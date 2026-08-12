@@ -1,0 +1,22 @@
+import path from 'path';
+import swc from 'unplugin-swc';
+import { defineConfig } from 'vitest/config';
+
+import { sharedTestConfig } from '../../vitest.shared.mjs';
+
+export default defineConfig({
+    test: {
+        ...sharedTestConfig,
+        typecheck: {
+            tsconfig: path.join(__dirname, 'tsconfig.e2e.json'),
+        },
+    },
+    plugins: [
+        // SWC required to support decorators used in test plugins
+        // See https://github.com/vitest-dev/vitest/issues/708#issuecomment-1118628479
+        // Vite plugin
+        swc.vite(),
+        // Rollup plugin
+        swc.rollup() as any,
+    ],
+});

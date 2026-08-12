@@ -1,0 +1,260 @@
+---
+title: "Transport Options"
+generated: true
+---
+## EmailTransportOptions
+
+<GenerationInfo sourceFile="packages/email-plugin/src/types.ts" sourceLine="172" packageName="@vendure/email-plugin" />
+
+A union of all the possible transport options for sending emails.
+
+```ts title="Signature"
+type EmailTransportOptions = | SMTPTransportOptions
+    | SendmailTransportOptions
+    | FileTransportOptions
+    | NoopTransportOptions
+    | SESTransportOptions
+    | TestingTransportOptions
+```
+## SMTPTransportOptions
+
+<GenerationInfo sourceFile="packages/email-plugin/src/types.ts" sourceLine="187" packageName="@vendure/email-plugin" />
+
+The SMTP transport options of [Nodemailer](https://nodemailer.com/smtp/)
+
+```ts title="Signature"
+interface SMTPTransportOptions extends SMTPTransport.Options {
+    type: 'smtp';
+    logging?: boolean;
+    pool?: boolean;
+    maxConnections?: SMTPPool.Options['maxConnections'];
+    maxMessages?: SMTPPool.Options['maxMessages'];
+    rateDelta?: SMTPPool.Options['rateDelta'];
+    rateLimit?: SMTPPool.Options['rateLimit'];
+}
+```
+* Extends: SMTPTransport.Options
+
+
+
+<div className="members-wrapper">
+
+### type
+
+<MemberInfo kind="property" type={`'smtp'`}   />
+
+
+### logging
+
+<MemberInfo kind="property" type={`boolean`} default={`false`}   />
+
+If true, uses the configured [VendureLogger](/reference/typescript-api/logger/vendure-logger#vendurelogger) to log messages from Nodemailer as it interacts with
+the SMTP server.
+### pool
+
+<MemberInfo kind="property" type={`boolean`} default={`false`}   />
+
+Set to true to use a pooled connection (defaults to false) instead of creating a new connection for
+every email. Nodemailer pooled-SMTP option, forwarded directly to `nodemailer.createTransport()`.
+### maxConnections
+
+<MemberInfo kind="property" type={`SMTPPool.Options['maxConnections']`} default={`5`}   />
+
+The maximum number of simultaneous connections to make against the SMTP server.
+Only applies when `pool` is `true`.
+### maxMessages
+
+<MemberInfo kind="property" type={`SMTPPool.Options['maxMessages']`} default={`100`}   />
+
+Limits the number of messages sent over a single connection. After `maxMessages` is reached the
+connection is dropped and a new one is created. Only applies when `pool` is `true`.
+### rateDelta
+
+<MemberInfo kind="property" type={`SMTPPool.Options['rateDelta']`} default={`1000`}   />
+
+Defines the time measuring period in milliseconds for rate limiting. Only applies when `pool` is `true`.
+### rateLimit
+
+<MemberInfo kind="property" type={`SMTPPool.Options['rateLimit']`}   />
+
+Limits the number of messages sent in the `rateDelta` window. Once reached, sending is paused until
+the end of the period. Only applies when `pool` is `true`.
+
+
+</div>
+## SESTransportOptions
+
+<GenerationInfo sourceFile="packages/email-plugin/src/types.ts" sourceLine="273" packageName="@vendure/email-plugin" />
+
+The SES transport options of [Nodemailer](https://nodemailer.com/transports/ses//)
+
+See [Nodemailers's SES docs](https://nodemailer.com/transports/ses/) for more details
+
+*Example*
+
+```ts
+ import { SES, SendRawEmailCommand } from '@aws-sdk/client-ses'
+
+ const ses = new SES({
+    apiVersion: '2010-12-01',
+    region: 'eu-central-1',
+    credentials: {
+        accessKeyId: process.env.SES_ACCESS_KEY || '',
+        secretAccessKey: process.env.SES_SECRET_KEY || '',
+    },
+ })
+
+ const config: VendureConfig = {
+  // Add an instance of the plugin to the plugins array
+  plugins: [
+    EmailPlugin.init({
+      handler: defaultEmailHandlers,
+      templateLoader: new FileBasedTemplateLoader(path.join(__dirname, '../static/email/templates')),
+      transport: {
+        type: 'ses',
+        SES: { ses, aws: { SendRawEmailCommand } },
+        sendingRate: 10, // optional messages per second sending rate
+      },
+    }),
+  ],
+};
+ ```
+
+```ts title="Signature"
+interface SESTransportOptions extends SESTransport.Options {
+    type: 'ses';
+}
+```
+* Extends: SESTransport.Options
+
+
+
+<div className="members-wrapper">
+
+### type
+
+<MemberInfo kind="property" type={`'ses'`}   />
+
+
+
+
+</div>
+## SendmailTransportOptions
+
+<GenerationInfo sourceFile="packages/email-plugin/src/types.ts" sourceLine="284" packageName="@vendure/email-plugin" />
+
+Uses the local Sendmail program to send the email.
+
+```ts title="Signature"
+interface SendmailTransportOptions {
+    type: 'sendmail';
+    path?: string;
+    newline?: string;
+}
+```
+
+<div className="members-wrapper">
+
+### type
+
+<MemberInfo kind="property" type={`'sendmail'`}   />
+
+
+### path
+
+<MemberInfo kind="property" type={`string`}   />
+
+
+### newline
+
+<MemberInfo kind="property" type={`string`}   />
+
+
+
+
+</div>
+## FileTransportOptions
+
+<GenerationInfo sourceFile="packages/email-plugin/src/types.ts" sourceLine="299" packageName="@vendure/email-plugin" />
+
+Outputs the email as an HTML file for development purposes.
+
+```ts title="Signature"
+interface FileTransportOptions {
+    type: 'file';
+    outputPath: string;
+    raw?: boolean;
+}
+```
+
+<div className="members-wrapper">
+
+### type
+
+<MemberInfo kind="property" type={`'file'`}   />
+
+
+### outputPath
+
+<MemberInfo kind="property" type={`string`}   />
+
+
+### raw
+
+<MemberInfo kind="property" type={`boolean`}   />
+
+
+
+
+</div>
+## NoopTransportOptions
+
+<GenerationInfo sourceFile="packages/email-plugin/src/types.ts" sourceLine="315" packageName="@vendure/email-plugin" />
+
+Does nothing with the generated email. Intended for use in testing where we don't care about the email transport,
+or when using a custom [EmailSender](/reference/core-plugins/email-plugin/email-sender#emailsender) which does not require transport options.
+
+```ts title="Signature"
+interface NoopTransportOptions {
+    type: 'none';
+}
+```
+
+<div className="members-wrapper">
+
+### type
+
+<MemberInfo kind="property" type={`'none'`}   />
+
+
+
+
+</div>
+## TestingTransportOptions
+
+<GenerationInfo sourceFile="packages/email-plugin/src/types.ts" sourceLine="344" packageName="@vendure/email-plugin" />
+
+Forwards the raw GeneratedEmailContext object to a provided callback, for use in testing.
+
+```ts title="Signature"
+interface TestingTransportOptions {
+    type: 'testing';
+    onSend: (details: EmailDetails) => void;
+}
+```
+
+<div className="members-wrapper">
+
+### type
+
+<MemberInfo kind="property" type={`'testing'`}   />
+
+
+### onSend
+
+<MemberInfo kind="property" type={`(details: <a href='/reference/core-plugins/email-plugin/email-plugin-types#emaildetails'>EmailDetails</a>) => void`}   />
+
+Callback to be invoked when an email would be sent.
+
+
+</div>

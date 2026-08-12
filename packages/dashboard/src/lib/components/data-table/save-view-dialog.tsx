@@ -1,0 +1,151 @@
+import { toast } from '@/vdb/components/ui/sonner.js';
+import { usePage } from '@/vdb/hooks/use-page.js';
+import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
+import { Trans, useLingui } from '@lingui/react/macro';
+import { ColumnFiltersState } from '@tanstack/react-table';
+import React, { useState } from 'react';
+import { useSavedViews } from '../../hooks/use-saved-views.js';
+import { Button } from '../ui/button.js';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '../ui/dialog.js';
+import { Input } from '../ui/input.js';
+import { Label } from '../ui/label.js';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group.js';
+
+interface SaveViewDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    filters: ColumnFiltersState;
+    searchTerm?: string;
+}
+
+export const SaveViewDialog: React.FC<SaveViewDialogProps> = ({
+    open,
+    onOpenChange,
+    filters,
+    searchTerm,
+}) => {
+    const [name, setName] = useState('');
+    const { t } = useLingui();
+    const [scope, setScope] = useState<'user' | 'global'>('user');
+    const [saving, setSaving] = useState(false);
+    const { saveView, userViews, globalViews, canManageGlobalViews } = useSavedViews();
+    const { pageId } = usePage();
+    const { settings } = useUserSettings();
+
+    const defaultVisibility = {
+        id: false,
+        createdAt: false,
+        updatedAt: false,
+        type: false,
+        currencyCode: false,
+    };
+    const tableSettings = pageId ? settings.tableSettings?.[pageId] : undefined;
+    const columnVisibility = pageId
+        ? (tableSettings?.columnVisibility ?? defaultVisibility)
+        : defaultVisibility;
+    const columnOrder = pageId ? (tableSettings?.columnOrder ?? []) : [];
+
+    const handleSave = async () => {
+        if (!name.trim()) {
+            toast.error(t`Please enter a name for the view`);
+            return;
+        }
+
+        // Check for duplicate names
+        const existingViews = scope === 'user' ? userViews : globalViews;
+        if (existingViews.some(v => v.name === name.trim())) {
+            toast.error(t`A view with this name already exists`);
+            return;
+        }
+
+        setSaving(true);
+        try {
+            await saveView({
+                name: name.trim(),
+                scope,
+                filters,
+                columnConfig: {
+                    columnVisibility,
+                    columnOrder,
+                },
+                searchTerm,
+            });
+            toast.success(t`View "${name}" saved successfully`);
+            onOpenChange(false);
+            setName('');
+            setScope('user');
+        } catch {
+            toast.error(t`Failed to save view`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        <Trans>Save current view</Trans>
+                    </DialogTitle>
+                    <DialogDescription>
+                        <Trans>Save the current filters and search term as a reusable view.</Trans>
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="view-name">
+                            <Trans>View name</Trans>
+                        </Label>
+                        <Input
+                            id="view-name"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            placeholder={t`Enter a name for this view`}
+                            autoFocus
+                        />
+                    </div>
+                    {canManageGlobalViews && (
+                        <div className="space-y-2">
+                            <Label>
+                                <Trans>View scope</Trans>
+                            </Label>
+                            <RadioGroup
+                                value={scope}
+                                onValueChange={value => setScope(value as 'user' | 'global')}
+                            >
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="user" id="scope-user" />
+                                    <Label htmlFor="scope-user" className="font-normal">
+                                        <Trans>Personal view (only visible to you)</Trans>
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="global" id="scope-global" />
+                                    <Label htmlFor="scope-global" className="font-normal">
+                                        <Trans>Global view (visible to all users)</Trans>
+                                    </Label>
+                                </div>
+                            </RadioGroup>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                        <Trans>Cancel</Trans>
+                    </Button>
+                    <Button onClick={() => void handleSave()} disabled={saving || !name.trim()}>
+                        {saving ? <Trans>Saving...</Trans> : <Trans>Save view</Trans>}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};

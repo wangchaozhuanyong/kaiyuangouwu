@@ -1,0 +1,9 @@
+{{#if isBun}}FROM oven/bun:1{{else}}FROM node:20{{/if}}
+
+WORKDIR /usr/src/app
+
+{{#if needsCorepack}}RUN corepack enable
+{{/if}}COPY package.json {{pmLockfile}} ./
+RUN {{pmCiInstall}}
+COPY . .
+RUN {{pmRunScript "build"}}

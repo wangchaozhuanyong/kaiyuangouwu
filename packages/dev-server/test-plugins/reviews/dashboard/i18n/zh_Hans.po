@@ -1,0 +1,88 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_Hans\n"
+
+msgid "Approved"
+msgstr "已通过"
+
+msgid "Create review"
+msgstr "新建评价"
+
+msgid "Enter a short review title"
+msgstr "请输入简短的评价标题"
+
+msgid "Enter the review content"
+msgstr "请输入评价正文"
+
+msgid "New review"
+msgstr "新评价"
+
+msgid "Pending review"
+msgstr "待审核"
+
+msgid "Product reviews"
+msgstr "商品评价"
+
+msgid "Rejected"
+msgstr "已拒绝"
+
+msgid "Review body is required"
+msgstr "请填写评价正文"
+
+msgid "Review content"
+msgstr "评价正文"
+
+msgid "Review title"
+msgstr "评价标题"
+
+msgid "Review title is required"
+msgstr "请填写评价标题"
+
+msgid "Reviewer name"
+msgstr "评价人"
+
+msgid "Select review status"
+msgstr "选择审核状态"
+
+msgid "fieldName.authorLocation"
+msgstr "评价人所在地"
+
+msgid "fieldName.authorName"
+msgstr "评价人"
+
+msgid "fieldName.body"
+msgstr "评价正文"
+
+msgid "fieldName.downvotes"
+msgstr "无帮助票数"
+
+msgid "fieldName.product"
+msgstr "商品"
+
+msgid "fieldName.productVariant"
+msgstr "商品 SKU"
+
+msgid "fieldName.rating"
+msgstr "评分"
+
+msgid "fieldName.response"
+msgstr "商家回复"
+
+msgid "fieldName.responseCreatedAt"
+msgstr "回复时间"
+
+msgid "fieldName.state"
+msgstr "审核状态"
+
+msgid "fieldName.summary"
+msgstr "评价标题"
+
+msgid "fieldName.upvotes"
+msgstr "有帮助票数"
+
+#. js-lingui-explicit-id
+msgid "review.productReviews"
+msgstr "商品评价"
