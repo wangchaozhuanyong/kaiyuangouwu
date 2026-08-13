@@ -6,6 +6,9 @@
         "jsx": "react-jsx",
         "paths": {
             "@vendure/admin-ui/*": ["../admin-ui/package/*"],
+            "@vendure/commerce-fulfillment-plugin": ["../commerce-fulfillment-plugin/src/index.ts"],
+            "@vendure/operations-dashboard-plugin": ["../operations-dashboard-plugin/src/index.ts"],
+            "@vendure/store-domain-plugin": ["../store-domain-plugin/src/index.ts"],
             "@plugins/*": ["./test-plugins/*"]
         }
     },

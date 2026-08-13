@@ -197,6 +197,51 @@ const watchers = [
         onSuccessfulRebuild: () => server.restart(),
     }),
     startWatcher({
+        label: 'commerce-fulfillment-plugin',
+        command: process.execPath,
+        args: [
+            typescriptCliPath,
+            '--project',
+            path.join(repoRoot, 'packages/commerce-fulfillment-plugin/tsconfig.build.json'),
+            '--watch',
+            '--preserveWatchOutput',
+            '--locale',
+            'en',
+        ],
+        env: watcherEnvironment,
+        onSuccessfulRebuild: () => server.restart(),
+    }),
+    startWatcher({
+        label: 'operations-dashboard-plugin',
+        command: process.execPath,
+        args: [
+            typescriptCliPath,
+            '--project',
+            path.join(repoRoot, 'packages/operations-dashboard-plugin/tsconfig.build.json'),
+            '--watch',
+            '--preserveWatchOutput',
+            '--locale',
+            'en',
+        ],
+        env: watcherEnvironment,
+        onSuccessfulRebuild: () => server.restart(),
+    }),
+    startWatcher({
+        label: 'store-domain-plugin',
+        command: process.execPath,
+        args: [
+            typescriptCliPath,
+            '--project',
+            path.join(repoRoot, 'packages/store-domain-plugin/tsconfig.build.json'),
+            '--watch',
+            '--preserveWatchOutput',
+            '--locale',
+            'en',
+        ],
+        env: watcherEnvironment,
+        onSuccessfulRebuild: () => server.restart(),
+    }),
+    startWatcher({
         label: 'dashboard-vite',
         command: process.execPath,
         args: [
@@ -278,6 +323,9 @@ async function buildPrerequisites(env) {
         ['@vendure/cli', path.join(repoRoot, 'packages/cli')],
         ['@vendure/asset-server-plugin', path.join(repoRoot, 'packages/asset-server-plugin')],
         ['@vendure/email-plugin', path.join(repoRoot, 'packages/email-plugin')],
+        ['@vendure/commerce-fulfillment-plugin', path.join(repoRoot, 'packages/commerce-fulfillment-plugin')],
+        ['@vendure/operations-dashboard-plugin', path.join(repoRoot, 'packages/operations-dashboard-plugin')],
+        ['@vendure/store-domain-plugin', path.join(repoRoot, 'packages/store-domain-plugin')],
     ];
 
     console.log('Building dev-server prerequisites...');

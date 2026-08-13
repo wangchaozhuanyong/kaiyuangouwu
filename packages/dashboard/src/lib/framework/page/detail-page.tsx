@@ -10,6 +10,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { AnyRoute, useNavigate } from '@tanstack/react-router';
 import { ResultOf, VariablesOf } from 'gql.tada';
 import { ControllerRenderProps, FieldPath, FieldValues } from 'react-hook-form';
+import { useDynamicTranslations } from '../../hooks/use-dynamic-translations.js';
 import {
     FieldInfo,
     getEntityName,
@@ -142,6 +143,7 @@ export function DetailPage<
 }: DetailPageProps<T, C, U>) {
     const params = route.useParams();
     const { t } = useLingui();
+    const { getTranslatedFieldName } = useDynamicTranslations();
     const creatingNewEntity = params.id === NEW_ENTITY_PATH;
     const navigate = useNavigate();
     const inferredEntityName = getEntityName(queryDocument);
@@ -202,7 +204,7 @@ export function DetailPage<
                                         key={fieldInfo.name}
                                         control={form.control}
                                         name={fieldInfo.name as never}
-                                        label={fieldInfo.name}
+                                        label={getTranslatedFieldName(fieldInfo.name)}
                                         render={({ field }) => (
                                             <FieldInputRenderer fieldInfo={fieldInfo} field={field} />
                                         )}
@@ -219,7 +221,7 @@ export function DetailPage<
                                         key={fieldInfo.name}
                                         control={form.control}
                                         name={fieldInfo.name as never}
-                                        label={fieldInfo.name}
+                                        label={getTranslatedFieldName(fieldInfo.name)}
                                         render={({ field }) => (
                                             <FieldInputRenderer fieldInfo={fieldInfo} field={field} />
                                         )}

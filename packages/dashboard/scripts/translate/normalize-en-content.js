@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parsePOFile } from './locale-profiles.js';
+import { getIcuArgumentNames, parsePOFile } from './locale-profiles.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const poFile = path.resolve(__dirname, '../../src/i18n/locales/en.po');
@@ -43,6 +43,7 @@ const exactTranslations = new Map([
 ]);
 
 const explicitIdTranslations = new Map([
+    ['entity.facetValues', 'Filter attribute values'],
     ['fieldName.attempts', 'Attempts'],
     ['fieldName.availableCurrencyCodes', 'Available currencies'],
     ['fieldName.availableLanguageCodes', 'Available content languages'],
@@ -54,6 +55,7 @@ const explicitIdTranslations = new Map([
     ['fieldName.couponCode', 'Coupon code'],
     ['fieldName.createdAt', 'Created'],
     ['fieldName.currencyCode', 'Currency'],
+    ['fieldName.currentValue', 'Current value'],
     ['fieldName.customer', 'Customer'],
     ['fieldName.customerGroup', 'Customer group'],
     ['fieldName.customers', 'Customers'],
@@ -76,9 +78,13 @@ const explicitIdTranslations = new Map([
     ['fieldName.isDefault', 'Default'],
     ['fieldName.isPrivate', 'Private'],
     ['fieldName.isSettled', 'Settled'],
+    ['fieldName.isRunning', 'Running'],
     ['fieldName.lastName', 'Last name'],
+    ['fieldName.lastExecutedAt', 'Last executed'],
+    ['fieldName.lastResult', 'Last result'],
     ['fieldName.name', 'Name'],
     ['fieldName.orderPlacedAt', 'Order date'],
+    ['fieldName.nextExecutionAt', 'Next execution'],
     ['fieldName.parentId', 'Parent'],
     ['fieldName.perCustomerUsageLimit', 'Per-customer usage limit'],
     ['fieldName.permissions', 'Permissions'],
@@ -90,8 +96,11 @@ const explicitIdTranslations = new Map([
     ['fieldName.progress', 'Progress'],
     ['fieldName.queueName', 'Queue name'],
     ['fieldName.result', 'Result'],
+    ['fieldName.readonly', 'Readonly'],
     ['fieldName.retries', 'Retries'],
     ['fieldName.seller', 'Merchant'],
+    ['fieldName.schedule', 'Schedule pattern'],
+    ['fieldName.scheduleDescription', 'Schedule'],
     ['fieldName.settledAt', 'Settled at'],
     ['fieldName.shippingLines', 'Shipping lines'],
     ['fieldName.sku', 'SKU'],
@@ -99,6 +108,7 @@ const explicitIdTranslations = new Map([
     ['fieldName.startedAt', 'Started at'],
     ['fieldName.startsAt', 'Start time'],
     ['fieldName.state', 'Status'],
+    ['fieldName.scopeType', 'Effective scope'],
     ['fieldName.stockLevels', 'Stock levels'],
     ['fieldName.token', 'Token'],
     ['fieldName.total', 'Total'],
@@ -110,6 +120,52 @@ const explicitIdTranslations = new Map([
     ['fieldName.value', 'Value'],
     ['fieldName.valueList', 'Values'],
     ['fieldName.zone', 'Zone'],
+    ['jobQueue.applyCollectionFilters', 'Update product group matches'],
+    [
+        'jobQueue.applyCollectionFilters.description',
+        'Recalculates product group contents from their filter rules',
+    ],
+    ['jobQueue.cleanSessions', 'Clean expired sign-in sessions'],
+    ['jobQueue.cleanSessions.description', 'Removes expired administrator and customer sign-in sessions'],
+    ['jobQueue.custom', 'Custom background task'],
+    ['jobQueue.custom.description', 'A background task registered by a plugin or business extension'],
+    ['jobQueue.sendEmail', 'Send system email'],
+    ['jobQueue.sendEmail.description', 'Sends order, account, and other notification emails'],
+    ['jobQueue.updateSearchIndex', 'Update product search index'],
+    ['jobQueue.updateSearchIndex.description', 'Synchronizes product search and filtering data'],
+    ['scheduledTask.cleanSessions', 'Clean expired sign-in sessions'],
+    [
+        'scheduledTask.cleanSessions.description',
+        'Removes expired administrator and customer sign-in sessions from the database',
+    ],
+    ['scheduledTask.cleanOrphanedSettingsStore', 'Clean invalid system configuration'],
+    [
+        'scheduledTask.cleanOrphanedSettingsStore.description',
+        'Removes system configuration records whose field definitions no longer exist',
+    ],
+    ['scheduledTask.cleanJobs', 'Clean background task records'],
+    [
+        'scheduledTask.cleanJobs.description',
+        'Removes completed, failed, and cancelled background task records from the database',
+    ],
+    ['scheduledTask.cleanJobQueueIndex', 'Clean background task index'],
+    [
+        'scheduledTask.cleanJobQueueIndex.description',
+        'Cleans the index used to speed up background task list queries',
+    ],
+    ['scheduledTask.custom', 'Custom scheduled task'],
+    [
+        'scheduledTask.custom.description',
+        'A scheduled background task registered by a plugin or business extension',
+    ],
+    ['settingsStore.pluginGlobalValue', 'Plugin global setting'],
+    ['settingsStore.pluginUserValue', 'Plugin user setting'],
+    ['settingsStore.buildVersion', 'System build version'],
+    ['settingsStore.buildMetadata', 'System build information'],
+    ['settingsStore.dashboardUserSettings', 'Dashboard user preferences'],
+    ['settingsStore.globalSavedViews', 'Shared table views'],
+    ['settingsStore.userSavedViews', 'Personal table views'],
+    ['settingsStore.custom', 'Extension configuration'],
     ['fulfillmentState.Cancelled', 'Cancelled'],
     ['fulfillmentState.Created', 'Created'],
     ['fulfillmentState.Delivered', 'Delivered'],
@@ -136,6 +192,9 @@ const explicitIdTranslations = new Map([
     ['paymentState.Failed', 'Failed'],
     ['paymentState.Pending', 'Pending'],
     ['paymentState.Settled', 'Paid'],
+    ['refundState.Failed', 'Failed'],
+    ['refundState.Pending', 'Pending'],
+    ['refundState.Settled', 'Settled'],
     ['refundReason.CustomerRequest', 'Customer request'],
     ['refundReason.DamagedInShipping', 'Damaged in transit'],
     ['refundReason.NotAvailable', 'Out of stock'],
@@ -150,7 +209,7 @@ function normalizeTranslation(entry) {
     if (exact !== undefined) return exact;
 
     let value = entry.msgstr;
-    const argumentNames = [...entry.msgid.matchAll(/\{([A-Za-z_][\w.]*)(?=[,}])/gu)].map(match => match[1]);
+    const argumentNames = getIcuArgumentNames(entry.msgid);
 
     // Terminology changes apply only to visible copy. Protect ICU argument names
     // such as {collectionName}; changing those identifiers breaks catalog compilation.
@@ -235,7 +294,9 @@ function getViolations(entries) {
             return [{ entry, expected, reason: 'terminology mismatch' }];
         }
         if (
-            /^(nav|fieldName|fulfillmentState|orderState|paymentState|refundReason)\./u.test(entry.msgid) &&
+            /^(nav|entity|fieldName|jobQueue|scheduledTask|settingsStore|fulfillmentState|orderState|paymentState|refundReason)\./u.test(
+                entry.msgid,
+            ) &&
             entry.msgstr === entry.msgid
         ) {
             return [{ entry, expected: entry.msgstr, reason: 'unresolved navigation id' }];

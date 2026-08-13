@@ -1,0 +1,10 @@
+{{> header title="验证电子邮箱" }}
+
+<mj-section background-color="#ffffff" padding="16px 28px 24px">
+    <mj-column>
+        <mj-text padding="0 0 16px">感谢您注册明集市。请点击下方按钮验证电子邮箱并完成注册。</mj-text>
+        <mj-button href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}">验证电子邮箱</mj-button>
+    </mj-column>
+</mj-section>
+
+{{> footer }}

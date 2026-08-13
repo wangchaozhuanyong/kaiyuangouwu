@@ -1,10 +1,3 @@
-import { closestCenter, DndContext } from '@dnd-kit/core';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Table } from '@tanstack/react-table';
-import { GripVertical, Settings2 } from 'lucide-react';
-
 import { Button } from '@/vdb/components/ui/button.js';
 import {
     DropdownMenu,
@@ -21,15 +14,29 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/vdb/components/ui/too
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { usePage } from '@/vdb/hooks/use-page.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
+import { closestCenter, DndContext } from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Trans } from '@lingui/react/macro';
+import { Table } from '@tanstack/react-table';
+import { GripVertical, Settings2 } from 'lucide-react';
 
-import { pinnedLeadingColumns } from './data-table-utils.js';
+import { getDataTableColumnLabel, pinnedLeadingColumns } from './data-table-utils.js';
 
 interface DataTableViewOptionsProps<TData> {
     table: Table<TData>;
 }
 
-function SortableItem({ id, children, disableSort }: { id: string; children: React.ReactNode; disableSort?: boolean }) {
+function SortableItem({
+    id,
+    children,
+    disableSort,
+}: {
+    id: string;
+    children: React.ReactNode;
+    disableSort?: boolean;
+}) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
     const style = {
@@ -88,8 +95,21 @@ export function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps
         <div className="flex items-center gap-2">
             <DropdownMenu modal={false}>
                 <Tooltip>
-                    <TooltipTrigger render={<DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" className="ml-auto hidden lg:flex" data-testid="dt-column-settings-trigger" />} />}>
-                                <Settings2 />
+                    <TooltipTrigger
+                        render={
+                            <DropdownMenuTrigger
+                                render={
+                                    <Button
+                                        variant="outline"
+                                        size="icon-sm"
+                                        className="ml-auto hidden lg:flex"
+                                        data-testid="dt-column-settings-trigger"
+                                    />
+                                }
+                            />
+                        }
+                    >
+                        <Settings2 />
                     </TooltipTrigger>
                     <TooltipContent>
                         <Trans>Column settings</Trans>
@@ -118,7 +138,7 @@ export function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps
                                             onCheckedChange={value => column.toggleVisibility(value)}
                                             closeOnClick={false}
                                         >
-                                            {getTranslatedFieldName(column.id)}
+                                            {getDataTableColumnLabel(column, getTranslatedFieldName)}
                                         </DropdownMenuCheckboxItem>
                                     </SortableItem>
                                 ))}

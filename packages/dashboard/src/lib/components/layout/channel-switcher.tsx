@@ -1,4 +1,4 @@
-import { ChevronsUpDown, Languages, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Languages, Plus, Store } from 'lucide-react';
 
 import { ChannelCodeLabel } from '@/vdb/components/shared/channel-code-label.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
@@ -16,14 +16,13 @@ import {
 } from '@/vdb/components/ui/dropdown-menu.js';
 import { ScrollArea } from '@/vdb/components/ui/scroll-area.js';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/vdb/components/ui/sidebar.js';
-import { DEFAULT_CHANNEL_CODE } from '@/vdb/constants.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { useServerConfig } from '@/vdb/hooks/use-server-config.js';
 import { useSortedLanguages } from '@/vdb/hooks/use-sorted-languages.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { cn } from '@/vdb/lib/utils.js';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ManageLanguagesDialog } from './manage-languages-dialog.js';
@@ -49,6 +48,7 @@ function getChannelInitialsFromCode(code: string) {
 }
 
 export function ChannelSwitcher() {
+    const { t } = useLingui();
     const { isMobile } = useSidebar();
     const { channels, activeChannel, setActiveChannel } = useChannel();
     const serverConfig = useServerConfig();
@@ -80,28 +80,44 @@ export function ChannelSwitcher() {
         }
     }, [activeChannel, contentLanguage]);
 
-    const renderChannel = (channel: (typeof channels)[number]) => (
-        <div key={channel.code}>
-            <DropdownMenuItem onClick={() => setActiveChannel(channel.id)} className="gap-2 p-2">
-                <div
-                    className={cn(
-                        'flex size-8 items-center justify-center rounded border',
-                        channel.code === DEFAULT_CHANNEL_CODE ? 'bg-primary' : '',
-                    )}
+    const renderChannel = (channel: (typeof channels)[number]) => {
+        const isActive = channel.id === displayChannel?.id;
+        return (
+            <div key={channel.code}>
+                <DropdownMenuItem
+                    onClick={() => setActiveChannel(channel.id)}
+                    className={cn('gap-2 p-2', isActive && 'bg-accent')}
                 >
-                    <span className="truncate font-semibold text-xs uppercase">
-                        {getChannelInitialsFromCode(channel.code)}
-                    </span>
-                </div>
-                <ChannelCodeLabel code={channel.code} />
-                {channel.id === displayChannel?.id && (
-                    <span className="ms-auto text-xs text-muted-foreground">
-                        <Trans context="current channel">Current</Trans>
-                    </span>
-                )}
-            </DropdownMenuItem>
-        </div>
-    );
+                    <div
+                        className={cn(
+                            'flex size-8 items-center justify-center rounded border',
+                            isActive
+                                ? 'border-primary/30 bg-primary text-primary-foreground'
+                                : 'bg-background',
+                        )}
+                    >
+                        <span className="truncate font-semibold text-xs uppercase">
+                            {getChannelInitialsFromCode(channel.code)}
+                        </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">
+                            <ChannelCodeLabel code={channel.code} />
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                            {channel.defaultCurrencyCode} · {formatLanguageName(channel.defaultLanguageCode)}
+                        </div>
+                    </div>
+                    {isActive && (
+                        <span className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-primary">
+                            <Check className="size-3.5" />
+                            <Trans context="current channel">Current store</Trans>
+                        </span>
+                    )}
+                </DropdownMenuItem>
+            </div>
+        );
+    };
 
     return (
         <>
@@ -112,7 +128,8 @@ export function ChannelSwitcher() {
                             render={
                                 <SidebarMenuButton
                                     size="lg"
-                                    className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
+                                    tooltip={t`Current store: ${displayChannel?.code ?? ''}`}
+                                    className="border border-sidebar-border/70 bg-sidebar-accent/40 data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
                                 />
                             }
                         >
@@ -121,18 +138,14 @@ export function ChannelSwitcher() {
                                     'bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg'
                                 }
                             >
-                                <span className="truncate font-semibold text-xs uppercase">
-                                    {getChannelInitialsFromCode(displayChannel?.code || '')}
-                                </span>
+                                <Store className="size-4" aria-hidden="true" />
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
-                                <span className="truncate font-semibold">
-                                    <ChannelCodeLabel code={displayChannel?.code} />
+                                <span className="truncate text-[11px] text-muted-foreground">
+                                    <Trans>Current store</Trans>
                                 </span>
-                                <span className="truncate text-xs">
-                                    <span>
-                                        <Trans>Content language: {formatLanguageName(contentLanguage)}</Trans>
-                                    </span>
+                                <span className="truncate font-semibold leading-5">
+                                    <ChannelCodeLabel code={displayChannel?.code} />
                                 </span>
                             </div>
                             <ChevronsUpDown className="ml-auto" />
@@ -147,7 +160,7 @@ export function ChannelSwitcher() {
                                 <div className="sticky top-0 pt-1 bg-popover z-10">
                                     <DropdownMenuGroup>
                                         <DropdownMenuLabel className="text-muted-foreground text-xs">
-                                            <Trans>Channels</Trans>
+                                            <Trans>Switch store</Trans>
                                         </DropdownMenuLabel>
                                     </DropdownMenuGroup>
                                     {!!displayChannel && (
@@ -216,7 +229,7 @@ export function ChannelSwitcher() {
                                             <Plus className="size-4" />
                                         </div>
                                         <div className="text-muted-foreground font-medium">
-                                            <Trans>Add channel</Trans>
+                                            <Trans>Add store</Trans>
                                         </div>
                                     </DropdownMenuItem>
                                 </PermissionGuard>

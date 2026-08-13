@@ -7,6 +7,7 @@ import { graphql } from '@/vdb/graphql/graphql.js';
 import { useGroupedPermissions } from '@/vdb/hooks/use-grouped-permissions.js';
 import { useLingui } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
+import { getPermissionDisplay } from '../../_roles/components/permission-labels.js';
 
 const rolesByIdDocument = graphql(`
     query RolesById($options: RoleListOptions) {
@@ -107,11 +108,35 @@ export function RolePermissionsDisplay({ value = [] }: Readonly<RolePermissionsD
                                                         />
                                                         <TooltipProvider>
                                                             <Tooltip>
-                                                                <TooltipTrigger render={<label className="text-sm cursor-default" aria-label={i18n.t(permission.name)} />}>
-                                                                    {i18n.t(permission.name)}
+                                                                <TooltipTrigger
+                                                                    render={
+                                                                        <label
+                                                                            className="text-sm cursor-default"
+                                                                            aria-label={
+                                                                                getPermissionDisplay(
+                                                                                    i18n,
+                                                                                    permission.name,
+                                                                                ).fullLabel
+                                                                            }
+                                                                        />
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        getPermissionDisplay(
+                                                                            i18n,
+                                                                            permission.name,
+                                                                        ).fullLabel
+                                                                    }
                                                                 </TooltipTrigger>
                                                                 <TooltipContent>
-                                                                    <p>{i18n.t(permission.description)}</p>
+                                                                    <p>
+                                                                        {
+                                                                            getPermissionDisplay(
+                                                                                i18n,
+                                                                                permission.name,
+                                                                            ).description
+                                                                        }
+                                                                    </p>
                                                                 </TooltipContent>
                                                             </Tooltip>
                                                         </TooltipProvider>

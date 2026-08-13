@@ -9,6 +9,7 @@ import { DocumentNode, print } from 'graphql';
 import { uiConfig } from 'virtual:vendure-ui-config';
 
 import { getApiBaseUrl } from '../utils/config-utils.js';
+import { addDashboardLanguageParams } from './language-request.js';
 
 const API_URL = getApiBaseUrl() + `/${uiConfig.api.adminApiPath}`;
 const DISPLAY_LANGUAGE_HEADER = 'x-vendure-dashboard-display-language';
@@ -32,7 +33,7 @@ const awesomeClient = new AwesomeGraphQLClient({
         if (sessionToken) {
             headers.set('Authorization', `Bearer ${sessionToken}`);
         }
-        if (channelToken) {
+        if (channelToken && !headers.has(uiConfig.api.channelTokenKey)) {
             headers.set(uiConfig.api.channelTokenKey, channelToken);
         }
 
@@ -42,13 +43,7 @@ const awesomeClient = new AwesomeGraphQLClient({
         try {
             const userSettings = localStorage.getItem(LS_KEY_USER_SETTINGS);
             const settings = userSettings ? JSON.parse(userSettings) : undefined;
-            const requestLanguage = displayLanguage || settings?.contentLanguage;
-
-            if (requestLanguage) {
-                const urlObj = new URL(finalUrl);
-                urlObj.searchParams.set('languageCode', requestLanguage);
-                finalUrl = urlObj.toString();
-            }
+            finalUrl = addDashboardLanguageParams(finalUrl, settings, displayLanguage);
         } catch (error) {
             // eslint-disable-next-line no-console
             console.warn('Failed to read content language from user settings:', error);
@@ -112,6 +107,19 @@ function queryForDisplayLanguage<T, V extends Variables = Variables>(
     return query(document, variables, { [DISPLAY_LANGUAGE_HEADER]: displayLanguage });
 }
 
+/**
+ * Runs a read-only query against a specific channel without changing the active channel.
+ * This is useful for cross-channel reporting where switching the global dashboard context
+ * for every request would invalidate unrelated page data.
+ */
+function queryForChannel<T, V extends Variables = Variables>(
+    document: RequestDocument | TypedDocumentNode<T, V>,
+    channelToken: string,
+    variables?: V,
+): Promise<T> {
+    return query(document, variables, { [uiConfig.api.channelTokenKey]: channelToken });
+}
+
 function mutate<T, V extends Variables = Variables>(
     document: TypedDocumentNode<T, V>,
 ): (variables: V) => Promise<T>;
@@ -138,5 +146,6 @@ function mutate<T, V extends Variables = Variables>(
 export const api = {
     query,
     queryForDisplayLanguage,
+    queryForChannel,
     mutate,
 };

@@ -8,6 +8,7 @@ import {
     PopoverTrigger,
 } from '@/vdb/components/ui/popover.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
+import { useLingui } from '@lingui/react/macro';
 import { CircleHelp } from 'lucide-react';
 
 import { getFieldHelpTopic, localizeHelpText } from './help-content.js';
@@ -19,16 +20,16 @@ export interface FieldHelpButtonProps {
 }
 
 export function FieldHelpButton({ fieldName, title, description }: Readonly<FieldHelpButtonProps>) {
+    const { t } = useLingui();
     const { displayLanguage } = useUserSettings().settings;
     const topic = getFieldHelpTopic(fieldName);
 
     if (!topic && !description) return null;
 
-    const isChinese = displayLanguage.startsWith('zh');
-    const label = isChinese ? '查看字段说明' : 'View field guidance';
+    const label = t`View field guidance`;
     const resolvedTitle = topic
         ? localizeHelpText(topic.title, displayLanguage)
-        : (title ?? (isChinese ? '字段说明' : 'Field guidance'));
+        : (title ?? t`Field guidance`);
     const resolvedDescription = topic ? localizeHelpText(topic.description, displayLanguage) : description;
 
     return (

@@ -8,7 +8,8 @@ set -euo pipefail
 
 LOCALES_DIR="src/i18n/locales"
 
-npx lingui extract 2>/dev/null
+# The configured Dashboard exposes only these two display languages.
+npx lingui extract --locale en,zh_Hans 2>/dev/null
 
 if git diff --exit-code "$LOCALES_DIR" > /dev/null 2>&1; then
     echo "i18n catalogs are in sync"

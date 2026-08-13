@@ -38,6 +38,23 @@ export default defineConfig({
                 availableLanguages: [LanguageCode.zh_Hans, LanguageCode.en],
                 availableLocales: ['CN', 'MY'],
             },
+            pluginPackageScanner: {
+                nodeModulesRoot: path.resolve(__dirname, '../../node_modules'),
+            },
+            pathAdapter: {
+                sourceRoot: path.resolve(__dirname, '../..'),
+                getCompiledConfigPath: ({ outputPath, configFileName }) =>
+                    path.join(outputPath, 'packages/dev-server', configFileName),
+                transformTsConfigPathMappings: ({ phase, patterns }) =>
+                    phase === 'loading'
+                        ? patterns.map(pattern =>
+                              path
+                                  .join('packages/dev-server', pattern)
+                                  .replace(/\.tsx?$/, '.js')
+                                  .replaceAll('\\', '/'),
+                          )
+                        : patterns,
+            },
             gqlOutputPath: path.resolve(__dirname, './graphql/'),
         }),
     ],

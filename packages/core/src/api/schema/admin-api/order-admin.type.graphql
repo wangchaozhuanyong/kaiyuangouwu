@@ -9,6 +9,7 @@ type Order {
 
 type Fulfillment {
     nextStates: [String!]!
+    handlerCode: String!
 }
 
 type Payment {

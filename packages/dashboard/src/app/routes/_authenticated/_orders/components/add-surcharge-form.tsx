@@ -8,34 +8,40 @@ import { Switch } from '@/vdb/components/ui/switch.js';
 import { DetailFormGrid } from '@/vdb/framework/layout-engine/page-layout.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { VariablesOf } from 'gql.tada';
 import { Plus } from 'lucide-react';
+import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { modifyOrderDocument } from '../orders.graphql.js';
 
 type ModifyOrderInput = VariablesOf<typeof modifyOrderDocument>['input'];
 type SurchargeInput = NonNullable<ModifyOrderInput['surcharges']>[number];
 
-const surchargeFormSchema = z.object({
-    description: z.string().min(1),
-    sku: z.string().optional(),
-    price: z.string().refine(val => !Number.isNaN(Number(val)) && Number(val) > 0, {
-        message: 'Price must be a positive number',
-    }),
-    priceIncludesTax: z.boolean(),
-    taxRate: z.number().nonnegative().max(100),
-    taxDescription: z.string().optional(),
-});
+type Translate = ReturnType<typeof useLingui>['t'];
 
-type SurchargeFormValues = z.infer<typeof surchargeFormSchema>;
+const createSurchargeFormSchema = (t: Translate) =>
+    z.object({
+        description: z.string().min(1),
+        sku: z.string().optional(),
+        price: z.string().refine(val => !Number.isNaN(Number(val)) && Number(val) > 0, {
+            message: t`Price must be a positive number`,
+        }),
+        priceIncludesTax: z.boolean(),
+        taxRate: z.number().nonnegative().max(100),
+        taxDescription: z.string().optional(),
+    });
+
+type SurchargeFormValues = z.infer<ReturnType<typeof createSurchargeFormSchema>>;
 
 export interface AddSurchargeFormProps {
     onAddSurcharge: (surcharge: SurchargeInput) => void;
 }
 
 export function AddSurchargeForm({ onAddSurcharge }: Readonly<AddSurchargeFormProps>) {
+    const { t } = useLingui();
     const { activeChannel } = useChannel();
+    const surchargeFormSchema = useMemo(() => createSurchargeFormSchema(t), [t]);
 
     const surchargeForm = useForm<SurchargeFormValues>({
         resolver: zodResolver(surchargeFormSchema),

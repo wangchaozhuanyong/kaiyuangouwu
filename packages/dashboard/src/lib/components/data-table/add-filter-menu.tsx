@@ -14,8 +14,10 @@ import { Column, ColumnDef } from '@tanstack/react-table';
 import { FilterIcon } from 'lucide-react';
 import { useState } from 'react';
 
+import { getDataTableColumnLabel } from './data-table-utils.js';
+
 export interface AddFilterMenuProps {
-    columns: Column<any, unknown>[];
+    columns: Array<Column<any, unknown>>;
 }
 
 export function AddFilterMenu({ columns }: Readonly<AddFilterMenuProps>) {
@@ -28,8 +30,23 @@ export function AddFilterMenu({ columns }: Readonly<AddFilterMenuProps>) {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DropdownMenu>
                 <Tooltip>
-                    <TooltipTrigger render={<DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" data-testid="dt-add-filter-trigger" />} />}>
-                                <FilterIcon />
+                    <TooltipTrigger
+                        render={
+                            <DropdownMenuTrigger
+                                render={
+                                    <Button
+                                        variant="outline"
+                                        size="icon-sm"
+                                        data-testid="dt-add-filter-trigger"
+                                    />
+                                }
+                            />
+                        }
+                    >
+                        <FilterIcon aria-hidden="true" />
+                        <span className="sr-only">
+                            <Trans>Add filter</Trans>
+                        </span>
                     </TooltipTrigger>
                     <TooltipContent>
                         <Trans>Add filter</Trans>
@@ -44,7 +61,7 @@ export function AddFilterMenu({ columns }: Readonly<AddFilterMenuProps>) {
                                 setIsDialogOpen(true);
                             }}
                         >
-                            {getTranslatedFieldName(column.id)}
+                            {getDataTableColumnLabel(column, getTranslatedFieldName)}
                         </DropdownMenuItem>
                     ))}
                 </DropdownMenuContent>

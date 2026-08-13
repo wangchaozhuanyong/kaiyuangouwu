@@ -159,6 +159,10 @@ export interface ListPageProps<
      */
     onSearchTermChange?: (searchTerm: string) => NonNullable<V['options']>['filter'];
     /**
+     * Placeholder shown in the list search input.
+     */
+    searchPlaceholder?: string;
+    /**
      * @description
      * Allows you to customize the rendering and other aspects of individual columns.
      *
@@ -517,6 +521,7 @@ export function ListPage<
     route: routeOrFn,
     defaultVisibility,
     onSearchTermChange,
+    searchPlaceholder,
     facetedFilters,
     children,
     rowActions,
@@ -594,6 +599,7 @@ export function ListPage<
         defaultColumnOrder: defaultColumnOrder as any,
         defaultVisibility: defaultVisibility as any,
         onSearchTermChange,
+        searchPlaceholder,
         page: pagination.page,
         itemsPerPage: pagination.itemsPerPage,
         sorting,

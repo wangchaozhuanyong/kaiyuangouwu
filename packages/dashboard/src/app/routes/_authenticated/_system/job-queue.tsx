@@ -1,3 +1,4 @@
+import { ConfirmationDialog } from '@/vdb/components/shared/confirmation-dialog.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import {
@@ -21,42 +22,15 @@ import {
     CircleXIcon,
     ClockIcon,
     LoaderIcon,
-    MoreVertical,
     RefreshCw,
     RotateCcw,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CancelJobsBulkAction } from './components/cancel-jobs-bulk-action.js';
 import { PayloadDialog } from './components/payload-dialog.js';
+import { formatJobDuration, getJobQueueDisplayInfo, getJobQueueDisplayName } from './job-queue-utils.js';
 import { cancelJobDocument, jobListDocument, jobQueueListDocument } from './job-queue.graphql.js';
-
-function formatDuration(ms: number): string {
-    if (ms < 1000) {
-        return `${ms}ms`;
-    }
-
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    const parts: string[] = [];
-
-    if (days > 0) {
-        parts.push(`${days}d`);
-    }
-    if (hours % 24 > 0) {
-        parts.push(`${hours % 24}h`);
-    }
-    if (minutes % 60 > 0) {
-        parts.push(`${minutes % 60}m`);
-    }
-    if (seconds % 60 > 0) {
-        parts.push(`${seconds % 60}s`);
-    }
-
-    return parts.join(' ');
-}
 
 function getJobStateBadgeVariant(state: string) {
     switch (state) {
@@ -97,7 +71,7 @@ const REFRESH_INTERVALS = [
 
 function JobQueuePage() {
     const refreshRef = useRef<() => void>(() => {});
-    const { t } = useLingui();
+    const { i18n, t } = useLingui();
     const { formatRelativeDate } = useLocalFormat();
     const [refreshInterval, setRefreshInterval] = useState(10000);
     const isActionMenuOpenRef = useRef(false);
@@ -147,7 +121,16 @@ function JobQueuePage() {
                     ),
                 },
                 queueName: {
-                    cell: ({ row }) => <span className="font-mono">{row.original.queueName}</span>,
+                    header: () => <Trans>Task type</Trans>,
+                    cell: ({ row }) => {
+                        const queue = getJobQueueDisplayInfo(i18n, row.original.queueName);
+                        return (
+                            <div className="flex flex-col gap-0.5" title={row.original.queueName}>
+                                <span className="font-medium">{queue.name}</span>
+                                <span className="text-xs text-muted-foreground">{queue.description}</span>
+                            </div>
+                        );
+                    },
                 },
                 result: {
                     cell: ({ row }) => {
@@ -176,7 +159,11 @@ function JobQueuePage() {
                         const cancelJobMutation = useMutation({
                             mutationFn: (jobId: string) => api.mutate(cancelJobDocument, { jobId }),
                             onSuccess: () => {
+                                toast.success(t`Task cancelled successfully`);
                                 refreshRef.current();
+                            },
+                            onError: () => {
+                                toast.error(t`Failed to cancel task`);
                             },
                         });
                         const state = JOB_STATES.find(s => s.value === row.original.state);
@@ -190,26 +177,24 @@ function JobQueuePage() {
                                             }
                                         />
                                     )}
-                                    {state ? t(state.label) : row.original.state}
+                                    {state ? t(state.label) : t`Unknown status`}
                                 </Badge>
                                 {row.original.state === 'RUNNING' && (
-                                    <DropdownMenu onOpenChange={open => (isActionMenuOpenRef.current = open)}>
-                                        <DropdownMenuTrigger
-                                            render={<Button variant="ghost" size="icon-xs" />}
+                                    <ConfirmationDialog
+                                        title={t`Cancel Job`}
+                                        description={t`Are you sure you want to cancel this job? This action cannot be undone.`}
+                                        confirmText={t`Cancel Job`}
+                                        onConfirm={() => cancelJobMutation.mutate(row.original.id)}
+                                    >
+                                        <Button
+                                            variant="ghost"
+                                            size="icon-xs"
+                                            disabled={cancelJobMutation.isPending}
+                                            aria-label={t`Cancel Job`}
                                         >
-                                            <MoreVertical />
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem
-                                                onClick={() => cancelJobMutation.mutate(row.original.id)}
-                                                disabled={cancelJobMutation.isPending}
-                                                className="text-destructive focus:text-destructive"
-                                            >
-                                                <Ban />
-                                                <Trans>Cancel Job</Trans>
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                            <Ban className="text-destructive" />
+                                        </Button>
+                                    </ConfirmationDialog>
                                 )}
                             </div>
                         );
@@ -217,7 +202,9 @@ function JobQueuePage() {
                 },
                 duration: {
                     cell: ({ row }) => {
-                        return row.original.duration ? formatDuration(row.original.duration) : null;
+                        return row.original.duration != null
+                            ? formatJobDuration(row.original.duration, i18n.locale)
+                            : null;
                     },
                 },
             }}
@@ -232,11 +219,11 @@ function JobQueuePage() {
             }}
             facetedFilters={{
                 queueName: {
-                    title: t`Queue`,
+                    title: t`Task type`,
                     optionsFn: async () => {
                         return api.query(jobQueueListDocument).then(r => {
                             return r.jobQueues.map(queue => ({
-                                label: queue.name,
+                                label: getJobQueueDisplayName(i18n, queue.name),
                                 value: queue.name,
                             }));
                         });

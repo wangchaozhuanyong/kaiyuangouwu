@@ -19,6 +19,15 @@ export const markets: Record<MarketCode, MarketConfig> = {
     },
 };
 
+const configuredMarketCodes = (import.meta.env.VITE_STOREFRONT_MARKETS ?? 'cn-mainland')
+    .split(',')
+    .map((code: string) => code.trim())
+    .filter((code: string): code is MarketCode => code in markets);
+
+export const enabledMarkets: MarketConfig[] = configuredMarketCodes.length
+    ? configuredMarketCodes.map((code: MarketCode) => markets[code])
+    : [markets['cn-mainland']];
+
 export const copy = {
     'cn-mainland': {
         brand: '明集市',

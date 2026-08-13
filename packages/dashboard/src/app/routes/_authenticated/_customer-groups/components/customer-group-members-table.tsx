@@ -103,7 +103,7 @@ export function CustomerGroupMembersTable({
                 }}
                 additionalColumns={{
                     name: {
-                        header: 'Name',
+                        header: t`Name`,
                         cell: ({ row }) => {
                             const value = `${row.original.firstName} ${row.original.lastName}`;
                             return (

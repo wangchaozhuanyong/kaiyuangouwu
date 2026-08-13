@@ -1,6 +1,8 @@
+import type { MessageDescriptor } from '@lingui/core';
 import { ComponentType } from 'react';
 
 export type AlertSeverity = 'info' | 'warning' | 'error';
+export type AlertText = string | MessageDescriptor;
 
 /**
  * @description
@@ -26,12 +28,12 @@ export interface AlertActionContext<TResponse = any> {
  */
 export type DashboardAlertAction<TResponse = any> =
     | {
-          label: string;
+          label: AlertText;
           onClick: (args: AlertActionContext<TResponse>) => void | Promise<any>;
           component?: never;
       }
     | {
-          label?: string;
+          label?: AlertText;
           onClick?: never;
           /**
            * @description
@@ -63,12 +65,12 @@ export interface DashboardAlertDefinition<TResponse = any> {
      * @description
      * The title of the alert. Can be a string or a function that returns a string based on the response data.
      */
-    title: string | ((data: TResponse) => string);
+    title: AlertText | ((data: TResponse) => AlertText);
     /**
      * @description
      * The description of the alert. Can be a string or a function that returns a string based on the response data.
      */
-    description?: string | ((data: TResponse) => string);
+    description?: AlertText | ((data: TResponse) => AlertText);
     /**
      * @description
      * The severity level of the alert.

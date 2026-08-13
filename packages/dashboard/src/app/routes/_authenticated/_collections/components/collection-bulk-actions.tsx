@@ -4,11 +4,11 @@ import { useState } from 'react';
 
 import { DataTableBulkActionItem } from '@/vdb/components/data-table/data-table-bulk-action-item.js';
 import { AssignToChannelBulkAction } from '@/vdb/components/shared/assign-to-channel-bulk-action.js';
-import { usePaginatedList } from '@/vdb/hooks/use-paginated-list.js';
 import { RemoveFromChannelBulkAction } from '@/vdb/components/shared/remove-from-channel-bulk-action.js';
 import { BulkActionComponent } from '@/vdb/framework/extension-api/types/data-table.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
+import { usePaginatedList } from '@/vdb/hooks/use-paginated-list.js';
 import { Trans } from '@lingui/react/macro';
 import { DeleteBulkAction } from '../../../../common/delete-bulk-action.js';
 import { DuplicateBulkAction } from '../../../../common/duplicate-bulk-action.js';
@@ -69,7 +69,7 @@ export const DuplicateCollectionsBulkAction: BulkActionComponent<any> = ({ selec
             entityType="Collection"
             duplicatorCode="collection-duplicator"
             requiredPermissions={['UpdateCatalog', 'UpdateCollection']}
-            entityName="Collection"
+            entityName="collections"
             selection={selection}
             table={table}
             onSuccess={() => {
@@ -102,7 +102,8 @@ export const MoveCollectionsBulkAction: BulkActionComponent<any> = ({ selection,
     };
 
     const handleResetExpanded = () => {
-        const refreshChildCaches = (table.options.meta as { refreshChildCaches: () => void })?.refreshChildCaches;
+        const refreshChildCaches = (table.options.meta as { refreshChildCaches: () => void })
+            ?.refreshChildCaches;
         if (refreshChildCaches) {
             refreshChildCaches();
         }

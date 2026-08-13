@@ -2,6 +2,7 @@ import { ResultOf } from '@/vdb/graphql/graphql.js';
 
 import { ConfirmationDialog } from '@/vdb/components/shared/confirmation-dialog.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
+import { Button } from '@/vdb/components/ui/button.js';
 import {
     Dialog,
     DialogContent,
@@ -120,7 +121,16 @@ export function CustomerAddressCard({
                 <div className="flex gap-4 mt-3 pt-3 border-t border-border">
                     {editable && (
                         <Dialog open={open} onOpenChange={setOpen}>
-                            <DialogTrigger>
+                            <DialogTrigger
+                                render={
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label={t`Edit Address`}
+                                    />
+                                }
+                            >
                                 <EditIcon className="w-4 h-4" />
                             </DialogTrigger>
                             <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -142,10 +152,11 @@ export function CustomerAddressCard({
                             description={t`Are you sure you want to delete this address?`}
                             onConfirm={() => {
                                 deleteAddress({ id: address.id });
-                                onDelete?.();
                             }}
                         >
-                            <TrashIcon className="w-4 h-4 text-destructive" />
+                            <Button type="button" variant="ghost" size="icon" aria-label={t`Delete Address`}>
+                                <TrashIcon className="w-4 h-4 text-destructive" />
+                            </Button>
                         </ConfirmationDialog>
                     )}
                 </div>

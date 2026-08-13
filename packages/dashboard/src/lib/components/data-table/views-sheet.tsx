@@ -1,7 +1,8 @@
+import { toast } from '@/vdb/components/ui/sonner.js';
+import { useDataTableContext } from '@/vdb/hooks/use-data-table-context.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Copy, Edit, Globe, MoreHorizontal, Trash2 } from 'lucide-react';
 import React, { useState } from 'react';
-import { toast } from '@/vdb/components/ui/sonner.js';
 import { useSavedViews } from '../../hooks/use-saved-views.js';
 import { SavedView } from '../../types/saved-views.js';
 import {
@@ -23,7 +24,6 @@ import {
 } from '../ui/dropdown-menu.js';
 import { Input } from '../ui/input.js';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../ui/sheet.js';
-import { useDataTableContext } from '@/vdb/hooks/use-data-table-context.js';
 
 interface ViewsSheetProps {
     open: boolean;
@@ -44,7 +44,7 @@ export const ViewsSheet: React.FC<ViewsSheetProps> = ({ open, onOpenChange, type
     const isGlobal = type === 'global';
 
     const handleViewApply = (view: SavedView) => {
-        handleApplyView(view.filters,view.columnConfig, view.searchTerm);
+        handleApplyView(view.filters, view.columnConfig, view.searchTerm);
         const viewName = view.name;
         const message = isGlobal ? t`Applied global view "${viewName}"` : t`Applied view "${viewName}"`;
         toast.success(message);
@@ -227,8 +227,16 @@ export const ViewsSheet: React.FC<ViewsSheetProps> = ({ open, onOpenChange, type
                                                         <Trans>Apply</Trans>
                                                     </Button>
                                                     <DropdownMenu>
-                                                        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-                                                                <MoreHorizontal className="h-4 w-4" />
+                                                        <DropdownMenuTrigger
+                                                            render={
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    aria-label={t`Actions for ${view.name}`}
+                                                                />
+                                                            }
+                                                        >
+                                                            <MoreHorizontal className="h-4 w-4" />
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem

@@ -7,12 +7,12 @@ import {
 import { Button } from '@/vdb/components/ui/button.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
-import { useLingui } from '@lingui/react/macro';
+import { useWidgetFilters } from '@/vdb/hooks/use-widget-filters.js';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from '@tanstack/react-router';
 import { ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import { DashboardBaseWidget } from '../base-widget.js';
-import { useWidgetFilters } from '@/vdb/hooks/use-widget-filters.js';
 import { latestOrdersQuery } from './latest-orders-widget.graphql.js';
 
 export const WIDGET_ID = 'latest-orders-widget';
@@ -32,17 +32,7 @@ export function LatestOrdersWidget() {
     ]);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(tableSettings?.pageSize ?? 10);
-    const [filters, setFilters] = useState<ColumnFiltersState>([
-        {
-            id: 'orderPlacedAt',
-            value: {
-                between: {
-                    start: dateRange.from.toISOString(),
-                    end: dateRange.to.toISOString(),
-                },
-            },
-        },
-    ]);
+    const [filters, setFilters] = useState<ColumnFiltersState>([]);
 
     // Update page size if user settings change
     useEffect(() => {
@@ -51,23 +41,10 @@ export function LatestOrdersWidget() {
         }
     }, [tableSettings?.pageSize]);
 
-    // Update filters when date range changes
-    useEffect(() => {
-        setFilters([
-            {
-                id: 'orderPlacedAt',
-                value: {
-                    between: {
-                        start: dateRange.from.toISOString(),
-                        end: dateRange.to.toISOString(),
-                    },
-                },
-            },
-        ]);
-    }, [dateRange]);
-
     const defaultVisibility = {
         code: true,
+        customer: true,
+        state: true,
         total: true,
         orderPlacedAt: true,
     };
@@ -75,9 +52,19 @@ export function LatestOrdersWidget() {
     const columnVisibility = tableSettings?.columnVisibility ?? defaultVisibility;
 
     return (
-        <DashboardBaseWidget id={WIDGET_ID} title={t`Latest Orders`} description={t`Your latest orders`}>
+        <DashboardBaseWidget
+            id={WIDGET_ID}
+            title={t`Recent orders`}
+            description={t`Orders placed during the selected period`}
+            actions={
+                <Button variant="outline" size="sm" render={<Link to="/orders" />}>
+                    <Trans>View all orders</Trans>
+                </Button>
+            }
+        >
             <PaginatedListDataTable
                 page={page}
+                transformQueryKey={queryKey => [...queryKey, dateRange.from, dateRange.to]}
                 transformVariables={variables => ({
                     ...variables,
                     options: {
@@ -89,13 +76,19 @@ export function LatestOrdersWidget() {
                             state: {
                                 notIn: ['Cancelled', 'Draft'],
                             },
+                            orderPlacedAt: {
+                                between: {
+                                    start: dateRange.from.toISOString(),
+                                    end: dateRange.to.toISOString(),
+                                },
+                            },
                             ...(variables.options?.filter ?? {}),
                         },
                     },
                 })}
                 customizeColumns={{
                     code: {
-                        header: t`Code`,
+                        header: t`Order number`,
                         cell: ({ row }) => {
                             return (
                                 <Button variant="ghost" render={<Link to={`/orders/${row.original.id}`} />}>
@@ -105,7 +98,8 @@ export function LatestOrdersWidget() {
                         },
                     },
                     orderPlacedAt: {
-                        header: t`Placed At`,
+                        header: t`Order time`,
+                        enableColumnFilter: false,
                         cell: ({ row }) => {
                             return (
                                 <span className="capitalize">
@@ -118,7 +112,7 @@ export function LatestOrdersWidget() {
                         meta: {
                             dependencies: ['currencyCode'],
                         },
-                        header: t`Total`,
+                        header: t`Order amount`,
                         cell: OrderMoneyCell,
                     },
                     totalWithTax: {

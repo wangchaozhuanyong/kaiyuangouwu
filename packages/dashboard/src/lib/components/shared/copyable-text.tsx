@@ -1,4 +1,5 @@
 import { cn } from '@/vdb/lib/utils.js';
+import { Trans } from '@lingui/react/macro';
 import { useCopyToClipboard } from '@uidotdev/usehooks';
 import { CheckIcon, CopyIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -70,6 +71,9 @@ export function CopyableText({ value, children, className }: Readonly<CopyableTe
                 ) : (
                     <CopyIcon className="h-3.5 w-3.5" />
                 )}
+                <span className="sr-only">
+                    <Trans>Copy to clipboard</Trans>
+                </span>
             </button>
         </div>
     );

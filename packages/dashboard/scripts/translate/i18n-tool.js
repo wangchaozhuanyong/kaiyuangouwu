@@ -2,14 +2,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import {
-    ALLOWED_SCRIPTS,
-    REQUIRED_SCRIPTS,
-    SCRIPT_RANGES,
-    looksTrivial,
-} from './locale-profiles.js';
+import { ALLOWED_SCRIPTS, REQUIRED_SCRIPTS, SCRIPT_RANGES, looksTrivial } from './locale-profiles.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,7 +65,10 @@ function validateLocaleBatch(languageCode, translations) {
         if (expect) {
             let hasNative = false;
             for (const ch of msgstr) {
-                if (expect.test(ch)) { hasNative = true; break; }
+                if (expect.test(ch)) {
+                    hasNative = true;
+                    break;
+                }
             }
             if (!hasNative) {
                 violations.push({
@@ -340,9 +338,13 @@ function applyTranslations(translationsFile, localesDir = DEFAULT_LOCALES_DIR) {
     if (allViolations.length) {
         console.error('\n✗ Aborting: translation batch failed script-validation.\n');
         for (const { languageCode, violations } of allViolations) {
-            console.error(`  ${languageCode}: ${violations.length} suspicious entr${violations.length === 1 ? 'y' : 'ies'}`);
+            console.error(
+                `  ${languageCode}: ${violations.length} suspicious entr${violations.length === 1 ? 'y' : 'ies'}`,
+            );
             for (const v of violations.slice(0, 5)) {
-                console.error(`    - "${v.msgid}" → "${v.msgstr.slice(0, 60)}${v.msgstr.length > 60 ? '…' : ''}"`);
+                console.error(
+                    `    - "${v.msgid}" → "${v.msgstr.slice(0, 60)}${v.msgstr.length > 60 ? '…' : ''}"`,
+                );
                 console.error(`      ${v.reason}`);
             }
             if (violations.length > 5) console.error(`    …and ${violations.length - 5} more`);
@@ -350,7 +352,9 @@ function applyTranslations(translationsFile, localesDir = DEFAULT_LOCALES_DIR) {
         console.error('\nNo files were written. Re-check the translations file. Common causes:');
         console.error('  - Block headers and content are mismatched (the LLM labelled the wrong locale).');
         console.error('  - The LLM produced output in the wrong language for that block.');
-        console.error('  - A foreign-script character (e.g. Arabic, Cyrillic, CJK) leaked into a Latin-script locale.');
+        console.error(
+            '  - A foreign-script character (e.g. Arabic, Cyrillic, CJK) leaked into a Latin-script locale.',
+        );
         process.exit(1);
     }
 
@@ -482,7 +486,7 @@ function main() {
 }
 
 // Run the CLI if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
     main();
 }
 

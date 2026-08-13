@@ -203,6 +203,12 @@ export function SlugInput({
         }
     }, [generatedSlug, shouldAutoGenerate, value, onChange]);
 
+    useEffect(() => {
+        if (shouldAutoGenerate && watchedValue && debouncedWatchedValue !== watchedValue && value) {
+            onChange?.('');
+        }
+    }, [debouncedWatchedValue, onChange, shouldAutoGenerate, value, watchedValue]);
+
     const toggleReadonly = () => {
         if (!isFormReadonly) {
             setIsManuallyReadonly(!isManuallyReadonly);
@@ -222,7 +228,8 @@ export function SlugInput({
         onChange?.(newValue);
     };
 
-    const displayValue = shouldAutoGenerate && generatedSlug ? generatedSlug : value || '';
+    const hasFreshGeneratedSlug = debouncedWatchedValue === watchedValue && !!generatedSlug;
+    const displayValue = shouldAutoGenerate ? (hasFreshGeneratedSlug ? generatedSlug : '') : value || '';
     const showLoading = isLoading && shouldAutoGenerate;
 
     return (

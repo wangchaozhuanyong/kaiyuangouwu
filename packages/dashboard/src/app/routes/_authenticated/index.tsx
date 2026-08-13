@@ -2,10 +2,16 @@ import { DateRangePicker } from '@/vdb/components/date-range-picker.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import type { GridLayout as GridLayoutType } from '@/vdb/components/ui/grid-layout.js';
 import { GridLayout } from '@/vdb/components/ui/grid-layout.js';
-import { getDashboardWidget, getDashboardWidgetRegistry } from '@/vdb/framework/dashboard-widget/widget-extensions.js';
-import { usePermissions } from '@/vdb/hooks/use-permissions.js';
-import { DefinedDateRange, WidgetFiltersProvider, } from '@/vdb/framework/dashboard-widget/widget-filters-context.js';
+import {
+    getDashboardWidget,
+    getDashboardWidgetRegistry,
+} from '@/vdb/framework/dashboard-widget/widget-extensions.js';
+import {
+    DefinedDateRange,
+    WidgetFiltersProvider,
+} from '@/vdb/framework/dashboard-widget/widget-filters-context.js';
 import { DashboardWidgetInstance } from '@/vdb/framework/extension-api/types/widgets.js';
+import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import {
     FullWidthPageBlock,
     Page,
@@ -13,12 +19,12 @@ import {
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
+import { usePermissions } from '@/vdb/hooks/use-permissions.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute } from '@tanstack/react-router';
 import { endOfDay, startOfMonth } from 'date-fns';
 import { useEffect, useRef, useState } from 'react';
-import { Trans, useLingui } from '@lingui/react/macro';
 
 export const Route = createFileRoute('/_authenticated/')({
     component: DashboardPage,
@@ -64,6 +70,42 @@ const findNextPosition = (
     return { x: 0, y: maxExistingRow };
 };
 
+const canUsePosition = (
+    existingWidgets: DashboardWidgetInstance[],
+    position: { x: number; y: number },
+    size: { w: number; h: number },
+) => {
+    if (position.x < 0 || position.y < 0 || position.x + size.w > 12) {
+        return false;
+    }
+    return existingWidgets.every(widget => {
+        const layout = widget.layout;
+        return (
+            position.x + size.w <= layout.x ||
+            layout.x + layout.w <= position.x ||
+            position.y + size.h <= layout.y ||
+            layout.y + layout.h <= position.y
+        );
+    });
+};
+
+const makeRoomForNewWidgets = (
+    savedLayouts: Record<string, { x: number; y: number; w: number; h: number }>,
+) => {
+    let nextLayouts = savedLayouts;
+    if (!nextLayouts['store-overview-widget']) {
+        nextLayouts = Object.fromEntries(
+            Object.entries(nextLayouts).map(([id, layout]) => [id, { ...layout, y: layout.y + 4 }]),
+        );
+    }
+    if (!nextLayouts['operations-todo-widget']) {
+        nextLayouts = Object.fromEntries(
+            Object.entries(nextLayouts).map(([id, layout]) => [id, { ...layout, y: layout.y + 3 }]),
+        );
+    }
+    return nextLayouts;
+};
+
 function DashboardPage() {
     const [widgets, setWidgets] = useState<DashboardWidgetInstance[]>([]);
     const [editMode, setEditMode] = useState(false);
@@ -79,17 +121,17 @@ function DashboardPage() {
     const { hasPermissions } = usePermissions();
 
     useEffect(() => {
-        const savedLayouts = settings.widgetLayout || {};
+        const savedLayouts = makeRoomForNewWidgets(settings.widgetLayout || {});
 
         const initialWidgets = Array.from(getDashboardWidgetRegistry().entries())
+            .sort(([, a], [, b]) => (a.order ?? 1_000) - (b.order ?? 1_000))
             .filter(([, widget]) => {
                 if (!widget.requiresPermissions || widget.requiresPermissions.length === 0) {
                     return true;
                 }
                 return hasPermissions(widget.requiresPermissions);
             })
-            .reduce(
-            (acc: DashboardWidgetInstance[], [id, widget]) => {
+            .reduce((acc: DashboardWidgetInstance[], [id, widget]) => {
                 const defaultSize = {
                     w: widget.defaultSize.w ?? 4, // Default 4 columns
                     h: widget.defaultSize.h ?? 3, // Default 3 rows
@@ -117,10 +159,13 @@ function DashboardPage() {
 
                 // Only find next position if we don't have a saved layout
                 if (!savedLayout) {
-                    const pos = findNextPosition(acc, {
-                        w: layout.w,
-                        h: layout.h,
-                    });
+                    const preferredPosition = {
+                        x: widget.defaultSize.x ?? 0,
+                        y: widget.defaultSize.y ?? 0,
+                    };
+                    const pos = canUsePosition(acc, preferredPosition, layout)
+                        ? preferredPosition
+                        : findNextPosition(acc, layout);
                     layout.x = pos.x;
                     layout.y = pos.y;
                 }
@@ -133,9 +178,7 @@ function DashboardPage() {
                         layout,
                     },
                 ];
-            },
-            [],
-        );
+            }, []);
 
         setWidgets(initialWidgets);
         setIsInitialized(true);
@@ -181,7 +224,7 @@ function DashboardPage() {
     return (
         <Page pageId="insights">
             <PageTitle>
-                <Trans>Insights</Trans>
+                <Trans>Workspace</Trans>
             </PageTitle>
             <PageActionBar>
                 <ActionBarItem itemId="date-range-picker">
@@ -196,7 +239,7 @@ function DashboardPage() {
                         variant={editMode ? 'default' : 'outline'}
                         onClick={() => setEditMode(prev => !prev)}
                     >
-                        {editMode ? t`Save Layout` : t`Edit Layout`}
+                        {editMode ? t`Save workspace layout` : t`Customize workspace`}
                     </Button>
                 </ActionBarItem>
             </PageActionBar>
@@ -227,7 +270,16 @@ function DashboardPage() {
                                 className="flex items-center justify-center text-muted-foreground"
                                 style={{ height: '400px' }}
                             >
-                                <Trans>No widgets available</Trans>
+                                <div className="text-center">
+                                    <p className="font-medium text-foreground">
+                                        <Trans>No workspace content available</Trans>
+                                    </p>
+                                    <p className="mt-1 text-sm">
+                                        <Trans>
+                                            Your role does not currently have access to any workspace modules
+                                        </Trans>
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>

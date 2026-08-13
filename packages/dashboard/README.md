@@ -17,10 +17,8 @@ The package consists of three main components:
 import { DashboardPlugin } from '@vendure/dashboard-plugin';
 
 const config: VendureConfig = {
-  // Add an instance of the plugin to the plugins array
-  plugins: [
-    DashboardPlugin.init({ route: 'dashboard' }),
-  ],
+    // Add an instance of the plugin to the plugins array
+    plugins: [DashboardPlugin.init({ route: 'dashboard' })],
 };
 ```
 
@@ -34,10 +32,10 @@ If you are building a stand-alone version of the Dashboard UI app and don't need
 import { DashboardPlugin } from '@vendure/dashboard-plugin';
 
 const config: VendureConfig = {
-  plugins: [
-    DashboardPlugin, // <-- no call to .init()
-  ],
-  // ...
+    plugins: [
+        DashboardPlugin, // <-- no call to .init()
+    ],
+    // ...
 };
 ```
 
@@ -49,12 +47,12 @@ You can also provide a custom build of the Dashboard UI:
 import { DashboardPlugin } from '@vendure/dashboard-plugin';
 
 const config: VendureConfig = {
-  plugins: [
-    DashboardPlugin.init({ 
-      route: 'dashboard',
-      app: path.join(__dirname, 'custom-dashboard-build'),
-    }),
-  ],
+    plugins: [
+        DashboardPlugin.init({
+            route: 'dashboard',
+            app: path.join(__dirname, 'custom-dashboard-build'),
+        }),
+    ],
 };
 ```
 
@@ -96,9 +94,7 @@ imports by adding the path alias to _their_ `tsconfig.json` file.
 {
     "compilerOptions": {
         "paths": {
-            "@/vdb/*": [
-                "./node_modules/@vendure/dashboard/src/lib/*"
-            ]
+            "@/vdb/*": ["./node_modules/@vendure/dashboard/src/lib/*"]
         }
     }
 }
@@ -112,6 +108,17 @@ when developing dashboard extensions.
 Run `bun run test` to run unit tests once, or `bunx vitest` to run them in watch mode.
 
 For E2E (Playwright) tests, see [e2e/README.md](./e2e/README.md).
+
+### Overlay layering
+
+Modal surfaces and anchored floating surfaces use the centralized layer contract in
+`src/app/styles.css`: modals use `--vdb-z-modal`, while popovers, selects, menus,
+tooltips, hover cards, and comboboxes use `--vdb-z-floating`.
+
+- Reuse the dashboard UI components and their Base UI portals for new overlays.
+- Do not add a page-level `z-index` workaround for a floating control inside a modal.
+- Custom overlay components must use the shared CSS variables and add a nested-overlay
+  case to `e2e/tests/components/overlay-layering.spec.ts`.
 
 ## Translations
 

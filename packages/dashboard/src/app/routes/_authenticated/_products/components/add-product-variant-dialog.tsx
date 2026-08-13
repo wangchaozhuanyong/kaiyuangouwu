@@ -19,7 +19,7 @@ import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createProductOptionDocument, createProductVariantsDocument } from '../products.graphql.js';
@@ -55,15 +55,18 @@ const getProductOptionGroupsDocument = graphql(`
     }
 `);
 
-const formSchema = z.object({
-    name: z.string().min(1, 'Name is required'),
-    sku: z.string().min(1, 'SKU is required'),
-    price: z.string().min(1, 'Price is required'),
-    stockOnHand: z.string().min(1, 'Stock level is required'),
-    options: z.record(z.string(), z.string()),
-});
+type Translate = ReturnType<typeof useLingui>['t'];
 
-type FormValues = z.infer<typeof formSchema>;
+const createFormSchema = (t: Translate) =>
+    z.object({
+        name: z.string().min(1, t`Name is required`),
+        sku: z.string().min(1, t`SKU is required`),
+        price: z.string().min(1, t`Price is required`),
+        stockOnHand: z.string().min(1, t`Stock level is required`),
+        options: z.record(z.string(), z.string()),
+    });
+
+type FormValues = z.infer<ReturnType<typeof createFormSchema>>;
 
 export function AddProductVariantDialog({
     productId,
@@ -75,6 +78,7 @@ export function AddProductVariantDialog({
     const [open, setOpen] = useState(false);
     const { activeChannel } = useChannel();
     const { t } = useLingui();
+    const formSchema = useMemo(() => createFormSchema(t), [t]);
     const [duplicateVariantError, setDuplicateVariantError] = useState<string | null>(null);
     const [nameTouched, setNameTouched] = useState(false);
 

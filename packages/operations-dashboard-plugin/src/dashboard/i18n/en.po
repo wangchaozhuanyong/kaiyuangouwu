@@ -1,0 +1,154 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: en\n"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.workbench"
+msgstr "Workspace"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.productCenter"
+msgstr "Product center"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.orderCenter"
+msgstr "Order center"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.customerCenter"
+msgstr "Customer center"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.marketingCenter"
+msgstr "Marketing center"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.inventoryAndFulfillment"
+msgstr "Inventory & fulfillment"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.storeSettings"
+msgstr "Store settings"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.accountsAndAccess"
+msgstr "Accounts & access"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.systemManagement"
+msgstr "System management"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.skuAndInventory"
+msgstr "SKUs & inventory"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.productGroups"
+msgstr "Product groups"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.specificationTemplates"
+msgstr "Specification templates"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.productAttributes"
+msgstr "Product attributes"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.warehouses"
+msgstr "Warehouses"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.stores"
+msgstr "Stores"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.title"
+msgstr "Order tasks"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.description"
+msgstr "Orders that need attention right now"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingPayment"
+msgstr "Awaiting payment"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingPaymentDescription"
+msgstr "Customers have not completed payment"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingShipment"
+msgstr "Awaiting shipment"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingShipmentDescription"
+msgstr "Paid orders ready for fulfillment"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.modifying"
+msgstr "Order changes in progress"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.modifyingDescription"
+msgstr "Orders currently being adjusted"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.openOrders"
+msgstr "Open order center"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.loadError"
+msgstr "Could not load order tasks"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.title"
+msgstr "All-store performance"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.description"
+msgstr "Compare each store for the selected period"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.manage"
+msgstr "Manage stores"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.orders"
+msgstr "Orders"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.sales"
+msgstr "Sales"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.current"
+msgstr "Current store"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.total"
+msgstr "Total"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.storeCount"
+msgstr "stores"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.loadError"
+msgstr "Could not load store data"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.unavailable"
+msgstr "Data unavailable"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.retry"
+msgstr "Retry"

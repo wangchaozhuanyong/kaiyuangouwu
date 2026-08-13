@@ -64,7 +64,7 @@ export function customerHistoryUtils(customer: CustomerHistoryCustomerDetail) {
             case 'CUSTOMER_EMAIL_UPDATE_VERIFIED':
                 return <Trans>Email update verified</Trans>;
             default:
-                return <Trans>{entry.type.replace(/_/g, ' ').toLowerCase()}</Trans>;
+                return <Trans>Unknown customer activity</Trans>;
         }
     };
 

@@ -1,0 +1,21 @@
+{
+    "name": "@vendure/operations-dashboard-plugin",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc --project tsconfig.build.json",
+        "check-types": "tsc --project tsconfig.json --noEmit"
+    },
+    "dependencies": {
+        "@lingui/core": "^5.9.3",
+        "@lingui/react": "^5.9.3",
+        "lucide-react": "^0.475.0"
+    },
+    "peerDependencies": {
+        "@vendure/core": "3.7.2",
+        "@vendure/dashboard": "3.7.2",
+        "react": "^19.2.4"
+    }
+}

@@ -4,7 +4,7 @@ import { Button } from '@/vdb/components/ui/button.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from '@tanstack/react-router';
 import { SortingState } from '@tanstack/react-table';
 import { PlusIcon } from 'lucide-react';
@@ -35,6 +35,7 @@ export interface FacetValuesTableProps {
 }
 
 export function FacetValuesTable({ facetId, registerRefresher }: Readonly<FacetValuesTableProps>) {
+    const { t } = useLingui();
     const [sorting, setSorting] = useState<SortingState>([]);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -109,7 +110,7 @@ export function FacetValuesTable({ facetId, registerRefresher }: Readonly<FacetV
                 }}
                 customizeColumns={{
                     name: {
-                        header: 'Name',
+                        header: t`Name`,
                         cell: ({ row }) => (
                             <DetailPageButton
                                 id={row.original.id}

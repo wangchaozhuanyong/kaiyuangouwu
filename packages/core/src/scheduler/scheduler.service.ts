@@ -1,5 +1,5 @@
 import { Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
-import { Success, UpdateScheduledTaskInput } from '@vendure/common/lib/generated-types';
+import { LanguageCode, Success, UpdateScheduledTaskInput } from '@vendure/common/lib/generated-types';
 import CronTime from 'cron-time-generator';
 import { Cron } from 'croner';
 import cronstrue from 'cronstrue';
@@ -9,6 +9,7 @@ import { Logger } from '../config/logger/vendure-logger';
 import { ProcessContext } from '../process-context';
 
 import { NoopSchedulerStrategy } from './noop-scheduler-strategy';
+import { getScheduleDescription } from './schedule-description';
 import { ScheduledTask } from './scheduled-task';
 import { TaskReport } from './scheduler-strategy';
 
@@ -90,17 +91,22 @@ export class SchedulerService implements OnApplicationBootstrap, OnApplicationSh
      * @description
      * Returns a list of all the scheduled tasks and their current status.
      */
-    getTaskList(): Promise<TaskInfo[]> {
+    getTaskList(languageCode: LanguageCode = LanguageCode.en): Promise<TaskInfo[]> {
         return this.configService.schedulerOptions.schedulerStrategy
             .getTasks()
             .then(taskReports =>
-                taskReports.map(taskReport => this.createTaskInfo(taskReport)).filter(x => x !== undefined),
+                taskReports
+                    .map(taskReport => this.createTaskInfo(taskReport, languageCode))
+                    .filter(x => x !== undefined),
             );
     }
 
-    updateTask(input: UpdateScheduledTaskInput): Promise<TaskInfo> {
+    updateTask(
+        input: UpdateScheduledTaskInput,
+        languageCode: LanguageCode = LanguageCode.en,
+    ): Promise<TaskInfo> {
         return this.configService.schedulerOptions.schedulerStrategy.updateTask(input).then(taskReport => {
-            const taskInfo = this.createTaskInfo(taskReport);
+            const taskInfo = this.createTaskInfo(taskReport, languageCode);
             if (!taskInfo) {
                 throw new Error(`Task ${input.id} not found`);
             }
@@ -128,7 +134,7 @@ export class SchedulerService implements OnApplicationBootstrap, OnApplicationSh
         }
     }
 
-    private createTaskInfo(taskReport: TaskReport): TaskInfo | undefined {
+    private createTaskInfo(taskReport: TaskReport, languageCode: LanguageCode): TaskInfo | undefined {
         const job = this.jobs.get(taskReport.id)?.job;
         const task = this.jobs.get(taskReport.id)?.task;
         if (!job || !task) {
@@ -140,7 +146,7 @@ export class SchedulerService implements OnApplicationBootstrap, OnApplicationSh
             id: taskReport.id,
             description: task.options.description ?? '',
             schedule: pattern ?? 'unknown',
-            scheduleDescription: pattern ? cronstrue.toString(pattern) : 'unknown',
+            scheduleDescription: getScheduleDescription(pattern, languageCode),
             lastExecutedAt: taskReport.lastExecutedAt,
             nextExecutionAt: job.nextRun(),
             isRunning: taskReport.isRunning,

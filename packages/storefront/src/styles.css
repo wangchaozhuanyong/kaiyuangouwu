@@ -1050,6 +1050,17 @@ img {
         padding-right: 15px;
     }
 
+    .back-button {
+        min-height: 44px;
+        padding: 0 8px 0 0;
+        margin: -8px 0 -5px;
+    }
+
+    .icon-button {
+        width: 44px;
+        height: 44px;
+    }
+
     .cart-line {
         grid-template-columns: 72px minmax(0, 1fr);
     }
@@ -1060,6 +1071,16 @@ img {
 
     .line-price {
         grid-column: 2;
+    }
+
+    .quantity-control {
+        height: 46px;
+        grid-template-columns: 44px 40px 44px;
+    }
+
+    .remove-button {
+        width: 44px;
+        height: 44px;
     }
 
     .form-grid.two-columns {

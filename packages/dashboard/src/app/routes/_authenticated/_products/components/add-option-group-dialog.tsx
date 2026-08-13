@@ -24,12 +24,12 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useDebounce } from '@uidotdev/usehooks';
 import { Check, Link, Plus, Save } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { optionGroupListDocument } from '../../_option-groups/option-groups.graphql.js';
 import { addOptionGroupToProductDocument, createProductOptionGroupDocument } from '../products.graphql.js';
-import { OptionGroup, optionGroupSchema, SingleOptionGroupEditor } from './option-groups-editor.js';
+import { createOptionGroupSchema, OptionGroup, SingleOptionGroupEditor } from './option-groups-editor.js';
 
 export function AddOptionGroupDialog({
     productId,
@@ -45,6 +45,7 @@ export function AddOptionGroupDialog({
     const [open, setOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('existing');
     const { t } = useLingui();
+    const optionGroupSchema = useMemo(() => createOptionGroupSchema(t), [t]);
 
     const form = useForm<OptionGroup>({
         resolver: zodResolver(optionGroupSchema),
@@ -136,7 +137,9 @@ export function AddOptionGroupDialog({
             {trigger ? (
                 <DialogTrigger render={trigger} />
             ) : (
-                <DialogTrigger render={<Button variant="outline" size="sm" type="button" className="w-full gap-2" />}>
+                <DialogTrigger
+                    render={<Button variant="outline" size="sm" type="button" className="w-full gap-2" />}
+                >
                     <Plus className="h-4 w-4" />
                     <Trans>Add option group</Trans>
                 </DialogTrigger>
@@ -171,10 +174,7 @@ export function AddOptionGroupDialog({
                     <TabsContent value="new">
                         <div className="space-y-4">
                             <Form {...form}>
-                                <SingleOptionGroupEditor
-                                    control={form.control}
-                                    fieldArrayPath={''}
-                                />
+                                <SingleOptionGroupEditor control={form.control} fieldArrayPath={''} />
                             </Form>
                         </div>
                         <DialogFooter className="mt-4">
@@ -217,9 +217,7 @@ function OptionGroupSearch({
                 options: {
                     take: 20,
                     sort: { name: 'ASC' },
-                    filter: debouncedSearchTerm
-                        ? { name: { contains: debouncedSearchTerm } }
-                        : undefined,
+                    filter: debouncedSearchTerm ? { name: { contains: debouncedSearchTerm } } : undefined,
                 },
             }),
         staleTime: 1000 * 60,

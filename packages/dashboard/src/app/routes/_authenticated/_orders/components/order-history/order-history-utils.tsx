@@ -42,7 +42,9 @@ export function orderHistoryUtils(order: OrderHistoryOrderDetail) {
             case 'ORDER_CUSTOMER_UPDATED':
                 return <UserX className="h-4 w-4" />;
             case 'ORDER_CANCELLATION': {
-                const lines = entry.data.lines as Array<{ orderLineId: string; quantity: number }> | undefined;
+                const lines = entry.data.lines as
+                    | Array<{ orderLineId: string; quantity: number }>
+                    | undefined;
                 const hasRefundData = (lines && lines.length > 0) || entry.data.reason;
                 if (hasRefundData) {
                     return <RotateCcw className="h-4 w-4" />;
@@ -104,7 +106,9 @@ export function orderHistoryUtils(order: OrderHistoryOrderDetail) {
             case 'ORDER_CUSTOMER_UPDATED':
                 return <Trans>Customer updated</Trans>;
             case 'ORDER_CANCELLATION': {
-                const lines = entry.data.lines as Array<{ orderLineId: string; quantity: number }> | undefined;
+                const lines = entry.data.lines as
+                    | Array<{ orderLineId: string; quantity: number }>
+                    | undefined;
                 const hasPartialCancellation = lines && lines.length > 0;
                 if (hasPartialCancellation || entry.data.reason) {
                     return <Trans>Items refunded</Trans>;
@@ -112,7 +116,7 @@ export function orderHistoryUtils(order: OrderHistoryOrderDetail) {
                 return <Trans>Order cancelled</Trans>;
             }
             default:
-                return <Trans>{entry.type.replace(/_/g, ' ').toLowerCase()}</Trans>;
+                return <Trans>Unknown order activity</Trans>;
         }
     };
 

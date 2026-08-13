@@ -3,6 +3,7 @@ import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { DropdownMenuItem } from '@/vdb/components/ui/dropdown-menu.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
+import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import {
     Page,
     PageActionBar,
@@ -10,7 +11,6 @@ import {
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useCustomFieldConfig } from '@/vdb/hooks/use-custom-field-config.js';
@@ -28,8 +28,8 @@ import {
     setOrderCustomFieldsDocument,
     transitionOrderToStateDocument,
 } from '../orders.graphql.js';
-import { OrderProcessDialog } from './order-process-dialog.js';
 import { canAddFulfillment, canRefundOrder, shouldShowAddManualPaymentButton } from '../utils/order-utils.js';
+import { OrderProcessDialog } from './order-process-dialog.js';
 
 import { AddManualPaymentDialog } from './add-manual-payment-dialog.js';
 import { FulfillOrderDialog } from './fulfill-order-dialog.js';
@@ -134,6 +134,14 @@ export function OrderDetailShared({
                         void refreshPage();
                     }
                 },
+                confirmation:
+                    state === 'Cancelled'
+                        ? {
+                              title: t`Cancel order`,
+                              description: t`Are you sure you want to cancel this order? This action cannot be undone.`,
+                              confirmText: t`Cancel order`,
+                          }
+                        : undefined,
             }));
     }, [entity, transitionToState, t, refreshPage]);
 
@@ -188,11 +196,11 @@ export function OrderDetailShared({
         <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
             <PageTitle>{titleSlot?.(entity) || <DefaultOrderTitle entity={entity} />}</PageTitle>
             <PageActionBar
-                    dropdownMenuItems={[
-                        ...(nextStates.includes('Modifying') ? [{ component: ModifyMenuItem }] : []),
-                        ...(showRefundOption ? [{ component: RefundMenuItem }] : []),
-                    ]}
-                >
+                dropdownMenuItems={[
+                    ...(nextStates.includes('Modifying') ? [{ component: ModifyMenuItem }] : []),
+                    ...(showRefundOption ? [{ component: RefundMenuItem }] : []),
+                ]}
+            >
                 {showAddPaymentButton && (
                     <ActionBarItem itemId="add-payment-button" requiresPermission={['UpdateOrder']}>
                         <AddManualPaymentDialog

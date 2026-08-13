@@ -33,16 +33,12 @@ export function ShippingMethodSelector({
                         onClick={() => onSelect(method.id)}
                     >
                         <CardHeader className="pb-2">
-                            <CardTitle className="">
-                                <Trans>{method.name}</Trans>
-                            </CardTitle>
+                            <CardTitle className="">{method.name}</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-2">
                                 {method.description && (
-                                    <p className="text-sm text-muted-foreground">
-                                        <Trans>{method.description}</Trans>
-                                    </p>
+                                    <p className="text-sm text-muted-foreground">{method.description}</p>
                                 )}
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm font-medium">

@@ -1,0 +1,154 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_Hans\n"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.workbench"
+msgstr "工作台"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.productCenter"
+msgstr "商品中心"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.orderCenter"
+msgstr "订单中心"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.customerCenter"
+msgstr "客户中心"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.marketingCenter"
+msgstr "营销中心"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.inventoryAndFulfillment"
+msgstr "库存与履约"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.storeSettings"
+msgstr "店铺设置"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.accountsAndAccess"
+msgstr "账号与权限"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.systemManagement"
+msgstr "系统管理"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.skuAndInventory"
+msgstr "SKU 与库存"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.productGroups"
+msgstr "商品分组"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.specificationTemplates"
+msgstr "规格模板"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.productAttributes"
+msgstr "商品属性"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.warehouses"
+msgstr "仓库"
+
+#. js-lingui-explicit-id
+msgid "operations.nav.stores"
+msgstr "店铺"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.title"
+msgstr "订单待办"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.description"
+msgstr "当前需要优先处理的订单"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingPayment"
+msgstr "待付款"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingPaymentDescription"
+msgstr "客户尚未完成付款"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingShipment"
+msgstr "待发货"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.pendingShipmentDescription"
+msgstr "已付款并等待履约"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.modifying"
+msgstr "改单处理中"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.modifyingDescription"
+msgstr "正在人工调整的订单"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.openOrders"
+msgstr "进入订单中心"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.loadError"
+msgstr "订单待办加载失败"
+
+#. js-lingui-explicit-id
+msgid "operations.todo.retry"
+msgstr "重试"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.title"
+msgstr "全部店铺经营概览"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.description"
+msgstr "对比所选时间范围内各店铺的经营数据"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.manage"
+msgstr "管理店铺"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.orders"
+msgstr "订单量"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.sales"
+msgstr "销售额"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.current"
+msgstr "当前店铺"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.total"
+msgstr "合计"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.storeCount"
+msgstr "家店铺"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.loadError"
+msgstr "店铺经营数据加载失败"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.unavailable"
+msgstr "数据暂不可用"
+
+#. js-lingui-explicit-id
+msgid "operations.stores.retry"
+msgstr "重试"

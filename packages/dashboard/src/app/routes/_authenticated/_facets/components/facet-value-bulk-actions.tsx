@@ -7,7 +7,7 @@ export const DeleteFacetValuesBulkAction: BulkActionComponent<any> = ({ selectio
     return (
         <DeleteBulkAction
             mutationDocument={deleteFacetValuesDocument}
-            entityName="facets"
+            entityName="facet values"
             requiredPermissions={['DeleteCatalog', 'DeleteFacet']}
             selection={selection}
             table={table}

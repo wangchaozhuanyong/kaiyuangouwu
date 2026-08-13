@@ -3,6 +3,7 @@ import { graphql } from '@/vdb/graphql/graphql.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Button } from '../ui/button.js';
 import { Checkbox } from '../ui/checkbox.js';
@@ -26,23 +27,26 @@ const getAvailableCountriesDocument = graphql(`
     }
 `);
 
-const addressFormSchema = z.object({
-    id: z.string(),
-    fullName: z.string().optional(),
-    company: z.string().optional(),
-    streetLine1: z.string().min(1, { message: 'Street address is required' }),
-    streetLine2: z.string().optional(),
-    city: z.string().min(1, { message: 'City is required' }),
-    province: z.string().optional(),
-    postalCode: z.string().optional(),
-    countryCode: z.string().min(1, { message: 'Country is required' }),
-    phoneNumber: z.string().optional(),
-    defaultShippingAddress: z.boolean(),
-    defaultBillingAddress: z.boolean(),
-    customFields: z.any().optional(),
-});
+type Translate = ReturnType<typeof useLingui>['t'];
 
-export type AddressFormValues = z.infer<typeof addressFormSchema>;
+const createAddressFormSchema = (t: Translate) =>
+    z.object({
+        id: z.string(),
+        fullName: z.string().optional(),
+        company: z.string().optional(),
+        streetLine1: z.string().min(1, { message: t`Street address is required` }),
+        streetLine2: z.string().optional(),
+        city: z.string().min(1, { message: t`City is required` }),
+        province: z.string().optional(),
+        postalCode: z.string().optional(),
+        countryCode: z.string().min(1, { message: t`Country is required` }),
+        phoneNumber: z.string().optional(),
+        defaultShippingAddress: z.boolean(),
+        defaultBillingAddress: z.boolean(),
+        customFields: z.any().optional(),
+    });
+
+export type AddressFormValues = z.infer<ReturnType<typeof createAddressFormSchema>>;
 
 interface CustomerAddressFormProps<T = any> {
     address?: T;
@@ -71,6 +75,7 @@ export function CustomerAddressForm<T>({
     submitLabel,
 }: CustomerAddressFormProps<T>) {
     const { t } = useLingui();
+    const addressFormSchema = useMemo(() => createAddressFormSchema(t), [t]);
 
     // Fetch available countries
     const { data: countriesData, isLoading: isLoadingCountries } = useQuery({
@@ -135,7 +140,7 @@ export function CustomerAddressForm<T>({
                         name="streetLine1"
                         label={<Trans>Street Address</Trans>}
                         render={({ field }) => (
-                            <Input placeholder="123 Main St" {...field} value={field.value || ''} />
+                            <Input placeholder={t`123 Main St`} {...field} value={field.value || ''} />
                         )}
                     />
 

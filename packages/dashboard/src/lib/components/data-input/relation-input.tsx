@@ -1,5 +1,9 @@
-import { DashboardFormComponent, DashboardFormComponentProps } from '@/vdb/framework/form-engine/form-engine-types.js';
+import {
+    DashboardFormComponent,
+    DashboardFormComponentProps,
+} from '@/vdb/framework/form-engine/form-engine-types.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
+import { msg } from '@lingui/core/macro';
 import { createRelationSelectorConfig, RelationSelector } from './relation-selector.js';
 
 /**
@@ -105,7 +109,7 @@ export const productRelationConfig = createRelationSelectorConfig({
     `),
     idKey: 'id' as const,
     labelKey: 'name' as const,
-    placeholder: 'Search products...',
+    placeholder: msg`Search products...`,
     buildSearchFilter: (term: string) => ({
         name: { contains: term },
     }),
@@ -130,7 +134,7 @@ export const customerRelationConfig = createRelationSelectorConfig({
     `),
     idKey: 'id' as const,
     labelKey: 'emailAddress' as const,
-    placeholder: 'Search customers...',
+    placeholder: msg`Search customers...`,
     buildSearchFilter: (term: string) => ({
         emailAddress: { contains: term },
     }),
@@ -158,7 +162,7 @@ export const collectionRelationConfig = createRelationSelectorConfig({
     `),
     idKey: 'id' as const,
     labelKey: 'name' as const,
-    placeholder: 'Search collections...',
+    placeholder: msg`Search collections...`,
     buildSearchFilter: (term: string) => ({
         name: { contains: term },
     }),

@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/vdb/components/ui/pop
 import { getQueryName } from '@/vdb/framework/document-introspection/get-document-structure.js';
 import { api } from '@/vdb/graphql/api.js';
 import { cn } from '@/vdb/lib/utils.js';
+import type { MessageDescriptor } from '@lingui/core';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useDebounce } from '@uidotdev/usehooks';
@@ -28,7 +29,7 @@ export interface RelationSelectorConfig<T = any> {
     /** Number of items to load per page */
     pageSize?: number;
     /** Placeholder text for the search input */
-    placeholder?: string;
+    placeholder?: string | MessageDescriptor;
     /** Whether to enable multi-select mode */
     multiple?: boolean;
     /** Custom filter function for search */
@@ -195,7 +196,7 @@ export function RelationSelector<T>({
     className,
     selectorLabel,
 }: Readonly<RelationSelectorProps<T>>) {
-    const { t } = useLingui();
+    const { i18n, t } = useLingui();
 
     const [open, setOpen] = useState(false);
     const [selectedItemsCache, setSelectedItemsCache] = useState<T[]>([]);
@@ -401,20 +402,40 @@ export function RelationSelector<T>({
 
             {/* Selector trigger */}
             <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger render={<Button variant="outline" size="sm" type="button" disabled={disabled} className="gap-2" />}>
-                        <Plus className="h-4 w-4" />
-                        {isMultiple
-                            ? selectedItems.length > 0
-                                ? <Trans>Add more ({selectedItems.length} selected)</Trans>
-                                : (selectorLabel ?? <Trans>Select items</Trans>)
-                            : selectedItems.length > 0
-                                ? <Trans>Change selection</Trans>
-                                : (selectorLabel ?? <Trans>Select item</Trans>)}
+                <PopoverTrigger
+                    render={
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            disabled={disabled}
+                            className="gap-2"
+                        />
+                    }
+                >
+                    <Plus className="h-4 w-4" />
+                    {isMultiple ? (
+                        selectedItems.length > 0 ? (
+                            <Trans>Add more ({selectedItems.length} selected)</Trans>
+                        ) : (
+                            (selectorLabel ?? <Trans>Select items</Trans>)
+                        )
+                    ) : selectedItems.length > 0 ? (
+                        <Trans>Change selection</Trans>
+                    ) : (
+                        (selectorLabel ?? <Trans>Select item</Trans>)
+                    )}
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-[400px]" align="start">
                     <Command shouldFilter={false}>
                         <CommandInput
-                            placeholder={config.placeholder ?? t`Search...`}
+                            placeholder={
+                                typeof config.placeholder === 'string'
+                                    ? config.placeholder
+                                    : config.placeholder
+                                      ? i18n._(config.placeholder)
+                                      : t`Search...`
+                            }
                             value={searchTerm}
                             onValueChange={setSearchTerm}
                             disabled={disabled}

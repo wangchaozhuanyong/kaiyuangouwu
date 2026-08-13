@@ -4,14 +4,15 @@ import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js'
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
-import {    DetailFormGrid,
+import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
+import {
+    DetailFormGrid,
     Page,
     PageActionBar,
     PageBlock,
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-loader.js';
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -108,10 +109,10 @@ function RoleDetailPage() {
                             <FormFieldWrapper
                                 control={form.control}
                                 name="channelIds"
-                                label={<Trans>Channels</Trans>}
+                                label={<Trans>Managed stores</Trans>}
                                 description={
                                     <Trans>
-                                        The selected permissions will be applied to the these channels.
+                                        This role can only view and manage data for the selected stores.
                                     </Trans>
                                 }
                                 render={({ field }) => (

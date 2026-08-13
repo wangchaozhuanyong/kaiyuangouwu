@@ -5,6 +5,8 @@ import { DashboardRouteDefinition, DetailPageButton, ListPage } from '@vendure/d
 
 const reviewMessages = {
     productReviews: msg({ id: 'review.productReviews', message: 'Product reviews' }),
+    reviewContent: msg({ id: 'review.content', message: 'Review content' }),
+    reviewerLocation: msg({ id: 'review.reviewerLocation', message: 'Reviewer location' }),
 };
 
 const getReviewList = graphql(`
@@ -85,6 +87,25 @@ export const reviewList: DashboardRouteDefinition = {
                     header: () => <Trans>Reviewer name</Trans>,
                     cell: ({ row }) => {
                         return <div className="text-red-500">{row.original.customFields?.reviewerName}</div>;
+                    },
+                },
+                body: {
+                    header: () => <Trans id={reviewMessages.reviewContent.id}>Review content</Trans>,
+                },
+                authorLocation: {
+                    header: () => <Trans id={reviewMessages.reviewerLocation.id}>Reviewer location</Trans>,
+                },
+                state: {
+                    header: () => <Trans id="review.status">Review status</Trans>,
+                    cell: ({ row }) => {
+                        switch (row.original.state) {
+                            case 'approved':
+                                return <Trans>Approved</Trans>;
+                            case 'rejected':
+                                return <Trans>Rejected</Trans>;
+                            default:
+                                return <Trans>Pending review</Trans>;
+                        }
                     },
                 },
             }}

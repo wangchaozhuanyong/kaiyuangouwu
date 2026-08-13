@@ -6,6 +6,7 @@ import { Button } from '@/vdb/components/ui/button.js';
 import { Form } from '@/vdb/components/ui/form.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { useGeneratedForm } from '@/vdb/framework/form-engine/use-generated-form.js';
+import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import {
     Page,
     PageActionBar,
@@ -13,7 +14,6 @@ import {
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -22,11 +22,16 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { ResultOf } from 'gql.tada';
 import { User } from 'lucide-react';
 import { toast } from 'sonner';
+import { addressFragment } from '../_customers/customers.graphql.js';
 import { CustomerAddressSelector } from './components/customer-address-selector.js';
+import {
+    getDraftOrderIncompleteReason,
+    hasCompletePhysicalShippingAddress,
+    orderLinesRequireShipping,
+} from './components/draft-order-readiness.js';
 import { DraftOrderStatus } from './components/draft-order-status.js';
 import { EditOrderTable } from './components/edit-order-table.js';
 import { OrderAddress } from './components/order-address.js';
-import { addressFragment } from '../_customers/customers.graphql.js';
 import {
     addItemToDraftOrderDocument,
     adjustDraftOrderLineDocument,
@@ -181,12 +186,8 @@ function DraftOrderPage() {
                         });
                         addresses = customer?.addresses ?? [];
                     }
-                    const defaultShippingAddress = addresses.find(
-                        address => address.defaultShippingAddress,
-                    );
-                    const defaultBillingAddress = addresses.find(
-                        address => address.defaultBillingAddress,
-                    );
+                    const defaultShippingAddress = addresses.find(address => address.defaultShippingAddress);
+                    const defaultBillingAddress = addresses.find(address => address.defaultBillingAddress);
                     // Sequence the address mutations: they all mutate the same
                     // version-tracked Order, so firing them concurrently makes
                     // the second read a stale version and fail with an
@@ -214,7 +215,9 @@ function DraftOrderPage() {
                             });
                         }
                     } catch (e) {
-                        toast.error(t`Failed to set address for order: ${e instanceof Error ? e.message : String(e)}`);
+                        toast.error(
+                            t`Failed to set address for order: ${e instanceof Error ? e.message : String(e)}`,
+                        );
                     }
                     refreshEntity();
                     break;
@@ -372,10 +375,20 @@ function DraftOrderPage() {
 
     const hasCustomer = !!entity.customer;
     const hasLines = entity.lines.length > 0;
+    const requiresShipping = orderLinesRequireShipping(entity.lines);
+    const hasCompleteShippingAddress = hasCompletePhysicalShippingAddress(entity.shippingAddress);
     const hasShippingMethod = entity.shippingLines.length > 0;
     const isDraftState = entity.state === 'Draft';
 
-    const isCompleteDraftDisabled = !hasCustomer || !hasLines || !hasShippingMethod || !isDraftState;
+    const isCompleteDraftDisabled =
+        getDraftOrderIncompleteReason({
+            hasCustomer,
+            hasLines,
+            requiresShipping,
+            hasCompleteShippingAddress,
+            hasShippingMethod,
+            isDraftState,
+        }) !== null;
 
     return (
         <Page pageId="draft-order-detail" form={form} entity={entity}>
@@ -416,6 +429,8 @@ function DraftOrderPage() {
                     <DraftOrderStatus
                         hasCustomer={hasCustomer}
                         hasLines={hasLines}
+                        requiresShipping={requiresShipping}
+                        hasCompleteShippingAddress={hasCompleteShippingAddress}
                         hasShippingMethod={hasShippingMethod}
                         isDraftState={isDraftState}
                     />
@@ -496,7 +511,11 @@ function DraftOrderPage() {
                 </PageBlock>
                 <PageBlock column="side" blockId="customer" title={<Trans>Customer</Trans>}>
                     {entity?.customer?.id ? (
-                        <Button variant="outline" render={<Link to={`/customers/${entity?.customer?.id}`} />} className="mb-4">
+                        <Button
+                            variant="outline"
+                            render={<Link to={`/customers/${entity?.customer?.id}`} />}
+                            className="mb-4"
+                        >
                             <User className="w-4 h-4" />
                             {entity?.customer?.firstName} {entity?.customer?.lastName}
                         </Button>

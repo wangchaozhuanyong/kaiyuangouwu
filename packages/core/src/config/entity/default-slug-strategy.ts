@@ -7,7 +7,7 @@ import { SlugGenerateParams, SlugStrategy } from './slug-strategy';
  * The default strategy for generating slugs. This strategy:
  * - Converts to lowercase
  * - Replaces spaces and special characters with hyphens
- * - Removes non-alphanumeric characters (except hyphens)
+ * - Removes characters that are not Unicode letters, numbers, spaces, or hyphens
  * - Removes leading and trailing hyphens
  * - Collapses multiple hyphens into one
  *
@@ -34,7 +34,7 @@ export class DefaultSlugStrategy implements SlugStrategy {
             .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
             .toLowerCase()
             .trim()
-            .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
+            .replace(/[^\p{Letter}\p{Number}\s-]/gu, '') // Preserve letters and numbers from every language
             .replace(/\s+/g, '-'); // Replace spaces with hyphens
 
         // Split by hyphen, filter out empty strings, and rejoin to handle multiple hyphens

@@ -5,6 +5,8 @@ import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js'
 import { LanguageSelector } from '@/vdb/components/shared/language-selector.js';
 import { SellerSelector } from '@/vdb/components/shared/seller-selector.js';
 import { ZoneSelector } from '@/vdb/components/shared/zone-selector.js';
+import { Alert, AlertDescription, AlertTitle } from '@/vdb/components/ui/alert.js';
+import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { Switch } from '@/vdb/components/ui/switch.js';
@@ -25,7 +27,9 @@ import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { z } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { CheckCircle2, Circle, ClipboardCopy, Globe2, Store } from 'lucide-react';
 import { toast } from 'sonner';
+import { uiConfig } from 'virtual:vendure-ui-config';
 import { channelDetailDocument, createChannelDocument, updateChannelDocument } from './channels.graphql.js';
 
 const pageId = 'channel-detail';
@@ -62,8 +66,8 @@ export const Route = createFileRoute('/_authenticated/_channels/channels_/$id')(
         queryDocument: channelDetailDocument,
         breadcrumb(isNew, entity) {
             return [
-                { path: '/channels', label: <Trans>Channels</Trans> },
-                isNew ? <Trans>New channel</Trans> : <ChannelCodeLabel code={entity?.code ?? ''} />,
+                { path: '/channels', label: <Trans>Stores</Trans> },
+                isNew ? <Trans>Create store</Trans> : <ChannelCodeLabel code={entity?.code ?? ''} />,
             ];
         },
     }),
@@ -132,7 +136,9 @@ function ChannelDetailPage() {
                     ...(creatingNewEntity
                         ? {
                               defaultTaxZoneId: z.string().min(1, { message: t`This field is required` }),
-                              defaultShippingZoneId: z.string().min(1, { message: t`This field is required` }),
+                              defaultShippingZoneId: z
+                                  .string()
+                                  .min(1, { message: t`This field is required` }),
                           }
                         : {}),
                 })
@@ -153,7 +159,10 @@ function ChannelDetailPage() {
                     if (!available.length) {
                         // Nothing is available, so the default cannot be filled in yet — say so on
                         // both fields rather than only on the one that happens to be required.
-                        addIssue('availableCurrencyCodes', t`You must select at least one available currency`);
+                        addIssue(
+                            'availableCurrencyCodes',
+                            t`You must select at least one available currency`,
+                        );
                         addIssue(
                             'defaultCurrencyCode',
                             t`You must first select an available currency to set a default currency`,
@@ -170,20 +179,20 @@ function ChannelDetailPage() {
         params: { id: params.id },
         onSuccess: async data => {
             if (data.__typename === 'Channel') {
-                toast(creatingNewEntity ? t`Successfully created channel` : t`Successfully updated channel`);
+                toast(creatingNewEntity ? t`Store created` : t`Store settings updated`);
                 refreshChannels();
                 resetForm();
                 if (creatingNewEntity) {
                     await navigate({ to: `../$id`, params: { id: data.id } });
                 }
             } else {
-                toast(creatingNewEntity ? t`Failed to create channel` : t`Failed to update channel`, {
+                toast(creatingNewEntity ? t`Could not create store` : t`Could not update store`, {
                     description: data.message,
                 });
             }
         },
         onError: err => {
-            toast(creatingNewEntity ? t`Failed to create channel` : t`Failed to update channel`, {
+            toast(creatingNewEntity ? t`Could not create store` : t`Could not update store`, {
                 description: err instanceof Error ? err.message : t`Unknown error`,
             });
         },
@@ -191,14 +200,42 @@ function ChannelDetailPage() {
 
     const availableCurrencyCodes = form.watch('availableCurrencyCodes');
     const availableLanguageCodes = form.watch('availableLanguageCodes');
+    const storeCode = form.watch('code');
+    const storeToken = form.watch('token');
+    const defaultCurrencyCode = form.watch('defaultCurrencyCode');
+    const defaultLanguageCode = form.watch('defaultLanguageCode');
+    const defaultTaxZoneId = form.watch('defaultTaxZoneId');
+    const defaultShippingZoneId = form.watch('defaultShippingZoneId');
 
     const codeIsDefault = entity?.code === DEFAULT_CHANNEL_CODE;
+    const setupSteps = [
+        {
+            label: t`Store identity`,
+            complete: Boolean(storeCode && storeToken),
+        },
+        {
+            label: t`Currency and content language`,
+            complete: Boolean(defaultCurrencyCode && defaultLanguageCode),
+        },
+        {
+            label: t`Delivery and tax regions`,
+            complete: Boolean(defaultTaxZoneId && defaultShippingZoneId),
+        },
+    ];
+
+    const copyStoreToken = async () => {
+        if (!storeToken) {
+            return;
+        }
+        await navigator.clipboard.writeText(storeToken);
+        toast.success(t`Store API token copied`);
+    };
 
     return (
         <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
             <PageTitle>
                 {creatingNewEntity ? (
-                    <Trans>New channel</Trans>
+                    <Trans>Create store</Trans>
                 ) : (
                     <ChannelCodeLabel code={entity?.code ?? ''} />
                 )}
@@ -216,24 +253,29 @@ function ChannelDetailPage() {
                 </ActionBarItem>
             </PageActionBar>
             <PageLayout>
-                <PageBlock column="main" blockId="main-form">
+                <PageBlock
+                    column="main"
+                    blockId="main-form"
+                    title={<Trans>Store identity</Trans>}
+                    description={<Trans>Set the internal identity used to distinguish this store.</Trans>}
+                >
                     <DetailFormGrid>
                         <FormFieldWrapper
                             control={form.control}
                             name="code"
-                            label={<Trans>Code</Trans>}
+                            label={<Trans>Store code</Trans>}
+                            description={<Trans>Use a stable short code, such as cn-mainland.</Trans>}
                             render={({ field }) => (
                                 <Input placeholder="" {...field} disabled={codeIsDefault} />
                             )}
                         />
-                        <div></div>
                         <FormFieldWrapper
                             control={form.control}
                             name="token"
-                            label={<Trans>Token</Trans>}
+                            label={<Trans>Store API token</Trans>}
                             description={
                                 <Trans>
-                                    The token is used to specify the channel when making API requests.
+                                    The storefront sends this token with API requests to select this store.
                                 </Trans>
                             }
                             render={({ field }) => <Input placeholder="" {...field} />}
@@ -241,7 +283,12 @@ function ChannelDetailPage() {
                         <FormFieldWrapper
                             control={form.control}
                             name="sellerId"
-                            label={<Trans>Seller</Trans>}
+                            label={<Trans>Operating entity</Trans>}
+                            description={
+                                <Trans>
+                                    Optional. Use this when the store belongs to a specific merchant.
+                                </Trans>
+                            }
                             render={({ field }) => (
                                 <SellerSelector value={field.value ?? ''} onChange={field.onChange} />
                             )}
@@ -249,8 +296,10 @@ function ChannelDetailPage() {
                         <FormFieldWrapper
                             control={form.control}
                             name="availableLanguageCodes"
-                            label={<Trans>Available languages</Trans>}
-                            description={<Trans>Defaults to the default language.</Trans>}
+                            label={<Trans>Supported content languages</Trans>}
+                            description={
+                                <Trans>Select the languages that editors can maintain for this store.</Trans>
+                            }
                             render={({ field }) => (
                                 <LanguageSelector
                                     value={field.value ?? []}
@@ -262,7 +311,7 @@ function ChannelDetailPage() {
                         <FormFieldWrapper
                             control={form.control}
                             name="availableCurrencyCodes"
-                            label={<Trans>Available currencies</Trans>}
+                            label={<Trans>Supported currencies</Trans>}
                             description={<Trans>The default currency is chosen from this list.</Trans>}
                             render={({ field }) => (
                                 <CurrencySelector
@@ -274,12 +323,21 @@ function ChannelDetailPage() {
                         />
                     </DetailFormGrid>
                 </PageBlock>
-                <PageBlock column="main" blockId="channel-defaults" title={<Trans>Channel defaults</Trans>}>
+                <PageBlock
+                    column="main"
+                    blockId="channel-defaults"
+                    title={<Trans>Market and content defaults</Trans>}
+                    description={
+                        <Trans>
+                            These defaults apply when the storefront does not specify a language or currency.
+                        </Trans>
+                    }
+                >
                     <DetailFormGrid>
                         <FormFieldWrapper
                             control={form.control}
                             name="defaultLanguageCode"
-                            label={<Trans>Default language</Trans>}
+                            label={<Trans>Default content language</Trans>}
                             render={({ field }) => (
                                 <LanguageSelector
                                     value={field.value ?? ''}
@@ -301,7 +359,7 @@ function ChannelDetailPage() {
                         <FormFieldWrapper
                             control={form.control}
                             name="defaultCurrencyCode"
-                            label={<Trans>Default currency</Trans>}
+                            label={<Trans>Settlement currency</Trans>}
                             render={({ field }) => (
                                 <CurrencySelector
                                     value={field.value ?? ''}
@@ -315,10 +373,21 @@ function ChannelDetailPage() {
                                 />
                             )}
                         />
+                    </DetailFormGrid>
+                </PageBlock>
+                <PageBlock
+                    column="main"
+                    blockId="store-regions"
+                    title={<Trans>Delivery and tax</Trans>}
+                    description={
+                        <Trans>Set the default service regions and how catalog prices handle tax.</Trans>
+                    }
+                >
+                    <DetailFormGrid>
                         <FormFieldWrapper
                             control={form.control}
                             name="defaultTaxZoneId"
-                            label={<Trans>Default tax zone</Trans>}
+                            label={<Trans>Default tax region</Trans>}
                             render={({ field }) => (
                                 <ZoneSelector value={field.value ?? ''} onChange={field.onChange} />
                             )}
@@ -326,7 +395,7 @@ function ChannelDetailPage() {
                         <FormFieldWrapper
                             control={form.control}
                             name="defaultShippingZoneId"
-                            label={<Trans>Default shipping zone</Trans>}
+                            label={<Trans>Default delivery region</Trans>}
                             render={({ field }) => (
                                 <ZoneSelector value={field.value ?? ''} onChange={field.onChange} />
                             )}
@@ -334,11 +403,11 @@ function ChannelDetailPage() {
                         <FormFieldWrapper
                             control={form.control}
                             name="pricesIncludeTax"
-                            label={<Trans>Prices include tax for default tax zone</Trans>}
+                            label={<Trans>Catalog prices include tax</Trans>}
                             description={
                                 <Trans>
-                                    When this is enabled, the prices entered in the product catalog will be
-                                    included in the tax for the default tax zone.
+                                    When enabled, prices entered for this store already include tax for the
+                                    default tax region.
                                 </Trans>
                             }
                             render={({ field }) => (
@@ -346,6 +415,83 @@ function ChannelDetailPage() {
                             )}
                         />
                     </DetailFormGrid>
+                </PageBlock>
+                <PageBlock
+                    column="side"
+                    blockId="store-setup-progress"
+                    title={<Trans>Store setup</Trans>}
+                    description={<Trans>Complete the required information before creating the store.</Trans>}
+                >
+                    <div className="space-y-3">
+                        {setupSteps.map(step => (
+                            <div key={step.label} className="flex items-center gap-2.5 text-sm">
+                                {step.complete ? (
+                                    <CheckCircle2
+                                        className="size-4 shrink-0 text-success"
+                                        aria-hidden="true"
+                                    />
+                                ) : (
+                                    <Circle
+                                        className="size-4 shrink-0 text-muted-foreground"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                <span className={step.complete ? 'font-medium' : 'text-muted-foreground'}>
+                                    {step.label}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </PageBlock>
+                <PageBlock
+                    column="side"
+                    blockId="storefront-connection"
+                    title={<Trans>Storefront connection</Trans>}
+                    description={
+                        <Trans>
+                            Use the store token only for local development or compatibility integrations.
+                        </Trans>
+                    }
+                >
+                    <Alert className="mb-4">
+                        <Globe2 aria-hidden="true" />
+                        <AlertTitle>
+                            <Trans>Verified domains select the store automatically</Trans>
+                        </AlertTitle>
+                        <AlertDescription>
+                            <Trans>
+                                Clients using a verified custom domain do not need to send this token.
+                            </Trans>
+                        </AlertDescription>
+                    </Alert>
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Store className="size-3.5" aria-hidden="true" />
+                            <Trans>API request header</Trans>
+                        </div>
+                        <div className="rounded-md border bg-muted/40 p-3 font-mono text-xs">
+                            <div className="text-muted-foreground">{uiConfig.api.channelTokenKey}</div>
+                            <div className="mt-1 break-all text-foreground">
+                                {storeToken || t`Enter a store token first`}
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            disabled={!storeToken}
+                            onClick={() => void copyStoreToken()}
+                        >
+                            <ClipboardCopy className="size-4" aria-hidden="true" />
+                            <Trans>Copy store token</Trans>
+                        </Button>
+                        {entity && (
+                            <Badge variant="outline" className="mt-2">
+                                <Trans>Store ID: {entity.id}</Trans>
+                            </Badge>
+                        )}
+                    </div>
                 </PageBlock>
                 <CustomFieldsPageBlock column="main" entityType="Channel" control={form.control} />
             </PageLayout>

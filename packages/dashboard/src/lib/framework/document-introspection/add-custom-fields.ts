@@ -50,11 +50,15 @@ function createOptionsKey(options?: {
     }
 
     if (options.includeCustomFields) {
-        parts.push(`include:${[...options.includeCustomFields].sort((a, b) => a.localeCompare(b)).join(',')}`);
+        parts.push(
+            `include:${[...options.includeCustomFields].sort((a, b) => a.localeCompare(b)).join(',')}`,
+        );
     }
 
     if (options.includeNestedFragments) {
-        parts.push(`nested:${[...options.includeNestedFragments].sort((a, b) => a.localeCompare(b)).join(',')}`);
+        parts.push(
+            `nested:${[...options.includeNestedFragments].sort((a, b) => a.localeCompare(b)).join(',')}`,
+        );
     }
 
     return parts.join('|') || 'default';
@@ -227,10 +231,10 @@ function applyCustomFieldsToSelection(
                 },
             });
         }
-    } else if (existingCustomFieldsField) {
-        // If there are no custom fields for this type (e.g. all marked with ui.dashboard: false),
-        // but there is a bare `customFields` field in the document, remove it to prevent
-        // a GraphQL error ("must have a selection of subfields")
+    } else if (existingCustomFieldsField && !existingCustomFieldsField.selectionSet?.selections.length) {
+        // If there are no dashboard-visible custom fields for this type (e.g. all are marked with
+        // ui.dashboard: false), remove only a bare `customFields` field. Explicit selections can be
+        // used by application logic for hidden or internal fields and must remain in the query.
         const index = (selectionSet.selections as SelectionNode[]).indexOf(existingCustomFieldsField);
         if (index >= 0) {
             (selectionSet.selections as SelectionNode[]).splice(index, 1);

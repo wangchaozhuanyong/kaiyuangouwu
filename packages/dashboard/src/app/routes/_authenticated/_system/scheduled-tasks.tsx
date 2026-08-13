@@ -1,5 +1,6 @@
-import { CopyableText } from '@/vdb/components/shared/copyable-text.js';
 import { DataTable } from '@/vdb/components/data-table/data-table.js';
+import { ConfirmationDialog } from '@/vdb/components/shared/confirmation-dialog.js';
+import { CopyableText } from '@/vdb/components/shared/copyable-text.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import {
@@ -17,13 +18,16 @@ import {
 import { api } from '@/vdb/graphql/api.js';
 import { graphql, ResultOf } from '@/vdb/graphql/graphql.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
+import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { createColumnHelper } from '@tanstack/react-table';
 import { CirclePlay, EllipsisIcon } from 'lucide-react';
 import { toast } from 'sonner';
+
 import { PayloadDialog } from './components/payload-dialog.js';
+import { getScheduledTaskDisplayInfo } from './scheduled-task-utils.js';
 
 export const Route = createFileRoute('/_authenticated/_system/scheduled-tasks')({
     component: ScheduledTasksPage,
@@ -66,10 +70,11 @@ const runScheduledTaskDocument = graphql(`
 type ScheduledTask = ResultOf<typeof getScheduledTasksDocument>['scheduledTasks'][number];
 
 function ScheduledTasksPage() {
-    const { t } = useLingui();
+    const { i18n, t } = useLingui();
+    const { displayLanguage } = useUserSettings().settings;
     const { data } = useQuery({
-        queryKey: ['scheduledTasks'],
-        queryFn: () => api.query(getScheduledTasksDocument),
+        queryKey: ['scheduledTasks', displayLanguage],
+        queryFn: () => api.queryForDisplayLanguage(getScheduledTasksDocument, displayLanguage),
     });
     const queryClient = useQueryClient();
     const { mutate: updateScheduledTask } = useMutation({
@@ -79,14 +84,14 @@ function ScheduledTasksPage() {
         },
     });
     const refreshScheduledTasks = () => {
-        queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });
+        void queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });
     };
     const { mutate: runScheduledTask } = useMutation({
         mutationFn: api.mutate(runScheduledTaskDocument),
         onSuccess: result => {
             if ((result as ResultOf<typeof runScheduledTaskDocument>).runScheduledTask.success) {
                 toast.success(t`Scheduled task will be executed`);
-                queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });
+                void queryClient.invalidateQueries({ queryKey: ['scheduledTasks'] });
             } else {
                 toast.error(t`Scheduled task could not be executed`);
             }
@@ -105,11 +110,22 @@ function ScheduledTasksPage() {
     const columnHelper = createColumnHelper<ScheduledTask>();
     const columns = [
         columnHelper.accessor('id', {
-            header: t`ID`,
-            cell: ({ getValue }) => <CopyableText value={getValue()}><span className="font-mono">{getValue()}</span></CopyableText>,
+            header: t`Scheduled task`,
+            cell: ({ row }) => {
+                const taskInfo = getScheduledTaskDisplayInfo(i18n, row.original);
+                return (
+                    <div className="flex min-w-56 flex-col gap-1">
+                        <span className="font-medium">{taskInfo.name}</span>
+                        <CopyableText value={row.original.id}>
+                            <code className="text-muted-foreground text-xs">{row.original.id}</code>
+                        </CopyableText>
+                    </div>
+                );
+            },
         }),
         columnHelper.accessor('description', {
             header: t`Description`,
+            cell: ({ row }) => getScheduledTaskDisplayInfo(i18n, row.original).description,
         }),
         columnHelper.accessor('enabled', {
             header: t`Enabled`,
@@ -195,20 +211,24 @@ function ScheduledTasksPage() {
                 return (
                     <DropdownMenu>
                         <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                            <EllipsisIcon />
+                            <EllipsisIcon aria-hidden="true" />
+                            <span className="sr-only">
+                                <Trans>More actions</Trans>
+                            </span>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                             {row.original.enabled && (
-                                <DropdownMenuItem
-                                    onClick={() =>
-                                        runScheduledTask({
-                                            id: row.original.id,
-                                        })
-                                    }
+                                <ConfirmationDialog
+                                    title={t`Run scheduled task`}
+                                    description={t`Run this scheduled task now? It may update or remove system data.`}
+                                    confirmText={t`Run`}
+                                    onConfirm={() => runScheduledTask({ id: row.original.id })}
                                 >
-                                    <CirclePlay className="w-4 h-4" />
-                                    <Trans>Run</Trans>
-                                </DropdownMenuItem>
+                                    <DropdownMenuItem closeOnClick={false}>
+                                        <CirclePlay className="w-4 h-4" />
+                                        <Trans>Run</Trans>
+                                    </DropdownMenuItem>
+                                </ConfirmationDialog>
                             )}
                             <DropdownMenuItem
                                 onClick={() =>

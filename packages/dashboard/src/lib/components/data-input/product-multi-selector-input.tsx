@@ -511,7 +511,7 @@ export const ProductMultiInput: DashboardFormComponent = ({ value, onChange, dis
             <div className="space-y-2">
                 <Button variant="outline" disabled={disabled} onClick={() => setOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    <Trans>{buttonText}</Trans>
+                    {buttonText}
                 </Button>
 
                 {selectedIds.length > 0 && (

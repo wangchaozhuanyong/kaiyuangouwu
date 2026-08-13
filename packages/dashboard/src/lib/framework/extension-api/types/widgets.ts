@@ -80,6 +80,12 @@ export type DashboardWidgetDefinition = {
     name: string;
     /**
      * @description
+     * Controls the order in which widgets are placed when no saved layout is available.
+     * Lower values are placed first.
+     */
+    order?: number;
+    /**
+     * @description
      * The React component that renders the widget.
      */
     component: React.ComponentType<DashboardBaseWidgetProps>;

@@ -7,6 +7,7 @@ import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { useCustomFieldConfig } from '@/vdb/hooks/use-custom-field-config.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
+import { cn } from '@/vdb/lib/utils.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
@@ -17,7 +18,11 @@ import {
     orderDetailFragment,
     transitionFulfillmentToStateDocument,
 } from '../orders.graphql.js';
-import { getTypeForState, StateTransitionControl } from './state-transition-control.js';
+import {
+    getTypeForState,
+    StateTransitionControl,
+    type StateTransitionAction,
+} from './state-transition-control.js';
 
 type Order = NonNullable<ResultOf<typeof orderDetailFragment>>;
 
@@ -27,11 +32,19 @@ type FulfillmentDetailsProps = {
     onSuccess?: () => void;
 };
 
+export function getFulfillmentMethodDisplay(
+    fulfillment: Pick<ResultOf<typeof fulfillmentFragment>, 'handlerCode' | 'method'>,
+    digitalDeliveryLabel: string,
+) {
+    return fulfillment.handlerCode === 'digital-fulfillment' ? digitalDeliveryLabel : fulfillment.method;
+}
+
 export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<FulfillmentDetailsProps>) {
     const { formatDate } = useLocalFormat();
     const { t } = useLingui();
     const { getTranslatedFulfillmentState } = useDynamicTranslations();
     const customFieldConfig = useCustomFieldConfig('Fulfillment');
+    const fulfillmentMethod = getFulfillmentMethodDisplay(fulfillment, t`Digital delivery`);
     const customFieldsForm = useForm({
         values: {
             customFields: (fulfillment as any).customFields ?? {},
@@ -44,12 +57,12 @@ export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<F
     const transitionFulfillmentMutation = useMutation({
         mutationFn: api.mutate(transitionFulfillmentToStateDocument),
         onSuccess: (result: ResultOf<typeof transitionFulfillmentToStateDocument>) => {
-            const fulfillment = result.transitionFulfillmentToState;
-            if (fulfillment.__typename === 'Fulfillment') {
+            const updatedFulfillment = result.transitionFulfillmentToState;
+            if (updatedFulfillment.__typename === 'Fulfillment') {
                 toast.success(t`Fulfillment state updated successfully`);
                 onSuccess?.();
             } else {
-                toast.error(fulfillment.message ?? t`Failed to update fulfillment state`);
+                toast.error(updatedFulfillment.message ?? t`Failed to update fulfillment state`);
             }
         },
         onError: error => {
@@ -85,7 +98,7 @@ export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<F
     };
 
     const getFulfillmentActions = () => {
-        const actions = [];
+        const actions: StateTransitionAction[] = [];
 
         const suggested = nextSuggestedState();
         if (suggested) {
@@ -103,6 +116,14 @@ export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<F
                 type: getTypeForState(state),
                 onClick: () => handleStateTransition(state),
                 disabled: transitionFulfillmentMutation.isPending,
+                confirmation:
+                    state === 'Cancelled'
+                        ? {
+                              title: t`Cancel fulfillment`,
+                              description: t`Are you sure you want to cancel this fulfillment? This action cannot be undone.`,
+                              confirmText: t`Cancel fulfillment`,
+                          }
+                        : undefined,
             });
         });
 
@@ -113,9 +134,9 @@ export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<F
         <div className="space-y-1 p-3 border rounded-md">
             <div className="space-y-1">
                 <LabeledData label={<Trans>Fulfillment ID</Trans>} value={fulfillment.id.slice(-8)} />
-                <LabeledData label={<Trans>Method</Trans>} value={fulfillment.method} />
+                <LabeledData label={<Trans>Method</Trans>} value={fulfillmentMethod} />
                 <LabeledData
-                    label={<Trans>State</Trans>}
+                    label={<Trans>Fulfillment state</Trans>}
                     value={getTranslatedFulfillmentState(fulfillment.state)}
                 />
                 {fulfillment.trackingCode && (
@@ -127,7 +148,13 @@ export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<F
             {fulfillment.lines.length > 0 && (
                 <div className="mt-3 pt-3 border-t">
                     <Collapsible>
-                        <CollapsibleTrigger className="flex items-center justify-between w-full text-sm hover:underline text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md p-1 -m-1">
+                        <CollapsibleTrigger
+                            className={cn(
+                                'flex w-full items-center justify-between text-sm text-muted-foreground',
+                                'rounded-md p-1 -m-1 hover:underline focus-visible:outline-none',
+                                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                            )}
+                        >
                             <Trans>
                                 Fulfilled items (
                                 {fulfillment.lines.reduce((acc, line) => acc + line.quantity, 0)})

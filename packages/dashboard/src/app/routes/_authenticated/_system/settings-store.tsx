@@ -1,3 +1,4 @@
+import { JsonViewer } from '@/vdb/components/data-display/json-viewer.js';
 import { DataTable } from '@/vdb/components/data-table/data-table.js';
 import { CopyableText } from '@/vdb/components/shared/copyable-text.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
@@ -27,10 +28,11 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { ColumnFilter, createColumnHelper } from '@tanstack/react-table';
-import { JsonViewer } from '@/vdb/components/data-display/json-viewer.js';
 import { Braces } from 'lucide-react';
 import React, { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+
+import { getSettingsStoreDisplayName } from './settings-store-utils.js';
 
 export const Route = createFileRoute('/_authenticated/_system/settings-store')({
     component: SettingsStorePage,
@@ -54,7 +56,7 @@ type FieldDefinition = ResultOf<
 
 const fieldDefinitionsQueryKey = ['settingsStoreFieldDefinitions'] as const;
 
-const scopeBadgeVariant: Record<string, 'default' | 'secondary' | 'outline'> = {
+const scopeBadgeVariant: Record<FieldDefinition['scopeType'], 'default' | 'secondary' | 'outline'> = {
     GLOBAL: 'default',
     USER: 'secondary',
     CHANNEL: 'outline',
@@ -68,7 +70,9 @@ function ValueCell({ field, onSave }: { field: FieldDefinition; onSave: (value: 
 
     // Complex objects/arrays → dialog with JSON tree viewer/editor
     if (isComplex) {
-        return <JsonValueDialog value={value} fieldKey={field.key} readonly={field.readonly} onSave={onSave} />;
+        return (
+            <JsonValueDialog value={value} fieldKey={field.key} readonly={field.readonly} onSave={onSave} />
+        );
     }
 
     // Readonly simple values → plain text
@@ -105,14 +109,13 @@ function JsonValueDialog({
         setOpen(false);
     };
 
-    const preview = JSON.stringify(value);
-    const truncated = preview.length > 60 ? preview.slice(0, 60) + '…' : preview;
-
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger render={<Button variant="outline" size="sm" className="max-w-[300px] justify-start gap-2 font-mono text-xs" />}>
+            <DialogTrigger
+                render={<Button variant="outline" size="sm" className="max-w-[300px] justify-start gap-2" />}
+            >
                 <Braces className="size-3.5 shrink-0" />
-                <span className="truncate">{truncated}</span>
+                <span className="truncate">{t`View configuration content`}</span>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
@@ -217,16 +220,16 @@ function formatDisplayValue(value: any): string {
 }
 
 function SettingsStorePage() {
-    const { t } = useLingui();
+    const { i18n, t } = useLingui();
     const [search, setSearch] = useState('');
     const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
     const queryClient = useQueryClient();
-    const { data, isLoading } = useQuery({
+    const { data, error, isLoading } = useQuery({
         queryKey: fieldDefinitionsQueryKey,
         queryFn: () => api.query(settingsStoreFieldDefinitionsDocument),
     });
     const invalidateFieldDefinitions = () => {
-        queryClient.invalidateQueries({ queryKey: [...fieldDefinitionsQueryKey] });
+        void queryClient.invalidateQueries({ queryKey: [...fieldDefinitionsQueryKey] });
     };
     const { mutate: setValue } = useMutation({
         mutationFn: api.mutate(setSettingsStoreValueDocument),
@@ -242,8 +245,27 @@ function SettingsStorePage() {
     });
 
     const allFields = data?.settingsStoreFieldDefinitions ?? [];
+    const scopeLabels = useMemo<Record<FieldDefinition['scopeType'], string>>(
+        () => ({
+            GLOBAL: t`Global`,
+            USER: t`User`,
+            CHANNEL: t`Channel`,
+            USER_AND_CHANNEL: t`User & Channel`,
+            CUSTOM: t`Custom`,
+        }),
+        [t],
+    );
+    const scopeOptions = useMemo(
+        () =>
+            Object.entries(scopeLabels).map(([value, label]) => ({
+                label,
+                value: value as FieldDefinition['scopeType'],
+            })),
+        [scopeLabels],
+    );
     const filteredFields = allFields.filter(f => {
-        if (search && !f.key.toLowerCase().includes(search.toLowerCase())) return false;
+        const searchTarget = `${getSettingsStoreDisplayName(i18n, f.key)} ${f.key}`.toLowerCase();
+        if (search && !searchTarget.includes(search.toLowerCase())) return false;
         for (const filter of columnFilters) {
             const values = filter.value as string[];
             if (!values?.length) continue;
@@ -257,15 +279,21 @@ function SettingsStorePage() {
     const columns = useMemo(
         () => [
             columnHelper.accessor('key', {
-                header: t`Key`,
-                cell: ({ row }) => (
-                    <CopyableText value={row.original.key}>
-                        <code className="text-xs">{row.original.key}</code>
-                    </CopyableText>
-                ),
+                header: t`Configuration item`,
+                cell: ({ row }) => {
+                    const displayName = getSettingsStoreDisplayName(i18n, row.original.key);
+                    return (
+                        <div className="flex min-w-52 flex-col gap-1">
+                            <span className="font-medium">{displayName}</span>
+                            <CopyableText value={row.original.key}>
+                                <code className="text-muted-foreground text-xs">{row.original.key}</code>
+                            </CopyableText>
+                        </div>
+                    );
+                },
             }),
             columnHelper.accessor('currentValue', {
-                header: t`Value`,
+                header: t`Current value`,
                 cell: ({ row }) => (
                     <ValueCell
                         field={row.original}
@@ -278,10 +306,10 @@ function SettingsStorePage() {
                 ),
             }),
             columnHelper.accessor('scopeType', {
-                header: t`Scope`,
+                header: t`Effective scope`,
                 cell: ({ row }) => (
-                    <Badge variant={scopeBadgeVariant[row.original.scopeType] ?? 'outline'}>
-                        {row.original.scopeType}
+                    <Badge variant={scopeBadgeVariant[row.original.scopeType]}>
+                        {scopeLabels[row.original.scopeType]}
                     </Badge>
                 ),
             }),
@@ -295,7 +323,7 @@ function SettingsStorePage() {
                     ) : null,
             }),
         ],
-        [t, setValue],
+        [i18n, t, setValue, scopeLabels],
     );
 
     return (
@@ -311,14 +339,8 @@ function SettingsStorePage() {
                         onFilterChange={(_table, filters) => setColumnFilters(filters)}
                         facetedFilters={{
                             scopeType: {
-                                title: t`Scope`,
-                                options: [
-                                    { label: 'Global', value: 'GLOBAL' },
-                                    { label: 'User', value: 'USER' },
-                                    { label: 'Channel', value: 'CHANNEL' },
-                                    { label: 'User & Channel', value: 'USER_AND_CHANNEL' },
-                                    { label: 'Custom', value: 'CUSTOM' },
-                                ],
+                                title: t`Effective scope`,
+                                options: scopeOptions,
                             },
                             readonly: {
                                 title: t`Readonly`,
@@ -329,6 +351,7 @@ function SettingsStorePage() {
                             },
                         }}
                         isLoading={isLoading}
+                        error={error}
                         columns={columns}
                         data={filteredFields}
                         totalItems={filteredFields.length}

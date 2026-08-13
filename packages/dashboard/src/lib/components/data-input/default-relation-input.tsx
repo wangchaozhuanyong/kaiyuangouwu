@@ -1,5 +1,5 @@
 import { graphql } from '@/vdb/graphql/graphql.js';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
 import { useMemo } from 'react';
 import { MultiRelationInput, SingleRelationInput } from './relation-input.js';
 import { createRelationSelectorConfig } from './relation-selector.js';
@@ -107,7 +107,7 @@ function createBaseEntityConfig(
     return {
         idKey: 'id',
         labelKey,
-        placeholder: i18n`Search ${entityNameLower}...`,
+        placeholder: i18n`Search...`,
         buildSearchFilter: (term: string) => ({
             [searchField]: { contains: term },
         }),
@@ -645,7 +645,7 @@ export function DefaultRelationInput({
                 onBlur={onBlur}
                 name={name}
                 disabled={disabled}
-                placeholder={`Enter ${entityName} ID`}
+                placeholder={t`Enter ID`}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
         );
@@ -663,7 +663,6 @@ export function DefaultRelationInput({
                 onChange={onChange}
                 config={config}
                 disabled={disabled}
-                selectorLabel={<Trans>Select {entityName.toLowerCase()}s</Trans>}
             />
         );
     } else {
@@ -676,7 +675,6 @@ export function DefaultRelationInput({
                 onChange={onChange}
                 config={config}
                 disabled={disabled}
-                selectorLabel={<Trans>Select {entityName.toLowerCase()}</Trans>}
             />
         );
     }

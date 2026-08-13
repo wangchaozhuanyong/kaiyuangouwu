@@ -1,6 +1,8 @@
 import { FacetValueFacetedFilter } from '@/vdb/components/data-table/data-table-facet-value-faceted-filter.js';
+import { ChannelCodeLabel } from '@/vdb/components/shared/channel-code-label.js';
 import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { RichTextDescriptionCell } from '@/vdb/components/shared/table-cell/order-table-cell-components.js';
+import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
@@ -45,12 +47,29 @@ function ProductListPage() {
             pageId="product-list"
             listQuery={productListDocument}
             title={<Trans>Products</Trans>}
+            searchPlaceholder={t`Search product name, URL identifier or SKU`}
             customizeColumns={{
                 name: {
+                    header: () => <Trans>Product name</Trans>,
                     cell: ({ row }) => <DetailPageButton id={row.original.id} label={row.original.name} />,
+                },
+                enabled: {
+                    header: () => <Trans>Sales status</Trans>,
                 },
                 description: {
                     cell: RichTextDescriptionCell,
+                },
+                channels: {
+                    header: () => <Trans>Published stores</Trans>,
+                    cell: ({ row }) => (
+                        <div className="flex max-w-80 flex-wrap gap-1.5">
+                            {row.original.channels.map(channel => (
+                                <Badge variant="secondary" key={channel.id}>
+                                    <ChannelCodeLabel code={channel.code} />
+                                </Badge>
+                            ))}
+                        </div>
+                    ),
                 },
             }}
             onSearchTermChange={searchTerm => {
@@ -86,11 +105,14 @@ function ProductListPage() {
                 };
             }}
             defaultSort={[{ id: 'updatedAt', desc: true }]}
+            defaultColumnOrder={['featuredAsset', 'name', 'enabled', 'channels', 'slug', 'updatedAt']}
             defaultVisibility={{
-                name: true,
                 featuredAsset: true,
-                slug: true,
+                name: true,
                 enabled: true,
+                channels: true,
+                slug: true,
+                updatedAt: true,
             }}
             route={Route}
             bulkActions={[
@@ -100,9 +122,7 @@ function ProductListPage() {
                     { component: AssignFacetValuesToProductsBulkAction, order: 300 },
                     { component: DuplicateProductsBulkAction, order: 400 },
                 ],
-                [
-                    { component: DeleteProductsBulkAction },
-                ],
+                [{ component: DeleteProductsBulkAction }],
             ]}
         >
             <ActionBarItem itemId="rebuild-index-button" requiresPermission={['UpdateCatalog']}>
@@ -114,7 +134,7 @@ function ProductListPage() {
             <ActionBarItem itemId="create-button" requiresPermission={['CreateProduct', 'CreateCatalog']}>
                 <Button render={<Link to="./new" />}>
                     <PlusIcon className="mr-2 h-4 w-4" />
-                    <Trans>New Product</Trans>
+                    <Trans>Create product</Trans>
                 </Button>
             </ActionBarItem>
         </ListPage>

@@ -2076,6 +2076,7 @@ export type Fulfillment = Node & {
   __typename?: 'Fulfillment';
   createdAt: Scalars['DateTime']['output'];
   customFields?: Maybe<Scalars['JSON']['output']>;
+  handlerCode: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   lines: Array<FulfillmentLine>;
   method: Scalars['String']['output'];

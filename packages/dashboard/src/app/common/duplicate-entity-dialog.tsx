@@ -84,10 +84,10 @@ export function DuplicateEntityDialog({
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>
-                        <Trans>Duplicate {entityName.toLowerCase()}s</Trans>
+                        <Trans>Duplicate {entityName}</Trans>
                     </DialogTitle>
                     <DialogDescription className="sr-only">
-                        <Trans>Configure duplication settings for {entityName.toLowerCase()}s</Trans>
+                        <Trans>Configure duplication settings for {entityName}</Trans>
                     </DialogDescription>
                 </DialogHeader>
 
@@ -104,7 +104,7 @@ export function DuplicateEntityDialog({
                     {!matchingDuplicator && (
                         <div className="text-sm text-muted-foreground">
                             <Trans>
-                                No duplicator found with code "{duplicatorCode}" for {entityName}s
+                                No duplicator found with code "{duplicatorCode}" for {entityName}
                             </Trans>
                         </div>
                     )}

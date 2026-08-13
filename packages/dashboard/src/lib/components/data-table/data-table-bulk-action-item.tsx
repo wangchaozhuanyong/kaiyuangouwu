@@ -104,11 +104,18 @@ export function DataTableBulkActionItem({
     if (confirmationText) {
         return (
             <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-                <AlertDialogTrigger nativeButton={false} render={<DropdownMenuItem closeOnClick={false} onClick={handleClick} disabled={!userHasPermission || disabled} />}>
-                        {Icon && <Icon className={cn('mr-1 h-4 w-4', className)} />}
-                        <span className={cn('text-sm', className)}>
-                            <Trans>{label}</Trans>
-                        </span>
+                <AlertDialogTrigger
+                    nativeButton={false}
+                    render={
+                        <DropdownMenuItem
+                            closeOnClick={false}
+                            onClick={handleClick}
+                            disabled={!userHasPermission || disabled}
+                        />
+                    }
+                >
+                    {Icon && <Icon className={cn('mr-1 h-4 w-4', className)} />}
+                    <span className={cn('text-sm', className)}>{label}</span>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -133,9 +140,7 @@ export function DataTableBulkActionItem({
     return (
         <DropdownMenuItem closeOnClick={closeOnClick} onClick={handleClick}>
             {Icon && <Icon className={cn('mr-1 h-4 w-4', className)} />}
-            <span className={cn('text-sm', className)}>
-                <Trans>{label}</Trans>
-            </span>
+            <span className={cn('text-sm', className)}>{label}</span>
         </DropdownMenuItem>
     );
 }

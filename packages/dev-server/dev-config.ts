@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import { OnApplicationBootstrap } from '@nestjs/common';
 import { AssetServerPlugin } from '@vendure/asset-server-plugin';
+import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin';
 import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/shared-constants';
 import {
     DefaultJobQueuePlugin,
@@ -18,13 +19,13 @@ import {
 } from '@vendure/core';
 import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import { defaultEmailHandlers, EmailPlugin, FileBasedTemplateLoader } from '@vendure/email-plugin';
+import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import path from 'path';
 import { DataSourceOptions } from 'typeorm';
 
-import { CommerceFulfillmentPlugin } from './plugins/commerce-fulfillment/commerce-fulfillment.plugin';
-import { NavModifierPlugin } from './test-plugins/nav-modifier-plugin/nav-modifier-plugin';
 // import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
 import { ReviewsPlugin } from './test-plugins/reviews/reviews-plugin';
 
@@ -37,6 +38,16 @@ const dashboardAppDir =
     path.basename(__dirname) === 'dist'
         ? path.join(__dirname, './dashboard')
         : path.join(__dirname, './dist/dashboard');
+const localizedEmailSubjects: Record<string, string> = {
+    'order-confirmation': '订单确认 #{{ order.code }}',
+    'email-verification': '请验证您的电子邮箱',
+    'password-reset': '重置您的登录密码',
+    'email-address-change': '请验证新的电子邮箱',
+};
+const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
+    const subject = localizedEmailSubjects[handler.type];
+    return subject ? handler.setSubject(subject) : handler;
+});
 
 @VendurePlugin({
     imports: [PluginCommonModule],
@@ -131,8 +142,20 @@ export const devConfig: VendureConfig = {
         ReadonlySettingsTestPlugin,
         ReviewsPlugin,
         // FieldTestPlugin,
-        NavModifierPlugin,
+        OperationsDashboardPlugin,
         CommerceFulfillmentPlugin,
+        StoreDomainPlugin.init({
+            cnameTarget: process.env.STORE_DOMAIN_CNAME_TARGET || 'vendure.localhost',
+            routingMode:
+                process.env.STORE_DOMAIN_ROUTING_MODE === 'require-domain'
+                    ? 'require-domain'
+                    : 'prefer-domain',
+            trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
+            bypassHosts: (process.env.STORE_DOMAIN_BYPASS_HOSTS || 'localhost,127.0.0.1,vendure.localhost')
+                .split(',')
+                .map(host => host.trim())
+                .filter(Boolean),
+        }),
         ...(SERVE_GRAPHIQL ? [loadPackage('@vendure/graphiql-plugin').GraphiqlPlugin.init()] : []),
         AssetServerPlugin.init({
             route: 'assets',
@@ -147,8 +170,8 @@ export const devConfig: VendureConfig = {
         EmailPlugin.init({
             devMode: true,
             route: 'mailbox',
-            handlers: defaultEmailHandlers,
-            templateLoader: new FileBasedTemplateLoader(path.join(__dirname, '../email-plugin/templates')),
+            handlers: localizedEmailHandlers,
+            templateLoader: new FileBasedTemplateLoader(path.join(__dirname, './email-templates')),
             outputPath: path.join(__dirname, 'test-emails'),
             globalTemplateVars: {
                 verifyEmailAddressUrl: `${dashboardUrl}/verify`,

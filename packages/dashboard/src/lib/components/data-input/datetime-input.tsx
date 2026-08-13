@@ -10,7 +10,7 @@ import { isFieldDisabled } from '@/vdb/framework/form-engine/utils.js';
 import { useDisplayLocale } from '@/vdb/hooks/use-display-locale.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { cn } from '@/vdb/lib/utils.js';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import type { Locale } from 'date-fns/locale';
 import { CalendarClock, Clock, X } from 'lucide-react';
 
@@ -46,7 +46,7 @@ export function DateTimeInput({
     const readOnly = isFieldDisabled(disabled, fieldDef);
     const locale = useDayPickerLocale();
     const { formatDate } = useLocalFormat();
-    const { bcp47Tag } = useDisplayLocale();
+    const { t } = useLingui();
     const date = value && value instanceof Date ? value.toISOString() : (value ?? '');
     const [isOpen, setIsOpen] = React.useState(false);
 
@@ -96,9 +96,7 @@ export function DateTimeInput({
                                   minute: '2-digit',
                                   hour12: false,
                               })
-                            : bcp47Tag.startsWith('zh')
-                              ? 'YYYY年MM月DD日 HH:mm'
-                              : 'DD/MM/YYYY HH:mm'}
+                            : t`DD/MM/YYYY HH:mm`}
                     </span>
                 </Button>
                 {date ? (

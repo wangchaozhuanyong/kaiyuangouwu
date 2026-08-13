@@ -5,6 +5,12 @@ import { graphql } from '@/vdb/graphql/graphql.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { useLingui } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+
+import {
+    getShippingMethodFulfillmentHandlers,
+    isShippingMethodFulfillmentHandler,
+} from './shipping-method-fulfillment-handlers.js';
 
 export const fulfillmentHandlersDocument = graphql(
     `
@@ -32,7 +38,15 @@ export function FulfillmentHandlerSelector({ value, onChange }: Readonly<Fulfill
         staleTime: 1000 * 60 * 60 * 5,
     });
 
-    const fulfillmentHandlers = fulfillmentHandlersData?.fulfillmentHandlers;
+    const fulfillmentHandlers = getShippingMethodFulfillmentHandlers(
+        fulfillmentHandlersData?.fulfillmentHandlers ?? [],
+    );
+
+    useEffect(() => {
+        if (value && fulfillmentHandlersData && !isShippingMethodFulfillmentHandler(value)) {
+            onChange(undefined);
+        }
+    }, [fulfillmentHandlersData, onChange, value]);
 
     const onFulfillmentHandlerSelected = (code: string) => {
         const fulfillmentHandler = fulfillmentHandlers?.find(fh => fh.code === code);
@@ -46,7 +60,7 @@ export function FulfillmentHandlerSelector({ value, onChange }: Readonly<Fulfill
         <div>
             <Select
                 items={
-                    fulfillmentHandlers
+                    fulfillmentHandlers.length
                         ? Object.fromEntries(fulfillmentHandlers.map(fh => [fh.code, fh.description]))
                         : undefined
                 }

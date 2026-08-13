@@ -16,6 +16,11 @@ export const productListDocument = graphql(`
                 slug
                 enabled
                 description
+                channels {
+                    id
+                    code
+                    token
+                }
             }
             totalItems
         }

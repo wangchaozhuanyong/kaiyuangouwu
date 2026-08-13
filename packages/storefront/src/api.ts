@@ -1,6 +1,9 @@
 import { MarketConfig, Order, Product, ShippingMethod } from './types';
 
 const API_URL = import.meta.env.VITE_SHOP_API_URL ?? '/shop-api';
+const SEND_CLIENT_CHANNEL_TOKEN =
+    import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
 
 const orderFields = `
     id
@@ -197,14 +200,17 @@ export class ShopApi {
     }
 
     private async request<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+        const headers: Record<string, string> = {
+            'content-type': 'application/json',
+            'language-code': this.market.languageCode,
+        };
+        if (SEND_CLIENT_CHANNEL_TOKEN) {
+            headers['vendure-token'] = this.market.code;
+        }
         const response = await fetch(API_URL, {
             method: 'POST',
             credentials: 'include',
-            headers: {
-                'content-type': 'application/json',
-                'vendure-token': this.market.code,
-                'language-code': this.market.languageCode,
-            },
+            headers,
             body: JSON.stringify({ query, variables }),
         });
         const body = (await response.json()) as GraphQlResponse<T>;

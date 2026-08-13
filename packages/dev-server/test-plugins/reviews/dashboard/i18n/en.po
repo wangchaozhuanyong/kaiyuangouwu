@@ -49,45 +49,130 @@ msgstr "Review title"
 msgid "Review title is required"
 msgstr "Review title is required"
 
+#. js-lingui-explicit-id
+msgid "review.status"
+msgstr "Review status"
+
 msgid "Reviewer name"
 msgstr "Reviewer name"
+
+msgid "Reviewer location"
+msgstr "Reviewer location"
+
+#. js-lingui-explicit-id
+msgid "review.content"
+msgstr "Review content"
+
+#. js-lingui-explicit-id
+msgid "review.reviewerLocation"
+msgstr "Reviewer location"
+
+#. js-lingui-explicit-id
+msgid "review.titlePlaceholder"
+msgstr "Enter a short review title"
+
+#. js-lingui-explicit-id
+msgid "review.bodyPlaceholder"
+msgstr "Enter the review content"
+
+#. js-lingui-explicit-id
+msgid "review.titleRequired"
+msgstr "Review title is required"
+
+#. js-lingui-explicit-id
+msgid "review.bodyRequired"
+msgstr "Review body is required"
+
+#. js-lingui-explicit-id
+msgid "review.ratingInvalid"
+msgstr "Rating must be between 1 and 5"
+
+#. js-lingui-explicit-id
+msgid "review.reviewerRequired"
+msgstr "Reviewer name is required"
+
+#. js-lingui-explicit-id
+msgid "review.missingProduct"
+msgstr "Unable to determine the current product"
+
+#. js-lingui-explicit-id
+msgid "review.createFailed"
+msgstr "Failed to create review"
+
+#. js-lingui-explicit-id
+msgid "review.created"
+msgstr "Review created and linked to this product"
+
+msgid "Rating"
+msgstr "Rating"
+
+msgid "Unable to determine the current product"
+msgstr "Unable to determine the current product"
+
+msgid "Failed to create review"
+msgstr "Failed to create review"
+
+msgid "Rating must be between 1 and 5"
+msgstr "Rating must be between 1 and 5"
+
+msgid "Reviewer name is required"
+msgstr "Reviewer name is required"
+
+msgid "Review created and linked to this product"
+msgstr "Review created and linked to this product"
 
 msgid "Select review status"
 msgstr "Select review status"
 
+#. js-lingui-explicit-id
 msgid "fieldName.authorLocation"
 msgstr "Author location"
 
+#. js-lingui-explicit-id
 msgid "fieldName.authorName"
 msgstr "Reviewer name"
 
+#. js-lingui-explicit-id
 msgid "fieldName.body"
 msgstr "Review content"
 
+#. js-lingui-explicit-id
 msgid "fieldName.downvotes"
 msgstr "Unhelpful votes"
 
+#. js-lingui-explicit-id
 msgid "fieldName.product"
 msgstr "Product"
 
+#. js-lingui-explicit-id
 msgid "fieldName.productVariant"
 msgstr "Product SKU"
 
+#. js-lingui-explicit-id
 msgid "fieldName.rating"
 msgstr "Rating"
 
+#. js-lingui-explicit-id
 msgid "fieldName.response"
 msgstr "Merchant response"
 
+#. js-lingui-explicit-id
 msgid "fieldName.responseCreatedAt"
 msgstr "Response time"
 
+#. js-lingui-explicit-id
 msgid "fieldName.state"
 msgstr "Review status"
 
+#. js-lingui-explicit-id
 msgid "fieldName.summary"
 msgstr "Review title"
 
+#. js-lingui-explicit-id
+msgid "fieldName.text"
+msgstr "Translation content"
+
+#. js-lingui-explicit-id
 msgid "fieldName.upvotes"
 msgstr "Helpful votes"
 

@@ -1,3 +1,4 @@
+import { JsonViewer } from '@/vdb/components/data-display/json-viewer.js';
 import { LabeledData } from '@/vdb/components/labeled-data.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/vdb/components/ui/collapsible.js';
@@ -7,7 +8,6 @@ import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js'
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
-import { JsonViewer } from '@/vdb/components/data-display/json-viewer.js';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -155,6 +155,14 @@ export function PaymentDetails({ payment, currencyCode, onSuccess }: Readonly<Pa
                 type: getTypeForState(state),
                 onClick: () => handlePaymentStateTransition(state),
                 disabled: transitionPaymentMutation.isPending || cancelPaymentMutation.isPending,
+                confirmation:
+                    state === 'Cancelled'
+                        ? {
+                              title: t`Cancel payment`,
+                              description: t`Are you sure you want to cancel this payment? This action cannot be undone.`,
+                              confirmText: t`Cancel payment`,
+                          }
+                        : undefined,
             });
         });
 

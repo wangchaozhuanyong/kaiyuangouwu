@@ -9,13 +9,14 @@ import { api } from '@/vdb/graphql/api.js';
 import { duplicateEntityDocument } from '@/vdb/graphql/common-operations.js';
 import { usePaginatedList } from '@/vdb/hooks/use-paginated-list.js';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { type BulkActionEntityName, getBulkActionEntityLabel } from './bulk-action-entity-labels.js';
 import { DuplicateEntityDialog } from './duplicate-entity-dialog.js';
 
 interface DuplicateBulkActionProps {
     entityType: 'Product' | 'Collection' | 'Facet' | 'Promotion';
     duplicatorCode: string;
     requiredPermissions: string[];
-    entityName: string;
+    entityName: BulkActionEntityName;
     onSuccess?: () => void;
     selection: any[];
     table: any;
@@ -25,13 +26,14 @@ export function DuplicateBulkAction({
     entityType,
     duplicatorCode,
     requiredPermissions,
-    entityName,
+    entityName: entityKey,
     onSuccess,
     selection,
     table,
 }: Readonly<DuplicateBulkActionProps>) {
     const { refetchPaginatedList } = usePaginatedList();
-    const { t } = useLingui();
+    const { i18n, t } = useLingui();
+    const entityName = getBulkActionEntityLabel(i18n, entityKey);
     const [isDuplicating, setIsDuplicating] = useState(false);
     const [progress, setProgress] = useState({ completed: 0, total: 0 });
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -79,12 +81,12 @@ export function DuplicateBulkAction({
                             result.duplicateEntity.message ||
                             result.duplicateEntity.duplicationError ||
                             t`Unknown error`;
-                        results.errors.push(`${entityName} ${entity.name || entity.id}: ${errorMsg}`);
+                        results.errors.push(`${entity.name || entity.id}: ${errorMsg}`);
                     }
                 } catch (error) {
                     results.failed++;
                     results.errors.push(
-                        `${entityName} ${entity.name || entity.id}: ${error instanceof Error ? error.message : t`Unknown error`}`,
+                        `${entity.name || entity.id}: ${error instanceof Error ? error.message : t`Unknown error`}`,
                     );
                 }
 
@@ -97,13 +99,12 @@ export function DuplicateBulkAction({
                 toast.success(t`Successfully duplicated ${count} ${entityName}`);
             }
             if (results.failed > 0) {
+                const remainingErrorCount = results.errors.length - 3;
                 const errorMessage =
-                    results.errors.length > 3
-                        ? `${results.errors.slice(0, 3).join(', ')}... and ${results.errors.length - 3} more`
+                    remainingErrorCount > 0
+                        ? `${results.errors.slice(0, 3).join(', ')}; ${t`${remainingErrorCount} more errors`}`
                         : results.errors.join(', ');
-                toast.error(
-                    `Failed to duplicate ${results.failed} ${entityName.toLowerCase()}s: ${errorMessage}`,
-                );
+                toast.error(t`Failed to duplicate ${results.failed} ${entityName}: ${errorMessage}`);
             }
 
             if (results.success > 0) {

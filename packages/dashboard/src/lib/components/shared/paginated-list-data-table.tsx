@@ -10,6 +10,7 @@ import { includeOnlySelectedListFields } from '@/vdb/framework/document-introspe
 import { BulkActionsInput } from '@/vdb/framework/extension-api/types/index.js';
 import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { useExtendedListQuery } from '@/vdb/hooks/use-extended-list-query.js';
+import { useViewOptionDefaults } from '@/vdb/hooks/use-view-option-defaults.js';
 import { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { ColumnFiltersState, ColumnSort, SortingState, Table } from '@tanstack/react-table';
 import { ColumnDef, Row, TableOptions, VisibilityState } from '@tanstack/table-core';
@@ -17,7 +18,6 @@ import React from 'react';
 import { getColumnVisibility, getStandardizedDefaultColumnOrder } from '../data-table/data-table-utils.js';
 import { useGeneratedColumns } from '../data-table/use-generated-columns.js';
 import { PaginatedListContext } from './paginated-list-context.js';
-import { useViewOptionDefaults } from '@/vdb/hooks/use-view-option-defaults.js';
 
 // Type that identifies a paginated list structure (has items array and totalItems)
 type IsPaginatedList<T> = T extends { items: any[]; totalItems: number } ? true : false;
@@ -199,6 +199,11 @@ export interface PaginatedListDataTableProps<
      * still invoked on every change so pages can use it as a state-sync hook.
      */
     onSearchTermChange?: (searchTerm: string) => NonNullable<V['options']>['filter'];
+    /**
+     * Placeholder shown in the table search input. Use this to name the business fields
+     * that are actually searchable on the current page.
+     */
+    searchPlaceholder?: string;
     page: number;
     itemsPerPage: number;
     sorting: SortingState;
@@ -370,6 +375,7 @@ export function PaginatedListDataTable<
     defaultVisibility: _defaultVisibility,
     defaultColumnOrder: _defaultColumnOrder,
     onSearchTermChange,
+    searchPlaceholder,
     page,
     itemsPerPage,
     sorting,
@@ -416,7 +422,10 @@ export function PaginatedListDataTable<
     const paginatedListObjectPath = getObjectPathToPaginatedList(extendedListQuery);
 
     // Merge code-defined default view options with any view options configured via the Plugin Extension API
-    const { defaultColumnVisibility, defaultColumnOrder } = useViewOptionDefaults(_defaultVisibility, _defaultColumnOrder);
+    const { defaultColumnVisibility, defaultColumnOrder } = useViewOptionDefaults(
+        _defaultVisibility,
+        _defaultColumnOrder,
+    );
 
     const { columns, customFieldColumnNames } = useGeneratedColumns({
         fields,
@@ -464,7 +473,7 @@ export function PaginatedListDataTable<
     ];
     const queryKey = transformQueryKey ? transformQueryKey(defaultQueryKey) : defaultQueryKey;
 
-    const { data, isFetching } = useQuery({
+    const { data, error, isFetching } = useQuery({
         queryFn: () => {
             // Always invoke onSearchTermChange so callers can use it as a
             // state-sync hook (e.g. collections.tsx gates drag-and-drop on the
@@ -503,6 +512,7 @@ export function PaginatedListDataTable<
             <DataTable
                 columns={columns}
                 data={transformedData}
+                error={error}
                 isLoading={isFetching}
                 page={page}
                 itemsPerPage={itemsPerPage}
@@ -514,6 +524,7 @@ export function PaginatedListDataTable<
                 onFilterChange={onFilterChange}
                 onColumnVisibilityChange={onColumnVisibilityChange}
                 onSearchTermChange={onSearchTermChange ? term => setSearchTerm(term) : undefined}
+                searchPlaceholder={searchPlaceholder}
                 defaultColumnVisibility={columnVisibility}
                 facetedFilters={facetedFilters}
                 disableViewOptions={disableViewOptions}

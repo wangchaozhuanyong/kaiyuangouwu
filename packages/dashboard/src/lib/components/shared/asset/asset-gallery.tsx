@@ -376,10 +376,18 @@ export function AssetGallery({
                                 <SelectValue placeholder={t`Asset type`} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value={AssetType.ALL}><Trans>All types</Trans></SelectItem>
-                                <SelectItem value={AssetType.IMAGE}><Trans>Images</Trans></SelectItem>
-                                <SelectItem value={AssetType.VIDEO}><Trans>Video</Trans></SelectItem>
-                                <SelectItem value={AssetType.BINARY}><Trans>Binary</Trans></SelectItem>
+                                <SelectItem value={AssetType.ALL}>
+                                    <Trans>All types</Trans>
+                                </SelectItem>
+                                <SelectItem value={AssetType.IMAGE}>
+                                    <Trans>Images</Trans>
+                                </SelectItem>
+                                <SelectItem value={AssetType.VIDEO}>
+                                    <Trans>Video</Trans>
+                                </SelectItem>
+                                <SelectItem value={AssetType.BINARY}>
+                                    <Trans>Binary</Trans>
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                         {onViewModeChange && (
@@ -402,7 +410,11 @@ export function AssetGallery({
                         )}
                         <PageActionBar>
                             <ActionBarItem itemId="upload-assets-button">
-                                <Button onClick={openFileDialog} disabled={isUploading} className="whitespace-nowrap">
+                                <Button
+                                    onClick={openFileDialog}
+                                    disabled={isUploading}
+                                    className="whitespace-nowrap"
+                                >
                                     {isUploading ? (
                                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                     ) : (
@@ -447,14 +459,18 @@ export function AssetGallery({
                 {isDragActive && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-md">
                         <Upload className="h-12 w-12 text-primary mb-2" />
-                        <p className="text-center font-medium"><Trans>Drop files here to upload</Trans></p>
+                        <p className="text-center font-medium">
+                            <Trans>Drop files here to upload</Trans>
+                        </p>
                     </div>
                 )}
 
                 {isUploading && (
                     <div className="absolute inset-0 bg-background/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-md">
                         <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
-                        <p className="text-center font-medium"><Trans>Uploading assets...</Trans></p>
+                        <p className="text-center font-medium">
+                            <Trans>Uploading assets...</Trans>
+                        </p>
                     </div>
                 )}
 
@@ -481,18 +497,16 @@ export function AssetGallery({
 
             <div className="flex flex-col md:flex-row items-center md:justify-between gap-4 mt-4 flex-shrink-0">
                 <div className="mt-2 text-xs text-muted-foreground flex-shrink-0">
-                    <Trans>
-                        {totalItems} {totalItems === 1 ? 'asset' : 'assets'} found
-                    </Trans>
-                    {selected.length > 0 && (
-                        <Trans>, {selected.length} selected</Trans>
-                    )}
+                    <Trans>{totalItems} assets found</Trans>
+                    {selected.length > 0 && <Trans>, {selected.length} selected</Trans>}
                 </div>
                 <div className="flex-1"></div>
                 {/* Items per page selector */}
                 {onPageSizeChange && (
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground"><Trans>Items per page</Trans></span>
+                        <span className="text-sm text-muted-foreground">
+                            <Trans>Items per page</Trans>
+                        </span>
                         <Select
                             items={Object.fromEntries([12, 24, 48, 96].map(size => [`${size}`, size]))}
                             value={pageSize.toString()}
@@ -666,7 +680,11 @@ function AssetGridView({
     }
 
     if (assets.length === 0) {
-        return <div data-asset-gallery><AssetEmptyState /></div>;
+        return (
+            <div data-asset-gallery>
+                <AssetEmptyState />
+            </div>
+        );
     }
 
     return (
@@ -687,11 +705,7 @@ function AssetGridView({
                     onClick={e => handleSelect(asset, e)}
                 >
                     <div className="relative aspect-square bg-muted/30 overflow-hidden">
-                        <VendureImage
-                            asset={asset}
-                            preset="thumb"
-                            className="w-full h-full object-cover"
-                        />
+                        <VendureImage asset={asset} preset="thumb" className="w-full h-full object-cover" />
                         {selectable && (
                             <div className="absolute top-1.5 left-1.5">
                                 <Checkbox
@@ -705,10 +719,7 @@ function AssetGridView({
                         )}
                     </div>
                     <div className="px-2 py-1.5">
-                        <p
-                            className="text-sm font-medium leading-tight line-clamp-1"
-                            title={asset.name}
-                        >
+                        <p className="text-sm font-medium leading-tight line-clamp-1" title={asset.name}>
                             {asset.name}
                         </p>
                         <div className="flex items-center justify-between mt-0.5">
@@ -749,7 +760,11 @@ function AssetListView({
     }
 
     if (assets.length === 0) {
-        return <div data-asset-gallery><AssetEmptyState /></div>;
+        return (
+            <div data-asset-gallery>
+                <AssetEmptyState />
+            </div>
+        );
     }
 
     return (
@@ -759,11 +774,21 @@ function AssetListView({
                     <TableRow>
                         {selectable && <TableHead className="w-10" />}
                         <TableHead className="w-12" />
-                        <TableHead><Trans>Name</Trans></TableHead>
-                        <TableHead><Trans>Type</Trans></TableHead>
-                        <TableHead><Trans>Size</Trans></TableHead>
-                        <TableHead><Trans>Dimensions</Trans></TableHead>
-                        <TableHead><Trans>Created</Trans></TableHead>
+                        <TableHead>
+                            <Trans>Name</Trans>
+                        </TableHead>
+                        <TableHead>
+                            <Trans>Type</Trans>
+                        </TableHead>
+                        <TableHead>
+                            <Trans>Size</Trans>
+                        </TableHead>
+                        <TableHead>
+                            <Trans>Dimensions</Trans>
+                        </TableHead>
+                        <TableHead>
+                            <Trans>Created</Trans>
+                        </TableHead>
                         <TableHead className="w-10" />
                     </TableRow>
                 </TableHeader>
@@ -803,9 +828,7 @@ function AssetListView({
                                 {asset.fileSize ? formatFileSize(asset.fileSize) : '-'}
                             </TableCell>
                             <TableCell className="text-muted-foreground">
-                                {asset.width && asset.height
-                                    ? `${asset.width} \u00d7 ${asset.height}`
-                                    : '-'}
+                                {asset.width && asset.height ? `${asset.width} \u00d7 ${asset.height}` : '-'}
                             </TableCell>
                             <TableCell className="text-muted-foreground">
                                 {formatDate(asset.createdAt)}

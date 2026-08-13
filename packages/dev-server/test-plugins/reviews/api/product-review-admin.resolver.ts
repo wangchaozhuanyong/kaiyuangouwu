@@ -67,6 +67,33 @@ export class ProductReviewAdminResolver {
 
     @Transaction()
     @Mutation()
+    @Allow(Permission.CreateCatalog)
+    async createProductReview(
+        @Ctx() ctx: RequestContext,
+        @Args('input')
+        input: {
+            productId: string;
+            summary: string;
+            body: string;
+            rating: number;
+            authorName: string;
+            authorLocation?: string | null;
+        },
+    ) {
+        const product = await this.connection.getEntityOrThrow(ctx, Product, input.productId);
+        const review = new ProductReview({
+            ...input,
+            authorLocation: input.authorLocation?.trim() || null,
+            product,
+            state: 'new',
+            upvotes: 0,
+            downvotes: 0,
+        });
+        return this.connection.getRepository(ctx, ProductReview).save(review);
+    }
+
+    @Transaction()
+    @Mutation()
     @Allow(Permission.UpdateCatalog)
     async updateProductReview(
         @Ctx() ctx: RequestContext,

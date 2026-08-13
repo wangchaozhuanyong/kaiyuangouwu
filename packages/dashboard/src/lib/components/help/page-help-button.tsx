@@ -9,17 +9,18 @@ import {
     SheetTrigger,
 } from '@/vdb/components/ui/sheet.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { AlertTriangle, CircleHelp, Lightbulb, ListChecks } from 'lucide-react';
 import { getPageHelpMode, getPageHelpTopic, localizeHelpText } from './help-content.js';
 
 export function PageHelpButton({ pageId }: Readonly<{ pageId?: string }>) {
+    const { t } = useLingui();
     const { displayLanguage } = useUserSettings().settings;
     const topic = getPageHelpTopic(pageId);
 
     if (!topic) return null;
 
-    const isChinese = displayLanguage.startsWith('zh');
-    const label = isChinese ? '查看操作说明' : 'View operation guide';
+    const label = t`View operation guide`;
     const mode = getPageHelpMode(pageId);
     const helpId = pageId ?? 'page';
     const steps =
@@ -44,13 +45,11 @@ export function PageHelpButton({ pageId }: Readonly<{ pageId?: string }>) {
             <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
                 <SheetHeader className="border-b px-6 py-5 text-left">
                     <p className="text-xs font-medium text-muted-foreground">
-                        {mode === 'list'
-                            ? isChinese
-                                ? '列表与批量操作'
-                                : 'List and bulk actions'
-                            : isChinese
-                              ? '详情与配置'
-                              : 'Details and configuration'}
+                        {mode === 'list' ? (
+                            <Trans>List and bulk actions</Trans>
+                        ) : (
+                            <Trans>Details and configuration</Trans>
+                        )}
                     </p>
                     <SheetTitle>{localizeHelpText(topic.title, displayLanguage)}</SheetTitle>
                     <SheetDescription className="text-sm leading-6">
@@ -64,7 +63,7 @@ export function PageHelpButton({ pageId }: Readonly<{ pageId?: string }>) {
                                 <div className="mb-4 flex items-center gap-2">
                                     <ListChecks className="size-4 text-primary" />
                                     <h3 id={`help-steps-${helpId}`} className="text-sm font-semibold">
-                                        {isChinese ? '建议操作顺序' : 'Recommended workflow'}
+                                        <Trans>Recommended workflow</Trans>
                                     </h3>
                                 </div>
                                 <ol className="space-y-4">
@@ -83,7 +82,7 @@ export function PageHelpButton({ pageId }: Readonly<{ pageId?: string }>) {
                             <div className="mb-4 flex items-center gap-2">
                                 <Lightbulb className="size-4 text-primary" />
                                 <h3 id={`help-tips-${helpId}`} className="text-sm font-semibold">
-                                    {isChinese ? '实用提示' : 'Practical tips'}
+                                    <Trans>Practical tips</Trans>
                                 </h3>
                             </div>
                             <ul className="space-y-3 text-sm leading-6 text-muted-foreground">
@@ -99,7 +98,7 @@ export function PageHelpButton({ pageId }: Readonly<{ pageId?: string }>) {
                                 <div className="mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-400">
                                     <AlertTriangle className="size-4" />
                                     <h3 className="text-sm font-semibold">
-                                        {isChinese ? '操作前请确认' : 'Confirm before continuing'}
+                                        <Trans>Confirm before continuing</Trans>
                                     </h3>
                                 </div>
                                 <p className="text-sm leading-6 text-muted-foreground">

@@ -8,11 +8,13 @@ import { api } from '@/vdb/graphql/api.js';
 import { usePaginatedList } from '@/vdb/hooks/use-paginated-list.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 
+import { type BulkActionEntityName, getBulkActionEntityLabel } from './bulk-action-entity-labels.js';
+
 interface DeleteBulkActionProps {
     /** The GraphQL mutation document to execute */
     mutationDocument: any;
     /** The entity name for localization (e.g., "products", "administrators") */
-    entityName: string;
+    entityName: BulkActionEntityName;
     /** The required permissions for this action */
     requiredPermissions: string[];
     /** Optional callback for additional cleanup after successful deletion */
@@ -71,7 +73,7 @@ interface DeleteBulkActionProps {
  */
 export function DeleteBulkAction({
     mutationDocument,
-    entityName,
+    entityName: entityKey,
     requiredPermissions,
     onSuccess,
     invalidateQueries = [],
@@ -79,7 +81,8 @@ export function DeleteBulkAction({
     table,
 }: Readonly<DeleteBulkActionProps>) {
     const { refetchPaginatedList } = usePaginatedList();
-    const { t } = useLingui();
+    const { i18n, t } = useLingui();
+    const entityName = getBulkActionEntityLabel(i18n, entityKey);
     const queryClient = useQueryClient();
 
     const { mutate } = useMutation({
@@ -127,8 +130,15 @@ export function DeleteBulkAction({
             // Call additional success callback if provided
             onSuccess?.();
         },
-        onError: () => {
-            toast.error(t`Failed to delete ${selection.length} ${entityName}`);
+        onError: error => {
+            const message = error instanceof Error ? error.message : String(error);
+            if (/foreign key constraint failed/i.test(message)) {
+                toast.error(
+                    t`This item is still in use and cannot be deleted. Remove its associations first.`,
+                );
+                return;
+            }
+            toast.error(t`Failed to delete ${selection.length} ${entityName}: ${message}`);
         },
     });
 

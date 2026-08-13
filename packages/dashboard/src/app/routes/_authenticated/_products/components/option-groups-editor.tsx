@@ -5,26 +5,26 @@ import { Input } from '@/vdb/components/ui/input.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Plus, Trash2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Control, useFieldArray, useForm } from 'react-hook-form';
 import { OptionValueInput } from './option-value-input.js';
 
-export const optionValueSchema = z.object({
-    value: z.string().min(1, { message: 'Value cannot be empty' }),
-    id: z.string().min(1, { message: 'Value cannot be empty' }),
-});
+type Translate = ReturnType<typeof useLingui>['t'];
 
-export const optionGroupSchema = z.object({
-    name: z.string().min(1, { message: 'Option name is required' }),
-    values: z.array(optionValueSchema).min(1, { message: 'At least one value is required' }),
-});
+export const createOptionGroupSchema = (t: Translate) => {
+    const optionValueSchema = z.object({
+        value: z.string().min(1, { message: t`Value cannot be empty` }),
+        id: z.string().min(1, { message: t`Value cannot be empty` }),
+    });
 
-const multiGroupFormSchema = z.object({
-    optionGroups: z.array(optionGroupSchema),
-});
+    return z.object({
+        name: z.string().min(1, { message: t`Option name is required` }),
+        values: z.array(optionValueSchema).min(1, { message: t`At least one value is required` }),
+    });
+};
 
-export type OptionGroup = z.infer<typeof optionGroupSchema>;
-export type MultiGroupForm = z.infer<typeof multiGroupFormSchema>;
+export type OptionGroup = z.infer<ReturnType<typeof createOptionGroupSchema>>;
+export type MultiGroupForm = { optionGroups: OptionGroup[] };
 
 export interface SingleOptionGroup {
     name: string;
@@ -95,6 +95,13 @@ interface OptionGroupsEditorProps {
 
 export function OptionGroupsEditor({ onChange, initialGroups = [] }: Readonly<OptionGroupsEditorProps>) {
     const { t } = useLingui();
+    const multiGroupFormSchema = useMemo(
+        () =>
+            z.object({
+                optionGroups: z.array(createOptionGroupSchema(t)),
+            }),
+        [t],
+    );
     const form = useForm<MultiGroupForm>({
         resolver: zodResolver(multiGroupFormSchema),
         defaultValues: {

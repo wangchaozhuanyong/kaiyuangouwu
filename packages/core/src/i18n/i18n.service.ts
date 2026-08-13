@@ -31,11 +31,26 @@ export interface I18nRequest extends Request {
     t: TFunction;
 }
 
+export function detectVendureRequestLanguage(req: Pick<Request, 'query'>): string | undefined {
+    const query = req.query as Record<string, unknown> | undefined;
+    const getValidLanguageCode = (value: unknown) =>
+        typeof value === 'string' && /^[a-zA-Z0-9_-]+$/u.test(value) ? value : undefined;
+
+    return getValidLanguageCode(query?.displayLanguageCode) ?? getValidLanguageCode(query?.languageCode);
+}
+
+const vendureQueryLanguageDetector = {
+    name: 'vendureQueryLanguage',
+    lookup(req: Request): string | undefined {
+        return detectVendureRequestLanguage(req);
+    },
+};
+
 /**
  * This service is responsible for translating messages from the server before they reach the client.
  * The `i18next-express-middleware` middleware detects the client's preferred language based on
- * the `Accept-Language` header or "lang" query param and adds language-specific translation
- * functions to the Express request / response objects.
+ * the `displayLanguageCode` query param, content-language fallback, or `Accept-Language` header and
+ * adds language-specific translation functions to the Express request / response objects.
  *
  * @docsCategory common
  * @docsPage I18nService
@@ -64,8 +79,10 @@ export class I18nService implements OnModuleInit {
         for (const langKey of this.getBundledLanguageCodes()) {
             this.supportedLanguages.add(langKey);
         }
+        const languageDetector = new i18nextMiddleware.LanguageDetector();
+        languageDetector.addDetector(vendureQueryLanguageDetector);
         return i18next
-            .use(i18nextMiddleware.LanguageDetector)
+            .use(languageDetector)
             .use(Backend as any)
             .use(ICU)
             .init({
@@ -74,7 +91,11 @@ export class I18nService implements OnModuleInit {
                 supportedLngs: Array.from(this.supportedLanguages),
                 fallbackLng: 'en',
                 detection: {
-                    lookupQuerystring: 'languageCode',
+                    order: ['vendureQueryLanguage', 'header'],
+                },
+                i18nFormat: {
+                    // Vendure language codes use underscores, whereas Intl.Locale requires BCP 47.
+                    parseLngForICU: (languageCode: string) => languageCode.replace(/_/g, '-'),
                 },
                 backend: {
                     loadPath: path.join(__dirname, 'messages/{{lng}}.json'),

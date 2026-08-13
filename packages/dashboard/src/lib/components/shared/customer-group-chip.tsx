@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { X } from 'lucide-react';
 import { Badge } from '../ui/badge.js';
 
@@ -8,6 +9,8 @@ export function CustomerGroupChip({
     group: { id: string; name: string };
     onRemove?: (id: string) => void;
 }) {
+    const { t } = useLingui();
+
     return (
         <Badge
             key={group.id}
@@ -20,7 +23,7 @@ export function CustomerGroupChip({
                     type="button"
                     className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted/30"
                     onClick={() => onRemove(group.id)}
-                    aria-label={`Remove ${group.name}`}
+                    aria-label={t`Remove customer group ${group.name}`}
                 >
                     <X className="h-3 w-3" />
                 </button>

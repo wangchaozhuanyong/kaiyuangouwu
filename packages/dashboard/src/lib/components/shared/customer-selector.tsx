@@ -18,7 +18,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
 import { useDebounce } from '@uidotdev/usehooks';
 import { Plus, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CustomFieldsForm } from './custom-fields-form.js';
 import { FormFieldWrapper } from './form-field-wrapper.js';
@@ -58,16 +58,22 @@ export interface CustomerSelectorProps {
     readOnly?: boolean;
 }
 
-const createCustomerFormSchema = z.object({
-    title: z.string().optional(),
-    firstName: z.string().min(1, { message: 'First name is required' }),
-    lastName: z.string().min(1, { message: 'Last name is required' }),
-    emailAddress: z.string().min(1, { message: 'Email address is required' }).email(),
-    phoneNumber: z.string().optional(),
-    customFields: z.any().optional(),
-});
+type Translate = ReturnType<typeof useLingui>['t'];
 
-type CreateCustomerFormValues = z.infer<typeof createCustomerFormSchema>;
+const createCustomerFormSchema = (t: Translate) =>
+    z.object({
+        title: z.string().optional(),
+        firstName: z.string().min(1, { message: t`First name is required` }),
+        lastName: z.string().min(1, { message: t`Last name is required` }),
+        emailAddress: z
+            .string()
+            .min(1, { message: t`Email address is required` })
+            .email(),
+        phoneNumber: z.string().optional(),
+        customFields: z.any().optional(),
+    });
+
+type CreateCustomerFormValues = z.infer<ReturnType<typeof createCustomerFormSchema>>;
 
 function CustomerSearch({ onSelect }: Readonly<{ onSelect: (value: Customer) => void }>) {
     const { t } = useLingui();
@@ -121,9 +127,14 @@ function CustomerSearch({ onSelect }: Readonly<{ onSelect: (value: Customer) => 
     );
 }
 
-function CreateCustomerForm({ onSubmit, onCancel }: Readonly<{ onSubmit: (input: CreateCustomerInput) => void; onCancel?: () => void }>) {
+function CreateCustomerForm({
+    onSubmit,
+    onCancel,
+}: Readonly<{ onSubmit: (input: CreateCustomerInput) => void; onCancel?: () => void }>) {
+    const { t } = useLingui();
+    const customerFormSchema = useMemo(() => createCustomerFormSchema(t), [t]);
     const form = useForm<CreateCustomerFormValues>({
-        resolver: zodResolver(createCustomerFormSchema),
+        resolver: zodResolver(customerFormSchema),
         defaultValues: {
             title: '',
             firstName: '',

@@ -59,6 +59,7 @@ function RoleListPage() {
                     },
                 },
                 channels: {
+                    header: () => <Trans>Managed stores</Trans>,
                     cell: ({ row }) => {
                         if (SYSTEM_ROLES.includes(row.original.code)) {
                             return null;

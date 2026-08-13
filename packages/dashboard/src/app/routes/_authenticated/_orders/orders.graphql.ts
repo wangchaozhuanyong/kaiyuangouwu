@@ -94,6 +94,7 @@ export const fulfillmentFragment = graphql(`
         createdAt
         updatedAt
         method
+        handlerCode
         lines {
             orderLineId
             quantity
@@ -156,6 +157,9 @@ export const orderLineFragment = graphql(
             fulfillmentLines {
                 fulfillmentId
                 quantity
+            }
+            customFields {
+                fulfillmentTypeSnapshot
             }
             unitPrice
             unitPriceWithTax

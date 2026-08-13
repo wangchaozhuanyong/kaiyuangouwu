@@ -75,7 +75,8 @@ export const REQUIRED_SCRIPTS = {
     zh_Hant: { name: 'CJK', test: c => SCRIPT_RANGES.cjk.test(c) },
     ja: {
         name: 'Japanese (Hira/Kana/CJK)',
-        test: c => SCRIPT_RANGES.hiragana.test(c) || SCRIPT_RANGES.katakana.test(c) || SCRIPT_RANGES.cjk.test(c),
+        test: c =>
+            SCRIPT_RANGES.hiragana.test(c) || SCRIPT_RANGES.katakana.test(c) || SCRIPT_RANGES.cjk.test(c),
     },
     ko: { name: 'Hangul', test: c => SCRIPT_RANGES.hangul.test(c) },
     ne: { name: 'Devanagari', test: c => SCRIPT_RANGES.devanagari.test(c) },
@@ -102,8 +103,29 @@ export function looksTrivial(s) {
     const stripped = s.replace(/[\s\d\p{P}\p{S}]/gu, '');
     if (stripped.length < 2) return true;
     // Looks like a pure placeholder string ("{count}", "%s", "{0} of {1}")?
-    if (/^[\s{}\d%a-zA-Z_,\-]*$/.test(s) && !/[a-z]{4,}/i.test(s)) return true;
+    if (/^[-\s{}\d%a-zA-Z_,]*$/.test(s) && !/[a-z]{4,}/i.test(s)) return true;
     return false;
+}
+
+/**
+ * Returns only top-level ICU arguments. Nested braces contain plural/select
+ * branches and must not be treated as variables.
+ */
+export function getIcuArgumentNames(message) {
+    const names = new Set();
+    let depth = 0;
+    for (let index = 0; index < message.length; index++) {
+        if (message[index] === '{') {
+            if (depth === 0) {
+                const argument = message.slice(index + 1).match(/^\s*([A-Za-z_][\w.]*)\s*[,}]/u);
+                if (argument) names.add(argument[1]);
+            }
+            depth++;
+        } else if (message[index] === '}') {
+            depth--;
+        }
+    }
+    return [...names].sort();
 }
 
 // ---------------------------------------------------------------------------
@@ -135,11 +157,7 @@ export function parsePOFile(filePath) {
     let i = 0;
     while (i < lines.length) {
         const refs = [];
-        while (
-            i < lines.length &&
-            !lines[i].startsWith('msgid ') &&
-            !lines[i].startsWith('msgctxt ')
-        ) {
+        while (i < lines.length && !lines[i].startsWith('msgid ') && !lines[i].startsWith('msgctxt ')) {
             if (lines[i].startsWith('#:')) refs.push(lines[i].slice(2).trim());
             i++;
         }
@@ -199,9 +217,5 @@ export function entryId(msgctxt, msgid) {
 function unquote(s) {
     s = s.trim();
     if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1);
-    return s
-        .replace(/\\"/g, '"')
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t')
-        .replace(/\\\\/g, '\\');
+    return s.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
 }

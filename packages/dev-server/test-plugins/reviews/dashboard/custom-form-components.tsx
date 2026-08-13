@@ -68,21 +68,23 @@ export const ReviewMultiSelect: DashboardFormComponent = props => {
 };
 
 export const ReviewStateSelect: DashboardFormComponent = props => {
+    const statusLabels = {
+        new: <Trans>Pending review</Trans>,
+        approved: <Trans>Approved</Trans>,
+        rejected: <Trans>Rejected</Trans>,
+    };
+
     return (
-        <Select value={props.value} onValueChange={props.onChange} key={props.value}>
+        <Select value={props.value} onValueChange={props.onChange} key={props.value} items={statusLabels}>
             <SelectTrigger>
-                <SelectValue placeholder={<Trans>Select review status</Trans>}></SelectValue>
+                <SelectValue placeholder={<Trans>Select review status</Trans>}>
+                    {(value: keyof typeof statusLabels) => statusLabels[value]}
+                </SelectValue>
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="new">
-                    <Trans>Pending review</Trans>
-                </SelectItem>
-                <SelectItem value="approved">
-                    <Trans>Approved</Trans>
-                </SelectItem>
-                <SelectItem value="rejected">
-                    <Trans>Rejected</Trans>
-                </SelectItem>
+                <SelectItem value="new">{statusLabels.new}</SelectItem>
+                <SelectItem value="approved">{statusLabels.approved}</SelectItem>
+                <SelectItem value="rejected">{statusLabels.rejected}</SelectItem>
             </SelectContent>
         </Select>
     );

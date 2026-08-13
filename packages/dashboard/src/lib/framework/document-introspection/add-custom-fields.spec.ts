@@ -1,6 +1,6 @@
 import { CustomFieldConfig, CustomFields } from '@vendure/common/lib/generated-types';
 import { graphql } from 'gql.tada';
-import { DocumentNode, FieldNode, FragmentDefinitionNode, Kind, print } from 'graphql';
+import { DocumentNode, FieldNode, FragmentDefinitionNode, Kind, parse, print } from 'graphql';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { addCustomFields, addCustomFieldsToFragment } from './add-custom-fields.js';
@@ -808,6 +808,33 @@ describe('addCustomFields()', () => {
             // Should add customFields to both Order and OrderLine
             expect(printed).toContain('orderCustomField');
             expect(printed).toContain('orderLineCustomField');
+        });
+
+        it('preserves explicit custom field selections when no dashboard fields are configured', () => {
+            const documentNode = parse(`
+                query GetOrder($id: ID!) {
+                    order(id: $id) {
+                        id
+                        lines {
+                            ...OrderLine
+                        }
+                    }
+                }
+
+                fragment OrderLine on OrderLine {
+                    id
+                    customFields {
+                        fulfillmentTypeSnapshot
+                    }
+                }
+            `);
+
+            const result = addCustomFields(documentNode, {
+                customFieldsMap: new Map(),
+                includeNestedFragments: ['OrderLine'],
+            });
+
+            expect(print(result)).toContain('fulfillmentTypeSnapshot');
         });
     });
 

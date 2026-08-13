@@ -62,6 +62,15 @@ export const adminApiExtensions = gql`
         translations: [ProductReviewTranslationInput!]!
     }
 
+    input CreateProductReviewInput {
+        productId: ID!
+        summary: String!
+        body: String!
+        rating: Float!
+        authorName: String!
+        authorLocation: String
+    }
+
     extend type ProductReview {
         author: Customer
     }
@@ -72,6 +81,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        createProductReview(input: CreateProductReviewInput!): ProductReview!
         updateProductReview(input: UpdateProductReviewInput!): ProductReview!
         approveProductReview(id: ID!): ProductReview
         rejectProductReview(id: ID!): ProductReview

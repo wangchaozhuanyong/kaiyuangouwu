@@ -9,7 +9,9 @@ import { Field, FieldLabel } from '@/vdb/components/ui/field.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { Switch } from '@/vdb/components/ui/switch.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
-import {    CustomFieldsPageBlock,
+import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
+import {
+    CustomFieldsPageBlock,
     DetailFormGrid,
     Page,
     PageActionBar,
@@ -17,7 +19,6 @@ import {    CustomFieldsPageBlock,
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-loader.js';
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { useJobQueuePolling } from '@/vdb/hooks/use-job-queue-polling.js';
@@ -73,6 +74,17 @@ function CollectionDetailPage() {
             };
         },
         updateDocument: updateCollectionDocument,
+        extendSchema: schema =>
+            schema.refine(
+                values =>
+                    values.translations?.some((translation: { slug?: string | null }) =>
+                        Boolean(translation.slug?.trim()),
+                    ),
+                {
+                    path: ['translations', 0, 'slug'],
+                    message: t`This field is required`,
+                },
+            ),
         setValuesForUpdate: entity => {
             return {
                 id: entity.id,
@@ -135,7 +147,10 @@ function CollectionDetailPage() {
         <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
             <PageTitle>{creatingNewEntity ? <Trans>New collection</Trans> : (entity?.name ?? '')}</PageTitle>
             <PageActionBar>
-                <ActionBarItem itemId="save-button" requiresPermission={['UpdateCollection', 'UpdateCatalog']}>
+                <ActionBarItem
+                    itemId="save-button"
+                    requiresPermission={['UpdateCollection', 'UpdateCatalog']}
+                >
                     <Button
                         type="submit"
                         disabled={

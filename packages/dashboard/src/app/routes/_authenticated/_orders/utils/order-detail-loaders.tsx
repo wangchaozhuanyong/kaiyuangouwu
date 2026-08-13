@@ -132,7 +132,7 @@ export async function loadSellerOrder(
             },
             {
                 path: `/orders/${params.aggregateOrderId}`,
-                label: 'Seller orders',
+                label: <Trans>Seller orders</Trans>,
             },
             result.order.code,
         ],

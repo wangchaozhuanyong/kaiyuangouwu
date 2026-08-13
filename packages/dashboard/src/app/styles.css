@@ -3,9 +3,9 @@
 @import '@fontsource-variable/geist-mono';
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import "shadcn/tailwind.css";
+@import 'shadcn/tailwind.css';
 
-html[dir="rtl"] * {
+html[dir='rtl'] * {
     direction: rtl;
 }
 
@@ -38,6 +38,12 @@ html[dir="rtl"] * {
 /* stylelint-disable-next-line no-invalid-position-at-import-rule */
 @import 'virtual:vendure-user-styles';
 
+:root {
+    --vdb-z-background-floating: 40;
+    --vdb-z-modal: 50;
+    --vdb-z-floating: 60;
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;
@@ -54,7 +60,7 @@ html[dir="rtl"] * {
 
     /* Restore h-svh on sidebar-gap to prevent sidebar fixed container
        from intercepting pointer events in the main content area */
-    [data-slot="sidebar-gap"] {
+    [data-slot='sidebar-gap'] {
         height: 100svh;
     }
 }
@@ -91,6 +97,32 @@ html[dir="rtl"] * {
 /* Prevent the main content area from overflowing horizontally on mobile,
    which otherwise extends behind the sidebar Sheet backdrop and blocks
    tap-to-close interactions. */
-[data-slot="sidebar-inset"] {
+[data-slot='sidebar-inset'] {
     overflow-x: hidden;
+}
+
+/* Overlay layer contract: background floating surfaces, modal surfaces, then
+   the active floating surface (including its click-capturing backdrop). */
+:is(
+    [data-slot='dialog-overlay'],
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-overlay'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='sheet-overlay'],
+    [data-slot='sheet-content'],
+    [data-slot='drawer-overlay'],
+    [data-slot='drawer-content']
+) {
+    z-index: var(--vdb-z-modal);
+}
+
+[data-base-ui-portal]:has(> [role='presentation'][data-side]) > [role='presentation'] {
+    z-index: var(--vdb-z-floating);
+}
+
+/* A modal marks previously-open portal trees as hidden. Move those surfaces
+   below the modal. Only target the hidden portal's direct presentation layers:
+   active controls opened inside the modal can be nested in that portal tree. */
+[data-base-ui-portal][aria-hidden='true']:has(> [role='presentation'][data-side]) > [role='presentation'] {
+    z-index: var(--vdb-z-background-floating);
 }

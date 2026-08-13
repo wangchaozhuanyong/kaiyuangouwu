@@ -16,7 +16,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 import { ShopApi } from './api';
-import { copy, markets } from './i18n';
+import { copy, enabledMarkets, markets } from './i18n';
 import {
     FulfillmentType,
     MarketCode,
@@ -33,7 +33,9 @@ type Panel = 'cart' | 'checkout' | null;
 export function App() {
     const [marketCode, setMarketCode] = useState<MarketCode>(() => {
         const stored = localStorage.getItem('storefront-market');
-        return stored === 'my-malaysia' ? stored : 'cn-mainland';
+        return enabledMarkets.some(market => market.code === stored)
+            ? (stored as MarketCode)
+            : enabledMarkets[0].code;
     });
     const [products, setProducts] = useState<Product[]>([]);
     const [order, setOrder] = useState<Order | null>(null);
@@ -490,6 +492,7 @@ function CheckoutPanel({
 
     const needsAddress = order?.checkoutFulfillment.requiresShippingAddress ?? false;
     const isMixed = order?.checkoutFulfillment.fulfillmentType === 'MIXED';
+    const selectedShippingMethod = shippingMethods.find(method => method.id === selectedShippingId);
 
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -645,7 +648,12 @@ function CheckoutPanel({
                         </fieldset>
                     )}
                     {error && <p className="inline-error">{error}</p>}
-                    <OrderSummary order={order} market={market} marketCode={marketCode} />
+                    <OrderSummary
+                        order={order}
+                        market={market}
+                        marketCode={marketCode}
+                        shippingPreviewWithTax={selectedShippingMethod?.priceWithTax}
+                    />
                 </div>
                 <div className="panel-footer">
                     <button className="primary-button wide" type="submit" disabled={submitting}>
@@ -685,12 +693,16 @@ function OrderSummary({
     order,
     market,
     marketCode,
+    shippingPreviewWithTax,
 }: {
     order: Order;
     market: MarketConfig;
     marketCode: MarketCode;
+    shippingPreviewWithTax?: number;
 }) {
     const text = copy[marketCode];
+    const shippingWithTax = shippingPreviewWithTax ?? order.shippingWithTax;
+    const totalWithTax = order.totalWithTax - order.shippingWithTax + shippingWithTax;
     return (
         <dl className="order-summary">
             <div>
@@ -699,11 +711,11 @@ function OrderSummary({
             </div>
             <div>
                 <dt>{text.shipping}</dt>
-                <dd>{formatMoney(order.shippingWithTax, order.currencyCode, market.locale)}</dd>
+                <dd>{formatMoney(shippingWithTax, order.currencyCode, market.locale)}</dd>
             </div>
             <div className="order-total">
                 <dt>{text.total}</dt>
-                <dd>{formatMoney(order.totalWithTax, order.currencyCode, market.locale)}</dd>
+                <dd>{formatMoney(totalWithTax, order.currencyCode, market.locale)}</dd>
             </div>
         </dl>
     );
@@ -753,7 +765,7 @@ function MarketSwitcher({
             <Globe2 aria-hidden="true" />
             <span className="sr-only">{label}</span>
             <select value={value} onChange={event => onChange(event.target.value as MarketCode)}>
-                {Object.values(markets).map(market => (
+                {enabledMarkets.map(market => (
                     <option key={market.code} value={market.code}>
                         {market.label}
                     </option>

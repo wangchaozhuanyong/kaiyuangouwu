@@ -1,10 +1,13 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/vdb/components/ui/table.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Order } from '../utils/order-types.js';
 
 export function OrderTaxSummary({ order }: Readonly<{ order: Order }>) {
     const { formatCurrency } = useLocalFormat();
+    const { t } = useLingui();
+    const getTaxDescription = (description: string) =>
+        description === 'shipping tax' ? t`Shipping tax` : description;
     return (
         <div>
             <Table>
@@ -27,7 +30,7 @@ export function OrderTaxSummary({ order }: Readonly<{ order: Order }>) {
                 <TableBody>
                     {order.taxSummary.map(taxLine => (
                         <TableRow key={taxLine.description}>
-                            <TableCell>{taxLine.description}</TableCell>
+                            <TableCell>{getTaxDescription(taxLine.description)}</TableCell>
                             <TableCell>{taxLine.taxRate}%</TableCell>
                             <TableCell>{formatCurrency(taxLine.taxBase, order.currencyCode)}</TableCell>
                             <TableCell>{formatCurrency(taxLine.taxTotal, order.currencyCode)}</TableCell>

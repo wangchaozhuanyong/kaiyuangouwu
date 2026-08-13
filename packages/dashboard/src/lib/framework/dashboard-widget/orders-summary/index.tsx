@@ -1,12 +1,11 @@
 import { AnimatedCurrency, AnimatedNumber } from '@/vdb/components/shared/animated-number.js';
 import { api } from '@/vdb/graphql/api.js';
-import { Trans } from '@lingui/react/macro';
-import { useLingui } from '@lingui/react/macro';
+import { useWidgetFilters } from '@/vdb/hooks/use-widget-filters.js';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
 import { differenceInDays, subDays } from 'date-fns';
 import { useMemo } from 'react';
 import { DashboardBaseWidget } from '../base-widget.js';
-import { useWidgetFilters } from '@/vdb/hooks/use-widget-filters.js';
 import { orderSummaryQuery } from './order-summary-widget.graphql.js';
 
 const WIDGET_ID = 'orders-summary-widget';
@@ -81,13 +80,15 @@ export function OrdersSummaryWidget() {
     return (
         <DashboardBaseWidget
             id={WIDGET_ID}
-            title={t`Orders Summary`}
-            description={t`Your orders summary`}
+            title={t`Period overview`}
+            description={t`Compared with the previous period of the same length`}
         >
             <div className="@container h-full">
                 <div className="flex flex-col h-full @md:flex-row gap-8 items-center justify-center @md:justify-evenly text-center tabular-nums">
                     <div className="flex flex-col lg:gap-2">
-                        <p className="lg:text-lg text-muted-foreground"><Trans>Total Orders</Trans></p>
+                        <p className="lg:text-lg text-muted-foreground">
+                            <Trans>Orders placed</Trans>
+                        </p>
                         <p className="text-xl @md:text-3xl font-semibold">
                             <AnimatedNumber
                                 animationConfig={{ mass: 0.01, stiffness: 90, damping: 3 }}
@@ -97,7 +98,9 @@ export function OrdersSummaryWidget() {
                         <PercentageChange value={orderChange} />
                     </div>
                     <div className="flex flex-col lg:gap-2">
-                        <p className="lg:text-lg text-muted-foreground"><Trans>Total Revenue</Trans></p>
+                        <p className="lg:text-lg text-muted-foreground">
+                            <Trans>Order revenue</Trans>
+                        </p>
                         <p className="text-xl @md:text-3xl font-semibold">
                             <AnimatedCurrency
                                 animationConfig={{ mass: 0.01, stiffness: 90, damping: 3 }}

@@ -5,6 +5,7 @@ import {
 } from '@/vdb/graphql/settings-store-operations.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { SavedView, SavedViewsStore, SaveViewInput, UpdateViewInput } from '@/vdb/types/saved-views.js';
+import { useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ColumnFiltersState } from '@tanstack/react-table';
 
@@ -19,6 +20,7 @@ const generateId = () => {
 };
 
 export function useSavedViews() {
+    const { t } = useLingui();
     const queryClient = useQueryClient();
     const { settingsStoreIsAvailable } = useUserSettings();
     const { pageId } = usePage();
@@ -188,7 +190,7 @@ export function useSavedViews() {
             const newView: SavedView = {
                 ...viewToDuplicate,
                 id: generateId(),
-                name: `${viewToDuplicate.name} (Copy)`,
+                name: t`${viewToDuplicate.name} (Copy)`,
                 scope: newScope,
                 pageId,
                 blockId: blockId === 'default' ? undefined : blockId,

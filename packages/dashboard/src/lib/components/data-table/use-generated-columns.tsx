@@ -1,4 +1,5 @@
 import { useAllBulkActions } from '@/vdb/components/data-table/use-all-bulk-actions.js';
+import { toast } from '@/vdb/components/ui/sonner.js';
 import { DisplayComponent } from '@/vdb/framework/component-registry/display-component.js';
 import {
     FieldInfo,
@@ -27,7 +28,6 @@ import {
 } from '@tanstack/react-table';
 import { EllipsisIcon, TrashIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
-import { toast } from '@/vdb/components/ui/sonner.js';
 import {
     AdditionalColumns,
     AllItemFieldKeys,
@@ -100,6 +100,7 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
 } {
     const { pageId } = usePage();
     const pageBlock = usePageBlock();
+    const { t } = useLingui();
     const columnHelper = createColumnHelper<PaginatedListItemFields<T>>();
     const allBulkActions = useAllBulkActions(bulkActions ?? []);
 
@@ -212,11 +213,10 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
                 accessorKey: 'selection',
                 header: ({ table }) => (
                     <Checkbox
+                        aria-label={t`Select all rows`}
                         className="mx-1"
                         checked={table.getIsAllRowsSelected()}
-                        onCheckedChange={checked =>
-                            table.toggleAllRowsSelected(checked)
-                        }
+                        onCheckedChange={checked => table.toggleAllRowsSelected(checked)}
                     />
                 ),
                 enableColumnFilter: false,
@@ -224,9 +224,10 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
                 cell: ({ row }) => {
                     return (
                         <Checkbox
+                            aria-label={t`Select row`}
                             className="mx-1"
                             checked={row.getIsSelected()}
-                            onCheckedChange={(checked) => row.toggleSelected(!!checked)}
+                            onCheckedChange={checked => row.toggleSelected(!!checked)}
                         />
                     );
                 },
@@ -234,7 +235,7 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
         }
 
         return { columns: finalColumns, customFieldColumnNames };
-    }, [fields, customizeColumns, rowActions, deleteMutation, additionalColumns, defaultColumnOrder]);
+    }, [fields, customizeColumns, rowActions, deleteMutation, additionalColumns, defaultColumnOrder, t]);
 
     return { columns, customFieldColumnNames };
 }
@@ -256,8 +257,13 @@ function getRowActions(
         cell: ({ row, table }) => {
             return (
                 <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button variant="ghost" size="icon" data-testid="dt-row-actions-trigger" />}>
-                            <EllipsisIcon />
+                    <DropdownMenuTrigger
+                        render={<Button variant="ghost" size="icon" data-testid="dt-row-actions-trigger" />}
+                    >
+                        <EllipsisIcon aria-hidden="true" />
+                        <span className="sr-only">
+                            <Trans>More actions</Trans>
+                        </span>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="min-w-56">
                         {hasRowActions && (
@@ -272,28 +278,29 @@ function getRowActions(
                                 ))}
                             </DropdownMenuGroup>
                         )}
-                        {hasBulkActions && bulkActionGroups?.map((group, groupIndex) => {
-                            if (group.actions.length === 0) return null;
-                            const showSeparator = hasRowActions || groupIndex > 0;
-                            return (
-                                <div key={`group-${groupIndex}`}>
-                                    {showSeparator && <DropdownMenuSeparator />}
-                                    <DropdownMenuGroup>
-                                        {group.label && <DropdownMenuLabel>{group.label}</DropdownMenuLabel>}
-                                        {group.actions.map((action, index) => (
-                                            <action.component
-                                                key={`bulk-action-${groupIndex}-${index}`}
-                                                selection={[row.original]}
-                                                table={table}
-                                            />
-                                        ))}
-                                    </DropdownMenuGroup>
-                                </div>
-                            );
-                        })}
-                        {deleteMutation && (hasRowActions || hasBulkActions) && (
-                            <DropdownMenuSeparator />
-                        )}
+                        {hasBulkActions &&
+                            bulkActionGroups?.map((group, groupIndex) => {
+                                if (group.actions.length === 0) return null;
+                                const showSeparator = hasRowActions || groupIndex > 0;
+                                return (
+                                    <div key={`group-${groupIndex}`}>
+                                        {showSeparator && <DropdownMenuSeparator />}
+                                        <DropdownMenuGroup>
+                                            {group.label && (
+                                                <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                                            )}
+                                            {group.actions.map((action, index) => (
+                                                <action.component
+                                                    key={`bulk-action-${groupIndex}-${index}`}
+                                                    selection={[row.original]}
+                                                    table={table}
+                                                />
+                                            ))}
+                                        </DropdownMenuGroup>
+                                    </div>
+                                );
+                            })}
+                        {deleteMutation && (hasRowActions || hasBulkActions) && <DropdownMenuSeparator />}
                         {deleteMutation && (
                             <DropdownMenuGroup>
                                 <DeleteMutationRowAction deleteMutation={deleteMutation} row={row} />
@@ -402,10 +409,10 @@ function DeleteMutationRowAction({
     return (
         <AlertDialog>
             <AlertDialogTrigger nativeButton={false} render={<DropdownMenuItem closeOnClick={false} />}>
-                    <div className="flex items-center gap-2">
-                        <TrashIcon className="w-4 h-4" />
-                        <Trans>Delete</Trans>
-                    </div>
+                <div className="flex items-center gap-2">
+                    <TrashIcon className="w-4 h-4" />
+                    <Trans>Delete</Trans>
+                </div>
             </AlertDialogTrigger>
             <AlertDialogContent>
                 <AlertDialogHeader>

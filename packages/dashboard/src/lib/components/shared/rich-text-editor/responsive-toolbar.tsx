@@ -1,4 +1,4 @@
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Editor, useEditorState } from '@tiptap/react';
 import {
     BoldIcon,
@@ -42,6 +42,7 @@ interface ToolbarItem {
 }
 
 export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolbarProps>) {
+    const { t } = useLingui();
     const [linkDialogOpen, setLinkDialogOpen] = useState(false);
     const [imageDialogOpen, setImageDialogOpen] = useState(false);
     const [visibleItems, setVisibleItems] = useState<string[]>([]);
@@ -50,7 +51,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
 
     const editorState = useEditorState({
         editor: editor,
-        selector: (context) => {
+        selector: context => {
             if (context.editor == null) {
                 return;
             }
@@ -64,10 +65,10 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
                 isLink: context.editor.isActive('link'),
                 isImage: context.editor.isActive('image'),
                 isBlockquote: context.editor.isActive('blockquote'),
-                isTable: context.editor.isActive('table')
-            }
-        }
-    })
+                isTable: context.editor.isActive('table'),
+            };
+        },
+    });
 
     const handleHeadingChange = useCallback(
         (value: string) => {
@@ -114,7 +115,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'bold',
                 priority: 1,
-                label: 'Bold',
+                label: t`Bold`,
                 isActive: editorState.isBold,
                 action: () => editor.chain().focus().toggleBold().run(),
                 element: (
@@ -134,7 +135,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'italic',
                 priority: 2,
-                label: 'Italic',
+                label: t`Italic`,
                 isActive: editorState.isItalic,
                 action: () => editor.chain().focus().toggleItalic().run(),
                 element: (
@@ -154,7 +155,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'strike',
                 priority: 3,
-                label: 'Strikethrough',
+                label: t`Strikethrough`,
                 isActive: editorState.isStrike,
                 action: () => editor.chain().focus().toggleStrike().run(),
                 element: (
@@ -174,7 +175,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'bulletList',
                 priority: 4,
-                label: 'Bullet List',
+                label: t`Bullet List`,
                 isActive: editorState.isBulletList,
                 action: () => editor.chain().focus().toggleBulletList().run(),
                 element: (
@@ -194,7 +195,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'orderedList',
                 priority: 5,
-                label: 'Ordered List',
+                label: t`Ordered List`,
                 isActive: editorState.isOrderedList,
                 action: () => editor.chain().focus().toggleOrderedList().run(),
                 element: (
@@ -214,7 +215,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'link',
                 priority: 6,
-                label: 'Link',
+                label: t`Link`,
                 isActive: editorState.isLink,
                 action: () => setLinkDialogOpen(true),
                 element: (
@@ -234,7 +235,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'image',
                 priority: 7,
-                label: 'Image',
+                label: t`Image`,
                 isActive: editorState.isImage,
                 action: () => setImageDialogOpen(true),
                 element: (
@@ -254,7 +255,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'blockquote',
                 priority: 8,
-                label: 'Blockquote',
+                label: t`Blockquote`,
                 isActive: editorState.isBlockquote,
                 action: () => editor.chain().focus().toggleBlockquote().run(),
                 element: (
@@ -274,7 +275,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'table',
                 priority: 9,
-                label: 'Table',
+                label: t`Table`,
                 isActive: editorState.isTable,
                 action: () =>
                     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
@@ -305,7 +306,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'undo',
                 priority: 10,
-                label: 'Undo',
+                label: t`Undo`,
                 action: () => editor.chain().focus().undo().run(),
                 element: (
                     <Button
@@ -324,7 +325,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
             {
                 id: 'redo',
                 priority: 11,
-                label: 'Redo',
+                label: t`Redo`,
                 action: () => editor.chain().focus().redo().run(),
                 element: (
                     <Button
@@ -341,7 +342,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
                 ),
             },
         ];
-    }, [editor, disabled, linkDialogOpen, imageDialogOpen, canUndo, canRedo, canInsertTable, editorState]);
+    }, [editor, disabled, linkDialogOpen, imageDialogOpen, canUndo, canRedo, canInsertTable, editorState, t]);
 
     useEffect(() => {
         const calculateVisibleItems = () => {
@@ -425,8 +426,18 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
 
             {overflowElements.length > 0 && (
                 <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={disabled} />}>
-                            <MoreHorizontalIcon className="h-4 w-4" />
+                    <DropdownMenuTrigger
+                        render={
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2"
+                                disabled={disabled}
+                            />
+                        }
+                    >
+                        <MoreHorizontalIcon className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         {overflowElements.map((item, index) => (
@@ -436,7 +447,7 @@ export function ResponsiveToolbar({ editor, disabled }: Readonly<ResponsiveToolb
                                     disabled={disabled}
                                     className={item.isActive ? 'bg-accent' : ''}
                                 >
-                                    <Trans>{item.label}</Trans>
+                                    {item.label}
                                 </DropdownMenuItem>
                                 {(index < overflowElements.length - 1 && index === 2) ||
                                 index === 4 ||

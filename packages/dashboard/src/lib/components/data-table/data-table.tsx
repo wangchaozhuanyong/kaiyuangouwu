@@ -6,24 +6,21 @@ import { RefreshButton } from '@/vdb/components/data-table/refresh-button.js';
 import { SaveViewButton } from '@/vdb/components/data-table/save-view-button.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
+import { Separator } from '@/vdb/components/ui/separator.js';
 import { Skeleton } from '@/vdb/components/ui/skeleton.js';
+import { toast } from '@/vdb/components/ui/sonner.js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/vdb/components/ui/table.js';
 import { BulkActionsInput } from '@/vdb/framework/extension-api/types/index.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
+import { useDragAndDrop } from '@/vdb/hooks/use-drag-and-drop.js';
 import { usePage } from '@/vdb/hooks/use-page.js';
 import { useSavedViews } from '@/vdb/hooks/use-saved-views.js';
-import { Trans, useLingui } from '@lingui/react/macro';
-import {
-    closestCenter,
-    DndContext,
-} from '@dnd-kit/core';
+import { cn } from '@/vdb/lib/utils.js';
+import { closestCenter, DndContext } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import {
-    SortableContext,
-    useSortable,
-    verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Trans, useLingui } from '@lingui/react/macro';
 import {
     ColumnDef,
     ColumnFilter,
@@ -39,22 +36,19 @@ import {
     VisibilityState,
 } from '@tanstack/react-table';
 import { RowSelectionState, TableOptions } from '@tanstack/table-core';
-import { GripVertical } from 'lucide-react';
+import { AlertCircle, GripVertical } from 'lucide-react';
 import React, { Suspense, useEffect, useId, useMemo, useRef } from 'react';
-import { Separator } from '@/vdb/components/ui/separator.js';
-import { cn } from '@/vdb/lib/utils.js';
-import { ActiveFiltersPopover } from './data-table-active-filters-popover.js';
 import { AddFilterMenu } from './add-filter-menu.js';
+import { ActiveFiltersPopover } from './data-table-active-filters-popover.js';
 import { DataTableBulkActions } from './data-table-bulk-actions.js';
 import { DataTableProvider } from './data-table-context.js';
+import { getDataTableErrorKind } from './data-table-error.js';
 import {
     DataTableFacetedFilter,
     DataTableFacetedFilterOption,
     DataTableFacetedFilterProps,
 } from './data-table-faceted-filter.js';
 import { DataTableFilterBadgeEditable } from './data-table-filter-badge-editable.js';
-import { useDragAndDrop } from '@/vdb/hooks/use-drag-and-drop.js';
-import { toast } from '@/vdb/components/ui/sonner.js';
 
 // Layout constants used to reserve space and render skeletons during the
 // initial fetch. Row height matches the `h-12` class used on every TableCell
@@ -107,11 +101,14 @@ function DraggableRow<TData>({ row, isDragDisabled, getRowCanDrag }: Readonly<Dr
                     ) : null}
                 </TableCell>
             )}
-            {row.getVisibleCells().filter(cell => cell.column.id !== '__drag_handle__').map(cell => (
-                <TableCell key={cell.id} className="h-12">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-            ))}
+            {row
+                .getVisibleCells()
+                .filter(cell => cell.column.id !== '__drag_handle__')
+                .map(cell => (
+                    <TableCell key={cell.id} className="h-12">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                ))}
         </TableRow>
     );
 }
@@ -140,6 +137,7 @@ interface DataTableProps<TData> {
     data: TData[];
     totalItems: number;
     isLoading?: boolean;
+    error?: unknown;
     page?: number;
     itemsPerPage?: number;
     sorting?: SortingState;
@@ -149,6 +147,7 @@ interface DataTableProps<TData> {
     onFilterChange?: (table: TableType<TData>, columnFilters: ColumnFilter[]) => void;
     onColumnVisibilityChange?: (table: TableType<TData>, columnVisibility: VisibilityState) => void;
     onSearchTermChange?: (searchTerm: string) => void;
+    searchPlaceholder?: string;
     defaultColumnVisibility?: VisibilityState;
     facetedFilters?: { [key: string]: FacetedFilter | undefined };
     disableViewOptions?: boolean;
@@ -191,6 +190,7 @@ export function DataTable<TData>({
     data,
     totalItems,
     isLoading,
+    error,
     page,
     itemsPerPage,
     sorting: sortingInitialState,
@@ -199,6 +199,7 @@ export function DataTable<TData>({
     onSortChange,
     onFilterChange,
     onSearchTermChange,
+    searchPlaceholder,
     onColumnVisibilityChange,
     defaultColumnVisibility,
     facetedFilters,
@@ -368,14 +369,16 @@ export function DataTable<TData>({
         >
             <div className="space-y-2 @container/table">
                 <div className="relative">
-                    <div className={cn(
-                        "flex flex-wrap items-start justify-between gap-2 transition-opacity duration-150",
-                        hasSelection && "opacity-0 pointer-events-none"
-                    )}>
+                    <div
+                        className={cn(
+                            'flex flex-wrap items-start justify-between gap-2 transition-opacity duration-150',
+                            hasSelection && 'opacity-0 pointer-events-none',
+                        )}
+                    >
                         <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                             {onSearchTermChange && (
                                 <Input
-                                    placeholder={t`Filter...`}
+                                    placeholder={searchPlaceholder ?? t`Search or filter...`}
                                     value={searchTerm}
                                     onChange={event => handleSearchChange(event.target.value)}
                                     className="h-8 w-full @sm/table:w-64"
@@ -417,10 +420,13 @@ export function DataTable<TData>({
                                                         column={column}
                                                         currencyCode={currencyCode}
                                                         dataType={
-                                                            (column?.columnDef.meta as any)?.fieldInfo?.type ?? 'String'
+                                                            (column?.columnDef.meta as any)?.fieldInfo
+                                                                ?.type ?? 'String'
                                                         }
                                                         onRemove={() =>
-                                                            setColumnFilters(old => old.filter(x => x.id !== f.id))
+                                                            setColumnFilters(old =>
+                                                                old.filter(x => x.id !== f.id),
+                                                            )
                                                         }
                                                     />
                                                 );
@@ -439,7 +445,9 @@ export function DataTable<TData>({
                                             filters={nonFacetedFilters}
                                             table={table}
                                             currencyCode={currencyCode}
-                                            onRemoveFilter={id => setColumnFilters(old => old.filter(x => x.id !== id))}
+                                            onRemoveFilter={id =>
+                                                setColumnFilters(old => old.filter(x => x.id !== id))
+                                            }
                                             onClearAll={clearNonFacetedFilters}
                                         />
                                     )}
@@ -449,7 +457,9 @@ export function DataTable<TData>({
                         <div className="flex items-center gap-2 flex-shrink-0">
                             {pageId && onFilterChange && <SaveViewButton />}
                             {!disableViewOptions && <DataTableViewOptions table={table} />}
-                            {onRefresh && <RefreshButton onRefresh={onRefresh} isLoading={isLoading ?? false} />}
+                            {onRefresh && (
+                                <RefreshButton onRefresh={onRefresh} isLoading={isLoading ?? false} />
+                            )}
                         </div>
                     </div>
                     <DataTableBulkActions bulkActions={bulkActions ?? []} table={table} />
@@ -500,7 +510,42 @@ export function DataTable<TData>({
                             </TableHeader>
                             <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
                                 <TableBody>
-                                    {isLoading && !localData?.length ? (
+                                    {error ? (
+                                        <TableRow className="animate-in fade-in duration-100">
+                                            <TableCell
+                                                colSpan={columnsWithOptionalDragHandle.length}
+                                                className="h-40 text-center"
+                                            >
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <AlertCircle className="h-5 w-5 text-destructive" />
+                                                    <p className="font-medium">
+                                                        <Trans>Unable to load records</Trans>
+                                                    </p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {getDataTableErrorKind(error) === 'forbidden' ? (
+                                                            <Trans>
+                                                                You do not have permission to view these
+                                                                records.
+                                                            </Trans>
+                                                        ) : (
+                                                            <Trans>
+                                                                The data could not be loaded. Try again.
+                                                            </Trans>
+                                                        )}
+                                                    </p>
+                                                    {onRefresh && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={onRefresh}
+                                                        >
+                                                            <Trans>Retry</Trans>
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : isLoading && !localData?.length ? (
                                         Array.from({
                                             length: Math.min(pagination.pageSize, MAX_SKELETON_ROWS),
                                         }).map((_, index) => (
@@ -513,14 +558,16 @@ export function DataTable<TData>({
                                                         <Skeleton className="h-4 w-4" />
                                                     </TableCell>
                                                 )}
-                                                {Array.from({ length: visibleColumnCount }).map((_, cellIndex) => (
-                                                    <TableCell
-                                                        key={`skeleton-cell-${index}-${cellIndex}`}
-                                                        className="h-12"
-                                                    >
-                                                        <Skeleton className="h-4 my-2 w-full" />
-                                                    </TableCell>
-                                                ))}
+                                                {Array.from({ length: visibleColumnCount }).map(
+                                                    (_, cellIndex) => (
+                                                        <TableCell
+                                                            key={`skeleton-cell-${index}-${cellIndex}`}
+                                                            className="h-12"
+                                                        >
+                                                            <Skeleton className="h-4 my-2 w-full" />
+                                                        </TableCell>
+                                                    ),
+                                                )}
                                             </TableRow>
                                         ))
                                     ) : table.getRowModel().rows?.length ? (
@@ -570,7 +617,10 @@ export function DataTable<TData>({
                                                     >
                                                         {row.getVisibleCells().map(cell => (
                                                             <TableCell key={cell.id} className="h-12">
-                                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                                {flexRender(
+                                                                    cell.column.columnDef.cell,
+                                                                    cell.getContext(),
+                                                                )}
                                                             </TableCell>
                                                         ))}
                                                     </TableRow>
@@ -583,9 +633,29 @@ export function DataTable<TData>({
                                         <TableRow className="animate-in fade-in duration-100">
                                             <TableCell
                                                 colSpan={columnsWithOptionalDragHandle.length}
-                                                className="h-24 text-center"
+                                                className="h-32 text-center"
                                             >
-                                                <Trans>No results</Trans>
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <p className="font-medium">
+                                                        {searchTerm || columnFilters.length ? (
+                                                            <Trans>No matching results</Trans>
+                                                        ) : (
+                                                            <Trans>No records yet</Trans>
+                                                        )}
+                                                    </p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {searchTerm || columnFilters.length ? (
+                                                            <Trans>
+                                                                Try changing the search term or filters
+                                                            </Trans>
+                                                        ) : (
+                                                            <Trans>
+                                                                Records will appear here after they are
+                                                                created
+                                                            </Trans>
+                                                        )}
+                                                    </p>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     )}

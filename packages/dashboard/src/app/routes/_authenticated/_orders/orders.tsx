@@ -35,6 +35,7 @@ function OrderListPage() {
         <ListPage
             pageId="order-list"
             title={<Trans>Orders</Trans>}
+            searchPlaceholder={t`Search order number, customer surname or transaction ID`}
             onSearchTermChange={searchTerm => {
                 return {
                     _or: [
@@ -69,9 +70,11 @@ function OrderListPage() {
                     cell: OrderMoneyCell,
                 },
                 state: {
+                    header: () => <Trans>Order status</Trans>,
                     cell: OrderStateCell,
                 },
                 code: {
+                    header: () => <Trans>Order number</Trans>,
                     cell: ({ cell, row }) => {
                         const value = cell.getValue() as string;
                         const id = row.original.id;
@@ -82,23 +85,32 @@ function OrderListPage() {
                     cell: CustomerCell,
                 },
                 shippingLines: {
-                    header: () => <Trans>Shipping</Trans>,
+                    header: () => <Trans>Delivery method</Trans>,
                     cell: ({ row }) => {
                         const value = row.original.shippingLines;
                         return <div>{value?.map(line => line.shippingMethod.name).join(', ')}</div>;
                     },
                 },
             }}
+            defaultColumnOrder={[
+                'code',
+                'orderPlacedAt',
+                'customer',
+                'totalWithTax',
+                'state',
+                'shippingLines',
+            ]}
             defaultVisibility={{
-                id: false,
-                createdAt: false,
-                orderPlacedAt: false,
-                type: false,
-                currencyCode: false,
+                code: true,
+                orderPlacedAt: true,
+                customer: true,
+                totalWithTax: true,
+                state: true,
+                shippingLines: true,
             }}
             facetedFilters={{
                 state: {
-                    title: t`State`,
+                    title: t`Order status`,
                     options:
                         serverConfig?.orderProcess.map(state => {
                             return {
@@ -112,7 +124,7 @@ function OrderListPage() {
             <ActionBarItem itemId="create-draft-button">
                 <Button onClick={() => createDraftOrder({})}>
                     <PlusIcon className="mr-2 h-4 w-4" />
-                    <Trans>Draft order</Trans>
+                    <Trans>Create manual order</Trans>
                 </Button>
             </ActionBarItem>
         </ListPage>

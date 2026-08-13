@@ -6,6 +6,7 @@ import { useGroupedPermissions } from '@/vdb/hooks/use-grouped-permissions.js';
 import { ServerConfig } from '@/vdb/providers/server-config.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { InfoIcon } from 'lucide-react';
+import { getPermissionDisplay, getPermissionResourceLabel } from './permission-labels.js';
 
 interface PermissionsTableGridProps {
     value: string[];
@@ -38,26 +39,6 @@ export function PermissionsTableGrid({
         onChange(newPermissions);
     };
 
-    // Extract CRUD operation from permission name (e.g., "CreateAdministrator" -> "Create")
-    const getPermissionLabel = (permission: ServerConfig['permissions'][0], groupLabel: string) => {
-        const name = permission.name;
-        const crudPrefixes = ['Create', 'Read', 'Update', 'Delete'];
-
-        for (const prefix of crudPrefixes) {
-            if (name.startsWith(prefix)) {
-                // Check if the rest matches the group name (singular form)
-                const remainder = name.substring(prefix.length);
-                const groupSingular = groupLabel.replace(/s$/, ''); // Simple singularization
-                if (remainder.toLowerCase() === groupSingular.toLowerCase().replace(/\s/g, '')) {
-                    return prefix;
-                }
-            }
-        }
-
-        // Fallback to full name if not a CRUD operation
-        return i18n.t(name);
-    };
-
     return (
         <div className="w-full">
             {/* Desktop Table View */}
@@ -70,14 +51,23 @@ export function PermissionsTableGrid({
                                     <div className="space-y-2">
                                         <div className="flex items-center gap-2">
                                             <span className="font-semibold text-sm">
-                                                {i18n.t(section.label)}
+                                                {getPermissionResourceLabel(i18n, section.label)}
                                             </span>
                                             <TooltipProvider>
                                                 <Tooltip>
-                                                    <TooltipTrigger render={<InfoIcon className="h-3 w-3 text-muted-foreground" />} />
+                                                    <TooltipTrigger
+                                                        render={
+                                                            <InfoIcon className="h-3 w-3 text-muted-foreground" />
+                                                        }
+                                                    />
                                                     <TooltipContent side="right" className="max-w-[250px]">
                                                         <p className="text-xs">
-                                                            {i18n.t(section.description)}
+                                                            {
+                                                                getPermissionDisplay(
+                                                                    i18n,
+                                                                    section.permissions[0].name,
+                                                                ).description
+                                                            }
                                                         </p>
                                                     </TooltipContent>
                                                 </Tooltip>
@@ -103,30 +93,40 @@ export function PermissionsTableGrid({
                                     >
                                         <TooltipProvider>
                                             <Tooltip>
-                                                <TooltipTrigger render={<div className="flex flex-col items-center space-y-1.5" />}>
-                                                        <Switch
-                                                            id={`${section.id}-${permission.name}`}
-                                                            checked={value.includes(permission.name)}
-                                                            onCheckedChange={checked =>
-                                                                setPermission(permission.name, checked)
-                                                            }
-                                                            disabled={readonly}
-                                                            className="scale-90"
-                                                        />
-                                                        <label
-                                                            htmlFor={`${section.id}-${permission.name}`}
-                                                            className="text-xs text-center cursor-pointer leading-tight"
-                                                        >
-                                                            {getPermissionLabel(permission, section.label)}
-                                                        </label>
+                                                <TooltipTrigger
+                                                    render={
+                                                        <div className="flex flex-col items-center space-y-1.5" />
+                                                    }
+                                                >
+                                                    <Switch
+                                                        id={`${section.id}-${permission.name}`}
+                                                        checked={value.includes(permission.name)}
+                                                        onCheckedChange={checked =>
+                                                            setPermission(permission.name, checked)
+                                                        }
+                                                        disabled={readonly}
+                                                        className="scale-90"
+                                                    />
+                                                    <label
+                                                        htmlFor={`${section.id}-${permission.name}`}
+                                                        className="text-xs text-center cursor-pointer leading-tight"
+                                                    >
+                                                        {getPermissionDisplay(i18n, permission.name).action}
+                                                    </label>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="top" className="max-w-[250px]">
                                                     <div className="text-xs">
                                                         <div className="font-medium">
-                                                            {i18n.t(permission.name)}
+                                                            {
+                                                                getPermissionDisplay(i18n, permission.name)
+                                                                    .fullLabel
+                                                            }
                                                         </div>
                                                         <div className="text-accent-foreground/70 mt-1">
-                                                            {i18n.t(permission.description)}
+                                                            {
+                                                                getPermissionDisplay(i18n, permission.name)
+                                                                    .description
+                                                            }
                                                         </div>
                                                     </div>
                                                 </TooltipContent>
@@ -154,12 +154,21 @@ export function PermissionsTableGrid({
                     <div key={index} className="border rounded-lg p-4 bg-card">
                         <div className="mb-3">
                             <div className="flex items-center gap-2 mb-2">
-                                <span className="font-semibold text-sm">{i18n.t(section.label)}</span>
+                                <span className="font-semibold text-sm">
+                                    {getPermissionResourceLabel(i18n, section.label)}
+                                </span>
                                 <TooltipProvider>
                                     <Tooltip>
-                                        <TooltipTrigger render={<InfoIcon className="h-3 w-3 text-muted-foreground" />} />
+                                        <TooltipTrigger
+                                            render={<InfoIcon className="h-3 w-3 text-muted-foreground" />}
+                                        />
                                         <TooltipContent side="right" className="max-w-[250px]">
-                                            <p className="text-xs">{i18n.t(section.description)}</p>
+                                            <p className="text-xs">
+                                                {
+                                                    getPermissionDisplay(i18n, section.permissions[0].name)
+                                                        .description
+                                                }
+                                            </p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
@@ -190,20 +199,33 @@ export function PermissionsTableGrid({
                                     <div className="flex-1 min-w-0">
                                         <TooltipProvider>
                                             <Tooltip>
-                                                <TooltipTrigger render={<label
-                                                        htmlFor={`mobile-${section.id}-${permission.name}`}
-                                                        className="text-xs cursor-pointer block truncate"
-                                                        aria-label={i18n.t(permission.name)}
-                                                    />}>
-                                                        {getPermissionLabel(permission, section.label)}
+                                                <TooltipTrigger
+                                                    render={
+                                                        <label
+                                                            htmlFor={`mobile-${section.id}-${permission.name}`}
+                                                            className="text-xs cursor-pointer block truncate"
+                                                            aria-label={
+                                                                getPermissionDisplay(i18n, permission.name)
+                                                                    .fullLabel
+                                                            }
+                                                        />
+                                                    }
+                                                >
+                                                    {getPermissionDisplay(i18n, permission.name).action}
                                                 </TooltipTrigger>
                                                 <TooltipContent side="top" className="max-w-[250px]">
                                                     <div className="text-xs">
                                                         <div className="font-medium">
-                                                            {i18n.t(permission.name)}
+                                                            {
+                                                                getPermissionDisplay(i18n, permission.name)
+                                                                    .fullLabel
+                                                            }
                                                         </div>
                                                         <div className="text-muted-foreground mt-1">
-                                                            {i18n.t(permission.description)}
+                                                            {
+                                                                getPermissionDisplay(i18n, permission.name)
+                                                                    .description
+                                                            }
                                                         </div>
                                                     </div>
                                                 </TooltipContent>

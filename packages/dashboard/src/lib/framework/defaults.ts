@@ -298,8 +298,9 @@ export function registerDefaults() {
     registerDashboardWidget({
         id: 'metrics-widget',
         name: /* i18n*/ 'Metrics Widget',
+        order: 200,
         component: MetricsWidget,
-        defaultSize: { w: 12, h: 6, x: 0, y: 0 },
+        defaultSize: { w: 12, h: 4, x: 0, y: 3 },
         minSize: { w: 6, h: 4 },
         requiresPermissions: ['ReadOrder'],
     });
@@ -307,16 +308,18 @@ export function registerDefaults() {
     registerDashboardWidget({
         id: 'latest-orders-widget',
         name: /* i18n*/ 'Latest Orders Widget',
+        order: 300,
         component: LatestOrdersWidget,
-        defaultSize: { w: 6, h: 7, x: 0, y: 0 },
+        defaultSize: { w: 8, h: 5, x: 0, y: 7 },
         requiresPermissions: ['ReadOrder'],
     });
 
     registerDashboardWidget({
         id: 'orders-summary-widget',
         name: /* i18n*/ 'Orders Summary Widget',
+        order: 400,
         component: OrdersSummaryWidget,
-        defaultSize: { w: 6, h: 3, x: 6, y: 0 },
+        defaultSize: { w: 4, h: 3, x: 8, y: 7 },
         requiresPermissions: ['ReadOrder'],
     });
 

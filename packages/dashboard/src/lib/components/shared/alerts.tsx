@@ -24,8 +24,11 @@ export function Alerts() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger render={<Button size="icon" variant="ghost" className="relative" />}>
-                    <BellIcon />
-                    <AlertsIndicator />
+                <BellIcon aria-hidden="true" />
+                <AlertsIndicator />
+                <span className="sr-only">
+                    <Trans>Alerts</Trans>
+                </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-w-[800px] min-w-96">
                 <DropdownMenuGroup>

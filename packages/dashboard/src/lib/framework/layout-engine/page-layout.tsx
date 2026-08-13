@@ -701,7 +701,10 @@ function EntityInfoDropdown({ entity }: Readonly<{ entity: any }>) {
                     />
                 }
             >
-                <InfoIcon className="w-4 h-4" />
+                <InfoIcon aria-hidden="true" className="w-4 h-4" />
+                <span className="sr-only">
+                    <Trans>Entity information</Trans>
+                </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuGroup>
@@ -724,6 +727,9 @@ function EntityInfoDropdown({ entity }: Readonly<{ entity: any }>) {
                                 ) : (
                                     <CopyIcon className="h-3 w-3" />
                                 )}
+                                <span className="sr-only">
+                                    <Trans>Copy ID</Trans>
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -831,7 +837,10 @@ function PageActionBarDropdown({
             <DropdownMenuTrigger
                 render={<Button variant="ghost" size="icon" data-testid="action-bar-dropdown-trigger" />}
             >
-                <EllipsisVerticalIcon className="w-4 h-4" />
+                <EllipsisVerticalIcon aria-hidden="true" className="w-4 h-4" />
+                <span className="sr-only">
+                    <Trans>More actions</Trans>
+                </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
                 {items.map((item, index) => (

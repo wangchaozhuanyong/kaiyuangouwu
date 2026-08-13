@@ -1,9 +1,11 @@
 {
-    "extends": "./tsconfig.json",
+    "extends": "../../tsconfig.json",
     "compilerOptions": {
+        "module": "NodeNext",
         "outDir": "./dist",
         "rootDir": ".",
-        "noEmitOnError": true
+        "noEmitOnError": true,
+        "sourceMap": true
     },
     "exclude": [
         "node_modules",

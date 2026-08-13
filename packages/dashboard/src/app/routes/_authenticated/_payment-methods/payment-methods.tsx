@@ -41,8 +41,8 @@ function PaymentMethodListPage() {
                 enabled: {
                     title: t`Enabled`,
                     options: [
-                        { label: 'Enabled', value: true },
-                        { label: 'Disabled', value: false },
+                        { label: t`Enabled`, value: true },
+                        { label: t`Disabled`, value: false },
                     ],
                 },
             }}

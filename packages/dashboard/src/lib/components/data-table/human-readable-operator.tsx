@@ -62,6 +62,6 @@ export function HumanReadableOperator({
             return <Trans>matches regex</Trans>;
         default:
             operator satisfies never;
-            return <Trans>{operator}</Trans>;
+            return null;
     }
 }

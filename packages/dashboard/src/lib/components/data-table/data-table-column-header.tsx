@@ -1,5 +1,6 @@
 import { Button } from '@/vdb/components/ui/button.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
+import { Trans } from '@lingui/react/macro';
 import { ColumnDef, HeaderContext } from '@tanstack/table-core';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { useMemo } from 'react';
@@ -41,6 +42,9 @@ export function DataTableColumnHeader({ headerContext, customConfig }: Readonly<
                         ) : (
                             <ArrowUpDown className="opacity-50" />
                         )}
+                        <span className="sr-only">
+                            <Trans>Change sort order</Trans>
+                        </span>
                     </Button>
                 )}
                 <div>{display}</div>

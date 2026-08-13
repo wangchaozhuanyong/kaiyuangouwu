@@ -1,3 +1,4 @@
+import { toBcp47Locale } from '@/vdb/lib/i18n.js';
 import { loadI18nMessages } from '@/vdb/lib/load-i18n-messages.js';
 import { useLingui } from '@lingui/react/macro';
 import { useCallback } from 'react';
@@ -18,14 +19,15 @@ export function useUiLanguageLoader() {
 
     const loadAndActivateLocale = useCallback(
         async (locale: string) => {
-            if (currentlyLoading === locale || i18n.locale === locale) {
+            const bcp47Locale = toBcp47Locale(locale);
+            if (currentlyLoading === bcp47Locale || i18n.locale === bcp47Locale) {
                 return;
             }
-            currentlyLoading = locale;
+            currentlyLoading = bcp47Locale;
             try {
                 const messages = await loadI18nMessages(locale);
-                i18n.load(locale, messages);
-                i18n.activate(locale);
+                i18n.load(bcp47Locale, messages);
+                i18n.activate(bcp47Locale);
             } finally {
                 currentlyLoading = null;
             }

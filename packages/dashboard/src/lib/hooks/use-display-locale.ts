@@ -1,3 +1,5 @@
+import { toBcp47Locale } from '@/vdb/lib/i18n.js';
+
 import { useUserSettings } from './use-user-settings.js';
 
 const rtlLanguageCodes = ['ar', 'he', 'fa', 'ur', 'ps'];
@@ -35,11 +37,9 @@ export function getPreferredLocaleForLanguage(language: string): 'CN' | 'MY' | u
  */
 export function useDisplayLocale() {
     const { settings } = useUserSettings();
-    const language = settings.displayLanguage.replace(/[_-]/, '-');
+    const language = toBcp47Locale(settings.displayLanguage);
     const locale = settings.displayLocale;
-    const bcp47Tag = language.match(/[_-]/)
-        ? language.replace(/[_-]/, '-')
-        : [language, locale].filter(x => !!x).join('-');
+    const bcp47Tag = language.includes('-') ? language : [language, locale].filter(x => !!x).join('-');
     const humanReadableLanguageAndLocale = new Intl.DisplayNames([bcp47Tag], { type: 'language' }).of(
         bcp47Tag,
     );

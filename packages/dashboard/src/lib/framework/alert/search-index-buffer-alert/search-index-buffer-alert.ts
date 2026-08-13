@@ -1,6 +1,8 @@
 import { toast } from '@/vdb/components/ui/sonner.js';
 import { api } from '@/vdb/graphql/api.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 
 import { DashboardAlertDefinition } from '../../extension-api/types/index.js';
 
@@ -25,14 +27,14 @@ export const searchIndexBufferAlert: DashboardAlertDefinition<number> = {
         return data.pendingSearchIndexUpdates;
     },
     shouldShow: data => data > 0,
-    title: data => /* i18n*/ `${data} pending search index updates`,
+    title: data => msg`${data} pending search index updates`,
     severity: data => (data < 10 ? 'info' : 'warning'),
     actions: [
         {
-            label: /* i18n*/ `Run pending updates`,
+            label: msg`Run pending updates`,
             onClick: async ({ dismiss }) => {
                 await api.mutate(runPendingSearchIndexUpdatesDocument, {});
-                toast.success(/* i18n*/ 'Running pending search index updates');
+                toast.success(i18n._(msg`Running pending search index updates`));
                 dismiss();
             },
         },

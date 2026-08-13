@@ -116,7 +116,10 @@ export function GeneratedBreadcrumbs() {
         return undefined;
     };
 
-    const sectionCrumb = React.useMemo(() => findSectionCrumb(currentPath), [currentPath, navMenuConfig]);
+    const sectionCrumb = React.useMemo(
+        () => findSectionCrumb(currentPath),
+        [currentPath, navMenuConfig, i18n.locale],
+    );
     const breadcrumbs: BreadcrumbPair[] = React.useMemo(() => {
         const arr = sectionCrumb ? [sectionCrumb, ...pageCrumbs] : pageCrumbs;
         return arr.filter(

@@ -301,7 +301,7 @@ export function EditOrderTable({
                                             listQuery: couponCodeSelectorPromotionListDocument,
                                             idKey: 'couponCode',
                                             labelKey: 'couponCode',
-                                            placeholder: 'Search coupon codes...',
+                                            placeholder: t`Search coupon codes...`,
                                             label: (item: any) => `${item.couponCode} (${item.name})`,
                                         }}
                                         value={''}

@@ -1,3 +1,4 @@
+import { toBcp47Locale } from '@/vdb/lib/i18n.js';
 import { loadI18nMessages } from '@/vdb/lib/load-i18n-messages.js';
 import { i18n } from '@lingui/core';
 import { I18nProvider as LinguiI18nProvider } from '@lingui/react';
@@ -17,9 +18,10 @@ i18n.activate(defaultLocale);
  * @param locale any locale string
  */
 export async function dynamicActivate(locale: string, onActivate?: () => void) {
+    const bcp47Locale = toBcp47Locale(locale);
     const messages = await loadI18nMessages(locale);
-    i18n.load(locale, messages);
-    i18n.activate(locale);
+    i18n.load(bcp47Locale, messages);
+    i18n.activate(bcp47Locale);
     onActivate?.();
 }
 

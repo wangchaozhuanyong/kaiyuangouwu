@@ -5,13 +5,15 @@ import { uiConfig } from 'virtual:vendure-ui-config';
 
 export function OrderStateTransitionComponent(props: Readonly<HistoryEntryProps>) {
     const { entry } = props;
+    const { getTranslatedOrderState } = useDynamicTranslations();
     if (entry.data.from === 'Created') return null;
 
     return (
         <HistoryEntry {...props}>
             <p className="text-xs text-muted-foreground">
                 <Trans>
-                    From {entry.data.from} to {entry.data.to}
+                    From {getTranslatedOrderState(entry.data.from)} to{' '}
+                    {getTranslatedOrderState(entry.data.to)}
                 </Trans>
             </p>
         </HistoryEntry>
@@ -20,11 +22,12 @@ export function OrderStateTransitionComponent(props: Readonly<HistoryEntryProps>
 
 export function OrderPaymentTransitionComponent(props: Readonly<HistoryEntryProps>) {
     const { entry } = props;
+    const { getTranslatedPaymentState } = useDynamicTranslations();
     return (
         <HistoryEntry {...props}>
             <p className="text-xs text-muted-foreground">
                 <Trans>
-                    Payment #{entry.data.paymentId} transitioned to {entry.data.to}
+                    Payment #{entry.data.paymentId} transitioned to {getTranslatedPaymentState(entry.data.to)}
                 </Trans>
             </p>
         </HistoryEntry>
@@ -33,11 +36,12 @@ export function OrderPaymentTransitionComponent(props: Readonly<HistoryEntryProp
 
 export function OrderRefundTransitionComponent(props: Readonly<HistoryEntryProps>) {
     const { entry } = props;
+    const { getTranslatedRefundState } = useDynamicTranslations();
     return (
         <HistoryEntry {...props}>
             <p className="text-xs text-muted-foreground">
                 <Trans>
-                    Refund #{entry.data.refundId} transitioned to {entry.data.to}
+                    Refund #{entry.data.refundId} transitioned to {getTranslatedRefundState(entry.data.to)}
                 </Trans>
             </p>
         </HistoryEntry>
@@ -46,11 +50,14 @@ export function OrderRefundTransitionComponent(props: Readonly<HistoryEntryProps
 
 export function OrderFulfillmentTransitionComponent(props: Readonly<HistoryEntryProps>) {
     const { entry } = props;
+    const { getTranslatedFulfillmentState } = useDynamicTranslations();
     return (
         <HistoryEntry {...props}>
             <p className="text-xs text-muted-foreground">
                 <Trans>
-                    Fulfillment #{entry.data.fulfillmentId} from {entry.data.from} to {entry.data.to}
+                    Fulfillment #{entry.data.fulfillmentId} from{' '}
+                    {getTranslatedFulfillmentState(entry.data.from)} to{' '}
+                    {getTranslatedFulfillmentState(entry.data.to)}
                 </Trans>
             </p>
         </HistoryEntry>

@@ -2,6 +2,7 @@ import { Money } from '@/vdb/components/data-display/money.js';
 import { PaginatedListDataTable } from '@/vdb/components/shared/paginated-list-data-table.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
+import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { getTypeForState, stateTypeToBadgeVariant } from '@/vdb/utils/state-type.js';
 import { Link } from '@tanstack/react-router';
 import { ColumnFiltersState, SortingState } from '@tanstack/react-table';
@@ -13,6 +14,7 @@ interface CustomerOrderTableProps {
 }
 
 export function CustomerOrderTable({ customerId }: Readonly<CustomerOrderTableProps>) {
+    const { getTranslatedFieldName, getTranslatedOrderState } = useDynamicTranslations();
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [sorting, setSorting] = useState<SortingState>([{ id: 'orderPlacedAt', desc: true }]);
@@ -37,7 +39,7 @@ export function CustomerOrderTable({ customerId }: Readonly<CustomerOrderTablePr
             }}
             customizeColumns={{
                 total: {
-                    header: 'Total',
+                    header: getTranslatedFieldName('total'),
                     cell: ({ cell, row }) => {
                         const value = cell.getValue();
                         const currencyCode = row.original.currencyCode;
@@ -45,7 +47,7 @@ export function CustomerOrderTable({ customerId }: Readonly<CustomerOrderTablePr
                     },
                 },
                 totalWithTax: {
-                    header: 'Total with Tax',
+                    header: getTranslatedFieldName('totalWithTax'),
                     cell: ({ cell, row }) => {
                         const value = cell.getValue();
                         const currencyCode = row.original.currencyCode;
@@ -53,17 +55,21 @@ export function CustomerOrderTable({ customerId }: Readonly<CustomerOrderTablePr
                     },
                 },
                 state: {
-                    header: 'State',
+                    header: getTranslatedFieldName('state'),
                     cell: ({ cell }) => {
                         const value = cell.getValue() as string | undefined;
                         if (!value) {
                             return null;
                         }
-                        return <Badge variant={stateTypeToBadgeVariant(getTypeForState(value))}>{value}</Badge>;
+                        return (
+                            <Badge variant={stateTypeToBadgeVariant(getTypeForState(value))}>
+                                {getTranslatedOrderState(value)}
+                            </Badge>
+                        );
                     },
                 },
                 code: {
-                    header: 'Code',
+                    header: getTranslatedFieldName('code'),
                     cell: ({ cell, row }) => {
                         const value = cell.getValue() as string;
                         const id = row.original.id;

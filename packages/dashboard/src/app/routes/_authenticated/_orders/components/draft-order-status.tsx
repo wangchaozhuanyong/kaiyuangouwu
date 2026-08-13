@@ -1,10 +1,13 @@
 import { Alert, AlertDescription, AlertTitle } from '@/vdb/components/ui/alert.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { getDraftOrderIncompleteReason } from './draft-order-readiness.js';
 
 export type DraftOrderStatusProps = Readonly<{
     hasCustomer: boolean;
     hasLines: boolean;
+    requiresShipping: boolean;
+    hasCompleteShippingAddress: boolean;
     hasShippingMethod: boolean;
     isDraftState: boolean;
 }>;
@@ -12,20 +15,32 @@ export type DraftOrderStatusProps = Readonly<{
 export function DraftOrderStatus({
     hasCustomer,
     hasLines,
+    requiresShipping,
+    hasCompleteShippingAddress,
     hasShippingMethod,
     isDraftState,
 }: DraftOrderStatusProps) {
     const { t } = useLingui();
-    const isCompleteDraftDisabled = !hasCustomer || !hasLines || !hasShippingMethod || !isDraftState;
+    const incompleteReason = getDraftOrderIncompleteReason({
+        hasCustomer,
+        hasLines,
+        requiresShipping,
+        hasCompleteShippingAddress,
+        hasShippingMethod,
+        isDraftState,
+    });
+    const isCompleteDraftDisabled = incompleteReason !== null;
 
     let completeDraftDisabledReason: string | null = null;
-    if (!hasCustomer) {
+    if (incompleteReason === 'customer') {
         completeDraftDisabledReason = t`Select a customer to continue`;
-    } else if (!hasLines) {
+    } else if (incompleteReason === 'lines') {
         completeDraftDisabledReason = t`Add at least one item to the order`;
-    } else if (!hasShippingMethod) {
-        completeDraftDisabledReason = t`Set a shipping address and select a shipping method`;
-    } else if (!isDraftState) {
+    } else if (incompleteReason === 'shippingAddress') {
+        completeDraftDisabledReason = t`Enter a complete shipping address, including postcode and phone number`;
+    } else if (incompleteReason === 'shippingMethod') {
+        completeDraftDisabledReason = t`Select a shipping method to continue`;
+    } else if (incompleteReason === 'state') {
         completeDraftDisabledReason = t`Only draft orders can be completed`;
     }
 

@@ -43,6 +43,19 @@ export function getColumnVisibility(
 export const pinnedLeadingColumns: string[] = ['id', 'createdAt', 'updatedAt'];
 
 /**
+ * Reuses a page's translated string header in menus outside the table header context.
+ * Generated columns still fall back to the dynamic field-name catalog.
+ */
+export function getDataTableColumnLabel(
+    column: { id: string; columnDef: { header?: unknown } },
+    getFallbackLabel: (columnId: string) => string,
+): string {
+    return typeof column.columnDef.header === 'string'
+        ? column.columnDef.header
+        : getFallbackLabel(column.id);
+}
+
+/**
  * Ensures that the default column order always starts with pinned leading columns
  */
 export function getStandardizedDefaultColumnOrder<T extends string | number | symbol>(

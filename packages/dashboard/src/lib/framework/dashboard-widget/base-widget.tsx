@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/vdb/components/ui/card.js';
 import { DashboardBaseWidgetProps } from '@/vdb/framework/extension-api/types/index.js';
 import { cn } from '@/vdb/lib/utils.js';
-import { Trans } from '@lingui/react/macro';
 import { createContext, useEffect, useRef, useState } from 'react';
 
 export type WidgetDimensions = {
@@ -72,9 +71,7 @@ export function DashboardBaseWidget({
                     )}
                 >
                     <div>
-                        <CardTitle>
-                            <Trans>{title}</Trans>
-                        </CardTitle>
+                        <CardTitle>{title}</CardTitle>
                         {description && <CardDescription>{description}</CardDescription>}
                     </div>
                     {actions && <div className="flex items-center gap-2">{actions}</div>}

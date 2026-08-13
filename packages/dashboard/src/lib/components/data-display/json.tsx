@@ -1,3 +1,4 @@
+import { Trans } from '@lingui/react/macro';
 import { FileJson } from 'lucide-react';
 
 import { Button } from '../ui/button.js';
@@ -8,7 +9,10 @@ export function Json({ value }: Readonly<{ value: any }>) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="secondary" size="icon" />}>
-                    <FileJson />
+                <FileJson aria-hidden="true" />
+                <span className="sr-only">
+                    <Trans>View JSON data</Trans>
+                </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-96 max-h-96 overflow-auto p-2">
                 <JsonViewer viewOnly data={value} collapse={1} rootFontSize={12} />

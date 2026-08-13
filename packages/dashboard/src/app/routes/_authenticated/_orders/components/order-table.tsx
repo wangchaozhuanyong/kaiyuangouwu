@@ -1,3 +1,4 @@
+import { JsonViewer } from '@/vdb/components/data-display/json-viewer.js';
 import { Money } from '@/vdb/components/data-display/money.js';
 import { getColumnVisibility } from '@/vdb/components/data-table/data-table-utils.js';
 import { DataTable } from '@/vdb/components/data-table/data-table.js';
@@ -11,7 +12,6 @@ import { getFieldsFromDocumentNode } from '@/vdb/framework/document-introspectio
 import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans } from '@lingui/react/macro';
-import { JsonViewer } from '@/vdb/components/data-display/json-viewer.js';
 import { EllipsisVertical } from 'lucide-react';
 import { Fragment, useMemo } from 'react';
 import { orderDetailDocument, orderLineFragment } from '../orders.graphql.js';
@@ -66,7 +66,10 @@ function createCustomizeColumns(currencyCode: string) {
             cell: ({ row }: { row: any }) => (
                 <DropdownMenu>
                     <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                        <EllipsisVertical />
+                        <EllipsisVertical aria-hidden="true" />
+                        <span className="sr-only">
+                            <Trans>View fulfillment details</Trans>
+                        </span>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                         <JsonViewer data={row.original.fulfillmentLines} viewOnly rootFontSize={12} />

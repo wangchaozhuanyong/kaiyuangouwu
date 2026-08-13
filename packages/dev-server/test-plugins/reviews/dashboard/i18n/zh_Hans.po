@@ -41,45 +41,130 @@ msgstr "评价标题"
 msgid "Review title is required"
 msgstr "请填写评价标题"
 
+#. js-lingui-explicit-id
+msgid "review.status"
+msgstr "审核状态"
+
 msgid "Reviewer name"
 msgstr "评价人"
+
+msgid "Reviewer location"
+msgstr "评价人所在地"
+
+#. js-lingui-explicit-id
+msgid "review.content"
+msgstr "评价正文"
+
+#. js-lingui-explicit-id
+msgid "review.reviewerLocation"
+msgstr "评价人所在地"
+
+#. js-lingui-explicit-id
+msgid "review.titlePlaceholder"
+msgstr "输入简短的评价标题"
+
+#. js-lingui-explicit-id
+msgid "review.bodyPlaceholder"
+msgstr "输入评价正文"
+
+#. js-lingui-explicit-id
+msgid "review.titleRequired"
+msgstr "请填写评价标题"
+
+#. js-lingui-explicit-id
+msgid "review.bodyRequired"
+msgstr "请填写评价正文"
+
+#. js-lingui-explicit-id
+msgid "review.ratingInvalid"
+msgstr "评分必须在 1 到 5 之间"
+
+#. js-lingui-explicit-id
+msgid "review.reviewerRequired"
+msgstr "请填写评价人"
+
+#. js-lingui-explicit-id
+msgid "review.missingProduct"
+msgstr "无法识别当前商品"
+
+#. js-lingui-explicit-id
+msgid "review.createFailed"
+msgstr "创建评价失败"
+
+#. js-lingui-explicit-id
+msgid "review.created"
+msgstr "评价已创建并关联到当前商品"
+
+msgid "Rating"
+msgstr "评分"
+
+msgid "Unable to determine the current product"
+msgstr "无法识别当前商品"
+
+msgid "Failed to create review"
+msgstr "创建评价失败"
+
+msgid "Rating must be between 1 and 5"
+msgstr "评分必须在 1 到 5 之间"
+
+msgid "Reviewer name is required"
+msgstr "请填写评价人"
+
+msgid "Review created and linked to this product"
+msgstr "评价已创建并关联到当前商品"
 
 msgid "Select review status"
 msgstr "选择审核状态"
 
+#. js-lingui-explicit-id
 msgid "fieldName.authorLocation"
 msgstr "评价人所在地"
 
+#. js-lingui-explicit-id
 msgid "fieldName.authorName"
 msgstr "评价人"
 
+#. js-lingui-explicit-id
 msgid "fieldName.body"
 msgstr "评价正文"
 
+#. js-lingui-explicit-id
 msgid "fieldName.downvotes"
 msgstr "无帮助票数"
 
+#. js-lingui-explicit-id
 msgid "fieldName.product"
 msgstr "商品"
 
+#. js-lingui-explicit-id
 msgid "fieldName.productVariant"
 msgstr "商品 SKU"
 
+#. js-lingui-explicit-id
 msgid "fieldName.rating"
 msgstr "评分"
 
+#. js-lingui-explicit-id
 msgid "fieldName.response"
 msgstr "商家回复"
 
+#. js-lingui-explicit-id
 msgid "fieldName.responseCreatedAt"
 msgstr "回复时间"
 
+#. js-lingui-explicit-id
 msgid "fieldName.state"
 msgstr "审核状态"
 
+#. js-lingui-explicit-id
 msgid "fieldName.summary"
 msgstr "评价标题"
 
+#. js-lingui-explicit-id
+msgid "fieldName.text"
+msgstr "翻译内容"
+
+#. js-lingui-explicit-id
 msgid "fieldName.upvotes"
 msgstr "有帮助票数"
 
