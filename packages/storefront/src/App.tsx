@@ -78,15 +78,18 @@ function storefrontNameDisplayUnits(value: string): number {
     }, 0);
 }
 
-function storefrontName(value: string): string {
-    const normalized = value.trim();
+function normalizeStorefrontName(value: string | null | undefined, fallback: string): string {
+    const normalized = value?.trim() ?? '';
     if (!normalized || storefrontNameDisplayUnits(normalized) > STOREFRONT_NAME_MAX_DISPLAY_UNITS) {
-        throw new Error('Storefront name must use 1 to 16 display units');
+        return fallback;
     }
     return normalized;
 }
 
-const STOREFRONT_NAME = storefrontName('云桥Ai');
+const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
+    zh: '云桥Ai',
+    en: 'Yunqiao Ai',
+};
 
 interface RouteState {
     name: RouteName;
@@ -141,6 +144,8 @@ export function App() {
     const [route, setRoute] = useState<RouteState>(routeFromLocation);
     const [products, setProducts] = useState<Product[]>([]);
     const [collections, setCollections] = useState<CollectionSummary[]>([]);
+    const [storefrontNames, setStorefrontNames] =
+        useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
     const [cart, setCart] = useState<StorefrontCart | null>(null);
     const [customer, setCustomer] = useState<ActiveCustomer | null>(null);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
@@ -162,6 +167,7 @@ export function App() {
     const locale = localeFor(language, market);
     const text = uiCopy[language];
     const isZh = language === 'zh';
+    const storefrontName = storefrontNames[language];
     const api = useMemo(() => new ShopApi(market, languageCodeFor(language)), [language, market]);
 
     const notify = useCallback((message: string) => {
@@ -203,12 +209,14 @@ export function App() {
     const loadStorefront = useCallback(async () => {
         setLoading(true);
         setError(null);
-        const [productResult, collectionResult, cartResult, customerResult] = await Promise.allSettled([
-            api.products(),
-            api.collections(),
-            api.cart(),
-            api.activeCustomer(),
-        ]);
+        const [productResult, collectionResult, cartResult, customerResult, configResult] =
+            await Promise.allSettled([
+                api.products(),
+                api.collections(),
+                api.cart(),
+                api.activeCustomer(),
+                api.storefrontConfig(),
+            ]);
         if (productResult.status === 'fulfilled') setProducts(productResult.value);
         else setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
         if (collectionResult.status === 'fulfilled') setCollections(collectionResult.value);
@@ -219,15 +227,30 @@ export function App() {
             setCartError(cartResult.reason instanceof Error ? cartResult.reason.message : text.loadError);
         }
         if (customerResult.status === 'fulfilled') setCustomer(customerResult.value);
+        if (configResult.status === 'fulfilled') {
+            setStorefrontNames({
+                zh: normalizeStorefrontName(
+                    configResult.value.customFields.storefrontNameZh,
+                    DEFAULT_STOREFRONT_NAMES.zh,
+                ),
+                en: normalizeStorefrontName(
+                    configResult.value.customFields.storefrontNameEn,
+                    DEFAULT_STOREFRONT_NAMES.en,
+                ),
+            });
+        }
         setLoading(false);
     }, [api, text.loadError]);
 
     useEffect(() => {
         localStorage.setItem('storefront-language', language);
         document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
-        document.title = isZh ? '云桥Ai · 移动商城' : 'Yunqiao Ai · Store';
         void loadStorefront();
-    }, [isZh, language, loadStorefront]);
+    }, [language, loadStorefront]);
+
+    useEffect(() => {
+        document.title = isZh ? `${storefrontName} · 移动商城` : `${storefrontName} · Store`;
+    }, [isZh, storefrontName]);
 
     useEffect(() => {
         if (activeCollectionId === 'all' && collections.length) {
@@ -328,6 +351,7 @@ export function App() {
                         market={market}
                         locale={locale}
                         language={language}
+                        storefrontName={storefrontName}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
                         onCategorySelect={collection => {
@@ -414,6 +438,7 @@ export function App() {
                         market={market}
                         locale={locale}
                         language={language}
+                        storefrontName={storefrontName}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
@@ -436,6 +461,7 @@ export function App() {
                         market={market}
                         locale={locale}
                         language={language}
+                        storefrontName={storefrontName}
                         addingVariantId={addingVariantId}
                         onBack={goBack}
                         onNavigate={navigate}
@@ -493,6 +519,7 @@ export function App() {
                         market={market}
                         locale={locale}
                         language={language}
+                        storefrontName={storefrontName}
                         initialTab={route.tab ?? 'all'}
                         onBack={goBack}
                         onNavigate={navigate}
@@ -510,6 +537,7 @@ export function App() {
                         market={market}
                         locale={locale}
                         language={language}
+                        storefrontName={storefrontName}
                         onBack={goBack}
                         onBuyAgain={async order => {
                             for (const line of order.lines) {
@@ -538,6 +566,7 @@ export function App() {
                     <LoginPage
                         api={api}
                         language={language}
+                        storefrontName={storefrontName}
                         onBack={goBack}
                         onSuccess={async () => {
                             const [nextCustomer, nextCart] = await Promise.all([
@@ -592,6 +621,7 @@ interface HomePageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    storefrontName: string;
     addingVariantId: string | null;
     onNavigate: (route: RouteState) => void;
     onCategorySelect: (collection: CollectionSummary) => void;
@@ -610,6 +640,7 @@ function HomePage(props: HomePageProps) {
         market,
         locale,
         language,
+        storefrontName,
         addingVariantId,
         onNavigate,
         onCategorySelect,
@@ -680,7 +711,7 @@ function HomePage(props: HomePageProps) {
                     onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 >
                     <span className="brand-mark">桥</span>
-                    <strong>{STOREFRONT_NAME}</strong>
+                    <strong>{storefrontName}</strong>
                 </button>
                 <button
                     className="search-trigger"
@@ -849,7 +880,11 @@ function HomePage(props: HomePageProps) {
                         onProduct={product => onNavigate({ name: 'product', id: product.id })}
                         onAdd={onAdd}
                     />
-                    <LegalFooter language={language} onUnavailable={onNotify} />
+                    <LegalFooter
+                        language={language}
+                        storefrontName={storefrontName}
+                        onUnavailable={onNotify}
+                    />
                 </>
             )}
         </main>
@@ -1578,6 +1613,7 @@ interface AccountPageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    storefrontName: string;
     addingVariantId: string | null;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
@@ -1592,6 +1628,7 @@ function AccountPage(props: AccountPageProps) {
         market,
         locale,
         language,
+        storefrontName,
         addingVariantId,
         onNavigate,
         onAdd,
@@ -1643,8 +1680,8 @@ function AccountPage(props: AccountPageProps) {
                                 ? `${customerName}，你好`
                                 : `Hello, ${customerName}`
                             : isZh
-                              ? '登录云桥Ai账户'
-                              : 'Sign in to Yunqiao Ai'}
+                              ? `登录${storefrontName}账户`
+                              : `Sign in to ${storefrontName}`}
                     </strong>
                     <small>
                         {customer
@@ -1796,7 +1833,7 @@ function AccountPage(props: AccountPageProps) {
                 onProduct={product => onNavigate({ name: 'product', id: product.id })}
                 onAdd={onAdd}
             />
-            <LegalFooter language={language} onUnavailable={onUnavailable} />
+            <LegalFooter language={language} storefrontName={storefrontName} onUnavailable={onUnavailable} />
         </main>
     );
 }
@@ -1808,6 +1845,7 @@ function ProductDetailPage({
     market,
     locale,
     language,
+    storefrontName,
     addingVariantId,
     onBack,
     onNavigate,
@@ -1820,6 +1858,7 @@ function ProductDetailPage({
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    storefrontName: string;
     addingVariantId: string | null;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
@@ -1997,7 +2036,7 @@ function ProductDetailPage({
                 <div>
                     <span className="shop-mark">桥</span>
                     <span>
-                        <strong>云桥Ai</strong>
+                        <strong>{storefrontName}</strong>
                         <small>{isZh ? '品质商品 · 安心售后' : 'Quality products · Reliable support'}</small>
                     </span>
                     <button type="button" onClick={() => onNavigate({ name: 'home' })}>
@@ -2701,6 +2740,7 @@ function OrdersPage({
     market,
     locale,
     language,
+    storefrontName,
     initialTab,
     onBack,
     onNavigate,
@@ -2711,6 +2751,7 @@ function OrdersPage({
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    storefrontName: string;
     initialTab: OrderTab;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
@@ -2785,6 +2826,7 @@ function OrdersPage({
                             market={market}
                             locale={locale}
                             language={language}
+                            storefrontName={storefrontName}
                             onOpen={() => onNavigate({ name: 'order-detail', id: order.id })}
                             onBuyAgain={() => void onBuyAgain(order)}
                             onMore={onUnavailable}
@@ -2807,6 +2849,7 @@ function OrderDetailPage({
     market,
     locale,
     language,
+    storefrontName,
     onBack,
     onBuyAgain,
     onUnavailable,
@@ -2815,6 +2858,7 @@ function OrderDetailPage({
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    storefrontName: string;
     onBack: () => void;
     onBuyAgain: (order: Order) => Promise<void>;
     onUnavailable: () => void;
@@ -2875,7 +2919,7 @@ function OrderDetailPage({
             )}
             <section className="order-detail-products">
                 <header>
-                    <strong>云桥Ai</strong>
+                    <strong>{storefrontName}</strong>
                     <span>{isZh ? `${order.lines.length} 种商品` : `${order.lines.length} products`}</span>
                 </header>
                 {order.lines.map(line => (
@@ -3094,11 +3138,13 @@ function AddressesPage({
 function LoginPage({
     api,
     language,
+    storefrontName,
     onBack,
     onSuccess,
 }: {
     api: ShopApi;
     language: StorefrontLanguage;
+    storefrontName: string;
     onBack: () => void;
     onSuccess: () => Promise<void>;
 }) {
@@ -3125,7 +3171,7 @@ function LoginPage({
         <main className="page subpage login-page">
             <SubHeader title={isZh ? '登录' : 'Sign in'} onBack={onBack} />
             <section className="login-content">
-                <span className="login-brand">云桥Ai</span>
+                <span className="login-brand">{storefrontName}</span>
                 <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
                 <p>
                     {isZh
@@ -3474,6 +3520,7 @@ function OrderCard({
     order,
     locale,
     language,
+    storefrontName,
     onOpen,
     onBuyAgain,
     onMore,
@@ -3482,6 +3529,7 @@ function OrderCard({
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    storefrontName: string;
     onOpen: () => void;
     onBuyAgain: () => void;
     onMore: () => void;
@@ -3503,7 +3551,7 @@ function OrderCard({
         <article className="order-card">
             <header>
                 <button type="button" onClick={onOpen}>
-                    <strong>云桥Ai</strong>
+                    <strong>{storefrontName}</strong>
                     <ChevronRight />
                 </button>
                 <span>{orderStateLabel(order.state, language)}</span>
@@ -3724,15 +3772,17 @@ function ServiceButton({ icon, label, onClick }: { icon: ReactNode; label: strin
 }
 function LegalFooter({
     language,
+    storefrontName,
     onUnavailable,
 }: {
     language: StorefrontLanguage;
+    storefrontName: string;
     onUnavailable: () => void;
 }) {
     const isZh = language === 'zh';
     return (
         <footer className="legal-footer">
-            <span>云桥Ai</span>
+            <span>{storefrontName}</span>
             <nav>
                 <button type="button" onClick={onUnavailable}>
                     {isZh ? '隐私政策' : 'Privacy'}

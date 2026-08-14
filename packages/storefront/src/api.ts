@@ -3,11 +3,11 @@ import {
     CollectionSummary,
     CustomerAddress,
     MarketConfig,
-    Order,
     Product,
     ShippingMethod,
     StorefrontCart,
     StorefrontCheckoutSession,
+    StorefrontConfig,
     VendureLanguageCode,
 } from './types';
 
@@ -125,6 +125,21 @@ export class ShopApi {
         private readonly market: MarketConfig,
         private readonly languageCode: VendureLanguageCode = market.defaultLanguageCode,
     ) {}
+
+    async storefrontConfig(): Promise<StorefrontConfig> {
+        const result = await this.request<{ activeChannel: StorefrontConfig }>(`
+            query StorefrontConfig {
+                activeChannel {
+                    code
+                    customFields {
+                        storefrontNameZh
+                        storefrontNameEn
+                    }
+                }
+            }
+        `);
+        return result.activeChannel;
+    }
 
     async products(): Promise<Product[]> {
         const result = await this.request<{ products: { items: Product[] } }>(`
@@ -279,10 +294,7 @@ export class ShopApi {
         return result.storefrontCart;
     }
 
-    async addItem(
-        productVariantId: string,
-        expectedRevision: number,
-    ): Promise<StorefrontCart> {
+    async addItem(productVariantId: string, expectedRevision: number): Promise<StorefrontCart> {
         const result = await this.request<{ addStorefrontCartItem: StorefrontCart & ErrorResult }>(
             `
                 mutation AddStorefrontCartItem($productVariantId: ID!, $expectedRevision: Int!) {
@@ -372,10 +384,7 @@ export class ShopApi {
         return this.assertCart(result.setStorefrontCartLinesSelected);
     }
 
-    async setAllLinesSelected(
-        selected: boolean,
-        expectedRevision: number,
-    ): Promise<StorefrontCart> {
+    async setAllLinesSelected(selected: boolean, expectedRevision: number): Promise<StorefrontCart> {
         const result = await this.request<{
             setAllStorefrontCartLinesSelected: StorefrontCart & ErrorResult;
         }>(

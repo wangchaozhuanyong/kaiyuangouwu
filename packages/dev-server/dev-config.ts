@@ -9,6 +9,7 @@ import {
     DefaultSchedulerPlugin,
     DefaultSearchPlugin,
     dummyPaymentHandler,
+    LanguageCode,
     LogLevel,
     PluginCommonModule,
     RequestContextService,
@@ -91,6 +92,26 @@ function configuredValue(name: string, developmentDefault: string): string {
         throw new Error(`${name} must be configured in production`);
     }
     return developmentDefault;
+}
+
+function storefrontNameDisplayUnits(value: string): number {
+    return Array.from(value).reduce((total, character) => {
+        const isWideCharacter = /[\p{Script=Han}\uFF01-\uFF60]/u.test(character);
+        return total + (isWideCharacter ? 2 : 1);
+    }, 0);
+}
+
+function validateStorefrontName(value: string) {
+    const displayUnits = storefrontNameDisplayUnits(value.trim());
+    if (displayUnits < 1 || displayUnits > 16) {
+        return [
+            {
+                languageCode: LanguageCode.zh_Hans,
+                value: '网站名称须为 1 至 16 个显示单位（中文按 2 个计算）',
+            },
+            { languageCode: LanguageCode.en, value: 'Website name must use 1 to 16 display units' },
+        ];
+    }
 }
 
 function trustProxySetting(): boolean | number | string {
@@ -203,7 +224,50 @@ export const devConfig: VendureConfig = {
             },
         ],
     },
-    customFields: {},
+    customFields: {
+        Channel: [
+            {
+                name: 'storefrontNameZh',
+                type: 'string',
+                length: 32,
+                nullable: false,
+                defaultValue: '云桥Ai',
+                public: true,
+                validate: validateStorefrontName,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '中文网站名称' },
+                    { languageCode: LanguageCode.en, value: 'Chinese website name' },
+                ],
+                description: [
+                    { languageCode: LanguageCode.zh_Hans, value: '客户端切换为中文时显示的网站名称' },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Website name shown when the storefront uses Chinese',
+                    },
+                ],
+            },
+            {
+                name: 'storefrontNameEn',
+                type: 'string',
+                length: 32,
+                nullable: false,
+                defaultValue: 'Yunqiao Ai',
+                public: true,
+                validate: validateStorefrontName,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '英文网站名称' },
+                    { languageCode: LanguageCode.en, value: 'English website name' },
+                ],
+                description: [
+                    { languageCode: LanguageCode.zh_Hans, value: '客户端切换为英文时显示的网站名称' },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Website name shown when the storefront uses English',
+                    },
+                ],
+            },
+        ],
+    },
     logger: new DefaultLogger({ level: IS_PRODUCTION ? LogLevel.Info : LogLevel.Verbose }),
     importExportOptions: {
         importAssetsDir: process.env.VENDURE_IMPORT_ASSETS_DIR || path.join(serverRoot, 'import-assets'),

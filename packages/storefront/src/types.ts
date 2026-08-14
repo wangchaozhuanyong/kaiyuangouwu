@@ -152,3 +152,11 @@ export interface MarketConfig {
     locale: 'zh-CN' | 'en-MY';
     label: string;
 }
+
+export interface StorefrontConfig {
+    code: string;
+    customFields: {
+        storefrontNameZh?: string | null;
+        storefrontNameEn?: string | null;
+    };
+}
