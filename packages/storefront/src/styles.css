@@ -148,7 +148,7 @@ img {
 }
 
 .home-topbar {
-    grid-template-columns: 85px minmax(0, 1fr) 80px;
+    grid-template-columns: max-content minmax(80px, 1fr) 80px;
     gap: 5px;
 }
 
@@ -191,7 +191,8 @@ img {
 }
 
 .brand {
-    min-width: 0;
+    width: max-content;
+    max-width: calc(34px + 7px + 8em);
     height: 42px;
     padding: 0;
     border: 0;
@@ -216,12 +217,10 @@ img {
 }
 
 .brand strong {
-    min-width: 0;
-    overflow: hidden;
+    flex: none;
     font-size: 15px;
     font-weight: 650;
     white-space: nowrap;
-    text-overflow: ellipsis;
 }
 
 .search-trigger {
@@ -3789,11 +3788,12 @@ img {
     }
 
     .home-topbar {
-        grid-template-columns: 76px minmax(102px, 1fr) 78px;
+        grid-template-columns: max-content minmax(70px, 1fr) 76px;
         gap: 4px;
     }
 
     .brand {
+        max-width: calc(31px + 5px + 8em);
         gap: 5px;
     }
 

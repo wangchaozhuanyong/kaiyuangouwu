@@ -69,6 +69,25 @@ type RouteName =
 type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 type SortMode = 'recommended' | 'newest' | 'price-asc' | 'price-desc';
 
+const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
+
+function storefrontNameDisplayUnits(value: string): number {
+    return Array.from(value).reduce((total, character) => {
+        const isWideCharacter = /[\p{Script=Han}\uFF01-\uFF60]/u.test(character);
+        return total + (isWideCharacter ? 2 : 1);
+    }, 0);
+}
+
+function storefrontName(value: string): string {
+    const normalized = value.trim();
+    if (!normalized || storefrontNameDisplayUnits(normalized) > STOREFRONT_NAME_MAX_DISPLAY_UNITS) {
+        throw new Error('Storefront name must use 1 to 16 display units');
+    }
+    return normalized;
+}
+
+const STOREFRONT_NAME = storefrontName('云桥Ai');
+
 interface RouteState {
     name: RouteName;
     id?: string;
@@ -661,7 +680,7 @@ function HomePage(props: HomePageProps) {
                     onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 >
                     <span className="brand-mark">桥</span>
-                    <strong>云桥Ai</strong>
+                    <strong>{STOREFRONT_NAME}</strong>
                 </button>
                 <button
                     className="search-trigger"
