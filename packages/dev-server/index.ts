@@ -5,7 +5,9 @@ import { devConfig } from './dev-config';
 /**
  * This bootstraps the dev server, used for testing Vendure during development.
  */
-runMigrations(devConfig)
+const prepareDatabase = process.env.RUN_MIGRATIONS === 'false' ? Promise.resolve() : runMigrations(devConfig);
+
+prepareDatabase
     .then(() => bootstrap(devConfig))
     .then(app => {
         if (process.env.RUN_JOB_QUEUE === '1') {

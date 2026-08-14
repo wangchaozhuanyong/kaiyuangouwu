@@ -258,6 +258,7 @@ const optionTranslations: readonly NamedTranslation[] = [
 
 export class AddMainlandChineseCatalogContent1786515300000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         for (const [id, name, description] of productTranslations) {
             await this.insertProductLikeTranslation(
                 queryRunner,
@@ -290,6 +291,7 @@ export class AddMainlandChineseCatalogContent1786515300000 implements MigrationI
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         for (const table of [
             'product_translation',
             'product_variant_translation',
@@ -352,5 +354,13 @@ export class AddMainlandChineseCatalogContent1786515300000 implements MigrationI
             `,
             [name, baseId, baseId],
         );
+    }
+
+    private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {
+        if (['mysql', 'mariadb'].includes(queryRunner.connection.options.type)) {
+            await queryRunner.query(
+                `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')`,
+            );
+        }
     }
 }

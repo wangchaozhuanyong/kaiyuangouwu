@@ -2,6 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         await this.copyChannelAssignments(queryRunner, 'product_channels_channel', 'productId');
         await this.copyChannelAssignments(
             queryRunner,
@@ -21,12 +22,14 @@ export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterfa
         await this.copyChannelAssignments(queryRunner, 'payment_method_channels_channel', 'paymentMethodId');
         await this.copyChannelAssignments(queryRunner, 'stock_location_channels_channel', 'stockLocationId');
         await this.copyChannelAssignments(queryRunner, 'promotion_channels_channel', 'promotionId');
+        await this.copyChannelAssignments(queryRunner, 'role_channels_channel', 'roleId');
 
         await this.copyPrices(queryRunner, 'cn-mainland', 'CNY');
         await this.copyPrices(queryRunner, 'my-malaysia', 'MYR');
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         const channelIds = `(SELECT id FROM channel WHERE code IN ('cn-mainland', 'my-malaysia'))`;
         for (const table of [
             'product_channels_channel',
@@ -40,6 +43,7 @@ export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterfa
             'payment_method_channels_channel',
             'stock_location_channels_channel',
             'promotion_channels_channel',
+            'role_channels_channel',
         ]) {
             await queryRunner.query(`DELETE FROM "${table}" WHERE "channelId" IN ${channelIds}`);
         }
@@ -55,8 +59,9 @@ export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterfa
         table: string,
         entityIdColumn: string,
     ): Promise<void> {
+        const insertIgnore = this.isMysql(queryRunner) ? 'INSERT IGNORE' : 'INSERT OR IGNORE';
         await queryRunner.query(`
-            INSERT OR IGNORE INTO "${table}" ("${entityIdColumn}", "channelId")
+            ${insertIgnore} INTO "${table}" ("${entityIdColumn}", "channelId")
             SELECT source."${entityIdColumn}", target.id
             FROM "${table}" source
             JOIN channel source_channel ON source_channel.id = source."channelId"
@@ -89,5 +94,17 @@ export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterfa
             `,
             [currencyCode, targetChannelCode, currencyCode],
         );
+    }
+
+    private isMysql(queryRunner: QueryRunner): boolean {
+        return ['mysql', 'mariadb'].includes(queryRunner.connection.options.type);
+    }
+
+    private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {
+        if (this.isMysql(queryRunner)) {
+            await queryRunner.query(
+                `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')`,
+            );
+        }
     }
 }

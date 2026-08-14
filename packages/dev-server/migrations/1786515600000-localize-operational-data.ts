@@ -30,6 +30,7 @@ const regionNameOverrides: Readonly<Record<string, string>> = {
 
 export class LocalizeOperationalData1786515600000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         for (const [original, localized] of globalNames.taxCategory) {
             await queryRunner.query(`UPDATE "tax_category" SET "name" = ? WHERE "name" = ?`, [
                 localized,
@@ -142,6 +143,7 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         for (const [original, localized] of globalNames.taxCategory) {
             await queryRunner.query(`UPDATE "tax_category" SET "name" = ? WHERE "name" = ?`, [
                 original,
@@ -215,5 +217,13 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
             DELETE FROM "region_translation"
             WHERE "languageCode" = 'zh_Hans'
         `);
+    }
+
+    private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {
+        if (['mysql', 'mariadb'].includes(queryRunner.connection.options.type)) {
+            await queryRunner.query(
+                `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')`,
+            );
+        }
     }
 }

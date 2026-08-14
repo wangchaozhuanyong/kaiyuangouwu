@@ -2,6 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class LocalizeDefaultActors1786516200000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         await queryRunner.query(`
             UPDATE "seller"
             SET "name" = '默认商家'
@@ -16,6 +17,7 @@ export class LocalizeDefaultActors1786516200000 implements MigrationInterface {
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         await queryRunner.query(`
             UPDATE "seller"
             SET "name" = 'Default Seller'
@@ -27,5 +29,13 @@ export class LocalizeDefaultActors1786516200000 implements MigrationInterface {
             WHERE "emailAddress" = 'superadmin'
               AND "firstName" = '超级管理员'
         `);
+    }
+
+    private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {
+        if (['mysql', 'mariadb'].includes(queryRunner.connection.options.type)) {
+            await queryRunner.query(
+                `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')`,
+            );
+        }
     }
 }

@@ -20,25 +20,35 @@ import {
 import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import { defaultEmailHandlers, EmailPlugin, FileBasedTemplateLoader } from '@vendure/email-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
-import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import path from 'path';
 import { DataSourceOptions } from 'typeorm';
 
+import { devServerMigrations } from './migrations';
 // import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
 import { ReviewsPlugin } from './test-plugins/reviews/reviews-plugin';
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const IS_INSTRUMENTED = process.env.IS_INSTRUMENTED === 'true';
-const SERVE_GRAPHIQL = process.env.VENDURE_SERVE_GRAPHIQL !== 'false';
+const BOOTSTRAP_BASE_SCHEMA = process.env.VENDURE_BOOTSTRAP_BASE_SCHEMA === 'true';
+const SERVE_GRAPHIQL =
+    process.env.VENDURE_SERVE_GRAPHIQL != null
+        ? process.env.VENDURE_SERVE_GRAPHIQL === 'true'
+        : !IS_PRODUCTION;
 const SERVE_STATIC_DASHBOARD = process.env.VENDURE_SERVE_STATIC_DASHBOARD !== 'false';
 const loadPackage = createRequire(__filename);
+const serverRoot = path.basename(__dirname) === 'dist' ? path.dirname(__dirname) : __dirname;
 const dashboardUrl = process.env.VENDURE_DASHBOARD_URL || 'http://localhost:3000/dashboard';
 const dashboardAppDir =
     path.basename(__dirname) === 'dist'
         ? path.join(__dirname, './dashboard')
         : path.join(__dirname, './dist/dashboard');
+const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
 const localizedEmailSubjects: Record<string, string> = {
     'order-confirmation': '订单确认 #{{ order.code }}',
     'email-verification': '请验证您的电子邮箱',
@@ -70,6 +80,29 @@ function storeDomainBypassHosts(): string[] | undefined {
         .split(',')
         .map(host => host.trim())
         .filter(Boolean);
+}
+
+function configuredValue(name: string, developmentDefault: string): string {
+    const value = process.env[name]?.trim();
+    if (value) {
+        return value;
+    }
+    if (IS_PRODUCTION) {
+        throw new Error(`${name} must be configured in production`);
+    }
+    return developmentDefault;
+}
+
+function trustProxySetting(): boolean | number | string {
+    const value = process.env.VENDURE_TRUST_PROXY?.trim();
+    if (!value || value === 'false') {
+        return false;
+    }
+    if (value === 'true') {
+        return true;
+    }
+    const hopCount = Number(value);
+    return Number.isInteger(hopCount) && hopCount >= 0 ? hopCount : value;
 }
 
 @VendurePlugin({
@@ -106,36 +139,54 @@ class ReadonlySettingsTestPlugin implements OnApplicationBootstrap {
  */
 export const devConfig: VendureConfig = {
     apiOptions: {
+        hostname: process.env.VENDURE_HOSTNAME || (IS_PRODUCTION ? '127.0.0.1' : undefined),
         port: Number(process.env.PORT) || Number(process.env.API_PORT) || API_PORT,
-        trustProxy: process.env.VENDURE_TRUST_PROXY === 'true',
+        trustProxy: trustProxySetting(),
         adminApiPath: ADMIN_API_PATH,
-        adminApiPlayground: {
-            settings: {
-                'request.credentials': 'include',
-            },
-        },
-        adminApiDebug: true,
+        adminApiPlayground: IS_PRODUCTION
+            ? false
+            : {
+                  settings: {
+                      'request.credentials': 'include',
+                  },
+              },
+        adminApiDebug: !IS_PRODUCTION,
         shopApiPath: SHOP_API_PATH,
-        shopApiPlayground: {
-            settings: {
-                'request.credentials': 'include',
-            },
-        },
-        shopApiDebug: true,
+        shopApiPlayground: IS_PRODUCTION
+            ? false
+            : {
+                  settings: {
+                      'request.credentials': 'include',
+                  },
+              },
+        shopApiDebug: !IS_PRODUCTION,
+        introspection: !IS_PRODUCTION,
+        ...(corsOrigins?.length
+            ? { cors: { origin: corsOrigins, credentials: true } }
+            : IS_PRODUCTION
+              ? { cors: false }
+              : {}),
     },
     authOptions: {
         disableAuth: false,
         tokenMethod: ['bearer', 'cookie', 'api-key'] as const,
         requireVerification: true,
         customPermissions: [],
+        superadminCredentials: {
+            identifier: configuredValue('SUPERADMIN_USERNAME', 'superadmin'),
+            password: configuredValue('SUPERADMIN_PASSWORD', 'superadmin'),
+        },
         cookieOptions: {
-            secret: 'abc',
+            secret: configuredValue('COOKIE_SECRET', 'abc'),
+            httpOnly: true,
+            secure: IS_PRODUCTION,
+            sameSite: 'lax',
         },
     },
     dbConnectionOptions: {
         synchronize: false,
         logging: false,
-        migrations: [path.join(__dirname, 'migrations/*.+(js|ts)')],
+        migrations: devServerMigrations,
         ...getDbConfig(),
     },
     paymentOptions: {
@@ -153,31 +204,34 @@ export const devConfig: VendureConfig = {
         ],
     },
     customFields: {},
-    logger: new DefaultLogger({ level: LogLevel.Verbose }),
+    logger: new DefaultLogger({ level: IS_PRODUCTION ? LogLevel.Info : LogLevel.Verbose }),
     importExportOptions: {
-        importAssetsDir: path.join(__dirname, 'import-assets'),
+        importAssetsDir: process.env.VENDURE_IMPORT_ASSETS_DIR || path.join(serverRoot, 'import-assets'),
     },
     plugins: [
         // MultivendorPlugin.init({
         //     platformFeePercent: 10,
         //     platformFeeSKU: 'FEE',
         // }),
-        ReadonlySettingsTestPlugin,
-        ReviewsPlugin,
+        ...(!IS_PRODUCTION && !BOOTSTRAP_BASE_SCHEMA ? [ReadonlySettingsTestPlugin, ReviewsPlugin] : []),
         // FieldTestPlugin,
         OperationsDashboardPlugin,
-        CommerceFulfillmentPlugin,
-        StorefrontCartPlugin,
-        StoreDomainPlugin.init({
-            cnameTarget: process.env.STORE_DOMAIN_CNAME_TARGET || 'vendure.localhost',
-            routingMode: storeDomainRoutingMode(),
-            trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
-            bypassHosts: storeDomainBypassHosts(),
-        }),
+        ...(!BOOTSTRAP_BASE_SCHEMA
+            ? [
+                  CommerceFulfillmentPlugin,
+                  StorefrontCartPlugin,
+                  StoreDomainPlugin.init({
+                      cnameTarget: process.env.STORE_DOMAIN_CNAME_TARGET || 'vendure.localhost',
+                      routingMode: storeDomainRoutingMode(),
+                      trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
+                      bypassHosts: storeDomainBypassHosts(),
+                  }),
+              ]
+            : []),
         ...(SERVE_GRAPHIQL ? [loadPackage('@vendure/graphiql-plugin').GraphiqlPlugin.init()] : []),
         AssetServerPlugin.init({
             route: 'assets',
-            assetUploadDir: path.join(__dirname, 'assets'),
+            assetUploadDir: process.env.VENDURE_ASSET_UPLOAD_DIR || path.join(serverRoot, 'assets'),
         }),
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: false }),
         // Enable if you need to debug the job queue
@@ -189,8 +243,8 @@ export const devConfig: VendureConfig = {
             devMode: true,
             route: 'mailbox',
             handlers: localizedEmailHandlers,
-            templateLoader: new FileBasedTemplateLoader(path.join(__dirname, './email-templates')),
-            outputPath: path.join(__dirname, 'test-emails'),
+            templateLoader: new FileBasedTemplateLoader(path.join(serverRoot, 'email-templates')),
+            outputPath: process.env.VENDURE_EMAIL_OUTPUT_DIR || path.join(serverRoot, 'test-emails'),
             globalTemplateVars: {
                 verifyEmailAddressUrl: `${dashboardUrl}/verify`,
                 passwordResetUrl: `${dashboardUrl}/reset-password`,
@@ -209,17 +263,21 @@ export const devConfig: VendureConfig = {
 
 function getDbConfig(): DataSourceOptions {
     const dbType = process.env.DB || 'mysql';
+    const synchronize =
+        process.env.DB_SYNCHRONIZE != null
+            ? process.env.DB_SYNCHRONIZE === 'true'
+            : !IS_PRODUCTION && dbType !== 'sqlite';
     switch (dbType) {
         case 'postgres':
             console.log('Using postgres connection');
             return {
-                synchronize: true,
+                synchronize,
                 type: 'postgres',
                 host: process.env.DB_HOST || 'localhost',
                 port: Number(process.env.DB_PORT) || 5432,
-                username: process.env.DB_USERNAME || 'vendure',
-                password: process.env.DB_PASSWORD || 'password',
-                database: process.env.DB_NAME || 'vendure-dev',
+                username: configuredValue('DB_USERNAME', 'vendure'),
+                password: configuredValue('DB_PASSWORD', 'password'),
+                database: configuredValue('DB_NAME', 'vendure-dev'),
                 schema: process.env.DB_SCHEMA || 'public',
             };
         case 'sqlite':
@@ -227,7 +285,7 @@ function getDbConfig(): DataSourceOptions {
             return {
                 synchronize: false,
                 type: 'better-sqlite3',
-                database: path.join(__dirname, 'vendure.sqlite'),
+                database: process.env.DB_NAME || path.join(serverRoot, 'vendure.sqlite'),
             };
         case 'sqljs':
             console.log('Using sql.js connection');
@@ -235,20 +293,20 @@ function getDbConfig(): DataSourceOptions {
                 type: 'sqljs',
                 autoSave: true,
                 database: new Uint8Array([]),
-                location: path.join(__dirname, 'vendure.sqlite'),
+                location: process.env.DB_NAME || path.join(serverRoot, 'vendure.sqlite'),
             };
         case 'mysql':
         case 'mariadb':
         default:
             console.log('Using mysql connection');
             return {
-                synchronize: true,
+                synchronize,
                 type: 'mariadb',
-                host: '127.0.0.1',
-                port: 3306,
-                username: 'vendure',
-                password: 'password',
-                database: 'vendure-dev',
+                host: process.env.DB_HOST || '127.0.0.1',
+                port: Number(process.env.DB_PORT) || 3306,
+                username: configuredValue('DB_USERNAME', 'vendure'),
+                password: configuredValue('DB_PASSWORD', 'password'),
+                database: configuredValue('DB_NAME', 'vendure-dev'),
             };
     }
 }

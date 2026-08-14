@@ -2,8 +2,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class LocalizeAndAssignShippingMethods1786514683000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
+        const insertIgnore = this.isMysql(queryRunner) ? 'INSERT IGNORE' : 'INSERT OR IGNORE';
         await queryRunner.query(`
-            INSERT OR IGNORE INTO "shipping_method_channels_channel" ("shippingMethodId", "channelId")
+            ${insertIgnore} INTO "shipping_method_channels_channel" ("shippingMethodId", "channelId")
             SELECT shipping_method.id, channel.id
             FROM shipping_method
             CROSS JOIN channel
@@ -48,6 +50,7 @@ export class LocalizeAndAssignShippingMethods1786514683000 implements MigrationI
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await this.enableAnsiIdentifierQuotes(queryRunner);
         await queryRunner.query(`
             DELETE FROM "shipping_method_channels_channel"
             WHERE "shippingMethodId" IN (
@@ -72,5 +75,17 @@ export class LocalizeAndAssignShippingMethods1786514683000 implements MigrationI
                   SELECT id FROM shipping_method WHERE code IN ('standard-shipping', 'express-shipping')
               )
         `);
+    }
+
+    private isMysql(queryRunner: QueryRunner): boolean {
+        return ['mysql', 'mariadb'].includes(queryRunner.connection.options.type);
+    }
+
+    private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {
+        if (this.isMysql(queryRunner)) {
+            await queryRunner.query(
+                `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')`,
+            );
+        }
     }
 }
