@@ -454,6 +454,7 @@
         "@vendure/email-plugin": "3.7.1",
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
+        "@vendure/storefront-cart-plugin": "0.1.0",
       },
       "devDependencies": {
         "@typescript/native-preview": "7.0.0-dev.20260515.1",
@@ -600,6 +601,22 @@
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.0.4",
         "typescript": "5.8.2",
+      },
+    },
+    "packages/storefront-cart-plugin": {
+      "name": "@vendure/storefront-cart-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.1.0",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "typeorm": "^0.3.21",
+      },
+      "devDependencies": {
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4",
       },
     },
     "packages/telemetry-plugin": {
@@ -2731,6 +2748,8 @@
     "@vendure/store-domain-plugin": ["@vendure/store-domain-plugin@workspace:packages/store-domain-plugin"],
 
     "@vendure/storefront": ["@vendure/storefront@workspace:packages/storefront"],
+
+    "@vendure/storefront-cart-plugin": ["@vendure/storefront-cart-plugin@workspace:packages/storefront-cart-plugin"],
 
     "@vendure/telemetry-plugin": ["@vendure/telemetry-plugin@workspace:packages/telemetry-plugin"],
 

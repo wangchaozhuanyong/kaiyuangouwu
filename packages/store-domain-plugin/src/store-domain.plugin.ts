@@ -41,11 +41,23 @@ export class StoreDomainPlugin implements NestModule, OnApplicationBootstrap {
     ) {}
 
     static init(options: StoreDomainPluginOptions): typeof StoreDomainPlugin {
+        const production = process.env.NODE_ENV === 'production';
+        const cnameTarget = options.cnameTarget.trim().toLowerCase();
+        const routingMode = options.routingMode ?? (production ? 'require-domain' : 'prefer-domain');
+        if (!cnameTarget) {
+            throw new Error('StoreDomainPlugin requires a public CNAME target');
+        }
+        if (production && routingMode !== 'require-domain') {
+            throw new Error('StoreDomainPlugin must use require-domain routing in production');
+        }
+        if (production && (cnameTarget === 'localhost' || cnameTarget.endsWith('.localhost'))) {
+            throw new Error('StoreDomainPlugin requires a public CNAME target in production');
+        }
         this.options = {
-            cnameTarget: options.cnameTarget.trim().toLowerCase(),
-            routingMode: options.routingMode ?? 'prefer-domain',
+            cnameTarget,
+            routingMode,
             trustProxyHeaders: options.trustProxyHeaders ?? false,
-            bypassHosts: (options.bypassHosts ?? ['localhost', '127.0.0.1']).map(host =>
+            bypassHosts: (options.bypassHosts ?? (production ? [] : ['localhost', '127.0.0.1'])).map(host =>
                 host.trim().toLowerCase(),
             ),
             resolveTxt: options.resolveTxt ?? defaultResolveTxt,

@@ -20,7 +20,8 @@ import {
 import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import { defaultEmailHandlers, EmailPlugin, FileBasedTemplateLoader } from '@vendure/email-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
-import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import path from 'path';
@@ -48,6 +49,28 @@ const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
     const subject = localizedEmailSubjects[handler.type];
     return subject ? handler.setSubject(subject) : handler;
 });
+
+function storeDomainRoutingMode(): StoreDomainRoutingMode | undefined {
+    const value = process.env.STORE_DOMAIN_ROUTING_MODE?.trim();
+    if (!value) {
+        return;
+    }
+    if (value === 'prefer-domain' || value === 'require-domain') {
+        return value;
+    }
+    throw new Error('STORE_DOMAIN_ROUTING_MODE must be prefer-domain or require-domain');
+}
+
+function storeDomainBypassHosts(): string[] | undefined {
+    const value = process.env.STORE_DOMAIN_BYPASS_HOSTS;
+    if (value == null) {
+        return;
+    }
+    return value
+        .split(',')
+        .map(host => host.trim())
+        .filter(Boolean);
+}
 
 @VendurePlugin({
     imports: [PluginCommonModule],
@@ -144,17 +167,12 @@ export const devConfig: VendureConfig = {
         // FieldTestPlugin,
         OperationsDashboardPlugin,
         CommerceFulfillmentPlugin,
+        StorefrontCartPlugin,
         StoreDomainPlugin.init({
             cnameTarget: process.env.STORE_DOMAIN_CNAME_TARGET || 'vendure.localhost',
-            routingMode:
-                process.env.STORE_DOMAIN_ROUTING_MODE === 'require-domain'
-                    ? 'require-domain'
-                    : 'prefer-domain',
+            routingMode: storeDomainRoutingMode(),
             trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
-            bypassHosts: (process.env.STORE_DOMAIN_BYPASS_HOSTS || 'localhost,127.0.0.1,vendure.localhost')
-                .split(',')
-                .map(host => host.trim())
-                .filter(Boolean),
+            bypassHosts: storeDomainBypassHosts(),
         }),
         ...(SERVE_GRAPHIQL ? [loadPackage('@vendure/graphiql-plugin').GraphiqlPlugin.init()] : []),
         AssetServerPlugin.init({

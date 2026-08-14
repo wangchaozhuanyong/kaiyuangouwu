@@ -48,6 +48,27 @@ describe('StoreDomainMiddleware', () => {
         expect(status).not.toHaveBeenCalled();
     });
 
+    it('routes three store domains to three independent channel tokens', async () => {
+        const routes = new Map([
+            ['alpha.example.com', { status: 'ACTIVE' as const, channelToken: 'channel-alpha' }],
+            ['bravo.example.com', { status: 'ACTIVE' as const, channelToken: 'channel-bravo' }],
+            ['charlie.example.com', { status: 'ACTIVE' as const, channelToken: 'channel-charlie' }],
+        ]);
+        const { middleware, resolveRoute } = createMiddleware(null);
+        resolveRoute.mockImplementation((host: string) => Promise.resolve(routes.get(host) ?? null));
+
+        for (const [host, route] of routes) {
+            const request = { headers: { host }, query: {} } as any;
+            const { response } = createResponse();
+            const next = vi.fn();
+
+            await middleware.use(request, response, next);
+
+            expect(request.headers['vendure-token']).toBe(route.channelToken);
+            expect(next).toHaveBeenCalledOnce();
+        }
+    });
+
     it('rejects a pending domain', async () => {
         const { middleware } = createMiddleware({ status: 'PENDING', channelToken: 'shop' });
         const { response, status, json } = createResponse();

@@ -10,7 +10,7 @@ export class StoreDomain extends VendureEntity {
     }
 
     @Index({ unique: true })
-    @Column({ length: 253 })
+    @Column('varchar', { length: 253 })
     domain: string;
 
     @Index()
@@ -20,7 +20,7 @@ export class StoreDomain extends VendureEntity {
     @EntityId()
     channelId: ID;
 
-    @Column({ default: false })
+    @Column('boolean', { default: false })
     isPrimary: boolean;
 
     /** Nullable unique slot: non-primary rows are null, while the primary row stores its channel ID. */
@@ -32,7 +32,7 @@ export class StoreDomain extends VendureEntity {
     status: StoreDomainStatus;
 
     @Index({ unique: true })
-    @Column({ length: 64 })
+    @Column('varchar', { length: 64 })
     verificationToken: string;
 
     @Column({ type: Date, nullable: true })
