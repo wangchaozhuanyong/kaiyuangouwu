@@ -1,23 +1,49 @@
 import {
+    ArrowLeft,
+    ArrowUpDown,
+    Bell,
     Check,
-    ChevronDown,
-    CircleHelp,
-    Globe2,
+    ChevronRight,
+    CircleAlert,
+    CircleCheck,
+    Coffee,
+    Download,
+    Fingerprint,
+    Headphones,
+    Heart,
+    House,
+    LayoutGrid,
+    MapPin,
+    MessageSquare,
     Minus,
+    Navigation,
     Package,
     Plus,
+    RotateCcw,
     Search,
+    Settings,
+    Share2,
     ShoppingBag,
+    ShoppingCart,
+    SlidersHorizontal,
+    Sparkles,
+    Store,
+    TicketPercent,
     Trash2,
     Truck,
+    UserRound,
+    WalletCards,
+    WifiOff,
     X,
-    Zap,
 } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { ShopApi } from './api';
-import { copy, enabledMarkets, markets } from './i18n';
+import { ShopApi, ShopApiError } from './api';
+import { enabledMarkets, languageCodeFor, localeFor, markets, uiCopy } from './i18n';
 import {
+    ActiveCustomer,
+    CollectionSummary,
+    CustomerAddress,
     FulfillmentType,
     MarketCode,
     MarketConfig,
@@ -25,500 +51,1198 @@ import {
     Product,
     ProductVariant,
     ShippingMethod,
+    StorefrontCart,
+    StorefrontCheckoutSession,
+    StorefrontLanguage,
 } from './types';
 
-type SortMode = 'recommended' | 'price-asc' | 'price-desc';
-type Panel = 'cart' | 'checkout' | null;
+type MainPage = 'home' | 'category' | 'cart' | 'account';
+type RouteName = MainPage | 'product' | 'search' | 'checkout' | 'orders' | 'order-detail' | 'addresses' | 'login';
+type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
+type SortMode = 'recommended' | 'newest' | 'price-asc' | 'price-desc';
+
+interface RouteState {
+    name: RouteName;
+    id?: string;
+    tab?: OrderTab;
+}
+
+const rootPages: MainPage[] = ['home', 'category', 'cart', 'account'];
+
+function routeFromLocation(): RouteState {
+    const raw = window.location.hash.replace(/^#\/?/, '');
+    const [path = 'home', query = ''] = raw.split('?');
+    const name = (path || 'home') as RouteName;
+    const params = new URLSearchParams(query);
+    const validNames: RouteName[] = [
+        'home',
+        'category',
+        'cart',
+        'account',
+        'product',
+        'search',
+        'checkout',
+        'orders',
+        'order-detail',
+        'addresses',
+        'login',
+    ];
+    return {
+        name: validNames.includes(name) ? name : 'home',
+        id: params.get('id') ?? undefined,
+        tab: (params.get('tab') as OrderTab | null) ?? undefined,
+    };
+}
+
+function routeHash(route: RouteState): string {
+    const params = new URLSearchParams();
+    if (route.id) params.set('id', route.id);
+    if (route.tab) params.set('tab', route.tab);
+    return `#/${route.name}${params.size ? `?${params.toString()}` : ''}`;
+}
 
 export function App() {
-    const [marketCode, setMarketCode] = useState<MarketCode>(() => {
+    const [marketCode] = useState<MarketCode>(() => {
         const stored = localStorage.getItem('storefront-market');
         return enabledMarkets.some(market => market.code === stored)
             ? (stored as MarketCode)
             : enabledMarkets[0].code;
     });
+    const [language, setLanguage] = useState<StorefrontLanguage>(() =>
+        localStorage.getItem('storefront-language') === 'en' ? 'en' : 'zh',
+    );
+    const [route, setRoute] = useState<RouteState>(routeFromLocation);
     const [products, setProducts] = useState<Product[]>([]);
-    const [order, setOrder] = useState<Order | null>(null);
-    const [query, setQuery] = useState('');
-    const [sortMode, setSortMode] = useState<SortMode>('recommended');
-    const [panel, setPanel] = useState<Panel>(null);
+    const [collections, setCollections] = useState<CollectionSummary[]>([]);
+    const [cart, setCart] = useState<StorefrontCart | null>(null);
+    const [customer, setCustomer] = useState<ActiveCustomer | null>(null);
+    const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
-    const [cartLoading, setCartLoading] = useState(true);
+    const [cartLoading, setCartLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [cartError, setCartError] = useState<string | null>(null);
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
+    const [toast, setToast] = useState<string | null>(null);
+    const [online, setOnline] = useState(navigator.onLine);
+    const [activeCollectionId, setActiveCollectionId] = useState('all');
+    const [activeChildId, setActiveChildId] = useState('all');
+    const [sortMode, setSortMode] = useState<SortMode>('recommended');
+    const [fulfillmentFilter, setFulfillmentFilter] = useState<'all' | FulfillmentType>('all');
+    const [inStockOnly, setInStockOnly] = useState(false);
+    const toastTimer = useRef<number | null>(null);
 
     const market = markets[marketCode];
-    const text = copy[marketCode];
-    const api = useMemo(() => new ShopApi(market), [market]);
+    const locale = localeFor(language, market);
+    const text = uiCopy[language];
+    const isZh = language === 'zh';
+    const api = useMemo(
+        () => new ShopApi(market, languageCodeFor(language)),
+        [language, market],
+    );
+
+    const notify = useCallback((message: string) => {
+        setToast(message);
+        if (toastTimer.current) window.clearTimeout(toastTimer.current);
+        toastTimer.current = window.setTimeout(() => setToast(null), 2400);
+    }, []);
+
+    const navigate = useCallback((next: RouteState, replace = false) => {
+        const hash = routeHash(next);
+        if (replace) window.history.replaceState(next, '', hash);
+        else window.history.pushState(next, '', hash);
+        setRoute(next);
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    }, []);
+
+    const goBack = useCallback(() => {
+        if (window.history.length > 1) window.history.back();
+        else navigate({ name: 'home' }, true);
+    }, [navigate]);
 
     useEffect(() => {
-        localStorage.setItem('storefront-market', marketCode);
-        document.documentElement.lang = marketCode === 'cn-mainland' ? 'zh-CN' : 'en-MY';
-        document.title = `${text.brand} · ${text.marketTagline}`;
+        if (!window.location.hash) navigate({ name: 'home' }, true);
+        const onPopState = () => setRoute(routeFromLocation());
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, [navigate]);
+
+    useEffect(() => {
+        const setConnected = () => setOnline(navigator.onLine);
+        window.addEventListener('online', setConnected);
+        window.addEventListener('offline', setConnected);
+        return () => {
+            window.removeEventListener('online', setConnected);
+            window.removeEventListener('offline', setConnected);
+        };
+    }, []);
+
+    const loadStorefront = useCallback(async () => {
         setLoading(true);
-        setCartLoading(true);
         setError(null);
-        setCartError(null);
-        setPanel(null);
-        void Promise.allSettled([api.products(), api.activeOrder()]).then(([productResult, orderResult]) => {
-            if (productResult.status === 'fulfilled') {
-                setProducts(productResult.value);
-            } else {
-                setError(
-                    productResult.reason instanceof Error ? productResult.reason.message : text.loadError,
-                );
-            }
-            if (orderResult.status === 'fulfilled') {
-                setOrder(orderResult.value);
-            } else {
-                setCartError(
-                    orderResult.reason instanceof Error ? orderResult.reason.message : text.loadError,
-                );
-            }
-            setLoading(false);
-            setCartLoading(false);
-        });
-    }, [api, marketCode, text.brand, text.loadError, text.marketTagline]);
+        const [productResult, collectionResult, cartResult, customerResult] = await Promise.allSettled([
+            api.products(),
+            api.collections(),
+            api.cart(),
+            api.activeCustomer(),
+        ]);
+        if (productResult.status === 'fulfilled') setProducts(productResult.value);
+        else setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
+        if (collectionResult.status === 'fulfilled') setCollections(collectionResult.value);
+        if (cartResult.status === 'fulfilled') {
+            setCart(cartResult.value);
+            setCheckoutOrder(cartResult.value.checkoutOrder);
+        } else {
+            setCartError(cartResult.reason instanceof Error ? cartResult.reason.message : text.loadError);
+        }
+        if (customerResult.status === 'fulfilled') setCustomer(customerResult.value);
+        setLoading(false);
+    }, [api, text.loadError]);
 
-    const visibleProducts = useMemo(() => {
-        const normalizedQuery = query.trim().toLocaleLowerCase(market.locale);
-        const filtered = products.filter(product => {
-            if (!normalizedQuery) return true;
-            const searchable = [
-                product.name,
-                product.description,
-                ...product.variants.flatMap(variant => [variant.name, variant.sku]),
-            ]
-                .join(' ')
-                .toLocaleLowerCase(market.locale);
-            return searchable.includes(normalizedQuery);
-        });
-        if (sortMode === 'recommended') return filtered;
-        return [...filtered].sort((a, b) => {
-            const aPrice = Math.min(...a.variants.map(variant => variant.priceWithTax));
-            const bPrice = Math.min(...b.variants.map(variant => variant.priceWithTax));
-            return sortMode === 'price-asc' ? aPrice - bPrice : bPrice - aPrice;
-        });
-    }, [market.locale, products, query, sortMode]);
+    useEffect(() => {
+        localStorage.setItem('storefront-language', language);
+        document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+        document.title = isZh ? '云桥Ai · 移动商城' : 'Yunqiao Ai · Store';
+        void loadStorefront();
+    }, [isZh, language, loadStorefront]);
 
-    const addToCart = async (variant: ProductVariant) => {
-        setAddingVariantId(variant.id);
-        setCartError(null);
-        try {
-            setOrder(await api.addItem(variant.id));
-            setPanel('cart');
-        } catch (requestError) {
-            setCartError(requestError instanceof Error ? requestError.message : text.loadError);
-        } finally {
+    useEffect(() => {
+        if (activeCollectionId === 'all' && collections.length) {
+            setActiveCollectionId(collections[0].id);
+            setActiveChildId(collections[0].children?.[0]?.id ?? collections[0].id);
+        }
+    }, [activeCollectionId, collections]);
+
+    const refreshCart = useCallback(async () => {
+        const latest = await api.cart();
+        setCart(latest);
+        setCheckoutOrder(latest.checkoutOrder);
+        return latest;
+    }, [api]);
+
+    const mutateCart = useCallback(
+        async (mutation: (revision: number) => Promise<StorefrontCart>) => {
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                const current = cart ?? (await api.cart());
+                const updated = await mutation(current.revision);
+                setCart(updated);
+                setCheckoutOrder(updated.checkoutOrder);
+                return updated;
+            } catch (requestError) {
+                if (
+                    requestError instanceof ShopApiError &&
+                    requestError.errorCode === 'CART_REVISION_CONFLICT_ERROR'
+                ) {
+                    await refreshCart().catch(() => undefined);
+                    setCartError(isZh ? '购物车已更新，请重新操作' : 'Your cart was updated. Please try again.');
+                } else {
+                    setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                }
+                return null;
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [api, cart, isZh, refreshCart, text.loadError],
+    );
+
+    const addToCart = useCallback(
+        async (variant: ProductVariant, openCart = false) => {
+            setAddingVariantId(variant.id);
+            const updated = await mutateCart(revision => api.addItem(variant.id, revision));
             setAddingVariantId(null);
-        }
-    };
+            if (updated) {
+                notify(isZh ? '已加入购物车' : 'Added to cart');
+                if (openCart) navigate({ name: 'cart' });
+            }
+            return updated;
+        },
+        [api, isZh, mutateCart, navigate, notify],
+    );
 
-    const updateQuantity = async (lineId: string, quantity: number) => {
-        if (quantity < 1) return;
+    const beginCheckout = useCallback(async () => {
+        if (!cart || cart.selectedQuantity === 0) return;
         setCartLoading(true);
+        setCartError(null);
         try {
-            setOrder(await api.adjustLine(lineId, quantity));
+            const session = await api.beginCheckout(cart.revision);
+            setCart(session.cart);
+            setCheckoutOrder(session.order);
+            navigate({ name: 'checkout' });
         } catch (requestError) {
             setCartError(requestError instanceof Error ? requestError.message : text.loadError);
         } finally {
             setCartLoading(false);
         }
-    };
+    }, [api, cart, navigate, text.loadError]);
 
-    const removeLine = async (lineId: string) => {
-        setCartLoading(true);
-        try {
-            setOrder(await api.removeLine(lineId));
-        } catch (requestError) {
-            setCartError(requestError instanceof Error ? requestError.message : text.loadError);
-        } finally {
-            setCartLoading(false);
+    const selectedProduct = route.id ? products.find(product => product.id === route.id) ?? null : null;
+    const selectedOrder = route.id
+        ? customer?.orders.items.find(order => order.id === route.id) ?? null
+        : null;
+
+    const mainPage: MainPage = rootPages.includes(route.name as MainPage)
+        ? (route.name as MainPage)
+        : route.name === 'product' || route.name === 'search'
+          ? 'category'
+          : route.name === 'checkout'
+            ? 'cart'
+            : 'account';
+
+    const page = (() => {
+        switch (route.name) {
+            case 'home':
+                return (
+                    <HomePage
+                        products={products}
+                        collections={collections}
+                        loading={loading}
+                        error={error}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        addingVariantId={addingVariantId}
+                        onNavigate={navigate}
+                        onCategorySelect={collection => {
+                            setActiveCollectionId(collection.id);
+                            setActiveChildId(collection.children?.[0]?.id ?? collection.id);
+                            navigate({ name: 'category' });
+                        }}
+                        onAdd={variant => void addToCart(variant)}
+                        onToggleLanguage={() => setLanguage(value => (value === 'zh' ? 'en' : 'zh'))}
+                        onNotify={() => notify(text.unavailable)}
+                        onRetry={() => void loadStorefront()}
+                    />
+                );
+            case 'category':
+                return (
+                    <CategoryPage
+                        products={products}
+                        collections={collections}
+                        loading={loading}
+                        error={error}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        activeCollectionId={activeCollectionId}
+                        activeChildId={activeChildId}
+                        sortMode={sortMode}
+                        fulfillmentFilter={fulfillmentFilter}
+                        inStockOnly={inStockOnly}
+                        addingVariantId={addingVariantId}
+                        onCollectionChange={(collectionId, childId) => {
+                            setActiveCollectionId(collectionId);
+                            setActiveChildId(childId);
+                        }}
+                        onChildChange={setActiveChildId}
+                        onSortChange={setSortMode}
+                        onFilterChange={(type, inStock) => {
+                            setFulfillmentFilter(type);
+                            setInStockOnly(inStock);
+                        }}
+                        onNavigate={navigate}
+                        onAdd={variant => void addToCart(variant)}
+                        onNotify={() => notify(text.unavailable)}
+                        onRetry={() => void loadStorefront()}
+                    />
+                );
+            case 'cart':
+                return (
+                    <CartPage
+                        cart={cart}
+                        products={products}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        loading={cartLoading}
+                        error={cartError}
+                        addingVariantId={addingVariantId}
+                        onToggleAll={() =>
+                            void mutateCart(revision =>
+                                api.setAllLinesSelected(cart?.selectionState !== 'ALL', revision),
+                            )
+                        }
+                        onSelect={(lineId, selected) =>
+                            void mutateCart(revision => api.setLinesSelected([lineId], selected, revision))
+                        }
+                        onQuantity={(lineId, quantity) =>
+                            void mutateCart(revision => api.setLineQuantity(lineId, quantity, revision))
+                        }
+                        onRemove={lineId =>
+                            void mutateCart(revision => api.removeLines([lineId], revision))
+                        }
+                        onCheckout={() => void beginCheckout()}
+                        onNavigate={navigate}
+                        onAdd={variant => void addToCart(variant)}
+                        onRetry={() => void refreshCart()}
+                        onUnavailable={() => notify(text.unavailable)}
+                    />
+                );
+            case 'account':
+                return (
+                    <AccountPage
+                        customer={customer}
+                        products={products}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        addingVariantId={addingVariantId}
+                        onNavigate={navigate}
+                        onAdd={variant => void addToCart(variant)}
+                        onUnavailable={() => notify(text.unavailable)}
+                        onLogout={() => {
+                            void api.logout().then(() => {
+                                setCustomer(null);
+                                notify(isZh ? '已退出登录' : 'Signed out');
+                            });
+                        }}
+                    />
+                );
+            case 'product':
+                return selectedProduct ? (
+                    <ProductDetailPage
+                        product={selectedProduct}
+                        cartQuantity={cart?.totalQuantity ?? 0}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        addingVariantId={addingVariantId}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                        onAdd={(variant, buyNow) => void addToCart(variant, buyNow)}
+                        onUnavailable={() => notify(text.unavailable)}
+                    />
+                ) : (
+                    <Subpage title={isZh ? '商品详情' : 'Product'} onBack={goBack}>
+                        <EmptyState
+                            icon={<ShoppingBag />}
+                            title={text.noResults}
+                            detail={text.noResultsHint}
+                            action={text.browse}
+                            onAction={() => navigate({ name: 'category' })}
+                        />
+                    </Subpage>
+                );
+            case 'search':
+                return (
+                    <SearchPage
+                        products={products}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        addingVariantId={addingVariantId}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                        onAdd={variant => void addToCart(variant)}
+                    />
+                );
+            case 'checkout':
+                return (
+                    <CheckoutPage
+                        api={api}
+                        cart={cart}
+                        order={checkoutOrder}
+                        customer={customer}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        onBack={goBack}
+                        onSessionChange={(session: StorefrontCheckoutSession) => {
+                            setCart(session.cart);
+                            setCheckoutOrder(session.order);
+                        }}
+                        onCartChange={setCart}
+                        onNavigate={navigate}
+                        onNotify={notify}
+                    />
+                );
+            case 'orders':
+                return (
+                    <OrdersPage
+                        customer={customer}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        initialTab={route.tab ?? 'all'}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'order-detail':
+                return (
+                    <OrderDetailPage
+                        order={selectedOrder}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        onBack={goBack}
+                        onBuyAgain={async order => {
+                            for (const line of order.lines) {
+                                await addToCart(line.productVariant);
+                            }
+                            navigate({ name: 'cart' });
+                        }}
+                        onUnavailable={() => notify(text.unavailable)}
+                    />
+                );
+            case 'addresses':
+                return (
+                    <AddressesPage
+                        api={api}
+                        customer={customer}
+                        market={market}
+                        language={language}
+                        onBack={goBack}
+                        onCustomerChange={setCustomer}
+                        onNavigate={navigate}
+                        onNotify={notify}
+                    />
+                );
+            case 'login':
+                return (
+                    <LoginPage
+                        api={api}
+                        language={language}
+                        onBack={goBack}
+                        onSuccess={async () => {
+                            const [nextCustomer, nextCart] = await Promise.all([
+                                api.activeCustomer(),
+                                api.cart(),
+                            ]);
+                            setCustomer(nextCustomer);
+                            setCart(nextCart);
+                            setCheckoutOrder(nextCart.checkoutOrder);
+                            notify(isZh ? '登录成功' : 'Signed in');
+                            navigate({ name: 'account' }, true);
+                        }}
+                    />
+                );
         }
-    };
-
-    const refreshOrder = async () => setOrder(await api.activeOrder());
-
-    const changeMarket = (nextMarket: MarketCode) => {
-        setQuery('');
-        setSortMode('recommended');
-        setMarketCode(nextMarket);
-    };
+    })();
 
     return (
-        <div className="storefront-shell">
-            <header className="site-header">
-                <div className="header-inner">
-                    <a className="brand-lockup" href="#catalog" aria-label={text.brand}>
-                        <span className="brand-mark">明</span>
-                        <span>
-                            <strong>{text.brand}</strong>
-                            <small>{text.marketTagline}</small>
-                        </span>
-                    </a>
-                    <nav className="primary-nav" aria-label={text.navProducts}>
-                        <a href="#catalog">{text.navProducts}</a>
-                    </nav>
-                    <div className="header-actions">
-                        <MarketSwitcher value={marketCode} label={text.marketLabel} onChange={changeMarket} />
-                        <button className="cart-button" type="button" onClick={() => setPanel('cart')}>
-                            <ShoppingBag aria-hidden="true" />
-                            <span>{text.cart}</span>
-                            <span className="cart-count" aria-label={`${order?.totalQuantity ?? 0}`}>
-                                {order?.totalQuantity ?? 0}
-                            </span>
-                        </button>
-                    </div>
+        <div className="storefront-app">
+            <a className="skip-link" href="#storefront-content">
+                {isZh ? '跳到主要内容' : 'Skip to content'}
+            </a>
+            {!online && (
+                <div className="network-banner" role="status">
+                    <WifiOff aria-hidden="true" />
+                    {isZh ? '当前网络不可用，部分操作可能失败' : 'You are offline. Some actions may fail.'}
                 </div>
-            </header>
-
-            <main id="catalog" className="catalog-main">
-                <section className="catalog-toolbar" aria-labelledby="catalog-title">
-                    <div>
-                        <p className="catalog-eyebrow">{text.marketTagline}</p>
-                        <h1 id="catalog-title">{text.navProducts}</h1>
-                        <p>{text.productsFound(visibleProducts.length)}</p>
-                    </div>
-                    <div className="catalog-controls">
-                        <label className="search-box">
-                            <Search aria-hidden="true" />
-                            <span className="sr-only">{text.searchPlaceholder}</span>
-                            <input
-                                type="search"
-                                value={query}
-                                onChange={event => setQuery(event.target.value)}
-                                placeholder={text.searchPlaceholder}
-                            />
-                        </label>
-                        <label className="sort-select">
-                            <span className="sr-only">{text.sortRecommended}</span>
-                            <select
-                                value={sortMode}
-                                onChange={event => setSortMode(event.target.value as SortMode)}
-                            >
-                                <option value="recommended">{text.sortRecommended}</option>
-                                <option value="price-asc">{text.sortPriceAsc}</option>
-                                <option value="price-desc">{text.sortPriceDesc}</option>
-                            </select>
-                            <ChevronDown aria-hidden="true" />
-                        </label>
-                    </div>
-                </section>
-
-                {loading ? (
-                    <ProductSkeleton label={text.loading} />
-                ) : error ? (
-                    <EmptyState
-                        title={text.loadError}
-                        detail={error}
-                        action={text.retry}
-                        onAction={() => location.reload()}
-                    />
-                ) : visibleProducts.length === 0 ? (
-                    <EmptyState title={text.emptySearch} />
-                ) : (
-                    <section className="product-grid" aria-live="polite">
-                        {visibleProducts.map(product => (
-                            <ProductCard
-                                key={product.id}
-                                product={product}
-                                market={market}
-                                marketCode={marketCode}
-                                addingVariantId={addingVariantId}
-                                onAdd={variant => void addToCart(variant)}
-                            />
-                        ))}
-                    </section>
-                )}
-            </main>
-
-            {panel && (
-                <div className="panel-layer" role="presentation" onMouseDown={() => setPanel(null)}>
-                    <aside
-                        className="side-panel"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="panel-title"
-                        onMouseDown={event => event.stopPropagation()}
-                    >
-                        {panel === 'cart' ? (
-                            <CartPanel
-                                order={order}
-                                market={market}
-                                marketCode={marketCode}
-                                loading={cartLoading}
-                                error={cartError}
-                                onClose={() => setPanel(null)}
-                                onCheckout={() => setPanel('checkout')}
-                                onContinue={() => setPanel(null)}
-                                onUpdate={(lineId, quantity) => void updateQuantity(lineId, quantity)}
-                                onRemove={lineId => void removeLine(lineId)}
-                            />
-                        ) : (
-                            <CheckoutPanel
-                                api={api}
-                                order={order}
-                                market={market}
-                                marketCode={marketCode}
-                                onBack={() => setPanel('cart')}
-                                onClose={() => setPanel(null)}
-                                onOrderChange={setOrder}
-                                onRefresh={refreshOrder}
-                            />
-                        )}
-                    </aside>
+            )}
+            <div id="storefront-content">{page}</div>
+            {rootPages.includes(route.name as MainPage) && (
+                <BottomNavigation
+                    active={mainPage}
+                    cartQuantity={cart?.totalQuantity ?? 0}
+                    language={language}
+                    onNavigate={name => navigate({ name })}
+                />
+            )}
+            {toast && (
+                <div className="toast" role="status" aria-live="polite">
+                    {toast}
                 </div>
             )}
         </div>
     );
 }
 
-function ProductCard({
-    product,
-    market,
-    marketCode,
-    addingVariantId,
-    onAdd,
-}: {
-    product: Product;
-    market: MarketConfig;
-    marketCode: MarketCode;
-    addingVariantId: string | null;
-    onAdd: (variant: ProductVariant) => void;
-}) {
-    const text = copy[marketCode];
-    const [selectedId, setSelectedId] = useState(product.variants[0]?.id ?? '');
-    const variant = product.variants.find(item => item.id === selectedId) ?? product.variants[0];
-    if (!variant) return null;
-    const fulfillmentType = variant.customFields.fulfillmentType;
-    const outOfStock = fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK';
-    const isAdding = addingVariantId === variant.id;
-
-    return (
-        <article className="product-card">
-            <div className="product-media">
-                {product.featuredAsset ? (
-                    <img src={product.featuredAsset.preview} alt="" loading="lazy" />
-                ) : (
-                    <Package aria-hidden="true" />
-                )}
-                <FulfillmentBadge type={fulfillmentType} marketCode={marketCode} />
-            </div>
-            <div className="product-copy">
-                <div className="product-heading">
-                    <h2>{product.name}</h2>
-                    <strong>{formatMoney(variant.priceWithTax, variant.currencyCode, market.locale)}</strong>
-                </div>
-                <p>{product.description}</p>
-                <label className="variant-select">
-                    <span>{text.chooseVariant}</span>
-                    <select value={variant.id} onChange={event => setSelectedId(event.target.value)}>
-                        {product.variants.map(item => (
-                            <option key={item.id} value={item.id}>
-                                {item.name}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDown aria-hidden="true" />
-                </label>
-                <button
-                    className="primary-button"
-                    type="button"
-                    disabled={outOfStock || isAdding}
-                    onClick={() => onAdd(variant)}
-                >
-                    <ShoppingBag aria-hidden="true" />
-                    {isAdding ? text.adding : outOfStock ? text.soldOut : text.addToCart}
-                </button>
-            </div>
-        </article>
-    );
-}
-
-function FulfillmentBadge({ type, marketCode }: { type: FulfillmentType; marketCode: MarketCode }) {
-    const text = copy[marketCode];
-    const help = type === 'digital' ? text.digitalHelp : text.physicalHelp;
-    return (
-        <span className={`fulfillment-badge ${type}`} title={help}>
-            {type === 'digital' ? <Zap aria-hidden="true" /> : <Truck aria-hidden="true" />}
-            {type === 'digital' ? text.digital : text.physical}
-            <CircleHelp aria-label={text.helpLabel} />
-        </span>
-    );
-}
-
-function CartPanel({
-    order,
-    market,
-    marketCode,
-    loading,
-    error,
-    onClose,
-    onCheckout,
-    onContinue,
-    onUpdate,
-    onRemove,
-}: {
-    order: Order | null;
-    market: MarketConfig;
-    marketCode: MarketCode;
+interface HomePageProps {
+    products: Product[];
+    collections: CollectionSummary[];
     loading: boolean;
     error: string | null;
-    onClose: () => void;
-    onCheckout: () => void;
-    onContinue: () => void;
-    onUpdate: (lineId: string, quantity: number) => void;
-    onRemove: (lineId: string) => void;
-}) {
-    const text = copy[marketCode];
-    const isEmpty = !order?.lines.length;
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    addingVariantId: string | null;
+    onNavigate: (route: RouteState) => void;
+    onCategorySelect: (collection: CollectionSummary) => void;
+    onAdd: (variant: ProductVariant) => void;
+    onToggleLanguage: () => void;
+    onNotify: () => void;
+    onRetry: () => void;
+}
+
+function HomePage(props: HomePageProps) {
+    const {
+        products,
+        collections,
+        loading,
+        error,
+        market,
+        locale,
+        language,
+        addingVariantId,
+        onNavigate,
+        onCategorySelect,
+        onAdd,
+        onToggleLanguage,
+        onNotify,
+        onRetry,
+    } = props;
+    const isZh = language === 'zh';
+    const hero = products[0];
+    const heroImage = productImage(hero) ?? '/storefront/default-hero.jpg';
+    const quickCollections = collections.slice(0, 5);
+
     return (
-        <>
-            <PanelHeader title={text.cartTitle} closeLabel={text.close} onClose={onClose} />
-            <div className="panel-content">
-                {loading && <p className="status-copy">{text.loadingCart}</p>}
-                {error && <p className="inline-error">{error}</p>}
-                {isEmpty ? (
-                    <div className="empty-cart">
-                        <ShoppingBag aria-hidden="true" />
-                        <h3>{text.emptyCart}</h3>
-                        <p>{text.emptyCartHint}</p>
-                        <button type="button" className="secondary-button" onClick={onContinue}>
-                            {text.continueShopping}
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        <div className="cart-lines">
-                            {order.lines.map(line => (
-                                <div className="cart-line" key={line.id}>
-                                    <div className="cart-line-image">
-                                        {line.productVariant.featuredAsset ? (
-                                            <img src={line.productVariant.featuredAsset.preview} alt="" />
-                                        ) : (
-                                            <Package aria-hidden="true" />
-                                        )}
-                                    </div>
-                                    <div className="cart-line-copy">
-                                        <strong>{line.productVariant.name}</strong>
-                                        <span>SKU {line.productVariant.sku}</span>
-                                        <FulfillmentBadge
-                                            type={line.customFields.fulfillmentTypeSnapshot}
-                                            marketCode={marketCode}
-                                        />
-                                        <div className="quantity-row">
-                                            <div className="quantity-control">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onUpdate(line.id, line.quantity - 1)}
-                                                    disabled={line.quantity <= 1 || loading}
-                                                    aria-label="-"
-                                                >
-                                                    <Minus aria-hidden="true" />
-                                                </button>
-                                                <span>{line.quantity}</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onUpdate(line.id, line.quantity + 1)}
-                                                    disabled={loading}
-                                                    aria-label="+"
-                                                >
-                                                    <Plus aria-hidden="true" />
-                                                </button>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                className="remove-button"
-                                                onClick={() => onRemove(line.id)}
-                                                disabled={loading}
-                                                title={text.remove}
-                                                aria-label={text.remove}
-                                            >
-                                                <Trash2 aria-hidden="true" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <strong className="line-price">
-                                        {formatMoney(
-                                            line.linePriceWithTax,
-                                            order.currencyCode,
-                                            market.locale,
-                                        )}
-                                    </strong>
-                                </div>
-                            ))}
-                        </div>
-                        <OrderSummary order={order} market={market} marketCode={marketCode} />
-                    </>
-                )}
-            </div>
-            {!isEmpty && (
-                <div className="panel-footer">
-                    <button className="primary-button wide" type="button" onClick={onCheckout}>
-                        {text.checkout}
+        <main className="page home-page">
+            <header className="topbar home-topbar">
+                <button className="brand" type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                    <span className="brand-mark">桥</span>
+                    <strong>云桥Ai</strong>
+                </button>
+                <button className="search-trigger" type="button" onClick={() => onNavigate({ name: 'search' })}>
+                    <Search aria-hidden="true" />
+                    <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
+                </button>
+                <div className="topbar-actions">
+                    <button
+                        className="language-button"
+                        type="button"
+                        onClick={onToggleLanguage}
+                        aria-label={isZh ? 'Switch to English' : '切换为中文'}
+                    >
+                        {isZh ? '中' : 'EN'}
                     </button>
+                    <NoticeButton onClick={onNotify} />
                 </div>
+            </header>
+
+            <button className="notice-strip" type="button" onClick={onNotify}>
+                <Bell aria-hidden="true" />
+                <span>{isZh ? '店铺通知将在这里展示' : 'Store notices will appear here'}</span>
+                <ChevronRight aria-hidden="true" />
+            </button>
+
+            {loading ? (
+                <PageSkeleton />
+            ) : error ? (
+                <EmptyState
+                    icon={<WifiOff />}
+                    title={isZh ? '首页加载失败' : 'Could not load the home page'}
+                    detail={error}
+                    action={isZh ? '重新加载' : 'Try again'}
+                    onAction={onRetry}
+                />
+            ) : (
+                <>
+                    <section className="hero" aria-label={isZh ? '精选推荐' : 'Featured'}>
+                        {heroImage ? (
+                            <img src={heroImage} alt={hero?.name ?? ''} />
+                        ) : (
+                            <div className="image-placeholder"><Sparkles aria-hidden="true" /></div>
+                        )}
+                        <div className="hero-shade" />
+                        <div className="hero-copy">
+                            <small>{isZh ? '本周精选' : 'This week'}</small>
+                            <h1>{hero?.name ?? (isZh ? '认真挑选每一件好物' : 'Goods chosen with care')}</h1>
+                            <p>{trimText(hero?.description, 38) || (isZh ? '从当前店铺在售商品中，为你整理值得关注的选择' : 'A considered edit of what is available now')}</p>
+                            <button type="button" onClick={() => hero && onNavigate({ name: 'product', id: hero.id })}>
+                                {isZh ? '查看精选' : 'View selection'}
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                        </div>
+                    </section>
+
+                    <nav className="quick-grid" aria-label={isZh ? '快捷分类' : 'Quick categories'}>
+                        {(quickCollections.length
+                            ? quickCollections
+                            : fallbackCollections(isZh)
+                        ).map((collection, index) => (
+                            <button
+                                type="button"
+                                key={collection.id}
+                                onClick={() => onCategorySelect(collection)}
+                            >
+                                <span>{quickIcon(index)}</span>
+                                <b>{collection.name}</b>
+                            </button>
+                        ))}
+                    </nav>
+
+                    <button className="benefit-row" type="button" onClick={onNotify}>
+                        <TicketPercent aria-hidden="true" />
+                        <span>
+                            <small>{isZh ? '优惠活动' : 'Offers'}</small>
+                            <strong>{isZh ? '优惠以结算页实际结果为准' : 'Offers are calculated at checkout'}</strong>
+                        </span>
+                        <ChevronRight aria-hidden="true" />
+                    </button>
+
+                    <ProductSection
+                        title={isZh ? '限时精选' : 'Selected now'}
+                        subtitle={isZh ? '当前店铺值得关注的商品' : 'Worth a closer look'}
+                        products={products.slice(0, 4)}
+                        market={market}
+                        locale={locale}
+                        addingVariantId={addingVariantId}
+                        onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                        onAdd={onAdd}
+                    />
+
+                    {products.length > 1 && (
+                        <section className="content-section inspiration-section">
+                            <SectionHeader
+                                title={isZh ? '生活灵感' : 'Ideas for everyday life'}
+                                subtitle={isZh ? '从真实商品中发现搭配方向' : 'Explore combinations from the catalogue'}
+                                action={isZh ? '更多' : 'More'}
+                                onAction={() => onNavigate({ name: 'category' })}
+                            />
+                            <div className="story-grid">
+                                {products.slice(0, 2).map((product, index) => (
+                                    <button
+                                        type="button"
+                                        key={product.id}
+                                        onClick={() => onNavigate({ name: 'product', id: product.id })}
+                                    >
+                                        <ProductImage product={product} />
+                                        <span>
+                                            {product.name}
+                                            <small>{index === 0 ? (isZh ? '本周编辑推荐' : 'Editor selection') : (isZh ? '继续探索' : 'Explore more')}</small>
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    <ProductSection
+                        title={isZh ? '猜你喜欢' : 'You may also like'}
+                        subtitle={isZh ? '继续发现合适的好物' : 'Keep discovering'}
+                        products={products.slice(4, 10).length ? products.slice(4, 10) : products.slice(0, 4)}
+                        market={market}
+                        locale={locale}
+                        addingVariantId={addingVariantId}
+                        onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                        onAdd={onAdd}
+                    />
+                    <LegalFooter language={language} onUnavailable={onNotify} />
+                </>
             )}
-        </>
+        </main>
     );
 }
 
-function CheckoutPanel({
-    api,
-    order,
-    market,
-    marketCode,
-    onBack,
-    onClose,
-    onOrderChange,
-    onRefresh,
-}: {
-    api: ShopApi;
-    order: Order | null;
+interface CategoryPageProps {
+    products: Product[];
+    collections: CollectionSummary[];
+    loading: boolean;
+    error: string | null;
     market: MarketConfig;
-    marketCode: MarketCode;
-    onBack: () => void;
-    onClose: () => void;
-    onOrderChange: (order: Order | null) => void;
-    onRefresh: () => Promise<void>;
-}) {
-    const text = copy[marketCode];
+    locale: string;
+    language: StorefrontLanguage;
+    activeCollectionId: string;
+    activeChildId: string;
+    sortMode: SortMode;
+    fulfillmentFilter: 'all' | FulfillmentType;
+    inStockOnly: boolean;
+    addingVariantId: string | null;
+    onCollectionChange: (collectionId: string, childId: string) => void;
+    onChildChange: (childId: string) => void;
+    onSortChange: (sort: SortMode) => void;
+    onFilterChange: (type: 'all' | FulfillmentType, inStock: boolean) => void;
+    onNavigate: (route: RouteState) => void;
+    onAdd: (variant: ProductVariant) => void;
+    onNotify: () => void;
+    onRetry: () => void;
+}
+
+function CategoryPage(props: CategoryPageProps) {
+    const {
+        products,
+        collections,
+        loading,
+        error,
+        market,
+        locale,
+        language,
+        activeCollectionId,
+        activeChildId,
+        sortMode,
+        fulfillmentFilter,
+        inStockOnly,
+        addingVariantId,
+        onCollectionChange,
+        onChildChange,
+        onSortChange,
+        onFilterChange,
+        onNavigate,
+        onAdd,
+        onNotify,
+        onRetry,
+    } = props;
+    const isZh = language === 'zh';
+    const [filterOpen, setFilterOpen] = useState(false);
+    const [draftType, setDraftType] = useState(fulfillmentFilter);
+    const [draftStock, setDraftStock] = useState(inStockOnly);
+    const primary = collections.find(item => item.id === activeCollectionId) ?? collections[0];
+    const children = primary?.children?.length ? primary.children : primary ? [primary] : [];
+    const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
+
+    const visibleProducts = useMemo(() => {
+        const fallbackType =
+            !collections.length && (activeCollectionId === 'physical' || activeCollectionId === 'digital')
+                ? activeCollectionId
+                : 'all';
+        const effectiveType = fallbackType === 'all' ? fulfillmentFilter : fallbackType;
+        const filtered = products.filter(product => {
+            const collectionMatch =
+                !collections.length ||
+                selectedCollectionId === 'all' ||
+                product.collections.some(collection => collection.id === selectedCollectionId);
+            const typeMatch =
+                effectiveType === 'all' ||
+                product.variants.some(variant => variant.customFields.fulfillmentType === effectiveType);
+            const stockMatch =
+                !inStockOnly || product.variants.some(variant => variant.stockLevel === 'IN_STOCK');
+            return collectionMatch && typeMatch && stockMatch;
+        });
+        if (sortMode === 'recommended') return filtered;
+        if (sortMode === 'newest') {
+            return [...filtered].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        }
+        return [...filtered].sort((a, b) => {
+            const aPrice = minimumPrice(a);
+            const bPrice = minimumPrice(b);
+            return sortMode === 'price-asc' ? aPrice - bPrice : bPrice - aPrice;
+        });
+    }, [activeCollectionId, collections.length, fulfillmentFilter, inStockOnly, products, selectedCollectionId, sortMode]);
+
+    const bannerImage =
+        primary?.featuredAsset?.preview ??
+        productImage(visibleProducts[0]) ??
+        '/storefront/default-hero.jpg';
+
+    return (
+        <main className="page category-page">
+            <header className="topbar category-topbar">
+                <strong>{isZh ? '商品' : 'Shop'}</strong>
+                <button className="search-trigger" type="button" onClick={() => onNavigate({ name: 'search' })}>
+                    <Search aria-hidden="true" />
+                    <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
+                </button>
+                <NoticeButton onClick={onNotify} />
+            </header>
+
+            <nav className="primary-categories" aria-label={isZh ? '一级分类' : 'Main categories'}>
+                {(collections.length ? collections : fallbackCollections(isZh)).map(collection => (
+                    <button
+                        type="button"
+                        key={collection.id}
+                        className={collection.id === activeCollectionId ? 'is-active' : undefined}
+                        aria-pressed={collection.id === activeCollectionId}
+                        onClick={event => {
+                            onCollectionChange(
+                                collection.id,
+                                collection.children?.[0]?.id ?? collection.id,
+                            );
+                            event.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                        }}
+                    >
+                        {collection.name}
+                    </button>
+                ))}
+            </nav>
+
+            <div className="category-layout">
+                <nav className="secondary-categories" aria-label={isZh ? '二级分类' : 'Subcategories'}>
+                    {children.length ? (
+                        children.map(child => (
+                            <button
+                                type="button"
+                                key={child.id}
+                                className={child.id === activeChildId ? 'is-active' : undefined}
+                                onClick={() => onChildChange(child.id)}
+                            >
+                                {child.name}
+                            </button>
+                        ))
+                    ) : (
+                        <button type="button" className="is-active">{isZh ? '全部' : 'All'}</button>
+                    )}
+                </nav>
+
+                <section className="category-results">
+                    <button className="category-banner" type="button" onClick={() => visibleProducts[0] && onNavigate({ name: 'product', id: visibleProducts[0].id })}>
+                        {bannerImage ? <img src={bannerImage} alt={primary?.name ?? ''} /> : <div className="image-placeholder"><ShoppingBag /></div>}
+                        <span>
+                            <small>{isZh ? '分类精选' : 'Category edit'}</small>
+                            <strong>{primary?.name ?? (isZh ? '全部商品' : 'All products')}</strong>
+                        </span>
+                    </button>
+                    <div className="result-count">
+                        <span>{isZh ? `共 ${visibleProducts.length} 件` : `${visibleProducts.length} products`}</span>
+                        {(fulfillmentFilter !== 'all' || inStockOnly) && <b>{isZh ? '已筛选' : 'Filtered'}</b>}
+                    </div>
+                    <nav className="sort-bar" aria-label={isZh ? '排序和筛选' : 'Sort and filter'}>
+                        <button type="button" className={sortMode === 'recommended' ? 'is-active' : undefined} onClick={() => onSortChange('recommended')}>{isZh ? '综合' : 'Default'}</button>
+                        <button type="button" disabled title={isZh ? '销量排序需要后台索引支持' : 'Sales ranking needs backend support'}>{isZh ? '销量' : 'Sales'}</button>
+                        <button type="button" className={sortMode === 'newest' ? 'is-active' : undefined} onClick={() => onSortChange('newest')}>{isZh ? '最新' : 'Newest'}</button>
+                        <button
+                            type="button"
+                            className={sortMode.startsWith('price') ? 'is-active' : undefined}
+                            onClick={() => onSortChange(sortMode === 'price-asc' ? 'price-desc' : 'price-asc')}
+                        >
+                            {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
+                        </button>
+                        <button type="button" className={fulfillmentFilter !== 'all' || inStockOnly ? 'is-active' : undefined} onClick={() => setFilterOpen(true)}>
+                            {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
+                        </button>
+                    </nav>
+
+                    {loading ? (
+                        <ListSkeleton />
+                    ) : error ? (
+                        <EmptyState icon={<WifiOff />} title={isZh ? '商品加载失败' : 'Could not load products'} detail={error} action={isZh ? '重试' : 'Retry'} onAction={onRetry} compact />
+                    ) : visibleProducts.length ? (
+                        <div className="product-list">
+                            {visibleProducts.map(product => (
+                                <ProductRow
+                                    key={product.id}
+                                    product={product}
+                                    market={market}
+                                    locale={locale}
+                                    language={language}
+                                    adding={product.variants.some(variant => variant.id === addingVariantId)}
+                                    onOpen={() => onNavigate({ name: 'product', id: product.id })}
+                                    onAdd={() => product.variants[0] && onAdd(product.variants[0])}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <EmptyState icon={<Search />} title={isZh ? '当前分类没有商品' : 'No products in this category'} detail={isZh ? '可以切换分类或清除筛选条件' : 'Choose another category or clear filters'} compact />
+                    )}
+                </section>
+            </div>
+
+            {filterOpen && (
+                <Sheet title={isZh ? '筛选商品' : 'Filter products'} onClose={() => setFilterOpen(false)}>
+                    <div className="filter-sheet-content">
+                        <fieldset>
+                            <legend>{isZh ? '商品类型' : 'Product type'}</legend>
+                            <div className="segmented-options">
+                                {(['all', 'physical', 'digital'] as const).map(type => (
+                                    <button type="button" key={type} className={draftType === type ? 'is-active' : undefined} onClick={() => setDraftType(type)}>
+                                        {type === 'all' ? (isZh ? '全部' : 'All') : type === 'physical' ? (isZh ? '实物' : 'Physical') : (isZh ? '数字商品' : 'Digital')}
+                                    </button>
+                                ))}
+                            </div>
+                        </fieldset>
+                        <label className="switch-row">
+                            <span><strong>{isZh ? '仅看有货' : 'In stock only'}</strong><small>{isZh ? '隐藏当前不可售规格' : 'Hide unavailable variants'}</small></span>
+                            <input type="checkbox" checked={draftStock} onChange={event => setDraftStock(event.target.checked)} />
+                        </label>
+                        <div className="sheet-actions">
+                            <button type="button" onClick={() => { setDraftType('all'); setDraftStock(false); }}>{isZh ? '重置' : 'Reset'}</button>
+                            <button type="button" className="primary-action" onClick={() => { onFilterChange(draftType, draftStock); setFilterOpen(false); }}>{isZh ? '查看商品' : 'View products'}</button>
+                        </div>
+                    </div>
+                </Sheet>
+            )}
+        </main>
+    );
+}
+
+interface CartPageProps {
+    cart: StorefrontCart | null;
+    products: Product[];
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    loading: boolean;
+    error: string | null;
+    addingVariantId: string | null;
+    onToggleAll: () => void;
+    onSelect: (lineId: string, selected: boolean) => void;
+    onQuantity: (lineId: string, quantity: number) => void;
+    onRemove: (lineId: string) => void;
+    onCheckout: () => void;
+    onNavigate: (route: RouteState) => void;
+    onAdd: (variant: ProductVariant) => void;
+    onRetry: () => void;
+    onUnavailable: () => void;
+}
+
+function CartPage(props: CartPageProps) {
+    const { cart, products, market, locale, language, loading, error, addingVariantId, onToggleAll, onSelect, onQuantity, onRemove, onCheckout, onNavigate, onAdd, onRetry, onUnavailable } = props;
+    const isZh = language === 'zh';
+    const lines = cart?.lines ?? [];
+    const physical = lines.filter(line => line.productVariant?.customFields.fulfillmentType === 'physical');
+    const digital = lines.filter(line => line.productVariant?.customFields.fulfillmentType === 'digital');
+    const order = cart?.checkoutOrder;
+    const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
+    const amount = order?.subTotalWithTax ?? 0;
+
+    return (
+        <main className="page cart-page">
+            <header className="topbar cart-topbar">
+                <strong>{isZh ? '购物车' : 'Cart'}</strong>
+                {!!lines.length && (
+                    <button className={`select-all ${cart?.selectionState.toLowerCase()}`} type="button" onClick={onToggleAll} disabled={loading}>
+                        <span>{cart?.selectionState === 'ALL' ? <Check /> : cart?.selectionState === 'PARTIAL' ? <Minus /> : null}</span>
+                        <b>
+                            {cart?.selectionState === 'ALL'
+                                ? isZh ? `已全选 ${cart.selectedQuantity}件` : `All ${cart.selectedQuantity}`
+                                : isZh ? `已选 ${cart?.selectedQuantity ?? 0}件` : `${cart?.selectedQuantity ?? 0} selected`}
+                        </b>
+                    </button>
+                )}
+            </header>
+
+            {!!lines.length && (
+                <div className="shipping-note">
+                    <span><Truck aria-hidden="true" /></span>
+                    <div><strong>{isZh ? '配送与运费' : 'Delivery and shipping'}</strong><small>{isZh ? '选择地址后在结算页准确计算' : 'Calculated after you choose an address'}</small></div>
+                    <ChevronRight aria-hidden="true" />
+                </div>
+            )}
+
+            {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
+            {!cart && loading ? (
+                <ListSkeleton />
+            ) : !lines.length ? (
+                <EmptyState icon={<ShoppingBag />} title={isZh ? '购物车还是空的' : 'Your cart is empty'} detail={isZh ? '去挑几件喜欢的商品吧' : 'Browse the shop to add something'} action={isZh ? '去逛商品' : 'Browse products'} onAction={() => onNavigate({ name: 'category' })} />
+            ) : (
+                <>
+                    <div className="cart-groups">
+                        {!!physical.length && <CartGroup title={isZh ? '实物商品' : 'Physical products'} hint={isZh ? '需要配送' : 'Shipping required'} lines={physical} market={market} locale={locale} language={language} loading={loading} onSelect={onSelect} onQuantity={onQuantity} onRemove={onRemove} />}
+                        {!!digital.length && <CartGroup title={isZh ? '数字商品' : 'Digital products'} hint={isZh ? '支付后交付' : 'Delivered after payment'} lines={digital} market={market} locale={locale} language={language} loading={loading} onSelect={onSelect} onQuantity={onQuantity} onRemove={onRemove} />}
+                    </div>
+                    <button className="coupon-row" type="button" onClick={onUnavailable}>
+                        <span><TicketPercent /><strong>{isZh ? '优惠信息' : 'Offers'}</strong></span>
+                        <span><small>{discount ? (isZh ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}` : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`) : (isZh ? '结算时自动计算' : 'Calculated at checkout')}</small><ChevronRight /></span>
+                    </button>
+                    <ProductSection
+                        title={isZh ? '顺手带一件' : 'Complete the order'}
+                        subtitle={isZh ? '从当前店铺继续挑选' : 'More from this store'}
+                        products={products.filter(product => !lines.some(line => line.productVariant?.id === product.variants[0]?.id)).slice(0, 4)}
+                        market={market}
+                        locale={locale}
+                        addingVariantId={addingVariantId}
+                        onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                        onAdd={onAdd}
+                    />
+                </>
+            )}
+
+            {!!lines.length && (
+                <div className="cart-checkout-bar">
+                    <div><span>{isZh ? '合计' : 'Total'} <strong>{formatMoney(amount, order?.currencyCode ?? market.currencyCode, locale)}</strong></span><small>{discount ? (isZh ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}` : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`) : (isZh ? '不含待计算运费' : 'Shipping not included')}</small></div>
+                    <button type="button" onClick={onCheckout} disabled={loading || !cart?.selectedQuantity}>{isZh ? `结算（${cart?.selectedQuantity ?? 0}）` : `Checkout (${cart?.selectedQuantity ?? 0})`}</button>
+                </div>
+            )}
+        </main>
+    );
+}
+
+interface AccountPageProps {
+    customer: ActiveCustomer | null;
+    products: Product[];
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    addingVariantId: string | null;
+    onNavigate: (route: RouteState) => void;
+    onAdd: (variant: ProductVariant) => void;
+    onUnavailable: () => void;
+    onLogout: () => void;
+}
+
+function AccountPage(props: AccountPageProps) {
+    const { customer, products, market, locale, language, addingVariantId, onNavigate, onAdd, onUnavailable, onLogout } = props;
+    const isZh = language === 'zh';
+    const orders = customer?.orders.items ?? [];
+    const counts = {
+        pending: orders.filter(order => ['AddingItems', 'ArrangingPayment'].includes(order.state)).length,
+        shipping: orders.filter(order => ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)).length,
+        receiving: orders.filter(order => ['Shipped', 'PartiallyShipped'].includes(order.state)).length,
+    };
+    const latestOrder = orders[0];
+    const customerName = customer ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress : '';
+
+    return (
+        <main className="page account-page">
+            <header className="topbar account-topbar">
+                <strong>{isZh ? '我的' : 'Account'}</strong>
+                <div><button type="button" onClick={onUnavailable} aria-label={isZh ? '联系客服' : 'Support'}><Headphones /></button><button type="button" onClick={onUnavailable} aria-label={isZh ? '设置' : 'Settings'}><Settings /></button></div>
+            </header>
+            <section className="profile-band">
+                <span className="avatar">{customerName ? customerName.slice(0, 1).toUpperCase() : <UserRound />}</span>
+                <button type="button" onClick={() => customer ? onUnavailable() : onNavigate({ name: 'login' })}>
+                    <strong>{customer ? (isZh ? `${customerName}，你好` : `Hello, ${customerName}`) : (isZh ? '登录云桥Ai账户' : 'Sign in to Yunqiao Ai')}</strong>
+                    <small>{customer ? customer.emailAddress : (isZh ? '查看订单、地址和售后进度' : 'View orders, addresses and support')}</small>
+                </button>
+                <ChevronRight />
+            </section>
+
+            <section className="account-section order-shortcuts">
+                <SectionHeader title={isZh ? '我的订单' : 'My orders'} action={isZh ? '全部订单' : 'All orders'} onAction={() => onNavigate({ name: 'orders', tab: 'all' })} />
+                <nav>
+                    <AccountShortcut icon={<WalletCards />} label={isZh ? '待付款' : 'To pay'} count={counts.pending} onClick={() => onNavigate({ name: 'orders', tab: 'pending' })} />
+                    <AccountShortcut icon={<Package />} label={isZh ? '待发货' : 'To ship'} count={counts.shipping} onClick={() => onNavigate({ name: 'orders', tab: 'shipping' })} />
+                    <AccountShortcut icon={<Truck />} label={isZh ? '待收货' : 'To receive'} count={counts.receiving} onClick={() => onNavigate({ name: 'orders', tab: 'receiving' })} />
+                    <AccountShortcut icon={<RotateCcw />} label={isZh ? '退款/售后' : 'After-sales'} count={0} onClick={onUnavailable} />
+                </nav>
+            </section>
+
+            {latestOrder && (
+                <section className="account-section tracking-card">
+                    <header><span><Navigation /><strong>{isZh ? '最近订单' : 'Latest order'}</strong></span><small>{formatOrderDate(latestOrder.orderPlacedAt, locale)}</small></header>
+                    <button type="button" onClick={() => onNavigate({ name: 'order-detail', id: latestOrder.id })}>
+                        <OrderImage order={latestOrder} />
+                        <span><strong>{orderStateLabel(latestOrder.state, language)}</strong><small>{isZh ? `订单号 ${latestOrder.code}` : `Order ${latestOrder.code}`}</small></span>
+                        <ChevronRight />
+                    </button>
+                </section>
+            )}
+
+            <section className="account-section services-section">
+                <h2>{isZh ? '常用服务' : 'Services'}</h2>
+                <div>
+                    <ServiceButton icon={<MapPin />} label={isZh ? '地址管理' : 'Addresses'} onClick={() => customer ? onNavigate({ name: 'addresses' }) : onNavigate({ name: 'login' })} />
+                    <ServiceButton icon={<RotateCcw />} label={isZh ? '售后记录' : 'After-sales'} onClick={onUnavailable} />
+                    <ServiceButton icon={<MessageSquare />} label={isZh ? '联系客服' : 'Support'} onClick={onUnavailable} />
+                    <ServiceButton icon={<Store />} label={isZh ? '关于店铺' : 'About store'} onClick={onUnavailable} />
+                </div>
+            </section>
+
+            <button className="security-row" type="button" onClick={onUnavailable}><span><Fingerprint /><strong>{isZh ? '账户与安全' : 'Account and security'}</strong></span><span>{isZh ? '密码与隐私' : 'Password and privacy'} <ChevronRight /></span></button>
+
+            {customer && <button className="logout-button" type="button" onClick={onLogout}>{isZh ? '退出登录' : 'Sign out'}</button>}
+
+            <ProductSection
+                title={isZh ? '为你推荐' : 'Recommended for you'}
+                subtitle={isZh ? '继续发现合适的好物' : 'Keep discovering'}
+                products={products.slice(0, 4)}
+                market={market}
+                locale={locale}
+                addingVariantId={addingVariantId}
+                onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                onAdd={onAdd}
+            />
+            <LegalFooter language={language} onUnavailable={onUnavailable} />
+        </main>
+    );
+}
+
+function ProductDetailPage({ product, cartQuantity, market, locale, language, addingVariantId, onBack, onNavigate, onAdd, onUnavailable }: { product: Product; cartQuantity: number; market: MarketConfig; locale: string; language: StorefrontLanguage; addingVariantId: string | null; onBack: () => void; onNavigate: (route: RouteState) => void; onAdd: (variant: ProductVariant, buyNow?: boolean) => void; onUnavailable: () => void }) {
+    const isZh = language === 'zh';
+    const [variantId, setVariantId] = useState(product.variants[0]?.id ?? '');
+    const [activeImage, setActiveImage] = useState(0);
+    const variant = product.variants.find(item => item.id === variantId) ?? product.variants[0];
+    const assets = product.assets.length ? product.assets : product.featuredAsset ? [product.featuredAsset] : [];
+    const unavailable = !variant || (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK');
+
+    return (
+        <main className="page subpage product-detail-page">
+            <SubHeader title={isZh ? '商品详情' : 'Product details'} onBack={onBack} action={<button type="button" onClick={onUnavailable} aria-label={isZh ? '分享' : 'Share'}><Share2 /></button>} />
+            <section className="detail-gallery">
+                {assets[activeImage] ? <img src={assets[activeImage].preview} alt={`${product.name} ${activeImage + 1}`} /> : <div className="image-placeholder"><Package /></div>}
+                {assets.length > 1 && <div className="gallery-dots">{assets.map((asset, index) => <button type="button" key={asset.id} className={index === activeImage ? 'is-active' : undefined} onClick={() => setActiveImage(index)} aria-label={`${index + 1}`} />)}</div>}
+            </section>
+            <section className="detail-summary">
+                <p className="detail-price">{variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : '--'}</p>
+                <h1>{product.name}</h1>
+                <p>{product.description || (isZh ? '暂无更多商品说明' : 'No additional description')}</p>
+                <div className="detail-badges"><span><CircleCheck />{isZh ? '正品保障' : 'Authenticity'}</span><span><Truck />{variant?.customFields.fulfillmentType === 'digital' ? (isZh ? '支付后交付' : 'Delivered after payment') : (isZh ? '运费结算页计算' : 'Shipping at checkout')}</span></div>
+            </section>
+            <section className="detail-options">
+                <header><strong>{isZh ? '选择规格' : 'Choose an option'}</strong><span>{variant?.sku}</span></header>
+                <div>{product.variants.map(item => <button type="button" key={item.id} className={item.id === variant?.id ? 'is-active' : undefined} onClick={() => setVariantId(item.id)}>{item.name}</button>)}</div>
+            </section>
+            <section className="detail-description"><h2>{isZh ? '商品说明' : 'Description'}</h2><p>{product.description || (isZh ? '商品详细信息由商家后台维护。' : 'Product information is managed by the merchant.')}</p></section>
+            <div className="detail-action-bar">
+                <button type="button" onClick={onUnavailable}><Headphones /><span>{isZh ? '客服' : 'Support'}</span></button>
+                <button type="button" onClick={onUnavailable}><Heart /><span>{isZh ? '收藏' : 'Save'}</span></button>
+                <button type="button" onClick={() => onNavigate({ name: 'cart' })}><ShoppingCart /><span>{isZh ? '购物车' : 'Cart'}</span>{cartQuantity > 0 && <b>{cartQuantity}</b>}</button>
+                <button type="button" disabled={unavailable || addingVariantId !== null} onClick={() => variant && onAdd(variant)}>{addingVariantId === variant?.id ? (isZh ? '添加中' : 'Adding') : (isZh ? '加入购物车' : 'Add to cart')}</button>
+                <button type="button" disabled={unavailable || addingVariantId !== null} onClick={() => variant && onAdd(variant, true)}>{unavailable ? (isZh ? '暂时缺货' : 'Unavailable') : (isZh ? '立即购买' : 'Buy now')}</button>
+            </div>
+        </main>
+    );
+}
+
+function SearchPage({ products, market, locale, language, addingVariantId, onBack, onNavigate, onAdd }: { products: Product[]; market: MarketConfig; locale: string; language: StorefrontLanguage; addingVariantId: string | null; onBack: () => void; onNavigate: (route: RouteState) => void; onAdd: (variant: ProductVariant) => void }) {
+    const isZh = language === 'zh';
+    const [query, setQuery] = useState('');
+    const [submittedQuery, setSubmittedQuery] = useState('');
+    const [history, setHistory] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('storefront-search-history') ?? '[]') as string[]; } catch { return []; }
+    });
+    const results = useMemo(() => {
+        const value = submittedQuery.trim().toLocaleLowerCase(locale);
+        if (!value) return [];
+        return products.filter(product => [product.name, product.description, ...product.variants.flatMap(variant => [variant.name, variant.sku])].join(' ').toLocaleLowerCase(locale).includes(value));
+    }, [locale, products, submittedQuery]);
+    const submit = (value = query) => {
+        const next = value.trim();
+        if (!next) return;
+        setQuery(next);
+        setSubmittedQuery(next);
+        const nextHistory = [next, ...history.filter(item => item !== next)].slice(0, 8);
+        setHistory(nextHistory);
+        localStorage.setItem('storefront-search-history', JSON.stringify(nextHistory));
+    };
+
+    return (
+        <main className="page subpage search-page">
+            <header className="search-header">
+                <button type="button" onClick={onBack} aria-label={isZh ? '返回' : 'Back'}><ArrowLeft /></button>
+                <label><Search /><input autoFocus type="search" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && submit()} placeholder={isZh ? '搜索商品、分类' : 'Search products'} /></label>
+                <button type="button" onClick={() => submit()}>{isZh ? '搜索' : 'Search'}</button>
+            </header>
+            {!submittedQuery ? (
+                <div className="search-discovery">
+                    <section><header><strong>{isZh ? '最近搜索' : 'Recent searches'}</strong>{history.length > 0 && <button type="button" onClick={() => { setHistory([]); localStorage.removeItem('storefront-search-history'); }} aria-label={isZh ? '清空' : 'Clear'}><Trash2 /></button>}</header><div className="search-tags">{history.length ? history.map(item => <button type="button" key={item} onClick={() => submit(item)}>{item}</button>) : <small>{isZh ? '暂无搜索记录' : 'No recent searches'}</small>}</div></section>
+                    <section><header><strong>{isZh ? '发现商品' : 'Discover'}</strong><span>{isZh ? '从当前店铺开始' : 'Start with this store'}</span></header><div className="discovery-grid"><button type="button" onClick={() => onNavigate({ name: 'category' })}><LayoutGrid /><span>{isZh ? '全部分类' : 'Categories'}</span></button><button type="button" onClick={() => submit(products[0]?.name ?? '')}><Sparkles /><span>{isZh ? '本周精选' : 'Selected'}</span></button><button type="button" onClick={() => onNavigate({ name: 'cart' })}><ShoppingCart /><span>{isZh ? '购物车' : 'Cart'}</span></button></div></section>
+                </div>
+            ) : (
+                <section className="search-results">
+                    <header><strong>{isZh ? `“${submittedQuery}”的结果` : `Results for “${submittedQuery}”`}</strong><span>{results.length}</span></header>
+                    {results.length ? <div className="product-list">{results.map(product => <ProductRow key={product.id} product={product} market={market} locale={locale} language={language} adding={product.variants.some(variant => variant.id === addingVariantId)} onOpen={() => onNavigate({ name: 'product', id: product.id })} onAdd={() => product.variants[0] && onAdd(product.variants[0])} />)}</div> : <EmptyState icon={<Search />} title={isZh ? '没有找到相关商品' : 'No matching products'} detail={isZh ? '换个关键词或查看全部分类' : 'Try another search or browse categories'} action={isZh ? '查看分类' : 'Browse categories'} onAction={() => onNavigate({ name: 'category' })} />}
+                </section>
+            )}
+        </main>
+    );
+}
+
+function CheckoutPage({ api, cart, order, customer, market, locale, language, onBack, onSessionChange, onCartChange, onNavigate, onNotify }: { api: ShopApi; cart: StorefrontCart | null; order: Order | null; customer: ActiveCustomer | null; market: MarketConfig; locale: string; language: StorefrontLanguage; onBack: () => void; onSessionChange: (session: StorefrontCheckoutSession) => void; onCartChange: (cart: StorefrontCart) => void; onNavigate: (route: RouteState, replace?: boolean) => void; onNotify: (message: string) => void }) {
+    const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
-    const [success, setSuccess] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
     const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
     const [selectedShippingId, setSelectedShippingId] = useState('');
+    const defaultAddress = customer?.addresses?.find(address => address.defaultShippingAddress) ?? customer?.addresses?.[0];
+    const requiresShipping = order?.checkoutFulfillment?.requiresShippingAddress ?? order?.lines.some(line => line.productVariant.customFields.fulfillmentType === 'physical');
 
-    const needsAddress = order?.checkoutFulfillment.requiresShippingAddress ?? false;
-    const isMixed = order?.checkoutFulfillment.fulfillmentType === 'MIXED';
-    const selectedShippingMethod = shippingMethods.find(method => method.id === selectedShippingId);
-
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        setSubmitting(true);
-        setError(null);
+        if (!cart || !order) return;
         const data = new FormData(event.currentTarget);
+        setSubmitting(true);
+        setFormError(null);
         try {
-            if (!order) return;
-            if (!order.customer) {
+            if (!customer) {
                 await api.setCustomer({
-                    firstName: String(data.get('firstName')),
-                    lastName: String(data.get('lastName')),
-                    emailAddress: String(data.get('email')),
-                    phoneNumber: String(data.get('phone')),
+                    firstName: String(data.get('firstName') ?? ''),
+                    lastName: String(data.get('lastName') ?? ''),
+                    emailAddress: String(data.get('emailAddress') ?? ''),
                 });
             }
-            if (needsAddress) {
+            if (requiresShipping) {
                 await api.setShippingAddress({
-                    fullName: String(data.get('fullName')),
-                    streetLine1: String(data.get('streetLine1')),
-                    streetLine2: String(data.get('streetLine2')),
-                    city: String(data.get('city')),
-                    province: String(data.get('province')),
-                    postalCode: String(data.get('postalCode')),
+                    fullName: String(data.get('fullName') ?? ''),
+                    phoneNumber: String(data.get('phoneNumber') ?? ''),
+                    streetLine1: String(data.get('streetLine1') ?? ''),
+                    city: String(data.get('city') ?? ''),
+                    province: String(data.get('province') ?? ''),
+                    postalCode: String(data.get('postalCode') ?? ''),
                     countryCode: market.countryCode,
-                    phoneNumber: String(data.get('phone')),
                 });
                 let methods = shippingMethods;
                 if (!methods.length) {
@@ -526,309 +1250,156 @@ function CheckoutPanel({
                     setShippingMethods(methods);
                 }
                 const shippingId = selectedShippingId || methods[0]?.id;
-                if (!shippingId) throw new Error(text.checkoutError);
+                if (!shippingId) throw new Error(isZh ? '当前地址没有可用配送方式' : 'No shipping method is available');
                 await api.setShippingMethod(shippingId);
             }
-            const updatedOrder = await api.transitionToPayment();
-            onOrderChange(updatedOrder);
-            setSuccess(true);
+            const session = await api.preparePayment(cart.revision);
+            onSessionChange(session);
+            onNotify(isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.');
+            onNavigate({ name: 'orders', tab: 'pending' }, true);
         } catch (requestError) {
-            setError(requestError instanceof Error ? requestError.message : text.checkoutError);
-            await onRefresh().catch(() => undefined);
+            setFormError(requestError instanceof Error ? requestError.message : (isZh ? '提交订单失败' : 'Could not submit order'));
+            try { onCartChange(await api.cart()); } catch { /* Keep the current form visible. */ }
         } finally {
             setSubmitting(false);
         }
     };
 
-    useEffect(() => {
-        if (!needsAddress) return;
-        api.eligibleShippingMethods()
-            .then(methods => {
-                setShippingMethods(methods);
-                setSelectedShippingId(methods[0]?.id ?? '');
-            })
-            .catch(requestError => {
-                setError(requestError instanceof Error ? requestError.message : text.checkoutError);
-            });
-    }, [api, needsAddress, text.checkoutError]);
-
-    if (!order) return null;
-
-    if (success) {
-        return (
-            <>
-                <PanelHeader title={text.checkoutSuccess} closeLabel={text.close} onClose={onClose} />
-                <div className="success-state">
-                    <span>
-                        <Check aria-hidden="true" />
-                    </span>
-                    <h3>{text.checkoutSuccess}</h3>
-                    <p>{text.checkoutSuccessDescription}</p>
-                    <div className="order-reference">{order.code}</div>
-                </div>
-            </>
-        );
+    if (!order || !cart) {
+        return <Subpage title={isZh ? '确认订单' : 'Review order'} onBack={onBack}><EmptyState icon={<ShoppingBag />} title={isZh ? '没有可结算商品' : 'Nothing to check out'} action={isZh ? '返回购物车' : 'Back to cart'} onAction={() => onNavigate({ name: 'cart' })} /></Subpage>;
     }
 
     return (
-        <>
-            <PanelHeader
-                title={text.checkoutTitle}
-                closeLabel={text.close}
-                onClose={onClose}
-                backLabel={text.backToCart}
-                onBack={onBack}
-            />
-            <form className="checkout-form" onSubmit={event => void handleSubmit(event)}>
-                <div className="panel-content">
-                    {order.checkoutFulfillment.fulfillmentType === 'DIGITAL' && (
-                        <div className="checkout-notice digital">
-                            <Zap aria-hidden="true" />
-                            <div>
-                                <strong>{text.digitalCheckoutTitle}</strong>
-                                <p>{text.digitalCheckoutDescription}</p>
-                            </div>
-                        </div>
-                    )}
-                    {isMixed && (
-                        <div className="checkout-notice mixed">
-                            <Package aria-hidden="true" />
-                            <p>{text.mixedNotice}</p>
-                        </div>
-                    )}
-                    <fieldset>
-                        <legend>{text.contactTitle}</legend>
-                        <div className="form-grid two-columns">
-                            <FormInput name="firstName" label={text.firstName} required />
-                            <FormInput name="lastName" label={text.lastName} required />
-                            <FormInput name="email" label={text.email} type="email" required fullWidth />
-                            <FormInput name="phone" label={text.phone} type="tel" required fullWidth />
-                        </div>
-                    </fieldset>
-                    {needsAddress && (
-                        <fieldset>
-                            <legend>{text.addressTitle}</legend>
-                            <div className="form-grid two-columns">
-                                <FormInput name="fullName" label={text.fullName} required fullWidth />
-                                <FormInput name="streetLine1" label={text.streetLine1} required fullWidth />
-                                <FormInput name="streetLine2" label={text.streetLine2} fullWidth />
-                                <FormInput name="city" label={text.city} required />
-                                <FormInput name="province" label={text.province} required />
-                                <FormInput name="postalCode" label={text.postalCode} required fullWidth />
-                            </div>
-                        </fieldset>
-                    )}
-                    {needsAddress && (
-                        <fieldset>
-                            <legend>{text.shippingTitle}</legend>
-                            <div className="shipping-methods">
-                                {shippingMethods.map(method => (
-                                    <label key={method.id} className="shipping-method">
-                                        <input
-                                            type="radio"
-                                            name="shippingMethod"
-                                            value={method.id}
-                                            checked={selectedShippingId === method.id}
-                                            onChange={() => setSelectedShippingId(method.id)}
-                                        />
-                                        <span>
-                                            <strong>{method.name}</strong>
-                                            <small>{method.description}</small>
-                                        </span>
-                                        <strong>
-                                            {formatMoney(
-                                                method.priceWithTax,
-                                                order.currencyCode,
-                                                market.locale,
-                                            )}
-                                        </strong>
-                                    </label>
-                                ))}
-                            </div>
-                        </fieldset>
-                    )}
-                    {error && <p className="inline-error">{error}</p>}
-                    <OrderSummary
-                        order={order}
-                        market={market}
-                        marketCode={marketCode}
-                        shippingPreviewWithTax={selectedShippingMethod?.priceWithTax}
-                    />
-                </div>
-                <div className="panel-footer">
-                    <button className="primary-button wide" type="submit" disabled={submitting}>
-                        {submitting ? text.submittingOrder : text.submitOrder}
-                    </button>
-                </div>
+        <main className="page subpage checkout-page">
+            <SubHeader title={isZh ? '确认订单' : 'Review order'} onBack={onBack} />
+            <form className="checkout-form" onSubmit={submit}>
+                {!customer && <section className="checkout-section"><h2>{isZh ? '联系信息' : 'Contact'}</h2><div className="form-grid"><Field name="firstName" label={isZh ? '名字' : 'First name'} required /><Field name="lastName" label={isZh ? '姓氏' : 'Last name'} required /><Field name="emailAddress" label={isZh ? '电子邮箱' : 'Email'} type="email" required wide /></div></section>}
+                {requiresShipping && <section className="checkout-section"><h2>{isZh ? '收货地址' : 'Shipping address'}</h2>{defaultAddress && <button className="saved-address" type="button" onClick={() => onNavigate({ name: 'addresses' })}><MapPin /><span><strong>{defaultAddress.fullName} {defaultAddress.phoneNumber}</strong><small>{addressText(defaultAddress)}</small></span><ChevronRight /></button>}<div className="form-grid"><Field name="fullName" label={isZh ? '收货人' : 'Full name'} defaultValue={defaultAddress?.fullName ?? ''} required /><Field name="phoneNumber" label={isZh ? '手机号' : 'Phone'} defaultValue={defaultAddress?.phoneNumber ?? ''} required /><Field name="province" label={isZh ? '省/州' : 'Province'} defaultValue={defaultAddress?.province ?? ''} required /><Field name="city" label={isZh ? '城市' : 'City'} defaultValue={defaultAddress?.city ?? ''} required /><Field name="streetLine1" label={isZh ? '详细地址' : 'Street address'} defaultValue={defaultAddress?.streetLine1 ?? ''} required wide /><Field name="postalCode" label={isZh ? '邮政编码' : 'Postal code'} defaultValue={defaultAddress?.postalCode ?? ''} required wide /></div></section>}
+                <section className="checkout-section"><header className="checkout-section-title"><h2>{isZh ? '商品清单' : 'Items'}</h2><span>{isZh ? `${order.totalQuantity} 件` : `${order.totalQuantity} items`}</span></header><div className="checkout-items">{order.lines.map(line => <article key={line.id}><ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} /><div><strong>{line.productVariant.name}</strong><small>{line.productVariant.sku}</small></div><span><b>{formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}</b><small>×{line.quantity}</small></span></article>)}</div></section>
+                <section className="checkout-section checkout-options"><button type="button" onClick={() => onNotify(isZh ? '订单备注需要后台字段支持' : 'Order notes need backend support')}><span>{isZh ? '订单备注' : 'Order note'}</span><small>{isZh ? '暂无备注' : 'No note'}<ChevronRight /></small></button><button type="button" onClick={() => onNotify(isZh ? '优惠券钱包暂未开通' : 'Coupon wallet is not available yet')}><span>{isZh ? '优惠券' : 'Coupon'}</span><small>{isZh ? '自动计算可用优惠' : 'Available offers are automatic'}<ChevronRight /></small></button></section>
+                <section className="checkout-section"><PriceSummary order={order} locale={locale} language={language} /></section>
+                {formError && <InlineError message={formError} />}
+                <div className="submit-order-bar"><div><small>{isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}</small><span>{isZh ? '合计' : 'Total'} <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong></span></div><button type="submit" disabled={submitting}>{submitting ? (isZh ? '提交中' : 'Submitting') : (isZh ? '提交订单' : 'Submit order')}</button></div>
             </form>
-        </>
+        </main>
     );
 }
 
-function FormInput({
-    name,
-    label,
-    type = 'text',
-    required = false,
-    fullWidth = false,
-}: {
-    name: string;
-    label: string;
-    type?: string;
-    required?: boolean;
-    fullWidth?: boolean;
-}) {
-    return (
-        <label className={fullWidth ? 'full-width' : undefined}>
-            <span>
-                {label}
-                {required ? ' *' : ''}
-            </span>
-            <input name={name} type={type} required={required} autoComplete={autoCompleteFor(name)} />
-        </label>
-    );
+function OrdersPage({ customer, market, locale, language, initialTab, onBack, onNavigate }: { customer: ActiveCustomer | null; market: MarketConfig; locale: string; language: StorefrontLanguage; initialTab: OrderTab; onBack: () => void; onNavigate: (route: RouteState) => void }) {
+    const isZh = language === 'zh';
+    const [tab, setTab] = useState<OrderTab>(initialTab);
+    const orders = (customer?.orders.items ?? []).filter(order => orderMatchesTab(order, tab));
+    const tabs: Array<{ id: OrderTab; label: string }> = [{ id: 'all', label: isZh ? '全部' : 'All' }, { id: 'pending', label: isZh ? '待付款' : 'To pay' }, { id: 'shipping', label: isZh ? '待发货' : 'To ship' }, { id: 'receiving', label: isZh ? '待收货' : 'To receive' }, { id: 'service', label: isZh ? '售后' : 'After-sales' }];
+    return <main className="page subpage orders-page"><SubHeader title={isZh ? '我的订单' : 'My orders'} onBack={onBack} action={<button type="button" aria-label={isZh ? '搜索订单' : 'Search orders'}><Search /></button>} /><nav className="order-tabs">{tabs.map(item => <button type="button" key={item.id} className={tab === item.id ? 'is-active' : undefined} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>{!customer ? <EmptyState icon={<UserRound />} title={isZh ? '登录后查看订单' : 'Sign in to view orders'} detail={isZh ? '订单和物流信息将安全保存在账户中' : 'Orders and delivery details are saved to your account'} action={isZh ? '去登录' : 'Sign in'} onAction={() => onNavigate({ name: 'login' })} /> : orders.length ? <div className="order-list">{orders.map(order => <OrderCard key={order.id} order={order} market={market} locale={locale} language={language} onOpen={() => onNavigate({ name: 'order-detail', id: order.id })} />)}</div> : <EmptyState icon={<Package />} title={isZh ? '暂无相关订单' : 'No orders here'} detail={isZh ? '完成购买后，订单会显示在这里' : 'Completed purchases will appear here'} />}</main>;
 }
 
-function OrderSummary({
-    order,
-    market,
-    marketCode,
-    shippingPreviewWithTax,
-}: {
-    order: Order;
-    market: MarketConfig;
-    marketCode: MarketCode;
-    shippingPreviewWithTax?: number;
-}) {
-    const text = copy[marketCode];
-    const shippingWithTax = shippingPreviewWithTax ?? order.shippingWithTax;
-    const totalWithTax = order.totalWithTax - order.shippingWithTax + shippingWithTax;
-    return (
-        <dl className="order-summary">
-            <div>
-                <dt>{text.subtotal}</dt>
-                <dd>{formatMoney(order.subTotalWithTax, order.currencyCode, market.locale)}</dd>
-            </div>
-            <div>
-                <dt>{text.shipping}</dt>
-                <dd>{formatMoney(shippingWithTax, order.currencyCode, market.locale)}</dd>
-            </div>
-            <div className="order-total">
-                <dt>{text.total}</dt>
-                <dd>{formatMoney(totalWithTax, order.currencyCode, market.locale)}</dd>
-            </div>
-        </dl>
-    );
+function OrderDetailPage({ order, market, locale, language, onBack, onBuyAgain, onUnavailable }: { order: Order | null; market: MarketConfig; locale: string; language: StorefrontLanguage; onBack: () => void; onBuyAgain: (order: Order) => Promise<void>; onUnavailable: () => void }) {
+    const isZh = language === 'zh';
+    if (!order) return <Subpage title={isZh ? '订单详情' : 'Order details'} onBack={onBack}><EmptyState icon={<Package />} title={isZh ? '没有找到订单' : 'Order not found'} /></Subpage>;
+    return <main className="page subpage order-detail-page"><SubHeader title={isZh ? '订单详情' : 'Order details'} onBack={onBack} action={<button type="button" onClick={onUnavailable} aria-label={isZh ? '联系客服' : 'Support'}><Headphones /></button>} /><section className="order-status"><strong>{orderStateLabel(order.state, language)}</strong><span>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</span></section><section className="order-detail-products"><header><strong>云桥Ai</strong><span>{isZh ? `${order.lines.length} 种商品` : `${order.lines.length} products`}</span></header>{order.lines.map(line => <article key={line.id}><ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} /><div><strong>{line.productVariant.name}</strong><small>{line.productVariant.sku}</small><em>{line.productVariant.customFields.fulfillmentType === 'digital' ? (isZh ? '数字商品' : 'Digital') : (isZh ? '实物商品' : 'Physical')}</em></div><span><b>{formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}</b><small>×{line.quantity}</small></span></article>)}</section><section className="order-information"><div><span>{isZh ? '下单时间' : 'Placed at'}</span><b>{formatOrderDate(order.orderPlacedAt, locale)}</b></div><div><span>{isZh ? '订单编号' : 'Order code'}</span><b>{order.code}</b></div></section><section className="order-detail-summary"><PriceSummary order={order} locale={locale} language={language} /></section><div className="order-detail-actions"><button type="button" onClick={onUnavailable}>{isZh ? '更多' : 'More'}</button><button type="button" className="primary-action" onClick={() => void onBuyAgain(order)}>{isZh ? '再买一单' : 'Buy again'}</button></div></main>;
 }
 
-function PanelHeader({
-    title,
-    closeLabel,
-    onClose,
-    backLabel,
-    onBack,
-}: {
-    title: string;
-    closeLabel: string;
-    onClose: () => void;
-    backLabel?: string;
-    onBack?: () => void;
-}) {
-    return (
-        <header className="panel-header">
-            <div>
-                {onBack && (
-                    <button className="back-button" type="button" onClick={onBack}>
-                        {backLabel}
-                    </button>
-                )}
-                <h2 id="panel-title">{title}</h2>
-            </div>
-            <button className="icon-button" type="button" onClick={onClose} aria-label={closeLabel}>
-                <X aria-hidden="true" />
-            </button>
-        </header>
-    );
+function AddressesPage({ api, customer, market, language, onBack, onCustomerChange, onNavigate, onNotify }: { api: ShopApi; customer: ActiveCustomer | null; market: MarketConfig; language: StorefrontLanguage; onBack: () => void; onCustomerChange: (customer: ActiveCustomer | null) => void; onNavigate: (route: RouteState) => void; onNotify: (message: string) => void }) {
+    const isZh = language === 'zh';
+    const [open, setOpen] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [formError, setFormError] = useState('');
+    if (!customer) return <Subpage title={isZh ? '地址管理' : 'Addresses'} onBack={onBack}><EmptyState icon={<MapPin />} title={isZh ? '登录后管理地址' : 'Sign in to manage addresses'} action={isZh ? '去登录' : 'Sign in'} onAction={() => onNavigate({ name: 'login' })} /></Subpage>;
+    const create = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        setSubmitting(true);
+        setFormError('');
+        try {
+            await api.createAddress({ fullName: String(data.get('fullName')), phoneNumber: String(data.get('phoneNumber')), province: String(data.get('province')), city: String(data.get('city')), streetLine1: String(data.get('streetLine1')), postalCode: String(data.get('postalCode')), countryCode: market.countryCode, defaultShippingAddress: customer.addresses?.length === 0 });
+            onCustomerChange(await api.activeCustomer());
+            setOpen(false);
+            onNotify(isZh ? '地址已保存' : 'Address saved');
+        } catch (requestError) { setFormError(requestError instanceof Error ? requestError.message : (isZh ? '保存失败' : 'Could not save address')); } finally { setSubmitting(false); }
+    };
+    const remove = async (id: string) => { try { await api.deleteAddress(id); onCustomerChange(await api.activeCustomer()); onNotify(isZh ? '地址已删除' : 'Address deleted'); } catch (requestError) { onNotify(requestError instanceof Error ? requestError.message : (isZh ? '删除失败' : 'Could not delete address')); } };
+    return <main className="page subpage addresses-page"><SubHeader title={isZh ? '地址管理' : 'Addresses'} onBack={onBack} action={<button type="button" onClick={() => setOpen(true)} aria-label={isZh ? '新增地址' : 'Add address'}><Plus /></button>} />{customer.addresses?.length ? <div className="address-list">{customer.addresses.map(address => <article className="address-card" key={address.id}><header><strong>{address.fullName}</strong><span>{address.phoneNumber}</span>{address.defaultShippingAddress && <em>{isZh ? '默认' : 'Default'}</em>}</header><p>{addressText(address)}</p><footer><span>{address.country.name}</span><button type="button" onClick={() => void remove(address.id)}><Trash2 />{isZh ? '删除' : 'Delete'}</button></footer></article>)}</div> : <EmptyState icon={<MapPin />} title={isZh ? '还没有收货地址' : 'No saved addresses'} detail={isZh ? '新增地址后，结算会更方便' : 'Save an address for faster checkout'} action={isZh ? '新增地址' : 'Add address'} onAction={() => setOpen(true)} />}{open && <Sheet title={isZh ? '新增收货地址' : 'Add address'} onClose={() => setOpen(false)}><form className="address-form" onSubmit={create}><Field name="fullName" label={isZh ? '收货人' : 'Full name'} required wide /><Field name="phoneNumber" label={isZh ? '手机号' : 'Phone'} required wide /><Field name="province" label={isZh ? '省/州' : 'Province'} required /><Field name="city" label={isZh ? '城市' : 'City'} required /><Field name="streetLine1" label={isZh ? '详细地址' : 'Street address'} required wide /><Field name="postalCode" label={isZh ? '邮政编码' : 'Postal code'} required wide />{formError && <small className="form-error">{formError}</small>}<button className="primary-action wide-action" type="submit" disabled={submitting}>{submitting ? (isZh ? '保存中' : 'Saving') : (isZh ? '保存地址' : 'Save address')}</button></form></Sheet>}</main>;
 }
 
-function MarketSwitcher({
-    value,
-    label,
-    onChange,
-}: {
-    value: MarketCode;
-    label: string;
-    onChange: (value: MarketCode) => void;
-}) {
-    return (
-        <label className="market-switcher">
-            <Globe2 aria-hidden="true" />
-            <span className="sr-only">{label}</span>
-            <select value={value} onChange={event => onChange(event.target.value as MarketCode)}>
-                {enabledMarkets.map(market => (
-                    <option key={market.code} value={market.code}>
-                        {market.label}
-                    </option>
-                ))}
-            </select>
-            <ChevronDown aria-hidden="true" />
-        </label>
-    );
+function LoginPage({ api, language, onBack, onSuccess }: { api: ShopApi; language: StorefrontLanguage; onBack: () => void; onSuccess: () => Promise<void> }) {
+    const isZh = language === 'zh';
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        setSubmitting(true);
+        setError('');
+        try { await api.login(String(data.get('emailAddress')), String(data.get('password'))); await onSuccess(); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : (isZh ? '登录失败' : 'Sign-in failed')); } finally { setSubmitting(false); }
+    };
+    return <main className="page subpage login-page"><SubHeader title={isZh ? '登录' : 'Sign in'} onBack={onBack} /><section className="login-content"><span className="login-brand">云桥Ai</span><h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1><p>{isZh ? '登录后查看订单、地址与售后进度' : 'Sign in to view orders, addresses and support'}</p><form onSubmit={submit}><Field name="emailAddress" label={isZh ? '电子邮箱' : 'Email address'} type="email" autoComplete="email" required wide /><Field name="password" label={isZh ? '密码' : 'Password'} type="password" autoComplete="current-password" required wide />{error && <small className="form-error">{error}</small>}<button className="primary-action wide-action" type="submit" disabled={submitting}>{submitting ? (isZh ? '登录中' : 'Signing in') : (isZh ? '登录' : 'Sign in')}</button></form><small>{isZh ? '登录即代表你同意服务条款和隐私政策' : 'By signing in, you agree to the terms and privacy policy'}</small></section></main>;
 }
 
-function ProductSkeleton({ label }: { label: string }) {
-    return (
-        <div className="product-skeleton" aria-live="polite">
-            <span className="spinner" />
-            {label}
-        </div>
-    );
+function BottomNavigation({ active, cartQuantity, language, onNavigate }: { active: MainPage; cartQuantity: number; language: StorefrontLanguage; onNavigate: (page: MainPage) => void }) {
+    const isZh = language === 'zh';
+    const items: Array<{ id: MainPage; label: string; icon: ReactNode }> = [{ id: 'home', label: isZh ? '首页' : 'Home', icon: <House /> }, { id: 'category', label: isZh ? '商品' : 'Shop', icon: <LayoutGrid /> }, { id: 'cart', label: isZh ? '购物车' : 'Cart', icon: <ShoppingCart /> }, { id: 'account', label: isZh ? '我的' : 'Account', icon: <UserRound /> }];
+    return <nav className="bottom-navigation" aria-label={isZh ? '主导航' : 'Main navigation'}>{items.map(item => <button type="button" key={item.id} className={active === item.id ? 'is-active' : undefined} aria-current={active === item.id ? 'page' : undefined} onClick={() => onNavigate(item.id)}><span className="nav-icon">{item.icon}{item.id === 'cart' && cartQuantity > 0 && <b>{cartQuantity > 99 ? '99+' : cartQuantity}</b>}</span><span>{item.label}</span></button>)}</nav>;
 }
 
-function EmptyState({
-    title,
-    detail,
-    action,
-    onAction,
-}: {
-    title: string;
-    detail?: string;
-    action?: string;
-    onAction?: () => void;
-}) {
-    return (
-        <div className="catalog-empty">
-            <Package aria-hidden="true" />
-            <h2>{title}</h2>
-            {detail && <p>{detail}</p>}
-            {action && (
-                <button className="secondary-button" onClick={onAction}>
-                    {action}
-                </button>
-            )}
-        </div>
-    );
+function ProductSection({ title, subtitle, products, market, locale, addingVariantId, onProduct, onAdd }: { title: string; subtitle: string; products: Product[]; market: MarketConfig; locale: string; addingVariantId: string | null; onProduct: (product: Product) => void; onAdd: (variant: ProductVariant) => void }) {
+    if (!products.length) return null;
+    return <section className="content-section product-section"><SectionHeader title={title} subtitle={subtitle} /><div className="product-grid">{products.map(product => <ProductCard key={product.id} product={product} market={market} locale={locale} adding={product.variants.some(variant => variant.id === addingVariantId)} onOpen={() => onProduct(product)} onAdd={() => product.variants[0] && onAdd(product.variants[0])} />)}</div></section>;
 }
 
-function formatMoney(value: number, currency: string, locale: string): string {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(value / 100);
+function ProductCard({ product, market, locale, adding, onOpen, onAdd }: { product: Product; market: MarketConfig; locale: string; adding: boolean; onOpen: () => void; onAdd: () => void }) {
+    const variant = product.variants[0];
+    return <article className="product-card"><button className="product-card-image" type="button" onClick={onOpen}><ProductImage product={product} /></button><button className="product-card-name" type="button" onClick={onOpen}>{product.name}</button><span>{trimText(product.description, 26) || variant?.sku}</span><footer><b>{variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : formatMoney(0, market.currencyCode, locale)}</b><button type="button" onClick={onAdd} disabled={!variant || adding || (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK')} aria-label={`Add ${product.name}`}><Plus /></button></footer></article>;
 }
 
-function autoCompleteFor(name: string): string {
-    return (
-        (
-            {
-                firstName: 'given-name',
-                lastName: 'family-name',
-                email: 'email',
-                phone: 'tel',
-                fullName: 'name',
-                streetLine1: 'address-line1',
-                streetLine2: 'address-line2',
-                city: 'address-level2',
-                province: 'address-level1',
-                postalCode: 'postal-code',
-            } as Record<string, string>
-        )[name] ?? 'off'
-    );
+function ProductRow({ product, market, locale, language, adding, onOpen, onAdd }: { product: Product; market: MarketConfig; locale: string; language: StorefrontLanguage; adding: boolean; onOpen: () => void; onAdd: () => void }) {
+    const isZh = language === 'zh';
+    const variant = product.variants[0];
+    return <article className="product-row"><button type="button" className="product-row-image" onClick={onOpen}><ProductImage product={product} /></button><div><button type="button" className="product-row-name" onClick={onOpen}>{product.name}</button><span>{trimText(product.description, 34) || variant?.sku}</span><small>{variant?.customFields.fulfillmentType === 'digital' ? (isZh ? '数字商品 · 支付后交付' : 'Digital · delivered after payment') : (variant?.stockLevel === 'OUT_OF_STOCK' ? (isZh ? '暂时缺货' : 'Out of stock') : (isZh ? '现货商品' : 'In stock'))}</small><p>{variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : formatMoney(0, market.currencyCode, locale)}</p><button className="row-add" type="button" onClick={onAdd} disabled={!variant || adding || (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK')} aria-label={`${isZh ? '加入购物车' : 'Add to cart'} ${product.name}`}><Plus /></button></div></article>;
 }
+
+function CartGroup({ title, hint, lines, market, locale, language, loading, onSelect, onQuantity, onRemove }: { title: string; hint: string; lines: StorefrontCart['lines']; market: MarketConfig; locale: string; language: StorefrontLanguage; loading: boolean; onSelect: (lineId: string, selected: boolean) => void; onQuantity: (lineId: string, quantity: number) => void; onRemove: (lineId: string) => void }) {
+    const isZh = language === 'zh';
+    return <section className="cart-group"><header><strong>{title}</strong><span>{hint}</span></header>{lines.map(line => { const variant = line.productVariant; return <article className={`cart-line ${line.selected ? '' : 'is-unselected'}`} key={line.id}><label className="round-check"><input type="checkbox" checked={line.selected} disabled={!line.available || loading} onChange={event => onSelect(line.id, event.target.checked)} /><span><Check /></span></label><div className="cart-line-image">{variant ? <ProductVariantImage variant={variant} alt={variant.name} /> : <div className="image-placeholder"><Package /></div>}</div><div className="cart-line-copy"><strong>{variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item')}</strong><small>{variant?.sku}</small><b>{variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : formatMoney(0, market.currencyCode, locale)}</b><div className="cart-line-actions"><button type="button" onClick={() => onRemove(line.id)} disabled={loading} aria-label={isZh ? '删除' : 'Delete'}><Trash2 /></button><div><button type="button" onClick={() => line.quantity > 1 ? onQuantity(line.id, line.quantity - 1) : onRemove(line.id)} disabled={loading}><Minus /></button><span>{line.quantity}</span><button type="button" onClick={() => onQuantity(line.id, line.quantity + 1)} disabled={loading || !line.available}><Plus /></button></div></div></div></article>; })}</section>;
+}
+
+function OrderCard({ order, locale, language, onOpen }: { order: Order; market: MarketConfig; locale: string; language: StorefrontLanguage; onOpen: () => void }) {
+    const isZh = language === 'zh';
+    return <article className="order-card"><header><button type="button" onClick={onOpen}><strong>云桥Ai</strong><ChevronRight /></button><span>{orderStateLabel(order.state, language)}</span></header><button className="order-card-product" type="button" onClick={onOpen}><OrderImage order={order} /><span><strong>{order.lines[0]?.productVariant.name ?? (isZh ? '订单商品' : 'Order item')}</strong><small>{order.lines.length > 1 ? (isZh ? `另有 ${order.lines.length - 1} 种商品` : `${order.lines.length - 1} more products`) : order.lines[0]?.productVariant.sku}</small></span><span><b>{formatMoney(order.lines[0]?.linePriceWithTax ?? 0, order.currencyCode, locale)}</b><small>×{order.totalQuantity}</small></span></button><footer><div className="order-total">{isZh ? '实付款' : 'Paid'} <b>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</b></div><div className="order-operations"><button type="button" onClick={onOpen}>{isZh ? '更多' : 'More'}</button><button type="button" className="primary-action" onClick={onOpen}>{isZh ? '查看详情' : 'View details'}</button></div></footer></article>;
+}
+
+function PriceSummary({ order, locale, language }: { order: Order; locale: string; language: StorefrontLanguage }) {
+    const isZh = language === 'zh';
+    const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
+    return <dl className="price-summary"><div><dt>{isZh ? '商品金额' : 'Items'}</dt><dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd></div><div><dt>{isZh ? '运费' : 'Shipping'}</dt><dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd></div>{discount > 0 && <div className="discount"><dt>{isZh ? '优惠' : 'Discount'}</dt><dd>-{formatMoney(discount, order.currencyCode, locale)}</dd></div>}<div className="summary-total"><dt>{isZh ? '合计' : 'Total'}</dt><dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd></div></dl>;
+}
+
+function Subpage({ title, onBack, children }: { title: string; onBack: () => void; children: ReactNode }) { return <main className="page subpage"><SubHeader title={title} onBack={onBack} />{children}</main>; }
+function SubHeader({ title, onBack, action }: { title: string; onBack: () => void; action?: ReactNode }) { return <header className="topbar subpage-header"><button type="button" onClick={onBack} aria-label="Back"><ArrowLeft /></button><strong>{title}</strong><span>{action}</span></header>; }
+function NoticeButton({ onClick }: { onClick: () => void }) { return <button className="notice-button" type="button" onClick={onClick} aria-label="Notifications"><Bell /><b /></button>; }
+function SectionHeader({ title, subtitle, action, onAction }: { title: string; subtitle?: string; action?: string; onAction?: () => void }) { return <header className="section-header"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{action && <button type="button" onClick={onAction}>{action}<ChevronRight /></button>}</header>; }
+function AccountShortcut({ icon, label, count, onClick }: { icon: ReactNode; label: string; count: number; onClick: () => void }) { return <button type="button" onClick={onClick}><span>{icon}{count > 0 && <b>{count}</b>}</span><small>{label}</small></button>; }
+function ServiceButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) { return <button type="button" onClick={onClick}><span>{icon}</span><b>{label}</b></button>; }
+function LegalFooter({ language, onUnavailable }: { language: StorefrontLanguage; onUnavailable: () => void }) { const isZh = language === 'zh'; return <footer className="legal-footer"><span>云桥Ai</span><nav><button type="button" onClick={onUnavailable}>{isZh ? '隐私政策' : 'Privacy'}</button><button type="button" onClick={onUnavailable}>{isZh ? '服务条款' : 'Terms'}</button></nav></footer>; }
+
+function ProductImage({ product }: { product: Product }) { const image = productImage(product); return image ? <img src={image} alt={product.name} loading="lazy" /> : <div className="image-placeholder"><Package /></div>; }
+function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) { const image = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview; return image ? <img src={image} alt={alt} loading="lazy" /> : <div className="image-placeholder"><Package /></div>; }
+function OrderImage({ order }: { order: Order }) { const variant = order.lines[0]?.productVariant; return variant ? <ProductVariantImage variant={variant} alt={variant.name} /> : <div className="image-placeholder"><Package /></div>; }
+
+function EmptyState({ icon, title, detail, action, onAction, compact = false }: { icon: ReactNode; title: string; detail?: string; action?: string; onAction?: () => void; compact?: boolean }) { return <section className={`empty-state ${compact ? 'is-compact' : ''}`}><span>{icon}</span><strong>{title}</strong>{detail && <small>{detail}</small>}{action && onAction && <button type="button" onClick={onAction}>{action}</button>}</section>; }
+function InlineError({ message, action, onAction }: { message: string; action?: string; onAction?: () => void }) { return <div className="inline-error" role="alert"><CircleAlert /><span>{message}</span>{action && onAction && <button type="button" onClick={onAction}>{action}</button>}</div>; }
+function PageSkeleton() { return <div className="page-skeleton" aria-label="Loading"><span className="skeleton-hero" /><span className="skeleton-line" /><div><span /><span /><span /><span /></div><span className="skeleton-block" /><span className="skeleton-block" /></div>; }
+function ListSkeleton() { return <div className="list-skeleton" aria-label="Loading">{[0, 1, 2, 3].map(item => <span key={item}><i /><b /><b /></span>)}</div>; }
+
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="sheet-layer" role="presentation"><button className="sheet-mask" type="button" onClick={onClose} aria-label="Close" /><section className="sheet" role="dialog" aria-modal="true" aria-label={title}><header><strong>{title}</strong><button type="button" onClick={onClose} aria-label="Close"><X /></button></header>{children}</section></div>; }
+function Field({ name, label, type = 'text', required = false, wide = false, defaultValue, autoComplete }: { name: string; label: string; type?: string; required?: boolean; wide?: boolean; defaultValue?: string; autoComplete?: string }) { return <label className={wide ? 'field-wide' : undefined}><span>{label}</span><input name={name} type={type} required={required} defaultValue={defaultValue} autoComplete={autoComplete} /></label>; }
+
+function productImage(product?: Product | null): string | null { return product?.featuredAsset?.preview ?? product?.assets?.[0]?.preview ?? null; }
+function minimumPrice(product: Product): number { return Math.min(...product.variants.map(variant => variant.priceWithTax), Number.MAX_SAFE_INTEGER); }
+function trimText(value: string | undefined, length: number): string { if (!value) return ''; const clean = value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); return clean.length > length ? `${clean.slice(0, length)}…` : clean; }
+function formatMoney(value: number, currency: string, locale: string): string { return new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value / 100); }
+function formatOrderDate(value: string | null | undefined, locale: string): string { if (!value) return '--'; return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value)); }
+function addressText(address: CustomerAddress): string { return [address.province, address.city, address.streetLine1, address.streetLine2, address.postalCode].filter(Boolean).join(' '); }
+function orderStateLabel(state: string, language: StorefrontLanguage): string { const zh: Record<string, string> = { AddingItems: '待付款', ArrangingPayment: '待付款', PaymentAuthorized: '待发货', PaymentSettled: '待发货', Shipped: '待收货', PartiallyShipped: '部分发货', Delivered: '交易完成', Cancelled: '已取消' }; const en: Record<string, string> = { AddingItems: 'Payment pending', ArrangingPayment: 'Payment pending', PaymentAuthorized: 'Preparing shipment', PaymentSettled: 'Preparing shipment', Shipped: 'In transit', PartiallyShipped: 'Partially shipped', Delivered: 'Completed', Cancelled: 'Cancelled' }; return (language === 'zh' ? zh : en)[state] ?? state; }
+function orderMatchesTab(order: Order, tab: OrderTab): boolean { if (tab === 'all') return true; if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'].includes(order.state); if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'].includes(order.state); if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'].includes(order.state); return false; }
+function fallbackCollections(isZh: boolean): CollectionSummary[] { return [{ id: 'all', name: isZh ? '全部' : 'All', slug: 'all', description: '', position: 0, parentId: '', featuredAsset: null }, { id: 'physical', name: isZh ? '实物' : 'Physical', slug: 'physical', description: '', position: 1, parentId: '', featuredAsset: null }, { id: 'digital', name: isZh ? '数字' : 'Digital', slug: 'digital', description: '', position: 2, parentId: '', featuredAsset: null }]; }
+function quickIcon(index: number): ReactNode { return [<LayoutGrid key="all" />, <ShoppingBag key="goods" />, <Coffee key="life" />, <Sparkles key="selected" />, <Download key="digital" />][index % 5]; }

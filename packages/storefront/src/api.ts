@@ -1,4 +1,15 @@
-import { MarketConfig, Order, Product, ShippingMethod } from './types';
+import {
+    ActiveCustomer,
+    CollectionSummary,
+    CustomerAddress,
+    MarketConfig,
+    Order,
+    Product,
+    ShippingMethod,
+    StorefrontCart,
+    StorefrontCheckoutSession,
+    VendureLanguageCode,
+} from './types';
 
 const API_URL = import.meta.env.VITE_SHOP_API_URL ?? '/shop-api';
 const SEND_CLIENT_CHANNEL_TOKEN =
@@ -9,12 +20,14 @@ const orderFields = `
     id
     code
     state
+    orderPlacedAt
     totalQuantity
     subTotalWithTax
     shippingWithTax
     totalWithTax
     currencyCode
     customer { id emailAddress }
+    discounts { description amountWithTax }
     lines {
         id
         quantity
@@ -27,6 +40,7 @@ const orderFields = `
             currencyCode
             stockLevel
             featuredAsset { id preview }
+            product { featuredAsset { id preview } }
             customFields { fulfillmentType }
         }
         customFields { fulfillmentTypeSnapshot }
@@ -40,18 +54,77 @@ const orderFields = `
     }
 `;
 
+const cartFields = `
+    id
+    revision
+    state
+    projectedRevision
+    totalQuantity
+    selectedLineCount
+    selectedQuantity
+    selectionState
+    lines {
+        id
+        quantity
+        selected
+        available
+        productVariant {
+            id
+            name
+            sku
+            priceWithTax
+            currencyCode
+            stockLevel
+            featuredAsset { id preview }
+            product { featuredAsset { id preview } }
+            customFields { fulfillmentType }
+        }
+    }
+    checkoutOrder { ${orderFields} }
+`;
+
+const cartResultFields = `
+    __typename
+    ... on StorefrontCart { ${cartFields} }
+    ... on ErrorResult { errorCode message }
+`;
+
+const checkoutResultFields = `
+    __typename
+    ... on StorefrontCheckoutSession {
+        cart { ${cartFields} }
+        order { ${orderFields} }
+        checkout { id cartRevision state completedAt }
+    }
+    ... on ErrorResult { errorCode message }
+`;
+
 interface GraphQlResponse<T> {
     data?: T;
     errors?: Array<{ message: string }>;
 }
 
 interface ErrorResult {
+    __typename?: string;
     errorCode?: string;
     message?: string;
 }
 
+export class ShopApiError extends Error {
+    constructor(
+        readonly errorCode: string,
+        message: string,
+    ) {
+        super(message);
+        this.name = 'ShopApiError';
+    }
+}
+
 export class ShopApi {
-    constructor(private readonly market: MarketConfig) {}
+    constructor(
+        private readonly market: MarketConfig,
+        private readonly languageCode: VendureLanguageCode = market.defaultLanguageCode,
+    ) {}
 
     async products(): Promise<Product[]> {
         const result = await this.request<{ products: { items: Product[] } }>(`
@@ -59,10 +132,13 @@ export class ShopApi {
                 products(options: { take: 100, sort: { name: ASC } }) {
                     items {
                         id
+                        createdAt
                         name
                         slug
                         description
                         featuredAsset { id preview }
+                        assets { id preview }
+                        collections { id name slug parentId }
                         variants {
                             id
                             name
@@ -70,6 +146,8 @@ export class ShopApi {
                             priceWithTax
                             currencyCode
                             stockLevel
+                            featuredAsset { id preview }
+                            product { featuredAsset { id preview } }
                             customFields { fulfillmentType }
                         }
                     }
@@ -79,58 +157,290 @@ export class ShopApi {
         return result.products.items;
     }
 
-    async activeOrder(): Promise<Order | null> {
-        const result = await this.request<{ activeOrder: Order | null }>(`
-            query ActiveOrder {
-                activeOrder { ${orderFields} }
+    async collections(): Promise<CollectionSummary[]> {
+        const result = await this.request<{ collections: { items: CollectionSummary[] } }>(`
+            query StorefrontCollections {
+                collections(options: { take: 50, topLevelOnly: true, sort: { position: ASC } }) {
+                    items {
+                        id
+                        name
+                        slug
+                        description
+                        position
+                        parentId
+                        featuredAsset { id preview }
+                        children {
+                            id
+                            name
+                            slug
+                            description
+                            position
+                            parentId
+                            featuredAsset { id preview }
+                        }
+                    }
+                }
             }
         `);
-        return result.activeOrder;
+        return result.collections.items;
     }
 
-    async addItem(productVariantId: string): Promise<Order> {
-        const result = await this.request<{ addItemToOrder: Order & ErrorResult }>(
+    async activeCustomer(): Promise<ActiveCustomer | null> {
+        const result = await this.request<{ activeCustomer: ActiveCustomer | null }>(`
+            query StorefrontCustomer {
+                activeCustomer {
+                    id
+                    firstName
+                    lastName
+                    emailAddress
+                    phoneNumber
+                    addresses {
+                        id
+                        fullName
+                        phoneNumber
+                        streetLine1
+                        streetLine2
+                        city
+                        province
+                        postalCode
+                        defaultShippingAddress
+                        defaultBillingAddress
+                        country { code name }
+                    }
+                    orders(options: { take: 30, sort: { orderPlacedAt: DESC } }) {
+                        totalItems
+                        items { ${orderFields} }
+                    }
+                }
+            }
+        `);
+        return result.activeCustomer;
+    }
+
+    async login(emailAddress: string, password: string): Promise<void> {
+        const result = await this.request<{ login: ErrorResult }>(
             `
-                mutation AddItem($productVariantId: ID!) {
-                    addItemToOrder(productVariantId: $productVariantId, quantity: 1) {
-                        ... on Order { ${orderFields} }
+                mutation StorefrontLogin($emailAddress: String!, $password: String!) {
+                    login(username: $emailAddress, password: $password, rememberMe: true) {
+                        __typename
+                        ... on CurrentUser { id identifier }
                         ... on ErrorResult { errorCode message }
                     }
                 }
             `,
-            { productVariantId },
+            { emailAddress, password },
         );
-        return this.assertOrder(result.addItemToOrder);
+        this.assertNoError(result.login);
     }
 
-    async adjustLine(orderLineId: string, quantity: number): Promise<Order> {
-        const result = await this.request<{ adjustOrderLine: Order & ErrorResult }>(
+    async logout(): Promise<void> {
+        await this.request<{ logout: { success: boolean } }>(`
+            mutation StorefrontLogout { logout { success } }
+        `);
+    }
+
+    async createAddress(input: Record<string, unknown>): Promise<CustomerAddress> {
+        const result = await this.request<{ createCustomerAddress: CustomerAddress }>(
             `
-                mutation AdjustLine($orderLineId: ID!, $quantity: Int!) {
-                    adjustOrderLine(orderLineId: $orderLineId, quantity: $quantity) {
-                        ... on Order { ${orderFields} }
-                        ... on ErrorResult { errorCode message }
+                mutation CreateStorefrontAddress($input: CreateAddressInput!) {
+                    createCustomerAddress(input: $input) {
+                        id
+                        fullName
+                        phoneNumber
+                        streetLine1
+                        streetLine2
+                        city
+                        province
+                        postalCode
+                        defaultShippingAddress
+                        defaultBillingAddress
+                        country { code name }
                     }
                 }
             `,
-            { orderLineId, quantity },
+            { input },
         );
-        return this.assertOrder(result.adjustOrderLine);
+        return result.createCustomerAddress;
     }
 
-    async removeLine(orderLineId: string): Promise<Order> {
-        const result = await this.request<{ removeOrderLine: Order & ErrorResult }>(
+    async deleteAddress(id: string): Promise<void> {
+        await this.request<{ deleteCustomerAddress: { success: boolean } }>(
+            `mutation DeleteStorefrontAddress($id: ID!) { deleteCustomerAddress(id: $id) { success } }`,
+            { id },
+        );
+    }
+
+    async cart(): Promise<StorefrontCart> {
+        const result = await this.request<{ storefrontCart: StorefrontCart }>(`
+            query StorefrontCart {
+                storefrontCart { ${cartFields} }
+            }
+        `);
+        return result.storefrontCart;
+    }
+
+    async addItem(
+        productVariantId: string,
+        expectedRevision: number,
+    ): Promise<StorefrontCart> {
+        const result = await this.request<{ addStorefrontCartItem: StorefrontCart & ErrorResult }>(
             `
-                mutation RemoveLine($orderLineId: ID!) {
-                    removeOrderLine(orderLineId: $orderLineId) {
-                        ... on Order { ${orderFields} }
-                        ... on ErrorResult { errorCode message }
+                mutation AddStorefrontCartItem($productVariantId: ID!, $expectedRevision: Int!) {
+                    addStorefrontCartItem(
+                        input: { productVariantId: $productVariantId, quantity: 1 }
+                        expectedRevision: $expectedRevision
+                    ) {
+                        ${cartResultFields}
                     }
                 }
             `,
-            { orderLineId },
+            { productVariantId, expectedRevision },
         );
-        return this.assertOrder(result.removeOrderLine);
+        return this.assertCart(result.addStorefrontCartItem);
+    }
+
+    async setLineQuantity(
+        lineId: string,
+        quantity: number,
+        expectedRevision: number,
+    ): Promise<StorefrontCart> {
+        const result = await this.request<{
+            setStorefrontCartLineQuantity: StorefrontCart & ErrorResult;
+        }>(
+            `
+                mutation SetStorefrontCartLineQuantity(
+                    $lineId: ID!
+                    $quantity: Int!
+                    $expectedRevision: Int!
+                ) {
+                    setStorefrontCartLineQuantity(
+                        lineId: $lineId
+                        quantity: $quantity
+                        expectedRevision: $expectedRevision
+                    ) {
+                        ${cartResultFields}
+                    }
+                }
+            `,
+            { lineId, quantity, expectedRevision },
+        );
+        return this.assertCart(result.setStorefrontCartLineQuantity);
+    }
+
+    async removeLines(lineIds: string[], expectedRevision: number): Promise<StorefrontCart> {
+        const result = await this.request<{ removeStorefrontCartLines: StorefrontCart & ErrorResult }>(
+            `
+                mutation RemoveStorefrontCartLines($lineIds: [ID!]!, $expectedRevision: Int!) {
+                    removeStorefrontCartLines(
+                        lineIds: $lineIds
+                        expectedRevision: $expectedRevision
+                    ) {
+                        ${cartResultFields}
+                    }
+                }
+            `,
+            { lineIds, expectedRevision },
+        );
+        return this.assertCart(result.removeStorefrontCartLines);
+    }
+
+    async setLinesSelected(
+        lineIds: string[],
+        selected: boolean,
+        expectedRevision: number,
+    ): Promise<StorefrontCart> {
+        const result = await this.request<{
+            setStorefrontCartLinesSelected: StorefrontCart & ErrorResult;
+        }>(
+            `
+                mutation SetStorefrontCartLinesSelected(
+                    $lineIds: [ID!]!
+                    $selected: Boolean!
+                    $expectedRevision: Int!
+                ) {
+                    setStorefrontCartLinesSelected(
+                        lineIds: $lineIds
+                        selected: $selected
+                        expectedRevision: $expectedRevision
+                    ) {
+                        ${cartResultFields}
+                    }
+                }
+            `,
+            { lineIds, selected, expectedRevision },
+        );
+        return this.assertCart(result.setStorefrontCartLinesSelected);
+    }
+
+    async setAllLinesSelected(
+        selected: boolean,
+        expectedRevision: number,
+    ): Promise<StorefrontCart> {
+        const result = await this.request<{
+            setAllStorefrontCartLinesSelected: StorefrontCart & ErrorResult;
+        }>(
+            `
+                mutation SetAllStorefrontCartLinesSelected(
+                    $selected: Boolean!
+                    $expectedRevision: Int!
+                ) {
+                    setAllStorefrontCartLinesSelected(
+                        selected: $selected
+                        expectedRevision: $expectedRevision
+                    ) {
+                        ${cartResultFields}
+                    }
+                }
+            `,
+            { selected, expectedRevision },
+        );
+        return this.assertCart(result.setAllStorefrontCartLinesSelected);
+    }
+
+    async beginCheckout(expectedRevision: number): Promise<StorefrontCheckoutSession> {
+        const result = await this.request<{
+            beginStorefrontCheckout: StorefrontCheckoutSession & ErrorResult;
+        }>(
+            `
+                mutation BeginStorefrontCheckout($expectedRevision: Int!) {
+                    beginStorefrontCheckout(expectedRevision: $expectedRevision) {
+                        ${checkoutResultFields}
+                    }
+                }
+            `,
+            { expectedRevision },
+        );
+        return this.assertCheckoutSession(result.beginStorefrontCheckout);
+    }
+
+    async preparePayment(expectedRevision: number): Promise<StorefrontCheckoutSession> {
+        const result = await this.request<{
+            prepareStorefrontCartPayment: StorefrontCheckoutSession & ErrorResult;
+        }>(
+            `
+                mutation PrepareStorefrontCartPayment($expectedRevision: Int!) {
+                    prepareStorefrontCartPayment(expectedRevision: $expectedRevision) {
+                        ${checkoutResultFields}
+                    }
+                }
+            `,
+            { expectedRevision },
+        );
+        return this.assertCheckoutSession(result.prepareStorefrontCartPayment);
+    }
+
+    async reopenCart(expectedRevision: number): Promise<StorefrontCart> {
+        const result = await this.request<{ reopenStorefrontCart: StorefrontCart & ErrorResult }>(
+            `
+                mutation ReopenStorefrontCart($expectedRevision: Int!) {
+                    reopenStorefrontCart(expectedRevision: $expectedRevision) {
+                        ${cartResultFields}
+                    }
+                }
+            `,
+            { expectedRevision },
+        );
+        return this.assertCart(result.reopenStorefrontCart);
     }
 
     async setCustomer(input: Record<string, string>): Promise<void> {
@@ -187,22 +497,10 @@ export class ShopApi {
         this.assertNoError(result.setOrderShippingMethod);
     }
 
-    async transitionToPayment(): Promise<Order> {
-        const result = await this.request<{ transitionOrderToState: Order & ErrorResult }>(`
-            mutation TransitionToPayment {
-                transitionOrderToState(state: "ArrangingPayment") {
-                    ... on Order { ${orderFields} }
-                    ... on OrderStateTransitionError { errorCode message transitionError }
-                }
-            }
-        `);
-        return this.assertOrder(result.transitionOrderToState);
-    }
-
     private async request<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
         const headers: Record<string, string> = {
             'content-type': 'application/json',
-            'language-code': this.market.languageCode,
+            'language-code': this.languageCode,
         };
         if (SEND_CLIENT_CHANNEL_TOKEN) {
             headers['vendure-token'] = this.market.code;
@@ -213,21 +511,38 @@ export class ShopApi {
             headers,
             body: JSON.stringify({ query, variables }),
         });
-        const body = (await response.json()) as GraphQlResponse<T>;
+        const rawBody = await response.text();
+        let body: GraphQlResponse<T>;
+        try {
+            body = JSON.parse(rawBody) as GraphQlResponse<T>;
+        } catch {
+            throw new Error(
+                rawBody.trim()
+                    ? `Shop API returned an invalid response (${response.status})`
+                    : `Shop API did not respond (${response.status})`,
+            );
+        }
         if (!response.ok || body.errors?.length || !body.data) {
             throw new Error(body.errors?.[0]?.message ?? `Shop API request failed (${response.status})`);
         }
         return body.data;
     }
 
-    private assertOrder(result: Order & ErrorResult): Order {
+    private assertCart(result: StorefrontCart & ErrorResult): StorefrontCart {
+        this.assertNoError(result);
+        return result;
+    }
+
+    private assertCheckoutSession(
+        result: StorefrontCheckoutSession & ErrorResult,
+    ): StorefrontCheckoutSession {
         this.assertNoError(result);
         return result;
     }
 
     private assertNoError(result: ErrorResult): void {
         if (result.errorCode) {
-            throw new Error(result.message ?? result.errorCode);
+            throw new ShopApiError(result.errorCode, result.message ?? result.errorCode);
         }
     }
 }
