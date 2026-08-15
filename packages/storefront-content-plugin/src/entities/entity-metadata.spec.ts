@@ -35,6 +35,21 @@ describe('storefront content entity metadata', () => {
         });
     });
 
+    it('does not define unsupported defaults for text columns', () => {
+        const columns = getMetadataArgsStorage().columns;
+        const body = columns.find(
+            item => item.target === StorefrontContentBlockTranslation && item.propertyName === 'body',
+        );
+        const description = columns.find(
+            item => item.target === StorefrontContentItemTranslation && item.propertyName === 'description',
+        );
+
+        expect(body?.options).toMatchObject({ type: 'text' });
+        expect(body?.options.default).toBeUndefined();
+        expect(description?.options).toMatchObject({ type: 'text' });
+        expect(description?.options.default).toBeUndefined();
+    });
+
     it('cascades block, item, and translation cleanup', () => {
         const relations = getMetadataArgsStorage().relations;
         const channelRelation = relations.find(

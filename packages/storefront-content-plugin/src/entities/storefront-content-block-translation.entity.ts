@@ -24,7 +24,7 @@ export class StorefrontContentBlockTranslation
     @Column({ type: 'varchar', length: 500, default: '' })
     subtitle: string;
 
-    @Column({ type: 'text', default: '' })
+    @Column({ type: 'text' })
     body: string;
 
     @Column({ type: 'varchar', length: 120, default: '' })

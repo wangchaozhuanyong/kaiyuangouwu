@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableColumn, TableColumnOptions } from 'typeorm';
 
 export class AddStorefrontContent1786762500000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
@@ -7,12 +7,23 @@ export class AddStorefrontContent1786762500000 implements MigrationInterface {
             databaseType === 'postgres' || databaseType === 'sqlite' || databaseType === 'better-sqlite3'
                 ? 'integer'
                 : 'int';
-        const dateType = databaseType === 'postgres' ? 'timestamp without time zone' : 'datetime';
-        const now =
-            databaseType === 'sqlite' || databaseType === 'better-sqlite3'
-                ? "datetime('now')"
-                : 'CURRENT_TIMESTAMP';
+        const dateType: TableColumnOptions['type'] =
+            databaseType === 'postgres' ? 'timestamp without time zone' : 'datetime';
+        const isMysql = databaseType === 'mysql' || databaseType === 'mariadb';
+        const now = isMysql
+            ? 'CURRENT_TIMESTAMP(6)'
+            : databaseType === 'sqlite' || databaseType === 'better-sqlite3'
+              ? "datetime('now')"
+              : 'CURRENT_TIMESTAMP';
         const booleanTrue = databaseType === 'postgres' ? true : 1;
+        const booleanType: TableColumnOptions['type'] = isMysql ? 'tinyint' : 'boolean';
+        const timestampColumn = (name: 'createdAt' | 'updatedAt'): TableColumnOptions => ({
+            name,
+            type: dateType,
+            ...(isMysql ? { precision: 6 } : {}),
+            default: now,
+            ...(isMysql && name === 'updatedAt' ? { onUpdate: 'CURRENT_TIMESTAMP(6)' } : {}),
+        });
 
         if (!(await queryRunner.hasTable('storefront_content_block'))) {
             await queryRunner.createTable(
@@ -26,14 +37,24 @@ export class AddStorefrontContent1786762500000 implements MigrationInterface {
                             isGenerated: true,
                             generationStrategy: 'increment',
                         },
-                        { name: 'createdAt', type: dateType, default: now },
-                        { name: 'updatedAt', type: dateType, default: now },
+                        timestampColumn('createdAt'),
+                        timestampColumn('updatedAt'),
                         { name: 'code', type: 'varchar', length: '64' },
                         { name: 'type', type: 'varchar', length: '32' },
-                        { name: 'enabled', type: 'boolean', default: booleanTrue },
+                        { name: 'enabled', type: booleanType, default: booleanTrue },
                         { name: 'position', type: 'int', default: 0 },
-                        { name: 'startsAt', type: dateType, isNullable: true },
-                        { name: 'endsAt', type: dateType, isNullable: true },
+                        {
+                            name: 'startsAt',
+                            type: dateType,
+                            ...(isMysql ? { precision: 6 } : {}),
+                            isNullable: true,
+                        },
+                        {
+                            name: 'endsAt',
+                            type: dateType,
+                            ...(isMysql ? { precision: 6 } : {}),
+                            isNullable: true,
+                        },
                         { name: 'imageUrl', type: 'varchar', length: '2048', isNullable: true },
                         { name: 'backgroundColor', type: 'varchar', length: '32', isNullable: true },
                         { name: 'textColor', type: 'varchar', length: '32', isNullable: true },
@@ -82,12 +103,12 @@ export class AddStorefrontContent1786762500000 implements MigrationInterface {
                             isGenerated: true,
                             generationStrategy: 'increment',
                         },
-                        { name: 'createdAt', type: dateType, default: now },
-                        { name: 'updatedAt', type: dateType, default: now },
+                        timestampColumn('createdAt'),
+                        timestampColumn('updatedAt'),
                         { name: 'languageCode', type: 'varchar', length: '16' },
                         { name: 'title', type: 'varchar', length: '255', default: "''" },
                         { name: 'subtitle', type: 'varchar', length: '500', default: "''" },
-                        { name: 'body', type: 'text', default: "''" },
+                        { name: 'body', type: 'text' },
                         { name: 'ctaLabel', type: 'varchar', length: '120', default: "''" },
                         { name: 'baseId', type: idType },
                     ],
@@ -124,9 +145,9 @@ export class AddStorefrontContent1786762500000 implements MigrationInterface {
                             isGenerated: true,
                             generationStrategy: 'increment',
                         },
-                        { name: 'createdAt', type: dateType, default: now },
-                        { name: 'updatedAt', type: dateType, default: now },
-                        { name: 'enabled', type: 'boolean', default: booleanTrue },
+                        timestampColumn('createdAt'),
+                        timestampColumn('updatedAt'),
+                        { name: 'enabled', type: booleanType, default: booleanTrue },
                         { name: 'position', type: 'int', default: 0 },
                         { name: 'imageUrl', type: 'varchar', length: '2048', isNullable: true },
                         { name: 'targetType', type: 'varchar', length: '32', default: "'NONE'" },
@@ -165,11 +186,11 @@ export class AddStorefrontContent1786762500000 implements MigrationInterface {
                             isGenerated: true,
                             generationStrategy: 'increment',
                         },
-                        { name: 'createdAt', type: dateType, default: now },
-                        { name: 'updatedAt', type: dateType, default: now },
+                        timestampColumn('createdAt'),
+                        timestampColumn('updatedAt'),
                         { name: 'languageCode', type: 'varchar', length: '16' },
                         { name: 'label', type: 'varchar', length: '255', default: "''" },
-                        { name: 'description', type: 'text', default: "''" },
+                        { name: 'description', type: 'text' },
                         { name: 'baseId', type: idType },
                     ],
                     indices: [
@@ -190,6 +211,36 @@ export class AddStorefrontContent1786762500000 implements MigrationInterface {
                     ],
                 }),
                 true,
+            );
+        }
+
+        if (isMysql) {
+            for (const tableName of [
+                'storefront_content_block',
+                'storefront_content_block_translation',
+                'storefront_content_item',
+                'storefront_content_item_translation',
+            ]) {
+                await queryRunner.changeColumn(
+                    tableName,
+                    'createdAt',
+                    new TableColumn(timestampColumn('createdAt')),
+                );
+                await queryRunner.changeColumn(
+                    tableName,
+                    'updatedAt',
+                    new TableColumn(timestampColumn('updatedAt')),
+                );
+            }
+            await queryRunner.changeColumn(
+                'storefront_content_block',
+                'enabled',
+                new TableColumn({ name: 'enabled', type: booleanType, default: booleanTrue }),
+            );
+            await queryRunner.changeColumn(
+                'storefront_content_item',
+                'enabled',
+                new TableColumn({ name: 'enabled', type: booleanType, default: booleanTrue }),
             );
         }
     }

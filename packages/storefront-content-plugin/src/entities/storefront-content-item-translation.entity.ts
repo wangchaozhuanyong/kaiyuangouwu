@@ -21,7 +21,7 @@ export class StorefrontContentItemTranslation
     @Column({ type: 'varchar', length: 255, default: '' })
     label: string;
 
-    @Column({ type: 'text', default: '' })
+    @Column({ type: 'text' })
     description: string;
 
     @ManyToOne(() => StorefrontContentItem, base => base.translations, {
