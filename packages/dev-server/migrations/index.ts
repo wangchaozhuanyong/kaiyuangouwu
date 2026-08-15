@@ -11,6 +11,9 @@ import { LocalizeDefaultStockLocation1786516800000 } from './1786516800000-local
 import { AddStorefrontCart1786517100000 } from './1786517100000-add-storefront-cart';
 import { AlignStorefrontMysqlSchema1786517400000 } from './1786517400000-align-storefront-mysql-schema';
 import { AddStorefrontNames1786517700000 } from './1786517700000-add-storefront-names';
+import { RepairRegionalChannels1786760401000 } from './1786760401000-repair-regional-channels';
+import { AddStorefrontContent1786762500000 } from './1786762500000-add-storefront-content';
+import { AddCustomerOrderNote1786764000000 } from './1786764000000-add-customer-order-note';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -26,4 +29,7 @@ export const devServerMigrations = [
     AddStorefrontCart1786517100000,
     AlignStorefrontMysqlSchema1786517400000,
     AddStorefrontNames1786517700000,
+    RepairRegionalChannels1786760401000,
+    AddStorefrontContent1786762500000,
+    AddCustomerOrderNote1786764000000,
 ];

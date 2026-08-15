@@ -43,6 +43,13 @@ export interface Product {
     variants: ProductVariant[];
 }
 
+export type ProductSearchSort = 'recommended' | 'name' | 'price-asc' | 'price-desc';
+
+export interface ProductSearchPage {
+    items: Product[];
+    totalItems: number;
+}
+
 export interface OrderLine {
     id: string;
     quantity: number;
@@ -59,6 +66,15 @@ export interface CheckoutFulfillment {
     requiresShippingMethod: boolean;
 }
 
+export interface OrderFulfillment {
+    id: string;
+    state: string;
+    method: string;
+    trackingCode?: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface Order {
     id: string;
     code: string;
@@ -72,7 +88,23 @@ export interface Order {
     customer?: { id: string; emailAddress: string } | null;
     lines: OrderLine[];
     discounts: Array<{ description: string; amountWithTax: number }>;
+    couponCodes: string[];
+    customFields: {
+        customerNote?: string | null;
+    };
+    fulfillments?: OrderFulfillment[] | null;
     checkoutFulfillment?: CheckoutFulfillment;
+}
+
+export interface OrderPage {
+    items: Order[];
+    totalItems: number;
+}
+
+export interface CustomerOrderCounts {
+    pending: number;
+    shipping: number;
+    receiving: number;
 }
 
 export interface CustomerAddress {
@@ -87,6 +119,30 @@ export interface CustomerAddress {
     defaultShippingAddress: boolean | null;
     defaultBillingAddress: boolean | null;
     country: { code: string; name: string };
+}
+
+export interface CustomerAddressInput {
+    fullName: string;
+    phoneNumber: string;
+    streetLine1: string;
+    streetLine2?: string;
+    city: string;
+    province: string;
+    postalCode: string;
+    countryCode: string;
+    defaultShippingAddress?: boolean;
+    defaultBillingAddress?: boolean;
+}
+
+export interface CustomerAddressUpdateInput extends CustomerAddressInput {
+    id: string;
+}
+
+export interface RegisterCustomerInput {
+    emailAddress: string;
+    firstName: string;
+    lastName: string;
+    password: string;
 }
 
 export interface ActiveCustomer {
@@ -159,4 +215,55 @@ export interface StorefrontConfig {
         storefrontNameZh?: string | null;
         storefrontNameEn?: string | null;
     };
+}
+
+export type StorefrontContentBlockType =
+    | 'HERO'
+    | 'NOTICE'
+    | 'QUICK_LINKS'
+    | 'CATEGORY_AD'
+    | 'FEATURED_COLLECTION'
+    | 'STORY'
+    | 'LEGAL'
+    | 'SUPPORT';
+
+export type StorefrontContentTargetType =
+    | 'NONE'
+    | 'URL'
+    | 'PRODUCT'
+    | 'COLLECTION'
+    | 'CATEGORY'
+    | 'SEARCH'
+    | 'PAGE'
+    | 'SUPPORT';
+
+export interface StorefrontContentItem {
+    id: string;
+    enabled: boolean;
+    position: number;
+    imageUrl: string | null;
+    targetType: StorefrontContentTargetType;
+    targetValue: string | null;
+    label: string;
+    description: string;
+}
+
+export interface StorefrontContentBlock {
+    id: string;
+    code: string;
+    type: StorefrontContentBlockType;
+    enabled: boolean;
+    position: number;
+    startsAt: string | null;
+    endsAt: string | null;
+    imageUrl: string | null;
+    backgroundColor: string | null;
+    textColor: string | null;
+    targetType: StorefrontContentTargetType;
+    targetValue: string | null;
+    title: string;
+    subtitle: string;
+    body: string;
+    ctaLabel: string;
+    items: StorefrontContentItem[];
 }

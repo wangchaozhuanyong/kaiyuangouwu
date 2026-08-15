@@ -454,6 +454,7 @@
         "@vendure/email-plugin": "3.7.1",
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
+        "@vendure/storefront-content-plugin": "0.1.0",
         "@vendure/storefront-cart-plugin": "0.1.0",
       },
       "devDependencies": {
@@ -579,6 +580,27 @@
       },
       "devDependencies": {
         "@types/express": "^5.0.0",
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4",
+      },
+      "peerDependencies": {
+        "@vendure/dashboard": "3.7.2",
+        "react": "^19.2.4",
+      },
+    },
+    "packages/storefront-content-plugin": {
+      "name": "@vendure/storefront-content-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lingui/react": "^5.9.3",
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.1.0",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "lucide-react": "^0.475.0",
+      },
+      "devDependencies": {
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
       },
@@ -2746,6 +2768,8 @@
     "@vendure/operations-dashboard-plugin": ["@vendure/operations-dashboard-plugin@workspace:packages/operations-dashboard-plugin"],
 
     "@vendure/store-domain-plugin": ["@vendure/store-domain-plugin@workspace:packages/store-domain-plugin"],
+
+    "@vendure/storefront-content-plugin": ["@vendure/storefront-content-plugin@workspace:packages/storefront-content-plugin"],
 
     "@vendure/storefront": ["@vendure/storefront@workspace:packages/storefront"],
 

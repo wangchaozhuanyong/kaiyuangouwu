@@ -9,6 +9,7 @@
             "@vendure/commerce-fulfillment-plugin": ["../commerce-fulfillment-plugin/src/index.ts"],
             "@vendure/operations-dashboard-plugin": ["../operations-dashboard-plugin/src/index.ts"],
             "@vendure/storefront-cart-plugin": ["../storefront-cart-plugin/src/index.ts"],
+            "@vendure/storefront-content-plugin": ["../storefront-content-plugin/src/index.ts"],
             "@vendure/store-domain-plugin": ["../store-domain-plugin/src/index.ts"],
             "@plugins/*": ["./test-plugins/*"]
         }

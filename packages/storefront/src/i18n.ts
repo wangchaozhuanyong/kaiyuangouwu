@@ -32,6 +32,10 @@ export const enabledMarkets: MarketConfig[] = configuredMarketCodes.length
     ? configuredMarketCodes.map((code: MarketCode) => markets[code])
     : [markets['cn-mainland']];
 
+export function marketCodeForChannel(channelCode: string): MarketCode | null {
+    return Object.prototype.hasOwnProperty.call(markets, channelCode) ? (channelCode as MarketCode) : null;
+}
+
 export function languageCodeFor(language: StorefrontLanguage): VendureLanguageCode {
     return language === 'zh' ? 'zh_Hans' : 'en';
 }

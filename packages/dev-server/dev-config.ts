@@ -12,17 +12,20 @@ import {
     LanguageCode,
     LogLevel,
     PluginCommonModule,
+    RequestContext,
     RequestContextService,
     SettingsStoreScopes,
     SettingsStoreService,
+    TransactionalConnection,
     VendureConfig,
     VendurePlugin,
 } from '@vendure/core';
 import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import { defaultEmailHandlers, EmailPlugin, FileBasedTemplateLoader } from '@vendure/email-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
-import { StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
+import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import path from 'path';
@@ -94,6 +97,30 @@ function configuredValue(name: string, developmentDefault: string): string {
     return developmentDefault;
 }
 
+function fallbackStorefrontUrl(): string {
+    const rawUrl = configuredValue('VENDURE_STOREFRONT_URL', 'http://127.0.0.1:5175');
+    let url: URL;
+    try {
+        url = new URL(rawUrl);
+    } catch {
+        throw new Error('VENDURE_STOREFRONT_URL must be a valid absolute URL');
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        throw new Error('VENDURE_STOREFRONT_URL must use http or https');
+    }
+    return url.toString().replace(/\/$/, '');
+}
+
+async function storefrontUrlForChannel(
+    ctx: RequestContext,
+    connection: TransactionalConnection,
+): Promise<string> {
+    const primaryDomain = await connection.getRepository(ctx, StoreDomain).findOne({
+        where: { channelId: ctx.channelId, isPrimary: true, status: 'ACTIVE' },
+    });
+    return primaryDomain ? `https://${primaryDomain.domain}` : fallbackStorefrontUrl();
+}
+
 function storefrontNameDisplayUnits(value: string): number {
     return Array.from(value).reduce((total, character) => {
         const isWideCharacter = /[\p{Script=Han}\uFF01-\uFF60]/u.test(character);
@@ -110,6 +137,15 @@ function validateStorefrontName(value: string) {
                 value: '网站名称须为 1 至 16 个显示单位（中文按 2 个计算）',
             },
             { languageCode: LanguageCode.en, value: 'Website name must use 1 to 16 display units' },
+        ];
+    }
+}
+
+function validateCustomerOrderNote(value: string) {
+    if (value.length > 500) {
+        return [
+            { languageCode: LanguageCode.zh_Hans, value: '订单备注不能超过 500 个字符' },
+            { languageCode: LanguageCode.en, value: 'Order note cannot exceed 500 characters' },
         ];
     }
 }
@@ -225,6 +261,23 @@ export const devConfig: VendureConfig = {
         ],
     },
     customFields: {
+        Order: [
+            {
+                name: 'customerNote',
+                type: 'text',
+                nullable: true,
+                public: true,
+                validate: validateCustomerOrderNote,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '客户订单备注' },
+                    { languageCode: LanguageCode.en, value: 'Customer order note' },
+                ],
+                description: [
+                    { languageCode: LanguageCode.zh_Hans, value: '客户在确认订单时提交的备注' },
+                    { languageCode: LanguageCode.en, value: 'Note submitted during checkout' },
+                ],
+            },
+        ],
         Channel: [
             {
                 name: 'storefrontNameZh',
@@ -284,6 +337,7 @@ export const devConfig: VendureConfig = {
             ? [
                   CommerceFulfillmentPlugin,
                   StorefrontCartPlugin,
+                  StorefrontContentPlugin,
                   StoreDomainPlugin.init({
                       cnameTarget: process.env.STORE_DOMAIN_CNAME_TARGET || 'vendure.localhost',
                       routingMode: storeDomainRoutingMode(),
@@ -309,10 +363,16 @@ export const devConfig: VendureConfig = {
             handlers: localizedEmailHandlers,
             templateLoader: new FileBasedTemplateLoader(path.join(serverRoot, 'email-templates')),
             outputPath: process.env.VENDURE_EMAIL_OUTPUT_DIR || path.join(serverRoot, 'test-emails'),
-            globalTemplateVars: {
-                verifyEmailAddressUrl: `${dashboardUrl}/verify`,
-                passwordResetUrl: `${dashboardUrl}/reset-password`,
-                changeEmailAddressUrl: `${dashboardUrl}/change-email-address`,
+            globalTemplateVars: async (ctx, injector) => {
+                const storefrontUrl = await storefrontUrlForChannel(
+                    ctx,
+                    injector.get(TransactionalConnection),
+                );
+                return {
+                    verifyEmailAddressUrl: `${storefrontUrl}/#/verify-account`,
+                    passwordResetUrl: `${storefrontUrl}/#/reset-password`,
+                    changeEmailAddressUrl: `${dashboardUrl}/change-email-address`,
+                };
             },
         }),
         ...(IS_INSTRUMENTED ? [loadPackage('@vendure/telemetry-plugin').TelemetryPlugin.init({})] : []),

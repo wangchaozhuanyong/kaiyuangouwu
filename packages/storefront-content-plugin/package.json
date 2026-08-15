@@ -1,0 +1,29 @@
+{
+    "name": "@vendure/storefront-content-plugin",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc --project tsconfig.build.json",
+        "check-types": "tsc --project tsconfig.json --noEmit",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@lingui/react": "^5.9.3",
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.1.0",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "lucide-react": "^0.475.0"
+    },
+    "devDependencies": {
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4"
+    },
+    "peerDependencies": {
+        "@vendure/dashboard": "3.7.2",
+        "react": "^19.2.4"
+    }
+}

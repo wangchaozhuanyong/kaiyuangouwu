@@ -6,11 +6,10 @@ import {
     ChevronRight,
     CircleAlert,
     CircleCheck,
+    Clock3,
     Coffee,
     Download,
     Fingerprint,
-    Headphones,
-    Heart,
     House,
     LayoutGrid,
     MapPin,
@@ -18,6 +17,7 @@ import {
     Minus,
     Navigation,
     Package,
+    Pencil,
     Plus,
     RotateCcw,
     Search,
@@ -25,7 +25,6 @@ import {
     Share2,
     ShoppingBag,
     ShoppingCart,
-    SlidersHorizontal,
     Sparkles,
     Store,
     TicketPercent,
@@ -39,20 +38,24 @@ import {
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from './api';
-import { enabledMarkets, languageCodeFor, localeFor, markets, uiCopy } from './i18n';
+import { enabledMarkets, languageCodeFor, localeFor, marketCodeForChannel, markets, uiCopy } from './i18n';
 import {
     ActiveCustomer,
     CollectionSummary,
     CustomerAddress,
-    FulfillmentType,
+    CustomerAddressInput,
     MarketCode,
     MarketConfig,
     Order,
     Product,
+    ProductSearchSort,
     ProductVariant,
     ShippingMethod,
     StorefrontCart,
     StorefrontCheckoutSession,
+    StorefrontContentBlock,
+    StorefrontContentItem,
+    StorefrontContentTargetType,
     StorefrontLanguage,
 } from './types';
 
@@ -65,11 +68,22 @@ type RouteName =
     | 'orders'
     | 'order-detail'
     | 'addresses'
-    | 'login';
+    | 'account-security'
+    | 'history'
+    | 'notifications'
+    | 'login'
+    | 'register'
+    | 'verify-account'
+    | 'forgot-password'
+    | 'reset-password';
 type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
-type SortMode = 'recommended' | 'newest' | 'price-asc' | 'price-desc';
+type SortMode = ProductSearchSort;
 
 const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
+const ORDER_NOTE_MAX_LENGTH = 500;
+const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
+const SEARCH_HISTORY_STORAGE_KEY = 'storefront-search-history';
+const RECENT_PRODUCT_LIMIT = 20;
 
 function storefrontNameDisplayUnits(value: string): number {
     return Array.from(value).reduce((total, character) => {
@@ -86,6 +100,22 @@ function normalizeStorefrontName(value: string | null | undefined, fallback: str
     return normalized;
 }
 
+function scopedStorageKey(baseKey: string, channelCode: string): string {
+    return channelCode ? `${baseKey}:${channelCode}` : '';
+}
+
+function readStoredStrings(storageKey: string, limit: number): string[] {
+    if (!storageKey) return [];
+    try {
+        const value = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+        return Array.isArray(value)
+            ? value.filter((item): item is string => typeof item === 'string').slice(0, limit)
+            : [];
+    } catch {
+        return [];
+    }
+}
+
 const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
     zh: '云桥Ai',
     en: 'Yunqiao Ai',
@@ -95,12 +125,18 @@ interface RouteState {
     name: RouteName;
     id?: string;
     tab?: OrderTab;
+    token?: string;
+    term?: string;
 }
 
 const rootPages: MainPage[] = ['home', 'category', 'cart', 'account'];
 
 function routeFromLocation(): RouteState {
-    const raw = window.location.hash.replace(/^#\/?/, '');
+    return routeFromHash(window.location.hash);
+}
+
+function routeFromHash(hash: string): RouteState {
+    const raw = hash.replace(/^#\/?/, '');
     const [path = 'home', query = ''] = raw.split('?');
     const name = (path || 'home') as RouteName;
     const params = new URLSearchParams(query);
@@ -115,12 +151,21 @@ function routeFromLocation(): RouteState {
         'orders',
         'order-detail',
         'addresses',
+        'account-security',
+        'history',
+        'notifications',
         'login',
+        'register',
+        'verify-account',
+        'forgot-password',
+        'reset-password',
     ];
     return {
         name: validNames.includes(name) ? name : 'home',
         id: params.get('id') ?? undefined,
         tab: (params.get('tab') as OrderTab | null) ?? undefined,
+        token: params.get('token') ?? undefined,
+        term: params.get('term') ?? undefined,
     };
 }
 
@@ -128,11 +173,13 @@ function routeHash(route: RouteState): string {
     const params = new URLSearchParams();
     if (route.id) params.set('id', route.id);
     if (route.tab) params.set('tab', route.tab);
+    if (route.token) params.set('token', route.token);
+    if (route.term) params.set('term', route.term);
     return `#/${route.name}${params.size ? `?${params.toString()}` : ''}`;
 }
 
 export function App() {
-    const [marketCode] = useState<MarketCode>(() => {
+    const [marketCode, setMarketCode] = useState<MarketCode>(() => {
         const stored = localStorage.getItem('storefront-market');
         return enabledMarkets.some(candidateMarket => candidateMarket.code === stored)
             ? (stored as MarketCode)
@@ -143,9 +190,21 @@ export function App() {
     );
     const [route, setRoute] = useState<RouteState>(routeFromLocation);
     const [products, setProducts] = useState<Product[]>([]);
+    const [routeProduct, setRouteProduct] = useState<Product | null>(null);
+    const [routeProductLoading, setRouteProductLoading] = useState(false);
+    const [routeProductError, setRouteProductError] = useState('');
+    const [productReloadKey, setProductReloadKey] = useState(0);
+    const [routeOrder, setRouteOrder] = useState<Order | null>(null);
+    const [routeOrderLoading, setRouteOrderLoading] = useState(false);
+    const [routeOrderError, setRouteOrderError] = useState('');
+    const [orderReloadKey, setOrderReloadKey] = useState(0);
+    const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
     const [collections, setCollections] = useState<CollectionSummary[]>([]);
+    const [contentBlocks, setContentBlocks] = useState<StorefrontContentBlock[]>([]);
+    const [contentError, setContentError] = useState('');
     const [storefrontNames, setStorefrontNames] =
         useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
+    const [storefrontCode, setStorefrontCode] = useState('');
     const [cart, setCart] = useState<StorefrontCart | null>(null);
     const [customer, setCustomer] = useState<ActiveCustomer | null>(null);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
@@ -159,9 +218,9 @@ export function App() {
     const [activeCollectionId, setActiveCollectionId] = useState('all');
     const [activeChildId, setActiveChildId] = useState('all');
     const [sortMode, setSortMode] = useState<SortMode>('recommended');
-    const [fulfillmentFilter, setFulfillmentFilter] = useState<'all' | FulfillmentType>('all');
-    const [inStockOnly, setInStockOnly] = useState(false);
     const toastTimer = useRef<number | null>(null);
+    const routeRef = useRef(route);
+    const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
 
     const market = markets[marketCode];
     const locale = localeFor(language, market);
@@ -177,11 +236,19 @@ export function App() {
     }, []);
 
     const navigate = useCallback((next: RouteState, replace = false) => {
+        const currentRoute = routeRef.current;
+        if (rootPages.includes(currentRoute.name as MainPage)) {
+            mainPageScrollPositions.current[currentRoute.name as MainPage] = window.scrollY;
+        }
         const hash = routeHash(next);
         if (replace) window.history.replaceState(next, '', hash);
         else window.history.pushState(next, '', hash);
+        routeRef.current = next;
         setRoute(next);
-        window.scrollTo({ top: 0, behavior: 'instant' });
+        const nextScrollTop = rootPages.includes(next.name as MainPage)
+            ? (mainPageScrollPositions.current[next.name as MainPage] ?? 0)
+            : 0;
+        window.requestAnimationFrame(() => window.scrollTo({ top: nextScrollTop, behavior: 'instant' }));
     }, []);
 
     const goBack = useCallback(() => {
@@ -191,7 +258,19 @@ export function App() {
 
     useEffect(() => {
         if (!window.location.hash) navigate({ name: 'home' }, true);
-        const onPopState = () => setRoute(routeFromLocation());
+        const onPopState = () => {
+            const currentRoute = routeRef.current;
+            if (rootPages.includes(currentRoute.name as MainPage)) {
+                mainPageScrollPositions.current[currentRoute.name as MainPage] = window.scrollY;
+            }
+            const nextRoute = routeFromLocation();
+            routeRef.current = nextRoute;
+            setRoute(nextRoute);
+            const nextScrollTop = rootPages.includes(nextRoute.name as MainPage)
+                ? (mainPageScrollPositions.current[nextRoute.name as MainPage] ?? 0)
+                : 0;
+            window.requestAnimationFrame(() => window.scrollTo({ top: nextScrollTop, behavior: 'instant' }));
+        };
         window.addEventListener('popstate', onPopState);
         return () => window.removeEventListener('popstate', onPopState);
     }, [navigate]);
@@ -209,13 +288,15 @@ export function App() {
     const loadStorefront = useCallback(async () => {
         setLoading(true);
         setError(null);
-        const [productResult, collectionResult, cartResult, customerResult, configResult] =
+        setContentError('');
+        const [productResult, collectionResult, cartResult, customerResult, configResult, contentResult] =
             await Promise.allSettled([
                 api.products(),
                 api.collections(),
                 api.cart(),
                 api.activeCustomer(),
                 api.storefrontConfig(),
+                api.storefrontContent(),
             ]);
         if (productResult.status === 'fulfilled') setProducts(productResult.value);
         else setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
@@ -227,7 +308,29 @@ export function App() {
             setCartError(cartResult.reason instanceof Error ? cartResult.reason.message : text.loadError);
         }
         if (customerResult.status === 'fulfilled') setCustomer(customerResult.value);
+        if (contentResult.status === 'fulfilled') setContentBlocks(contentResult.value);
+        else {
+            setContentBlocks([]);
+            setContentError(
+                contentResult.reason instanceof Error ? contentResult.reason.message : text.loadError,
+            );
+        }
         if (configResult.status === 'fulfilled') {
+            const nextStorefrontCode = configResult.value.code;
+            const nextMarketCode = marketCodeForChannel(nextStorefrontCode);
+            if (nextMarketCode) {
+                localStorage.setItem('storefront-market', nextMarketCode);
+                setMarketCode(currentMarketCode =>
+                    currentMarketCode === nextMarketCode ? currentMarketCode : nextMarketCode,
+                );
+            }
+            setStorefrontCode(nextStorefrontCode);
+            setRecentProductIds(
+                readStoredStrings(
+                    scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, nextStorefrontCode),
+                    RECENT_PRODUCT_LIMIT,
+                ),
+            );
             setStorefrontNames({
                 zh: normalizeStorefrontName(
                     configResult.value.customFields.storefrontNameZh,
@@ -249,7 +352,7 @@ export function App() {
     }, [language, loadStorefront]);
 
     useEffect(() => {
-        document.title = isZh ? `${storefrontName} · 移动商城` : `${storefrontName} · Store`;
+        document.title = isZh ? `${storefrontName} · 在线商城` : `${storefrontName} · Online store`;
     }, [isZh, storefrontName]);
 
     useEffect(() => {
@@ -259,10 +362,91 @@ export function App() {
         }
     }, [activeCollectionId, collections]);
 
+    useEffect(() => {
+        if (route.name !== 'product' || !route.id) {
+            setRouteProduct(null);
+            setRouteProductLoading(false);
+            setRouteProductError('');
+            return;
+        }
+        const cachedProduct = products.find(product => product.id === route.id);
+        if (cachedProduct) {
+            setRouteProduct(cachedProduct);
+            setRouteProductLoading(false);
+            setRouteProductError('');
+            return;
+        }
+        let cancelled = false;
+        setRouteProduct(null);
+        setRouteProductLoading(true);
+        setRouteProductError('');
+        void api
+            .product(route.id)
+            .then(product => {
+                if (cancelled) return;
+                if (!product) {
+                    throw new Error(isZh ? '商品不存在或已下架' : 'Product not found');
+                }
+                setRouteProduct(product);
+            })
+            .catch(requestError => {
+                if (!cancelled) {
+                    setRouteProductError(
+                        requestError instanceof Error ? requestError.message : text.loadError,
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setRouteProductLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, isZh, productReloadKey, products, route.id, route.name, text.loadError]);
+
+    useEffect(() => {
+        if (route.name !== 'order-detail' || !route.id) {
+            setRouteOrder(null);
+            setRouteOrderLoading(false);
+            setRouteOrderError('');
+            return;
+        }
+        const cachedOrder = customer?.orders.items.find(order => order.id === route.id);
+        if (cachedOrder) {
+            setRouteOrder(cachedOrder);
+            setRouteOrderLoading(false);
+            setRouteOrderError('');
+            return;
+        }
+        let cancelled = false;
+        setRouteOrder(null);
+        setRouteOrderLoading(true);
+        setRouteOrderError('');
+        void api
+            .order(route.id)
+            .then(order => {
+                if (cancelled) return;
+                if (!order) throw new Error(isZh ? '订单不存在或无权查看' : 'Order not found');
+                setRouteOrder(order);
+            })
+            .catch(requestError => {
+                if (!cancelled) {
+                    setRouteOrderError(requestError instanceof Error ? requestError.message : text.loadError);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setRouteOrderLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, customer, isZh, orderReloadKey, route.id, route.name, text.loadError]);
+
     const refreshCart = useCallback(async () => {
         const latest = await api.cart();
         setCart(latest);
         setCheckoutOrder(latest.checkoutOrder);
+        setCartError(null);
         return latest;
     }, [api]);
 
@@ -310,6 +494,136 @@ export function App() {
         [api, isZh, mutateCart, navigate, notify],
     );
 
+    const addOrderToCart = useCallback(
+        async (order: Order) => {
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                let updated = cart ?? (await api.cart());
+                for (const line of order.lines) {
+                    updated = await api.addItem(line.productVariant.id, updated.revision, line.quantity);
+                }
+                setCart(updated);
+                setCheckoutOrder(updated.checkoutOrder);
+                notify(isZh ? '订单商品已加入购物车' : 'Order items added to cart');
+                navigate({ name: 'cart' });
+            } catch (requestError) {
+                setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                navigate({ name: 'cart' });
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [api, cart, isZh, navigate, notify, text.loadError],
+    );
+
+    const openContentTarget = useCallback(
+        (targetType: StorefrontContentTargetType, targetValue: string | null) => {
+            const value = targetValue?.trim();
+            if (targetType === 'NONE' || !value) return;
+            if (targetType === 'PRODUCT') {
+                navigate({ name: 'product', id: value });
+                return;
+            }
+            if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
+                setActiveCollectionId(value);
+                setActiveChildId(value);
+                navigate({ name: 'category' });
+                return;
+            }
+            if (targetType === 'SEARCH') {
+                navigate({ name: 'search', term: value });
+                return;
+            }
+            if (targetType === 'PAGE') {
+                navigate(routeFromHash(value.startsWith('#') ? value : `#/${value.replace(/^\//, '')}`));
+                return;
+            }
+            if (targetType === 'SUPPORT') {
+                if (/^(mailto:|tel:)/i.test(value)) {
+                    window.location.assign(value);
+                } else if (/^https?:\/\//i.test(value)) {
+                    window.open(value, '_blank', 'noopener,noreferrer');
+                } else {
+                    navigate({ name: 'account' });
+                }
+                return;
+            }
+            if (value.startsWith('#/')) {
+                navigate(routeFromHash(value));
+            } else if (value.startsWith('/')) {
+                window.location.assign(value);
+            } else {
+                window.open(value, '_blank', 'noopener,noreferrer');
+            }
+        },
+        [navigate],
+    );
+
+    const applyCoupon = useCallback(
+        async (couponCode: string): Promise<string | null> => {
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                await api.applyCouponCode(couponCode);
+                await refreshCart();
+                notify(isZh ? '优惠码已应用' : 'Coupon applied');
+                return null;
+            } catch (requestError) {
+                return requestError instanceof Error ? requestError.message : text.loadError;
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [api, isZh, notify, refreshCart, text.loadError],
+    );
+
+    const removeCoupon = useCallback(
+        async (couponCode: string): Promise<string | null> => {
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                await api.removeCouponCode(couponCode);
+                await refreshCart();
+                notify(isZh ? '优惠码已移除' : 'Coupon removed');
+                return null;
+            } catch (requestError) {
+                return requestError instanceof Error ? requestError.message : text.loadError;
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [api, isZh, notify, refreshCart, text.loadError],
+    );
+
+    const reopenPendingOrder = useCallback(
+        async (order: Order) => {
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                const current = cart ?? (await api.cart());
+                if (current.state !== 'PAYMENT_PENDING' || current.checkoutOrder?.id !== order.id) {
+                    throw new Error(
+                        isZh
+                            ? '该订单无法从当前购物车恢复，请刷新订单后重试'
+                            : 'This order cannot be restored from the current cart.',
+                    );
+                }
+                const reopened = await api.reopenCart(current.revision);
+                setCart(reopened);
+                setCheckoutOrder(reopened.checkoutOrder);
+                notify(isZh ? '订单已恢复，可以继续修改' : 'Order restored for editing');
+                navigate({ name: 'cart' });
+            } catch (requestError) {
+                setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                navigate({ name: 'cart' });
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [api, cart, isZh, navigate, notify, text.loadError],
+    );
+
     const beginCheckout = useCallback(async () => {
         if (!cart || cart.selectedQuantity === 0) return;
         setCartLoading(true);
@@ -320,16 +634,62 @@ export function App() {
             setCheckoutOrder(session.order);
             navigate({ name: 'checkout' });
         } catch (requestError) {
-            setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+            if (
+                requestError instanceof ShopApiError &&
+                requestError.errorCode === 'CART_REVISION_CONFLICT_ERROR'
+            ) {
+                await refreshCart().catch(() => undefined);
+                setCartError(
+                    isZh
+                        ? '购物车已更新，请确认后重新结算'
+                        : 'Your cart was updated. Please review it and try again.',
+                );
+            } else {
+                setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+            }
         } finally {
             setCartLoading(false);
         }
-    }, [api, cart, navigate, text.loadError]);
+    }, [api, cart, isZh, navigate, refreshCart, text.loadError]);
 
-    const selectedProduct = route.id ? (products.find(product => product.id === route.id) ?? null) : null;
-    const selectedOrder = route.id
-        ? (customer?.orders.items.find(order => order.id === route.id) ?? null)
+    const completeAuthentication = useCallback(async () => {
+        const [nextCustomer, nextCart] = await Promise.all([api.activeCustomer(), api.cart()]);
+        setCustomer(nextCustomer);
+        setCart(nextCart);
+        setCheckoutOrder(nextCart.checkoutOrder);
+        notify(isZh ? '登录成功' : 'Signed in');
+        navigate({ name: 'account' }, true);
+    }, [api, isZh, navigate, notify]);
+
+    const selectedProduct = route.id
+        ? (products.find(product => product.id === route.id) ??
+          (routeProduct?.id === route.id ? routeProduct : null))
         : null;
+    const selectedOrder = route.id
+        ? (customer?.orders.items.find(order => order.id === route.id) ??
+          (routeOrder?.id === route.id ? routeOrder : null))
+        : null;
+
+    useEffect(() => {
+        if (route.name !== 'product' || !selectedProduct || !storefrontCode) return;
+        setRecentProductIds(current => {
+            const next = [
+                selectedProduct.id,
+                ...current.filter(productId => productId !== selectedProduct.id),
+            ].slice(0, RECENT_PRODUCT_LIMIT);
+            if (
+                next.length === current.length &&
+                next.every((productId, index) => productId === current[index])
+            ) {
+                return current;
+            }
+            localStorage.setItem(
+                scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, storefrontCode),
+                JSON.stringify(next),
+            );
+            return next;
+        });
+    }, [route.name, selectedProduct, storefrontCode]);
 
     const mainPage: MainPage = rootPages.includes(route.name as MainPage)
         ? (route.name as MainPage)
@@ -346,6 +706,8 @@ export function App() {
                     <HomePage
                         products={products}
                         collections={collections}
+                        contentBlocks={contentBlocks}
+                        contentError={contentError}
                         loading={loading}
                         error={error}
                         market={market}
@@ -361,13 +723,15 @@ export function App() {
                         }}
                         onAdd={variant => void addToCart(variant)}
                         onToggleLanguage={() => setLanguage(value => (value === 'zh' ? 'en' : 'zh'))}
-                        onNotify={() => notify(text.unavailable)}
+                        onNotifications={() => navigate({ name: 'notifications' })}
+                        onContentTarget={openContentTarget}
                         onRetry={() => void loadStorefront()}
                     />
                 );
             case 'category':
                 return (
                     <CategoryPage
+                        api={api}
                         products={products}
                         collections={collections}
                         loading={loading}
@@ -378,8 +742,6 @@ export function App() {
                         activeCollectionId={activeCollectionId}
                         activeChildId={activeChildId}
                         sortMode={sortMode}
-                        fulfillmentFilter={fulfillmentFilter}
-                        inStockOnly={inStockOnly}
                         addingVariantId={addingVariantId}
                         onCollectionChange={(collectionId, childId) => {
                             setActiveCollectionId(collectionId);
@@ -387,13 +749,9 @@ export function App() {
                         }}
                         onChildChange={setActiveChildId}
                         onSortChange={setSortMode}
-                        onFilterChange={(type, inStock) => {
-                            setFulfillmentFilter(type);
-                            setInStockOnly(inStock);
-                        }}
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
-                        onNotify={() => notify(text.unavailable)}
+                        onNotify={() => navigate({ name: 'notifications' })}
                         onRetry={() => void loadStorefront()}
                     />
                 );
@@ -424,25 +782,28 @@ export function App() {
                         }
                         onRemove={lineId => void mutateCart(revision => api.removeLines([lineId], revision))}
                         onCheckout={() => void beginCheckout()}
+                        onReopen={() => cart?.checkoutOrder && void reopenPendingOrder(cart.checkoutOrder)}
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
                         onRetry={() => void refreshCart()}
-                        onUnavailable={() => notify(text.unavailable)}
+                        onApplyCoupon={applyCoupon}
+                        onRemoveCoupon={removeCoupon}
                     />
                 );
             case 'account':
                 return (
                     <AccountPage
+                        api={api}
                         customer={customer}
                         products={products}
                         market={market}
                         locale={locale}
                         language={language}
                         storefrontName={storefrontName}
+                        recentProductCount={recentProductIds.length}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
-                        onUnavailable={() => notify(text.unavailable)}
                         onLogout={() => {
                             void api.logout().then(() => {
                                 setCustomer(null);
@@ -452,7 +813,11 @@ export function App() {
                     />
                 );
             case 'product':
-                return selectedProduct ? (
+                return routeProductLoading || (route.id && !selectedProduct && !routeProductError) ? (
+                    <Subpage title={isZh ? '商品详情' : 'Product'} onBack={goBack}>
+                        <PageSkeleton />
+                    </Subpage>
+                ) : selectedProduct ? (
                     <ProductDetailPage
                         key={selectedProduct.id}
                         product={selectedProduct}
@@ -466,26 +831,33 @@ export function App() {
                         onBack={goBack}
                         onNavigate={navigate}
                         onAdd={(variant, buyNow) => void addToCart(variant, buyNow)}
-                        onUnavailable={() => notify(text.unavailable)}
+                        onNotify={notify}
                     />
                 ) : (
                     <Subpage title={isZh ? '商品详情' : 'Product'} onBack={goBack}>
                         <EmptyState
                             icon={<ShoppingBag />}
                             title={text.noResults}
-                            detail={text.noResultsHint}
-                            action={text.browse}
-                            onAction={() => navigate({ name: 'category' })}
+                            detail={routeProductError || text.noResultsHint}
+                            action={routeProductError ? (isZh ? '重试' : 'Retry') : text.browse}
+                            onAction={() =>
+                                routeProductError
+                                    ? setProductReloadKey(value => value + 1)
+                                    : navigate({ name: 'category' })
+                            }
                         />
                     </Subpage>
                 );
             case 'search':
                 return (
                     <SearchPage
+                        api={api}
                         products={products}
                         market={market}
                         locale={locale}
                         language={language}
+                        storefrontCode={storefrontCode}
+                        initialQuery={route.term ?? ''}
                         addingVariantId={addingVariantId}
                         onBack={goBack}
                         onNavigate={navigate}
@@ -507,14 +879,20 @@ export function App() {
                             setCart(session.cart);
                             setCheckoutOrder(session.order);
                         }}
-                        onCartChange={setCart}
+                        onCartChange={nextCart => {
+                            setCart(nextCart);
+                            setCheckoutOrder(nextCart.checkoutOrder);
+                        }}
                         onNavigate={navigate}
                         onNotify={notify}
+                        onApplyCoupon={applyCoupon}
+                        onRemoveCoupon={removeCoupon}
                     />
                 );
             case 'orders':
                 return (
                     <OrdersPage
+                        api={api}
                         customer={customer}
                         market={market}
                         locale={locale}
@@ -523,15 +901,15 @@ export function App() {
                         initialTab={route.tab ?? 'all'}
                         onBack={goBack}
                         onNavigate={navigate}
-                        onBuyAgain={async order => {
-                            for (const line of order.lines) await addToCart(line.productVariant);
-                            navigate({ name: 'cart' });
-                        }}
-                        onUnavailable={() => notify(text.unavailable)}
+                        onBuyAgain={addOrderToCart}
                     />
                 );
             case 'order-detail':
-                return (
+                return routeOrderLoading || (route.id && !selectedOrder && !routeOrderError) ? (
+                    <Subpage title={isZh ? '订单详情' : 'Order details'} onBack={goBack}>
+                        <PageSkeleton />
+                    </Subpage>
+                ) : selectedOrder ? (
                     <OrderDetailPage
                         order={selectedOrder}
                         market={market}
@@ -539,14 +917,22 @@ export function App() {
                         language={language}
                         storefrontName={storefrontName}
                         onBack={goBack}
-                        onBuyAgain={async order => {
-                            for (const line of order.lines) {
-                                await addToCart(line.productVariant);
-                            }
-                            navigate({ name: 'cart' });
-                        }}
+                        onBuyAgain={addOrderToCart}
+                        onReopen={reopenPendingOrder}
                         onUnavailable={() => notify(text.unavailable)}
                     />
+                ) : (
+                    <Subpage title={isZh ? '订单详情' : 'Order details'} onBack={goBack}>
+                        <EmptyState
+                            icon={<Package />}
+                            title={isZh ? '没有找到订单' : 'Order not found'}
+                            detail={routeOrderError}
+                            action={routeOrderError ? (isZh ? '重试' : 'Retry') : undefined}
+                            onAction={
+                                routeOrderError ? () => setOrderReloadKey(value => value + 1) : undefined
+                            }
+                        />
+                    </Subpage>
                 );
             case 'addresses':
                 return (
@@ -561,6 +947,48 @@ export function App() {
                         onNotify={notify}
                     />
                 );
+            case 'account-security':
+                return (
+                    <AccountSecurityPage
+                        customer={customer}
+                        language={language}
+                        storefrontName={storefrontName}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                        onLogout={() => {
+                            void api.logout().then(() => {
+                                setCustomer(null);
+                                notify(isZh ? '已退出登录' : 'Signed out');
+                                navigate({ name: 'account' }, true);
+                            });
+                        }}
+                    />
+                );
+            case 'history':
+                return (
+                    <BrowsingHistoryPage
+                        api={api}
+                        productIds={recentProductIds}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        addingVariantId={addingVariantId}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                        onAdd={variant => void addToCart(variant)}
+                        onClear={() => {
+                            if (storefrontCode) {
+                                localStorage.removeItem(
+                                    scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, storefrontCode),
+                                );
+                            }
+                            setRecentProductIds([]);
+                            notify(isZh ? '浏览足迹已清空' : 'Browsing history cleared');
+                        }}
+                    />
+                );
+            case 'notifications':
+                return <NotificationsPage language={language} onBack={goBack} onNavigate={navigate} />;
             case 'login':
                 return (
                     <LoginPage
@@ -568,17 +996,52 @@ export function App() {
                         language={language}
                         storefrontName={storefrontName}
                         onBack={goBack}
-                        onSuccess={async () => {
-                            const [nextCustomer, nextCart] = await Promise.all([
-                                api.activeCustomer(),
-                                api.cart(),
-                            ]);
-                            setCustomer(nextCustomer);
-                            setCart(nextCart);
-                            setCheckoutOrder(nextCart.checkoutOrder);
-                            notify(isZh ? '登录成功' : 'Signed in');
-                            navigate({ name: 'account' }, true);
-                        }}
+                        onSuccess={completeAuthentication}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'register':
+                return (
+                    <RegisterPage
+                        api={api}
+                        language={language}
+                        storefrontName={storefrontName}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'verify-account':
+                return (
+                    <VerifyAccountPage
+                        api={api}
+                        language={language}
+                        storefrontName={storefrontName}
+                        token={route.token}
+                        onBack={goBack}
+                        onSuccess={completeAuthentication}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'forgot-password':
+                return (
+                    <ForgotPasswordPage
+                        api={api}
+                        language={language}
+                        storefrontName={storefrontName}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'reset-password':
+                return (
+                    <ResetPasswordPage
+                        api={api}
+                        language={language}
+                        storefrontName={storefrontName}
+                        token={route.token}
+                        onBack={goBack}
+                        onSuccess={completeAuthentication}
+                        onNavigate={navigate}
                     />
                 );
         }
@@ -616,6 +1079,8 @@ export function App() {
 interface HomePageProps {
     products: Product[];
     collections: CollectionSummary[];
+    contentBlocks: StorefrontContentBlock[];
+    contentError: string;
     loading: boolean;
     error: string | null;
     market: MarketConfig;
@@ -627,7 +1092,8 @@ interface HomePageProps {
     onCategorySelect: (collection: CollectionSummary) => void;
     onAdd: (variant: ProductVariant) => void;
     onToggleLanguage: () => void;
-    onNotify: () => void;
+    onNotifications: () => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onRetry: () => void;
 }
 
@@ -635,6 +1101,8 @@ function HomePage(props: HomePageProps) {
     const {
         products,
         collections,
+        contentBlocks,
+        contentError,
         loading,
         error,
         market,
@@ -646,61 +1114,86 @@ function HomePage(props: HomePageProps) {
         onCategorySelect,
         onAdd,
         onToggleLanguage,
-        onNotify,
+        onNotifications,
+        onContentTarget,
         onRetry,
     } = props;
     const isZh = language === 'zh';
+    const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
+    const managedHeroes = contentBlocks.filter(block => block.type === 'HERO');
+    const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
+    const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
+    const managedSections = contentBlocks.filter(block =>
+        ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'SUPPORT'].includes(block.type),
+    );
     const heroProducts = products.slice(0, 2);
     const [heroIndex, setHeroIndex] = useState(0);
+    const heroCount = managedHeroes.length || heroProducts.length;
+    const managedHero = managedHeroes[heroIndex];
     const hero = heroProducts[heroIndex] ?? products[0];
-    const heroImage = productImage(hero) ?? '/storefront/default-hero.jpg';
+    const heroImage = managedHero?.imageUrl ?? productImage(hero) ?? '/storefront/default-hero.jpg';
     const quickCollections = collections.slice(0, 3);
 
     useEffect(() => {
-        if (heroProducts.length < 2) return;
-        const timer = window.setInterval(
-            () => setHeroIndex(index => (index + 1) % heroProducts.length),
-            5200,
-        );
+        if (heroCount < 2) return;
+        const timer = window.setInterval(() => setHeroIndex(index => (index + 1) % heroCount), 5200);
         return () => window.clearInterval(timer);
-    }, [heroProducts.length]);
+    }, [heroCount]);
 
     useEffect(() => {
-        if (heroIndex >= heroProducts.length) setHeroIndex(0);
-    }, [heroIndex, heroProducts.length]);
+        if (heroIndex >= heroCount) setHeroIndex(0);
+    }, [heroCount, heroIndex]);
 
-    const quickLinks: Array<{ id: string; label: string; icon: ReactNode; onClick: () => void }> = [
-        ...quickCollections.map((collection, index) => ({
-            id: collection.id,
-            label: collection.name,
-            icon: quickIcon(index),
-            onClick: () => onCategorySelect(collection),
-        })),
-        {
-            id: 'all-products',
-            label: isZh ? '全部商品' : 'All products',
-            icon: <LayoutGrid />,
-            onClick: () => onNavigate({ name: 'category' }),
-        },
-        {
-            id: 'weekly-edit',
-            label: isZh ? '本周精选' : 'Weekly edit',
-            icon: <Sparkles />,
-            onClick: () => hero && onNavigate({ name: 'product', id: hero.id }),
-        },
-        {
-            id: 'cart-shortcut',
-            label: isZh ? '购物车' : 'Cart',
-            icon: <ShoppingCart />,
-            onClick: () => onNavigate({ name: 'cart' }),
-        },
-        {
-            id: 'my-orders',
-            label: isZh ? '我的订单' : 'My orders',
-            icon: <Package />,
-            onClick: () => onNavigate({ name: 'orders', tab: 'all' }),
-        },
-    ].slice(0, 5);
+    const quickLinks: Array<{
+        id: string;
+        label: string;
+        icon: ReactNode;
+        disabled?: boolean;
+        onClick: () => void;
+    }> = quickBlock?.items.length
+        ? quickBlock.items.slice(0, 5).map((item, index) => ({
+              id: item.id,
+              label: item.label,
+              icon: item.imageUrl ? <img src={item.imageUrl} alt="" /> : quickIcon(index),
+              disabled: item.targetType === 'NONE' || !item.targetValue,
+              onClick: () => onContentTarget(item.targetType, item.targetValue),
+          }))
+        : [
+              ...quickCollections.map((collection, index) => ({
+                  id: collection.id,
+                  label: collection.name,
+                  icon: quickIcon(index),
+                  onClick: () => onCategorySelect(collection),
+              })),
+              {
+                  id: 'all-products',
+                  label: isZh ? '全部商品' : 'All products',
+                  icon: <LayoutGrid />,
+                  onClick: () => onNavigate({ name: 'category' }),
+              },
+              ...(hero
+                  ? [
+                        {
+                            id: 'weekly-edit',
+                            label: isZh ? '本周精选' : 'Weekly edit',
+                            icon: <Sparkles />,
+                            onClick: () => onNavigate({ name: 'product', id: hero.id }),
+                        },
+                    ]
+                  : []),
+              {
+                  id: 'cart-shortcut',
+                  label: isZh ? '购物车' : 'Cart',
+                  icon: <ShoppingCart />,
+                  onClick: () => onNavigate({ name: 'cart' }),
+              },
+              {
+                  id: 'my-orders',
+                  label: isZh ? '我的订单' : 'My orders',
+                  icon: <Package />,
+                  onClick: () => onNavigate({ name: 'orders', tab: 'all' }),
+              },
+          ].slice(0, 5);
 
     return (
         <main className="page home-page">
@@ -730,17 +1223,35 @@ function HomePage(props: HomePageProps) {
                     >
                         {isZh ? '中' : 'EN'}
                     </button>
-                    <NoticeButton language={language} onClick={onNotify} />
+                    <NoticeButton language={language} onClick={onNotifications} />
                 </div>
             </header>
 
-            <button className="notice-strip" type="button" onClick={onNotify}>
+            <button
+                className="notice-strip"
+                type="button"
+                disabled={!noticeBlock || noticeBlock.targetType === 'NONE' || !noticeBlock.targetValue}
+                onClick={() =>
+                    noticeBlock && onContentTarget(noticeBlock.targetType, noticeBlock.targetValue)
+                }
+            >
                 <Bell aria-hidden="true" />
                 <span>
-                    {isZh ? '现货商品配送时效以结算页为准' : 'Delivery timing is confirmed at checkout'}
+                    {noticeBlock?.title ||
+                        (isZh ? '现货商品配送时效以结算页为准' : 'Delivery timing is confirmed at checkout')}
                 </span>
-                <ChevronRight aria-hidden="true" />
+                {noticeBlock?.targetType !== 'NONE' && <ChevronRight aria-hidden="true" />}
             </button>
+
+            {contentError && (
+                <div className="content-warning" role="status">
+                    <span>{isZh ? '店铺内容暂时无法加载' : 'Store content is temporarily unavailable'}</span>
+                    <button type="button" onClick={onRetry}>
+                        <RotateCcw aria-hidden="true" />
+                        {isZh ? '重试' : 'Retry'}
+                    </button>
+                </div>
+            )}
 
             {loading ? (
                 <PageSkeleton />
@@ -754,72 +1265,112 @@ function HomePage(props: HomePageProps) {
                 />
             ) : (
                 <>
-                    <section className="hero" aria-label={isZh ? '精选推荐' : 'Featured'}>
-                        {heroImage ? (
-                            <img src={heroImage} alt={hero?.name ?? ''} />
-                        ) : (
-                            <div className="image-placeholder">
-                                <Sparkles aria-hidden="true" />
-                            </div>
-                        )}
-                        <div className="hero-shade" />
-                        <div className="hero-copy">
-                            <small>{isZh ? '本周精选' : 'This week'}</small>
-                            <h1>{hero?.name ?? (isZh ? '认真挑选每一件好物' : 'Goods chosen with care')}</h1>
-                            <p>
-                                {trimText(hero?.description, 38) ||
-                                    (isZh
-                                        ? '从当前店铺在售商品中，为你整理值得关注的选择'
-                                        : 'A considered edit of what is available now')}
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => hero && onNavigate({ name: 'product', id: hero.id })}
-                            >
-                                {isZh ? '查看精选' : 'View selection'}
-                                <ChevronRight aria-hidden="true" />
-                            </button>
-                        </div>
-                        {heroProducts.length > 1 && (
-                            <div
-                                className="hero-pagination"
-                                aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
-                            >
-                                {heroProducts.map((product, index) => (
+                    <div className="home-intro-grid">
+                        <section
+                            className="hero"
+                            aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
+                            style={{
+                                backgroundColor: managedHero?.backgroundColor ?? undefined,
+                                color: managedHero?.textColor ?? undefined,
+                            }}
+                        >
+                            {heroImage ? (
+                                <img src={heroImage} alt={managedHero?.title ?? hero?.name ?? ''} />
+                            ) : (
+                                <div className="image-placeholder">
+                                    <Sparkles aria-hidden="true" />
+                                </div>
+                            )}
+                            <div className="hero-shade" />
+                            <div className="hero-copy">
+                                <small>{managedHero?.subtitle || (isZh ? '本周精选' : 'This week')}</small>
+                                <h1>
+                                    {managedHero?.title ??
+                                        hero?.name ??
+                                        (isZh ? '认真挑选每一件好物' : 'Goods chosen with care')}
+                                </h1>
+                                <p>
+                                    {managedHero?.body ||
+                                        trimText(hero?.description, 38) ||
+                                        (isZh
+                                            ? '从当前店铺在售商品中，为你整理值得关注的选择'
+                                            : 'A considered edit of what is available now')}
+                                </p>
+                                {(managedHero ? managedHero.targetType !== 'NONE' : Boolean(hero)) && (
                                     <button
                                         type="button"
-                                        key={product.id}
-                                        className={index === heroIndex ? 'is-active' : undefined}
-                                        aria-label={isZh ? `第${index + 1}张广告` : `Promotion ${index + 1}`}
-                                        aria-current={index === heroIndex}
-                                        onClick={() => setHeroIndex(index)}
-                                    />
-                                ))}
+                                        disabled={managedHero ? !managedHero.targetValue : !hero}
+                                        onClick={() =>
+                                            managedHero
+                                                ? onContentTarget(
+                                                      managedHero.targetType,
+                                                      managedHero.targetValue,
+                                                  )
+                                                : hero && onNavigate({ name: 'product', id: hero.id })
+                                        }
+                                    >
+                                        {managedHero?.ctaLabel || (isZh ? '查看精选' : 'View selection')}
+                                        <ChevronRight aria-hidden="true" />
+                                    </button>
+                                )}
                             </div>
-                        )}
-                    </section>
+                            {heroCount > 1 && (
+                                <div
+                                    className="hero-pagination"
+                                    aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
+                                >
+                                    {(managedHeroes.length ? managedHeroes : heroProducts).map(
+                                        (item, index) => (
+                                            <button
+                                                type="button"
+                                                key={item.id}
+                                                className={index === heroIndex ? 'is-active' : undefined}
+                                                aria-label={
+                                                    isZh ? `第${index + 1}张广告` : `Promotion ${index + 1}`
+                                                }
+                                                aria-current={index === heroIndex}
+                                                onClick={() => setHeroIndex(index)}
+                                            />
+                                        ),
+                                    )}
+                                </div>
+                            )}
+                        </section>
 
-                    <nav className="quick-grid" aria-label={isZh ? '快捷分类' : 'Quick categories'}>
-                        {quickLinks.map((item, index) => (
-                            <button type="button" key={item.id} onClick={item.onClick}>
-                                <span data-tone={index % 5}>{item.icon}</span>
-                                <b>{item.label}</b>
-                            </button>
-                        ))}
-                    </nav>
+                        <nav className="quick-grid" aria-label={isZh ? '快捷分类' : 'Quick categories'}>
+                            {quickLinks.map((item, index) => (
+                                <button
+                                    type="button"
+                                    key={item.id}
+                                    onClick={item.onClick}
+                                    disabled={item.disabled}
+                                >
+                                    <span data-tone={index % 5}>{item.icon}</span>
+                                    <b>{item.label}</b>
+                                </button>
+                            ))}
+                        </nav>
 
-                    <button className="benefit-row" type="button" onClick={onNotify}>
-                        <TicketPercent aria-hidden="true" />
-                        <span>
-                            <small>{isZh ? '优惠自动计算' : 'Automatic savings'}</small>
-                            <strong>
-                                {isZh
-                                    ? '可用优惠将在结算时自动抵扣'
-                                    : 'Eligible offers apply automatically at checkout'}
-                            </strong>
-                        </span>
-                        <ChevronRight aria-hidden="true" />
-                    </button>
+                        <div className="benefit-row">
+                            <TicketPercent aria-hidden="true" />
+                            <span>
+                                <small>{isZh ? '优惠自动计算' : 'Automatic savings'}</small>
+                                <strong>
+                                    {isZh
+                                        ? '可用优惠将在结算时自动抵扣'
+                                        : 'Eligible offers apply automatically at checkout'}
+                                </strong>
+                            </span>
+                        </div>
+                    </div>
+
+                    {managedSections.map(block => (
+                        <ManagedContentSection
+                            key={block.id}
+                            block={block}
+                            onContentTarget={onContentTarget}
+                        />
+                    ))}
 
                     <ProductSection
                         title={isZh ? '限时精选' : 'Selected now'}
@@ -881,9 +1432,9 @@ function HomePage(props: HomePageProps) {
                         onAdd={onAdd}
                     />
                     <LegalFooter
-                        language={language}
                         storefrontName={storefrontName}
-                        onUnavailable={onNotify}
+                        content={legalBlock}
+                        onContentTarget={onContentTarget}
                     />
                 </>
             )}
@@ -891,7 +1442,88 @@ function HomePage(props: HomePageProps) {
     );
 }
 
+function ManagedContentSection({
+    block,
+    onContentTarget,
+}: {
+    block: StorefrontContentBlock;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    return (
+        <section
+            className={`content-section managed-content-section managed-content-${block.type.toLowerCase()}`}
+            style={{
+                backgroundColor: block.backgroundColor ?? undefined,
+                color: block.textColor ?? undefined,
+            }}
+        >
+            <SectionHeader
+                title={block.title}
+                subtitle={block.subtitle}
+                action={blockHasTarget ? block.ctaLabel || undefined : undefined}
+                onAction={
+                    blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined
+                }
+            />
+            {block.body && <p className="managed-content-body">{block.body}</p>}
+            {block.imageUrl && !block.items.length && (
+                <button
+                    className="managed-content-banner"
+                    type="button"
+                    disabled={!blockHasTarget}
+                    onClick={() => onContentTarget(block.targetType, block.targetValue)}
+                >
+                    <img src={block.imageUrl} alt={block.title} loading="lazy" />
+                </button>
+            )}
+            {!!block.items.length && (
+                <div className="managed-content-grid">
+                    {block.items.map(item => (
+                        <ManagedContentItemButton
+                            key={item.id}
+                            item={item}
+                            onContentTarget={onContentTarget}
+                        />
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function ManagedContentItemButton({
+    item,
+    onContentTarget,
+}: {
+    item: StorefrontContentItem;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const disabled = item.targetType === 'NONE' || !item.targetValue;
+    return (
+        <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onContentTarget(item.targetType, item.targetValue)}
+        >
+            {item.imageUrl ? (
+                <img src={item.imageUrl} alt="" loading="lazy" />
+            ) : (
+                <span className="managed-content-placeholder">
+                    <LayoutGrid aria-hidden="true" />
+                </span>
+            )}
+            <span className="managed-content-copy">
+                <strong>{item.label}</strong>
+                {item.description && <small>{item.description}</small>}
+            </span>
+            {!disabled && <ChevronRight aria-hidden="true" />}
+        </button>
+    );
+}
+
 interface CategoryPageProps {
+    api: ShopApi;
     products: Product[];
     collections: CollectionSummary[];
     loading: boolean;
@@ -902,13 +1534,10 @@ interface CategoryPageProps {
     activeCollectionId: string;
     activeChildId: string;
     sortMode: SortMode;
-    fulfillmentFilter: 'all' | FulfillmentType;
-    inStockOnly: boolean;
     addingVariantId: string | null;
     onCollectionChange: (collectionId: string, childId: string) => void;
     onChildChange: (childId: string) => void;
     onSortChange: (sort: SortMode) => void;
-    onFilterChange: (type: 'all' | FulfillmentType, inStock: boolean) => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
     onNotify: () => void;
@@ -917,6 +1546,7 @@ interface CategoryPageProps {
 
 function CategoryPage(props: CategoryPageProps) {
     const {
+        api,
         products,
         collections,
         loading,
@@ -927,105 +1557,142 @@ function CategoryPage(props: CategoryPageProps) {
         activeCollectionId,
         activeChildId,
         sortMode,
-        fulfillmentFilter,
-        inStockOnly,
         addingVariantId,
         onCollectionChange,
         onChildChange,
         onSortChange,
-        onFilterChange,
         onNavigate,
         onAdd,
         onNotify,
         onRetry,
     } = props;
     const isZh = language === 'zh';
-    const [filterOpen, setFilterOpen] = useState(false);
-    const [draftType, setDraftType] = useState(fulfillmentFilter);
-    const [draftStock, setDraftStock] = useState(inStockOnly);
-    const [minimumPriceInput, setMinimumPriceInput] = useState('');
-    const [maximumPriceInput, setMaximumPriceInput] = useState('');
-    const [draftMinimumPrice, setDraftMinimumPrice] = useState('');
-    const [draftMaximumPrice, setDraftMaximumPrice] = useState('');
-    const [visibleLimit, setVisibleLimit] = useState(6);
+    const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
+    const [totalItems, setTotalItems] = useState(0);
+    const [categoryLoading, setCategoryLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [categoryError, setCategoryError] = useState('');
+    const [categoryReloadKey, setCategoryReloadKey] = useState(0);
+    const activeCategoryKey = useRef('');
     const primary = collections.find(item => item.id === activeCollectionId) ?? collections[0];
     const children = primary?.children?.length ? primary.children : primary ? [primary] : [];
     const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
 
-    const visibleProducts = useMemo(() => {
-        const fallbackType =
-            !collections.length && (activeCollectionId === 'physical' || activeCollectionId === 'digital')
-                ? activeCollectionId
-                : 'all';
-        const effectiveType = fallbackType === 'all' ? fulfillmentFilter : fallbackType;
-        const filtered = products.filter(product => {
-            const collectionMatch =
-                !collections.length ||
-                selectedCollectionId === 'all' ||
-                product.collections.some(collection => collection.id === selectedCollectionId);
-            const typeMatch =
-                effectiveType === 'all' ||
-                product.variants.some(variant => variant.customFields.fulfillmentType === effectiveType);
-            const stockMatch =
-                !inStockOnly || product.variants.some(variant => variant.stockLevel === 'IN_STOCK');
-            const price = minimumPrice(product) / 100;
-            const minimumMatch = minimumPriceInput === '' || price >= Number(minimumPriceInput);
-            const maximumMatch = maximumPriceInput === '' || price <= Number(maximumPriceInput);
-            return collectionMatch && typeMatch && stockMatch && minimumMatch && maximumMatch;
-        });
-        if (sortMode === 'recommended') return filtered;
-        if (sortMode === 'newest') {
-            return [...filtered].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    useEffect(() => {
+        if (!collections.length) {
+            const fallbackType =
+                activeCollectionId === 'physical' || activeCollectionId === 'digital'
+                    ? activeCollectionId
+                    : 'all';
+            const fallbackProducts = products.filter(
+                product =>
+                    fallbackType === 'all' ||
+                    product.variants.some(variant => variant.customFields.fulfillmentType === fallbackType),
+            );
+            const sortedFallbackProducts = [...fallbackProducts].sort((first, second) => {
+                if (sortMode === 'name') return first.name.localeCompare(second.name, locale);
+                if (sortMode === 'price-asc') return minimumPrice(first) - minimumPrice(second);
+                if (sortMode === 'price-desc') return minimumPrice(second) - minimumPrice(first);
+                return 0;
+            });
+            setCategoryProducts(sortedFallbackProducts);
+            setTotalItems(fallbackProducts.length);
+            setCategoryLoading(false);
+            setCategoryError(error ?? '');
+            return;
         }
-        return [...filtered].sort((a, b) => {
-            const aPrice = minimumPrice(a);
-            const bPrice = minimumPrice(b);
-            return sortMode === 'price-asc' ? aPrice - bPrice : bPrice - aPrice;
-        });
+        if (!selectedCollectionId || selectedCollectionId === 'all') return;
+        const categoryKey = `${selectedCollectionId}\u0000${sortMode}\u0000${categoryReloadKey}`;
+        activeCategoryKey.current = categoryKey;
+        let cancelled = false;
+        setCategoryProducts([]);
+        setTotalItems(0);
+        setCategoryError('');
+        setCategoryLoading(true);
+        void api
+            .searchProducts('', sortMode, 0, 12, selectedCollectionId)
+            .then(page => {
+                if (cancelled || activeCategoryKey.current !== categoryKey) return;
+                setCategoryProducts(page.items);
+                setTotalItems(page.totalItems);
+            })
+            .catch(requestError => {
+                if (!cancelled && activeCategoryKey.current === categoryKey) {
+                    setCategoryError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : isZh
+                              ? '商品加载失败'
+                              : 'Could not load products',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled && activeCategoryKey.current === categoryKey) {
+                    setCategoryLoading(false);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [
         activeCollectionId,
+        api,
+        categoryReloadKey,
         collections.length,
-        fulfillmentFilter,
-        inStockOnly,
-        maximumPriceInput,
-        minimumPriceInput,
+        error,
+        isZh,
+        locale,
         products,
         selectedCollectionId,
         sortMode,
     ]);
 
-    useEffect(() => {
-        setVisibleLimit(6);
-    }, [
-        activeChildId,
-        activeCollectionId,
-        fulfillmentFilter,
-        inStockOnly,
-        maximumPriceInput,
-        minimumPriceInput,
-        sortMode,
-    ]);
-
-    const draftResultCount = products.filter(product => {
-        const collectionMatch =
-            !collections.length ||
+    const loadMore = async () => {
+        if (
+            !selectedCollectionId ||
             selectedCollectionId === 'all' ||
-            product.collections.some(collection => collection.id === selectedCollectionId);
-        const typeMatch =
-            draftType === 'all' ||
-            product.variants.some(variant => variant.customFields.fulfillmentType === draftType);
-        const stockMatch = !draftStock || product.variants.some(variant => variant.stockLevel === 'IN_STOCK');
-        const price = minimumPrice(product) / 100;
-        const minimumMatch = draftMinimumPrice === '' || price >= Number(draftMinimumPrice);
-        const maximumMatch = draftMaximumPrice === '' || price <= Number(draftMaximumPrice);
-        return collectionMatch && typeMatch && stockMatch && minimumMatch && maximumMatch;
-    }).length;
-
-    const hasFilters =
-        fulfillmentFilter !== 'all' || inStockOnly || minimumPriceInput !== '' || maximumPriceInput !== '';
+            loadingMore ||
+            categoryProducts.length >= totalItems
+        ) {
+            return;
+        }
+        const categoryKey = activeCategoryKey.current;
+        setLoadingMore(true);
+        setCategoryError('');
+        try {
+            const page = await api.searchProducts(
+                '',
+                sortMode,
+                categoryProducts.length,
+                12,
+                selectedCollectionId,
+            );
+            if (activeCategoryKey.current !== categoryKey) return;
+            setCategoryProducts(current => {
+                const existingIds = new Set(current.map(product => product.id));
+                return [...current, ...page.items.filter(product => !existingIds.has(product.id))];
+            });
+            setTotalItems(page.totalItems);
+        } catch (requestError) {
+            if (activeCategoryKey.current === categoryKey) {
+                setCategoryError(
+                    requestError instanceof Error
+                        ? requestError.message
+                        : isZh
+                          ? '加载更多失败'
+                          : 'Could not load more products',
+                );
+            }
+        } finally {
+            if (activeCategoryKey.current === categoryKey) setLoadingMore(false);
+        }
+    };
 
     const bannerImage =
-        primary?.featuredAsset?.preview ?? productImage(visibleProducts[0]) ?? '/storefront/default-hero.jpg';
+        primary?.featuredAsset?.preview ??
+        productImage(categoryProducts[0]) ??
+        '/storefront/default-hero.jpg';
 
     return (
         <main className="page category-page">
@@ -1087,8 +1754,9 @@ function CategoryPage(props: CategoryPageProps) {
                     <button
                         className="category-banner"
                         type="button"
+                        disabled={!categoryProducts[0]}
                         onClick={() =>
-                            visibleProducts[0] && onNavigate({ name: 'product', id: visibleProducts[0].id })
+                            categoryProducts[0] && onNavigate({ name: 'product', id: categoryProducts[0].id })
                         }
                     >
                         {bannerImage ? (
@@ -1104,10 +1772,7 @@ function CategoryPage(props: CategoryPageProps) {
                         </span>
                     </button>
                     <div className="result-count">
-                        <span>
-                            {isZh ? `共 ${visibleProducts.length} 件` : `${visibleProducts.length} products`}
-                        </span>
-                        {hasFilters && <b>{isZh ? '已筛选' : 'Filtered'}</b>}
+                        <span>{isZh ? `共 ${totalItems} 件` : `${totalItems} products`}</span>
                     </div>
                     <nav className="sort-bar" aria-label={isZh ? '排序和筛选' : 'Sort and filter'}>
                         <button
@@ -1119,17 +1784,10 @@ function CategoryPage(props: CategoryPageProps) {
                         </button>
                         <button
                             type="button"
-                            disabled
-                            title={isZh ? '销量排序需要后台索引支持' : 'Sales ranking needs backend support'}
+                            className={sortMode === 'name' ? 'is-active' : undefined}
+                            onClick={() => onSortChange('name')}
                         >
-                            {isZh ? '销量' : 'Sales'}
-                        </button>
-                        <button
-                            type="button"
-                            className={sortMode === 'newest' ? 'is-active' : undefined}
-                            onClick={() => onSortChange('newest')}
-                        >
-                            {isZh ? '最新' : 'Newest'}
+                            {isZh ? '名称' : 'Name'}
                         </button>
                         <button
                             type="button"
@@ -1140,35 +1798,24 @@ function CategoryPage(props: CategoryPageProps) {
                         >
                             {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
                         </button>
-                        <button
-                            type="button"
-                            className={hasFilters ? 'is-active' : undefined}
-                            onClick={() => {
-                                setDraftType(fulfillmentFilter);
-                                setDraftStock(inStockOnly);
-                                setDraftMinimumPrice(minimumPriceInput);
-                                setDraftMaximumPrice(maximumPriceInput);
-                                setFilterOpen(true);
-                            }}
-                        >
-                            {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
-                        </button>
                     </nav>
 
-                    {loading ? (
+                    {categoryLoading || (loading && !collections.length) ? (
                         <ListSkeleton />
-                    ) : error ? (
+                    ) : categoryError && !categoryProducts.length ? (
                         <EmptyState
                             icon={<WifiOff />}
                             title={isZh ? '商品加载失败' : 'Could not load products'}
-                            detail={error}
+                            detail={categoryError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={onRetry}
+                            onAction={() =>
+                                collections.length ? setCategoryReloadKey(value => value + 1) : onRetry()
+                            }
                             compact
                         />
-                    ) : visibleProducts.length ? (
+                    ) : categoryProducts.length ? (
                         <div className="product-list">
-                            {visibleProducts.slice(0, visibleLimit).map(product => (
+                            {categoryProducts.map(product => (
                                 <ProductRow
                                     key={product.id}
                                     product={product}
@@ -1180,15 +1827,28 @@ function CategoryPage(props: CategoryPageProps) {
                                     onAdd={() => product.variants[0] && onAdd(product.variants[0])}
                                 />
                             ))}
-                            {visibleProducts.length > visibleLimit && (
+                            {categoryError && (
+                                <div className="search-load-error" role="alert">
+                                    <span>{categoryError}</span>
+                                    <button type="button" onClick={() => void loadMore()}>
+                                        {isZh ? '重试' : 'Retry'}
+                                    </button>
+                                </div>
+                            )}
+                            {categoryProducts.length < totalItems && (
                                 <button
                                     className="load-more-button"
                                     type="button"
-                                    onClick={() => setVisibleLimit(limit => limit + 6)}
+                                    disabled={loadingMore}
+                                    onClick={() => void loadMore()}
                                 >
-                                    {isZh
-                                        ? `加载更多（剩余 ${visibleProducts.length - visibleLimit} 件）`
-                                        : `Load more (${visibleProducts.length - visibleLimit} remaining)`}
+                                    {loadingMore
+                                        ? isZh
+                                            ? '加载中'
+                                            : 'Loading'
+                                        : isZh
+                                          ? `加载更多（剩余 ${totalItems - categoryProducts.length} 件）`
+                                          : `Load more (${totalItems - categoryProducts.length} remaining)`}
                                 </button>
                             )}
                         </div>
@@ -1196,147 +1856,12 @@ function CategoryPage(props: CategoryPageProps) {
                         <EmptyState
                             icon={<Search />}
                             title={isZh ? '当前分类没有商品' : 'No products in this category'}
-                            detail={
-                                isZh
-                                    ? '可以切换分类或清除筛选条件'
-                                    : 'Choose another category or clear filters'
-                            }
+                            detail={isZh ? '可以切换其他分类' : 'Choose another category'}
                             compact
                         />
                     )}
                 </section>
             </div>
-
-            {filterOpen && (
-                <Sheet title={isZh ? '筛选' : 'Filter'} onClose={() => setFilterOpen(false)}>
-                    <div className="filter-sheet-content">
-                        <label className="switch-row filter-stock-row">
-                            <span>
-                                <strong>{isZh ? '仅看有货' : 'In stock only'}</strong>
-                                <small>{isZh ? '隐藏当前不可售规格' : 'Hide unavailable variants'}</small>
-                            </span>
-                            <input
-                                type="checkbox"
-                                checked={draftStock}
-                                onChange={event => setDraftStock(event.target.checked)}
-                            />
-                        </label>
-                        <fieldset>
-                            <legend>{isZh ? '价格区间' : 'Price range'}</legend>
-                            <div className="price-range-inputs">
-                                <label>
-                                    <span>{market.currencyCode === 'CNY' ? '¥' : market.currencyCode}</span>
-                                    <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        min="0"
-                                        placeholder={isZh ? '最低价' : 'Min'}
-                                        value={draftMinimumPrice}
-                                        onChange={event => setDraftMinimumPrice(event.target.value)}
-                                    />
-                                </label>
-                                <i />
-                                <label>
-                                    <span>{market.currencyCode === 'CNY' ? '¥' : market.currencyCode}</span>
-                                    <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        min="0"
-                                        placeholder={isZh ? '最高价' : 'Max'}
-                                        value={draftMaximumPrice}
-                                        onChange={event => setDraftMaximumPrice(event.target.value)}
-                                    />
-                                </label>
-                            </div>
-                            <div className="price-presets">
-                                {(
-                                    [
-                                        [0, 100],
-                                        [100, 300],
-                                        [300, 800],
-                                        [800, null],
-                                    ] as const
-                                ).map(([minimum, maximum]) => (
-                                    <button
-                                        type="button"
-                                        key={`${minimum}-${maximum ?? 'up'}`}
-                                        className={
-                                            draftMinimumPrice === String(minimum) &&
-                                            draftMaximumPrice === (maximum === null ? '' : String(maximum))
-                                                ? 'is-active'
-                                                : undefined
-                                        }
-                                        onClick={() => {
-                                            setDraftMinimumPrice(String(minimum));
-                                            setDraftMaximumPrice(maximum === null ? '' : String(maximum));
-                                        }}
-                                    >
-                                        {maximum === null
-                                            ? `${market.currencyCode === 'CNY' ? '¥' : ''}${minimum}${isZh ? '以上' : '+'}`
-                                            : `${market.currencyCode === 'CNY' ? '¥' : ''}${minimum}-${maximum}`}
-                                    </button>
-                                ))}
-                            </div>
-                        </fieldset>
-                        <fieldset>
-                            <legend>{isZh ? '商品类型' : 'Product type'}</legend>
-                            <div className="segmented-options">
-                                {(['all', 'physical', 'digital'] as const).map(type => (
-                                    <button
-                                        type="button"
-                                        key={type}
-                                        className={draftType === type ? 'is-active' : undefined}
-                                        onClick={() => setDraftType(type)}
-                                    >
-                                        {type === 'all'
-                                            ? isZh
-                                                ? '全部'
-                                                : 'All'
-                                            : type === 'physical'
-                                              ? isZh
-                                                  ? '实物'
-                                                  : 'Physical'
-                                              : isZh
-                                                ? '数字商品'
-                                                : 'Digital'}
-                                    </button>
-                                ))}
-                            </div>
-                        </fieldset>
-                        <div className="sheet-actions">
-                            <button type="button" onClick={() => setFilterOpen(false)}>
-                                {isZh ? '取消' : 'Cancel'}
-                            </button>
-                            <button
-                                type="button"
-                                className="reset-filter-button"
-                                onClick={() => {
-                                    setDraftType('all');
-                                    setDraftStock(false);
-                                    setDraftMinimumPrice('');
-                                    setDraftMaximumPrice('');
-                                }}
-                            >
-                                {isZh ? '重置' : 'Reset'}
-                            </button>
-                            <button
-                                type="button"
-                                className="primary-action"
-                                onClick={() => {
-                                    onFilterChange(draftType, draftStock);
-                                    setMinimumPriceInput(draftMinimumPrice);
-                                    setMaximumPriceInput(draftMaximumPrice);
-                                    setFilterOpen(false);
-                                }}
-                            >
-                                {isZh
-                                    ? `查看 ${draftResultCount} 件商品`
-                                    : `View ${draftResultCount} products`}
-                            </button>
-                        </div>
-                    </div>
-                </Sheet>
-            )}
         </main>
     );
 }
@@ -1356,10 +1881,12 @@ interface CartPageProps {
     onQuantity: (lineId: string, quantity: number) => void;
     onRemove: (lineId: string) => void;
     onCheckout: () => void;
+    onReopen: () => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
     onRetry: () => void;
-    onUnavailable: () => void;
+    onApplyCoupon: (couponCode: string) => Promise<string | null>;
+    onRemoveCoupon: (couponCode: string) => Promise<string | null>;
 }
 
 function CartPage(props: CartPageProps) {
@@ -1378,14 +1905,17 @@ function CartPage(props: CartPageProps) {
         onQuantity,
         onRemove,
         onCheckout,
+        onReopen,
         onNavigate,
         onAdd,
         onRetry,
-        onUnavailable,
+        onApplyCoupon,
+        onRemoveCoupon,
     } = props;
     const isZh = language === 'zh';
     const lines = cart?.lines ?? [];
     const [invalidOpen, setInvalidOpen] = useState(false);
+    const [couponOpen, setCouponOpen] = useState(false);
     const activeLines = lines.filter(line => line.available && line.productVariant);
     const invalidLines = lines.filter(line => !line.available || !line.productVariant);
     const physical = activeLines.filter(
@@ -1395,6 +1925,7 @@ function CartPage(props: CartPageProps) {
         line => line.productVariant?.customFields.fulfillmentType === 'digital',
     );
     const order = cart?.checkoutOrder;
+    const locked = cart?.state === 'PAYMENT_PENDING';
     const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
     const amount = order?.subTotalWithTax ?? 0;
 
@@ -1407,7 +1938,7 @@ function CartPage(props: CartPageProps) {
                         className={`select-all ${(cart?.selectionState ?? 'NONE').toLowerCase()}`}
                         type="button"
                         onClick={onToggleAll}
-                        disabled={loading}
+                        disabled={loading || locked}
                     >
                         <span>
                             {cart?.selectionState === 'ALL' ? (
@@ -1449,6 +1980,17 @@ function CartPage(props: CartPageProps) {
             )}
 
             {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
+            {locked && (
+                <InlineError
+                    message={
+                        isZh
+                            ? '订单正在等待支付，购物车内容已锁定。返回修改后才能调整商品或优惠。'
+                            : 'This cart is locked while its order awaits payment. Reopen it to make changes.'
+                    }
+                    action={isZh ? '返回修改' : 'Reopen'}
+                    onAction={onReopen}
+                />
+            )}
             {!cart && loading ? (
                 <ListSkeleton />
             ) : !lines.length ? (
@@ -1470,7 +2012,7 @@ function CartPage(props: CartPageProps) {
                                 market={market}
                                 locale={locale}
                                 language={language}
-                                loading={loading}
+                                loading={loading || locked}
                                 onSelect={onSelect}
                                 onSelectAll={onSelectGroup}
                                 onQuantity={onQuantity}
@@ -1485,7 +2027,7 @@ function CartPage(props: CartPageProps) {
                                 market={market}
                                 locale={locale}
                                 language={language}
-                                loading={loading}
+                                loading={loading || locked}
                                 onSelect={onSelect}
                                 onSelectAll={onSelectGroup}
                                 onQuantity={onQuantity}
@@ -1493,7 +2035,12 @@ function CartPage(props: CartPageProps) {
                             />
                         )}
                     </div>
-                    <button className="coupon-row" type="button" onClick={onUnavailable}>
+                    <button
+                        className="coupon-row"
+                        type="button"
+                        onClick={() => setCouponOpen(true)}
+                        disabled={!order || locked}
+                    >
                         <span>
                             <TicketPercent />
                             <strong>{isZh ? '优惠信息' : 'Offers'}</strong>
@@ -1505,8 +2052,8 @@ function CartPage(props: CartPageProps) {
                                         ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
                                         : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
                                     : isZh
-                                      ? '结算时自动计算'
-                                      : 'Calculated at checkout'}
+                                      ? '输入优惠码'
+                                      : 'Enter coupon code'}
                             </small>
                             <ChevronRight />
                         </span>
@@ -1549,7 +2096,7 @@ function CartPage(props: CartPageProps) {
                                             <button
                                                 type="button"
                                                 onClick={() => onRemove(line.id)}
-                                                disabled={loading}
+                                                disabled={loading || locked}
                                             >
                                                 {isZh ? '删除' : 'Remove'}
                                             </button>
@@ -1559,21 +2106,25 @@ function CartPage(props: CartPageProps) {
                             )}
                         </section>
                     )}
-                    <ProductSection
-                        title={isZh ? '顺手带一件' : 'Complete the order'}
-                        subtitle={isZh ? '从当前店铺继续挑选' : 'More from this store'}
-                        products={products
-                            .filter(
-                                product =>
-                                    !lines.some(line => line.productVariant?.id === product.variants[0]?.id),
-                            )
-                            .slice(0, 4)}
-                        market={market}
-                        locale={locale}
-                        addingVariantId={addingVariantId}
-                        onProduct={product => onNavigate({ name: 'product', id: product.id })}
-                        onAdd={onAdd}
-                    />
+                    {!locked && (
+                        <ProductSection
+                            title={isZh ? '顺手带一件' : 'Complete the order'}
+                            subtitle={isZh ? '从当前店铺继续挑选' : 'More from this store'}
+                            products={products
+                                .filter(
+                                    product =>
+                                        !lines.some(
+                                            line => line.productVariant?.id === product.variants[0]?.id,
+                                        ),
+                                )
+                                .slice(0, 4)}
+                            market={market}
+                            locale={locale}
+                            addingVariantId={addingVariantId}
+                            onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                            onAdd={onAdd}
+                        />
+                    )}
                 </>
             )}
 
@@ -1596,53 +2147,68 @@ function CartPage(props: CartPageProps) {
                                   : 'Shipping not included'}
                         </small>
                     </div>
-                    <button type="button" onClick={onCheckout} disabled={loading || !cart?.selectedQuantity}>
-                        {isZh
-                            ? `结算（${cart?.selectedQuantity ?? 0}）`
-                            : `Checkout (${cart?.selectedQuantity ?? 0})`}
+                    <button
+                        type="button"
+                        onClick={onCheckout}
+                        disabled={loading || locked || !cart?.selectedQuantity}
+                    >
+                        {locked
+                            ? isZh
+                                ? '订单待支付'
+                                : 'Payment pending'
+                            : isZh
+                              ? `结算（${cart?.selectedQuantity ?? 0}）`
+                              : `Checkout (${cart?.selectedQuantity ?? 0})`}
                     </button>
                 </div>
+            )}
+            {couponOpen && order && (
+                <CouponSheet
+                    couponCodes={order.couponCodes}
+                    language={language}
+                    loading={loading}
+                    onApply={onApplyCoupon}
+                    onRemove={onRemoveCoupon}
+                    onClose={() => setCouponOpen(false)}
+                />
             )}
         </main>
     );
 }
 
 interface AccountPageProps {
+    api: ShopApi;
     customer: ActiveCustomer | null;
     products: Product[];
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    recentProductCount: number;
     addingVariantId: string | null;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
-    onUnavailable: () => void;
     onLogout: () => void;
 }
 
 function AccountPage(props: AccountPageProps) {
     const {
+        api,
         customer,
         products,
         market,
         locale,
         language,
         storefrontName,
+        recentProductCount,
         addingVariantId,
         onNavigate,
         onAdd,
-        onUnavailable,
         onLogout,
     } = props;
     const isZh = language === 'zh';
     const orders = customer?.orders.items ?? [];
-    const counts = {
-        pending: orders.filter(order => ['AddingItems', 'ArrangingPayment'].includes(order.state)).length,
-        shipping: orders.filter(order => ['PaymentAuthorized', 'PaymentSettled'].includes(order.state))
-            .length,
-        receiving: orders.filter(order => ['Shipped', 'PartiallyShipped'].includes(order.state)).length,
-    };
+    const [counts, setCounts] = useState({ pending: 0, shipping: 0, receiving: 0 });
     const latestOrder = orders[0];
     const recentVariants = Array.from(
         new Map(
@@ -1653,15 +2219,37 @@ function AccountPage(props: AccountPageProps) {
         ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress
         : '';
 
+    useEffect(() => {
+        if (!customer) {
+            setCounts({ pending: 0, shipping: 0, receiving: 0 });
+            return;
+        }
+        let cancelled = false;
+        void api
+            .customerOrderCounts()
+            .then(nextCounts => {
+                if (!cancelled) setCounts(nextCounts);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [api, customer]);
+
     return (
         <main className="page account-page">
             <header className="topbar account-topbar">
                 <strong>{isZh ? '我的' : 'Account'}</strong>
                 <div>
-                    <button type="button" onClick={onUnavailable} aria-label={isZh ? '联系客服' : 'Support'}>
-                        <Headphones />
-                    </button>
-                    <button type="button" onClick={onUnavailable} aria-label={isZh ? '设置' : 'Settings'}>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            customer
+                                ? onNavigate({ name: 'account-security' })
+                                : onNavigate({ name: 'login' })
+                        }
+                        aria-label={isZh ? '设置' : 'Settings'}
+                    >
                         <Settings />
                     </button>
                 </div>
@@ -1672,7 +2260,9 @@ function AccountPage(props: AccountPageProps) {
                 </span>
                 <button
                     type="button"
-                    onClick={() => (customer ? onUnavailable() : onNavigate({ name: 'login' }))}
+                    onClick={() =>
+                        customer ? onNavigate({ name: 'account-security' }) : onNavigate({ name: 'login' })
+                    }
                 >
                     <strong>
                         {customer
@@ -1723,7 +2313,7 @@ function AccountPage(props: AccountPageProps) {
                         icon={<RotateCcw />}
                         label={isZh ? '退款/售后' : 'After-sales'}
                         count={0}
-                        onClick={onUnavailable}
+                        onClick={() => onNavigate({ name: 'orders', tab: 'service' })}
                     />
                 </nav>
             </section>
@@ -1762,24 +2352,33 @@ function AccountPage(props: AccountPageProps) {
                         }
                     />
                     <ServiceButton
-                        icon={<RotateCcw />}
-                        label={isZh ? '售后记录' : 'After-sales'}
-                        onClick={onUnavailable}
-                    />
-                    <ServiceButton
-                        icon={<MessageSquare />}
-                        label={isZh ? '联系客服' : 'Support'}
-                        onClick={onUnavailable}
+                        icon={<Clock3 />}
+                        label={
+                            recentProductCount
+                                ? isZh
+                                    ? `足迹 ${recentProductCount}`
+                                    : `History ${recentProductCount}`
+                                : isZh
+                                  ? '浏览足迹'
+                                  : 'History'
+                        }
+                        onClick={() => onNavigate({ name: 'history' })}
                     />
                     <ServiceButton
                         icon={<Store />}
-                        label={isZh ? '关于店铺' : 'About store'}
-                        onClick={onUnavailable}
+                        label={isZh ? '店铺首页' : 'Store home'}
+                        onClick={() => onNavigate({ name: 'home' })}
                     />
                 </div>
             </section>
 
-            <button className="security-row" type="button" onClick={onUnavailable}>
+            <button
+                className="security-row"
+                type="button"
+                onClick={() =>
+                    customer ? onNavigate({ name: 'account-security' }) : onNavigate({ name: 'login' })
+                }
+            >
                 <span>
                     <Fingerprint />
                     <strong>{isZh ? '账户与安全' : 'Account and security'}</strong>
@@ -1833,8 +2432,228 @@ function AccountPage(props: AccountPageProps) {
                 onProduct={product => onNavigate({ name: 'product', id: product.id })}
                 onAdd={onAdd}
             />
-            <LegalFooter language={language} storefrontName={storefrontName} onUnavailable={onUnavailable} />
+            <LegalFooter storefrontName={storefrontName} />
         </main>
+    );
+}
+
+function AccountSecurityPage({
+    customer,
+    language,
+    storefrontName,
+    onBack,
+    onNavigate,
+    onLogout,
+}: {
+    customer: ActiveCustomer | null;
+    language: StorefrontLanguage;
+    storefrontName: string;
+    onBack: () => void;
+    onNavigate: (route: RouteState) => void;
+    onLogout: () => void;
+}) {
+    const isZh = language === 'zh';
+    if (!customer) {
+        return (
+            <Subpage title={isZh ? '账户与安全' : 'Account and security'} onBack={onBack}>
+                <EmptyState
+                    icon={<UserRound />}
+                    title={isZh ? '请先登录' : 'Sign in required'}
+                    action={isZh ? '去登录' : 'Sign in'}
+                    onAction={() => onNavigate({ name: 'login' })}
+                />
+            </Subpage>
+        );
+    }
+    const fullName = `${customer.lastName}${customer.firstName}`.trim();
+    return (
+        <main className="page subpage account-security-page">
+            <SubHeader title={isZh ? '账户与安全' : 'Account and security'} onBack={onBack} />
+            <section className="account-security-profile">
+                <span className="avatar">
+                    {(fullName || customer.emailAddress).slice(0, 1).toUpperCase()}
+                </span>
+                <div>
+                    <strong>{fullName || storefrontName}</strong>
+                    <small>{customer.emailAddress}</small>
+                </div>
+            </section>
+            <section className="account-security-list">
+                <button type="button" onClick={() => onNavigate({ name: 'forgot-password' })}>
+                    <span>
+                        <Fingerprint />
+                        <b>{isZh ? '修改登录密码' : 'Change password'}</b>
+                    </span>
+                    <small>{isZh ? '通过邮箱验证后重置' : 'Reset after email verification'}</small>
+                    <ChevronRight />
+                </button>
+                <button type="button" onClick={() => onNavigate({ name: 'addresses' })}>
+                    <span>
+                        <MapPin />
+                        <b>{isZh ? '收货地址' : 'Delivery addresses'}</b>
+                    </span>
+                    <small>
+                        {isZh
+                            ? `${customer.addresses?.length ?? 0} 个地址`
+                            : `${customer.addresses?.length ?? 0} addresses`}
+                    </small>
+                    <ChevronRight />
+                </button>
+            </section>
+            <button className="logout-button" type="button" onClick={onLogout}>
+                {isZh ? '退出登录' : 'Sign out'}
+            </button>
+        </main>
+    );
+}
+
+function BrowsingHistoryPage({
+    api,
+    productIds,
+    market,
+    locale,
+    language,
+    addingVariantId,
+    onBack,
+    onNavigate,
+    onAdd,
+    onClear,
+}: {
+    api: ShopApi;
+    productIds: string[];
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    addingVariantId: string | null;
+    onBack: () => void;
+    onNavigate: (route: RouteState) => void;
+    onAdd: (variant: ProductVariant) => void;
+    onClear: () => void;
+}) {
+    const isZh = language === 'zh';
+    const [historyProducts, setHistoryProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [historyError, setHistoryError] = useState('');
+    const [retryKey, setRetryKey] = useState(0);
+    const productIdsKey = productIds.join(',');
+
+    useEffect(() => {
+        if (!productIds.length) {
+            setHistoryProducts([]);
+            setLoading(false);
+            setHistoryError('');
+            return;
+        }
+        let cancelled = false;
+        setLoading(true);
+        setHistoryError('');
+        void api
+            .productsByIds(productIds)
+            .then(nextProducts => {
+                if (!cancelled) setHistoryProducts(nextProducts);
+            })
+            .catch(requestError => {
+                if (!cancelled) {
+                    setHistoryError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : isZh
+                              ? '浏览足迹加载失败'
+                              : 'Could not load browsing history',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, isZh, productIdsKey, retryKey]);
+
+    return (
+        <main className="page subpage history-page">
+            <SubHeader
+                title={isZh ? '浏览足迹' : 'Browsing history'}
+                onBack={onBack}
+                action={
+                    productIds.length ? (
+                        <button
+                            type="button"
+                            onClick={onClear}
+                            aria-label={isZh ? '清空浏览足迹' : 'Clear browsing history'}
+                        >
+                            <Trash2 />
+                        </button>
+                    ) : undefined
+                }
+            />
+            {loading && !historyProducts.length ? (
+                <PageSkeleton />
+            ) : historyError ? (
+                <EmptyState
+                    icon={<WifiOff />}
+                    title={isZh ? '浏览足迹加载失败' : 'Could not load browsing history'}
+                    detail={historyError}
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={() => setRetryKey(value => value + 1)}
+                />
+            ) : historyProducts.length ? (
+                <ProductSection
+                    title={isZh ? '最近浏览' : 'Recently viewed'}
+                    subtitle={
+                        isZh ? `共 ${historyProducts.length} 件商品` : `${historyProducts.length} products`
+                    }
+                    products={historyProducts}
+                    market={market}
+                    locale={locale}
+                    addingVariantId={addingVariantId}
+                    onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                    onAdd={onAdd}
+                />
+            ) : (
+                <EmptyState
+                    icon={<Clock3 />}
+                    title={isZh ? '暂无浏览足迹' : 'No browsing history'}
+                    detail={
+                        productIds.length
+                            ? isZh
+                                ? '最近浏览的商品已下架'
+                                : 'Recently viewed products are no longer available'
+                            : isZh
+                              ? '浏览商品后会记录在这里'
+                              : 'Products you view will appear here'
+                    }
+                    action={isZh ? '去逛商品' : 'Browse products'}
+                    onAction={() => onNavigate({ name: 'category' })}
+                />
+            )}
+        </main>
+    );
+}
+
+function NotificationsPage({
+    language,
+    onBack,
+    onNavigate,
+}: {
+    language: StorefrontLanguage;
+    onBack: () => void;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <Subpage title={isZh ? '消息通知' : 'Notifications'} onBack={onBack}>
+            <EmptyState
+                icon={<Bell />}
+                title={isZh ? '暂无消息' : 'No notifications'}
+                detail={
+                    isZh ? '订单和店铺通知会显示在这里' : 'Order and store notifications will appear here'
+                }
+                action={isZh ? '返回首页' : 'Back to home'}
+                onAction={() => onNavigate({ name: 'home' })}
+            />
+        </Subpage>
     );
 }
 
@@ -1850,7 +2669,7 @@ function ProductDetailPage({
     onBack,
     onNavigate,
     onAdd,
-    onUnavailable,
+    onNotify,
 }: {
     product: Product;
     products: Product[];
@@ -1863,7 +2682,7 @@ function ProductDetailPage({
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant, buyNow?: boolean) => void;
-    onUnavailable: () => void;
+    onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
     const [variantId, setVariantId] = useState(product.variants[0]?.id ?? '');
@@ -1879,6 +2698,19 @@ function ProductDetailPage({
         (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK');
     const isDigital = variant?.customFields.fulfillmentType === 'digital';
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
+    const shareProduct = async () => {
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: product.name, text: product.description, url: location.href });
+            } else {
+                await navigator.clipboard.writeText(location.href);
+                onNotify(isZh ? '商品链接已复制' : 'Product link copied');
+            }
+        } catch (shareError) {
+            if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
+            onNotify(isZh ? '暂时无法分享商品' : 'Could not share this product');
+        }
+    };
 
     return (
         <main className="page subpage product-detail-page">
@@ -1886,7 +2718,11 @@ function ProductDetailPage({
                 title={isZh ? '商品详情' : 'Product details'}
                 onBack={onBack}
                 action={
-                    <button type="button" onClick={onUnavailable} aria-label={isZh ? '分享' : 'Share'}>
+                    <button
+                        type="button"
+                        onClick={() => void shareProduct()}
+                        aria-label={isZh ? '分享' : 'Share'}
+                    >
                         <Share2 />
                     </button>
                 }
@@ -1945,21 +2781,19 @@ function ProductDetailPage({
                 <p>{product.description || (isZh ? '暂无更多商品说明' : 'No additional description')}</p>
             </section>
             <section className="detail-promotions">
-                <button type="button" onClick={onUnavailable}>
+                <div>
                     <span>{isZh ? '优惠' : 'Offers'}</span>
                     <strong>
                         <TicketPercent />
                         {isZh ? '可用优惠将在结算时自动抵扣' : 'Eligible offers apply automatically'}
                     </strong>
-                    <ChevronRight />
-                </button>
-                <button type="button" onClick={onUnavailable}>
+                </div>
+                <div>
                     <span>{isZh ? '活动' : 'Activity'}</span>
                     <strong>
                         {isZh ? '店铺活动以结算页展示为准' : 'Store promotions are confirmed at checkout'}
                     </strong>
-                    <ChevronRight />
-                </button>
+                </div>
             </section>
             <section className="detail-options">
                 <header>
@@ -1979,7 +2813,7 @@ function ProductDetailPage({
                     ))}
                 </div>
             </section>
-            <button className="detail-info-row" type="button" onClick={onUnavailable}>
+            <div className="detail-info-row">
                 <span>{isZh ? '送至' : 'Deliver to'}</span>
                 <strong>
                     {isDigital
@@ -1990,8 +2824,7 @@ function ProductDetailPage({
                           ? '结算页选择收货地址并确认时效'
                           : 'Choose an address and confirm timing at checkout'}
                 </strong>
-                <ChevronRight />
-            </button>
+            </div>
             <section className="detail-service-bar">
                 <span>
                     <CircleCheck />
@@ -2106,14 +2939,6 @@ function ProductDetailPage({
                 onAdd={item => onAdd(item)}
             />
             <div className="detail-action-bar">
-                <button type="button" onClick={onUnavailable}>
-                    <Headphones />
-                    <span>{isZh ? '客服' : 'Support'}</span>
-                </button>
-                <button type="button" onClick={onUnavailable}>
-                    <Heart />
-                    <span>{isZh ? '收藏' : 'Save'}</span>
-                </button>
                 <button type="button" onClick={() => onNavigate({ name: 'cart' })}>
                     <ShoppingCart />
                     <span>{isZh ? '购物车' : 'Cart'}</span>
@@ -2145,57 +2970,52 @@ function ProductDetailPage({
 }
 
 function SearchPage({
+    api,
     products,
     market,
     locale,
     language,
+    storefrontCode,
+    initialQuery,
     addingVariantId,
     onBack,
     onNavigate,
     onAdd,
 }: {
+    api: ShopApi;
     products: Product[];
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
+    storefrontCode: string;
+    initialQuery: string;
     addingVariantId: string | null;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
 }) {
     const isZh = language === 'zh';
-    const [query, setQuery] = useState('');
-    const [submittedQuery, setSubmittedQuery] = useState('');
-    const [resultSort, setResultSort] = useState<'recommended' | 'newest' | 'price'>('recommended');
-    const [history, setHistory] = useState<string[]>(() => {
-        try {
-            return JSON.parse(localStorage.getItem('storefront-search-history') ?? '[]') as string[];
-        } catch {
-            return [];
-        }
-    });
-    const results = useMemo(() => {
-        const value = submittedQuery.trim().toLocaleLowerCase(locale);
-        if (!value) return [];
-        const matches = products.filter(product =>
-            [
-                product.name,
-                product.description,
-                ...product.variants.flatMap(variant => [variant.name, variant.sku]),
-            ]
-                .join(' ')
-                .toLocaleLowerCase(locale)
-                .includes(value),
-        );
-        if (resultSort === 'newest')
-            return [...matches].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-        if (resultSort === 'price') return [...matches].sort((a, b) => minimumPrice(a) - minimumPrice(b));
-        return matches;
-    }, [locale, products, resultSort, submittedQuery]);
+    const [query, setQuery] = useState(initialQuery);
+    const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
+    const [resultSort, setResultSort] = useState<ProductSearchSort>('recommended');
+    const [results, setResults] = useState<Product[]>([]);
+    const [totalItems, setTotalItems] = useState(0);
+    const [searching, setSearching] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [searchError, setSearchError] = useState('');
+    const [searchReloadKey, setSearchReloadKey] = useState(0);
+    const activeSearchKey = useRef('');
+    const [history, setHistory] = useState<string[]>([]);
+    const searchHistoryStorageKey = scopedStorageKey(SEARCH_HISTORY_STORAGE_KEY, storefrontCode);
     const popularSearches = products.slice(0, 6);
     const relatedProducts = products
         .filter(product => !results.some(result => result.id === product.id))
         .slice(0, 2);
+
+    useEffect(() => {
+        setQuery(initialQuery);
+        setSubmittedQuery(initialQuery);
+    }, [initialQuery]);
     const submit = (value = query) => {
         const next = value.trim();
         if (!next) return;
@@ -2203,7 +3023,84 @@ function SearchPage({
         setSubmittedQuery(next);
         const nextHistory = [next, ...history.filter(item => item !== next)].slice(0, 8);
         setHistory(nextHistory);
-        localStorage.setItem('storefront-search-history', JSON.stringify(nextHistory));
+        if (searchHistoryStorageKey) {
+            localStorage.setItem(searchHistoryStorageKey, JSON.stringify(nextHistory));
+        }
+    };
+
+    useEffect(() => {
+        setHistory(readStoredStrings(searchHistoryStorageKey, 8));
+    }, [searchHistoryStorageKey]);
+
+    useEffect(() => {
+        const term = submittedQuery.trim();
+        const searchKey = `${term}\u0000${resultSort}\u0000${searchReloadKey}`;
+        activeSearchKey.current = searchKey;
+        if (!term) {
+            setResults([]);
+            setTotalItems(0);
+            setSearchError('');
+            setSearching(false);
+            return;
+        }
+        let cancelled = false;
+        setResults([]);
+        setTotalItems(0);
+        setSearchError('');
+        setSearching(true);
+        void api
+            .searchProducts(term, resultSort)
+            .then(page => {
+                if (cancelled || activeSearchKey.current !== searchKey) return;
+                setResults(page.items);
+                setTotalItems(page.totalItems);
+            })
+            .catch(requestError => {
+                if (!cancelled && activeSearchKey.current === searchKey) {
+                    setSearchError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : isZh
+                              ? '搜索失败'
+                              : 'Search failed',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled && activeSearchKey.current === searchKey) setSearching(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, isZh, resultSort, searchReloadKey, submittedQuery]);
+
+    const loadMore = async () => {
+        const term = submittedQuery.trim();
+        if (!term || loadingMore || results.length >= totalItems) return;
+        const searchKey = activeSearchKey.current;
+        setLoadingMore(true);
+        setSearchError('');
+        try {
+            const page = await api.searchProducts(term, resultSort, results.length);
+            if (activeSearchKey.current !== searchKey) return;
+            setResults(current => {
+                const existingIds = new Set(current.map(product => product.id));
+                return [...current, ...page.items.filter(product => !existingIds.has(product.id))];
+            });
+            setTotalItems(page.totalItems);
+        } catch (requestError) {
+            if (activeSearchKey.current === searchKey) {
+                setSearchError(
+                    requestError instanceof Error
+                        ? requestError.message
+                        : isZh
+                          ? '加载更多失败'
+                          : 'Could not load more results',
+                );
+            }
+        } finally {
+            if (activeSearchKey.current === searchKey) setLoadingMore(false);
+        }
     };
 
     return (
@@ -2237,7 +3134,9 @@ function SearchPage({
                                     type="button"
                                     onClick={() => {
                                         setHistory([]);
-                                        localStorage.removeItem('storefront-search-history');
+                                        if (searchHistoryStorageKey) {
+                                            localStorage.removeItem(searchHistoryStorageKey);
+                                        }
                                     }}
                                     aria-label={isZh ? '清空' : 'Clear'}
                                 >
@@ -2342,7 +3241,7 @@ function SearchPage({
                         <strong>
                             {isZh ? `“${submittedQuery}”的结果` : `Results for “${submittedQuery}”`}
                         </strong>
-                        <span>{results.length}</span>
+                        <span>{searching ? (isZh ? '搜索中' : 'Searching') : totalItems}</span>
                     </header>
                     <nav className="search-sort" aria-label={isZh ? '搜索结果排序' : 'Search result sorting'}>
                         <button
@@ -2354,20 +3253,30 @@ function SearchPage({
                         </button>
                         <button
                             type="button"
-                            className={resultSort === 'newest' ? 'is-active' : undefined}
-                            onClick={() => setResultSort('newest')}
+                            className={resultSort === 'name' ? 'is-active' : undefined}
+                            onClick={() => setResultSort('name')}
                         >
-                            {isZh ? '最新' : 'Newest'}
+                            {isZh ? '名称' : 'Name'}
                         </button>
                         <button
                             type="button"
-                            className={resultSort === 'price' ? 'is-active' : undefined}
-                            onClick={() => setResultSort('price')}
+                            className={resultSort === 'price-asc' ? 'is-active' : undefined}
+                            onClick={() => setResultSort('price-asc')}
                         >
                             {isZh ? '价格' : 'Price'}
                         </button>
                     </nav>
-                    {results.length ? (
+                    {searching ? (
+                        <ListSkeleton />
+                    ) : searchError && !results.length ? (
+                        <EmptyState
+                            icon={<CircleAlert />}
+                            title={isZh ? '搜索加载失败' : 'Search failed'}
+                            detail={searchError}
+                            action={isZh ? '重试' : 'Retry'}
+                            onAction={() => setSearchReloadKey(value => value + 1)}
+                        />
+                    ) : results.length ? (
                         <div className="product-list">
                             {results.map(product => (
                                 <ProductRow
@@ -2381,6 +3290,30 @@ function SearchPage({
                                     onAdd={() => product.variants[0] && onAdd(product.variants[0])}
                                 />
                             ))}
+                            {searchError && (
+                                <div className="search-load-error" role="alert">
+                                    <span>{searchError}</span>
+                                    <button type="button" onClick={() => void loadMore()}>
+                                        {isZh ? '重试' : 'Retry'}
+                                    </button>
+                                </div>
+                            )}
+                            {results.length < totalItems && (
+                                <button
+                                    className="load-more-button search-load-more"
+                                    type="button"
+                                    disabled={loadingMore}
+                                    onClick={() => void loadMore()}
+                                >
+                                    {loadingMore
+                                        ? isZh
+                                            ? '加载中'
+                                            : 'Loading'
+                                        : isZh
+                                          ? `加载更多（剩余 ${totalItems - results.length} 件）`
+                                          : `Load more (${totalItems - results.length} remaining)`}
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <EmptyState
@@ -2393,7 +3326,7 @@ function SearchPage({
                             onAction={() => onNavigate({ name: 'category' })}
                         />
                     )}
-                    {!!relatedProducts.length && (
+                    {!searching && !!relatedProducts.length && (
                         <ProductSection
                             title={isZh ? '相关好物' : 'Related products'}
                             subtitle={isZh ? '换个方向继续看看' : 'Keep exploring'}
@@ -2424,6 +3357,8 @@ function CheckoutPage({
     onCartChange,
     onNavigate,
     onNotify,
+    onApplyCoupon,
+    onRemoveCoupon,
 }: {
     api: ShopApi;
     cart: StorefrontCart | null;
@@ -2437,12 +3372,23 @@ function CheckoutPage({
     onCartChange: (cart: StorefrontCart) => void;
     onNavigate: (route: RouteState, replace?: boolean) => void;
     onNotify: (message: string) => void;
+    onApplyCoupon: (couponCode: string) => Promise<string | null>;
+    onRemoveCoupon: (couponCode: string) => Promise<string | null>;
 }) {
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
     const [selectedShippingId, setSelectedShippingId] = useState('');
+    const [preparedAddressKey, setPreparedAddressKey] = useState('');
+    const [customerPrepared, setCustomerPrepared] = useState(Boolean(customer));
+    const [shippingUpdating, setShippingUpdating] = useState(false);
+    const [couponOpen, setCouponOpen] = useState(false);
+    const [noteOpen, setNoteOpen] = useState(false);
+    const [noteDraft, setNoteDraft] = useState('');
+    const [noteSaving, setNoteSaving] = useState(false);
+    const [noteError, setNoteError] = useState<string | null>(null);
+    const formRef = useRef<HTMLFormElement>(null);
     const defaultAddress =
         customer?.addresses?.find(address => address.defaultShippingAddress) ?? customer?.addresses?.[0];
     const requiresShipping =
@@ -2453,6 +3399,65 @@ function CheckoutPage({
     const digitalLines =
         order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'digital') ?? [];
 
+    const openOrderNote = () => {
+        setNoteDraft(order?.customFields.customerNote ?? '');
+        setNoteError(null);
+        setNoteOpen(true);
+    };
+
+    const saveOrderNote = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const customerNote = noteDraft.trim();
+        setNoteSaving(true);
+        setNoteError(null);
+        try {
+            await api.setOrderNote(customerNote);
+            onCartChange(await api.cart());
+            setNoteOpen(false);
+            onNotify(
+                customerNote
+                    ? isZh
+                        ? '订单备注已保存'
+                        : 'Order note saved'
+                    : isZh
+                      ? '订单备注已清空'
+                      : 'Order note cleared',
+            );
+        } catch (requestError) {
+            setNoteError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '订单备注保存失败'
+                      : 'Could not save the order note',
+            );
+        } finally {
+            setNoteSaving(false);
+        }
+    };
+
+    const selectShippingMethod = async (shippingMethodId: string) => {
+        const previousId = selectedShippingId;
+        setSelectedShippingId(shippingMethodId);
+        setShippingUpdating(true);
+        setFormError(null);
+        try {
+            await api.setShippingMethod(shippingMethodId);
+            onCartChange(await api.cart());
+        } catch (requestError) {
+            setSelectedShippingId(previousId);
+            setFormError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '配送方式更新失败'
+                      : 'Could not update the shipping method',
+            );
+        } finally {
+            setShippingUpdating(false);
+        }
+    };
+
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!cart || !order) return;
@@ -2460,15 +3465,16 @@ function CheckoutPage({
         setSubmitting(true);
         setFormError(null);
         try {
-            if (!customer) {
+            if (!customerPrepared) {
                 await api.setCustomer({
                     firstName: String(data.get('firstName') ?? ''),
                     lastName: String(data.get('lastName') ?? ''),
                     emailAddress: String(data.get('emailAddress') ?? ''),
                 });
+                setCustomerPrepared(true);
             }
             if (requiresShipping) {
-                await api.setShippingAddress({
+                const shippingAddress: CustomerAddressInput = {
                     fullName: String(data.get('fullName') ?? ''),
                     phoneNumber: String(data.get('phoneNumber') ?? ''),
                     streetLine1: String(data.get('streetLine1') ?? ''),
@@ -2476,18 +3482,39 @@ function CheckoutPage({
                     province: String(data.get('province') ?? ''),
                     postalCode: String(data.get('postalCode') ?? ''),
                     countryCode: market.countryCode,
-                });
-                let methods = shippingMethods;
-                if (!methods.length) {
-                    methods = await api.eligibleShippingMethods();
+                };
+                const addressKey = JSON.stringify(shippingAddress);
+                if (addressKey !== preparedAddressKey || !shippingMethods.length) {
+                    await api.setShippingAddress(shippingAddress);
+                    const methods = await api.eligibleShippingMethods();
+                    if (!methods.length) {
+                        throw new Error(
+                            isZh ? '当前地址没有可用配送方式' : 'No shipping method is available',
+                        );
+                    }
+                    const shippingId = methods.some(method => method.id === selectedShippingId)
+                        ? selectedShippingId
+                        : methods[0].id;
+                    await api.setShippingMethod(shippingId);
                     setShippingMethods(methods);
+                    setSelectedShippingId(shippingId);
+                    setPreparedAddressKey(addressKey);
+                    onCartChange(await api.cart());
+                    onNotify(
+                        isZh
+                            ? '地址和运费已更新，请确认配送方式后提交订单'
+                            : 'Address and shipping updated. Confirm the method, then submit.',
+                    );
+                    return;
                 }
-                const shippingId = selectedShippingId || methods[0]?.id;
-                if (!shippingId)
+                if (!selectedShippingId) {
                     throw new Error(isZh ? '当前地址没有可用配送方式' : 'No shipping method is available');
-                await api.setShippingMethod(shippingId);
+                }
+                await api.setShippingMethod(selectedShippingId);
             }
-            const session = await api.preparePayment(cart.revision);
+            const latestCart = await api.cart();
+            onCartChange(latestCart);
+            const session = await api.preparePayment(latestCart.revision);
             onSessionChange(session);
             onNotify(
                 isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.',
@@ -2527,7 +3554,7 @@ function CheckoutPage({
     return (
         <main className="page subpage checkout-page">
             <SubHeader title={isZh ? '确认订单' : 'Review order'} onBack={onBack} />
-            <form className="checkout-form" onSubmit={event => void submit(event)}>
+            <form ref={formRef} className="checkout-form" onSubmit={event => void submit(event)}>
                 {!customer && (
                     <section className="checkout-section">
                         <h2>{isZh ? '联系信息' : 'Contact'}</h2>
@@ -2627,24 +3654,35 @@ function CheckoutPage({
                     />
                 )}
                 <section className="checkout-section checkout-options">
-                    {requiresShipping && (
-                        <button
-                            type="button"
-                            onClick={() =>
-                                onNotify(
-                                    isZh
-                                        ? '提交订单时将匹配当前地址可用的配送方案'
-                                        : 'A delivery option is matched when placing the order',
-                                )
-                            }
-                        >
+                    {requiresShipping && !shippingMethods.length && (
+                        <button type="button" onClick={() => formRef.current?.requestSubmit()}>
                             <span>{isZh ? '配送方式' : 'Delivery'}</span>
                             <small>
-                                {shippingMethods.find(method => method.id === selectedShippingId)?.name ??
-                                    (isZh ? '自动匹配可用方案' : 'Matched automatically')}
+                                {isZh ? '填写地址后计算' : 'Calculate after address'}
                                 <ChevronRight />
                             </small>
                         </button>
+                    )}
+                    {requiresShipping && !!shippingMethods.length && (
+                        <fieldset className="shipping-method-list" disabled={shippingUpdating || submitting}>
+                            <legend>{isZh ? '配送方式' : 'Delivery'}</legend>
+                            {shippingMethods.map(method => (
+                                <label key={method.id}>
+                                    <input
+                                        type="radio"
+                                        name="shippingMethod"
+                                        value={method.id}
+                                        checked={selectedShippingId === method.id}
+                                        onChange={() => void selectShippingMethod(method.id)}
+                                    />
+                                    <span>
+                                        <strong>{method.name}</strong>
+                                        {method.description && <small>{method.description}</small>}
+                                    </span>
+                                    <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
+                                </label>
+                            ))}
+                        </fieldset>
                     )}
                     <button
                         type="button"
@@ -2662,29 +3700,27 @@ function CheckoutPage({
                             <ChevronRight />
                         </small>
                     </button>
-                    <button
-                        type="button"
-                        onClick={() =>
-                            onNotify(isZh ? '订单备注需要后台字段支持' : 'Order notes need backend support')
-                        }
-                    >
+                    <button type="button" onClick={openOrderNote}>
                         <span>{isZh ? '订单备注' : 'Order note'}</span>
                         <small>
-                            {isZh ? '暂未开通' : 'Not available'}
+                            {order.customFields.customerNote
+                                ? trimText(order.customFields.customerNote, 20)
+                                : isZh
+                                  ? '添加备注'
+                                  : 'Add a note'}
                             <ChevronRight />
                         </small>
                     </button>
-                    <button
-                        type="button"
-                        onClick={() =>
-                            onNotify(
-                                isZh ? '可用优惠已自动计算' : 'Eligible offers are calculated automatically',
-                            )
-                        }
-                    >
+                    <button type="button" onClick={() => setCouponOpen(true)}>
                         <span>{isZh ? '优惠券' : 'Coupon'}</span>
                         <small>
-                            {isZh ? '自动计算可用优惠' : 'Available offers are automatic'}
+                            {order.couponCodes.length
+                                ? isZh
+                                    ? `已使用 ${order.couponCodes.length} 个优惠码`
+                                    : `${order.couponCodes.length} applied`
+                                : isZh
+                                  ? '输入优惠码'
+                                  : 'Enter coupon code'}
                             <ChevronRight />
                         </small>
                     </button>
@@ -2727,15 +3763,79 @@ function CheckoutPage({
                         </span>
                     </div>
                     <button type="submit" disabled={submitting}>
-                        {submitting ? (isZh ? '提交中' : 'Submitting') : isZh ? '提交订单' : 'Submit order'}
+                        {submitting
+                            ? isZh
+                                ? '处理中'
+                                : 'Processing'
+                            : requiresShipping && !shippingMethods.length
+                              ? isZh
+                                  ? '下一步，选择配送'
+                                  : 'Continue to delivery'
+                              : isZh
+                                ? '提交订单'
+                                : 'Submit order'}
                     </button>
                 </div>
             </form>
+            {couponOpen && (
+                <CouponSheet
+                    couponCodes={order.couponCodes}
+                    language={language}
+                    loading={submitting}
+                    onApply={onApplyCoupon}
+                    onRemove={onRemoveCoupon}
+                    onClose={() => setCouponOpen(false)}
+                />
+            )}
+            {noteOpen && (
+                <Sheet
+                    title={isZh ? '订单备注' : 'Order note'}
+                    onClose={() => !noteSaving && setNoteOpen(false)}
+                >
+                    <form className="order-note-sheet" onSubmit={event => void saveOrderNote(event)}>
+                        <label>
+                            <span>{isZh ? '给商家留言' : 'Message for the store'}</span>
+                            <textarea
+                                value={noteDraft}
+                                maxLength={ORDER_NOTE_MAX_LENGTH}
+                                rows={6}
+                                autoFocus
+                                placeholder={
+                                    isZh
+                                        ? '例如配送时间、包装要求；不要填写支付密码等敏感信息'
+                                        : 'For example, delivery or packaging instructions. Do not enter passwords.'
+                                }
+                                onChange={event => setNoteDraft(event.currentTarget.value)}
+                            />
+                        </label>
+                        <div className="order-note-meta">
+                            <small>{isZh ? '最多 500 个字符' : 'Up to 500 characters'}</small>
+                            <span>
+                                {noteDraft.length}/{ORDER_NOTE_MAX_LENGTH}
+                            </span>
+                        </div>
+                        {noteError && <InlineError message={noteError} />}
+                        <div className="order-note-actions">
+                            <button
+                                type="button"
+                                disabled={noteSaving || !noteDraft}
+                                onClick={() => setNoteDraft('')}
+                            >
+                                {isZh ? '清空' : 'Clear'}
+                            </button>
+                            <button className="primary-action" type="submit" disabled={noteSaving}>
+                                {noteSaving ? (isZh ? '保存中' : 'Saving') : isZh ? '保存备注' : 'Save note'}
+                            </button>
+                        </div>
+                    </form>
+                </Sheet>
+            )}
         </main>
     );
 }
 
 function OrdersPage({
+    api,
     customer,
     market,
     locale,
@@ -2745,8 +3845,8 @@ function OrdersPage({
     onBack,
     onNavigate,
     onBuyAgain,
-    onUnavailable,
 }: {
+    api: ShopApi;
     customer: ActiveCustomer | null;
     market: MarketConfig;
     locale: string;
@@ -2756,11 +3856,18 @@ function OrdersPage({
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
     onBuyAgain: (order: Order) => Promise<void>;
-    onUnavailable: () => void;
 }) {
     const isZh = language === 'zh';
     const [tab, setTab] = useState<OrderTab>(initialTab);
-    const orders = (customer?.orders.items ?? []).filter(order => orderMatchesTab(order, tab));
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [totalItems, setTotalItems] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [listError, setListError] = useState('');
+    const [retryKey, setRetryKey] = useState(0);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
+    const [orderCode, setOrderCode] = useState('');
+    const pageSize = 10;
     const tabs: Array<{ id: OrderTab; label: string }> = [
         { id: 'all', label: isZh ? '全部' : 'All' },
         { id: 'pending', label: isZh ? '待付款' : 'To pay' },
@@ -2768,6 +3875,72 @@ function OrdersPage({
         { id: 'receiving', label: isZh ? '待收货' : 'To receive' },
         { id: 'service', label: isZh ? '售后' : 'After-sales' },
     ];
+
+    useEffect(() => setTab(initialTab), [initialTab]);
+
+    useEffect(() => {
+        if (!customer || tab === 'service') {
+            setOrders([]);
+            setTotalItems(0);
+            setLoading(false);
+            setListError('');
+            return;
+        }
+        let cancelled = false;
+        setOrders([]);
+        setTotalItems(0);
+        setLoading(true);
+        setListError('');
+        void api
+            .customerOrders(0, pageSize, orderStatesForTab(tab), orderCode)
+            .then(page => {
+                if (cancelled) return;
+                setOrders(page.items);
+                setTotalItems(page.totalItems);
+            })
+            .catch(requestError => {
+                if (!cancelled) {
+                    setListError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : isZh
+                              ? '订单加载失败'
+                              : 'Could not load orders',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, customer, isZh, orderCode, retryKey, tab]);
+
+    const loadMore = async () => {
+        if (loading || orders.length >= totalItems) return;
+        setLoading(true);
+        setListError('');
+        try {
+            const page = await api.customerOrders(orders.length, pageSize, orderStatesForTab(tab), orderCode);
+            setOrders(current => [
+                ...current,
+                ...page.items.filter(order => !current.some(item => item.id === order.id)),
+            ]);
+            setTotalItems(page.totalItems);
+        } catch (requestError) {
+            setListError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '更多订单加载失败'
+                      : 'Could not load more orders',
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <main className="page subpage orders-page">
             <SubHeader
@@ -2776,10 +3949,11 @@ function OrdersPage({
                 action={
                     <button
                         type="button"
-                        onClick={onUnavailable}
+                        onClick={() => setSearchOpen(value => !value)}
                         aria-label={isZh ? '搜索订单' : 'Search orders'}
+                        aria-expanded={searchOpen}
                     >
-                        <Search />
+                        {searchOpen ? <X /> : <Search />}
                     </button>
                 }
             />
@@ -2795,6 +3969,36 @@ function OrdersPage({
                     </button>
                 ))}
             </nav>
+            {searchOpen && (
+                <form
+                    className="order-search"
+                    onSubmit={event => {
+                        event.preventDefault();
+                        setOrderCode(searchInput.trim());
+                    }}
+                >
+                    <Search aria-hidden="true" />
+                    <input
+                        value={searchInput}
+                        onChange={event => setSearchInput(event.target.value)}
+                        placeholder={isZh ? '输入订单号' : 'Enter order code'}
+                        aria-label={isZh ? '订单号' : 'Order code'}
+                    />
+                    {!!searchInput && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSearchInput('');
+                                setOrderCode('');
+                            }}
+                            aria-label={isZh ? '清空' : 'Clear'}
+                        >
+                            <X />
+                        </button>
+                    )}
+                    <button type="submit">{isZh ? '搜索' : 'Search'}</button>
+                </form>
+            )}
             {!customer ? (
                 <EmptyState
                     icon={<UserRound />}
@@ -2817,6 +4021,16 @@ function OrdersPage({
                             : 'After-sales requires merchant service workflow support'
                     }
                 />
+            ) : loading && !orders.length ? (
+                <PageSkeleton />
+            ) : listError && !orders.length ? (
+                <EmptyState
+                    icon={<WifiOff />}
+                    title={isZh ? '订单加载失败' : 'Could not load orders'}
+                    detail={listError}
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={() => setRetryKey(value => value + 1)}
+                />
             ) : orders.length ? (
                 <div className="order-list">
                     {orders.map(order => (
@@ -2829,9 +4043,31 @@ function OrdersPage({
                             storefrontName={storefrontName}
                             onOpen={() => onNavigate({ name: 'order-detail', id: order.id })}
                             onBuyAgain={() => void onBuyAgain(order)}
-                            onMore={onUnavailable}
                         />
                     ))}
+                    {listError && (
+                        <InlineError
+                            message={listError}
+                            action={isZh ? '重试' : 'Retry'}
+                            onAction={() => void loadMore()}
+                        />
+                    )}
+                    {orders.length < totalItems && (
+                        <button
+                            type="button"
+                            className="load-more-button order-load-more"
+                            disabled={loading}
+                            onClick={() => void loadMore()}
+                        >
+                            {loading
+                                ? isZh
+                                    ? '加载中…'
+                                    : 'Loading…'
+                                : isZh
+                                  ? `加载更多（${orders.length}/${totalItems}）`
+                                  : `Load more (${orders.length}/${totalItems})`}
+                        </button>
+                    )}
                 </div>
             ) : (
                 <EmptyState
@@ -2852,6 +4088,7 @@ function OrderDetailPage({
     storefrontName,
     onBack,
     onBuyAgain,
+    onReopen,
     onUnavailable,
 }: {
     order: Order | null;
@@ -2861,6 +4098,7 @@ function OrderDetailPage({
     storefrontName: string;
     onBack: () => void;
     onBuyAgain: (order: Order) => Promise<void>;
+    onReopen: (order: Order) => Promise<void>;
     onUnavailable: () => void;
 }) {
     const isZh = language === 'zh';
@@ -2872,6 +4110,7 @@ function OrderDetailPage({
         );
     const inTransit = ['Shipped', 'PartiallyShipped'].includes(order.state);
     const pending = ['AddingItems', 'ArrangingPayment'].includes(order.state);
+    const fulfillments = order.fulfillments ?? [];
     const statusHint = pending
         ? isZh
             ? '订单等待支付，请在支付页完成付款'
@@ -2889,32 +4128,53 @@ function OrderDetailPage({
               : 'Order status updated';
     return (
         <main className="page subpage order-detail-page">
-            <SubHeader
-                title={isZh ? '订单详情' : 'Order details'}
-                onBack={onBack}
-                action={
-                    <button type="button" onClick={onUnavailable} aria-label={isZh ? '联系客服' : 'Support'}>
-                        <Headphones />
-                    </button>
-                }
-            />
+            <SubHeader title={isZh ? '订单详情' : 'Order details'} onBack={onBack} />
             <section className="order-status">
                 <strong>{orderStateLabel(order.state, language)}</strong>
                 <span>{statusHint}</span>
                 <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
             </section>
-            {inTransit && (
-                <section className="order-logistics">
+            {(inTransit || fulfillments.length > 0) && (
+                <section className="order-logistics" id="order-logistics">
                     <Navigation />
-                    <span>
-                        <strong>{isZh ? '物流运输中' : 'In transit'}</strong>
-                        <small>
-                            {isZh
-                                ? '物流详情将在承运商更新后显示'
-                                : 'Updates appear when provided by the carrier'}
-                        </small>
-                    </span>
-                    <ChevronRight />
+                    <div className="order-logistics-content">
+                        <strong>{isZh ? '物流信息' : 'Delivery details'}</strong>
+                        {fulfillments.length ? (
+                            fulfillments.map((fulfillment, index) => (
+                                <div className="order-logistics-item" key={fulfillment.id}>
+                                    <span>
+                                        {fulfillments.length > 1
+                                            ? isZh
+                                                ? `包裹 ${index + 1}`
+                                                : `Shipment ${index + 1}`
+                                            : isZh
+                                              ? '配送包裹'
+                                              : 'Shipment'}
+                                    </span>
+                                    <small>{fulfillment.method}</small>
+                                    <b>
+                                        {fulfillment.trackingCode
+                                            ? isZh
+                                                ? `运单号 ${fulfillment.trackingCode}`
+                                                : `Tracking ${fulfillment.trackingCode}`
+                                            : isZh
+                                              ? '承运商尚未提供运单号'
+                                              : 'Tracking number is not available yet'}
+                                    </b>
+                                    <em>
+                                        {fulfillmentStateLabel(fulfillment.state, language)} ·{' '}
+                                        {formatOrderDate(fulfillment.updatedAt, locale)}
+                                    </em>
+                                </div>
+                            ))
+                        ) : (
+                            <small>
+                                {isZh
+                                    ? '物流详情将在承运商更新后显示'
+                                    : 'Updates appear when provided by the carrier'}
+                            </small>
+                        )}
+                    </div>
                 </section>
             )}
             <section className="order-detail-products">
@@ -2961,18 +4221,29 @@ function OrderDetailPage({
                 <PriceSummary order={order} locale={locale} language={language} />
             </section>
             <div className="order-detail-actions">
-                <button type="button" onClick={onUnavailable}>
-                    {isZh ? '更多' : 'More'}
-                </button>
                 <button
                     type="button"
                     className="primary-action"
-                    onClick={pending || inTransit ? onUnavailable : () => void onBuyAgain(order)}
+                    onClick={
+                        pending
+                            ? () => void onReopen(order)
+                            : inTransit
+                              ? () => {
+                                    if (fulfillments.length) {
+                                        document
+                                            .getElementById('order-logistics')
+                                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    } else {
+                                        onUnavailable();
+                                    }
+                                }
+                              : () => void onBuyAgain(order)
+                    }
                 >
                     {pending
                         ? isZh
-                            ? '继续支付'
-                            : 'Continue payment'
+                            ? '返回修改订单'
+                            : 'Reopen order'
                         : inTransit
                           ? isZh
                               ? '查看物流'
@@ -3007,6 +4278,7 @@ function AddressesPage({
 }) {
     const isZh = language === 'zh';
     const [open, setOpen] = useState(false);
+    const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState('');
     if (!customer)
@@ -3020,24 +4292,29 @@ function AddressesPage({
                 />
             </Subpage>
         );
-    const create = async (event: FormEvent<HTMLFormElement>) => {
+    const save = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
         setSubmitting(true);
         setFormError('');
         try {
-            await api.createAddress({
+            const input: CustomerAddressInput = {
                 fullName: String(data.get('fullName')),
                 phoneNumber: String(data.get('phoneNumber')),
                 province: String(data.get('province')),
                 city: String(data.get('city')),
                 streetLine1: String(data.get('streetLine1')),
+                streetLine2: String(data.get('streetLine2') ?? ''),
                 postalCode: String(data.get('postalCode')),
-                countryCode: market.countryCode,
-                defaultShippingAddress: customer.addresses?.length === 0,
-            });
+                countryCode: editingAddress?.country.code ?? market.countryCode,
+                defaultShippingAddress:
+                    customer.addresses?.length === 0 || data.get('defaultShippingAddress') === 'on',
+            };
+            if (editingAddress) await api.updateAddress({ ...input, id: editingAddress.id });
+            else await api.createAddress(input);
             onCustomerChange(await api.activeCustomer());
             setOpen(false);
+            setEditingAddress(null);
             onNotify(isZh ? '地址已保存' : 'Address saved');
         } catch (requestError) {
             setFormError(
@@ -3052,6 +4329,7 @@ function AddressesPage({
         }
     };
     const remove = async (id: string) => {
+        if (!window.confirm(isZh ? '确定删除这个地址吗？' : 'Delete this address?')) return;
         try {
             await api.deleteAddress(id);
             onCustomerChange(await api.activeCustomer());
@@ -3066,6 +4344,32 @@ function AddressesPage({
             );
         }
     };
+    const makeDefault = async (address: CustomerAddress) => {
+        try {
+            await api.updateAddress({
+                id: address.id,
+                fullName: address.fullName ?? '',
+                phoneNumber: address.phoneNumber ?? '',
+                streetLine1: address.streetLine1,
+                streetLine2: address.streetLine2 ?? '',
+                city: address.city ?? '',
+                province: address.province ?? '',
+                postalCode: address.postalCode ?? '',
+                countryCode: address.country.code,
+                defaultShippingAddress: true,
+            });
+            onCustomerChange(await api.activeCustomer());
+            onNotify(isZh ? '默认地址已更新' : 'Default address updated');
+        } catch (requestError) {
+            onNotify(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '设置默认地址失败'
+                      : 'Could not set the default address',
+            );
+        }
+    };
     return (
         <main className="page subpage addresses-page">
             <SubHeader
@@ -3074,7 +4378,11 @@ function AddressesPage({
                 action={
                     <button
                         type="button"
-                        onClick={() => setOpen(true)}
+                        onClick={() => {
+                            setEditingAddress(null);
+                            setFormError('');
+                            setOpen(true);
+                        }}
                         aria-label={isZh ? '新增地址' : 'Add address'}
                     >
                         <Plus />
@@ -3093,10 +4401,29 @@ function AddressesPage({
                             <p>{addressText(address)}</p>
                             <footer>
                                 <span>{address.country.name}</span>
-                                <button type="button" onClick={() => void remove(address.id)}>
-                                    <Trash2 />
-                                    {isZh ? '删除' : 'Delete'}
-                                </button>
+                                <div className="address-actions">
+                                    {!address.defaultShippingAddress && (
+                                        <button type="button" onClick={() => void makeDefault(address)}>
+                                            <CircleCheck />
+                                            {isZh ? '设为默认' : 'Make default'}
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setEditingAddress(address);
+                                            setFormError('');
+                                            setOpen(true);
+                                        }}
+                                    >
+                                        <Pencil />
+                                        {isZh ? '编辑' : 'Edit'}
+                                    </button>
+                                    <button type="button" onClick={() => void remove(address.id)}>
+                                        <Trash2 />
+                                        {isZh ? '删除' : 'Delete'}
+                                    </button>
+                                </div>
                             </footer>
                         </article>
                     ))}
@@ -3107,23 +4434,84 @@ function AddressesPage({
                     title={isZh ? '还没有收货地址' : 'No saved addresses'}
                     detail={isZh ? '新增地址后，结算会更方便' : 'Save an address for faster checkout'}
                     action={isZh ? '新增地址' : 'Add address'}
-                    onAction={() => setOpen(true)}
+                    onAction={() => {
+                        setEditingAddress(null);
+                        setFormError('');
+                        setOpen(true);
+                    }}
                 />
             )}
             {open && (
-                <Sheet title={isZh ? '新增收货地址' : 'Add address'} onClose={() => setOpen(false)}>
-                    <form className="address-form" onSubmit={event => void create(event)}>
-                        <Field name="fullName" label={isZh ? '收货人' : 'Full name'} required wide />
-                        <Field name="phoneNumber" label={isZh ? '手机号' : 'Phone'} required wide />
-                        <Field name="province" label={isZh ? '省/州' : 'Province'} required />
-                        <Field name="city" label={isZh ? '城市' : 'City'} required />
+                <Sheet
+                    title={
+                        editingAddress
+                            ? isZh
+                                ? '编辑收货地址'
+                                : 'Edit address'
+                            : isZh
+                              ? '新增收货地址'
+                              : 'Add address'
+                    }
+                    onClose={() => {
+                        setOpen(false);
+                        setEditingAddress(null);
+                    }}
+                >
+                    <form className="address-form" onSubmit={event => void save(event)}>
                         <Field
-                            name="streetLine1"
-                            label={isZh ? '详细地址' : 'Street address'}
+                            name="fullName"
+                            label={isZh ? '收货人' : 'Full name'}
+                            defaultValue={editingAddress?.fullName ?? ''}
                             required
                             wide
                         />
-                        <Field name="postalCode" label={isZh ? '邮政编码' : 'Postal code'} required wide />
+                        <Field
+                            name="phoneNumber"
+                            label={isZh ? '手机号' : 'Phone'}
+                            defaultValue={editingAddress?.phoneNumber ?? ''}
+                            required
+                            wide
+                        />
+                        <Field
+                            name="province"
+                            label={isZh ? '省/州' : 'Province'}
+                            defaultValue={editingAddress?.province ?? ''}
+                            required
+                        />
+                        <Field
+                            name="city"
+                            label={isZh ? '城市' : 'City'}
+                            defaultValue={editingAddress?.city ?? ''}
+                            required
+                        />
+                        <Field
+                            name="streetLine1"
+                            label={isZh ? '详细地址' : 'Street address'}
+                            defaultValue={editingAddress?.streetLine1 ?? ''}
+                            required
+                            wide
+                        />
+                        <Field
+                            name="streetLine2"
+                            label={isZh ? '楼栋、单元等（选填）' : 'Apartment, suite, etc. (optional)'}
+                            defaultValue={editingAddress?.streetLine2 ?? ''}
+                            wide
+                        />
+                        <Field
+                            name="postalCode"
+                            label={isZh ? '邮政编码' : 'Postal code'}
+                            defaultValue={editingAddress?.postalCode ?? ''}
+                            required
+                            wide
+                        />
+                        <label className="address-default-toggle field-wide">
+                            <input
+                                type="checkbox"
+                                name="defaultShippingAddress"
+                                defaultChecked={Boolean(editingAddress?.defaultShippingAddress)}
+                            />
+                            <span>{isZh ? '设为默认收货地址' : 'Set as default shipping address'}</span>
+                        </label>
                         {formError && <small className="form-error">{formError}</small>}
                         <button className="primary-action wide-action" type="submit" disabled={submitting}>
                             {submitting ? (isZh ? '保存中' : 'Saving') : isZh ? '保存地址' : 'Save address'}
@@ -3141,12 +4529,14 @@ function LoginPage({
     storefrontName,
     onBack,
     onSuccess,
+    onNavigate,
 }: {
     api: ShopApi;
     language: StorefrontLanguage;
     storefrontName: string;
     onBack: () => void;
     onSuccess: () => Promise<void>;
+    onNavigate: (route: RouteState) => void;
 }) {
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
@@ -3195,11 +4585,24 @@ function LoginPage({
                         required
                         wide
                     />
+                    <button
+                        className="auth-inline-link"
+                        type="button"
+                        onClick={() => onNavigate({ name: 'forgot-password' })}
+                    >
+                        {isZh ? '忘记密码？' : 'Forgot password?'}
+                    </button>
                     {error && <small className="form-error">{error}</small>}
                     <button className="primary-action wide-action" type="submit" disabled={submitting}>
                         {submitting ? (isZh ? '登录中' : 'Signing in') : isZh ? '登录' : 'Sign in'}
                     </button>
                 </form>
+                <div className="auth-switch">
+                    <span>{isZh ? '还没有账户？' : 'New here?'}</span>
+                    <button type="button" onClick={() => onNavigate({ name: 'register' })}>
+                        {isZh ? '注册账户' : 'Create account'}
+                    </button>
+                </div>
                 <small>
                     {isZh
                         ? '登录即代表你同意服务条款和隐私政策'
@@ -3207,6 +4610,499 @@ function LoginPage({
                 </small>
             </section>
         </main>
+    );
+}
+
+function RegisterPage({
+    api,
+    language,
+    storefrontName,
+    onBack,
+    onNavigate,
+}: {
+    api: ShopApi;
+    language: StorefrontLanguage;
+    storefrontName: string;
+    onBack: () => void;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    const [submitting, setSubmitting] = useState(false);
+    const [registeredEmail, setRegisteredEmail] = useState('');
+    const [error, setError] = useState('');
+    const [resendMessage, setResendMessage] = useState('');
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const password = String(data.get('password'));
+        if (password !== String(data.get('confirmPassword'))) {
+            setError(isZh ? '两次输入的密码不一致' : 'The passwords do not match');
+            return;
+        }
+        setSubmitting(true);
+        setError('');
+        try {
+            const emailAddress = String(data.get('emailAddress')).trim();
+            await api.registerCustomerAccount({
+                emailAddress,
+                firstName: String(data.get('firstName')).trim(),
+                lastName: String(data.get('lastName')).trim(),
+                password,
+            });
+            setRegisteredEmail(emailAddress);
+        } catch (requestError) {
+            setError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '注册失败'
+                      : 'Registration failed',
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const resend = async () => {
+        setSubmitting(true);
+        setError('');
+        setResendMessage('');
+        try {
+            await api.refreshCustomerVerification(registeredEmail);
+            setResendMessage(isZh ? '验证邮件已重新发送' : 'Verification email sent again');
+        } catch (requestError) {
+            setError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '发送失败'
+                      : 'Could not resend email',
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <main className="page subpage login-page">
+            <SubHeader title={isZh ? '注册' : 'Create account'} onBack={onBack} />
+            <section className="login-content">
+                <span className="login-brand">{storefrontName}</span>
+                {registeredEmail ? (
+                    <AuthResult
+                        icon={<CircleCheck />}
+                        title={isZh ? '请查收验证邮件' : 'Check your email'}
+                        detail={
+                            isZh
+                                ? `验证链接已发送至 ${registeredEmail}`
+                                : `We sent a verification link to ${registeredEmail}`
+                        }
+                    >
+                        {resendMessage && (
+                            <small className="auth-success-message" role="status">
+                                {resendMessage}
+                            </small>
+                        )}
+                        {error && <small className="form-error">{error}</small>}
+                        <button
+                            className="primary-action wide-action"
+                            type="button"
+                            onClick={() => void resend()}
+                            disabled={submitting}
+                        >
+                            {submitting
+                                ? isZh
+                                    ? '发送中'
+                                    : 'Sending'
+                                : isZh
+                                  ? '重新发送验证邮件'
+                                  : 'Resend verification email'}
+                        </button>
+                        <button
+                            className="auth-secondary-action"
+                            type="button"
+                            onClick={() => onNavigate({ name: 'login' })}
+                        >
+                            {isZh ? '返回登录' : 'Back to sign in'}
+                        </button>
+                    </AuthResult>
+                ) : (
+                    <>
+                        <h1>{isZh ? '创建账户' : 'Create your account'}</h1>
+                        <p>{isZh ? '注册后需通过邮件验证' : 'Email verification is required'}</p>
+                        <form onSubmit={event => void submit(event)}>
+                            <div className="auth-name-fields">
+                                <Field
+                                    name="firstName"
+                                    label={isZh ? '名' : 'First name'}
+                                    autoComplete="given-name"
+                                    required
+                                />
+                                <Field
+                                    name="lastName"
+                                    label={isZh ? '姓' : 'Last name'}
+                                    autoComplete="family-name"
+                                    required
+                                />
+                            </div>
+                            <Field
+                                name="emailAddress"
+                                label={isZh ? '电子邮箱' : 'Email address'}
+                                type="email"
+                                autoComplete="email"
+                                required
+                                wide
+                            />
+                            <Field
+                                name="password"
+                                label={isZh ? '密码' : 'Password'}
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                wide
+                            />
+                            <Field
+                                name="confirmPassword"
+                                label={isZh ? '确认密码' : 'Confirm password'}
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                wide
+                            />
+                            {error && <small className="form-error">{error}</small>}
+                            <button
+                                className="primary-action wide-action"
+                                type="submit"
+                                disabled={submitting}
+                            >
+                                {submitting
+                                    ? isZh
+                                        ? '注册中'
+                                        : 'Creating account'
+                                    : isZh
+                                      ? '注册账户'
+                                      : 'Create account'}
+                            </button>
+                        </form>
+                        <div className="auth-switch">
+                            <span>{isZh ? '已有账户？' : 'Already have an account?'}</span>
+                            <button type="button" onClick={() => onNavigate({ name: 'login' })}>
+                                {isZh ? '去登录' : 'Sign in'}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </section>
+        </main>
+    );
+}
+
+function VerifyAccountPage({
+    api,
+    language,
+    storefrontName,
+    token,
+    onBack,
+    onSuccess,
+    onNavigate,
+}: {
+    api: ShopApi;
+    language: StorefrontLanguage;
+    storefrontName: string;
+    token?: string;
+    onBack: () => void;
+    onSuccess: () => Promise<void>;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    const [error, setError] = useState('');
+    const attempted = useRef(false);
+
+    useEffect(() => {
+        if (attempted.current) return;
+        attempted.current = true;
+        if (!token) {
+            setError(isZh ? '验证链接缺少令牌' : 'The verification link is missing its token');
+            return;
+        }
+        void api
+            .verifyCustomerAccount(token)
+            .then(onSuccess)
+            .catch(requestError => {
+                setError(
+                    requestError instanceof Error
+                        ? requestError.message
+                        : isZh
+                          ? '邮箱验证失败'
+                          : 'Email verification failed',
+                );
+            });
+    }, [api, isZh, onSuccess, token]);
+
+    return (
+        <main className="page subpage login-page">
+            <SubHeader title={isZh ? '验证邮箱' : 'Verify email'} onBack={onBack} />
+            <section className="login-content">
+                <span className="login-brand">{storefrontName}</span>
+                <AuthResult
+                    icon={error ? <CircleAlert /> : <Fingerprint />}
+                    title={
+                        error
+                            ? isZh
+                                ? '无法完成验证'
+                                : 'Verification failed'
+                            : isZh
+                              ? '正在验证'
+                              : 'Verifying your email'
+                    }
+                    detail={
+                        error ||
+                        (isZh
+                            ? '请稍候，完成后将自动登录'
+                            : 'Please wait. You will be signed in automatically.')
+                    }
+                >
+                    {error && (
+                        <button
+                            className="primary-action wide-action"
+                            type="button"
+                            onClick={() => onNavigate({ name: 'login' })}
+                        >
+                            {isZh ? '返回登录' : 'Back to sign in'}
+                        </button>
+                    )}
+                </AuthResult>
+            </section>
+        </main>
+    );
+}
+
+function ForgotPasswordPage({
+    api,
+    language,
+    storefrontName,
+    onBack,
+    onNavigate,
+}: {
+    api: ShopApi;
+    language: StorefrontLanguage;
+    storefrontName: string;
+    onBack: () => void;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    const [submitting, setSubmitting] = useState(false);
+    const [requested, setRequested] = useState(false);
+    const [error, setError] = useState('');
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        setSubmitting(true);
+        setError('');
+        try {
+            await api.requestPasswordReset(String(data.get('emailAddress')).trim());
+            setRequested(true);
+        } catch (requestError) {
+            setError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '发送重置邮件失败'
+                      : 'Could not send the reset email',
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <main className="page subpage login-page">
+            <SubHeader title={isZh ? '忘记密码' : 'Forgot password'} onBack={onBack} />
+            <section className="login-content">
+                <span className="login-brand">{storefrontName}</span>
+                {requested ? (
+                    <AuthResult
+                        icon={<CircleCheck />}
+                        title={isZh ? '请查收邮件' : 'Check your email'}
+                        detail={
+                            isZh
+                                ? '如果该邮箱已注册，你将收到密码重置链接'
+                                : 'If the address is registered, a password reset link will arrive shortly.'
+                        }
+                    >
+                        <button
+                            className="primary-action wide-action"
+                            type="button"
+                            onClick={() => onNavigate({ name: 'login' })}
+                        >
+                            {isZh ? '返回登录' : 'Back to sign in'}
+                        </button>
+                    </AuthResult>
+                ) : (
+                    <>
+                        <h1>{isZh ? '重置登录密码' : 'Reset your password'}</h1>
+                        <p>
+                            {isZh
+                                ? '输入注册邮箱，我们将发送重置链接'
+                                : 'Enter your email to receive a reset link'}
+                        </p>
+                        <form onSubmit={event => void submit(event)}>
+                            <Field
+                                name="emailAddress"
+                                label={isZh ? '电子邮箱' : 'Email address'}
+                                type="email"
+                                autoComplete="email"
+                                required
+                                wide
+                            />
+                            {error && <small className="form-error">{error}</small>}
+                            <button
+                                className="primary-action wide-action"
+                                type="submit"
+                                disabled={submitting}
+                            >
+                                {submitting
+                                    ? isZh
+                                        ? '发送中'
+                                        : 'Sending'
+                                    : isZh
+                                      ? '发送重置邮件'
+                                      : 'Send reset email'}
+                            </button>
+                        </form>
+                    </>
+                )}
+            </section>
+        </main>
+    );
+}
+
+function ResetPasswordPage({
+    api,
+    language,
+    storefrontName,
+    token,
+    onBack,
+    onSuccess,
+    onNavigate,
+}: {
+    api: ShopApi;
+    language: StorefrontLanguage;
+    storefrontName: string;
+    token?: string;
+    onBack: () => void;
+    onSuccess: () => Promise<void>;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState(
+        token ? '' : isZh ? '重置链接缺少令牌' : 'The reset link is missing its token',
+    );
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!token) return;
+        const data = new FormData(event.currentTarget);
+        const password = String(data.get('password'));
+        if (password !== String(data.get('confirmPassword'))) {
+            setError(isZh ? '两次输入的密码不一致' : 'The passwords do not match');
+            return;
+        }
+        setSubmitting(true);
+        setError('');
+        try {
+            await api.resetPassword(token, password);
+            await onSuccess();
+        } catch (requestError) {
+            setError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '重置密码失败'
+                      : 'Password reset failed',
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <main className="page subpage login-page">
+            <SubHeader title={isZh ? '重置密码' : 'Reset password'} onBack={onBack} />
+            <section className="login-content">
+                <span className="login-brand">{storefrontName}</span>
+                <h1>{isZh ? '设置新密码' : 'Choose a new password'}</h1>
+                <p>{isZh ? '新密码将立即用于登录' : 'Your new password will be active immediately'}</p>
+                {token ? (
+                    <form onSubmit={event => void submit(event)}>
+                        <Field
+                            name="password"
+                            label={isZh ? '新密码' : 'New password'}
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            wide
+                        />
+                        <Field
+                            name="confirmPassword"
+                            label={isZh ? '确认新密码' : 'Confirm new password'}
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            wide
+                        />
+                        {error && <small className="form-error">{error}</small>}
+                        <button className="primary-action wide-action" type="submit" disabled={submitting}>
+                            {submitting
+                                ? isZh
+                                    ? '提交中'
+                                    : 'Updating'
+                                : isZh
+                                  ? '更新密码'
+                                  : 'Update password'}
+                        </button>
+                    </form>
+                ) : (
+                    <AuthResult
+                        icon={<CircleAlert />}
+                        title={isZh ? '重置链接无效' : 'Invalid reset link'}
+                        detail={error}
+                    >
+                        <button
+                            className="primary-action wide-action"
+                            type="button"
+                            onClick={() => onNavigate({ name: 'forgot-password' })}
+                        >
+                            {isZh ? '重新获取链接' : 'Request another link'}
+                        </button>
+                    </AuthResult>
+                )}
+            </section>
+        </main>
+    );
+}
+
+function AuthResult({
+    icon,
+    title,
+    detail,
+    children,
+}: {
+    icon: ReactNode;
+    title: string;
+    detail: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className="auth-result">
+            <span>{icon}</span>
+            <h1>{title}</h1>
+            <p>{detail}</p>
+            <div>{children}</div>
+        </div>
     );
 }
 
@@ -3309,7 +5205,12 @@ function ProductCard({
     const variant = product.variants[0];
     return (
         <article className="product-card">
-            <button className="product-card-image" type="button" onClick={onOpen}>
+            <button
+                className="product-card-image"
+                type="button"
+                onClick={onOpen}
+                aria-label={`${locale.startsWith('zh') ? '查看' : 'View'} ${product.name}`}
+            >
                 <ProductImage product={product} />
             </button>
             <button className="product-card-name" type="button" onClick={onOpen}>
@@ -3331,7 +5232,7 @@ function ProductCard({
                         (variant.customFields.fulfillmentType === 'physical' &&
                             variant.stockLevel === 'OUT_OF_STOCK')
                     }
-                    aria-label={`Add ${product.name}`}
+                    aria-label={`${locale.startsWith('zh') ? '加入购物车' : 'Add to cart'} ${product.name}`}
                 >
                     <Plus />
                 </button>
@@ -3361,7 +5262,12 @@ function ProductRow({
     const variant = product.variants[0];
     return (
         <article className="product-row">
-            <button type="button" className="product-row-image" onClick={onOpen}>
+            <button
+                type="button"
+                className="product-row-image"
+                onClick={onOpen}
+                aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
+            >
                 <ProductImage product={product} />
             </button>
             <div>
@@ -3460,6 +5366,11 @@ function CartGroup({
                         <label className="round-check">
                             <input
                                 type="checkbox"
+                                aria-label={
+                                    isZh
+                                        ? `选择 ${variant?.name ?? '商品'}`
+                                        : `Select ${variant?.name ?? 'item'}`
+                                }
                                 checked={line.selected}
                                 disabled={!line.available || loading}
                                 onChange={event => onSelect(line.id, event.target.checked)}
@@ -3489,6 +5400,11 @@ function CartGroup({
                                 <div>
                                     <button
                                         type="button"
+                                        aria-label={
+                                            isZh
+                                                ? `减少 ${variant?.name ?? '商品'} 数量`
+                                                : `Decrease ${variant?.name ?? 'item'} quantity`
+                                        }
                                         onClick={() =>
                                             line.quantity > 1
                                                 ? onQuantity(line.id, line.quantity - 1)
@@ -3501,6 +5417,11 @@ function CartGroup({
                                     <span>{line.quantity}</span>
                                     <button
                                         type="button"
+                                        aria-label={
+                                            isZh
+                                                ? `增加 ${variant?.name ?? '商品'} 数量`
+                                                : `Increase ${variant?.name ?? 'item'} quantity`
+                                        }
                                         onClick={() => onQuantity(line.id, line.quantity + 1)}
                                         disabled={loading || !line.available}
                                     >
@@ -3523,7 +5444,6 @@ function OrderCard({
     storefrontName,
     onOpen,
     onBuyAgain,
-    onMore,
 }: {
     order: Order;
     market: MarketConfig;
@@ -3532,7 +5452,6 @@ function OrderCard({
     storefrontName: string;
     onOpen: () => void;
     onBuyAgain: () => void;
-    onMore: () => void;
 }) {
     const isZh = language === 'zh';
     const completed = ['Delivered', 'Cancelled'].includes(order.state);
@@ -3582,9 +5501,6 @@ function OrderCard({
                     <b>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</b>
                 </div>
                 <div className="order-operations">
-                    <button type="button" onClick={onMore}>
-                        {isZh ? '更多' : 'More'}
-                    </button>
                     <button
                         type="button"
                         className="primary-action"
@@ -3711,7 +5627,6 @@ function NoticeButton({ language, onClick }: { language: StorefrontLanguage; onC
             aria-label={language === 'zh' ? '通知' : 'Notifications'}
         >
             <Bell />
-            <b />
         </button>
     );
 }
@@ -3771,26 +5686,33 @@ function ServiceButton({ icon, label, onClick }: { icon: ReactNode; label: strin
     );
 }
 function LegalFooter({
-    language,
     storefrontName,
-    onUnavailable,
+    content,
+    onContentTarget,
 }: {
-    language: StorefrontLanguage;
     storefrontName: string;
-    onUnavailable: () => void;
+    content?: StorefrontContentBlock;
+    onContentTarget?: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
-    const isZh = language === 'zh';
     return (
         <footer className="legal-footer">
+            {content?.title && <strong>{content.title}</strong>}
+            {content?.body && <p>{content.body}</p>}
+            {!!content?.items.length && (
+                <nav aria-label={content.title}>
+                    {content.items.map(item => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            disabled={!onContentTarget || item.targetType === 'NONE' || !item.targetValue}
+                            onClick={() => onContentTarget?.(item.targetType, item.targetValue)}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
+                </nav>
+            )}
             <span>{storefrontName}</span>
-            <nav>
-                <button type="button" onClick={onUnavailable}>
-                    {isZh ? '隐私政策' : 'Privacy'}
-                </button>
-                <button type="button" onClick={onUnavailable}>
-                    {isZh ? '服务条款' : 'Terms'}
-                </button>
-            </nav>
         </footer>
     );
 }
@@ -3905,6 +5827,86 @@ function ListSkeleton() {
     );
 }
 
+function CouponSheet({
+    couponCodes,
+    language,
+    loading,
+    onApply,
+    onRemove,
+    onClose,
+}: {
+    couponCodes: string[];
+    language: StorefrontLanguage;
+    loading: boolean;
+    onApply: (couponCode: string) => Promise<string | null>;
+    onRemove: (couponCode: string) => Promise<string | null>;
+    onClose: () => void;
+}) {
+    const isZh = language === 'zh';
+    const [couponCode, setCouponCode] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const apply = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const normalizedCode = couponCode.trim();
+        if (!normalizedCode) return;
+        setSubmitting(true);
+        setError('');
+        const nextError = await onApply(normalizedCode);
+        setSubmitting(false);
+        if (nextError) setError(nextError);
+        else setCouponCode('');
+    };
+    const remove = async (code: string) => {
+        setSubmitting(true);
+        setError('');
+        const nextError = await onRemove(code);
+        setSubmitting(false);
+        if (nextError) setError(nextError);
+    };
+    return (
+        <Sheet title={isZh ? '优惠码' : 'Coupon code'} onClose={onClose}>
+            <div className="coupon-sheet-content">
+                <form className="coupon-code-form" onSubmit={event => void apply(event)}>
+                    <label>
+                        <span>{isZh ? '输入优惠码' : 'Enter coupon code'}</span>
+                        <input
+                            value={couponCode}
+                            onChange={event => setCouponCode(event.target.value)}
+                            autoComplete="off"
+                            placeholder={isZh ? '例如 SAVE10' : 'For example, SAVE10'}
+                        />
+                    </label>
+                    <button type="submit" disabled={loading || submitting || !couponCode.trim()}>
+                        {submitting ? (isZh ? '处理中' : 'Applying') : isZh ? '应用' : 'Apply'}
+                    </button>
+                </form>
+                {!!couponCodes.length && (
+                    <section className="applied-coupons">
+                        <strong>{isZh ? '已使用' : 'Applied'}</strong>
+                        {couponCodes.map(code => (
+                            <div key={code}>
+                                <span>
+                                    <TicketPercent />
+                                    {code}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => void remove(code)}
+                                    disabled={loading || submitting}
+                                >
+                                    {isZh ? '移除' : 'Remove'}
+                                </button>
+                            </div>
+                        ))}
+                    </section>
+                )}
+                {error && <small className="form-error">{error}</small>}
+            </div>
+        </Sheet>
+    );
+}
+
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
     return (
         <div className="sheet-layer" role="presentation">
@@ -4011,12 +6013,28 @@ function orderStateLabel(state: string, language: StorefrontLanguage): string {
     };
     return (language === 'zh' ? zh : en)[state] ?? state;
 }
-function orderMatchesTab(order: Order, tab: OrderTab): boolean {
-    if (tab === 'all') return true;
-    if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'].includes(order.state);
-    if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
-    if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'].includes(order.state);
-    return false;
+function fulfillmentStateLabel(state: string, language: StorefrontLanguage): string {
+    const zh: Record<string, string> = {
+        Created: '已创建',
+        Pending: '待发货',
+        Shipped: '运输中',
+        Delivered: '已送达',
+        Cancelled: '已取消',
+    };
+    const en: Record<string, string> = {
+        Created: 'Created',
+        Pending: 'Pending shipment',
+        Shipped: 'In transit',
+        Delivered: 'Delivered',
+        Cancelled: 'Cancelled',
+    };
+    return (language === 'zh' ? zh : en)[state] ?? state;
+}
+function orderStatesForTab(tab: OrderTab): string[] | undefined {
+    if (tab === 'pending') return ['AddingItems', 'ArrangingPayment'];
+    if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
+    if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
+    return undefined;
 }
 function fallbackCollections(isZh: boolean): CollectionSummary[] {
     return [
