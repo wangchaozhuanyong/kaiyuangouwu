@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AddStorefrontContent1786762500000 } from './1786762500000-add-storefront-content';
 import { AddCustomerOrderNote1786764000000 } from './1786764000000-add-customer-order-note';
 import { AddStoreProfiles1786765800000 } from './1786765800000-add-store-profiles';
+import { AddStoreAdministratorAccess1786767600000 } from './1786767600000-add-store-administrator-access';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -21,6 +22,36 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it('creates the merchant password gate with portable MySQL column types', async () => {
+        const createdTables: Table[] = [];
+        const queryRunner = {
+            connection: { options: { type: 'mysql' } },
+            hasTable: vi.fn(async () => false),
+            createTable: vi.fn(async (table: Table) => createdTables.push(table)),
+        } as unknown as QueryRunner;
+
+        await new AddStoreAdministratorAccess1786767600000().up(queryRunner);
+
+        expect(createdTables).toHaveLength(1);
+        expect(createdTables[0].findColumnByName('mustChangePassword')).toMatchObject({
+            type: 'tinyint',
+            default: 1,
+        });
+        expect(createdTables[0].findColumnByName('createdAt')).toMatchObject({
+            type: 'datetime',
+            precision: 6,
+            default: 'CURRENT_TIMESTAMP(6)',
+        });
+        expect(createdTables[0].indices).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'IDX_store_administrator_access_user',
+                    isUnique: true,
+                }),
+            ]),
+        );
+    });
+
     it('creates the store profile table with portable MySQL column types and backfills Channels', async () => {
         const execute = vi.fn(async () => undefined);
         const values = vi.fn(() => ({ execute }));

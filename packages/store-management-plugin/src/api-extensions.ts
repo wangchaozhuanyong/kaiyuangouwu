@@ -52,6 +52,10 @@ export const adminApiExtensions = gql`
         storefrontUrl: String
     }
 
+    type MerchantInitialPasswordStatus {
+        mustChangePassword: Boolean!
+    }
+
     input UpdateStoreProfileInput {
         id: ID!
         status: StoreProfileStatus
@@ -62,13 +66,25 @@ export const adminApiExtensions = gql`
         logoAssetId: ID
     }
 
+    input UpdateMyStoreProfileInput {
+        storefrontNameZh: String
+        storefrontNameEn: String
+        descriptionZh: String
+        descriptionEn: String
+        logoAssetId: ID
+    }
+
     extend type Query {
         storeProfiles: [StoreProfile!]!
+        myStoreProfile: StoreProfile!
+        merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
     }
 
     extend type Mutation {
         provisionStore(input: ProvisionStoreInput!): ProvisionStoreResult!
         updateStoreProfile(input: UpdateStoreProfileInput!): StoreProfile!
+        updateMyStoreProfile(input: UpdateMyStoreProfileInput!): StoreProfile!
+        completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
     }
 `;
 

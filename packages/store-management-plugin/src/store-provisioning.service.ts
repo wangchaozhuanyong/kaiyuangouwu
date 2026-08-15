@@ -20,6 +20,8 @@ import { storeDomainPermission } from '@vendure/store-domain-plugin';
 import { storefrontContentPermission } from '@vendure/storefront-content-plugin';
 import { randomBytes } from 'node:crypto';
 
+import { storeProfilePermission } from './constants';
+import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
 
@@ -29,6 +31,8 @@ export const storeAdministratorPermissions: Permission[] = [
     Permission.ReadCatalog,
     Permission.UpdateCatalog,
     Permission.DeleteCatalog,
+    Permission.CreateAsset,
+    Permission.ReadAsset,
     Permission.ReadOrder,
     Permission.UpdateOrder,
     Permission.ReadCustomer,
@@ -54,6 +58,8 @@ export const storeAdministratorPermissions: Permission[] = [
     storeDomainPermission.Read,
     storeDomainPermission.Update,
     storeDomainPermission.Delete,
+    storeProfilePermission.Read,
+    storeProfilePermission.Update,
 ];
 
 @Injectable()
@@ -66,6 +72,7 @@ export class StoreProvisioningService {
         private readonly administratorService: AdministratorService,
         private readonly stockLocationService: StockLocationService,
         private readonly storeProfileService: StoreProfileService,
+        private readonly merchantInitialPasswordService: MerchantInitialPasswordService,
     ) {}
 
     async provision(ctx: RequestContext, input: ProvisionStoreInput): Promise<ProvisionStoreResult> {
@@ -119,6 +126,7 @@ export class StoreProvisioningService {
             password: temporaryPassword,
             roleIds: [role.id],
         });
+        await this.merchantInitialPasswordService.requirePasswordChange(ctx, administrator);
         const stockLocation = await this.stockLocationService.create(ctx, {
             name: `${normalized.name} Warehouse`,
             description: `Primary stock location for ${normalized.code}`,

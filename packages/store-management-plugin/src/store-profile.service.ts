@@ -2,17 +2,24 @@ import { Injectable } from '@nestjs/common';
 import {
     Asset,
     Channel,
+    ChannelService,
     EntityNotFoundError,
     ID,
     RequestContext,
     TransactionalConnection,
     UserInputError,
+    isGraphQlErrorResult,
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import { In } from 'typeorm';
 
 import { StoreProfile } from './entities/store-profile.entity';
-import { PublicStoreSummary, StoreProfileStatus, UpdateStoreProfileInput } from './types';
+import {
+    PublicStoreSummary,
+    StoreProfileStatus,
+    UpdateMyStoreProfileInput,
+    UpdateStoreProfileInput,
+} from './types';
 
 interface StorefrontChannelFields {
     storefrontNameZh?: string | null;
@@ -21,7 +28,10 @@ interface StorefrontChannelFields {
 
 @Injectable()
 export class StoreProfileService {
-    constructor(private readonly connection: TransactionalConnection) {}
+    constructor(
+        private readonly connection: TransactionalConnection,
+        private readonly channelService: ChannelService,
+    ) {}
 
     async createDraft(ctx: RequestContext, channel: Channel): Promise<StoreProfile> {
         const repository = this.connection.getRepository(ctx, StoreProfile);
@@ -29,7 +39,7 @@ export class StoreProfileService {
         if (existing) {
             return existing;
         }
-        const last = await repository.findOne({ order: { sortOrder: 'DESC' } });
+        const [last] = await repository.find({ order: { sortOrder: 'DESC' }, take: 1 });
         return repository.save(
             new StoreProfile({
                 channel,
@@ -51,6 +61,11 @@ export class StoreProfileService {
             order: { sortOrder: 'ASC', createdAt: 'ASC' },
         });
         return this.attachDomains(ctx, profiles);
+    }
+
+    async findForMerchant(ctx: RequestContext): Promise<StoreProfile> {
+        const profile = await this.findByChannel(ctx, ctx.channelId);
+        return (await this.attachDomains(ctx, [profile]))[0];
     }
 
     async update(ctx: RequestContext, input: UpdateStoreProfileInput): Promise<StoreProfile> {
@@ -98,6 +113,55 @@ export class StoreProfileService {
                 await this.requireActivePrimaryDomain(ctx, profile.channelId);
             }
             profile.isPublished = input.isPublished;
+        }
+
+        const saved = await repository.save(profile);
+        return (await this.attachDomains(ctx, [saved]))[0];
+    }
+
+    async updateForMerchant(ctx: RequestContext, input: UpdateMyStoreProfileInput): Promise<StoreProfile> {
+        const repository = this.connection.getRepository(ctx, StoreProfile);
+        const profile = await this.findByChannel(ctx, ctx.channelId);
+        profile.descriptionZh = this.normalizeDescription(
+            input.descriptionZh,
+            profile.descriptionZh,
+            '中文简介',
+        );
+        profile.descriptionEn = this.normalizeDescription(
+            input.descriptionEn,
+            profile.descriptionEn,
+            '英文简介',
+        );
+        if (input.logoAssetId !== undefined) {
+            const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
+            profile.logoAsset = asset;
+            profile.logoAssetId = asset?.id ?? null;
+        }
+
+        const customFields = profile.channel.customFields as StorefrontChannelFields;
+        const storefrontNameZh = this.normalizeStorefrontName(
+            input.storefrontNameZh,
+            customFields.storefrontNameZh,
+            '中文店铺名称',
+        );
+        const storefrontNameEn = this.normalizeStorefrontName(
+            input.storefrontNameEn,
+            customFields.storefrontNameEn,
+            '英文店铺名称',
+        );
+        if (input.storefrontNameZh != null || input.storefrontNameEn != null) {
+            const updatedChannel = await this.channelService.update(ctx, {
+                id: profile.channelId,
+                customFields: {
+                    ...customFields,
+                    storefrontNameZh,
+                    storefrontNameEn,
+                },
+            });
+            if (isGraphQlErrorResult(updatedChannel)) {
+                throw new UserInputError(updatedChannel.message);
+            }
+            profile.channel = updatedChannel;
         }
 
         const saved = await repository.save(profile);
@@ -157,6 +221,17 @@ export class StoreProfileService {
         }
     }
 
+    private async findByChannel(ctx: RequestContext, channelId: ID): Promise<StoreProfile> {
+        const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
+            where: { channelId },
+            relations: { channel: { seller: true }, logoAsset: true },
+        });
+        if (!profile) {
+            throw new EntityNotFoundError(StoreProfile.name, channelId);
+        }
+        return profile;
+    }
+
     private async findAsset(ctx: RequestContext, id: ID): Promise<Asset> {
         const asset = await this.connection.getRepository(ctx, Asset).findOne({ where: { id } });
         if (!asset) {
@@ -178,6 +253,25 @@ export class StoreProfileService {
         const normalized = value.trim();
         if (normalized.length > 800) {
             throw new UserInputError(`${label}不能超过 800 个字符`);
+        }
+        return normalized;
+    }
+
+    private normalizeStorefrontName(
+        value: string | null | undefined,
+        current: string | null | undefined,
+        label: string,
+    ): string {
+        if (value == null) {
+            return current?.trim() ?? '';
+        }
+        const normalized = value.trim();
+        const units = Array.from(normalized).reduce(
+            (total, character) => total + (/\p{Script=Han}|[\uFF01-\uFF60]/u.test(character) ? 2 : 1),
+            0,
+        );
+        if (units < 1 || units > 16) {
+            throw new UserInputError(`${label}必须是 1 至 16 个显示单位`);
         }
         return normalized;
     }

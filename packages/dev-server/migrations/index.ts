@@ -15,6 +15,7 @@ import { RepairRegionalChannels1786760401000 } from './1786760401000-repair-regi
 import { AddStorefrontContent1786762500000 } from './1786762500000-add-storefront-content';
 import { AddCustomerOrderNote1786764000000 } from './1786764000000-add-customer-order-note';
 import { AddStoreProfiles1786765800000 } from './1786765800000-add-store-profiles';
+import { AddStoreAdministratorAccess1786767600000 } from './1786767600000-add-store-administrator-access';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -34,4 +35,5 @@ export const devServerMigrations = [
     AddStorefrontContent1786762500000,
     AddCustomerOrderNote1786764000000,
     AddStoreProfiles1786765800000,
+    AddStoreAdministratorAccess1786767600000,
 ];

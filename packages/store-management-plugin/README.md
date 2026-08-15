@@ -11,6 +11,7 @@ The SuperAdmin-only `provisionStore` Admin API mutation creates these resources 
 - one Channel copied from an existing template Channel's language, currency, tax, shipping, and inventory defaults;
 - one Channel-scoped merchant administrator Role;
 - one Administrator with a server-generated temporary password;
+- one password gate that restricts the merchant Admin API until the temporary password is changed;
 - one StockLocation assigned only to the new Channel.
 - one unpublished `StoreProfile` used by the App store directory.
 
@@ -35,4 +36,6 @@ The public Shop API query `availableStores` returns only profiles that are `ACTI
 and still have an active primary domain. The SuperAdmin-only `storeProfiles` and `updateStoreProfile` Admin
 API operations power the Dashboard's `Store management` page.
 
-A future forced-password-change flag still requires a separate approved schema change.
+Merchants use `myStoreProfile` and `updateMyStoreProfile`, which always resolve the active Channel and do
+not accept another store's Channel or profile ID. The Dashboard also exposes a dedicated current-store
+domain page backed by the Store Domain plugin's existing Channel isolation checks.

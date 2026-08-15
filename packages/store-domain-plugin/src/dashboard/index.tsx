@@ -1,8 +1,10 @@
 import { defineDashboardExtension } from '@vendure/dashboard';
 
+import { myStoreDomainsRoute } from './my-store-domains-page';
 import { StoreDomainPageBlock } from './store-domain-page-block';
 
 defineDashboardExtension({
+    routes: [myStoreDomainsRoute],
     pageBlocks: [
         {
             id: 'store-domains',

@@ -38,6 +38,14 @@ export interface UpdateStoreProfileInput {
     logoAssetId?: ID | null;
 }
 
+export interface UpdateMyStoreProfileInput {
+    storefrontNameZh?: string | null;
+    storefrontNameEn?: string | null;
+    descriptionZh?: string | null;
+    descriptionEn?: string | null;
+    logoAssetId?: ID | null;
+}
+
 export interface PublicStoreSummary {
     id: ID;
     channelId: ID;

@@ -37,6 +37,7 @@ function createService() {
     const administratorService = { create: vi.fn().mockResolvedValue({ id: 'administrator-1' }) };
     const stockLocationService = { create: vi.fn().mockResolvedValue({ id: 'stock-location-1' }) };
     const storeProfileService = { createDraft: vi.fn().mockResolvedValue({ id: 'profile-1' }) };
+    const merchantInitialPasswordService = { requirePasswordChange: vi.fn().mockResolvedValue(undefined) };
     const service = new StoreProvisioningService(
         connection as any,
         sellerService as any,
@@ -45,6 +46,7 @@ function createService() {
         administratorService as any,
         stockLocationService as any,
         storeProfileService as any,
+        merchantInitialPasswordService as any,
     );
     return {
         administratorService,
@@ -56,6 +58,7 @@ function createService() {
         service,
         stockLocationService,
         storeProfileService,
+        merchantInitialPasswordService,
     };
 }
 
@@ -83,6 +86,7 @@ describe('StoreProvisioningService', () => {
             service,
             stockLocationService,
             storeProfileService,
+            merchantInitialPasswordService,
         } = createService();
         const ctx = {
             channelId: 'template-1',
@@ -128,6 +132,10 @@ describe('StoreProvisioningService', () => {
                 emailAddress: 'owner@example.com',
                 roleIds: ['store-role-1'],
             }),
+        );
+        expect(merchantInitialPasswordService.requirePasswordChange).toHaveBeenCalledWith(
+            ctx,
+            expect.objectContaining({ id: 'administrator-1' }),
         );
         expect(stockLocationService.create).toHaveBeenCalledOnce();
         expect(channelService.assignToChannels).toHaveBeenCalledWith(
@@ -176,6 +184,8 @@ describe('StoreProvisioningService', () => {
         expect(storeAdministratorPermissions).toContain(Permission.ReadChannel);
         expect(storeAdministratorPermissions).toContain('ReadStoreDomain');
         expect(storeAdministratorPermissions).toContain('UpdateStorefrontContent');
+        expect(storeAdministratorPermissions).toContain('ReadStoreProfile');
+        expect(storeAdministratorPermissions).toContain('UpdateStoreProfile');
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateChannel);
         expect(storeAdministratorPermissions).not.toContain(Permission.DeleteChannel);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateSeller);
