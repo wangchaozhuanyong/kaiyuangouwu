@@ -320,6 +320,73 @@ describe('ShopApi storefront mutations', () => {
         expect(page.items.map(product => product.id)).toEqual(['product-2', 'product-1']);
     });
 
+    it('loads every search page before client-side filtering', async () => {
+        const firstPageIds = Array.from({ length: 100 }, (_, index) => `product-${index + 1}`);
+        const firstPageProducts = firstPageIds.map(id => ({ id, name: id, variants: [] }));
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            search: {
+                                totalItems: 101,
+                                items: firstPageIds.map(productId => ({ productId })),
+                            },
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({ data: { products: { items: firstPageProducts } } }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            search: {
+                                totalItems: 101,
+                                items: [{ productId: 'product-101' }],
+                            },
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            products: {
+                                items: [{ id: 'product-101', name: 'product-101', variants: [] }],
+                            },
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const products = await new ShopApi(market).searchAllProducts('', 'name', 'collection-1');
+
+        const secondSearchRequest = JSON.parse(String(fetchMock.mock.calls[2][1]?.body)) as {
+            variables: { input: Record<string, unknown> };
+        };
+        expect(fetchMock).toHaveBeenCalledTimes(4);
+        expect(secondSearchRequest.variables.input).toMatchObject({
+            collectionId: 'collection-1',
+            skip: 100,
+            take: 100,
+            sort: { name: 'ASC' },
+        });
+        expect(products).toHaveLength(101);
+        expect(products.at(-1)?.id).toBe('product-101');
+    });
+
     it('loads product history by id and preserves recent order', async () => {
         const fetchMock = mockGraphQlResponse({
             products: {

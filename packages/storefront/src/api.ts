@@ -356,6 +356,29 @@ export class ShopApi {
         };
     }
 
+    async searchAllProducts(
+        term: string,
+        sort: ProductSearchSort = 'recommended',
+        collectionId?: string,
+    ): Promise<Product[]> {
+        const pageSize = 100;
+        const productsById = new Map<string, Product>();
+        let totalItems = 0;
+
+        do {
+            const skip = productsById.size;
+            const page = await this.searchProducts(term, sort, skip, pageSize, collectionId);
+            totalItems = page.totalItems;
+            const previousSize = productsById.size;
+            for (const product of page.items) {
+                productsById.set(product.id, product);
+            }
+            if (!page.items.length || productsById.size === previousSize) break;
+        } while (productsById.size < totalItems);
+
+        return [...productsById.values()];
+    }
+
     async collections(): Promise<CollectionSummary[]> {
         const result = await this.request<{ collections: { items: CollectionSummary[] } }>(`
             query StorefrontCollections {

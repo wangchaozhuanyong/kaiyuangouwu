@@ -25,6 +25,7 @@ import {
     Share2,
     ShoppingBag,
     ShoppingCart,
+    SlidersHorizontal,
     Sparkles,
     Store,
     TicketPercent,
@@ -44,6 +45,7 @@ import {
     CollectionSummary,
     CustomerAddress,
     CustomerAddressInput,
+    FulfillmentType,
     MarketCode,
     MarketConfig,
     Order,
@@ -218,6 +220,8 @@ export function App() {
     const [activeCollectionId, setActiveCollectionId] = useState('all');
     const [activeChildId, setActiveChildId] = useState('all');
     const [sortMode, setSortMode] = useState<SortMode>('recommended');
+    const [fulfillmentFilter, setFulfillmentFilter] = useState<'all' | FulfillmentType>('all');
+    const [inStockOnly, setInStockOnly] = useState(false);
     const toastTimer = useRef<number | null>(null);
     const routeRef = useRef(route);
     const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
@@ -742,6 +746,8 @@ export function App() {
                         activeCollectionId={activeCollectionId}
                         activeChildId={activeChildId}
                         sortMode={sortMode}
+                        fulfillmentFilter={fulfillmentFilter}
+                        inStockOnly={inStockOnly}
                         addingVariantId={addingVariantId}
                         onCollectionChange={(collectionId, childId) => {
                             setActiveCollectionId(collectionId);
@@ -749,6 +755,10 @@ export function App() {
                         }}
                         onChildChange={setActiveChildId}
                         onSortChange={setSortMode}
+                        onFilterChange={(type, inStock) => {
+                            setFulfillmentFilter(type);
+                            setInStockOnly(inStock);
+                        }}
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
                         onNotify={() => navigate({ name: 'notifications' })}
@@ -1534,10 +1544,13 @@ interface CategoryPageProps {
     activeCollectionId: string;
     activeChildId: string;
     sortMode: SortMode;
+    fulfillmentFilter: 'all' | FulfillmentType;
+    inStockOnly: boolean;
     addingVariantId: string | null;
     onCollectionChange: (collectionId: string, childId: string) => void;
     onChildChange: (childId: string) => void;
     onSortChange: (sort: SortMode) => void;
+    onFilterChange: (type: 'all' | FulfillmentType, inStockOnly: boolean) => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
     onNotify: () => void;
@@ -1557,26 +1570,63 @@ function CategoryPage(props: CategoryPageProps) {
         activeCollectionId,
         activeChildId,
         sortMode,
+        fulfillmentFilter,
+        inStockOnly,
         addingVariantId,
         onCollectionChange,
         onChildChange,
         onSortChange,
+        onFilterChange,
         onNavigate,
         onAdd,
         onNotify,
         onRetry,
     } = props;
     const isZh = language === 'zh';
+    const [filterOpen, setFilterOpen] = useState(false);
+    const [minimumPriceInput, setMinimumPriceInput] = useState('');
+    const [maximumPriceInput, setMaximumPriceInput] = useState('');
+    const [draftType, setDraftType] = useState<'all' | FulfillmentType>(fulfillmentFilter);
+    const [draftStock, setDraftStock] = useState(inStockOnly);
+    const [draftMinimumPrice, setDraftMinimumPrice] = useState('');
+    const [draftMaximumPrice, setDraftMaximumPrice] = useState('');
     const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [categoryLoading, setCategoryLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [categoryError, setCategoryError] = useState('');
     const [categoryReloadKey, setCategoryReloadKey] = useState(0);
+    const [visibleLimit, setVisibleLimit] = useState(12);
     const activeCategoryKey = useRef('');
     const primary = collections.find(item => item.id === activeCollectionId) ?? collections[0];
     const children = primary?.children?.length ? primary.children : primary ? [primary] : [];
     const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
+    const hasFilters =
+        fulfillmentFilter !== 'all' ||
+        inStockOnly ||
+        minimumPriceInput !== '' ||
+        maximumPriceInput !== '';
+
+    const matchesFilters = useCallback(
+        (
+            product: Product,
+            type: 'all' | FulfillmentType,
+            stockOnly: boolean,
+            minimum: string,
+            maximum: string,
+        ) => {
+            const typeMatch =
+                type === 'all' ||
+                product.variants.some(variant => variant.customFields.fulfillmentType === type);
+            const stockMatch =
+                !stockOnly || product.variants.some(variant => variant.stockLevel !== 'OUT_OF_STOCK');
+            const price = minimumPrice(product) / 100;
+            const minimumMatch = minimum === '' || price >= Number(minimum);
+            const maximumMatch = maximum === '' || price <= Number(maximum);
+            return typeMatch && stockMatch && minimumMatch && maximumMatch;
+        },
+        [],
+    );
 
     useEffect(() => {
         if (!collections.length) {
@@ -1589,28 +1639,60 @@ function CategoryPage(props: CategoryPageProps) {
                     fallbackType === 'all' ||
                     product.variants.some(variant => variant.customFields.fulfillmentType === fallbackType),
             );
-            const sortedFallbackProducts = [...fallbackProducts].sort((first, second) => {
+            const filteredFallbackProducts = fallbackProducts.filter(product =>
+                matchesFilters(
+                    product,
+                    fulfillmentFilter,
+                    inStockOnly,
+                    minimumPriceInput,
+                    maximumPriceInput,
+                ),
+            );
+            const sortedFallbackProducts = [...filteredFallbackProducts].sort((first, second) => {
                 if (sortMode === 'name') return first.name.localeCompare(second.name, locale);
                 if (sortMode === 'price-asc') return minimumPrice(first) - minimumPrice(second);
                 if (sortMode === 'price-desc') return minimumPrice(second) - minimumPrice(first);
                 return 0;
             });
             setCategoryProducts(sortedFallbackProducts);
-            setTotalItems(fallbackProducts.length);
+            setTotalItems(filteredFallbackProducts.length);
+            setVisibleLimit(12);
             setCategoryLoading(false);
             setCategoryError(error ?? '');
             return;
         }
         if (!selectedCollectionId || selectedCollectionId === 'all') return;
-        const categoryKey = `${selectedCollectionId}\u0000${sortMode}\u0000${categoryReloadKey}`;
+        const categoryKey = [
+            selectedCollectionId,
+            sortMode,
+            fulfillmentFilter,
+            inStockOnly ? 'stock' : 'all-stock',
+            minimumPriceInput,
+            maximumPriceInput,
+            categoryReloadKey,
+        ].join('\u0000');
         activeCategoryKey.current = categoryKey;
         let cancelled = false;
         setCategoryProducts([]);
         setTotalItems(0);
         setCategoryError('');
         setCategoryLoading(true);
-        void api
-            .searchProducts('', sortMode, 0, 12, selectedCollectionId)
+        setVisibleLimit(12);
+        const request = hasFilters
+            ? api.searchAllProducts('', sortMode, selectedCollectionId).then(items => {
+                  const filteredItems = items.filter(product =>
+                      matchesFilters(
+                          product,
+                          fulfillmentFilter,
+                          inStockOnly,
+                          minimumPriceInput,
+                          maximumPriceInput,
+                      ),
+                  );
+                  return { items: filteredItems, totalItems: filteredItems.length };
+              })
+            : api.searchProducts('', sortMode, 0, 12, selectedCollectionId);
+        void request
             .then(page => {
                 if (cancelled || activeCategoryKey.current !== categoryKey) return;
                 setCategoryProducts(page.items);
@@ -1641,14 +1723,24 @@ function CategoryPage(props: CategoryPageProps) {
         categoryReloadKey,
         collections.length,
         error,
+        fulfillmentFilter,
+        hasFilters,
+        inStockOnly,
         isZh,
         locale,
+        matchesFilters,
+        maximumPriceInput,
+        minimumPriceInput,
         products,
         selectedCollectionId,
         sortMode,
     ]);
 
     const loadMore = async () => {
+        if (hasFilters) {
+            setVisibleLimit(limit => Math.min(limit + 12, categoryProducts.length));
+            return;
+        }
         if (
             !selectedCollectionId ||
             selectedCollectionId === 'all' ||
@@ -1688,6 +1780,22 @@ function CategoryPage(props: CategoryPageProps) {
             if (activeCategoryKey.current === categoryKey) setLoadingMore(false);
         }
     };
+
+    const visibleProducts = hasFilters ? categoryProducts.slice(0, visibleLimit) : categoryProducts;
+    const remainingItems = hasFilters
+        ? Math.max(categoryProducts.length - visibleProducts.length, 0)
+        : Math.max(totalItems - categoryProducts.length, 0);
+    const draftResultCount = products.filter(product => {
+        const collectionMatch =
+            !collections.length ||
+            !selectedCollectionId ||
+            selectedCollectionId === 'all' ||
+            product.collections.some(collection => collection.id === selectedCollectionId);
+        return (
+            collectionMatch &&
+            matchesFilters(product, draftType, draftStock, draftMinimumPrice, draftMaximumPrice)
+        );
+    }).length;
 
     const bannerImage =
         primary?.featuredAsset?.preview ??
@@ -1773,8 +1881,13 @@ function CategoryPage(props: CategoryPageProps) {
                     </button>
                     <div className="result-count">
                         <span>{isZh ? `共 ${totalItems} 件` : `${totalItems} products`}</span>
+                        {hasFilters && <b>{isZh ? '已筛选' : 'Filtered'}</b>}
                     </div>
-                    <nav className="sort-bar" aria-label={isZh ? '排序和筛选' : 'Sort and filter'}>
+                    <nav
+                        className="sort-bar"
+                        aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
+                        style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}
+                    >
                         <button
                             type="button"
                             className={sortMode === 'recommended' ? 'is-active' : undefined}
@@ -1798,6 +1911,19 @@ function CategoryPage(props: CategoryPageProps) {
                         >
                             {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
                         </button>
+                        <button
+                            type="button"
+                            className={hasFilters ? 'is-active' : undefined}
+                            onClick={() => {
+                                setDraftType(fulfillmentFilter);
+                                setDraftStock(inStockOnly);
+                                setDraftMinimumPrice(minimumPriceInput);
+                                setDraftMaximumPrice(maximumPriceInput);
+                                setFilterOpen(true);
+                            }}
+                        >
+                            {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
+                        </button>
                     </nav>
 
                     {categoryLoading || (loading && !collections.length) ? (
@@ -1815,7 +1941,7 @@ function CategoryPage(props: CategoryPageProps) {
                         />
                     ) : categoryProducts.length ? (
                         <div className="product-list">
-                            {categoryProducts.map(product => (
+                            {visibleProducts.map(product => (
                                 <ProductRow
                                     key={product.id}
                                     product={product}
@@ -1835,7 +1961,7 @@ function CategoryPage(props: CategoryPageProps) {
                                     </button>
                                 </div>
                             )}
-                            {categoryProducts.length < totalItems && (
+                            {remainingItems > 0 && (
                                 <button
                                     className="load-more-button"
                                     type="button"
@@ -1847,8 +1973,8 @@ function CategoryPage(props: CategoryPageProps) {
                                             ? '加载中'
                                             : 'Loading'
                                         : isZh
-                                          ? `加载更多（剩余 ${totalItems - categoryProducts.length} 件）`
-                                          : `Load more (${totalItems - categoryProducts.length} remaining)`}
+                                          ? `加载更多（剩余 ${remainingItems} 件）`
+                                          : `Load more (${remainingItems} remaining)`}
                                 </button>
                             )}
                         </div>
@@ -1856,12 +1982,151 @@ function CategoryPage(props: CategoryPageProps) {
                         <EmptyState
                             icon={<Search />}
                             title={isZh ? '当前分类没有商品' : 'No products in this category'}
-                            detail={isZh ? '可以切换其他分类' : 'Choose another category'}
+                            detail={
+                                hasFilters
+                                    ? isZh
+                                        ? '可以调整或清除筛选条件'
+                                        : 'Adjust or clear the filters'
+                                    : isZh
+                                      ? '可以切换其他分类'
+                                      : 'Choose another category'
+                            }
                             compact
                         />
                     )}
                 </section>
             </div>
+
+            {filterOpen && (
+                <Sheet title={isZh ? '筛选' : 'Filter'} onClose={() => setFilterOpen(false)}>
+                    <div className="filter-sheet-content">
+                        <label className="switch-row filter-stock-row">
+                            <span>
+                                <strong>{isZh ? '仅看有货' : 'In stock only'}</strong>
+                                <small>{isZh ? '隐藏当前不可售规格' : 'Hide unavailable variants'}</small>
+                            </span>
+                            <input
+                                type="checkbox"
+                                checked={draftStock}
+                                onChange={event => setDraftStock(event.target.checked)}
+                            />
+                        </label>
+                        <fieldset>
+                            <legend>{isZh ? '价格区间' : 'Price range'}</legend>
+                            <div className="price-range-inputs">
+                                <label>
+                                    <span>{market.currencyCode}</span>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        min="0"
+                                        placeholder={isZh ? '最低价' : 'Min'}
+                                        value={draftMinimumPrice}
+                                        onChange={event => setDraftMinimumPrice(event.target.value)}
+                                    />
+                                </label>
+                                <i />
+                                <label>
+                                    <span>{market.currencyCode}</span>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        min="0"
+                                        placeholder={isZh ? '最高价' : 'Max'}
+                                        value={draftMaximumPrice}
+                                        onChange={event => setDraftMaximumPrice(event.target.value)}
+                                    />
+                                </label>
+                            </div>
+                            <div className="price-presets">
+                                {(
+                                    [
+                                        [0, 100],
+                                        [100, 300],
+                                        [300, 800],
+                                        [800, null],
+                                    ] as const
+                                ).map(([minimum, maximum]) => (
+                                    <button
+                                        type="button"
+                                        key={`${minimum}-${maximum ?? 'up'}`}
+                                        className={
+                                            draftMinimumPrice === String(minimum) &&
+                                            draftMaximumPrice === (maximum === null ? '' : String(maximum))
+                                                ? 'is-active'
+                                                : undefined
+                                        }
+                                        onClick={() => {
+                                            setDraftMinimumPrice(String(minimum));
+                                            setDraftMaximumPrice(maximum === null ? '' : String(maximum));
+                                        }}
+                                    >
+                                        {maximum === null
+                                            ? `${minimum}${isZh ? '以上' : '+'}`
+                                            : `${minimum}-${maximum}`}
+                                    </button>
+                                ))}
+                            </div>
+                        </fieldset>
+                        <fieldset>
+                            <legend>{isZh ? '商品类型' : 'Product type'}</legend>
+                            <div className="segmented-options">
+                                {(['all', 'physical', 'digital'] as const).map(type => (
+                                    <button
+                                        type="button"
+                                        key={type}
+                                        className={draftType === type ? 'is-active' : undefined}
+                                        onClick={() => setDraftType(type)}
+                                    >
+                                        {type === 'all'
+                                            ? isZh
+                                                ? '全部'
+                                                : 'All'
+                                            : type === 'physical'
+                                              ? isZh
+                                                  ? '实物'
+                                                  : 'Physical'
+                                              : isZh
+                                                ? '数字商品'
+                                                : 'Digital'}
+                                    </button>
+                                ))}
+                            </div>
+                        </fieldset>
+                        <div className="sheet-actions">
+                            <button type="button" onClick={() => setFilterOpen(false)}>
+                                {isZh ? '取消' : 'Cancel'}
+                            </button>
+                            <button
+                                type="button"
+                                className="reset-filter-button"
+                                onClick={() => {
+                                    setDraftType('all');
+                                    setDraftStock(false);
+                                    setDraftMinimumPrice('');
+                                    setDraftMaximumPrice('');
+                                }}
+                            >
+                                {isZh ? '重置' : 'Reset'}
+                            </button>
+                            <button
+                                type="button"
+                                className="primary-action"
+                                onClick={() => {
+                                    onFilterChange(draftType, draftStock);
+                                    setMinimumPriceInput(draftMinimumPrice);
+                                    setMaximumPriceInput(draftMaximumPrice);
+                                    setFilterOpen(false);
+                                }}
+                            >
+                                {isZh
+                                    ? `查看 ${draftResultCount} 件商品`
+                                    : `View ${draftResultCount} products`}
+                            </button>
+                        </div>
+                    </div>
+                </Sheet>
+            )}
         </main>
     );
 }
