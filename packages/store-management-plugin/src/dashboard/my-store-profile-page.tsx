@@ -276,6 +276,21 @@ function MyStoreProfilePage() {
                                     )}
                                 </div>
                             </div>
+                            <div className="border-t pt-4 sm:hidden">
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    onClick={save}
+                                    disabled={mutation.isPending}
+                                >
+                                    {mutation.isPending ? (
+                                        <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                                    ) : (
+                                        <Save className="size-4" aria-hidden="true" />
+                                    )}
+                                    {mutation.isPending ? text.saving : text.save}
+                                </Button>
+                            </div>
                         </div>
                     ) : null}
                 </PageBlock>
