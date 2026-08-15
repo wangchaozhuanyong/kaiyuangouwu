@@ -25,7 +25,7 @@ export class StorefrontErrorBoundary extends Component<
     render() {
         if (!this.state.failed) return this.props.children;
 
-        const isZh = document.documentElement.lang !== 'en';
+        const isZh = document.documentElement.lang.toLowerCase().startsWith('zh');
         return (
             <main className="fatal-error-page" role="alert">
                 <span className="fatal-error-mark" aria-hidden="true">

@@ -17,7 +17,9 @@ import {
     Minus,
     Navigation,
     Package,
+    Pause,
     Pencil,
+    Play,
     Plus,
     RotateCcw,
     Search,
@@ -36,10 +38,18 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from './api';
-import { enabledMarkets, languageCodeFor, localeFor, marketCodeForChannel, markets, uiCopy } from './i18n';
+import {
+    enabledMarkets,
+    languageCodeFor,
+    localeFor,
+    marketCodeForChannel,
+    markets,
+    resolveStorefrontLanguage,
+    uiCopy,
+} from './i18n';
 import {
     ActiveCustomer,
     CollectionSummary,
@@ -77,7 +87,9 @@ type RouteName =
     | 'register'
     | 'verify-account'
     | 'forgot-password'
-    | 'reset-password';
+    | 'reset-password'
+    | 'legal'
+    | 'not-found';
 type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 type SortMode = ProductSearchSort;
 
@@ -85,6 +97,7 @@ const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
 const ORDER_NOTE_MAX_LENGTH = 500;
 const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 const SEARCH_HISTORY_STORAGE_KEY = 'storefront-search-history';
+const STOREFRONT_LANGUAGE_STORAGE_KEY = 'storefront-language';
 const RECENT_PRODUCT_LIMIT = 20;
 
 function sortCategoryProducts(
@@ -95,8 +108,7 @@ function sortCategoryProducts(
 ): Product[] {
     return [...products].sort((first, second) => {
         if (sortMode === 'sales') {
-            const salesDifference =
-                (salesByProductId[second.id] ?? 0) - (salesByProductId[first.id] ?? 0);
+            const salesDifference = (salesByProductId[second.id] ?? 0) - (salesByProductId[first.id] ?? 0);
             if (salesDifference !== 0) return salesDifference;
             return Date.parse(second.createdAt) - Date.parse(first.createdAt);
         }
@@ -127,6 +139,21 @@ function scopedStorageKey(baseKey: string, channelCode: string): string {
     return channelCode ? `${baseKey}:${channelCode}` : '';
 }
 
+function readStoredLanguage(marketCode: MarketCode, includeLegacyPreference = false): StorefrontLanguage {
+    try {
+        const scopedPreference = localStorage.getItem(
+            scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, marketCode),
+        );
+        const legacyPreference =
+            includeLegacyPreference && scopedPreference === null
+                ? localStorage.getItem(STOREFRONT_LANGUAGE_STORAGE_KEY)
+                : null;
+        return resolveStorefrontLanguage(markets[marketCode], scopedPreference ?? legacyPreference);
+    } catch {
+        return resolveStorefrontLanguage(markets[marketCode], null);
+    }
+}
+
 function readStoredStrings(storageKey: string, limit: number): string[] {
     if (!storageKey) return [];
     try {
@@ -137,6 +164,10 @@ function readStoredStrings(storageKey: string, limit: number): string[] {
     } catch {
         return [];
     }
+}
+
+function setMetaContent(selector: string, content: string): void {
+    document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', content);
 }
 
 const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
@@ -153,15 +184,17 @@ interface RouteState {
 }
 
 const rootPages: MainPage[] = ['home', 'category', 'cart', 'account'];
+const orderTabs: OrderTab[] = ['all', 'pending', 'shipping', 'receiving', 'service'];
 
 function routeFromLocation(): RouteState {
     return routeFromHash(window.location.hash);
 }
 
-function routeFromHash(hash: string): RouteState {
+export function routeFromHash(hash: string): RouteState {
     const raw = hash.replace(/^#\/?/, '');
-    const [path = 'home', query = ''] = raw.split('?');
-    const name = (path || 'home') as RouteName;
+    const [rawPath = 'home', query = ''] = raw.split('?');
+    const path = rawPath.replace(/^\/+|\/+$/g, '') || 'home';
+    const name = path as RouteName;
     const params = new URLSearchParams(query);
     const validNames: RouteName[] = [
         'home',
@@ -182,11 +215,13 @@ function routeFromHash(hash: string): RouteState {
         'verify-account',
         'forgot-password',
         'reset-password',
+        'legal',
     ];
+    const tab = params.get('tab');
     return {
-        name: validNames.includes(name) ? name : 'home',
+        name: validNames.includes(name) ? name : 'not-found',
         id: params.get('id') ?? undefined,
-        tab: (params.get('tab') as OrderTab | null) ?? undefined,
+        tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: params.get('token') ?? undefined,
         term: params.get('term') ?? undefined,
     };
@@ -202,15 +237,19 @@ function routeHash(route: RouteState): string {
 }
 
 export function App() {
-    const [marketCode, setMarketCode] = useState<MarketCode>(() => {
+    const [{ marketCode, language }, setStorefrontContext] = useState<{
+        marketCode: MarketCode;
+        language: StorefrontLanguage;
+    }>(() => {
         const stored = localStorage.getItem('storefront-market');
-        return enabledMarkets.some(candidateMarket => candidateMarket.code === stored)
+        const initialMarketCode = enabledMarkets.some(candidateMarket => candidateMarket.code === stored)
             ? (stored as MarketCode)
             : enabledMarkets[0].code;
+        return {
+            marketCode: initialMarketCode,
+            language: readStoredLanguage(initialMarketCode, true),
+        };
     });
-    const [language, setLanguage] = useState<StorefrontLanguage>(() =>
-        localStorage.getItem('storefront-language') === 'en' ? 'en' : 'zh',
-    );
     const [route, setRoute] = useState<RouteState>(routeFromLocation);
     const [products, setProducts] = useState<Product[]>([]);
     const [routeProduct, setRouteProduct] = useState<Product | null>(null);
@@ -345,8 +384,13 @@ export function App() {
             const nextMarketCode = marketCodeForChannel(nextStorefrontCode);
             if (nextMarketCode) {
                 localStorage.setItem('storefront-market', nextMarketCode);
-                setMarketCode(currentMarketCode =>
-                    currentMarketCode === nextMarketCode ? currentMarketCode : nextMarketCode,
+                setStorefrontContext(currentContext =>
+                    currentContext.marketCode === nextMarketCode
+                        ? currentContext
+                        : {
+                              marketCode: nextMarketCode,
+                              language: readStoredLanguage(nextMarketCode),
+                          },
                 );
             }
             setStorefrontCode(nextStorefrontCode);
@@ -371,14 +415,10 @@ export function App() {
     }, [api, text.loadError]);
 
     useEffect(() => {
-        localStorage.setItem('storefront-language', language);
-        document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+        localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, marketCode), language);
+        document.documentElement.lang = locale;
         void loadStorefront();
-    }, [language, loadStorefront]);
-
-    useEffect(() => {
-        document.title = isZh ? `${storefrontName} · 在线商城` : `${storefrontName} · Online store`;
-    }, [isZh, storefrontName]);
+    }, [language, loadStorefront, locale, marketCode]);
 
     useEffect(() => {
         if (activeCollectionId === 'all' && collections.length) {
@@ -694,6 +734,69 @@ export function App() {
         ? (customer?.orders.items.find(order => order.id === route.id) ??
           (routeOrder?.id === route.id ? routeOrder : null))
         : null;
+    const legalContent = contentBlocks.find(block => block.type === 'LEGAL');
+
+    useEffect(() => {
+        const routeLabels: Partial<Record<RouteName, string>> = {
+            category: isZh ? '商品' : 'Shop',
+            cart: isZh ? '购物车' : 'Cart',
+            account: isZh ? '我的账户' : 'Account',
+            search: isZh ? '搜索商品' : 'Search products',
+            checkout: isZh ? '确认订单' : 'Review order',
+            orders: isZh ? '我的订单' : 'My orders',
+            'order-detail': isZh ? '订单详情' : 'Order details',
+            addresses: isZh ? '地址管理' : 'Addresses',
+            'account-security': isZh ? '账户与安全' : 'Account and security',
+            history: isZh ? '浏览足迹' : 'Browsing history',
+            notifications: isZh ? '消息通知' : 'Notifications',
+            login: isZh ? '登录' : 'Sign in',
+            register: isZh ? '注册账户' : 'Create account',
+            'verify-account': isZh ? '验证邮箱' : 'Verify email',
+            'forgot-password': isZh ? '忘记密码' : 'Forgot password',
+            'reset-password': isZh ? '重置密码' : 'Reset password',
+            'not-found': isZh ? '页面未找到' : 'Page not found',
+        };
+        const storefrontDescription = isZh
+            ? `在${storefrontName}浏览商品、管理购物车并在线完成订单。`
+            : `Browse products, manage your cart and place orders with ${storefrontName}.`;
+        const productTitle = route.name === 'product' ? selectedProduct?.name : undefined;
+        const routeTitle = productTitle ?? routeLabels[route.name];
+        const title = routeTitle
+            ? `${routeTitle} · ${storefrontName}`
+            : isZh
+              ? `${storefrontName} · 在线商城`
+              : `${storefrontName} · Online store`;
+        const description =
+            route.name === 'product' && selectedProduct?.description.trim()
+                ? trimText(selectedProduct.description.trim(), 150)
+                : storefrontDescription;
+        const imagePath =
+            route.name === 'product' && selectedProduct
+                ? (productImage(selectedProduct) ?? '/storefront/default-hero.jpg')
+                : '/storefront/default-hero.jpg';
+        const image = new URL(imagePath, window.location.origin).href;
+        const imageAlt =
+            route.name === 'product' && selectedProduct
+                ? selectedProduct.name
+                : isZh
+                  ? `${storefrontName}精选商品`
+                  : `Featured products from ${storefrontName}`;
+
+        document.title = title;
+        setMetaContent('meta[name="description"]', description);
+        setMetaContent('meta[name="application-name"]', storefrontName);
+        setMetaContent('meta[property="og:type"]', route.name === 'product' ? 'product' : 'website');
+        setMetaContent('meta[property="og:site_name"]', storefrontName);
+        setMetaContent('meta[property="og:title"]', title);
+        setMetaContent('meta[property="og:description"]', description);
+        setMetaContent('meta[property="og:image"]', image);
+        setMetaContent('meta[property="og:image:alt"]', imageAlt);
+        setMetaContent('meta[property="og:url"]', window.location.href);
+        setMetaContent('meta[name="twitter:title"]', title);
+        setMetaContent('meta[name="twitter:description"]', description);
+        setMetaContent('meta[name="twitter:image"]', image);
+        setMetaContent('meta[name="twitter:image:alt"]', imageAlt);
+    }, [isZh, route, selectedProduct, storefrontName]);
 
     useEffect(() => {
         if (route.name !== 'product' || !selectedProduct || !storefrontCode) return;
@@ -747,7 +850,12 @@ export function App() {
                             navigate({ name: 'category' });
                         }}
                         onAdd={variant => void addToCart(variant)}
-                        onToggleLanguage={() => setLanguage(value => (value === 'zh' ? 'en' : 'zh'))}
+                        onToggleLanguage={() =>
+                            setStorefrontContext(currentContext => ({
+                                ...currentContext,
+                                language: currentContext.language === 'zh' ? 'en' : 'zh',
+                            }))
+                        }
                         onNotifications={() => navigate({ name: 'notifications' })}
                         onContentTarget={openContentTarget}
                         onRetry={() => void loadStorefront()}
@@ -845,7 +953,7 @@ export function App() {
                 );
             case 'product':
                 return routeProductLoading || (route.id && !selectedProduct && !routeProductError) ? (
-                    <Subpage title={isZh ? '商品详情' : 'Product'} onBack={goBack}>
+                    <Subpage title={isZh ? '商品详情' : 'Product'} language={language} onBack={goBack}>
                         <PageSkeleton />
                     </Subpage>
                 ) : selectedProduct ? (
@@ -865,7 +973,7 @@ export function App() {
                         onNotify={notify}
                     />
                 ) : (
-                    <Subpage title={isZh ? '商品详情' : 'Product'} onBack={goBack}>
+                    <Subpage title={isZh ? '商品详情' : 'Product'} language={language} onBack={goBack}>
                         <EmptyState
                             icon={<ShoppingBag />}
                             title={text.noResults}
@@ -937,7 +1045,7 @@ export function App() {
                 );
             case 'order-detail':
                 return routeOrderLoading || (route.id && !selectedOrder && !routeOrderError) ? (
-                    <Subpage title={isZh ? '订单详情' : 'Order details'} onBack={goBack}>
+                    <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={goBack}>
                         <PageSkeleton />
                     </Subpage>
                 ) : selectedOrder ? (
@@ -953,7 +1061,7 @@ export function App() {
                         onUnavailable={() => notify(text.unavailable)}
                     />
                 ) : (
-                    <Subpage title={isZh ? '订单详情' : 'Order details'} onBack={goBack}>
+                    <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={goBack}>
                         <EmptyState
                             icon={<Package />}
                             title={isZh ? '没有找到订单' : 'Order not found'}
@@ -1026,9 +1134,11 @@ export function App() {
                         api={api}
                         language={language}
                         storefrontName={storefrontName}
+                        legalContent={legalContent}
                         onBack={goBack}
                         onSuccess={completeAuthentication}
                         onNavigate={navigate}
+                        onContentTarget={openContentTarget}
                     />
                 );
             case 'register':
@@ -1037,8 +1147,10 @@ export function App() {
                         api={api}
                         language={language}
                         storefrontName={storefrontName}
+                        legalContent={legalContent}
                         onBack={goBack}
                         onNavigate={navigate}
+                        onContentTarget={openContentTarget}
                     />
                 );
             case 'verify-account':
@@ -1072,6 +1184,31 @@ export function App() {
                         token={route.token}
                         onBack={goBack}
                         onSuccess={completeAuthentication}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'legal':
+                return import.meta.env.DEV ? (
+                    <TemporaryLegalPage
+                        kind={route.id === 'terms' ? 'terms' : 'privacy'}
+                        language={language}
+                        storefrontName={storefrontName}
+                        onBack={goBack}
+                    />
+                ) : (
+                    <NotFoundPage
+                        language={language}
+                        storefrontName={storefrontName}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'not-found':
+                return (
+                    <NotFoundPage
+                        language={language}
+                        storefrontName={storefrontName}
+                        onBack={goBack}
                         onNavigate={navigate}
                     />
                 );
@@ -1154,11 +1291,17 @@ function HomePage(props: HomePageProps) {
     const managedHeroes = contentBlocks.filter(block => block.type === 'HERO');
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
     const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
+    const noticeHasTarget = Boolean(
+        noticeBlock && noticeBlock.targetType !== 'NONE' && noticeBlock.targetValue?.trim(),
+    );
     const managedSections = contentBlocks.filter(block =>
         ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'SUPPORT'].includes(block.type),
     );
     const heroProducts = products.slice(0, 2);
     const [heroIndex, setHeroIndex] = useState(0);
+    const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
+    const [heroUserPaused, setHeroUserPaused] = useState(false);
+    const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
     const heroCount = managedHeroes.length || heroProducts.length;
     const managedHero = managedHeroes[heroIndex];
     const hero = heroProducts[heroIndex] ?? products[0];
@@ -1166,10 +1309,18 @@ function HomePage(props: HomePageProps) {
     const quickCollections = collections.slice(0, 3);
 
     useEffect(() => {
-        if (heroCount < 2) return;
+        const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const updateMotionPreference = () => setPrefersReducedMotion(mediaQuery.matches);
+        updateMotionPreference();
+        mediaQuery.addEventListener('change', updateMotionPreference);
+        return () => mediaQuery.removeEventListener('change', updateMotionPreference);
+    }, []);
+
+    useEffect(() => {
+        if (heroCount < 2 || heroInteractionPaused || heroUserPaused || prefersReducedMotion) return;
         const timer = window.setInterval(() => setHeroIndex(index => (index + 1) % heroCount), 5200);
         return () => window.clearInterval(timer);
-    }, [heroCount]);
+    }, [heroCount, heroInteractionPaused, heroUserPaused, prefersReducedMotion]);
 
     useEffect(() => {
         if (heroIndex >= heroCount) setHeroIndex(0);
@@ -1261,9 +1412,11 @@ function HomePage(props: HomePageProps) {
             <button
                 className="notice-strip"
                 type="button"
-                disabled={!noticeBlock || noticeBlock.targetType === 'NONE' || !noticeBlock.targetValue}
+                disabled={!noticeHasTarget}
                 onClick={() =>
-                    noticeBlock && onContentTarget(noticeBlock.targetType, noticeBlock.targetValue)
+                    noticeHasTarget &&
+                    noticeBlock &&
+                    onContentTarget(noticeBlock.targetType, noticeBlock.targetValue)
                 }
             >
                 <Bell aria-hidden="true" />
@@ -1271,7 +1424,7 @@ function HomePage(props: HomePageProps) {
                     {noticeBlock?.title ||
                         (isZh ? '现货商品配送时效以结算页为准' : 'Delivery timing is confirmed at checkout')}
                 </span>
-                {noticeBlock?.targetType !== 'NONE' && <ChevronRight aria-hidden="true" />}
+                {noticeHasTarget && <ChevronRight aria-hidden="true" />}
             </button>
 
             {contentError && (
@@ -1300,6 +1453,14 @@ function HomePage(props: HomePageProps) {
                         <section
                             className="hero"
                             aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
+                            onMouseEnter={() => setHeroInteractionPaused(true)}
+                            onMouseLeave={() => setHeroInteractionPaused(false)}
+                            onFocus={() => setHeroInteractionPaused(true)}
+                            onBlur={event => {
+                                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                                    setHeroInteractionPaused(false);
+                                }
+                            }}
                             style={{
                                 backgroundColor: managedHero?.backgroundColor ?? undefined,
                                 color: managedHero?.textColor ?? undefined,
@@ -1350,12 +1511,43 @@ function HomePage(props: HomePageProps) {
                                     className="hero-pagination"
                                     aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
                                 >
+                                    {!prefersReducedMotion && (
+                                        <button
+                                            className="hero-playback"
+                                            type="button"
+                                            aria-label={
+                                                heroUserPaused
+                                                    ? isZh
+                                                        ? '继续自动播放'
+                                                        : 'Resume autoplay'
+                                                    : isZh
+                                                      ? '暂停自动播放'
+                                                      : 'Pause autoplay'
+                                            }
+                                            title={
+                                                heroUserPaused
+                                                    ? isZh
+                                                        ? '继续自动播放'
+                                                        : 'Resume autoplay'
+                                                    : isZh
+                                                      ? '暂停自动播放'
+                                                      : 'Pause autoplay'
+                                            }
+                                            onClick={() => setHeroUserPaused(paused => !paused)}
+                                        >
+                                            {heroUserPaused ? (
+                                                <Play aria-hidden="true" />
+                                            ) : (
+                                                <Pause aria-hidden="true" />
+                                            )}
+                                        </button>
+                                    )}
                                     {(managedHeroes.length ? managedHeroes : heroProducts).map(
                                         (item, index) => (
                                             <button
                                                 type="button"
                                                 key={item.id}
-                                                className={index === heroIndex ? 'is-active' : undefined}
+                                                className={`hero-dot ${index === heroIndex ? 'is-active' : ''}`}
                                                 aria-label={
                                                     isZh ? `第${index + 1}张广告` : `Promotion ${index + 1}`
                                                 }
@@ -1368,15 +1560,18 @@ function HomePage(props: HomePageProps) {
                             )}
                         </section>
 
-                        <nav className="quick-grid" aria-label={isZh ? '快捷分类' : 'Quick categories'}>
-                            {quickLinks.map((item, index) => (
+                        <nav
+                            className={`quick-grid quick-grid-${quickLinks.length}`}
+                            aria-label={isZh ? '快捷分类' : 'Quick categories'}
+                        >
+                            {quickLinks.map(item => (
                                 <button
                                     type="button"
                                     key={item.id}
                                     onClick={item.onClick}
                                     disabled={item.disabled}
                                 >
-                                    <span data-tone={index % 5}>{item.icon}</span>
+                                    <span>{item.icon}</span>
                                     <b>{item.label}</b>
                                 </button>
                             ))}
@@ -1620,13 +1815,11 @@ function CategoryPage(props: CategoryPageProps) {
     const [visibleLimit, setVisibleLimit] = useState(12);
     const activeCategoryKey = useRef('');
     const primary = collections.find(item => item.id === activeCollectionId) ?? collections[0];
-    const children = primary?.children?.length ? primary.children : primary ? [primary] : [];
+    const children = primary?.children ?? [];
+    const hasChildCategories = children.length > 0;
     const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
     const hasFilters =
-        fulfillmentFilter !== 'all' ||
-        inStockOnly ||
-        minimumPriceInput !== '' ||
-        maximumPriceInput !== '';
+        fulfillmentFilter !== 'all' || inStockOnly || minimumPriceInput !== '' || maximumPriceInput !== '';
 
     const matchesFilters = useCallback(
         (
@@ -1661,13 +1854,7 @@ function CategoryPage(props: CategoryPageProps) {
                     product.variants.some(variant => variant.customFields.fulfillmentType === fallbackType),
             );
             const filteredFallbackProducts = fallbackProducts.filter(product =>
-                matchesFilters(
-                    product,
-                    fulfillmentFilter,
-                    inStockOnly,
-                    minimumPriceInput,
-                    maximumPriceInput,
-                ),
+                matchesFilters(product, fulfillmentFilter, inStockOnly, minimumPriceInput, maximumPriceInput),
             );
             let cancelled = false;
             setCategoryLoading(sortMode === 'sales');
@@ -1680,12 +1867,7 @@ function CategoryPage(props: CategoryPageProps) {
                 .then(salesByProductId => {
                     if (cancelled) return;
                     setCategoryProducts(
-                        sortCategoryProducts(
-                            filteredFallbackProducts,
-                            sortMode,
-                            locale,
-                            salesByProductId,
-                        ),
+                        sortCategoryProducts(filteredFallbackProducts, sortMode, locale, salesByProductId),
                     );
                     setTotalItems(filteredFallbackProducts.length);
                     setVisibleLimit(12);
@@ -1726,8 +1908,7 @@ function CategoryPage(props: CategoryPageProps) {
         setCategoryError('');
         setCategoryLoading(true);
         setVisibleLimit(12);
-        const requiresCompleteProductSet =
-            hasFilters || sortMode === 'sales' || sortMode === 'newest';
+        const requiresCompleteProductSet = hasFilters || sortMode === 'sales' || sortMode === 'newest';
         const request = requiresCompleteProductSet
             ? api.searchAllProducts('', 'recommended', selectedCollectionId).then(async items => {
                   const filteredItems = items.filter(product =>
@@ -1839,9 +2020,7 @@ function CategoryPage(props: CategoryPageProps) {
     };
 
     const usesClientPagination = hasFilters || sortMode === 'sales' || sortMode === 'newest';
-    const visibleProducts = usesClientPagination
-        ? categoryProducts.slice(0, visibleLimit)
-        : categoryProducts;
+    const visibleProducts = usesClientPagination ? categoryProducts.slice(0, visibleLimit) : categoryProducts;
     const remainingItems = usesClientPagination
         ? Math.max(categoryProducts.length - visibleProducts.length, 0)
         : Math.max(totalItems - categoryProducts.length, 0);
@@ -1898,10 +2077,10 @@ function CategoryPage(props: CategoryPageProps) {
                 ))}
             </nav>
 
-            <div className="category-layout">
-                <nav className="secondary-categories" aria-label={isZh ? '二级分类' : 'Subcategories'}>
-                    {children.length ? (
-                        children.map(child => (
+            <div className={`category-layout ${hasChildCategories ? '' : 'is-single-level'}`}>
+                {hasChildCategories && (
+                    <nav className="secondary-categories" aria-label={isZh ? '二级分类' : 'Subcategories'}>
+                        {children.map(child => (
                             <button
                                 type="button"
                                 key={child.id}
@@ -1910,13 +2089,9 @@ function CategoryPage(props: CategoryPageProps) {
                             >
                                 {child.name}
                             </button>
-                        ))
-                    ) : (
-                        <button type="button" className="is-active">
-                            {isZh ? '全部' : 'All'}
-                        </button>
-                    )}
-                </nav>
+                        ))}
+                    </nav>
+                )}
 
                 <section className="category-results">
                     <button
@@ -1940,9 +2115,8 @@ function CategoryPage(props: CategoryPageProps) {
                         </span>
                     </button>
                     <nav
-                        className="sort-bar"
+                        className="sort-bar sort-bar-five"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
-                        style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
                     >
                         <button
                             type="button"
@@ -2061,7 +2235,11 @@ function CategoryPage(props: CategoryPageProps) {
             </div>
 
             {filterOpen && (
-                <Sheet title={isZh ? '筛选' : 'Filter'} onClose={() => setFilterOpen(false)}>
+                <Sheet
+                    title={isZh ? '筛选' : 'Filter'}
+                    language={language}
+                    onClose={() => setFilterOpen(false)}
+                >
                     <div className="filter-sheet-content">
                         <label className="switch-row filter-stock-row">
                             <span>
@@ -2783,7 +2961,7 @@ function AccountSecurityPage({
     const isZh = language === 'zh';
     if (!customer) {
         return (
-            <Subpage title={isZh ? '账户与安全' : 'Account and security'} onBack={onBack}>
+            <Subpage title={isZh ? '账户与安全' : 'Account and security'} language={language} onBack={onBack}>
                 <EmptyState
                     icon={<UserRound />}
                     title={isZh ? '请先登录' : 'Sign in required'}
@@ -2796,7 +2974,11 @@ function AccountSecurityPage({
     const fullName = `${customer.lastName}${customer.firstName}`.trim();
     return (
         <main className="page subpage account-security-page">
-            <SubHeader title={isZh ? '账户与安全' : 'Account and security'} onBack={onBack} />
+            <SubHeader
+                title={isZh ? '账户与安全' : 'Account and security'}
+                language={language}
+                onBack={onBack}
+            />
             <section className="account-security-profile">
                 <span className="avatar">
                     {(fullName || customer.emailAddress).slice(0, 1).toUpperCase()}
@@ -2903,6 +3085,7 @@ function BrowsingHistoryPage({
         <main className="page subpage history-page">
             <SubHeader
                 title={isZh ? '浏览足迹' : 'Browsing history'}
+                language={language}
                 onBack={onBack}
                 action={
                     productIds.length ? (
@@ -2971,7 +3154,7 @@ function NotificationsPage({
 }) {
     const isZh = language === 'zh';
     return (
-        <Subpage title={isZh ? '消息通知' : 'Notifications'} onBack={onBack}>
+        <Subpage title={isZh ? '消息通知' : 'Notifications'} language={language} onBack={onBack}>
             <EmptyState
                 icon={<Bell />}
                 title={isZh ? '暂无消息' : 'No notifications'}
@@ -3044,6 +3227,7 @@ function ProductDetailPage({
         <main className="page subpage product-detail-page">
             <SubHeader
                 title={isZh ? '商品详情' : 'Product details'}
+                language={language}
                 onBack={onBack}
                 action={
                     <button
@@ -3059,7 +3243,7 @@ function ProductDetailPage({
                 {assets[activeImage] ? (
                     <img src={assets[activeImage].preview} alt={`${product.name} ${activeImage + 1}`} />
                 ) : (
-                    <div className="image-placeholder">
+                    <div className="image-placeholder" aria-hidden="true">
                         <Package />
                     </div>
                 )}
@@ -3071,7 +3255,10 @@ function ProductDetailPage({
                                 key={asset.id}
                                 className={index === activeImage ? 'is-active' : undefined}
                                 onClick={() => setActiveImage(index)}
-                                aria-label={`${index + 1}`}
+                                aria-label={
+                                    isZh ? `查看第${index + 1}张商品图` : `View product image ${index + 1}`
+                                }
+                                aria-current={index === activeImage}
                             />
                         ))}
                     </div>
@@ -3868,7 +4055,7 @@ function CheckoutPage({
 
     if (!order || !cart) {
         return (
-            <Subpage title={isZh ? '确认订单' : 'Review order'} onBack={onBack}>
+            <Subpage title={isZh ? '确认订单' : 'Review order'} language={language} onBack={onBack}>
                 <EmptyState
                     icon={<ShoppingBag />}
                     title={isZh ? '没有可结算商品' : 'Nothing to check out'}
@@ -3881,7 +4068,7 @@ function CheckoutPage({
 
     return (
         <main className="page subpage checkout-page">
-            <SubHeader title={isZh ? '确认订单' : 'Review order'} onBack={onBack} />
+            <SubHeader title={isZh ? '确认订单' : 'Review order'} language={language} onBack={onBack} />
             <form ref={formRef} className="checkout-form" onSubmit={event => void submit(event)}>
                 {!customer && (
                     <section className="checkout-section">
@@ -4118,6 +4305,7 @@ function CheckoutPage({
             {noteOpen && (
                 <Sheet
                     title={isZh ? '订单备注' : 'Order note'}
+                    language={language}
                     onClose={() => !noteSaving && setNoteOpen(false)}
                 >
                     <form className="order-note-sheet" onSubmit={event => void saveOrderNote(event)}>
@@ -4273,6 +4461,7 @@ function OrdersPage({
         <main className="page subpage orders-page">
             <SubHeader
                 title={isZh ? '我的订单' : 'My orders'}
+                language={language}
                 onBack={onBack}
                 action={
                     <button
@@ -4432,7 +4621,7 @@ function OrderDetailPage({
     const isZh = language === 'zh';
     if (!order)
         return (
-            <Subpage title={isZh ? '订单详情' : 'Order details'} onBack={onBack}>
+            <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack}>
                 <EmptyState icon={<Package />} title={isZh ? '没有找到订单' : 'Order not found'} />
             </Subpage>
         );
@@ -4456,7 +4645,7 @@ function OrderDetailPage({
               : 'Order status updated';
     return (
         <main className="page subpage order-detail-page">
-            <SubHeader title={isZh ? '订单详情' : 'Order details'} onBack={onBack} />
+            <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
             <section className="order-status">
                 <strong>{orderStateLabel(order.state, language)}</strong>
                 <span>{statusHint}</span>
@@ -4611,7 +4800,7 @@ function AddressesPage({
     const [formError, setFormError] = useState('');
     if (!customer)
         return (
-            <Subpage title={isZh ? '地址管理' : 'Addresses'} onBack={onBack}>
+            <Subpage title={isZh ? '地址管理' : 'Addresses'} language={language} onBack={onBack}>
                 <EmptyState
                     icon={<MapPin />}
                     title={isZh ? '登录后管理地址' : 'Sign in to manage addresses'}
@@ -4702,6 +4891,7 @@ function AddressesPage({
         <main className="page subpage addresses-page">
             <SubHeader
                 title={isZh ? '地址管理' : 'Addresses'}
+                language={language}
                 onBack={onBack}
                 action={
                     <button
@@ -4780,6 +4970,7 @@ function AddressesPage({
                               ? '新增收货地址'
                               : 'Add address'
                     }
+                    language={language}
                     onClose={() => {
                         setOpen(false);
                         setEditingAddress(null);
@@ -4855,16 +5046,20 @@ function LoginPage({
     api,
     language,
     storefrontName,
+    legalContent,
     onBack,
     onSuccess,
     onNavigate,
+    onContentTarget,
 }: {
     api: ShopApi;
     language: StorefrontLanguage;
     storefrontName: string;
+    legalContent?: StorefrontContentBlock;
     onBack: () => void;
     onSuccess: () => Promise<void>;
     onNavigate: (route: RouteState) => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
@@ -4887,7 +5082,7 @@ function LoginPage({
     };
     return (
         <main className="page subpage login-page">
-            <SubHeader title={isZh ? '登录' : 'Sign in'} onBack={onBack} />
+            <SubHeader title={isZh ? '登录' : 'Sign in'} language={language} onBack={onBack} />
             <section className="login-content">
                 <span className="login-brand">{storefrontName}</span>
                 <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
@@ -4931,11 +5126,11 @@ function LoginPage({
                         {isZh ? '注册账户' : 'Create account'}
                     </button>
                 </div>
-                <small>
-                    {isZh
-                        ? '登录即代表你同意服务条款和隐私政策'
-                        : 'By signing in, you agree to the terms and privacy policy'}
-                </small>
+                <AuthLegalNotice
+                    content={legalContent}
+                    language={language}
+                    onContentTarget={onContentTarget}
+                />
             </section>
         </main>
     );
@@ -4945,14 +5140,18 @@ function RegisterPage({
     api,
     language,
     storefrontName,
+    legalContent,
     onBack,
     onNavigate,
+    onContentTarget,
 }: {
     api: ShopApi;
     language: StorefrontLanguage;
     storefrontName: string;
+    legalContent?: StorefrontContentBlock;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
@@ -5014,7 +5213,7 @@ function RegisterPage({
 
     return (
         <main className="page subpage login-page">
-            <SubHeader title={isZh ? '注册' : 'Create account'} onBack={onBack} />
+            <SubHeader title={isZh ? '注册' : 'Create account'} language={language} onBack={onBack} />
             <section className="login-content">
                 <span className="login-brand">{storefrontName}</span>
                 {registeredEmail ? (
@@ -5119,6 +5318,11 @@ function RegisterPage({
                                 {isZh ? '去登录' : 'Sign in'}
                             </button>
                         </div>
+                        <AuthLegalNotice
+                            content={legalContent}
+                            language={language}
+                            onContentTarget={onContentTarget}
+                        />
                     </>
                 )}
             </section>
@@ -5170,7 +5374,7 @@ function VerifyAccountPage({
 
     return (
         <main className="page subpage login-page">
-            <SubHeader title={isZh ? '验证邮箱' : 'Verify email'} onBack={onBack} />
+            <SubHeader title={isZh ? '验证邮箱' : 'Verify email'} language={language} onBack={onBack} />
             <section className="login-content">
                 <span className="login-brand">{storefrontName}</span>
                 <AuthResult
@@ -5247,7 +5451,7 @@ function ForgotPasswordPage({
 
     return (
         <main className="page subpage login-page">
-            <SubHeader title={isZh ? '忘记密码' : 'Forgot password'} onBack={onBack} />
+            <SubHeader title={isZh ? '忘记密码' : 'Forgot password'} language={language} onBack={onBack} />
             <section className="login-content">
                 <span className="login-brand">{storefrontName}</span>
                 {requested ? (
@@ -5359,7 +5563,7 @@ function ResetPasswordPage({
 
     return (
         <main className="page subpage login-page">
-            <SubHeader title={isZh ? '重置密码' : 'Reset password'} onBack={onBack} />
+            <SubHeader title={isZh ? '重置密码' : 'Reset password'} language={language} onBack={onBack} />
             <section className="login-content">
                 <span className="login-brand">{storefrontName}</span>
                 <h1>{isZh ? '设置新密码' : 'Choose a new password'}</h1>
@@ -5431,6 +5635,39 @@ function AuthResult({
             <p>{detail}</p>
             <div>{children}</div>
         </div>
+    );
+}
+
+function AuthLegalNotice({
+    content,
+    language,
+    onContentTarget,
+}: {
+    content?: StorefrontContentBlock;
+    language: StorefrontLanguage;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const items =
+        content?.items.filter(
+            item => item.enabled && item.targetType !== 'NONE' && item.targetValue?.trim(),
+        ) ?? [];
+    if (!items.length) return null;
+
+    return (
+        <small className="auth-legal-notice">
+            <span>{language === 'zh' ? '继续操作前，请阅读' : 'Before continuing, review'}</span>
+            <span className="auth-legal-links">
+                {items.map(item => (
+                    <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onContentTarget(item.targetType, item.targetValue)}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </span>
+        </small>
     );
 }
 
@@ -5927,19 +6164,182 @@ function CheckoutItemsGroup({
     );
 }
 
-function Subpage({ title, onBack, children }: { title: string; onBack: () => void; children: ReactNode }) {
+function Subpage({
+    title,
+    language,
+    onBack,
+    children,
+}: {
+    title: string;
+    language: StorefrontLanguage;
+    onBack: () => void;
+    children: ReactNode;
+}) {
     return (
         <main className="page subpage">
-            <SubHeader title={title} onBack={onBack} />
+            <SubHeader title={title} language={language} onBack={onBack} />
             {children}
         </main>
     );
 }
-function SubHeader({ title, onBack, action }: { title: string; onBack: () => void; action?: ReactNode }) {
+
+function NotFoundPage({
+    language,
+    storefrontName,
+    onBack,
+    onNavigate,
+}: {
+    language: StorefrontLanguage;
+    storefrontName: string;
+    onBack: () => void;
+    onNavigate: (route: RouteState, replace?: boolean) => void;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <main className="page subpage not-found-page">
+            <SubHeader title={isZh ? '页面未找到' : 'Page not found'} language={language} onBack={onBack} />
+            <section className="not-found-content">
+                <span className="not-found-code" aria-hidden="true">
+                    404
+                </span>
+                <span className="not-found-mark" aria-hidden="true">
+                    <Navigation />
+                </span>
+                <h1>{isZh ? '这个页面不存在' : 'This page does not exist'}</h1>
+                <p>
+                    {isZh
+                        ? '链接可能已失效，或者页面已经调整。'
+                        : 'The link may have expired, or the page may have moved.'}
+                </p>
+                <div className="not-found-actions">
+                    <button type="button" onClick={() => onNavigate({ name: 'home' }, true)}>
+                        <House aria-hidden="true" />
+                        {isZh ? `返回${storefrontName}首页` : `Back to ${storefrontName}`}
+                    </button>
+                    <button type="button" onClick={() => onNavigate({ name: 'category' }, true)}>
+                        <LayoutGrid aria-hidden="true" />
+                        {isZh ? '浏览商品' : 'Browse products'}
+                    </button>
+                </div>
+            </section>
+        </main>
+    );
+}
+function TemporaryLegalPage({
+    kind,
+    language,
+    storefrontName,
+    onBack,
+}: {
+    kind: 'privacy' | 'terms';
+    language: StorefrontLanguage;
+    storefrontName: string;
+    onBack: () => void;
+}) {
+    const isZh = language === 'zh';
+    const isPrivacy = kind === 'privacy';
+    const title = isPrivacy ? (isZh ? '隐私说明' : 'Privacy notice') : isZh ? '使用条款' : 'Terms of use';
+    const sections = isPrivacy
+        ? isZh
+            ? [
+                  ['适用范围', '本页仅用于本地开发和界面验证，描述演示环境中的账户、购物车和订单数据。'],
+                  ['演示数据', '临时商品、价格、订单和客户资料只用于功能测试，不应录入真实敏感信息。'],
+                  [
+                      '上线前要求',
+                      '正式上线前必须由业务与法务负责人根据实际数据流向、保留期限和用户权利替换本页。',
+                  ],
+              ]
+            : [
+                  [
+                      'Scope',
+                      'This page exists only for local development and interface testing. It describes sample account, cart and order data in the demo environment.',
+                  ],
+                  [
+                      'Demo data',
+                      'Temporary products, prices, orders and customer records are for functional testing only. Do not enter real sensitive information.',
+                  ],
+                  [
+                      'Before launch',
+                      'The business and legal owners must replace this page before production based on actual data flows, retention periods and customer rights.',
+                  ],
+              ]
+        : isZh
+          ? [
+                ['演示用途', '本页只是商品浏览、购物车、结算和数字交付流程的临时说明。'],
+                [
+                    '商品与价格',
+                    '当前商品名称、图片、库存、价格与配送信息均为本地测试数据，不构成交易要约或承诺。',
+                ],
+                [
+                    '上线前要求',
+                    '正式条款应根据实际运营主体、退换货规则、支付、配送和数字商品履约方式另行审核。',
+                ],
+            ]
+          : [
+                [
+                    'Demo purpose',
+                    'This page is temporary copy for testing product browsing, cart, checkout and digital-delivery flows.',
+                ],
+                [
+                    'Products and prices',
+                    'Current names, images, stock, prices and delivery information are local test data. They do not form an offer or commitment.',
+                ],
+                [
+                    'Before launch',
+                    'Reviewed terms must be prepared for the real operator, returns, payments, shipping and digital fulfilment model before production.',
+                ],
+            ];
+
+    return (
+        <main className="page subpage legal-draft-page">
+            <SubHeader title={title} language={language} onBack={onBack} />
+            <article className="legal-draft-content">
+                <header className="legal-draft-intro">
+                    <span>
+                        <CircleAlert aria-hidden="true" />
+                        {isZh ? '临时演示文本' : 'Temporary demo copy'}
+                    </span>
+                    <h1>{title}</h1>
+                    <p>
+                        {isZh
+                            ? '这不是已审核的法律文件，不能作为正式站点政策使用。'
+                            : 'This is not a reviewed legal document and must not be used as a production policy.'}
+                    </p>
+                </header>
+                <div className="legal-draft-sections">
+                    {sections.map(([sectionTitle, body], index) => (
+                        <section key={sectionTitle}>
+                            <small>{String(index + 1).padStart(2, '0')}</small>
+                            <div>
+                                <h2>{sectionTitle}</h2>
+                                <p>{body}</p>
+                            </div>
+                        </section>
+                    ))}
+                </div>
+                <footer>
+                    <strong>{storefrontName}</strong>
+                    <span>{isZh ? '本地开发环境' : 'Local development environment'}</span>
+                </footer>
+            </article>
+        </main>
+    );
+}
+function SubHeader({
+    title,
+    language,
+    onBack,
+    action,
+}: {
+    title: string;
+    language: StorefrontLanguage;
+    onBack: () => void;
+    action?: ReactNode;
+}) {
     return (
         <header className="topbar subpage-header">
-            <button type="button" onClick={onBack} aria-label="Back">
-                <ArrowLeft />
+            <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
+                <ArrowLeft aria-hidden="true" />
             </button>
             <strong>{title}</strong>
             <span>{action}</span>
@@ -6050,7 +6450,7 @@ function ProductImage({ product }: { product: Product }) {
     return image ? (
         <img src={image} alt={product.name} loading="lazy" />
     ) : (
-        <div className="image-placeholder">
+        <div className="image-placeholder" aria-hidden="true">
             <Package />
         </div>
     );
@@ -6060,7 +6460,7 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
     return image ? (
         <img src={image} alt={alt} loading="lazy" />
     ) : (
-        <div className="image-placeholder">
+        <div className="image-placeholder" aria-hidden="true">
             <Package />
         </div>
     );
@@ -6070,7 +6470,7 @@ function OrderImage({ order }: { order: Order }) {
     return variant ? (
         <ProductVariantImage variant={variant} alt={variant.name} />
     ) : (
-        <div className="image-placeholder">
+        <div className="image-placeholder" aria-hidden="true">
             <Package />
         </div>
     );
@@ -6193,7 +6593,7 @@ function CouponSheet({
         if (nextError) setError(nextError);
     };
     return (
-        <Sheet title={isZh ? '优惠码' : 'Coupon code'} onClose={onClose}>
+        <Sheet title={isZh ? '优惠码' : 'Coupon code'} language={language} onClose={onClose}>
             <div className="coupon-sheet-content">
                 <form className="coupon-code-form" onSubmit={event => void apply(event)}>
                     <label>
@@ -6235,15 +6635,107 @@ function CouponSheet({
     );
 }
 
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function Sheet({
+    title,
+    language,
+    onClose,
+    children,
+}: {
+    title: string;
+    language: StorefrontLanguage;
+    onClose: () => void;
+    children: ReactNode;
+}) {
+    const dialogRef = useRef<HTMLElement>(null);
+    const previousFocusRef = useRef<HTMLElement | null>(null);
+    const onCloseRef = useRef(onClose);
+    const titleId = useId();
+
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
+
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+
+        previousFocusRef.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const previousOverflow = document.body.style.overflow;
+        const focusableSelector = [
+            'a[href]',
+            'button:not([disabled])',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])',
+        ].join(',');
+        const getFocusableElements = () =>
+            Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+                element => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
+            );
+        const focusFrame = window.requestAnimationFrame(() => {
+            (getFocusableElements()[0] ?? dialog).focus();
+        });
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onCloseRef.current();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+
+            const focusableElements = getFocusableElements();
+            if (!focusableElements.length) {
+                event.preventDefault();
+                dialog.focus();
+                return;
+            }
+            const firstElement = focusableElements[0];
+            const lastElement = focusableElements[focusableElements.length - 1];
+            const activeElement = document.activeElement;
+            if (event.shiftKey && (activeElement === firstElement || !dialog.contains(activeElement))) {
+                event.preventDefault();
+                lastElement.focus();
+            } else if (
+                !event.shiftKey &&
+                (activeElement === lastElement || !dialog.contains(activeElement))
+            ) {
+                event.preventDefault();
+                firstElement.focus();
+            }
+        };
+
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.cancelAnimationFrame(focusFrame);
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = previousOverflow;
+            previousFocusRef.current?.focus();
+        };
+    }, []);
+
     return (
         <div className="sheet-layer" role="presentation">
-            <button className="sheet-mask" type="button" onClick={onClose} aria-label="Close" />
-            <section className="sheet" role="dialog" aria-modal="true" aria-label={title}>
+            <button
+                className="sheet-mask"
+                type="button"
+                onClick={onClose}
+                aria-label={language === 'zh' ? '关闭' : 'Close'}
+            />
+            <section
+                ref={dialogRef}
+                className="sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
+            >
                 <header>
-                    <strong>{title}</strong>
-                    <button type="button" onClick={onClose} aria-label="Close">
-                        <X />
+                    <strong id={titleId}>{title}</strong>
+                    <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>
+                        <X aria-hidden="true" />
                     </button>
                 </header>
                 {children}

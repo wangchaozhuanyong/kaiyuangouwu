@@ -25,11 +25,18 @@ describe('StorefrontErrorBoundary', () => {
 
     it('renders a localized recovery action after a render error', () => {
         const chineseFallback = failedBoundary('zh-CN');
-        const englishFallback = failedBoundary('en');
+        const chineseMarketEnglishFallback = failedBoundary('en-US');
+        const malaysiaEnglishFallback = failedBoundary('en-MY');
 
         expect(chineseFallback.props.children[1].props.children).toBe('页面暂时无法显示');
         expect(chineseFallback.props.children[3].props.children).toBe('重新加载');
-        expect(englishFallback.props.children[1].props.children).toBe('This page could not be displayed');
-        expect(englishFallback.props.children[3].props.children).toBe('Reload');
+        expect(chineseMarketEnglishFallback.props.children[1].props.children).toBe(
+            'This page could not be displayed',
+        );
+        expect(chineseMarketEnglishFallback.props.children[3].props.children).toBe('Reload');
+        expect(malaysiaEnglishFallback.props.children[1].props.children).toBe(
+            'This page could not be displayed',
+        );
+        expect(malaysiaEnglishFallback.props.children[3].props.children).toBe('Reload');
     });
 });

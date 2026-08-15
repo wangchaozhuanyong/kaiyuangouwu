@@ -32,6 +32,21 @@ export const enabledMarkets: MarketConfig[] = configuredMarketCodes.length
     ? configuredMarketCodes.map((code: MarketCode) => markets[code])
     : [markets['cn-mainland']];
 
+export const supportedStorefrontLanguages = ['zh', 'en'] as const satisfies readonly StorefrontLanguage[];
+
+export function defaultStorefrontLanguageFor(market: MarketConfig): StorefrontLanguage {
+    return market.defaultLanguageCode === 'en' ? 'en' : 'zh';
+}
+
+export function resolveStorefrontLanguage(
+    market: MarketConfig,
+    storedLanguage: string | null | undefined,
+): StorefrontLanguage {
+    return supportedStorefrontLanguages.includes(storedLanguage as StorefrontLanguage)
+        ? (storedLanguage as StorefrontLanguage)
+        : defaultStorefrontLanguageFor(market);
+}
+
 export function marketCodeForChannel(channelCode: string): MarketCode | null {
     return Object.prototype.hasOwnProperty.call(markets, channelCode) ? (channelCode as MarketCode) : null;
 }
