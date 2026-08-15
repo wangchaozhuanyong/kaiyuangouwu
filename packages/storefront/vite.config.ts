@@ -9,10 +9,16 @@ export default defineConfig(({ mode }) => {
         plugins: [react()],
         server: {
             port: 5175,
-            strictPort: false,
+            strictPort: true,
             proxy: {
                 '/shop-api': apiProxyTarget,
                 '/assets': apiProxyTarget,
+            },
+        },
+        preview: {
+            strictPort: true,
+            proxy: {
+                '/shop-api': apiProxyTarget,
             },
         },
     };

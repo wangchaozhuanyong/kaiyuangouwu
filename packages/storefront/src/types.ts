@@ -43,13 +43,7 @@ export interface Product {
     variants: ProductVariant[];
 }
 
-export type ProductSearchSort =
-    | 'recommended'
-    | 'sales'
-    | 'newest'
-    | 'name'
-    | 'price-asc'
-    | 'price-desc';
+export type ProductSearchSort = 'recommended' | 'sales' | 'newest' | 'name' | 'price-asc' | 'price-desc';
 
 export interface ProductSearchPage {
     items: Product[];
@@ -204,6 +198,15 @@ export interface ShippingMethod {
     name: string;
     description: string;
     priceWithTax: number;
+}
+
+export interface PaymentMethod {
+    id: string;
+    code: string;
+    name: string;
+    description: string;
+    isEligible: boolean;
+    eligibilityMessage: string | null;
 }
 
 export interface MarketConfig {

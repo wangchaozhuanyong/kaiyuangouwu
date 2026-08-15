@@ -6,7 +6,7 @@
     "private": true,
     "//": "dev uses Portless for worktree-safe URLs; dev:agent adds machine-readable status/stop commands; dev:direct is the fixed-port escape hatch; workers are explicit and repository-locked.",
     "scripts": {
-        "build:local-plugins": "bun run --cwd ../commerce-fulfillment-plugin build && bun run --cwd ../operations-dashboard-plugin build && bun run --cwd ../storefront-cart-plugin build && bun run --cwd ../store-domain-plugin build && bun run --cwd ../storefront-content-plugin build",
+        "build:local-plugins": "bun run --cwd ../commerce-fulfillment-plugin build && bun run --cwd ../operations-dashboard-plugin build && bun run --cwd ../storefront-cart-plugin build && bun run --cwd ../store-domain-plugin build && bun run --cwd ../storefront-content-plugin build && bun run --cwd ../store-management-plugin build",
         "populate": "node -r ts-node/register -r dotenv/config populate-dev-server.ts",
         "predev:server": "bun run build:local-plugins",
         "dev:server": "node ../cli/dist/cli.js dev server --server-entry ./index.ts",
@@ -22,6 +22,9 @@
         "dev:instrumented": "concurrently npm:dev:server:instrumented npm:dev:worker:instrumented",
         "dashboard:dev": "node ../cli/dist/cli.js dev dashboard",
         "test:dev-workflow": "node --test ./scripts/*.spec.mjs",
+        "seed:storefront-demo": "node ./scripts/seed-storefront-demo.mjs --apply",
+        "audit:storefront-readiness": "node ./scripts/storefront-readiness.mjs",
+        "audit:production-env": "node ./scripts/production-env-readiness.mjs",
         "test:order-note:e2e": "node ./scripts/order-note-e2e.mjs",
         "test:storefront-content:e2e": "node ./scripts/storefront-content-e2e.mjs",
         "prebuild": "bun run build:local-plugins",
@@ -46,6 +49,7 @@
         "@vendure/core": "3.7.2",
         "@vendure/email-plugin": "3.7.2",
         "@vendure/operations-dashboard-plugin": "0.1.0",
+        "@vendure/store-management-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
         "@vendure/storefront-cart-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0"

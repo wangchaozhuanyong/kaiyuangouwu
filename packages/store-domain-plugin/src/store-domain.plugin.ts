@@ -2,7 +2,7 @@ import { MiddlewareConsumer, NestModule, OnApplicationBootstrap } from '@nestjs/
 import { ChannelEvent, ConfigService, EventBus, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions } from './api-extensions';
-import { STORE_DOMAIN_PLUGIN_OPTIONS } from './constants';
+import { STORE_DOMAIN_PLUGIN_OPTIONS, storeDomainPermission } from './constants';
 import { StoreDomain } from './entities/store-domain.entity';
 import { StoreDomainChangedEvent } from './store-domain.event';
 import { StoreDomainMiddleware } from './store-domain.middleware';
@@ -18,6 +18,10 @@ import { StoreDomainPluginOptions } from './types';
         StoreDomainMiddleware,
         { provide: STORE_DOMAIN_PLUGIN_OPTIONS, useFactory: () => StoreDomainPlugin.options },
     ],
+    configuration: config => {
+        config.authOptions.customPermissions.push(storeDomainPermission);
+        return config;
+    },
     adminApiExtensions: {
         schema: adminApiExtensions,
         resolvers: [StoreDomainAdminResolver, StoreDomainEntityResolver],

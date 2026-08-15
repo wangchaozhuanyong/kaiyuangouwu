@@ -8,6 +8,7 @@ import {
     MarketConfig,
     Order,
     OrderPage,
+    PaymentMethod,
     Product,
     ProductSearchPage,
     ProductSearchSort,
@@ -20,7 +21,7 @@ import {
     VendureLanguageCode,
 } from './types';
 
-const API_URL = import.meta.env.VITE_SHOP_API_URL ?? '/shop-api';
+const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 const AUTH_TOKEN_STORAGE_PREFIX = 'vendure-shop-auth-token';
 const SEND_CLIENT_CHANNEL_TOKEN =
@@ -242,14 +243,17 @@ export class ShopApi {
         return result.storefrontContent;
     }
 
-    async products(): Promise<Product[]> {
-        const result = await this.request<{ products: { items: Product[] } }>(`
-            query StorefrontProducts {
-                products(options: { take: 100, sort: { name: ASC } }) {
+    async products(take = 16): Promise<Product[]> {
+        const result = await this.request<{ products: { items: Product[] } }>(
+            `
+            query StorefrontProducts($options: ProductListOptions) {
+                products(options: $options) {
                     items { ${productFields} }
                 }
             }
-        `);
+        `,
+            { options: { take, sort: { name: 'ASC' } } },
+        );
         return result.products.items;
     }
 
@@ -543,6 +547,18 @@ export class ShopApi {
             { id },
         );
         return result.order;
+    }
+
+    async orderByCode(code: string): Promise<Order | null> {
+        const result = await this.request<{ orderByCode: Order | null }>(
+            `
+                query StorefrontOrderByCode($code: String!) {
+                    orderByCode(code: $code) { ${orderFields} }
+                }
+            `,
+            { code },
+        );
+        return result.orderByCode;
     }
 
     async login(emailAddress: string, password: string): Promise<void> {
@@ -975,6 +991,38 @@ export class ShopApi {
             { id: [id] },
         );
         return this.assertOrder(result.setOrderShippingMethod);
+    }
+
+    async eligiblePaymentMethods(): Promise<PaymentMethod[]> {
+        const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(`
+            query EligibleStorefrontPaymentMethods {
+                eligiblePaymentMethods {
+                    id
+                    code
+                    name
+                    description
+                    isEligible
+                    eligibilityMessage
+                }
+            }
+        `);
+        return result.eligiblePaymentMethods;
+    }
+
+    async addPaymentToOrder(method: string, metadata: Record<string, unknown> = {}): Promise<Order> {
+        const result = await this.request<{ addPaymentToOrder: Order & ErrorResult }>(
+            `
+                mutation AddStorefrontPayment($input: PaymentInput!) {
+                    addPaymentToOrder(input: $input) {
+                        __typename
+                        ... on Order { ${orderFields} }
+                        ... on ErrorResult { errorCode message }
+                    }
+                }
+            `,
+            { input: { method, metadata } },
+        );
+        return this.assertOrder(result.addPaymentToOrder);
     }
 
     private async request<T>(query: string, variables?: Record<string, unknown>): Promise<T> {

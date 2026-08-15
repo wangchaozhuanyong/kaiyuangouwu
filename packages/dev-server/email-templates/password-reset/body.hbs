@@ -1,10 +1,20 @@
-{{> header title="重置登录密码" }}
+{{#if isChinese}}
+    {{> header title="重置登录密码" }}
+{{else}}
+    {{> header title="Reset your password" }}
+{{/if}}
 
 <mj-section background-color="#ffffff" padding="16px 28px 24px">
     <mj-column>
-        <mj-text padding="0 0 16px">我们收到了重置您账户密码的请求。</mj-text>
-        <mj-button href="{{ passwordResetUrl }}?token={{ passwordResetToken }}">重置密码</mj-button>
-        <mj-text color="#66727c" padding="16px 0 0">如果这不是您本人操作，可以忽略此邮件，账户不会发生变化。</mj-text>
+        {{#if isChinese}}
+            <mj-text padding="0 0 16px">我们收到了重置您账户密码的请求。</mj-text>
+            <mj-button href="{{ passwordResetUrl }}?token={{ passwordResetToken }}">重置密码</mj-button>
+            <mj-text color="#66727c" padding="16px 0 0">如果这不是您本人操作，可以忽略此邮件，账户不会发生变化。</mj-text>
+        {{else}}
+            <mj-text padding="0 0 16px">We received a request to reset your account password.</mj-text>
+            <mj-button href="{{ passwordResetUrl }}?token={{ passwordResetToken }}">Reset password</mj-button>
+            <mj-text color="#66727c" padding="16px 0 0">If you did not make this request, you can safely ignore this email. Your account has not changed.</mj-text>
+        {{/if}}
     </mj-column>
 </mj-section>
 

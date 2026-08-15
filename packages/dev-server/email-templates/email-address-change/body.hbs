@@ -1,9 +1,18 @@
-{{> header title="验证新的电子邮箱" }}
+{{#if isChinese}}
+    {{> header title="验证新的电子邮箱" }}
+{{else}}
+    {{> header title="Verify your new email address" }}
+{{/if}}
 
 <mj-section background-color="#ffffff" padding="16px 28px 24px">
     <mj-column>
-        <mj-text padding="0 0 16px">我们收到了将账户电子邮箱更改为当前地址的请求。请点击下方按钮完成验证。</mj-text>
-        <mj-button href="{{ changeEmailAddressUrl }}?token={{ identifierChangeToken }}">验证新的电子邮箱</mj-button>
+        {{#if isChinese}}
+            <mj-text padding="0 0 16px">我们收到了将账户电子邮箱更改为当前地址的请求。请点击下方按钮完成验证。</mj-text>
+            <mj-button href="{{ changeEmailAddressUrl }}?token={{ identifierChangeToken }}">验证新的电子邮箱</mj-button>
+        {{else}}
+            <mj-text padding="0 0 16px">We received a request to change your account email address to this one. Verify the new address to complete the change.</mj-text>
+            <mj-button href="{{ changeEmailAddressUrl }}?token={{ identifierChangeToken }}">Verify new email address</mj-button>
+        {{/if}}
     </mj-column>
 </mj-section>
 

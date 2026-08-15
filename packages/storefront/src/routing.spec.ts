@@ -27,6 +27,14 @@ describe('storefront hash routing', () => {
         expect(routeFromHash('#/orders?tab=unknown').tab).toBeUndefined();
     });
 
+    it('opens payment and guest order confirmation routes', () => {
+        expect(routeFromHash('#/payment').name).toBe('payment');
+        expect(routeFromHash('#/order-confirmation?id=T0001')).toMatchObject({
+            name: 'order-confirmation',
+            id: 'T0001',
+        });
+    });
+
     it('opens temporary legal pages from managed footer links', () => {
         expect(routeFromHash('#/legal?id=privacy')).toMatchObject({ name: 'legal', id: 'privacy' });
         expect(routeFromHash('#/legal?id=terms')).toMatchObject({ name: 'legal', id: 'terms' });

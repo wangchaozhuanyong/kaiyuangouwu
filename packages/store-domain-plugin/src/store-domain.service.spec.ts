@@ -3,23 +3,19 @@ import 'reflect-metadata';
 import { Permission } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { storeDomainPermission } from './constants';
 import { StoreDomainService } from './store-domain.service';
 
 function createService() {
     const repository = { find: vi.fn().mockResolvedValue([]) };
     const connection = { getRepository: vi.fn().mockReturnValue(repository) };
-    const service = new StoreDomainService(
-        connection as any,
-        {} as any,
-        {} as any,
-        {
-            cnameTarget: 'stores.example.com',
-            routingMode: 'require-domain',
-            trustProxyHeaders: false,
-            bypassHosts: [],
-            resolveTxt: vi.fn(),
-        },
-    );
+    const service = new StoreDomainService(connection as any, {} as any, {} as any, {
+        cnameTarget: 'stores.example.com',
+        routingMode: 'require-domain',
+        trustProxyHeaders: false,
+        bypassHosts: [],
+        resolveTxt: vi.fn(),
+    });
     return { repository, service };
 }
 
@@ -42,9 +38,7 @@ describe('StoreDomainService channel isolation', () => {
         expect(repository.find).toHaveBeenCalledWith(
             expect.objectContaining({ where: { channelId: 'store-a' } }),
         );
-        await expect(service.findAll(ctx as any, 'store-b')).rejects.toThrow(
-            '无权管理该店铺的域名',
-        );
+        await expect(service.findAll(ctx as any, 'store-b')).rejects.toThrow('无权管理该店铺的域名');
     });
 
     it('allows a super administrator to inspect another channel', async () => {
@@ -61,5 +55,22 @@ describe('StoreDomainService channel isolation', () => {
         expect(repository.find).toHaveBeenCalledWith(
             expect.objectContaining({ where: { channelId: 'store-c' } }),
         );
+    });
+
+    it('allows a least-privilege store administrator to read only the active Channel domains', async () => {
+        const { repository, service } = createService();
+        const ctx = {
+            channelId: 'store-a',
+            userHasPermissions: vi.fn((permissions: Permission[]) =>
+                permissions.includes(storeDomainPermission.Read),
+            ),
+        };
+
+        await service.findAll(ctx as any, 'store-a');
+
+        expect(repository.find).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { channelId: 'store-a' } }),
+        );
+        await expect(service.findAll(ctx as any, 'store-b')).rejects.toThrow('无权管理该店铺的域名');
     });
 });

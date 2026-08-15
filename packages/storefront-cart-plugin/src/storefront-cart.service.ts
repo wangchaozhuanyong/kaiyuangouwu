@@ -305,7 +305,8 @@ export class StorefrontCartService {
         }
 
         const owner = await this.getOwner(ctx);
-        const projected = await this.projectCart(ctx, cart, owner, true);
+        // Preserve customer, address and shipping changes made after beginCheckout unless the cart changed.
+        const projected = await this.projectCart(ctx, cart, owner);
         if (isGraphQlErrorResult(projected)) {
             return projected;
         }
@@ -334,7 +335,7 @@ export class StorefrontCartService {
             'ArrangingPayment',
         );
         if (isGraphQlErrorResult(transition)) {
-            return new CartProjectionError(transition.errorCode, transition.message);
+            return new CartProjectionError(transition.errorCode, transition.transitionError);
         }
         const lockedCart = await this.loadCart(ctx, projected.id, owner);
         lockedCart.checkoutOrder = transition;
@@ -369,10 +370,9 @@ export class StorefrontCartService {
                 return new CartProjectionError(transition.errorCode, transition.message);
             }
         }
-        await this.connection.getRepository(ctx, StorefrontCartCheckout).update(
-            { cartId: cart.id, orderId: order.id, state: 'PREPARED' },
-            { state: 'ABANDONED' },
-        );
+        await this.connection
+            .getRepository(ctx, StorefrontCartCheckout)
+            .update({ cartId: cart.id, orderId: order.id, state: 'PREPARED' }, { state: 'ABANDONED' });
         const owner = await this.getOwner(ctx);
         const reopened = await this.connection.getRepository(ctx, StorefrontCart).update(
             {
@@ -553,11 +553,7 @@ export class StorefrontCartService {
         return created;
     }
 
-    private async initializeCart(
-        ctx: RequestContext,
-        cart: StorefrontCart,
-        owner: CartOwner,
-    ): Promise<void> {
+    private async initializeCart(ctx: RequestContext, cart: StorefrontCart, owner: CartOwner): Promise<void> {
         if (cart.initialized) {
             return;
         }

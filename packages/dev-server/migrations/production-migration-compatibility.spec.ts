@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AddStorefrontContent1786762500000 } from './1786762500000-add-storefront-content';
 import { AddCustomerOrderNote1786764000000 } from './1786764000000-add-customer-order-note';
+import { AddStoreProfiles1786765800000 } from './1786765800000-add-store-profiles';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -20,6 +21,45 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it('creates the store profile table with portable MySQL column types and backfills Channels', async () => {
+        const execute = vi.fn(async () => undefined);
+        const values = vi.fn(() => ({ execute }));
+        const into = vi.fn(() => ({ values }));
+        const insert = vi.fn(() => ({ into }));
+        const createdTables: Table[] = [];
+        const queryRunner = {
+            connection: { options: { type: 'mysql' } },
+            hasTable: vi.fn(async () => false),
+            createTable: vi.fn(async (table: Table) => createdTables.push(table)),
+            query: vi.fn(async () => [{ id: 1 }, { id: 2 }]),
+            manager: { createQueryBuilder: vi.fn(() => ({ insert })) },
+        } as unknown as QueryRunner;
+
+        await new AddStoreProfiles1786765800000().up(queryRunner);
+
+        expect(createdTables).toHaveLength(1);
+        expect(createdTables[0].findColumnByName('createdAt')).toMatchObject({
+            type: 'datetime',
+            precision: 6,
+            default: 'CURRENT_TIMESTAMP(6)',
+        });
+        expect(createdTables[0].findColumnByName('updatedAt')).toMatchObject({
+            type: 'datetime',
+            precision: 6,
+            onUpdate: 'CURRENT_TIMESTAMP(6)',
+        });
+        expect(createdTables[0].findColumnByName('isPublished')).toMatchObject({
+            type: 'tinyint',
+            default: 0,
+        });
+        expect(createdTables[0].findColumnByName('descriptionZh')?.default).toBeUndefined();
+        expect(values).toHaveBeenCalledWith([
+            expect.objectContaining({ channelId: 1, status: 'DRAFT', sortOrder: 0 }),
+            expect.objectContaining({ channelId: 2, status: 'DRAFT', sortOrder: 1 }),
+        ]);
+        expect(execute).toHaveBeenCalledOnce();
+    });
+
     it('creates MySQL content tables without defaults on text columns', async () => {
         const { changeColumn, createdTables, queryRunner } = mysqlQueryRunner();
 

@@ -28,6 +28,19 @@ afterEach(() => {
 });
 
 describe('ShopApi storefront mutations', () => {
+    it('limits the initial storefront product request to 16 items', async () => {
+        const fetchMock = mockGraphQlResponse({ products: { items: [] } });
+
+        await new ShopApi(market).products();
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('query StorefrontProducts($options: ProductListOptions)');
+        expect(request.variables).toEqual({ options: { take: 16, sort: { name: 'ASC' } } });
+    });
+
     it('requests localized content with Vendure language query context', async () => {
         const fetchMock = mockGraphQlResponse({ storefrontContent: [] });
 
@@ -137,6 +150,76 @@ describe('ShopApi storefront mutations', () => {
                 errorCode: 'COUPON_CODE_INVALID_ERROR',
             }),
         );
+    });
+
+    it('loads eligible payment methods for the active order', async () => {
+        const fetchMock = mockGraphQlResponse({
+            eligiblePaymentMethods: [
+                {
+                    id: 'payment-1',
+                    code: '测试支付',
+                    name: '测试支付',
+                    description: '',
+                    isEligible: true,
+                    eligibilityMessage: null,
+                },
+            ],
+        });
+
+        await expect(new ShopApi(market).eligiblePaymentMethods()).resolves.toHaveLength(1);
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('eligiblePaymentMethods');
+        expect(request.query).toContain('isEligible');
+    });
+
+    it('submits payment metadata and returns the placed order', async () => {
+        const fetchMock = mockGraphQlResponse({
+            addPaymentToOrder: {
+                __typename: 'Order',
+                id: 'order-1',
+                code: 'T0001',
+                state: 'PaymentAuthorized',
+                lines: [],
+            },
+        });
+
+        await expect(new ShopApi(market).addPaymentToOrder('测试支付')).resolves.toMatchObject({
+            code: 'T0001',
+            state: 'PaymentAuthorized',
+        });
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            variables: Record<string, unknown>;
+        };
+        expect(request.variables).toEqual({ input: { method: '测试支付', metadata: {} } });
+    });
+
+    it('surfaces a structured payment decline', async () => {
+        mockGraphQlResponse({
+            addPaymentToOrder: {
+                __typename: 'PaymentDeclinedError',
+                errorCode: 'PAYMENT_DECLINED_ERROR',
+                message: 'Payment was declined',
+            },
+        });
+
+        await expect(new ShopApi(market).addPaymentToOrder('测试支付')).rejects.toEqual(
+            expect.objectContaining<Partial<ShopApiError>>({
+                name: 'ShopApiError',
+                errorCode: 'PAYMENT_DECLINED_ERROR',
+            }),
+        );
+    });
+
+    it('retrieves a guest order by its public order code', async () => {
+        const fetchMock = mockGraphQlResponse({
+            orderByCode: { id: 'order-1', code: 'T0001', state: 'PaymentAuthorized', lines: [] },
+        });
+
+        await expect(new ShopApi(market).orderByCode('T0001')).resolves.toMatchObject({ code: 'T0001' });
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            variables: Record<string, unknown>;
+        };
+        expect(request.variables).toEqual({ code: 'T0001' });
     });
 
     it('updates the customer note through active-order custom fields', async () => {
@@ -339,10 +422,10 @@ describe('ShopApi storefront mutations', () => {
                 ),
             )
             .mockResolvedValueOnce(
-                new Response(
-                    JSON.stringify({ data: { products: { items: firstPageProducts } } }),
-                    { status: 200, headers: { 'content-type': 'application/json' } },
-                ),
+                new Response(JSON.stringify({ data: { products: { items: firstPageProducts } } }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                }),
             )
             .mockResolvedValueOnce(
                 new Response(
@@ -389,7 +472,7 @@ describe('ShopApi storefront mutations', () => {
 
     it('loads product sales in bounded batches and removes duplicate ids', async () => {
         const productIds = Array.from({ length: 101 }, (_, index) => `product-${index + 1}`);
-        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
             const request = JSON.parse(String(init?.body)) as { variables: { productIds: string[] } };
             return new Response(
                 JSON.stringify({

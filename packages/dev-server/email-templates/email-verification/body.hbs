@@ -1,9 +1,18 @@
-{{> header title="验证电子邮箱" }}
+{{#if isChinese}}
+    {{> header title="验证电子邮箱" }}
+{{else}}
+    {{> header title="Verify your email address" }}
+{{/if}}
 
 <mj-section background-color="#ffffff" padding="16px 28px 24px">
     <mj-column>
-        <mj-text padding="0 0 16px">感谢您注册明集市。请点击下方按钮验证电子邮箱并完成注册。</mj-text>
-        <mj-button href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}">验证电子邮箱</mj-button>
+        {{#if isChinese}}
+            <mj-text padding="0 0 16px">感谢您注册 {{ brandName }}。请点击下方按钮验证电子邮箱并完成注册。</mj-text>
+            <mj-button href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}">验证电子邮箱</mj-button>
+        {{else}}
+            <mj-text padding="0 0 16px">Thank you for creating a {{ brandName }} account. Verify your email address to complete registration.</mj-text>
+            <mj-button href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}">Verify email address</mj-button>
+        {{/if}}
     </mj-column>
 </mj-section>
 

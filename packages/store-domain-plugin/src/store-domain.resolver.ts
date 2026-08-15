@@ -1,6 +1,7 @@
 import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
+import { storeDomainPermission } from './constants';
 import { StoreDomain } from './entities/store-domain.entity';
 import { StoreDomainService } from './store-domain.service';
 
@@ -24,7 +25,7 @@ export class StoreDomainAdminResolver {
     constructor(private readonly storeDomainService: StoreDomainService) {}
 
     @Query()
-    @Allow(Permission.ReadSettings, Permission.ReadChannel)
+    @Allow(Permission.ReadSettings, Permission.ReadChannel, storeDomainPermission.Read)
     storeDomains(@Ctx() ctx: RequestContext, @Args('channelId') channelId: ID) {
         return this.storeDomainService.findAll(ctx, channelId);
     }
@@ -37,7 +38,7 @@ export class StoreDomainAdminResolver {
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin, Permission.UpdateChannel)
+    @Allow(Permission.SuperAdmin, Permission.UpdateChannel, storeDomainPermission.Create)
     createStoreDomain(
         @Ctx() ctx: RequestContext,
         @Args('input') input: { channelId: ID; domain: string; isPrimary?: boolean | null },
@@ -47,21 +48,21 @@ export class StoreDomainAdminResolver {
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin, Permission.UpdateChannel)
+    @Allow(Permission.SuperAdmin, Permission.UpdateChannel, storeDomainPermission.Update)
     verifyStoreDomain(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.storeDomainService.verify(ctx, id);
     }
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin, Permission.UpdateChannel)
+    @Allow(Permission.SuperAdmin, Permission.UpdateChannel, storeDomainPermission.Update)
     setPrimaryStoreDomain(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.storeDomainService.setPrimary(ctx, id);
     }
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin, Permission.UpdateChannel)
+    @Allow(Permission.SuperAdmin, Permission.UpdateChannel, storeDomainPermission.Delete)
     deleteStoreDomain(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.storeDomainService.delete(ctx, id);
     }

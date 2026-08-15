@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { OnApplicationBootstrap } from '@nestjs/common';
-import { AssetServerPlugin } from '@vendure/asset-server-plugin';
+import { AssetServerPlugin, PresetOnlyStrategy } from '@vendure/asset-server-plugin';
 import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin';
 import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/shared-constants';
 import {
@@ -9,6 +9,7 @@ import {
     DefaultSchedulerPlugin,
     DefaultSearchPlugin,
     dummyPaymentHandler,
+    Injector,
     LanguageCode,
     LogLevel,
     PluginCommonModule,
@@ -21,9 +22,16 @@ import {
     VendurePlugin,
 } from '@vendure/core';
 import { DashboardPlugin } from '@vendure/dashboard/plugin';
-import { defaultEmailHandlers, EmailPlugin, FileBasedTemplateLoader } from '@vendure/email-plugin';
+import {
+    defaultEmailHandlers,
+    EmailPlugin,
+    type EmailPluginDevModeOptions,
+    type EmailPluginOptions,
+    FileBasedTemplateLoader,
+} from '@vendure/email-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
+import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import 'dotenv/config';
@@ -31,6 +39,12 @@ import { createRequire } from 'node:module';
 import path from 'path';
 import { DataSourceOptions } from 'typeorm';
 
+import {
+    emailLanguageVariables,
+    localizedEmailSubjects,
+    localizedEmailText,
+    type StorefrontNameFields,
+} from './email-localization';
 import { devServerMigrations } from './migrations';
 // import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
 import { ReviewsPlugin } from './test-plugins/reviews/reviews-plugin';
@@ -42,10 +56,14 @@ const SERVE_GRAPHIQL =
     process.env.VENDURE_SERVE_GRAPHIQL != null
         ? process.env.VENDURE_SERVE_GRAPHIQL === 'true'
         : !IS_PRODUCTION;
+if (IS_PRODUCTION && SERVE_GRAPHIQL) {
+    throw new Error('VENDURE_SERVE_GRAPHIQL must be false in production');
+}
 const SERVE_STATIC_DASHBOARD = process.env.VENDURE_SERVE_STATIC_DASHBOARD !== 'false';
 const loadPackage = createRequire(__filename);
 const serverRoot = path.basename(__dirname) === 'dist' ? path.dirname(__dirname) : __dirname;
-const dashboardUrl = process.env.VENDURE_DASHBOARD_URL || 'http://localhost:3000/dashboard';
+const dashboardUrl = configuredUrl('VENDURE_DASHBOARD_URL', 'http://localhost:3000/dashboard');
+const storefrontFallbackUrl = configuredUrl('VENDURE_STOREFRONT_URL', 'http://127.0.0.1:5175');
 const dashboardAppDir =
     path.basename(__dirname) === 'dist'
         ? path.join(__dirname, './dashboard')
@@ -53,15 +71,11 @@ const dashboardAppDir =
 const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
-const localizedEmailSubjects: Record<string, string> = {
-    'order-confirmation': '订单确认 #{{ order.code }}',
-    'email-verification': '请验证您的电子邮箱',
-    'password-reset': '重置您的登录密码',
-    'email-address-change': '请验证新的电子邮箱',
-};
 const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
-    const subject = localizedEmailSubjects[handler.type];
-    return subject ? handler.setSubject(subject) : handler;
+    const subjects = localizedEmailSubjects[handler.type];
+    return subjects
+        ? handler.setSubject((_event, ctx) => localizedEmailText(subjects, ctx.languageCode))
+        : handler;
 });
 
 function storeDomainRoutingMode(): StoreDomainRoutingMode | undefined {
@@ -97,19 +111,60 @@ function configuredValue(name: string, developmentDefault: string): string {
     return developmentDefault;
 }
 
-function fallbackStorefrontUrl(): string {
-    const rawUrl = configuredValue('VENDURE_STOREFRONT_URL', 'http://127.0.0.1:5175');
+function configuredPort(name: string, developmentDefault: number): number {
+    const rawValue = configuredValue(name, String(developmentDefault));
+    const value = Number(rawValue);
+    if (!Number.isInteger(value) || value < 1 || value > 65535) {
+        throw new Error(`${name} must be an integer between 1 and 65535`);
+    }
+    return value;
+}
+
+function configuredBoolean(name: string, developmentDefault: boolean): boolean {
+    const value = configuredValue(name, String(developmentDefault)).toLowerCase();
+    if (value === 'true') {
+        return true;
+    }
+    if (value === 'false') {
+        return false;
+    }
+    throw new Error(`${name} must be true or false`);
+}
+
+function configuredUrl(name: string, developmentDefault: string): string {
+    const rawUrl = configuredValue(name, developmentDefault);
     let url: URL;
     try {
         url = new URL(rawUrl);
     } catch {
-        throw new Error('VENDURE_STOREFRONT_URL must be a valid absolute URL');
+        throw new Error(`${name} must be a valid absolute URL`);
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        throw new Error('VENDURE_STOREFRONT_URL must use http or https');
+        throw new Error(`${name} must use http or https`);
+    }
+    if (IS_PRODUCTION && url.protocol !== 'https:') {
+        throw new Error(`${name} must use https in production`);
     }
     return url.toString().replace(/\/$/, '');
 }
+
+function configuredDirectory(name: string, developmentDefault: string): string {
+    const configuredPath = configuredValue(name, developmentDefault);
+    if (IS_PRODUCTION && !path.isAbsolute(configuredPath)) {
+        throw new Error(`${name} must be an absolute path in production`);
+    }
+    const resolvedPath = path.resolve(serverRoot, configuredPath);
+    if (IS_PRODUCTION && resolvedPath === path.parse(resolvedPath).root) {
+        throw new Error(`${name} must not use the filesystem root`);
+    }
+    return resolvedPath;
+}
+
+const importAssetsDir = configuredDirectory(
+    'VENDURE_IMPORT_ASSETS_DIR',
+    path.join(serverRoot, 'import-assets'),
+);
+const assetUploadDir = configuredDirectory('VENDURE_ASSET_UPLOAD_DIR', path.join(serverRoot, 'assets'));
 
 async function storefrontUrlForChannel(
     ctx: RequestContext,
@@ -118,7 +173,60 @@ async function storefrontUrlForChannel(
     const primaryDomain = await connection.getRepository(ctx, StoreDomain).findOne({
         where: { channelId: ctx.channelId, isPrimary: true, status: 'ACTIVE' },
     });
-    return primaryDomain ? `https://${primaryDomain.domain}` : fallbackStorefrontUrl();
+    return primaryDomain ? `https://${primaryDomain.domain}` : storefrontFallbackUrl;
+}
+
+async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAddress: string) {
+    const storefrontUrl = await storefrontUrlForChannel(ctx, injector.get(TransactionalConnection));
+    return {
+        ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields as StorefrontNameFields),
+        fromAddress,
+        verifyEmailAddressUrl: `${storefrontUrl}/#/verify-account`,
+        passwordResetUrl: `${storefrontUrl}/#/reset-password`,
+        changeEmailAddressUrl: `${dashboardUrl}/change-email-address`,
+    };
+}
+
+function emailPluginOptions(): EmailPluginOptions | EmailPluginDevModeOptions {
+    const fromAddress = configuredValue('VENDURE_EMAIL_FROM', '"Yunqiao Ai" <noreply@example.com>');
+    const commonOptions = {
+        handlers: localizedEmailHandlers,
+        templateLoader: new FileBasedTemplateLoader(path.join(serverRoot, 'email-templates')),
+        globalTemplateVars: (ctx: RequestContext, injector: Injector) =>
+            emailTemplateVars(ctx, injector, fromAddress),
+    };
+    if (!IS_PRODUCTION) {
+        return {
+            ...commonOptions,
+            devMode: true,
+            route: 'mailbox',
+            outputPath: process.env.VENDURE_EMAIL_OUTPUT_DIR || path.join(serverRoot, 'test-emails'),
+        };
+    }
+
+    const smtpUser = process.env.SMTP_USER?.trim();
+    const smtpPassword = process.env.SMTP_PASSWORD?.trim();
+    if (Boolean(smtpUser) !== Boolean(smtpPassword)) {
+        throw new Error('SMTP_USER and SMTP_PASSWORD must either both be configured or both be omitted');
+    }
+
+    return {
+        ...commonOptions,
+        transport: {
+            type: 'smtp',
+            host: configuredValue('SMTP_HOST', '127.0.0.1'),
+            port: configuredPort('SMTP_PORT', 1025),
+            secure: configuredBoolean('SMTP_SECURE', false),
+            ...(smtpUser && smtpPassword
+                ? {
+                      auth: {
+                          user: smtpUser,
+                          pass: smtpPassword,
+                      },
+                  }
+                : {}),
+        },
+    };
 }
 
 function storefrontNameDisplayUnits(value: string): number {
@@ -323,7 +431,7 @@ export const devConfig: VendureConfig = {
     },
     logger: new DefaultLogger({ level: IS_PRODUCTION ? LogLevel.Info : LogLevel.Verbose }),
     importExportOptions: {
-        importAssetsDir: process.env.VENDURE_IMPORT_ASSETS_DIR || path.join(serverRoot, 'import-assets'),
+        importAssetsDir,
     },
     plugins: [
         // MultivendorPlugin.init({
@@ -336,6 +444,7 @@ export const devConfig: VendureConfig = {
         ...(!BOOTSTRAP_BASE_SCHEMA
             ? [
                   CommerceFulfillmentPlugin,
+                  StoreManagementPlugin,
                   StorefrontCartPlugin,
                   StorefrontContentPlugin,
                   StoreDomainPlugin.init({
@@ -349,7 +458,24 @@ export const devConfig: VendureConfig = {
         ...(SERVE_GRAPHIQL ? [loadPackage('@vendure/graphiql-plugin').GraphiqlPlugin.init()] : []),
         AssetServerPlugin.init({
             route: 'assets',
-            assetUploadDir: process.env.VENDURE_ASSET_UPLOAD_DIR || path.join(serverRoot, 'assets'),
+            assetUploadDir,
+            presets: [
+                { name: 'storefront-original-preview', width: 1600, height: 1600, mode: 'resize' },
+                { name: 'storefront-thumbnail-160', width: 160, height: 160, mode: 'crop' },
+                { name: 'storefront-thumbnail-320', width: 320, height: 320, mode: 'crop' },
+                { name: 'storefront-card-320', width: 320, height: 280, mode: 'crop' },
+                { name: 'storefront-card-640', width: 640, height: 560, mode: 'crop' },
+                { name: 'storefront-hero-480', width: 480, height: 240, mode: 'crop' },
+                { name: 'storefront-hero-960', width: 960, height: 480, mode: 'crop' },
+                { name: 'storefront-hero-1440', width: 1440, height: 720, mode: 'crop' },
+                { name: 'storefront-detail-640', width: 640, height: 640, mode: 'resize' },
+                { name: 'storefront-detail-1200', width: 1200, height: 1200, mode: 'resize' },
+            ],
+            imageTransformStrategy: new PresetOnlyStrategy({
+                defaultPreset: 'storefront-original-preview',
+                permittedQuality: [55, 75],
+                permittedFormats: ['jpg', 'webp', 'avif'],
+            }),
         }),
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: false }),
         // Enable if you need to debug the job queue
@@ -357,24 +483,7 @@ export const devConfig: VendureConfig = {
         DefaultJobQueuePlugin.init({}),
         // JobQueueTestPlugin.init({ queueCount: 10 }),
         DefaultSchedulerPlugin.init({}),
-        EmailPlugin.init({
-            devMode: true,
-            route: 'mailbox',
-            handlers: localizedEmailHandlers,
-            templateLoader: new FileBasedTemplateLoader(path.join(serverRoot, 'email-templates')),
-            outputPath: process.env.VENDURE_EMAIL_OUTPUT_DIR || path.join(serverRoot, 'test-emails'),
-            globalTemplateVars: async (ctx, injector) => {
-                const storefrontUrl = await storefrontUrlForChannel(
-                    ctx,
-                    injector.get(TransactionalConnection),
-                );
-                return {
-                    verifyEmailAddressUrl: `${storefrontUrl}/#/verify-account`,
-                    passwordResetUrl: `${storefrontUrl}/#/reset-password`,
-                    changeEmailAddressUrl: `${dashboardUrl}/change-email-address`,
-                };
-            },
-        }),
+        EmailPlugin.init(emailPluginOptions()),
         ...(IS_INSTRUMENTED ? [loadPackage('@vendure/telemetry-plugin').TelemetryPlugin.init({})] : []),
         SERVE_STATIC_DASHBOARD
             ? DashboardPlugin.init({
@@ -387,10 +496,20 @@ export const devConfig: VendureConfig = {
 
 function getDbConfig(): DataSourceOptions {
     const dbType = process.env.DB || 'mysql';
+    const supportedDbTypes = ['mysql', 'mariadb', 'postgres', 'sqlite', 'sqljs'];
+    if (!supportedDbTypes.includes(dbType)) {
+        throw new Error(`DB must be one of: ${supportedDbTypes.join(', ')}`);
+    }
+    if (IS_PRODUCTION && (dbType === 'sqlite' || dbType === 'sqljs')) {
+        throw new Error('Production must use mysql, mariadb, or postgres instead of a file database');
+    }
     const synchronize =
         process.env.DB_SYNCHRONIZE != null
             ? process.env.DB_SYNCHRONIZE === 'true'
             : !IS_PRODUCTION && dbType !== 'sqlite';
+    if (IS_PRODUCTION && synchronize) {
+        throw new Error('DB_SYNCHRONIZE must be false in production');
+    }
     switch (dbType) {
         case 'postgres':
             console.log('Using postgres connection');

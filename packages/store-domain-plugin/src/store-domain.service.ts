@@ -13,7 +13,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import { promises as dns } from 'node:dns';
 
-import { STORE_DOMAIN_PLUGIN_OPTIONS } from './constants';
+import { STORE_DOMAIN_PLUGIN_OPTIONS, storeDomainPermission } from './constants';
 import { normalizeDomain, verificationRecordName, verificationRecordValue } from './domain-utils';
 import { StoreDomain } from './entities/store-domain.entity';
 import { StoreDomainChangedEvent } from './store-domain.event';
@@ -29,7 +29,7 @@ export class StoreDomainService {
     ) {}
 
     async findAll(ctx: RequestContext, channelId: ID): Promise<StoreDomain[]> {
-        this.assertChannelAccess(ctx, channelId, Permission.ReadChannel);
+        this.assertChannelAccess(ctx, channelId, [Permission.ReadChannel, storeDomainPermission.Read]);
         return this.connection.getRepository(ctx, StoreDomain).find({
             where: { channelId },
             relations: { channel: true },
@@ -48,7 +48,10 @@ export class StoreDomainService {
         ctx: RequestContext,
         input: { channelId: ID; domain: string; isPrimary?: boolean | null },
     ): Promise<StoreDomain> {
-        this.assertChannelAccess(ctx, input.channelId, Permission.UpdateChannel);
+        this.assertChannelAccess(ctx, input.channelId, [
+            Permission.UpdateChannel,
+            storeDomainPermission.Create,
+        ]);
         await this.assertChannelExists(ctx, input.channelId);
         const domain = this.parseDomain(input.domain);
         const repository = this.connection.getRepository(ctx, StoreDomain);
@@ -94,7 +97,10 @@ export class StoreDomainService {
         ctx: RequestContext,
         id: ID,
     ): Promise<{ success: boolean; message: string; domain: StoreDomain }> {
-        const domain = await this.getForMutation(ctx, id);
+        const domain = await this.getForMutation(ctx, id, [
+            Permission.UpdateChannel,
+            storeDomainPermission.Update,
+        ]);
         if (domain.status === 'ACTIVE') {
             return { success: true, message: '域名已经验证通过', domain };
         }
@@ -128,7 +134,10 @@ export class StoreDomainService {
     }
 
     async setPrimary(ctx: RequestContext, id: ID): Promise<StoreDomain> {
-        const domain = await this.getForMutation(ctx, id);
+        const domain = await this.getForMutation(ctx, id, [
+            Permission.UpdateChannel,
+            storeDomainPermission.Update,
+        ]);
         if (domain.status !== 'ACTIVE') {
             throw new UserInputError('域名验证通过后才能设为主域名');
         }
@@ -143,7 +152,10 @@ export class StoreDomainService {
     }
 
     async delete(ctx: RequestContext, id: ID): Promise<{ result: 'DELETED'; message: string }> {
-        const domain = await this.getForMutation(ctx, id);
+        const domain = await this.getForMutation(ctx, id, [
+            Permission.UpdateChannel,
+            storeDomainPermission.Delete,
+        ]);
         const repository = this.connection.getRepository(ctx, StoreDomain);
         const wasPrimary = domain.isPrimary;
         const channelId = domain.channelId;
@@ -206,7 +218,11 @@ export class StoreDomainService {
         return this.invalidateRoute(domain);
     }
 
-    private async getForMutation(ctx: RequestContext, id: ID): Promise<StoreDomain> {
+    private async getForMutation(
+        ctx: RequestContext,
+        id: ID,
+        permissions: Permission[],
+    ): Promise<StoreDomain> {
         const domain = await this.connection.getRepository(ctx, StoreDomain).findOne({
             where: { id },
             relations: { channel: true },
@@ -214,15 +230,15 @@ export class StoreDomainService {
         if (!domain) {
             throw new EntityNotFoundError(StoreDomain.name, id);
         }
-        this.assertChannelAccess(ctx, domain.channelId, Permission.UpdateChannel);
+        this.assertChannelAccess(ctx, domain.channelId, permissions);
         return domain;
     }
 
-    private assertChannelAccess(ctx: RequestContext, channelId: ID, permission: Permission): void {
+    private assertChannelAccess(ctx: RequestContext, channelId: ID, permissions: Permission[]): void {
         if (ctx.userHasPermissions([Permission.SuperAdmin])) {
             return;
         }
-        if (String(ctx.channelId) !== String(channelId) || !ctx.userHasPermissions([permission])) {
+        if (String(ctx.channelId) !== String(channelId) || !ctx.userHasPermissions(permissions)) {
             throw new UserInputError('无权管理该店铺的域名');
         }
     }

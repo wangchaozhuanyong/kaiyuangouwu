@@ -10,6 +10,7 @@ import {
     Coffee,
     Download,
     Fingerprint,
+    Heart,
     House,
     LayoutGrid,
     MapPin,
@@ -38,7 +39,17 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+    FormEvent,
+    ImgHTMLAttributes,
+    ReactNode,
+    useCallback,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 
 import { ShopApi, ShopApiError } from './api';
 import {
@@ -50,6 +61,8 @@ import {
     resolveStorefrontLanguage,
     uiCopy,
 } from './i18n';
+import { filterProductsByHanTerm, hasHanCharacters } from './search';
+import { responsiveImageSources, StorefrontImageKind } from './responsive-image';
 import {
     ActiveCustomer,
     CollectionSummary,
@@ -59,6 +72,7 @@ import {
     MarketCode,
     MarketConfig,
     Order,
+    PaymentMethod,
     Product,
     ProductSearchSort,
     ProductVariant,
@@ -77,6 +91,8 @@ type RouteName =
     | 'product'
     | 'search'
     | 'checkout'
+    | 'payment'
+    | 'order-confirmation'
     | 'orders'
     | 'order-detail'
     | 'addresses'
@@ -95,10 +111,13 @@ type SortMode = ProductSearchSort;
 
 const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
 const ORDER_NOTE_MAX_LENGTH = 500;
+const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
 const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 const SEARCH_HISTORY_STORAGE_KEY = 'storefront-search-history';
 const STOREFRONT_LANGUAGE_STORAGE_KEY = 'storefront-language';
+const FAVORITE_PRODUCT_LIMIT = 100;
 const RECENT_PRODUCT_LIMIT = 20;
+const LOCAL_TEST_PAYMENT_CODE = '测试支付';
 
 function sortCategoryProducts(
     products: Product[],
@@ -204,6 +223,8 @@ export function routeFromHash(hash: string): RouteState {
         'product',
         'search',
         'checkout',
+        'payment',
+        'order-confirmation',
         'orders',
         'order-detail',
         'addresses',
@@ -260,6 +281,7 @@ export function App() {
     const [routeOrderLoading, setRouteOrderLoading] = useState(false);
     const [routeOrderError, setRouteOrderError] = useState('');
     const [orderReloadKey, setOrderReloadKey] = useState(0);
+    const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
     const [collections, setCollections] = useState<CollectionSummary[]>([]);
     const [contentBlocks, setContentBlocks] = useState<StorefrontContentBlock[]>([]);
@@ -270,7 +292,9 @@ export function App() {
     const [cart, setCart] = useState<StorefrontCart | null>(null);
     const [customer, setCustomer] = useState<ActiveCustomer | null>(null);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
+    const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
+    const [sessionLoading, setSessionLoading] = useState(true);
     const [cartLoading, setCartLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [cartError, setCartError] = useState<string | null>(null);
@@ -283,6 +307,7 @@ export function App() {
     const [fulfillmentFilter, setFulfillmentFilter] = useState<'all' | FulfillmentType>('all');
     const [inStockOnly, setInStockOnly] = useState(false);
     const toastTimer = useRef<number | null>(null);
+    const storefrontLoadId = useRef(0);
     const routeRef = useRef(route);
     const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
 
@@ -349,51 +374,59 @@ export function App() {
         };
     }, []);
 
+    const loadSession = useCallback(
+        async (loadId: number) => {
+            setSessionLoading(true);
+            setCartError(null);
+            const [cartResult, customerResult] = await Promise.allSettled([
+                api.cart(),
+                api.activeCustomer(),
+            ]);
+            if (storefrontLoadId.current !== loadId) return;
+
+            if (cartResult.status === 'fulfilled') {
+                setCart(cartResult.value);
+                setCheckoutOrder(cartResult.value.checkoutOrder);
+            } else {
+                setCartError(cartResult.reason instanceof Error ? cartResult.reason.message : text.loadError);
+            }
+            if (customerResult.status === 'fulfilled') setCustomer(customerResult.value);
+            setSessionLoading(false);
+        },
+        [api, text.loadError],
+    );
+
     const loadStorefront = useCallback(async () => {
+        const loadId = ++storefrontLoadId.current;
         setLoading(true);
         setError(null);
         setContentError('');
-        const [productResult, collectionResult, cartResult, customerResult, configResult, contentResult] =
-            await Promise.allSettled([
-                api.products(),
-                api.collections(),
-                api.cart(),
-                api.activeCustomer(),
-                api.storefrontConfig(),
-                api.storefrontContent(),
-            ]);
-        if (productResult.status === 'fulfilled') setProducts(productResult.value);
-        else setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
-        if (collectionResult.status === 'fulfilled') setCollections(collectionResult.value);
-        if (cartResult.status === 'fulfilled') {
-            setCart(cartResult.value);
-            setCheckoutOrder(cartResult.value.checkoutOrder);
-        } else {
-            setCartError(cartResult.reason instanceof Error ? cartResult.reason.message : text.loadError);
-        }
-        if (customerResult.status === 'fulfilled') setCustomer(customerResult.value);
-        if (contentResult.status === 'fulfilled') setContentBlocks(contentResult.value);
-        else {
-            setContentBlocks([]);
-            setContentError(
-                contentResult.reason instanceof Error ? contentResult.reason.message : text.loadError,
-            );
-        }
+        const [productResult, collectionResult, configResult, contentResult] = await Promise.allSettled([
+            api.products(16),
+            api.collections(),
+            api.storefrontConfig(),
+            api.storefrontContent(),
+        ]);
+        if (storefrontLoadId.current !== loadId) return;
+
         if (configResult.status === 'fulfilled') {
             const nextStorefrontCode = configResult.value.code;
             const nextMarketCode = marketCodeForChannel(nextStorefrontCode);
-            if (nextMarketCode) {
+            if (nextMarketCode && nextMarketCode !== marketCode) {
                 localStorage.setItem('storefront-market', nextMarketCode);
-                setStorefrontContext(currentContext =>
-                    currentContext.marketCode === nextMarketCode
-                        ? currentContext
-                        : {
-                              marketCode: nextMarketCode,
-                              language: readStoredLanguage(nextMarketCode),
-                          },
-                );
+                setStorefrontContext({
+                    marketCode: nextMarketCode,
+                    language: readStoredLanguage(nextMarketCode),
+                });
+                return;
             }
             setStorefrontCode(nextStorefrontCode);
+            setFavoriteProductIds(
+                readStoredStrings(
+                    scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
+                    FAVORITE_PRODUCT_LIMIT,
+                ),
+            );
             setRecentProductIds(
                 readStoredStrings(
                     scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, nextStorefrontCode),
@@ -411,8 +444,19 @@ export function App() {
                 ),
             });
         }
+        if (productResult.status === 'fulfilled') setProducts(productResult.value);
+        else setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
+        if (collectionResult.status === 'fulfilled') setCollections(collectionResult.value);
+        if (contentResult.status === 'fulfilled') setContentBlocks(contentResult.value);
+        else {
+            setContentBlocks([]);
+            setContentError(
+                contentResult.reason instanceof Error ? contentResult.reason.message : text.loadError,
+            );
+        }
         setLoading(false);
-    }, [api, text.loadError]);
+        void loadSession(loadId);
+    }, [api, loadSession, marketCode, text.loadError]);
 
     useEffect(() => {
         localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, marketCode), language);
@@ -743,6 +787,8 @@ export function App() {
             account: isZh ? '我的账户' : 'Account',
             search: isZh ? '搜索商品' : 'Search products',
             checkout: isZh ? '确认订单' : 'Review order',
+            payment: isZh ? '选择支付方式' : 'Choose payment',
+            'order-confirmation': isZh ? '订单已提交' : 'Order confirmed',
             orders: isZh ? '我的订单' : 'My orders',
             'order-detail': isZh ? '订单详情' : 'Order details',
             addresses: isZh ? '地址管理' : 'Addresses',
@@ -754,6 +800,14 @@ export function App() {
             'verify-account': isZh ? '验证邮箱' : 'Verify email',
             'forgot-password': isZh ? '忘记密码' : 'Forgot password',
             'reset-password': isZh ? '重置密码' : 'Reset password',
+            legal:
+                route.id === 'terms'
+                    ? isZh
+                        ? '使用条款'
+                        : 'Terms of use'
+                    : isZh
+                      ? '隐私说明'
+                      : 'Privacy notice',
             'not-found': isZh ? '页面未找到' : 'Page not found',
         };
         const storefrontDescription = isZh
@@ -819,13 +873,36 @@ export function App() {
         });
     }, [route.name, selectedProduct, storefrontCode]);
 
+    const toggleFavoriteProduct = useCallback(
+        (productId: string) => {
+            if (!storefrontCode) return;
+            setFavoriteProductIds(current => {
+                const next = current.includes(productId)
+                    ? current.filter(currentProductId => currentProductId !== productId)
+                    : [productId, ...current].slice(0, FAVORITE_PRODUCT_LIMIT);
+                localStorage.setItem(
+                    scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, storefrontCode),
+                    JSON.stringify(next),
+                );
+                return next;
+            });
+        },
+        [storefrontCode],
+    );
+
     const mainPage: MainPage = rootPages.includes(route.name as MainPage)
         ? (route.name as MainPage)
         : route.name === 'product' || route.name === 'search'
           ? 'category'
-          : route.name === 'checkout'
+          : route.name === 'checkout' || route.name === 'payment'
             ? 'cart'
             : 'account';
+
+    const toggleLanguage = () =>
+        setStorefrontContext(currentContext => ({
+            ...currentContext,
+            language: currentContext.language === 'zh' ? 'en' : 'zh',
+        }));
 
     const page = (() => {
         switch (route.name) {
@@ -850,12 +927,7 @@ export function App() {
                             navigate({ name: 'category' });
                         }}
                         onAdd={variant => void addToCart(variant)}
-                        onToggleLanguage={() =>
-                            setStorefrontContext(currentContext => ({
-                                ...currentContext,
-                                language: currentContext.language === 'zh' ? 'en' : 'zh',
-                            }))
-                        }
+                        onToggleLanguage={toggleLanguage}
                         onNotifications={() => navigate({ name: 'notifications' })}
                         onContentTarget={openContentTarget}
                         onRetry={() => void loadStorefront()}
@@ -902,7 +974,7 @@ export function App() {
                         market={market}
                         locale={locale}
                         language={language}
-                        loading={cartLoading}
+                        loading={cartLoading || sessionLoading}
                         error={cartError}
                         addingVariantId={addingVariantId}
                         onToggleAll={() =>
@@ -967,9 +1039,11 @@ export function App() {
                         language={language}
                         storefrontName={storefrontName}
                         addingVariantId={addingVariantId}
+                        favorite={favoriteProductIds.includes(selectedProduct.id)}
                         onBack={goBack}
                         onNavigate={navigate}
                         onAdd={(variant, buyNow) => void addToCart(variant, buyNow)}
+                        onFavorite={() => toggleFavoriteProduct(selectedProduct.id)}
                         onNotify={notify}
                     />
                 ) : (
@@ -1026,6 +1100,41 @@ export function App() {
                         onNotify={notify}
                         onApplyCoupon={applyCoupon}
                         onRemoveCoupon={removeCoupon}
+                    />
+                );
+            case 'payment':
+                return (
+                    <PaymentPage
+                        api={api}
+                        cart={cart}
+                        order={checkoutOrder}
+                        locale={locale}
+                        language={language}
+                        onCancel={order => void reopenPendingOrder(order)}
+                        onComplete={async order => {
+                            setCompletedOrder(order);
+                            setCheckoutOrder(order);
+                            notify(isZh ? '测试支付已完成' : 'Test payment completed');
+                            try {
+                                setCart(await api.cart());
+                            } catch {
+                                // Payment succeeded; cart refresh can recover on the next page load.
+                            }
+                            navigate({ name: 'order-confirmation', id: order.code }, true);
+                        }}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'order-confirmation':
+                return (
+                    <OrderConfirmationPage
+                        api={api}
+                        code={route.id ?? ''}
+                        initialOrder={completedOrder}
+                        customer={customer}
+                        locale={locale}
+                        language={language}
+                        onNavigate={navigate}
                     />
                 );
             case 'orders':
@@ -1306,6 +1415,11 @@ function HomePage(props: HomePageProps) {
     const managedHero = managedHeroes[heroIndex];
     const hero = heroProducts[heroIndex] ?? products[0];
     const heroImage = managedHero?.imageUrl ?? productImage(hero) ?? '/storefront/default-hero.jpg';
+    const managedHeroProduct =
+        managedHero?.targetType === 'PRODUCT'
+            ? products.find(product => product.id === managedHero.targetValue)
+            : undefined;
+    const heroFallbackImage = productImage(managedHeroProduct ?? hero) ?? '/storefront/default-hero.jpg';
     const quickCollections = collections.slice(0, 3);
 
     useEffect(() => {
@@ -1336,7 +1450,11 @@ function HomePage(props: HomePageProps) {
         ? quickBlock.items.slice(0, 5).map((item, index) => ({
               id: item.id,
               label: item.label,
-              icon: item.imageUrl ? <img src={item.imageUrl} alt="" /> : quickIcon(index),
+              icon: item.imageUrl ? (
+                  <SafeImage src={item.imageUrl} alt="" imageKind="thumbnail" />
+              ) : (
+                  quickIcon(index)
+              ),
               disabled: item.targetType === 'NONE' || !item.targetValue,
               onClick: () => onContentTarget(item.targetType, item.targetValue),
           }))
@@ -1467,7 +1585,14 @@ function HomePage(props: HomePageProps) {
                             }}
                         >
                             {heroImage ? (
-                                <img src={heroImage} alt={managedHero?.title ?? hero?.name ?? ''} />
+                                <SafeImage
+                                    src={heroImage}
+                                    fallbackSrc={heroFallbackImage}
+                                    alt={managedHero?.title ?? hero?.name ?? ''}
+                                    imageKind="hero"
+                                    loading="eager"
+                                    fetchPriority="high"
+                                />
                             ) : (
                                 <div className="image-placeholder">
                                     <Sparkles aria-hidden="true" />
@@ -1594,6 +1719,7 @@ function HomePage(props: HomePageProps) {
                         <ManagedContentSection
                             key={block.id}
                             block={block}
+                            products={products}
                             onContentTarget={onContentTarget}
                         />
                     ))}
@@ -1670,12 +1796,18 @@ function HomePage(props: HomePageProps) {
 
 function ManagedContentSection({
     block,
+    products,
     onContentTarget,
 }: {
     block: StorefrontContentBlock;
+    products: Product[];
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const blockTargetProduct =
+        block.targetType === 'PRODUCT'
+            ? products.find(product => product.id === block.targetValue)
+            : undefined;
     return (
         <section
             className={`content-section managed-content-section managed-content-${block.type.toLowerCase()}`}
@@ -1700,7 +1832,13 @@ function ManagedContentSection({
                     disabled={!blockHasTarget}
                     onClick={() => onContentTarget(block.targetType, block.targetValue)}
                 >
-                    <img src={block.imageUrl} alt={block.title} loading="lazy" />
+                    <SafeImage
+                        src={block.imageUrl}
+                        fallbackSrc={productImage(blockTargetProduct) ?? undefined}
+                        alt={block.title}
+                        imageKind="hero"
+                        loading="lazy"
+                    />
                 </button>
             )}
             {!!block.items.length && (
@@ -1709,6 +1847,7 @@ function ManagedContentSection({
                         <ManagedContentItemButton
                             key={item.id}
                             item={item}
+                            products={products}
                             onContentTarget={onContentTarget}
                         />
                     ))}
@@ -1720,12 +1859,16 @@ function ManagedContentSection({
 
 function ManagedContentItemButton({
     item,
+    products,
     onContentTarget,
 }: {
     item: StorefrontContentItem;
+    products: Product[];
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const disabled = item.targetType === 'NONE' || !item.targetValue;
+    const targetProduct =
+        item.targetType === 'PRODUCT' ? products.find(product => product.id === item.targetValue) : undefined;
     return (
         <button
             type="button"
@@ -1733,7 +1876,13 @@ function ManagedContentItemButton({
             onClick={() => onContentTarget(item.targetType, item.targetValue)}
         >
             {item.imageUrl ? (
-                <img src={item.imageUrl} alt="" loading="lazy" />
+                <SafeImage
+                    src={item.imageUrl}
+                    fallbackSrc={productImage(targetProduct) ?? undefined}
+                    alt=""
+                    imageKind="card"
+                    loading="lazy"
+                />
             ) : (
                 <span className="managed-content-placeholder">
                     <LayoutGrid aria-hidden="true" />
@@ -1856,7 +2005,7 @@ function CategoryPage(props: CategoryPageProps) {
             const filteredFallbackProducts = fallbackProducts.filter(product =>
                 matchesFilters(product, fulfillmentFilter, inStockOnly, minimumPriceInput, maximumPriceInput),
             );
-            let cancelled = false;
+            let fallbackCancelled = false;
             setCategoryLoading(sortMode === 'sales');
             setCategoryError('');
             const salesRequest =
@@ -1865,7 +2014,7 @@ function CategoryPage(props: CategoryPageProps) {
                     : Promise.resolve({});
             void salesRequest
                 .then(salesByProductId => {
-                    if (cancelled) return;
+                    if (fallbackCancelled) return;
                     setCategoryProducts(
                         sortCategoryProducts(filteredFallbackProducts, sortMode, locale, salesByProductId),
                     );
@@ -1874,7 +2023,7 @@ function CategoryPage(props: CategoryPageProps) {
                     setCategoryError(error ?? '');
                 })
                 .catch(requestError => {
-                    if (!cancelled) {
+                    if (!fallbackCancelled) {
                         setCategoryError(
                             requestError instanceof Error
                                 ? requestError.message
@@ -1885,10 +2034,10 @@ function CategoryPage(props: CategoryPageProps) {
                     }
                 })
                 .finally(() => {
-                    if (!cancelled) setCategoryLoading(false);
+                    if (!fallbackCancelled) setCategoryLoading(false);
                 });
             return () => {
-                cancelled = true;
+                fallbackCancelled = true;
             };
         }
         if (!selectedCollectionId || selectedCollectionId === 'all') return;
@@ -2044,7 +2193,7 @@ function CategoryPage(props: CategoryPageProps) {
     return (
         <main className="page category-page">
             <header className="topbar category-topbar">
-                <strong>{isZh ? '商品' : 'Shop'}</strong>
+                <h1 className="topbar-title">{isZh ? '商品' : 'Shop'}</h1>
                 <button
                     className="search-trigger"
                     type="button"
@@ -2057,24 +2206,39 @@ function CategoryPage(props: CategoryPageProps) {
             </header>
 
             <nav className="primary-categories" aria-label={isZh ? '一级分类' : 'Main categories'}>
-                {(collections.length ? collections : fallbackCollections(isZh)).map(collection => (
-                    <button
-                        type="button"
-                        key={collection.id}
-                        className={collection.id === activeCollectionId ? 'is-active' : undefined}
-                        aria-pressed={collection.id === activeCollectionId}
-                        onClick={event => {
-                            onCollectionChange(collection.id, collection.children?.[0]?.id ?? collection.id);
-                            event.currentTarget.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'nearest',
-                                inline: 'center',
-                            });
-                        }}
-                    >
-                        {collection.name}
-                    </button>
-                ))}
+                {(collections.length ? collections : fallbackCollections(isZh)).map(collection => {
+                    const image = collectionImage(collection);
+                    return (
+                        <button
+                            type="button"
+                            key={collection.id}
+                            className={collection.id === activeCollectionId ? 'is-active' : undefined}
+                            aria-pressed={collection.id === activeCollectionId}
+                            onClick={event => {
+                                onCollectionChange(
+                                    collection.id,
+                                    collection.children?.[0]?.id ?? collection.id,
+                                );
+                                event.currentTarget.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'nearest',
+                                    inline: 'center',
+                                });
+                            }}
+                        >
+                            <span className="primary-category-image" aria-hidden="true">
+                                {image ? (
+                                    <SafeImage src={image} alt="" imageKind="thumbnail" loading="lazy" />
+                                ) : (
+                                    <span className="primary-category-placeholder">
+                                        <LayoutGrid aria-hidden="true" />
+                                    </span>
+                                )}
+                            </span>
+                            <span className="primary-category-label">{collection.name}</span>
+                        </button>
+                    );
+                })}
             </nav>
 
             <div className={`category-layout ${hasChildCategories ? '' : 'is-single-level'}`}>
@@ -2103,14 +2267,20 @@ function CategoryPage(props: CategoryPageProps) {
                         }
                     >
                         {bannerImage ? (
-                            <img src={bannerImage} alt={primary?.name ?? ''} />
+                            <SafeImage
+                                src={bannerImage}
+                                fallbackSrc="/storefront/default-hero.jpg"
+                                alt={primary?.name ?? ''}
+                                imageKind="hero"
+                                loading="lazy"
+                            />
                         ) : (
                             <div className="image-placeholder">
                                 <ShoppingBag />
                             </div>
                         )}
                         <span>
-                            <small>{isZh ? '分类精选' : 'Category edit'}</small>
+                            <small>{isZh ? '分类精选' : 'Collection focus'}</small>
                             <strong>{primary?.name ?? (isZh ? '全部商品' : 'All products')}</strong>
                         </span>
                     </button>
@@ -2430,15 +2600,16 @@ function CartPage(props: CartPageProps) {
     const digital = activeLines.filter(
         line => line.productVariant?.customFields.fulfillmentType === 'digital',
     );
+    const digitalOnly = digital.length > 0 && physical.length === 0;
     const order = cart?.checkoutOrder;
     const locked = cart?.state === 'PAYMENT_PENDING';
     const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
-    const amount = order?.subTotalWithTax ?? 0;
+    const amount = locked && order ? order.totalWithTax : (order?.subTotalWithTax ?? 0);
 
     return (
         <main className="page cart-page">
             <header className="topbar cart-topbar">
-                <strong>{isZh ? '购物车' : 'Cart'}</strong>
+                <h1 className="topbar-title">{isZh ? '购物车' : 'Cart'}</h1>
                 {!!lines.length && (
                     <button
                         className={`select-all ${(cart?.selectionState ?? 'NONE').toLowerCase()}`}
@@ -2473,29 +2644,55 @@ function CartPage(props: CartPageProps) {
             {!!lines.length && (
                 <div className="shipping-note">
                     <span>
-                        <Truck aria-hidden="true" />
+                        {digitalOnly ? <Download aria-hidden="true" /> : <Truck aria-hidden="true" />}
                     </span>
                     <div>
-                        <strong>{isZh ? '配送与运费' : 'Delivery and shipping'}</strong>
+                        <strong>
+                            {digitalOnly
+                                ? isZh
+                                    ? '数字商品交付'
+                                    : 'Digital delivery'
+                                : isZh
+                                  ? '配送与运费'
+                                  : 'Delivery and shipping'}
+                        </strong>
                         <small>
-                            {isZh ? '选择地址后在结算页准确计算' : 'Calculated after you choose an address'}
+                            {digitalOnly
+                                ? locked
+                                    ? isZh
+                                        ? '交付方式已在待支付订单中确认'
+                                        : 'Delivery is confirmed on the pending order'
+                                    : isZh
+                                      ? '支付完成后自动添加到订单'
+                                      : 'Added to your order after payment'
+                                : locked
+                                  ? isZh
+                                      ? '配送方式与运费已在待支付订单中确认'
+                                      : 'Delivery method and fee are confirmed on the pending order'
+                                  : isZh
+                                    ? '选择地址后在结算页准确计算'
+                                    : 'Calculated after you choose an address'}
                         </small>
                     </div>
-                    <ChevronRight aria-hidden="true" />
                 </div>
             )}
 
             {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
             {locked && (
-                <InlineError
-                    message={
-                        isZh
-                            ? '订单正在等待支付，购物车内容已锁定。返回修改后才能调整商品或优惠。'
-                            : 'This cart is locked while its order awaits payment. Reopen it to make changes.'
-                    }
-                    action={isZh ? '返回修改' : 'Reopen'}
-                    onAction={onReopen}
-                />
+                <div className="cart-pending-actions">
+                    <InlineError
+                        message={
+                            isZh
+                                ? '订单正在等待支付，购物车内容已锁定。可以继续支付，或返回修改商品与优惠。'
+                                : 'This cart is locked while its order awaits payment. Continue payment or reopen it to make changes.'
+                        }
+                        action={isZh ? '继续支付' : 'Continue payment'}
+                        onAction={() => onNavigate({ name: 'payment' })}
+                    />
+                    <button type="button" onClick={onReopen} disabled={loading}>
+                        {isZh ? '返回修改订单' : 'Return to edit order'}
+                    </button>
+                </div>
             )}
             {!cart && loading ? (
                 <ListSkeleton />
@@ -2644,13 +2841,29 @@ function CartPage(props: CartPageProps) {
                             </strong>
                         </span>
                         <small>
-                            {discount
-                                ? isZh
-                                    ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
-                                    : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
-                                : isZh
-                                  ? '不含待计算运费'
-                                  : 'Shipping not included'}
+                            {locked && order
+                                ? digitalOnly
+                                    ? isZh
+                                        ? '无需配送'
+                                        : 'No shipping required'
+                                    : order.shippingWithTax > 0
+                                      ? isZh
+                                          ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
+                                          : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
+                                      : isZh
+                                        ? '配送费已确认'
+                                        : 'Delivery confirmed'
+                                : discount
+                                  ? isZh
+                                      ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
+                                      : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
+                                  : digitalOnly
+                                    ? isZh
+                                        ? '无需配送'
+                                        : 'No shipping required'
+                                    : isZh
+                                      ? '不含待计算运费'
+                                      : 'Shipping not included'}
                         </small>
                     </div>
                     <button
@@ -2745,7 +2958,7 @@ function AccountPage(props: AccountPageProps) {
     return (
         <main className="page account-page">
             <header className="topbar account-topbar">
-                <strong>{isZh ? '我的' : 'Account'}</strong>
+                <h1 className="topbar-title">{isZh ? '我的' : 'Account'}</h1>
                 <div>
                     <button
                         type="button"
@@ -3177,9 +3390,11 @@ function ProductDetailPage({
     language,
     storefrontName,
     addingVariantId,
+    favorite,
     onBack,
     onNavigate,
     onAdd,
+    onFavorite,
     onNotify,
 }: {
     product: Product;
@@ -3190,14 +3405,17 @@ function ProductDetailPage({
     language: StorefrontLanguage;
     storefrontName: string;
     addingVariantId: string | null;
+    favorite: boolean;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant, buyNow?: boolean) => void;
+    onFavorite: () => void;
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
     const [variantId, setVariantId] = useState(product.variants[0]?.id ?? '');
     const [activeImage, setActiveImage] = useState(0);
+    const [headerScrolled, setHeaderScrolled] = useState(false);
     const variant = product.variants.find(item => item.id === variantId) ?? product.variants[0];
     const assets = product.assets.length
         ? product.assets
@@ -3223,9 +3441,17 @@ function ProductDetailPage({
         }
     };
 
+    useEffect(() => {
+        const updateHeader = () => setHeaderScrolled(window.scrollY > 16);
+        updateHeader();
+        window.addEventListener('scroll', updateHeader, { passive: true });
+        return () => window.removeEventListener('scroll', updateHeader);
+    }, []);
+
     return (
         <main className="page subpage product-detail-page">
             <SubHeader
+                className={`product-detail-header${headerScrolled ? ' is-scrolled' : ''}`}
                 title={isZh ? '商品详情' : 'Product details'}
                 language={language}
                 onBack={onBack}
@@ -3241,7 +3467,11 @@ function ProductDetailPage({
             />
             <section className="detail-gallery">
                 {assets[activeImage] ? (
-                    <img src={assets[activeImage].preview} alt={`${product.name} ${activeImage + 1}`} />
+                    <SafeImage
+                        src={assets[activeImage].preview}
+                        alt={`${product.name} ${activeImage + 1}`}
+                        imageKind="detail"
+                    />
                 ) : (
                     <div className="image-placeholder" aria-hidden="true">
                         <Package />
@@ -3275,7 +3505,17 @@ function ProductDetailPage({
                         {variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : '--'}
                     </p>
                     <span>
-                        {unavailable ? (isZh ? '暂时缺货' : 'Unavailable') : isZh ? '库存充足' : 'In stock'}
+                        {unavailable
+                            ? isZh
+                                ? '暂时无法购买'
+                                : 'Unavailable'
+                            : isDigital
+                              ? isZh
+                                  ? '可在线购买'
+                                  : 'Available online'
+                              : isZh
+                                ? '库存充足'
+                                : 'In stock'}
                     </span>
                 </div>
                 <div className="detail-tags">
@@ -3329,12 +3569,12 @@ function ProductDetailPage({
                 </div>
             </section>
             <div className="detail-info-row">
-                <span>{isZh ? '送至' : 'Deliver to'}</span>
+                <span>{isDigital ? (isZh ? '获取方式' : 'Access') : isZh ? '送至' : 'Deliver to'}</span>
                 <strong>
                     {isDigital
                         ? isZh
-                            ? '付款后自动发送至订单'
-                            : 'Delivered to your order after payment'
+                            ? '付款后自动添加到订单'
+                            : 'Access details are added to your order after payment'
                         : isZh
                           ? '结算页选择收货地址并确认时效'
                           : 'Choose an address and confirm timing at checkout'}
@@ -3343,7 +3583,7 @@ function ProductDetailPage({
             <section className="detail-service-bar">
                 <span>
                     <CircleCheck />
-                    {isZh ? '正品保障' : 'Authenticity'}
+                    {isDigital ? (isZh ? '安全购买' : 'Secure purchase') : isZh ? '正品保障' : 'Authenticity'}
                 </span>
                 <span>
                     <Truck />
@@ -3437,9 +3677,11 @@ function ProductDetailPage({
                             : 'Product information is managed by the merchant.')}
                 </p>
                 {assets[0] && (
-                    <img
+                    <SafeImage
                         src={assets[0].preview}
                         alt={isZh ? `${product.name}细节展示` : `${product.name} details`}
+                        imageKind="detail"
+                        loading="lazy"
                     />
                 )}
             </section>
@@ -3454,6 +3696,35 @@ function ProductDetailPage({
                 onAdd={item => onAdd(item)}
             />
             <div className="detail-action-bar">
+                <button
+                    className={`detail-favorite-action${favorite ? ' is-active' : ''}`}
+                    type="button"
+                    aria-pressed={favorite}
+                    aria-label={
+                        favorite
+                            ? isZh
+                                ? '取消收藏'
+                                : 'Remove from favorites'
+                            : isZh
+                              ? '收藏商品'
+                              : 'Add to favorites'
+                    }
+                    onClick={() => {
+                        onFavorite();
+                        onNotify(
+                            favorite
+                                ? isZh
+                                    ? '已取消收藏'
+                                    : 'Removed from favorites'
+                                : isZh
+                                  ? '已收藏'
+                                  : 'Added to favorites',
+                        );
+                    }}
+                >
+                    <Heart fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
+                    <span>{favorite ? (isZh ? '已收藏' : 'Saved') : isZh ? '收藏' : 'Save'}</span>
+                </button>
                 <button type="button" onClick={() => onNavigate({ name: 'cart' })}>
                     <ShoppingCart />
                     <span>{isZh ? '购物车' : 'Cart'}</span>
@@ -3563,6 +3834,17 @@ function SearchPage({
         setTotalItems(0);
         setSearchError('');
         setSearching(true);
+        if (hasHanCharacters(term)) {
+            const matchedProducts = sortCategoryProducts(
+                filterProductsByHanTerm(products, term),
+                resultSort,
+                locale,
+            );
+            setResults(matchedProducts);
+            setTotalItems(matchedProducts.length);
+            setSearching(false);
+            return;
+        }
         void api
             .searchProducts(term, resultSort)
             .then(page => {
@@ -3587,7 +3869,7 @@ function SearchPage({
         return () => {
             cancelled = true;
         };
-    }, [api, isZh, resultSort, searchReloadKey, submittedQuery]);
+    }, [api, isZh, locale, products, resultSort, searchReloadKey, submittedQuery]);
 
     const loadMore = async () => {
         const term = submittedQuery.trim();
@@ -3620,6 +3902,7 @@ function SearchPage({
 
     return (
         <main className="page subpage search-page">
+            <h1 className="visually-hidden">{isZh ? '搜索商品' : 'Search products'}</h1>
             <header className="search-header">
                 <button type="button" onClick={onBack} aria-label={isZh ? '返回' : 'Back'}>
                     <ArrowLeft />
@@ -4034,7 +4317,7 @@ function CheckoutPage({
             onNotify(
                 isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.',
             );
-            onNavigate({ name: 'orders', tab: 'pending' }, true);
+            onNavigate({ name: 'payment' }, true);
         } catch (requestError) {
             setFormError(
                 requestError instanceof Error
@@ -4148,7 +4431,7 @@ function CheckoutPage({
                         hint={
                             isZh
                                 ? `${physicalLines.length} 种 · 共 ${physicalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
-                                : `${physicalLines.length} products`
+                                : `${physicalLines.length} ${physicalLines.length === 1 ? 'product' : 'products'}`
                         }
                         lines={physicalLines}
                         locale={locale}
@@ -4161,7 +4444,7 @@ function CheckoutPage({
                         hint={
                             isZh
                                 ? `${digitalLines.length} 种 · 共 ${digitalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
-                                : `${digitalLines.length} products`
+                                : `${digitalLines.length} ${digitalLines.length === 1 ? 'product' : 'products'}`
                         }
                         lines={digitalLines}
                         locale={locale}
@@ -4241,7 +4524,12 @@ function CheckoutPage({
                     </button>
                 </section>
                 <section className="checkout-section">
-                    <PriceSummary order={order} locale={locale} language={language} />
+                    <PriceSummary
+                        order={order}
+                        locale={locale}
+                        language={language}
+                        requiresShipping={requiresShipping}
+                    />
                 </section>
                 <section
                     className="checkout-assurance"
@@ -4249,7 +4537,13 @@ function CheckoutPage({
                 >
                     <span>
                         <CircleCheck />
-                        {isZh ? '正品保障' : 'Authenticity'}
+                        {physicalLines.length
+                            ? isZh
+                                ? '正品保障'
+                                : 'Authenticity'
+                            : isZh
+                              ? '安全购买'
+                              : 'Secure purchase'}
                     </span>
                     <span>
                         <Truck />
@@ -4270,7 +4564,9 @@ function CheckoutPage({
                 <div className="submit-order-bar">
                     <div>
                         <small>
-                            {isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}
+                            {isZh
+                                ? `共 ${order.totalQuantity} 件`
+                                : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
                         </small>
                         <span>
                             {isZh ? '合计' : 'Total'}{' '}
@@ -4346,6 +4642,391 @@ function CheckoutPage({
                     </form>
                 </Sheet>
             )}
+        </main>
+    );
+}
+
+function PaymentPage({
+    api,
+    cart,
+    order,
+    locale,
+    language,
+    onCancel,
+    onComplete,
+    onNavigate,
+}: {
+    api: ShopApi;
+    cart: StorefrontCart | null;
+    order: Order | null;
+    locale: string;
+    language: StorefrontLanguage;
+    onCancel: (order: Order) => void;
+    onComplete: (order: Order) => Promise<void>;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    const [methods, setMethods] = useState<PaymentMethod[]>([]);
+    const [selectedMethod, setSelectedMethod] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [paymentError, setPaymentError] = useState('');
+    const [retryKey, setRetryKey] = useState(0);
+    const submissionLock = useRef(false);
+    const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
+
+    useEffect(() => {
+        if (!isPending) {
+            setMethods([]);
+            setSelectedMethod('');
+            setLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setLoading(true);
+        setPaymentError('');
+        void api
+            .eligiblePaymentMethods()
+            .then(result => {
+                if (cancelled) return;
+                const localMethods = import.meta.env.DEV
+                    ? result.filter(method => method.code === LOCAL_TEST_PAYMENT_CODE)
+                    : [];
+                setMethods(localMethods);
+                setSelectedMethod(localMethods.find(method => method.isEligible)?.code ?? '');
+            })
+            .catch(requestError => {
+                if (!cancelled) {
+                    setPaymentError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : isZh
+                              ? '支付方式加载失败'
+                              : 'Could not load payment methods',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, isPending, isZh, retryKey]);
+
+    const submitPayment = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!import.meta.env.DEV || !isPending || !selectedMethod || submitting || submissionLock.current) {
+            return;
+        }
+        submissionLock.current = true;
+        setSubmitting(true);
+        setPaymentError('');
+        try {
+            const paidOrder = await api.addPaymentToOrder(selectedMethod);
+            await onComplete(paidOrder);
+        } catch (requestError) {
+            setPaymentError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '测试支付失败，请重试'
+                      : 'Test payment failed. Please try again.',
+            );
+        } finally {
+            submissionLock.current = false;
+            setSubmitting(false);
+        }
+    };
+
+    if (!order || !cart || !isPending) {
+        return (
+            <Subpage
+                title={isZh ? '选择支付方式' : 'Choose payment'}
+                language={language}
+                onBack={() => onNavigate({ name: 'cart' })}
+            >
+                <EmptyState
+                    icon={<WalletCards />}
+                    title={isZh ? '没有待支付订单' : 'No order awaiting payment'}
+                    detail={isZh ? '请返回购物车重新结算' : 'Return to your cart and start checkout again.'}
+                    action={isZh ? '返回购物车' : 'Back to cart'}
+                    onAction={() => onNavigate({ name: 'cart' })}
+                />
+            </Subpage>
+        );
+    }
+
+    return (
+        <main className="page subpage payment-page">
+            <SubHeader
+                title={isZh ? '选择支付方式' : 'Choose payment'}
+                language={language}
+                onBack={() => onCancel(order)}
+            />
+            <form className="payment-layout" onSubmit={event => void submitPayment(event)}>
+                <div className="payment-main">
+                    <section className="payment-test-notice" role="note">
+                        <CircleAlert aria-hidden="true" />
+                        <div>
+                            <strong>{isZh ? '本地测试支付' : 'Local test payment'}</strong>
+                            <span>
+                                {isZh
+                                    ? '仅用于预览结账流程，不会产生真实扣款。'
+                                    : 'For previewing checkout only. No real charge will be made.'}
+                            </span>
+                        </div>
+                    </section>
+                    <section className="payment-method-section">
+                        <h2>{isZh ? '支付方式' : 'Payment method'}</h2>
+                        {loading ? (
+                            <PageSkeleton />
+                        ) : paymentError && !methods.length ? (
+                            <InlineError
+                                message={paymentError}
+                                action={isZh ? '重试' : 'Retry'}
+                                onAction={() => setRetryKey(value => value + 1)}
+                            />
+                        ) : methods.length ? (
+                            <fieldset className="payment-method-list">
+                                <legend className="sr-only">
+                                    {isZh ? '选择支付方式' : 'Choose a payment method'}
+                                </legend>
+                                {methods.map(method => (
+                                    <label
+                                        key={method.id}
+                                        className={selectedMethod === method.code ? 'is-selected' : undefined}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="paymentMethod"
+                                            value={method.code}
+                                            checked={selectedMethod === method.code}
+                                            disabled={!method.isEligible || submitting}
+                                            onChange={event => setSelectedMethod(event.currentTarget.value)}
+                                        />
+                                        <WalletCards aria-hidden="true" />
+                                        <span>
+                                            <strong>{isZh ? '测试支付' : 'Test payment'}</strong>
+                                            <small>
+                                                {method.isEligible
+                                                    ? isZh
+                                                        ? '本地即时模拟支付'
+                                                        : 'Instant local payment simulation'
+                                                    : (method.eligibilityMessage ??
+                                                      (isZh
+                                                          ? '当前订单不可用'
+                                                          : 'Unavailable for this order'))}
+                                            </small>
+                                        </span>
+                                        <Check aria-hidden="true" />
+                                    </label>
+                                ))}
+                            </fieldset>
+                        ) : (
+                            <InlineError
+                                message={
+                                    isZh
+                                        ? '当前没有可用的本地测试支付方式'
+                                        : 'No local test payment method is available'
+                                }
+                                action={isZh ? '重试' : 'Retry'}
+                                onAction={() => setRetryKey(value => value + 1)}
+                            />
+                        )}
+                        {paymentError && methods.length > 0 && <InlineError message={paymentError} />}
+                    </section>
+                </div>
+                <aside className="payment-summary" aria-label={isZh ? '订单摘要' : 'Order summary'}>
+                    <header>
+                        <span>{isZh ? '订单号' : 'Order'}</span>
+                        <strong>{order.code}</strong>
+                    </header>
+                    <div className="payment-summary-lines">
+                        {order.lines.map(line => (
+                            <div key={line.id}>
+                                <span>{line.productVariant.name}</span>
+                                <small>×{line.quantity}</small>
+                                <b>{formatMoney(line.linePriceWithTax, order.currencyCode, locale)}</b>
+                            </div>
+                        ))}
+                    </div>
+                    <dl className="price-summary">
+                        <div>
+                            <dt>{isZh ? '商品小计' : 'Subtotal'}</dt>
+                            <dd>{formatMoney(order.subTotalWithTax, order.currencyCode, locale)}</dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '配送费' : 'Delivery'}</dt>
+                            <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
+                        </div>
+                        <div className="summary-total">
+                            <dt>{isZh ? '应付合计' : 'Total due'}</dt>
+                            <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
+                        </div>
+                    </dl>
+                    <button type="submit" disabled={!selectedMethod || submitting || loading}>
+                        <WalletCards aria-hidden="true" />
+                        {submitting
+                            ? isZh
+                                ? '正在完成测试支付'
+                                : 'Completing test payment'
+                            : isZh
+                              ? '确认测试支付'
+                              : 'Confirm test payment'}
+                    </button>
+                    <button
+                        type="button"
+                        className="payment-edit-order"
+                        disabled={submitting}
+                        onClick={() => onCancel(order)}
+                    >
+                        {isZh ? '返回修改订单' : 'Return to edit order'}
+                    </button>
+                </aside>
+            </form>
+        </main>
+    );
+}
+
+function OrderConfirmationPage({
+    api,
+    code,
+    initialOrder,
+    customer,
+    locale,
+    language,
+    onNavigate,
+}: {
+    api: ShopApi;
+    code: string;
+    initialOrder: Order | null;
+    customer: ActiveCustomer | null;
+    locale: string;
+    language: StorefrontLanguage;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    const [order, setOrder] = useState<Order | null>(initialOrder?.code === code ? initialOrder : null);
+    const [loading, setLoading] = useState(!order && Boolean(code));
+    const [loadError, setLoadError] = useState('');
+    const [retryKey, setRetryKey] = useState(0);
+
+    useEffect(() => {
+        if (!code || order?.code === code) {
+            setLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setLoading(true);
+        setLoadError('');
+        void api
+            .orderByCode(code)
+            .then(result => {
+                if (!cancelled) setOrder(result);
+            })
+            .catch(requestError => {
+                if (!cancelled) {
+                    setLoadError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : isZh
+                              ? '订单加载失败'
+                              : 'Could not load the order',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, code, isZh, order?.code, retryKey]);
+
+    if (loading) {
+        return (
+            <Subpage
+                title={isZh ? '订单已提交' : 'Order confirmed'}
+                language={language}
+                onBack={() => onNavigate({ name: 'home' })}
+            >
+                <PageSkeleton />
+            </Subpage>
+        );
+    }
+    if (!order) {
+        return (
+            <Subpage
+                title={isZh ? '订单已提交' : 'Order confirmed'}
+                language={language}
+                onBack={() => onNavigate({ name: 'home' })}
+            >
+                <EmptyState
+                    icon={<Package />}
+                    title={isZh ? '无法读取订单' : 'Could not retrieve the order'}
+                    detail={
+                        loadError ||
+                        (isZh
+                            ? '访问时间可能已超过游客查询时限'
+                            : 'The guest access window may have expired.')
+                    }
+                    action={loadError ? (isZh ? '重试' : 'Retry') : isZh ? '返回首页' : 'Back to home'}
+                    onAction={() =>
+                        loadError ? setRetryKey(value => value + 1) : onNavigate({ name: 'home' })
+                    }
+                />
+            </Subpage>
+        );
+    }
+
+    return (
+        <main className="page subpage order-confirmation-page">
+            <section className="order-confirmation-hero">
+                <span className="order-confirmation-icon">
+                    <CircleCheck aria-hidden="true" />
+                </span>
+                <p>{isZh ? '本地测试订单' : 'Local test order'}</p>
+                <h1>{isZh ? '订单提交成功' : 'Order confirmed'}</h1>
+                <span>
+                    {isZh
+                        ? '测试支付已完成，不会产生真实扣款。'
+                        : 'The test payment is complete. No real charge was made.'}
+                </span>
+            </section>
+            <section className="order-confirmation-summary">
+                <dl>
+                    <div>
+                        <dt>{isZh ? '订单号' : 'Order number'}</dt>
+                        <dd>{order.code}</dd>
+                    </div>
+                    <div>
+                        <dt>{isZh ? '订单状态' : 'Status'}</dt>
+                        <dd>{orderStateLabel(order.state, language)}</dd>
+                    </div>
+                    <div>
+                        <dt>{isZh ? '支付金额' : 'Payment total'}</dt>
+                        <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
+                    </div>
+                </dl>
+                <small>
+                    {isZh
+                        ? '请保留订单号。游客订单只能在有限时间内通过当前链接查看。'
+                        : 'Keep your order number. Guest access through this link is available for a limited time.'}
+                </small>
+            </section>
+            <div className="order-confirmation-actions">
+                <button type="button" className="primary-action" onClick={() => onNavigate({ name: 'home' })}>
+                    <House aria-hidden="true" />
+                    {isZh ? '继续购物' : 'Continue shopping'}
+                </button>
+                {customer && (
+                    <button type="button" onClick={() => onNavigate({ name: 'orders', tab: 'shipping' })}>
+                        <Package aria-hidden="true" />
+                        {isZh ? '查看我的订单' : 'View my orders'}
+                    </button>
+                )}
+            </div>
         </main>
     );
 }
@@ -6083,10 +6764,12 @@ function PriceSummary({
     order,
     locale,
     language,
+    requiresShipping = true,
 }: {
     order: Order;
     locale: string;
     language: StorefrontLanguage;
+    requiresShipping?: boolean;
 }) {
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
@@ -6097,7 +6780,9 @@ function PriceSummary({
                 <dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd>
             </div>
             <div>
-                <dt>{isZh ? '运费' : 'Shipping'}</dt>
+                <dt>
+                    {requiresShipping ? (isZh ? '运费' : 'Shipping') : isZh ? '数字交付' : 'Digital delivery'}
+                </dt>
                 <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
             </div>
             {discount > 0 && (
@@ -6330,14 +7015,16 @@ function SubHeader({
     language,
     onBack,
     action,
+    className,
 }: {
     title: string;
     language: StorefrontLanguage;
     onBack: () => void;
     action?: ReactNode;
+    className?: string;
 }) {
     return (
-        <header className="topbar subpage-header">
+        <header className={`topbar subpage-header${className ? ` ${className}` : ''}`}>
             <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
                 <ArrowLeft aria-hidden="true" />
             </button>
@@ -6448,7 +7135,7 @@ function LegalFooter({
 function ProductImage({ product }: { product: Product }) {
     const image = productImage(product);
     return image ? (
-        <img src={image} alt={product.name} loading="lazy" />
+        <SafeImage src={image} alt={product.name} imageKind="card" loading="lazy" />
     ) : (
         <div className="image-placeholder" aria-hidden="true">
             <Package />
@@ -6458,11 +7145,88 @@ function ProductImage({ product }: { product: Product }) {
 function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) {
     const image = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
     return image ? (
-        <img src={image} alt={alt} loading="lazy" />
+        <SafeImage src={image} alt={alt} imageKind="thumbnail" loading="lazy" />
     ) : (
         <div className="image-placeholder" aria-hidden="true">
             <Package />
         </div>
+    );
+}
+
+function SafeImage({
+    src,
+    fallbackSrc,
+    alt,
+    imageKind,
+    ...imageProps
+}: {
+    src: string;
+    fallbackSrc?: string;
+    alt: string;
+    imageKind?: StorefrontImageKind;
+} & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>) {
+    const [currentSrc, setCurrentSrc] = useState(src);
+    const [failed, setFailed] = useState(false);
+    const [useResponsiveSource, setUseResponsiveSource] = useState(true);
+
+    useEffect(() => {
+        setCurrentSrc(src);
+        setFailed(false);
+        setUseResponsiveSource(true);
+    }, [fallbackSrc, src]);
+
+    const responsiveSource = useMemo(
+        () =>
+            imageKind && useResponsiveSource ? responsiveImageSources(currentSrc, imageKind) : null,
+        [currentSrc, imageKind, useResponsiveSource],
+    );
+
+    if (failed) {
+        return (
+            <span
+                className="image-placeholder"
+                role={alt ? 'img' : undefined}
+                aria-label={alt || undefined}
+                aria-hidden={alt ? undefined : true}
+            >
+                <Package aria-hidden="true" />
+            </span>
+        );
+    }
+
+    const image = (
+        <img
+            {...imageProps}
+            src={responsiveSource?.fallbackSrc ?? currentSrc}
+            srcSet={responsiveSource?.fallbackSrcSet ?? imageProps.srcSet}
+            sizes={responsiveSource?.sizes ?? imageProps.sizes}
+            width={imageProps.width ?? responsiveSource?.width}
+            height={imageProps.height ?? responsiveSource?.height}
+            decoding={imageProps.decoding ?? 'async'}
+            alt={alt}
+            onError={() => {
+                if (responsiveSource) {
+                    setUseResponsiveSource(false);
+                    return;
+                }
+                if (fallbackSrc && currentSrc !== fallbackSrc) {
+                    setCurrentSrc(fallbackSrc);
+                    setUseResponsiveSource(true);
+                } else {
+                    setFailed(true);
+                }
+            }}
+        />
+    );
+
+    return responsiveSource ? (
+        <picture className="responsive-picture">
+            <source type="image/avif" srcSet={responsiveSource.avifSrcSet} sizes={responsiveSource.sizes} />
+            <source type="image/webp" srcSet={responsiveSource.webpSrcSet} sizes={responsiveSource.sizes} />
+            {image}
+        </picture>
+    ) : (
+        image
     );
 }
 function OrderImage({ order }: { order: Order }) {
@@ -6776,6 +7540,13 @@ function Field({
 
 function productImage(product?: Product | null): string | null {
     return product?.featuredAsset?.preview ?? product?.assets?.[0]?.preview ?? null;
+}
+function collectionImage(collection: CollectionSummary): string | null {
+    return (
+        collection.featuredAsset?.preview ??
+        collection.children?.find(child => child.featuredAsset?.preview)?.featuredAsset?.preview ??
+        null
+    );
 }
 function minimumPrice(product: Product): number {
     return Math.min(...product.variants.map(variant => variant.priceWithTax), Number.MAX_SAFE_INTEGER);
