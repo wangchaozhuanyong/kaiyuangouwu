@@ -6,6 +6,7 @@ import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/sha
 import {
     DefaultJobQueuePlugin,
     DefaultLogger,
+    DefaultProductVariantPriceUpdateStrategy,
     DefaultSchedulerPlugin,
     DefaultSearchPlugin,
     dummyPaymentHandler,
@@ -356,6 +357,11 @@ export const devConfig: VendureConfig = {
     },
     paymentOptions: {
         paymentMethodHandlers: [dummyPaymentHandler],
+    },
+    catalogOptions: {
+        productVariantPriceUpdateStrategy: new DefaultProductVariantPriceUpdateStrategy({
+            syncPricesAcrossChannels: true,
+        }),
     },
     settingsStoreFields: {
         MyPlugin: [

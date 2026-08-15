@@ -66,8 +66,6 @@ const zhCopy = {
     active: '正常',
     draft: '待启用',
     suspended: '已停用',
-    published: '已公开',
-    hidden: '未公开',
     invalidName: '中英文店铺名称都必须是 1 至 16 个显示单位',
 };
 
@@ -95,8 +93,6 @@ const enCopy: typeof zhCopy = {
     active: 'Active',
     draft: 'Pending',
     suspended: 'Suspended',
-    published: 'Public',
-    hidden: 'Hidden',
     invalidName: 'Both store names must use 1 to 16 display units',
 };
 
@@ -325,9 +321,6 @@ function StoreOperation({ profile, text }: Readonly<{ profile: MyStoreProfileRec
                 <dd className="flex flex-wrap justify-end gap-1">
                     <Badge variant={profile.status === 'SUSPENDED' ? 'destructive' : 'secondary'}>
                         {statusLabel}
-                    </Badge>
-                    <Badge variant={profile.isPublished ? 'default' : 'outline'}>
-                        {profile.isPublished ? text.published : text.hidden}
                     </Badge>
                 </dd>
             </div>

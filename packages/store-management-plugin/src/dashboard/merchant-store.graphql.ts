@@ -21,7 +21,6 @@ const myStoreProfileFields = gql`
     fragment MyStoreProfileFields on StoreProfile {
         id
         status
-        isPublished
         descriptionZh
         descriptionEn
         primaryDomain
@@ -95,7 +94,6 @@ export interface CompleteInitialPasswordChangeResult {
 export interface MyStoreProfileRecord {
     id: string;
     status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
-    isPublished: boolean;
     descriptionZh: string;
     descriptionEn: string;
     primaryDomain: string | null;

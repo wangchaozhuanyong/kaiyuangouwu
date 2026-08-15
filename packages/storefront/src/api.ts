@@ -193,18 +193,30 @@ export class ShopApi {
     }
 
     async storefrontConfig(): Promise<StorefrontConfig> {
-        const result = await this.request<{ activeChannel: StorefrontConfig }>(`
+        const result = await this.request<{
+            activeChannel: Omit<StorefrontConfig, 'availableCountries'>;
+            availableCountries: StorefrontConfig['availableCountries'];
+        }>(`
             query StorefrontConfig {
                 activeChannel {
                     code
+                    defaultLanguageCode
+                    defaultCurrencyCode
                     customFields {
                         storefrontNameZh
                         storefrontNameEn
                     }
                 }
+                availableCountries {
+                    code
+                    name
+                }
             }
         `);
-        return result.activeChannel;
+        return {
+            ...result.activeChannel,
+            availableCountries: result.availableCountries,
+        };
     }
 
     async storefrontContent(): Promise<StorefrontContentBlock[]> {

@@ -93,6 +93,85 @@ export const demoProducts = [
     },
 ];
 
+export const demoCollections = [
+    {
+        channelCode: 'cn-mainland',
+        code: 'cn-workstations',
+        productSkus: ['DEMO-TABLET-128', 'DEMO-MONITOR-27-4K'],
+        translations: [
+            {
+                languageCode: 'en',
+                name: 'Workstations',
+                slug: 'cn-workstations',
+                description: 'Temporary category for workstation products in the mainland China store.',
+            },
+            {
+                languageCode: 'zh_Hans',
+                name: '桌面工作站',
+                slug: 'cn-workstations',
+                description: '中国大陆店铺的临时桌面工作商品分类。',
+            },
+        ],
+    },
+    {
+        channelCode: 'cn-mainland',
+        code: 'cn-office-input',
+        productSkus: ['DEMO-MOUSE-SILENT', 'DEMO-KEYBOARD-75'],
+        translations: [
+            {
+                languageCode: 'en',
+                name: 'Office Input Devices',
+                slug: 'cn-office-input',
+                description: 'Temporary category for office input devices in the mainland China store.',
+            },
+            {
+                languageCode: 'zh_Hans',
+                name: '办公输入设备',
+                slug: 'cn-office-input',
+                description: '中国大陆店铺的临时办公输入设备分类。',
+            },
+        ],
+    },
+    {
+        channelCode: 'my-malaysia',
+        code: 'my-mobile-computing',
+        productSkus: ['DEMO-TABLET-128', 'DEMO-MOUSE-SILENT'],
+        translations: [
+            {
+                languageCode: 'en',
+                name: 'Mobile Computing',
+                slug: 'my-mobile-computing',
+                description: 'Temporary mobile-computing category for the Malaysia store.',
+            },
+            {
+                languageCode: 'zh_Hans',
+                name: '移动办公',
+                slug: 'my-mobile-computing',
+                description: '马来西亚店铺的临时移动办公商品分类。',
+            },
+        ],
+    },
+    {
+        channelCode: 'my-malaysia',
+        code: 'my-desk-setup',
+        productSkus: ['DEMO-MONITOR-27-4K', 'DEMO-KEYBOARD-75'],
+        translations: [
+            {
+                languageCode: 'en',
+                name: 'Desk Setup',
+                slug: 'my-desk-setup',
+                description: 'Temporary desk-setup category for the Malaysia store.',
+            },
+            {
+                languageCode: 'zh_Hans',
+                name: '桌面搭配',
+                slug: 'my-desk-setup',
+                description: '马来西亚店铺的临时桌面搭配商品分类。',
+            },
+        ],
+    },
+];
+
 export function isLocalApiOrigin(value) {
     let url;
     try {
@@ -129,6 +208,30 @@ export function validateDemoProducts(products) {
         skus.add(product.sku);
         slugs.add(product.product.en.slug);
     }
+    return true;
+}
+
+export function validateDemoCollections(collections, products = demoProducts) {
+    const productSkus = new Set(products.map(product => product.sku));
+    const collectionCodes = new Set();
+    const channelCodes = new Set();
+
+    for (const collection of collections) {
+        assert.ok(!collectionCodes.has(collection.code), `Duplicate demo collection code: ${collection.code}`);
+        assert.ok(collection.productSkus.length > 0, `Demo collection has no products: ${collection.code}`);
+        assert.ok(
+            collection.translations.some(translation => translation.languageCode === 'en') &&
+                collection.translations.some(translation => translation.languageCode === 'zh_Hans'),
+            `Demo collection must be bilingual: ${collection.code}`,
+        );
+        for (const sku of collection.productSkus) {
+            assert.ok(productSkus.has(sku), `Unknown demo product SKU ${sku} in ${collection.code}`);
+        }
+        collectionCodes.add(collection.code);
+        channelCodes.add(collection.channelCode);
+    }
+
+    assert.deepEqual([...channelCodes].sort(), ['cn-mainland', 'my-malaysia']);
     return true;
 }
 
@@ -231,6 +334,86 @@ async function uploadAsset(fetchImpl, apiOrigin, authToken, channelToken, produc
     return result.id;
 }
 
+async function upsertDemoCollection(
+    fetchImpl,
+    apiOrigin,
+    authToken,
+    channel,
+    collection,
+    productIdsBySku,
+) {
+    const existing = await graphql(
+        fetchImpl,
+        apiOrigin,
+        `
+            query ExistingDemoCollection($slug: String!) {
+                collection(slug: $slug) {
+                    id
+                }
+            }
+        `,
+        { slug: collection.code },
+        headers(authToken, channel.token),
+    );
+    const productIds = collection.productSkus.map(sku => {
+        const productId = productIdsBySku.get(sku);
+        assert.ok(productId, `Product ${sku} must exist before its demo collection is created`);
+        return productId;
+    });
+    const filters = [
+        {
+            code: 'product-id-filter',
+            arguments: [
+                { name: 'productIds', value: JSON.stringify(productIds) },
+                { name: 'combineWithAnd', value: 'true' },
+            ],
+        },
+    ];
+
+    if (existing.data.collection?.id) {
+        const updated = await graphql(
+            fetchImpl,
+            apiOrigin,
+            `
+                mutation UpdateDemoCollection($input: UpdateCollectionInput!) {
+                    updateCollection(input: $input) {
+                        id
+                    }
+                }
+            `,
+            {
+                input: {
+                    id: existing.data.collection.id,
+                    filters,
+                    translations: collection.translations,
+                },
+            },
+            headers(authToken, channel.token),
+        );
+        return updated.data.updateCollection.id;
+    }
+
+    const created = await graphql(
+        fetchImpl,
+        apiOrigin,
+        `
+            mutation CreateDemoCollection($input: CreateCollectionInput!) {
+                createCollection(input: $input) {
+                    id
+                }
+            }
+        `,
+        {
+            input: {
+                filters,
+                translations: collection.translations,
+            },
+        },
+        headers(authToken, channel.token),
+    );
+    return created.data.createCollection.id;
+}
+
 function productTranslations(product) {
     return [
         { languageCode: 'en', ...product.product.en },
@@ -249,6 +432,7 @@ export async function seedStorefrontDemo({ apiOrigin, username, password, fetchI
     assert.ok(isLocalApiOrigin(apiOrigin), 'The demo seed only accepts localhost API origins');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
     validateDemoProducts(demoProducts);
+    validateDemoCollections(demoCollections);
     const normalizedOrigin = apiOrigin.replace(/\/$/, '');
 
     const login = await graphql(
@@ -312,6 +496,7 @@ export async function seedStorefrontDemo({ apiOrigin, username, password, fetchI
     );
     const variantsBySku = new Map(existing.data.productVariants.items.map(variant => [variant.sku, variant]));
     const results = [];
+    const productIdsBySku = new Map();
 
     for (const product of demoProducts) {
         const assetId = await uploadAsset(
@@ -484,9 +669,25 @@ export async function seedStorefrontDemo({ apiOrigin, username, password, fetchI
         }
 
         results.push({ sku: product.sku, productId, variantId: variant.id, assetId });
+        productIdsBySku.set(product.sku, productId);
     }
 
-    return results;
+    const collectionResults = [];
+    for (const collection of demoCollections) {
+        const channel = channels.get(collection.channelCode);
+        assert.ok(channel, `Channel ${collection.channelCode} is required`);
+        const collectionId = await upsertDemoCollection(
+            fetchImpl,
+            normalizedOrigin,
+            authToken,
+            channel,
+            collection,
+            productIdsBySku,
+        );
+        collectionResults.push({ code: collection.code, channelCode: collection.channelCode, collectionId });
+    }
+
+    return { products: results, collections: collectionResults };
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -501,7 +702,13 @@ if (isMain) {
     const results = await seedStorefrontDemo({ apiOrigin, username, password });
     process.stdout.write(
         `${String(
-            JSON.stringify({ ok: true, productCount: results.length, skus: results.map(item => item.sku) }),
+            JSON.stringify({
+                ok: true,
+                productCount: results.products.length,
+                collectionCount: results.collections.length,
+                skus: results.products.map(item => item.sku),
+                collectionCodes: results.collections.map(item => item.code),
+            }),
         )}\n`,
     );
 }

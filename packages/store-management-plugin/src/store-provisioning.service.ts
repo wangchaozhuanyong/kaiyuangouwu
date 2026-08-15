@@ -6,12 +6,13 @@ import {
     ChannelService,
     InternalServerError,
     isGraphQlErrorResult,
+    PaymentMethod,
     RequestContext,
     Role,
     RoleService,
     SellerService,
+    ShippingMethod,
     StockLocation,
-    StockLocationService,
     TransactionalConnection,
     User,
     UserInputError,
@@ -19,6 +20,7 @@ import {
 import { storeDomainPermission } from '@vendure/store-domain-plugin';
 import { storefrontContentPermission } from '@vendure/storefront-content-plugin';
 import { randomBytes } from 'node:crypto';
+import { IsNull } from 'typeorm';
 
 import { storeProfilePermission } from './constants';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
@@ -27,17 +29,27 @@ import { ProvisionStoreInput, ProvisionStoreResult } from './types';
 
 export const storeAdministratorPermissions: Permission[] = [
     Permission.ReadChannel,
-    Permission.CreateCatalog,
     Permission.ReadCatalog,
-    Permission.UpdateCatalog,
-    Permission.DeleteCatalog,
+    Permission.CreateProduct,
+    Permission.ReadProduct,
+    Permission.UpdateProduct,
+    Permission.DeleteProduct,
+    Permission.CreateCollection,
+    Permission.ReadCollection,
+    Permission.UpdateCollection,
+    Permission.DeleteCollection,
+    Permission.CreateFacet,
+    Permission.ReadFacet,
+    Permission.UpdateFacet,
+    Permission.DeleteFacet,
     Permission.CreateAsset,
     Permission.ReadAsset,
+    Permission.UpdateAsset,
+    Permission.DeleteAsset,
     Permission.ReadOrder,
     Permission.UpdateOrder,
     Permission.ReadCustomer,
     Permission.ReadStockLocation,
-    Permission.UpdateStockLocation,
     Permission.ReadShippingMethod,
     Permission.ReadPaymentMethod,
     Permission.CreatePromotion,
@@ -70,7 +82,6 @@ export class StoreProvisioningService {
         private readonly channelService: ChannelService,
         private readonly roleService: RoleService,
         private readonly administratorService: AdministratorService,
-        private readonly stockLocationService: StockLocationService,
         private readonly storeProfileService: StoreProfileService,
         private readonly merchantInitialPasswordService: MerchantInitialPasswordService,
     ) {}
@@ -80,6 +91,23 @@ export class StoreProvisioningService {
         const template = await this.channelService.findOne(ctx, normalized.templateChannelId);
         if (!template) {
             throw new UserInputError('网店模板 Channel 不存在');
+        }
+        const [sharedStockLocations, sharedPaymentMethods, sharedShippingMethods] = await Promise.all([
+            this.connection.getRepository(ctx, StockLocation).find({
+                where: { channels: { id: template.id } },
+                order: { createdAt: 'ASC' },
+            }),
+            this.connection.getRepository(ctx, PaymentMethod).find({
+                where: { channels: { id: template.id } },
+                order: { createdAt: 'ASC' },
+            }),
+            this.connection.getRepository(ctx, ShippingMethod).find({
+                where: { channels: { id: template.id }, deletedAt: IsNull() },
+                order: { createdAt: 'ASC' },
+            }),
+        ]);
+        if (sharedStockLocations.length === 0) {
+            throw new UserInputError('网店模板没有可共享的库存点');
         }
         await this.assertUnique(ctx, normalized.code, normalized.administrator.emailAddress);
 
@@ -127,15 +155,14 @@ export class StoreProvisioningService {
             roleIds: [role.id],
         });
         await this.merchantInitialPasswordService.requirePasswordChange(ctx, administrator);
-        const stockLocation = await this.stockLocationService.create(ctx, {
-            name: `${normalized.name} Warehouse`,
-            description: `Primary stock location for ${normalized.code}`,
-        });
-        await this.channelService.assignToChannels(ctx, StockLocation, stockLocation.id, [channel.id]);
-        if (String(ctx.channelId) !== String(channel.id)) {
-            await this.channelService.removeFromChannels(ctx, StockLocation, stockLocation.id, [
-                ctx.channelId,
-            ]);
+        for (const stockLocation of sharedStockLocations) {
+            await this.channelService.assignToChannels(ctx, StockLocation, stockLocation.id, [channel.id]);
+        }
+        for (const paymentMethod of sharedPaymentMethods) {
+            await this.channelService.assignToChannels(ctx, PaymentMethod, paymentMethod.id, [channel.id]);
+        }
+        for (const shippingMethod of sharedShippingMethods) {
+            await this.channelService.assignToChannels(ctx, ShippingMethod, shippingMethod.id, [channel.id]);
         }
         const profile = await this.storeProfileService.createDraft(ctx, channel);
 
@@ -144,7 +171,7 @@ export class StoreProvisioningService {
             channelId: channel.id,
             roleId: role.id,
             administratorId: administrator.id,
-            stockLocationId: stockLocation.id,
+            stockLocationId: sharedStockLocations[0].id,
             profileId: profile.id,
             channelCode: channel.code,
             temporaryPassword,

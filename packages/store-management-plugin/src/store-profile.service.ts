@@ -14,12 +14,7 @@ import { StoreDomain } from '@vendure/store-domain-plugin';
 import { In } from 'typeorm';
 
 import { StoreProfile } from './entities/store-profile.entity';
-import {
-    PublicStoreSummary,
-    StoreProfileStatus,
-    UpdateMyStoreProfileInput,
-    UpdateStoreProfileInput,
-} from './types';
+import { StoreProfileStatus, UpdateMyStoreProfileInput, UpdateStoreProfileInput } from './types';
 
 interface StorefrontChannelFields {
     storefrontNameZh?: string | null;
@@ -85,6 +80,7 @@ export class StoreProfileService {
         }
 
         profile.status = status;
+        profile.isPublished = false;
         profile.sortOrder = input.sortOrder ?? profile.sortOrder;
         profile.descriptionZh = this.normalizeDescription(
             input.descriptionZh,
@@ -96,23 +92,17 @@ export class StoreProfileService {
             profile.descriptionEn,
             '英文简介',
         );
+        await this.updateStorefrontNames(
+            ctx,
+            profile,
+            input.storefrontNameZh,
+            input.storefrontNameEn,
+        );
 
         if (input.logoAssetId !== undefined) {
             const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
             profile.logoAsset = asset;
             profile.logoAssetId = asset?.id ?? null;
-        }
-
-        if (status !== 'ACTIVE') {
-            if (input.isPublished === true) {
-                throw new UserInputError('只有 ACTIVE 状态的网店才能发布到 App');
-            }
-            profile.isPublished = false;
-        } else if (input.isPublished != null) {
-            if (input.isPublished) {
-                await this.requireActivePrimaryDomain(ctx, profile.channelId);
-            }
-            profile.isPublished = input.isPublished;
         }
 
         const saved = await repository.save(profile);
@@ -138,61 +128,15 @@ export class StoreProfileService {
             profile.logoAssetId = asset?.id ?? null;
         }
 
-        const customFields = profile.channel.customFields as StorefrontChannelFields;
-        const storefrontNameZh = this.normalizeStorefrontName(
+        await this.updateStorefrontNames(
+            ctx,
+            profile,
             input.storefrontNameZh,
-            customFields.storefrontNameZh,
-            '中文店铺名称',
-        );
-        const storefrontNameEn = this.normalizeStorefrontName(
             input.storefrontNameEn,
-            customFields.storefrontNameEn,
-            '英文店铺名称',
         );
-        if (input.storefrontNameZh != null || input.storefrontNameEn != null) {
-            const updatedChannel = await this.channelService.update(ctx, {
-                id: profile.channelId,
-                customFields: {
-                    ...customFields,
-                    storefrontNameZh,
-                    storefrontNameEn,
-                },
-            });
-            if (isGraphQlErrorResult(updatedChannel)) {
-                throw new UserInputError(updatedChannel.message);
-            }
-            profile.channel = updatedChannel;
-        }
 
         const saved = await repository.save(profile);
         return (await this.attachDomains(ctx, [saved]))[0];
-    }
-
-    async findPublished(ctx: RequestContext): Promise<PublicStoreSummary[]> {
-        const profiles = await this.connection.getRepository(ctx, StoreProfile).find({
-            where: { status: 'ACTIVE', isPublished: true },
-            relations: { channel: { seller: true }, logoAsset: true },
-            order: { sortOrder: 'ASC', createdAt: 'ASC' },
-        });
-        const hydrated = await this.attachDomains(ctx, profiles);
-        return hydrated
-            .filter(profile => profile.primaryDomain != null)
-            .map(profile => {
-                const customFields = profile.channel.customFields as StorefrontChannelFields;
-                return {
-                    id: profile.id,
-                    channelId: profile.channelId,
-                    code: profile.channel.code,
-                    merchantName: profile.channel.seller?.name ?? profile.channel.code,
-                    storefrontNameZh: customFields.storefrontNameZh?.trim() || profile.channel.code,
-                    storefrontNameEn: customFields.storefrontNameEn?.trim() || profile.channel.code,
-                    descriptionZh: profile.descriptionZh,
-                    descriptionEn: profile.descriptionEn,
-                    logo: profile.logoAsset,
-                    domain: profile.primaryDomain as string,
-                    storefrontUrl: profile.storefrontUrl as string,
-                };
-            });
     }
 
     private async attachDomains(ctx: RequestContext, profiles: StoreProfile[]): Promise<StoreProfile[]> {
@@ -210,15 +154,6 @@ export class StoreProfileService {
             profile.storefrontUrl = domain ? `https://${domain}` : null;
         }
         return profiles;
-    }
-
-    private async requireActivePrimaryDomain(ctx: RequestContext, channelId: ID): Promise<void> {
-        const domain = await this.connection.getRepository(ctx, StoreDomain).findOne({
-            where: { channelId, isPrimary: true, status: 'ACTIVE' },
-        });
-        if (!domain) {
-            throw new UserInputError('发布到 App 前必须先绑定并验证主域名');
-        }
     }
 
     private async findByChannel(ctx: RequestContext, channelId: ID): Promise<StoreProfile> {
@@ -274,5 +209,39 @@ export class StoreProfileService {
             throw new UserInputError(`${label}必须是 1 至 16 个显示单位`);
         }
         return normalized;
+    }
+
+    private async updateStorefrontNames(
+        ctx: RequestContext,
+        profile: StoreProfile,
+        storefrontNameZhInput: string | null | undefined,
+        storefrontNameEnInput: string | null | undefined,
+    ): Promise<void> {
+        if (storefrontNameZhInput == null && storefrontNameEnInput == null) {
+            return;
+        }
+        const customFields = profile.channel.customFields as StorefrontChannelFields;
+        const storefrontNameZh = this.normalizeStorefrontName(
+            storefrontNameZhInput,
+            customFields.storefrontNameZh,
+            '中文店铺名称',
+        );
+        const storefrontNameEn = this.normalizeStorefrontName(
+            storefrontNameEnInput,
+            customFields.storefrontNameEn,
+            '英文店铺名称',
+        );
+        const updatedChannel = await this.channelService.update(ctx, {
+            id: profile.channelId,
+            customFields: {
+                ...customFields,
+                storefrontNameZh,
+                storefrontNameEn,
+            },
+        });
+        if (isGraphQlErrorResult(updatedChannel)) {
+            throw new UserInputError(updatedChannel.message);
+        }
+        profile.channel = updatedChannel;
     }
 }

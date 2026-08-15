@@ -1,4 +1,4 @@
-import type { Asset, ID } from '@vendure/core';
+import type { ID } from '@vendure/core';
 
 export interface ProvisionStoreAdministratorInput {
     firstName: string;
@@ -30,8 +30,9 @@ export type StoreProfileStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 
 export interface UpdateStoreProfileInput {
     id: ID;
+    storefrontNameZh?: string | null;
+    storefrontNameEn?: string | null;
     status?: StoreProfileStatus | null;
-    isPublished?: boolean | null;
     sortOrder?: number | null;
     descriptionZh?: string | null;
     descriptionEn?: string | null;
@@ -44,18 +45,4 @@ export interface UpdateMyStoreProfileInput {
     descriptionZh?: string | null;
     descriptionEn?: string | null;
     logoAssetId?: ID | null;
-}
-
-export interface PublicStoreSummary {
-    id: ID;
-    channelId: ID;
-    code: string;
-    merchantName: string;
-    storefrontNameZh: string;
-    storefrontNameEn: string;
-    descriptionZh: string;
-    descriptionEn: string;
-    logo: Asset | null;
-    domain: string;
-    storefrontUrl: string;
 }

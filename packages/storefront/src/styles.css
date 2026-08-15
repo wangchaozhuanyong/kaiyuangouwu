@@ -1088,7 +1088,7 @@ img {
 }
 
 .primary-categories {
-    height: 104px;
+    height: 122px;
     padding: 10px 12px 7px;
     position: sticky;
     z-index: 9;
@@ -1110,9 +1110,9 @@ img {
 }
 
 .primary-categories button {
-    width: 78px;
-    min-width: 78px;
-    min-height: 87px;
+    width: 112px;
+    min-width: 112px;
+    height: 105px;
     padding: 0;
     position: relative;
     flex: none;
@@ -1183,12 +1183,17 @@ img {
 
 .primary-category-label {
     width: 100%;
+    height: 34px;
     overflow: hidden;
-    font-size: 15px;
-    line-height: 18px;
+    font-size: 14px;
+    line-height: 17px;
     text-align: center;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .primary-categories button.is-active {
@@ -1213,7 +1218,7 @@ img {
 }
 
 .category-layout {
-    min-height: calc(100dvh - 234px);
+    min-height: calc(100dvh - 252px);
     display: grid;
     grid-template-columns: 82px minmax(0, 1fr);
     align-items: start;
@@ -1224,9 +1229,9 @@ img {
 }
 
 .secondary-categories {
-    min-height: calc(100dvh - 156px);
+    min-height: calc(100dvh - 174px);
     position: sticky;
-    top: 156px;
+    top: 174px;
     background: #eff1f1;
 }
 
@@ -1260,7 +1265,7 @@ img {
 
 .category-results {
     min-width: 0;
-    min-height: calc(100dvh - 156px);
+    min-height: calc(100dvh - 174px);
     padding: 9px 9px 88px;
     background: white;
 }
@@ -1334,7 +1339,7 @@ img {
     margin: 0 -9px;
     position: sticky;
     z-index: 8;
-    top: 156px;
+    top: 174px;
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
     background: rgba(255, 255, 255, 0.97);
@@ -3564,7 +3569,9 @@ img {
 }
 
 .form-grid input,
-.address-form input {
+.address-form input,
+.form-grid select,
+.address-form select {
     width: 100%;
     height: 44px;
     padding: 0 10px;
@@ -3575,7 +3582,9 @@ img {
 }
 
 .form-grid input:hover,
-.address-form input:hover {
+.address-form input:hover,
+.form-grid select:hover,
+.address-form select:hover {
     border-color: #c6ccca;
 }
 
@@ -5832,14 +5841,14 @@ img {
     }
 
     .primary-categories {
-        height: 104px;
+        height: 122px;
         padding: 10px 32px 7px;
         top: 128px;
         gap: 14px;
     }
 
     .category-layout {
-        min-height: calc(100dvh - 232px);
+        min-height: calc(100dvh - 250px);
         grid-template-columns: 220px minmax(0, 1fr);
     }
 
@@ -5848,9 +5857,9 @@ img {
     }
 
     .secondary-categories {
-        min-height: calc(100dvh - 232px);
+        min-height: calc(100dvh - 250px);
         padding: 16px 12px;
-        top: 232px;
+        top: 250px;
         border-right: 1px solid var(--line);
         background: #f1f3f2;
     }
@@ -5867,7 +5876,7 @@ img {
     }
 
     .category-results {
-        min-height: calc(100dvh - 232px);
+        min-height: calc(100dvh - 250px);
         padding: 24px 32px 56px;
     }
 
@@ -5892,7 +5901,7 @@ img {
     .sort-bar {
         height: 52px;
         margin: 0;
-        top: 232px;
+        top: 250px;
         border-top: 0;
     }
 

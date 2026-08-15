@@ -56,8 +56,7 @@ import {
     enabledMarkets,
     languageCodeFor,
     localeFor,
-    marketCodeForChannel,
-    markets,
+    marketForStorefrontConfig,
     resolveStorefrontLanguage,
     uiCopy,
 } from './i18n';
@@ -69,7 +68,6 @@ import {
     CustomerAddress,
     CustomerAddressInput,
     FulfillmentType,
-    MarketCode,
     MarketConfig,
     Order,
     PaymentMethod,
@@ -79,6 +77,7 @@ import {
     ShippingMethod,
     StorefrontCart,
     StorefrontCheckoutSession,
+    StorefrontConfig,
     StorefrontContentBlock,
     StorefrontContentItem,
     StorefrontContentTargetType,
@@ -158,18 +157,18 @@ function scopedStorageKey(baseKey: string, channelCode: string): string {
     return channelCode ? `${baseKey}:${channelCode}` : '';
 }
 
-function readStoredLanguage(marketCode: MarketCode, includeLegacyPreference = false): StorefrontLanguage {
+function readStoredLanguage(market: MarketConfig, includeLegacyPreference = false): StorefrontLanguage {
     try {
         const scopedPreference = localStorage.getItem(
-            scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, marketCode),
+            scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, market.code),
         );
         const legacyPreference =
             includeLegacyPreference && scopedPreference === null
                 ? localStorage.getItem(STOREFRONT_LANGUAGE_STORAGE_KEY)
                 : null;
-        return resolveStorefrontLanguage(markets[marketCode], scopedPreference ?? legacyPreference);
+        return resolveStorefrontLanguage(market, scopedPreference ?? legacyPreference);
     } catch {
-        return resolveStorefrontLanguage(markets[marketCode], null);
+        return resolveStorefrontLanguage(market, null);
     }
 }
 
@@ -258,17 +257,14 @@ function routeHash(route: RouteState): string {
 }
 
 export function App() {
-    const [{ marketCode, language }, setStorefrontContext] = useState<{
-        marketCode: MarketCode;
+    const [{ market, language }, setStorefrontContext] = useState<{
+        market: MarketConfig;
         language: StorefrontLanguage;
     }>(() => {
-        const stored = localStorage.getItem('storefront-market');
-        const initialMarketCode = enabledMarkets.some(candidateMarket => candidateMarket.code === stored)
-            ? (stored as MarketCode)
-            : enabledMarkets[0].code;
+        const initialMarket = enabledMarkets[0];
         return {
-            marketCode: initialMarketCode,
-            language: readStoredLanguage(initialMarketCode, true),
+            market: initialMarket,
+            language: readStoredLanguage(initialMarket, true),
         };
     });
     const [route, setRoute] = useState<RouteState>(routeFromLocation);
@@ -289,6 +285,7 @@ export function App() {
     const [storefrontNames, setStorefrontNames] =
         useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
     const [storefrontCode, setStorefrontCode] = useState('');
+    const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
     const [cart, setCart] = useState<StorefrontCart | null>(null);
     const [customer, setCustomer] = useState<ActiveCustomer | null>(null);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
@@ -311,7 +308,6 @@ export function App() {
     const routeRef = useRef(route);
     const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
 
-    const market = markets[marketCode];
     const locale = localeFor(language, market);
     const text = uiCopy[language];
     const isZh = language === 'zh';
@@ -411,12 +407,17 @@ export function App() {
 
         if (configResult.status === 'fulfilled') {
             const nextStorefrontCode = configResult.value.code;
-            const nextMarketCode = marketCodeForChannel(nextStorefrontCode);
-            if (nextMarketCode && nextMarketCode !== marketCode) {
-                localStorage.setItem('storefront-market', nextMarketCode);
+            const nextMarket = marketForStorefrontConfig(configResult.value, market);
+            setAvailableCountries(configResult.value.availableCountries);
+            if (
+                nextMarket.code !== market.code ||
+                nextMarket.defaultLanguageCode !== market.defaultLanguageCode ||
+                nextMarket.currencyCode !== market.currencyCode ||
+                nextMarket.countryCode !== market.countryCode
+            ) {
                 setStorefrontContext({
-                    marketCode: nextMarketCode,
-                    language: readStoredLanguage(nextMarketCode),
+                    market: nextMarket,
+                    language: readStoredLanguage(nextMarket),
                 });
                 return;
             }
@@ -456,13 +457,13 @@ export function App() {
         }
         setLoading(false);
         void loadSession(loadId);
-    }, [api, loadSession, marketCode, text.loadError]);
+    }, [api, loadSession, market, text.loadError]);
 
     useEffect(() => {
-        localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, marketCode), language);
+        localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, market.code), language);
         document.documentElement.lang = locale;
         void loadStorefront();
-    }, [language, loadStorefront, locale, marketCode]);
+    }, [language, loadStorefront, locale, market.code]);
 
     useEffect(() => {
         if (activeCollectionId === 'all' && collections.length) {
@@ -1085,6 +1086,7 @@ export function App() {
                         order={checkoutOrder}
                         customer={customer}
                         market={market}
+                        availableCountries={availableCountries}
                         locale={locale}
                         language={language}
                         onBack={goBack}
@@ -1188,6 +1190,7 @@ export function App() {
                         api={api}
                         customer={customer}
                         market={market}
+                        availableCountries={availableCountries}
                         language={language}
                         onBack={goBack}
                         onCustomerChange={setCustomer}
@@ -4148,6 +4151,7 @@ function CheckoutPage({
     order,
     customer,
     market,
+    availableCountries,
     locale,
     language,
     onBack,
@@ -4163,6 +4167,7 @@ function CheckoutPage({
     order: Order | null;
     customer: ActiveCustomer | null;
     market: MarketConfig;
+    availableCountries: StorefrontConfig['availableCountries'];
     locale: string;
     language: StorefrontLanguage;
     onBack: () => void;
@@ -4279,7 +4284,7 @@ function CheckoutPage({
                     city: String(data.get('city') ?? ''),
                     province: String(data.get('province') ?? ''),
                     postalCode: String(data.get('postalCode') ?? ''),
-                    countryCode: market.countryCode,
+                    countryCode: String(data.get('countryCode') ?? market.countryCode),
                 };
                 const addressKey = JSON.stringify(shippingAddress);
                 if (addressKey !== preparedAddressKey || !shippingMethods.length) {
@@ -4397,6 +4402,7 @@ function CheckoutPage({
                                 <input type="hidden" name="province" value={defaultAddress.province ?? ''} />
                                 <input type="hidden" name="city" value={defaultAddress.city ?? ''} />
                                 <input type="hidden" name="streetLine1" value={defaultAddress.streetLine1} />
+                                <input type="hidden" name="countryCode" value={defaultAddress.country.code} />
                                 <input
                                     type="hidden"
                                     name="postalCode"
@@ -4405,6 +4411,11 @@ function CheckoutPage({
                             </>
                         ) : (
                             <div className="form-grid">
+                                <CountryField
+                                    countries={availableCountries}
+                                    defaultCountryCode={market.countryCode}
+                                    language={language}
+                                />
                                 <Field name="fullName" label={isZh ? '收货人' : 'Full name'} required />
                                 <Field name="phoneNumber" label={isZh ? '手机号' : 'Phone'} required />
                                 <Field name="province" label={isZh ? '省/州' : 'Province'} required />
@@ -5459,6 +5470,7 @@ function AddressesPage({
     api,
     customer,
     market,
+    availableCountries,
     language,
     onBack,
     onCustomerChange,
@@ -5468,6 +5480,7 @@ function AddressesPage({
     api: ShopApi;
     customer: ActiveCustomer | null;
     market: MarketConfig;
+    availableCountries: StorefrontConfig['availableCountries'];
     language: StorefrontLanguage;
     onBack: () => void;
     onCustomerChange: (customer: ActiveCustomer | null) => void;
@@ -5504,7 +5517,7 @@ function AddressesPage({
                 streetLine1: String(data.get('streetLine1')),
                 streetLine2: String(data.get('streetLine2') ?? ''),
                 postalCode: String(data.get('postalCode')),
-                countryCode: editingAddress?.country.code ?? market.countryCode,
+                countryCode: String(data.get('countryCode') ?? market.countryCode),
                 defaultShippingAddress:
                     customer.addresses?.length === 0 || data.get('defaultShippingAddress') === 'on',
             };
@@ -5658,6 +5671,11 @@ function AddressesPage({
                     }}
                 >
                     <form className="address-form" onSubmit={event => void save(event)}>
+                        <CountryField
+                            countries={availableCountries}
+                            defaultCountryCode={editingAddress?.country.code ?? market.countryCode}
+                            language={language}
+                        />
                         <Field
                             name="fullName"
                             label={isZh ? '收货人' : 'Full name'}
@@ -7534,6 +7552,35 @@ function Field({
                 defaultValue={defaultValue}
                 autoComplete={autoComplete}
             />
+        </label>
+    );
+}
+
+function CountryField({
+    countries,
+    defaultCountryCode,
+    language,
+}: {
+    countries: StorefrontConfig['availableCountries'];
+    defaultCountryCode: string;
+    language: StorefrontLanguage;
+}) {
+    const options = countries.length
+        ? countries
+        : [{ code: defaultCountryCode, name: defaultCountryCode }];
+    const selectedCode = options.some(country => country.code === defaultCountryCode)
+        ? defaultCountryCode
+        : options[0].code;
+    return (
+        <label className="field-wide">
+            <span>{language === 'zh' ? '国家/地区' : 'Country/region'}</span>
+            <select name="countryCode" defaultValue={selectedCode} required>
+                {options.map(country => (
+                    <option key={country.code} value={country.code}>
+                        {country.name}
+                    </option>
+                ))}
+            </select>
         </label>
     );
 }

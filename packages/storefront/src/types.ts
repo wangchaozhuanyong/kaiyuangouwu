@@ -1,4 +1,4 @@
-export type MarketCode = 'cn-mainland' | 'my-malaysia';
+export type MarketCode = string;
 export type StorefrontLanguage = 'zh' | 'en';
 export type VendureLanguageCode = 'zh_Hans' | 'en';
 export type FulfillmentType = 'physical' | 'digital';
@@ -212,14 +212,20 @@ export interface PaymentMethod {
 export interface MarketConfig {
     code: MarketCode;
     defaultLanguageCode: VendureLanguageCode;
-    currencyCode: 'CNY' | 'MYR';
-    countryCode: 'CN' | 'MY';
-    locale: 'zh-CN' | 'en-MY';
+    currencyCode: string;
+    countryCode: string;
+    locale: string;
     label: string;
 }
 
 export interface StorefrontConfig {
     code: string;
+    defaultLanguageCode: string;
+    defaultCurrencyCode: string;
+    availableCountries: Array<{
+        code: string;
+        name: string;
+    }>;
     customFields: {
         storefrontNameZh?: string | null;
         storefrontNameEn?: string | null;

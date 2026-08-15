@@ -1,6 +1,11 @@
-import { MarketCode, MarketConfig, StorefrontLanguage, VendureLanguageCode } from './types';
+import {
+    MarketConfig,
+    StorefrontConfig,
+    StorefrontLanguage,
+    VendureLanguageCode,
+} from './types';
 
-export const markets: Record<MarketCode, MarketConfig> = {
+export const markets: Record<string, MarketConfig> = {
     'cn-mainland': {
         code: 'cn-mainland',
         defaultLanguageCode: 'zh_Hans',
@@ -26,10 +31,23 @@ const configuredMarketCodes = (
 )
     .split(',')
     .map((code: string) => code.trim())
-    .filter((code: string): code is MarketCode => code in markets);
+    .filter(Boolean);
+
+function fallbackMarket(code: string): MarketConfig {
+    return (
+        markets[code] ?? {
+            code,
+            defaultLanguageCode: 'en',
+            currencyCode: 'USD',
+            countryCode: 'US',
+            locale: 'en-US',
+            label: code,
+        }
+    );
+}
 
 export const enabledMarkets: MarketConfig[] = configuredMarketCodes.length
-    ? configuredMarketCodes.map((code: MarketCode) => markets[code])
+    ? configuredMarketCodes.map(fallbackMarket)
     : [markets['cn-mainland']];
 
 export const supportedStorefrontLanguages = ['zh', 'en'] as const satisfies readonly StorefrontLanguage[];
@@ -47,8 +65,27 @@ export function resolveStorefrontLanguage(
         : defaultStorefrontLanguageFor(market);
 }
 
-export function marketCodeForChannel(channelCode: string): MarketCode | null {
-    return Object.prototype.hasOwnProperty.call(markets, channelCode) ? (channelCode as MarketCode) : null;
+export function marketForStorefrontConfig(
+    config: StorefrontConfig,
+    currentMarket?: MarketConfig,
+): MarketConfig {
+    const knownMarket = markets[config.code];
+    const countryCode =
+        knownMarket?.countryCode ??
+        config.availableCountries[0]?.code?.toUpperCase() ??
+        currentMarket?.countryCode ??
+        'US';
+    const defaultLanguageCode: VendureLanguageCode =
+        config.defaultLanguageCode === 'zh_Hans' ? 'zh_Hans' : 'en';
+
+    return {
+        code: config.code,
+        defaultLanguageCode,
+        currencyCode: config.defaultCurrencyCode || knownMarket?.currencyCode || 'USD',
+        countryCode,
+        locale: defaultLanguageCode === 'zh_Hans' ? 'zh-CN' : localeForCountry(countryCode),
+        label: knownMarket?.label ?? config.code,
+    };
 }
 
 export function languageCodeFor(language: StorefrontLanguage): VendureLanguageCode {
@@ -57,7 +94,12 @@ export function languageCodeFor(language: StorefrontLanguage): VendureLanguageCo
 
 export function localeFor(language: StorefrontLanguage, market: MarketConfig): string {
     if (language === 'zh') return 'zh-CN';
-    return market.code === 'my-malaysia' ? 'en-MY' : 'en-US';
+    if (market.code === 'cn-mainland') return 'en-US';
+    return market.locale || localeForCountry(market.countryCode);
+}
+
+function localeForCountry(countryCode: string): string {
+    return /^[A-Z]{2}$/.test(countryCode) ? `en-${countryCode}` : 'en-US';
 }
 
 export const uiCopy = {

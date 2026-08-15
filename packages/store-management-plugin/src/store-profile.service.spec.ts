@@ -74,22 +74,7 @@ describe('StoreProfileService', () => {
         expect(repository.find).toHaveBeenCalledWith({ order: { sortOrder: 'DESC' }, take: 1 });
     });
 
-    it('requires an active primary domain before publishing', async () => {
-        const current = profile();
-        const profileRepository = {
-            findOne: vi.fn().mockResolvedValue(current),
-            save: vi.fn(async value => value),
-        };
-        const domainRepository = { findOne: vi.fn().mockResolvedValue(null) };
-        const { service } = createService(profileRepository, domainRepository);
-
-        await expect(
-            service.update({} as any, { id: current.id, status: 'ACTIVE', isPublished: true }),
-        ).rejects.toThrow('绑定并验证主域名');
-        expect(profileRepository.save).not.toHaveBeenCalled();
-    });
-
-    it('automatically removes a suspended store from the App directory', async () => {
+    it('keeps legacy directory publication disabled when a store is updated', async () => {
         const current = profile({ status: 'ACTIVE', isPublished: true });
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
@@ -98,35 +83,37 @@ describe('StoreProfileService', () => {
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { service } = createService(profileRepository, domainRepository);
 
-        const updated = await service.update({} as any, { id: current.id, status: 'SUSPENDED' });
+        const updated = await service.update({} as any, { id: current.id, status: 'ACTIVE' });
 
-        expect(updated).toMatchObject({ status: 'SUSPENDED', isPublished: false });
+        expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false });
     });
 
-    it('returns only published active stores that still have a verified primary domain', async () => {
-        const first = profile({ status: 'ACTIVE', isPublished: true, sortOrder: 0 });
-        const second = profile({
-            id: 'profile-2',
-            channel: channel('channel-2'),
-            channelId: 'channel-2',
-            status: 'ACTIVE',
-            isPublished: true,
-            sortOrder: 1,
-        });
-        const profileRepository = { find: vi.fn().mockResolvedValue([first, second]) };
-        const domainRepository = {
-            find: vi.fn().mockResolvedValue([{ channelId: 'channel-1', domain: 'store-one.example.com' }]),
+    it('allows a SuperAdmin to update both storefront names', async () => {
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(async value => value),
         };
-        const { service } = createService(profileRepository, domainRepository);
+        const domainRepository = { find: vi.fn().mockResolvedValue([]) };
+        const { channelService, service } = createService(profileRepository, domainRepository);
+        const ctx = {} as any;
 
-        const stores = await service.findPublished({} as any);
-
-        expect(stores).toHaveLength(1);
-        expect(stores[0]).toMatchObject({
-            channelId: 'channel-1',
-            domain: 'store-one.example.com',
-            storefrontUrl: 'https://store-one.example.com',
+        await service.update(ctx, {
+            id: current.id,
+            storefrontNameZh: '软件商城',
+            storefrontNameEn: 'Software Shop',
         });
+
+        expect(channelService.update).toHaveBeenCalledWith(
+            ctx,
+            expect.objectContaining({
+                id: 'channel-1',
+                customFields: expect.objectContaining({
+                    storefrontNameZh: '软件商城',
+                    storefrontNameEn: 'Software Shop',
+                }),
+            }),
+        );
     });
 
     it('updates only the active Channel profile for a merchant', async () => {

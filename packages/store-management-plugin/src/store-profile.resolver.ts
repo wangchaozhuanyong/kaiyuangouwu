@@ -35,14 +35,3 @@ export class StoreProfileAdminResolver {
         return this.storeProfileService.updateForMerchant(ctx, input);
     }
 }
-
-@Resolver()
-export class StoreProfileShopResolver {
-    constructor(private readonly storeProfileService: StoreProfileService) {}
-
-    @Query()
-    @Allow(Permission.Public)
-    availableStores(@Ctx() ctx: RequestContext) {
-        return this.storeProfileService.findPublished(ctx);
-    }
-}

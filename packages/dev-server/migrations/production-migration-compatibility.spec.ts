@@ -1,10 +1,12 @@
 import { QueryRunner, Table, TableColumn } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
+import { Permission } from '@vendure/common/lib/generated-types';
 
 import { AddStorefrontContent1786762500000 } from './1786762500000-add-storefront-content';
 import { AddCustomerOrderNote1786764000000 } from './1786764000000-add-customer-order-note';
 import { AddStoreProfiles1786765800000 } from './1786765800000-add-store-profiles';
 import { AddStoreAdministratorAccess1786767600000 } from './1786767600000-add-store-administrator-access';
+import { HardenStoreAdministratorPermissions1786769400000 } from './1786769400000-harden-store-administrator-permissions';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -22,6 +24,43 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it('replaces broad catalog writes with scoped permissions for existing store admins', async () => {
+        const roles = [
+            {
+                code: 'alpha-store-admin',
+                permissions: [
+                    Permission.ReadCatalog,
+                    Permission.CreateCatalog,
+                    Permission.UpdateCatalog,
+                    Permission.DeleteCatalog,
+                ],
+            },
+        ];
+        const save = vi.fn(async () => roles);
+        const find = vi.fn(async () => roles);
+        const queryRunner = {
+            manager: { getRepository: vi.fn(() => ({ find, save })) },
+        } as unknown as QueryRunner;
+
+        await new HardenStoreAdministratorPermissions1786769400000().up(queryRunner);
+
+        expect(roles[0].permissions).toEqual(
+            expect.arrayContaining([
+                Permission.ReadCatalog,
+                Permission.CreateProduct,
+                Permission.UpdateProduct,
+                Permission.DeleteProduct,
+                Permission.CreateCollection,
+                Permission.ReadCollection,
+                Permission.UpdateCollection,
+                Permission.DeleteCollection,
+            ]),
+        );
+        expect(roles[0].permissions).not.toContain(Permission.UpdateCatalog);
+        expect(roles[0].permissions).not.toContain(Permission.DeleteCatalog);
+        expect(save).toHaveBeenCalledOnce();
+    });
+
     it('creates the merchant password gate with portable MySQL column types', async () => {
         const createdTables: Table[] = [];
         const queryRunner = {

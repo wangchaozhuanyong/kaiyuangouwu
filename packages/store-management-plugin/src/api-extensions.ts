@@ -43,7 +43,6 @@ export const adminApiExtensions = gql`
         updatedAt: DateTime!
         channel: Channel!
         status: StoreProfileStatus!
-        isPublished: Boolean!
         sortOrder: Int!
         descriptionZh: String!
         descriptionEn: String!
@@ -58,8 +57,9 @@ export const adminApiExtensions = gql`
 
     input UpdateStoreProfileInput {
         id: ID!
+        storefrontNameZh: String
+        storefrontNameEn: String
         status: StoreProfileStatus
-        isPublished: Boolean
         sortOrder: Int
         descriptionZh: String
         descriptionEn: String
@@ -85,27 +85,5 @@ export const adminApiExtensions = gql`
         updateStoreProfile(input: UpdateStoreProfileInput!): StoreProfile!
         updateMyStoreProfile(input: UpdateMyStoreProfileInput!): StoreProfile!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
-    }
-`;
-
-export const shopApiExtensions = gql`
-    ${commonTypes}
-
-    type AvailableStore implements Node {
-        id: ID!
-        channelId: ID!
-        code: String!
-        merchantName: String!
-        storefrontNameZh: String!
-        storefrontNameEn: String!
-        descriptionZh: String!
-        descriptionEn: String!
-        logo: Asset
-        domain: String!
-        storefrontUrl: String!
-    }
-
-    extend type Query {
-        availableStores: [AvailableStore!]!
     }
 `;

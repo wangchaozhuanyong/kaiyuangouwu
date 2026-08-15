@@ -60,7 +60,6 @@ export type StoreProfileStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 export interface StoreProfileRecord {
     id: string;
     status: StoreProfileStatus;
-    isPublished: boolean;
     sortOrder: number;
     descriptionZh: string;
     descriptionEn: string;
@@ -90,7 +89,6 @@ const storeProfileFields = gql`
     fragment StoreManagementProfile on StoreProfile {
         id
         status
-        isPublished
         sortOrder
         descriptionZh
         descriptionEn

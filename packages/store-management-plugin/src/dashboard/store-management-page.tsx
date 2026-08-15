@@ -27,7 +27,6 @@ import {
     SelectTrigger,
     SelectValue,
     Skeleton,
-    Switch,
     Textarea,
     api,
     toast,
@@ -48,37 +47,36 @@ import {
 
 interface ProfileDraft {
     id: string;
+    storefrontNameZh: string;
+    storefrontNameEn: string;
     status: StoreProfileStatus;
-    isPublished: boolean;
     sortOrder: string;
     descriptionZh: string;
     descriptionEn: string;
     logoAsset: Asset | null;
-    primaryDomain: string | null;
 }
 
 const zhCopy = {
     title: '网店管理',
-    description: '管理独立网店的 App 展示状态、顺序和基础资料。',
+    description: '管理各独立域名网店的运营状态、顺序和基础资料。',
     refresh: '刷新网店列表',
     loadingError: '网店列表加载失败',
     retry: '重试',
     empty: '暂时没有网店 Profile',
     stores: '家网店',
-    published: '已发布',
+    enabled: '正常运营',
     draft: '草稿',
     active: '正常',
     suspended: '已停用',
-    hidden: '未发布',
     noDomain: '尚未验证主域名',
     order: '排序',
     edit: '编辑网店资料',
     editTitle: '编辑网店',
-    editDescription: '只有正常状态且已验证主域名的网店才能发布到 App。',
+    editDescription: '店铺通过各自绑定的域名独立访问，前台不会展示跨店入口。',
     status: '网店状态',
-    appVisibility: '在 App 中展示',
-    appVisibilityHint: '关闭后，App 的网店目录不会返回这家店。',
-    sortOrder: 'App 排序',
+    sortOrder: '管理顺序',
+    storefrontNameZh: '中文店铺名称',
+    storefrontNameEn: '英文店铺名称',
     descriptionZh: '中文简介',
     descriptionEn: '英文简介',
     logo: '网店 Logo',
@@ -89,31 +87,30 @@ const zhCopy = {
     saving: '正在保存',
     saved: '网店资料已保存',
     invalidOrder: '排序必须是大于或等于 0 的整数',
-    publishNeedsDomain: '请先绑定并验证主域名',
+    invalidName: '中英文店铺名称都必须是 1 至 16 个显示单位',
 };
 
 const enCopy: typeof zhCopy = {
     title: 'Store management',
-    description: 'Manage each independent store profile, App visibility, and ordering.',
+    description: 'Manage the operational status, ordering, and profile of each custom-domain store.',
     refresh: 'Refresh stores',
     loadingError: 'Could not load stores',
     retry: 'Retry',
     empty: 'No store profiles yet',
     stores: 'stores',
-    published: 'Published',
+    enabled: 'Active stores',
     draft: 'Draft',
     active: 'Active',
     suspended: 'Suspended',
-    hidden: 'Hidden',
     noDomain: 'No verified primary domain',
     order: 'Order',
     edit: 'Edit store profile',
     editTitle: 'Edit store',
-    editDescription: 'A store must be active and have a verified primary domain before publishing.',
+    editDescription: 'Each store is opened through its own bound domain without cross-store links.',
     status: 'Store status',
-    appVisibility: 'Show in App',
-    appVisibilityHint: 'When disabled, this store is omitted from the App directory.',
-    sortOrder: 'App order',
+    sortOrder: 'Management order',
+    storefrontNameZh: 'Chinese store name',
+    storefrontNameEn: 'English store name',
     descriptionZh: 'Chinese description',
     descriptionEn: 'English description',
     logo: 'Store logo',
@@ -124,7 +121,7 @@ const enCopy: typeof zhCopy = {
     saving: 'Saving',
     saved: 'Store profile saved',
     invalidOrder: 'Order must be an integer greater than or equal to 0',
-    publishNeedsDomain: 'Bind and verify a primary domain first',
+    invalidName: 'Both store names must use 1 to 16 display units',
 };
 
 export const storeManagementRoute: DashboardRouteDefinition = {
@@ -157,8 +154,9 @@ function StoreManagementPage() {
             api.mutate(updateStoreProfileMutation, {
                 input: {
                     id: input.id,
+                    storefrontNameZh: input.storefrontNameZh,
+                    storefrontNameEn: input.storefrontNameEn,
                     status: input.status,
-                    isPublished: input.isPublished,
                     sortOrder: Number(input.sortOrder),
                     descriptionZh: input.descriptionZh,
                     descriptionEn: input.descriptionEn,
@@ -176,13 +174,13 @@ function StoreManagementPage() {
     const openEditor = (profile: StoreProfileRecord) => {
         setDraft({
             id: profile.id,
+            storefrontNameZh: profile.channel.customFields.storefrontNameZh,
+            storefrontNameEn: profile.channel.customFields.storefrontNameEn,
             status: profile.status,
-            isPublished: profile.isPublished,
             sortOrder: String(profile.sortOrder),
             descriptionZh: profile.descriptionZh,
             descriptionEn: profile.descriptionEn,
             logoAsset: profile.logoAsset,
-            primaryDomain: profile.primaryDomain,
         });
     };
     const save = () => {
@@ -190,6 +188,10 @@ function StoreManagementPage() {
         const sortOrder = Number(draft.sortOrder);
         if (!Number.isInteger(sortOrder) || sortOrder < 0) {
             toast.error(text.invalidOrder);
+            return;
+        }
+        if (!validStorefrontName(draft.storefrontNameZh) || !validStorefrontName(draft.storefrontNameEn)) {
+            toast.error(text.invalidName);
             return;
         }
         mutation.mutate(draft);
@@ -256,7 +258,7 @@ function StoreManagementPage() {
                         <>
                             <div className="pb-3 text-sm text-muted-foreground">
                                 {profiles.length} {text.stores} ·{' '}
-                                {profiles.filter(profile => profile.isPublished).length} {text.published}
+                                {profiles.filter(profile => profile.status === 'ACTIVE').length} {text.enabled}
                             </div>
                             <div className="divide-y">
                                 {profiles.map(profile => (
@@ -316,9 +318,6 @@ function StoreProfileRow({
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-medium">{name || profile.channel.code}</span>
                         <StatusBadge status={profile.status} text={text} />
-                        <Badge variant={profile.isPublished ? 'default' : 'outline'}>
-                            {profile.isPublished ? text.published : text.hidden}
-                        </Badge>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span>{profile.channel.seller?.name ?? profile.channel.code}</span>
@@ -379,8 +378,6 @@ function ProfileEditor({
     if (!draft) return null;
     const update = <K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) =>
         onChange({ ...draft, [field]: value });
-    const canPublish = draft.status === 'ACTIVE' && draft.primaryDomain != null;
-
     return (
         <>
             <Dialog open onOpenChange={open => !open && onClose()}>
@@ -393,14 +390,7 @@ function ProfileEditor({
                         <Field label={text.status} htmlFor="profile-status">
                             <Select
                                 value={draft.status}
-                                onValueChange={value => {
-                                    const status = value as StoreProfileStatus;
-                                    onChange({
-                                        ...draft,
-                                        status,
-                                        isPublished: status === 'ACTIVE' ? draft.isPublished : false,
-                                    });
-                                }}
+                                onValueChange={value => update('status', value as StoreProfileStatus)}
                             >
                                 <SelectTrigger id="profile-status" className="w-full">
                                     <SelectValue />
@@ -422,20 +412,20 @@ function ProfileEditor({
                                 onChange={event => update('sortOrder', event.target.value)}
                             />
                         </Field>
-                        <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5 sm:col-span-2">
-                            <div>
-                                <Label htmlFor="profile-published">{text.appVisibility}</Label>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    {canPublish ? text.appVisibilityHint : text.publishNeedsDomain}
-                                </p>
-                            </div>
-                            <Switch
-                                id="profile-published"
-                                checked={draft.isPublished}
-                                disabled={!canPublish && !draft.isPublished}
-                                onCheckedChange={value => update('isPublished', value)}
+                        <Field label={text.storefrontNameZh} htmlFor="profile-name-zh">
+                            <Input
+                                id="profile-name-zh"
+                                value={draft.storefrontNameZh}
+                                onChange={event => update('storefrontNameZh', event.target.value)}
                             />
-                        </div>
+                        </Field>
+                        <Field label={text.storefrontNameEn} htmlFor="profile-name-en">
+                            <Input
+                                id="profile-name-en"
+                                value={draft.storefrontNameEn}
+                                onChange={event => update('storefrontNameEn', event.target.value)}
+                            />
+                        </Field>
                         <Field label={text.descriptionZh} htmlFor="profile-description-zh">
                             <Textarea
                                 id="profile-description-zh"
@@ -511,6 +501,15 @@ function ProfileEditor({
             />
         </>
     );
+}
+
+function validStorefrontName(value: string): boolean {
+    const normalized = value.trim();
+    const units = Array.from(normalized).reduce(
+        (total, character) => total + (/\p{Script=Han}|[\uFF01-\uFF60]/u.test(character) ? 2 : 1),
+        0,
+    );
+    return units >= 1 && units <= 16;
 }
 
 function Field({

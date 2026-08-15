@@ -1,8 +1,9 @@
 import 'reflect-metadata';
 
 import { LanguageCode } from '@vendure/common/lib/generated-types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentService } from './storefront-content.service';
 import { CreateStorefrontContentBlockInput } from './types';
 
@@ -72,5 +73,53 @@ describe('StorefrontContentService input validation', () => {
         expect(() =>
             validate(createInput({ targetType: 'URL', targetValue: 'javascript:alert(1)' })),
         ).toThrow(/HTTP\(S\)/);
+    });
+});
+
+describe('StorefrontContentService Channel isolation', () => {
+    it('lists and reads only content owned by the active Channel', async () => {
+        const blocks = [
+            new StorefrontContentBlock({
+                id: 'block-a',
+                channelId: 'store-a',
+                code: 'hero',
+                position: 0,
+                items: [],
+                translations: [],
+            }),
+            new StorefrontContentBlock({
+                id: 'block-b',
+                channelId: 'store-b',
+                code: 'hero',
+                position: 0,
+                items: [],
+                translations: [],
+            }),
+        ];
+        const repository = {
+            find: vi.fn(async ({ where }) =>
+                blocks.filter(block => String(block.channelId) === String(where.channelId)),
+            ),
+            findOne: vi.fn(async ({ where }) =>
+                blocks.find(
+                    block =>
+                        String(block.id) === String(where.id) &&
+                        String(block.channelId) === String(where.channelId),
+                ) ?? null,
+            ),
+        };
+        const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+        const translator = { translate: vi.fn(block => block) };
+        const service = new StorefrontContentService(connection as any, translator as any);
+
+        await expect(service.findAllForAdmin({ channelId: 'store-a' } as any)).resolves.toEqual([
+            expect.objectContaining({ id: 'block-a' }),
+        ]);
+        await expect(
+            service.findOneForAdmin({ channelId: 'store-b' } as any, 'block-a'),
+        ).resolves.toBeUndefined();
+        expect(repository.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: 'block-a', channelId: 'store-b' } }),
+        );
     });
 });

@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    demoCollections,
     createUploadMap,
     demoProducts,
     isLocalApiOrigin,
+    validateDemoCollections,
     validateDemoProducts,
 } from './seed-storefront-demo.mjs';
 
@@ -23,6 +25,18 @@ void test('demo products have unique bilingual identifiers and regional prices',
 
 void test('rejects duplicate demo SKUs', () => {
     assert.throws(() => validateDemoProducts([demoProducts[0], demoProducts[0]]), /Duplicate demo SKU/);
+});
+
+void test('demo collections are channel-specific, bilingual, and group shared products differently', () => {
+    assert.equal(validateDemoCollections(demoCollections), true);
+    assert.equal(new Set(demoCollections.map(collection => collection.code)).size, demoCollections.length);
+    const cnGroups = demoCollections
+        .filter(collection => collection.channelCode === 'cn-mainland')
+        .map(collection => collection.productSkus.join(','));
+    const myGroups = demoCollections
+        .filter(collection => collection.channelCode === 'my-malaysia')
+        .map(collection => collection.productSkus.join(','));
+    assert.notDeepEqual(cnGroups, myGroups);
 });
 
 void test('uses the GraphQL multipart request map shape', () => {

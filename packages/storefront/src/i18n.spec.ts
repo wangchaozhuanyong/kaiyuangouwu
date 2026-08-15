@@ -4,20 +4,28 @@ import {
     defaultStorefrontLanguageFor,
     languageCodeFor,
     localeFor,
-    marketCodeForChannel,
+    marketForStorefrontConfig,
     markets,
     resolveStorefrontLanguage,
     supportedStorefrontLanguages,
 } from './i18n';
 
 describe('storefront market configuration', () => {
-    it('uses the active regional Channel as the client market', () => {
-        expect(marketCodeForChannel('cn-mainland')).toBe('cn-mainland');
-        expect(marketCodeForChannel('my-malaysia')).toBe('my-malaysia');
-    });
-
-    it('does not apply regional defaults to an unknown Channel', () => {
-        expect(marketCodeForChannel('merchant-custom-channel')).toBeNull();
+    it('uses runtime Channel configuration for an arbitrary store', () => {
+        expect(
+            marketForStorefrontConfig({
+                code: 'software-store',
+                defaultLanguageCode: 'en',
+                defaultCurrencyCode: 'MYR',
+                availableCountries: [{ code: 'MY', name: 'Malaysia' }],
+                customFields: {},
+            }),
+        ).toMatchObject({
+            code: 'software-store',
+            defaultLanguageCode: 'en',
+            currencyCode: 'MYR',
+            countryCode: 'MY',
+        });
     });
 
     it('formats English with the active market locale', () => {
