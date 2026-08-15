@@ -387,6 +387,32 @@ describe('ShopApi storefront mutations', () => {
         expect(products.at(-1)?.id).toBe('product-101');
     });
 
+    it('loads product sales in bounded batches and removes duplicate ids', async () => {
+        const productIds = Array.from({ length: 101 }, (_, index) => `product-${index + 1}`);
+        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+            const request = JSON.parse(String(init?.body)) as { variables: { productIds: string[] } };
+            return new Response(
+                JSON.stringify({
+                    data: {
+                        storefrontProductSales: request.variables.productIds.map((productId, index) => ({
+                            productId,
+                            quantity: index + 1,
+                        })),
+                    },
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            );
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const sales = await new ShopApi(market).productSales([...productIds, productIds[0]]);
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(sales['product-1']).toBe(1);
+        expect(sales['product-100']).toBe(100);
+        expect(sales['product-101']).toBe(1);
+    });
+
     it('loads product history by id and preserves recent order', async () => {
         const fetchMock = mockGraphQlResponse({
             products: {

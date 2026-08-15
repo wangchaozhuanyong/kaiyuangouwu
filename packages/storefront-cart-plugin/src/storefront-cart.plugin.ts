@@ -13,12 +13,13 @@ import {
     StorefrontCartShopResolver,
 } from './storefront-cart.resolver';
 import { StorefrontCartService } from './storefront-cart.service';
+import { StorefrontProductSalesService } from './storefront-product-sales.service';
 import { reconcileStorefrontCartCheckoutsTask } from './storefront-cart-tasks';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
     entities: [StorefrontCart, StorefrontCartLine, StorefrontCartCheckout, StorefrontCartCheckoutLine],
-    providers: [StorefrontCartService, StorefrontCartLifecycleService],
+    providers: [StorefrontCartService, StorefrontCartLifecycleService, StorefrontProductSalesService],
     shopApiExtensions: {
         schema: shopApiExtensions,
         resolvers: [

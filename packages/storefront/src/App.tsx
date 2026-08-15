@@ -87,6 +87,27 @@ const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 const SEARCH_HISTORY_STORAGE_KEY = 'storefront-search-history';
 const RECENT_PRODUCT_LIMIT = 20;
 
+function sortCategoryProducts(
+    products: Product[],
+    sortMode: SortMode,
+    locale: string,
+    salesByProductId: Record<string, number> = {},
+): Product[] {
+    return [...products].sort((first, second) => {
+        if (sortMode === 'sales') {
+            const salesDifference =
+                (salesByProductId[second.id] ?? 0) - (salesByProductId[first.id] ?? 0);
+            if (salesDifference !== 0) return salesDifference;
+            return Date.parse(second.createdAt) - Date.parse(first.createdAt);
+        }
+        if (sortMode === 'newest') return Date.parse(second.createdAt) - Date.parse(first.createdAt);
+        if (sortMode === 'name') return first.name.localeCompare(second.name, locale);
+        if (sortMode === 'price-asc') return minimumPrice(first) - minimumPrice(second);
+        if (sortMode === 'price-desc') return minimumPrice(second) - minimumPrice(first);
+        return 0;
+    });
+}
+
 function storefrontNameDisplayUnits(value: string): number {
     return Array.from(value).reduce((total, character) => {
         const isWideCharacter = /[\p{Script=Han}\uFF01-\uFF60]/u.test(character);
@@ -1648,18 +1669,45 @@ function CategoryPage(props: CategoryPageProps) {
                     maximumPriceInput,
                 ),
             );
-            const sortedFallbackProducts = [...filteredFallbackProducts].sort((first, second) => {
-                if (sortMode === 'name') return first.name.localeCompare(second.name, locale);
-                if (sortMode === 'price-asc') return minimumPrice(first) - minimumPrice(second);
-                if (sortMode === 'price-desc') return minimumPrice(second) - minimumPrice(first);
-                return 0;
-            });
-            setCategoryProducts(sortedFallbackProducts);
-            setTotalItems(filteredFallbackProducts.length);
-            setVisibleLimit(12);
-            setCategoryLoading(false);
-            setCategoryError(error ?? '');
-            return;
+            let cancelled = false;
+            setCategoryLoading(sortMode === 'sales');
+            setCategoryError('');
+            const salesRequest =
+                sortMode === 'sales'
+                    ? api.productSales(filteredFallbackProducts.map(product => product.id))
+                    : Promise.resolve({});
+            void salesRequest
+                .then(salesByProductId => {
+                    if (cancelled) return;
+                    setCategoryProducts(
+                        sortCategoryProducts(
+                            filteredFallbackProducts,
+                            sortMode,
+                            locale,
+                            salesByProductId,
+                        ),
+                    );
+                    setTotalItems(filteredFallbackProducts.length);
+                    setVisibleLimit(12);
+                    setCategoryError(error ?? '');
+                })
+                .catch(requestError => {
+                    if (!cancelled) {
+                        setCategoryError(
+                            requestError instanceof Error
+                                ? requestError.message
+                                : isZh
+                                  ? '销量加载失败'
+                                  : 'Could not load sales',
+                        );
+                    }
+                })
+                .finally(() => {
+                    if (!cancelled) setCategoryLoading(false);
+                });
+            return () => {
+                cancelled = true;
+            };
         }
         if (!selectedCollectionId || selectedCollectionId === 'all') return;
         const categoryKey = [
@@ -1678,8 +1726,10 @@ function CategoryPage(props: CategoryPageProps) {
         setCategoryError('');
         setCategoryLoading(true);
         setVisibleLimit(12);
-        const request = hasFilters
-            ? api.searchAllProducts('', sortMode, selectedCollectionId).then(items => {
+        const requiresCompleteProductSet =
+            hasFilters || sortMode === 'sales' || sortMode === 'newest';
+        const request = requiresCompleteProductSet
+            ? api.searchAllProducts('', 'recommended', selectedCollectionId).then(async items => {
                   const filteredItems = items.filter(product =>
                       matchesFilters(
                           product,
@@ -1689,7 +1739,14 @@ function CategoryPage(props: CategoryPageProps) {
                           maximumPriceInput,
                       ),
                   );
-                  return { items: filteredItems, totalItems: filteredItems.length };
+                  const salesByProductId =
+                      sortMode === 'sales'
+                          ? await api.productSales(filteredItems.map(product => product.id))
+                          : {};
+                  return {
+                      items: sortCategoryProducts(filteredItems, sortMode, locale, salesByProductId),
+                      totalItems: filteredItems.length,
+                  };
               })
             : api.searchProducts('', sortMode, 0, 12, selectedCollectionId);
         void request
@@ -1737,7 +1794,7 @@ function CategoryPage(props: CategoryPageProps) {
     ]);
 
     const loadMore = async () => {
-        if (hasFilters) {
+        if (hasFilters || sortMode === 'sales' || sortMode === 'newest') {
             setVisibleLimit(limit => Math.min(limit + 12, categoryProducts.length));
             return;
         }
@@ -1781,8 +1838,11 @@ function CategoryPage(props: CategoryPageProps) {
         }
     };
 
-    const visibleProducts = hasFilters ? categoryProducts.slice(0, visibleLimit) : categoryProducts;
-    const remainingItems = hasFilters
+    const usesClientPagination = hasFilters || sortMode === 'sales' || sortMode === 'newest';
+    const visibleProducts = usesClientPagination
+        ? categoryProducts.slice(0, visibleLimit)
+        : categoryProducts;
+    const remainingItems = usesClientPagination
         ? Math.max(categoryProducts.length - visibleProducts.length, 0)
         : Math.max(totalItems - categoryProducts.length, 0);
     const draftResultCount = products.filter(product => {
@@ -1879,14 +1939,10 @@ function CategoryPage(props: CategoryPageProps) {
                             <strong>{primary?.name ?? (isZh ? '全部商品' : 'All products')}</strong>
                         </span>
                     </button>
-                    <div className="result-count">
-                        <span>{isZh ? `共 ${totalItems} 件` : `${totalItems} products`}</span>
-                        {hasFilters && <b>{isZh ? '已筛选' : 'Filtered'}</b>}
-                    </div>
                     <nav
                         className="sort-bar"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
-                        style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}
+                        style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
                     >
                         <button
                             type="button"
@@ -1897,10 +1953,17 @@ function CategoryPage(props: CategoryPageProps) {
                         </button>
                         <button
                             type="button"
-                            className={sortMode === 'name' ? 'is-active' : undefined}
-                            onClick={() => onSortChange('name')}
+                            className={sortMode === 'sales' ? 'is-active' : undefined}
+                            onClick={() => onSortChange('sales')}
                         >
-                            {isZh ? '名称' : 'Name'}
+                            {isZh ? '销量' : 'Sales'}
+                        </button>
+                        <button
+                            type="button"
+                            className={sortMode === 'newest' ? 'is-active' : undefined}
+                            onClick={() => onSortChange('newest')}
+                        >
+                            {isZh ? '最新' : 'Newest'}
                         </button>
                         <button
                             type="button"

@@ -43,7 +43,13 @@ export interface Product {
     variants: ProductVariant[];
 }
 
-export type ProductSearchSort = 'recommended' | 'name' | 'price-asc' | 'price-desc';
+export type ProductSearchSort =
+    | 'recommended'
+    | 'sales'
+    | 'newest'
+    | 'name'
+    | 'price-asc'
+    | 'price-desc';
 
 export interface ProductSearchPage {
     items: Product[];

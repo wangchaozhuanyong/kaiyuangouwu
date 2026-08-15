@@ -5,4 +5,5 @@ export * from './entities/storefront-cart.entity';
 export * from './storefront-cart.errors';
 export * from './storefront-cart.plugin';
 export * from './storefront-cart.service';
+export * from './storefront-product-sales.service';
 export * from './types';

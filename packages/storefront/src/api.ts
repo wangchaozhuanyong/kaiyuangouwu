@@ -379,6 +379,34 @@ export class ShopApi {
         return [...productsById.values()];
     }
 
+    async productSales(productIds: string[]): Promise<Record<string, number>> {
+        const uniqueProductIds = [...new Set(productIds)];
+        const quantities: Record<string, number> = {};
+        const batchSize = 100;
+
+        for (let offset = 0; offset < uniqueProductIds.length; offset += batchSize) {
+            const batch = uniqueProductIds.slice(offset, offset + batchSize);
+            const result = await this.request<{
+                storefrontProductSales: Array<{ productId: string; quantity: number }>;
+            }>(
+                `
+                    query StorefrontProductSales($productIds: [ID!]!) {
+                        storefrontProductSales(productIds: $productIds) {
+                            productId
+                            quantity
+                        }
+                    }
+                `,
+                { productIds: batch },
+            );
+            for (const item of result.storefrontProductSales) {
+                quantities[item.productId] = item.quantity;
+            }
+        }
+
+        return quantities;
+    }
+
     async collections(): Promise<CollectionSummary[]> {
         const result = await this.request<{ collections: { items: CollectionSummary[] } }>(`
             query StorefrontCollections {
