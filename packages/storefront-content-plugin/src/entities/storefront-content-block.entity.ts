@@ -1,6 +1,6 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Channel, EntityId, LocaleString, Translatable, Translation, VendureEntity } from '@vendure/core';
-import { Column, Entity, Index, ManyToOne, OneToMany } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 
 import { StorefrontContentBlockType, StorefrontContentTargetType } from '../constants';
 import { StorefrontContentBlockTranslation } from './storefront-content-block-translation.entity';
@@ -63,6 +63,7 @@ export class StorefrontContentBlock extends VendureEntity implements Translatabl
 
     @Index('IDX_storefront_content_block_channel')
     @ManyToOne(() => Channel, { onDelete: 'CASCADE', nullable: false })
+    @JoinColumn({ name: 'channelId', foreignKeyConstraintName: 'FK_storefront_content_block_channel' })
     channel: Channel;
 
     @EntityId()

@@ -1,7 +1,7 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial } from '@vendure/common/lib/shared-types';
 import { Translation, VendureEntity } from '@vendure/core';
-import { Column, Entity, Index, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 import { StorefrontContentItem } from './storefront-content-item.entity';
 
@@ -27,6 +27,10 @@ export class StorefrontContentItemTranslation
     @ManyToOne(() => StorefrontContentItem, base => base.translations, {
         onDelete: 'CASCADE',
         nullable: false,
+    })
+    @JoinColumn({
+        name: 'baseId',
+        foreignKeyConstraintName: 'FK_storefront_content_item_translation_base',
     })
     base: StorefrontContentItem;
 }

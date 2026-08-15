@@ -74,4 +74,20 @@ describe('storefront content entity metadata', () => {
             expect(relation?.options).toMatchObject({ nullable: false, onDelete: 'CASCADE' });
         }
     });
+
+    it('uses stable foreign key names that match production migrations', () => {
+        const joinColumns = getMetadataArgsStorage().joinColumns;
+        const expected = [
+            [StorefrontContentBlock, 'channel', 'FK_storefront_content_block_channel'],
+            [StorefrontContentBlockTranslation, 'base', 'FK_storefront_content_block_translation_base'],
+            [StorefrontContentItem, 'block', 'FK_storefront_content_item_block'],
+            [StorefrontContentItemTranslation, 'base', 'FK_storefront_content_item_translation_base'],
+        ] as const;
+
+        for (const [target, propertyName, foreignKeyConstraintName] of expected) {
+            expect(
+                joinColumns.find(item => item.target === target && item.propertyName === propertyName),
+            ).toMatchObject({ foreignKeyConstraintName });
+        }
+    });
 });
