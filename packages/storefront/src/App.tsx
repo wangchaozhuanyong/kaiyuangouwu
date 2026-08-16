@@ -1607,7 +1607,7 @@ export function App() {
                     {isZh ? '当前网络不可用，部分操作可能失败' : 'You are offline. Some actions may fail.'}
                 </div>
             )}
-            {(isNavigationPending || productQuery.isFetching) && (
+            {((isNavigationPending && !isRootRoute) || productQuery.isFetching) && (
                 <div className="navigation-progress" role="progressbar" aria-label={text.loading} />
             )}
             <div id="storefront-content">
@@ -2272,6 +2272,7 @@ function CategoryPage(props: CategoryPageProps) {
         enabled: collections.length > 0 && !!selectedCollectionId && selectedCollectionId !== 'all',
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
+        refetchOnMount: false,
         placeholderData: keepPreviousData,
         meta: publicQueryMeta(),
     });
@@ -5216,13 +5217,22 @@ function SafeImage({
     const [failed, setFailed] = useState(false);
     const [useResponsiveSource, setUseResponsiveSource] = useState(true);
     const [loaded, setLoaded] = useState(false);
+    const imageRef = useRef<HTMLImageElement>(null);
+    const sourceIdentity = [src, fallbackSrc ?? '', imageKind ?? ''].join('\u0000');
+    const sourceIdentityRef = useRef(sourceIdentity);
 
     useEffect(() => {
+        if (sourceIdentityRef.current === sourceIdentity) {
+            const image = imageRef.current;
+            if (image?.complete && image.naturalWidth > 0) setLoaded(true);
+            return;
+        }
+        sourceIdentityRef.current = sourceIdentity;
         setCurrentSrc(src);
         setFailed(false);
         setUseResponsiveSource(true);
         setLoaded(false);
-    }, [fallbackSrc, src]);
+    }, [sourceIdentity, src]);
 
     const responsiveSource = useMemo(
         () => (imageKind && useResponsiveSource ? responsiveImageSources(currentSrc, imageKind) : null),
@@ -5245,6 +5255,7 @@ function SafeImage({
     const image = (
         <img
             {...imageProps}
+            ref={imageRef}
             src={responsiveSource?.fallbackSrc ?? currentSrc}
             srcSet={responsiveSource?.fallbackSrcSet ?? imageProps.srcSet}
             sizes={responsiveSource?.sizes ?? imageProps.sizes}
