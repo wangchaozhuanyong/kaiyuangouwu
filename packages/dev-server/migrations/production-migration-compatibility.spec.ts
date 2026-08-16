@@ -1,12 +1,13 @@
+import { Permission } from '@vendure/common/lib/generated-types';
 import { QueryRunner, Table, TableColumn } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
-import { Permission } from '@vendure/common/lib/generated-types';
 
 import { AddStorefrontContent1786762500000 } from './1786762500000-add-storefront-content';
 import { AddCustomerOrderNote1786764000000 } from './1786764000000-add-customer-order-note';
 import { AddStoreProfiles1786765800000 } from './1786765800000-add-store-profiles';
 import { AddStoreAdministratorAccess1786767600000 } from './1786767600000-add-store-administrator-access';
 import { HardenStoreAdministratorPermissions1786769400000 } from './1786769400000-harden-store-administrator-permissions';
+import { EnableMainlandChineseLanguage1786771200000 } from './1786771200000-enable-mainland-chinese-language';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -24,6 +25,63 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it('enables simplified Chinese globally without replacing existing languages', async () => {
+        const query = vi
+            .fn()
+            .mockResolvedValueOnce([{ id: 7, availableLanguages: 'en,zh_Hant' }])
+            .mockResolvedValueOnce(undefined);
+        const queryRunner = {
+            connection: { options: { type: 'postgres' } },
+            query,
+        } as unknown as QueryRunner;
+
+        await new EnableMainlandChineseLanguage1786771200000().up(queryRunner);
+
+        expect(query).toHaveBeenNthCalledWith(1, `SELECT "id", "availableLanguages" FROM "global_settings"`);
+        expect(query).toHaveBeenNthCalledWith(
+            2,
+            `UPDATE "global_settings" SET "availableLanguages" = $1 WHERE "id" = $2`,
+            ['en,zh_Hant,zh_Hans', 7],
+        );
+    });
+
+    it('does not rewrite global languages when simplified Chinese is already enabled', async () => {
+        const query = vi.fn(async () => [{ id: 1, availableLanguages: 'en,zh_Hans' }]);
+        const queryRunner = {
+            connection: { options: { type: 'sqlite' } },
+            query,
+        } as unknown as QueryRunner;
+
+        await new EnableMainlandChineseLanguage1786771200000().up(queryRunner);
+
+        expect(query).toHaveBeenCalledOnce();
+    });
+
+    it('uses MySQL-compatible identifier quoting and parameters for the language update', async () => {
+        const query = vi
+            .fn()
+            .mockResolvedValueOnce(undefined)
+            .mockResolvedValueOnce([{ id: 3, availableLanguages: 'en' }])
+            .mockResolvedValueOnce(undefined);
+        const queryRunner = {
+            connection: { options: { type: 'mysql' } },
+            query,
+        } as unknown as QueryRunner;
+
+        await new EnableMainlandChineseLanguage1786771200000().up(queryRunner);
+
+        expect(query).toHaveBeenNthCalledWith(
+            1,
+            `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')`,
+        );
+        expect(query).toHaveBeenNthCalledWith(2, `SELECT "id", "availableLanguages" FROM "global_settings"`);
+        expect(query).toHaveBeenNthCalledWith(
+            3,
+            `UPDATE "global_settings" SET "availableLanguages" = ? WHERE "id" = ?`,
+            ['en,zh_Hans', 3],
+        );
+    });
+
     it('replaces broad catalog writes with scoped permissions for existing store admins', async () => {
         const roles = [
             {

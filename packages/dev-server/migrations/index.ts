@@ -17,6 +17,7 @@ import { AddCustomerOrderNote1786764000000 } from './1786764000000-add-customer-
 import { AddStoreProfiles1786765800000 } from './1786765800000-add-store-profiles';
 import { AddStoreAdministratorAccess1786767600000 } from './1786767600000-add-store-administrator-access';
 import { HardenStoreAdministratorPermissions1786769400000 } from './1786769400000-harden-store-administrator-permissions';
+import { EnableMainlandChineseLanguage1786771200000 } from './1786771200000-enable-mainland-chinese-language';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -38,4 +39,5 @@ export const devServerMigrations = [
     AddStoreProfiles1786765800000,
     AddStoreAdministratorAccess1786767600000,
     HardenStoreAdministratorPermissions1786769400000,
+    EnableMainlandChineseLanguage1786771200000,
 ];
