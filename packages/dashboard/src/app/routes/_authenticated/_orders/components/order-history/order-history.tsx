@@ -58,7 +58,11 @@ export function OrderHistory({
         };
         if (entry.type === 'ORDER_NOTE') {
             return (
-                <HistoryNoteEntry {...props} onEditNote={handleEditNote} onDeleteNote={handleDeleteNote} />
+                <HistoryNoteEntry
+                    {...props}
+                    onEditNote={onUpdateNote ? handleEditNote : undefined}
+                    onDeleteNote={onDeleteNote ? handleDeleteNote : undefined}
+                />
             );
         } else if (entry.type === 'ORDER_STATE_TRANSITION') {
             return <OrderStateTransitionComponent {...props} />;
@@ -79,16 +83,19 @@ export function OrderHistory({
         }
         return (
             <HistoryEntry {...props}>
-                {entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data) && Object.keys(entry.data).length > 0 && (
-                    <div className="text-xs text-muted-foreground space-y-0.5">
-                        {Object.entries(entry.data).map(([key, value]) => (
-                            <p key={key}>
-                                <span className="font-medium">{key}:</span>{' '}
-                                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                            </p>
-                        ))}
-                    </div>
-                )}
+                {entry.data &&
+                    typeof entry.data === 'object' &&
+                    !Array.isArray(entry.data) &&
+                    Object.keys(entry.data).length > 0 && (
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                            {Object.entries(entry.data).map(([key, value]) => (
+                                <p key={key}>
+                                    <span className="font-medium">{key}:</span>{' '}
+                                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                </p>
+                            ))}
+                        </div>
+                    )}
             </HistoryEntry>
         );
     };
@@ -103,15 +110,17 @@ export function OrderHistory({
             >
                 <HistoryNoteInput onAddNote={onAddNote} />
             </HistoryTimelineWithGrouping>
-            <HistoryNoteEditor
-                key={noteState.noteId}
-                note={noteState.note}
-                onNoteChange={handleNoteEditorSave}
-                open={noteEditorOpen}
-                onOpenChange={setNoteEditorOpen}
-                noteId={noteState.noteId}
-                isPrivate={noteState.isPrivate}
-            />
+            {onUpdateNote && (
+                <HistoryNoteEditor
+                    key={noteState.noteId}
+                    note={noteState.note}
+                    onNoteChange={handleNoteEditorSave}
+                    open={noteEditorOpen}
+                    onOpenChange={setNoteEditorOpen}
+                    noteId={noteState.noteId}
+                    isPrivate={noteState.isPrivate}
+                />
+            )}
         </>
     );
 }

@@ -15,6 +15,7 @@ import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useCustomFieldConfig } from '@/vdb/hooks/use-custom-field-config.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
+import { usePermissions } from '@/vdb/hooks/use-permissions.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -57,7 +58,7 @@ export interface OrderDetailSharedProps {
 }
 
 function DefaultOrderTitle({ entity }: { entity: any }) {
-    return <>{entity?.code ?? ''}</>;
+    return <span className="block break-all leading-tight">{entity?.code ?? ''}</span>;
 }
 
 /**
@@ -74,6 +75,8 @@ export function OrderDetailShared({
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { getTranslatedOrderState } = useDynamicTranslations();
+    const { hasPermissions } = usePermissions();
+    const isSuperAdmin = hasPermissions(['SuperAdmin']);
 
     const { form, submitHandler, entity, refreshEntity } = useDetailPage({
         pageId,
@@ -119,6 +122,9 @@ export function OrderDetailShared({
         if (!entity) {
             return [];
         }
+        if (!isSuperAdmin) {
+            return [];
+        }
         return entity.nextStates
             .filter((state: string) => state !== 'Modifying')
             .map((state: string) => ({
@@ -143,7 +149,7 @@ export function OrderDetailShared({
                           }
                         : undefined,
             }));
-    }, [entity, transitionToState, t, refreshPage]);
+    }, [entity, getTranslatedOrderState, isSuperAdmin, transitionToState, t, refreshPage]);
 
     const handleModifyClick = useCallback(async () => {
         if (!entity) return;
@@ -188,16 +194,18 @@ export function OrderDetailShared({
     }
 
     const nextStates = entity.nextStates;
-    const showAddPaymentButton = shouldShowAddManualPaymentButton(entity);
+    const showAddPaymentButton = isSuperAdmin && shouldShowAddManualPaymentButton(entity);
     const showFulfillButton = canAddFulfillment(entity);
-    const showRefundOption = canRefundOrder(entity);
+    const showRefundOption = isSuperAdmin && canRefundOrder(entity);
 
     return (
         <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
             <PageTitle>{titleSlot?.(entity) || <DefaultOrderTitle entity={entity} />}</PageTitle>
             <PageActionBar
                 dropdownMenuItems={[
-                    ...(nextStates.includes('Modifying') ? [{ component: ModifyMenuItem }] : []),
+                    ...(isSuperAdmin && nextStates.includes('Modifying')
+                        ? [{ component: ModifyMenuItem }]
+                        : []),
                     ...(showRefundOption ? [{ component: RefundMenuItem }] : []),
                 ]}
             >
@@ -242,15 +250,21 @@ export function OrderDetailShared({
                 </PageBlock>
                 {customFieldConfig?.length ? (
                     <PageBlock column="main" blockId="custom-fields">
-                        <CustomFieldsForm entityType="Order" control={form.control} />
-                        <div className="flex justify-end">
-                            <Button
-                                type="submit"
-                                disabled={!form.formState.isDirty || !form.formState.isValid}
-                            >
-                                <Trans>Save</Trans>
-                            </Button>
-                        </div>
+                        <CustomFieldsForm
+                            entityType="Order"
+                            control={form.control}
+                            disabled={!isSuperAdmin}
+                        />
+                        {isSuperAdmin && (
+                            <div className="flex justify-end">
+                                <Button
+                                    type="submit"
+                                    disabled={!form.formState.isDirty || !form.formState.isValid}
+                                >
+                                    <Trans>Save</Trans>
+                                </Button>
+                            </div>
+                        )}
                     </PageBlock>
                 ) : null}
                 <PageBlock column="main" blockId="payment-details" title={<Trans>Payment details</Trans>}>

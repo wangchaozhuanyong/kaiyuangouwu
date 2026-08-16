@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from '@/vdb/components/ui/alert.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Skeleton } from '@/vdb/components/ui/skeleton.js';
+import { usePermissions } from '@/vdb/hooks/use-permissions.js';
 import { Trans } from '@lingui/react/macro';
 import { TriangleAlert } from 'lucide-react';
 import { OrderHistory } from './order-history.js';
@@ -11,6 +12,8 @@ interface OrderHistoryContainerProps {
 }
 
 export function OrderHistoryContainer({ orderId }: Readonly<OrderHistoryContainerProps>) {
+    const { hasPermissions } = usePermissions();
+    const isSuperAdmin = hasPermissions(['SuperAdmin']);
     const {
         historyEntries,
         order,
@@ -66,8 +69,8 @@ export function OrderHistoryContainer({ orderId }: Readonly<OrderHistoryContaine
                     order={order}
                     historyEntries={historyEntries ?? []}
                     onAddNote={addNote}
-                    onUpdateNote={updateNote}
-                    onDeleteNote={deleteNote}
+                    onUpdateNote={isSuperAdmin ? updateNote : undefined}
+                    onDeleteNote={isSuperAdmin ? deleteNote : undefined}
                 />
             ) : null}
             {hasNextPage && (

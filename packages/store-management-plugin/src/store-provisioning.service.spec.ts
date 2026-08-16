@@ -159,12 +159,9 @@ describe('StoreProvisioningService', () => {
             'stock-location-2',
             ['store-1'],
         );
-        expect(channelService.assignToChannels).toHaveBeenCalledWith(
-            ctx,
-            PaymentMethod,
-            'payment-method-1',
-            ['store-1'],
-        );
+        expect(channelService.assignToChannels).toHaveBeenCalledWith(ctx, PaymentMethod, 'payment-method-1', [
+            'store-1',
+        ]);
         expect(channelService.assignToChannels).toHaveBeenCalledWith(
             ctx,
             ShippingMethod,
@@ -242,6 +239,7 @@ describe('StoreProvisioningService', () => {
         expect(storeAdministratorPermissions).not.toContain(Permission.DeleteChannel);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateSeller);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateAdministrator);
+        expect(storeAdministratorPermissions).not.toContain(Permission.CreateOrder);
         expect(storeAdministratorPermissions).not.toContain(Permission.DeleteOrder);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateCatalog);
         expect(storeAdministratorPermissions).not.toContain(Permission.UpdateCatalog);

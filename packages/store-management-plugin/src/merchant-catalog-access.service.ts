@@ -8,7 +8,10 @@ import {
     Facet,
     FacetValue,
     ForbiddenError,
+    Fulfillment,
     idsAreEqual,
+    Order,
+    OrderLine,
     Product,
     ProductOption,
     ProductOptionGroup,
@@ -57,6 +60,16 @@ const channelTransferMutations = new Set([
     'updateStockLocation',
 ]);
 
+const platformOrderMutations = new Set([
+    'cancelOrder',
+    'modifyOrder',
+    'setOrderCustomFields',
+    'setOrderCustomer',
+    'transitionOrderToState',
+    'updateOrderNote',
+    'deleteOrderNote',
+]);
+
 interface CatalogMutationInput {
     assetId?: ID;
     assetIds?: ID[];
@@ -64,6 +77,7 @@ interface CatalogMutationInput {
     facetId?: ID;
     id?: ID;
     parentId?: ID;
+    lines?: Array<{ orderLineId: ID }> | null;
     productId?: ID;
     productOptionGroupId?: ID;
     stockLevels?: Array<{ stockLocationId: ID }> | null;
@@ -104,8 +118,12 @@ export class MerchantCatalogAccessService {
         if (channelTransferMutations.has(fieldName)) {
             throw new ForbiddenError();
         }
+        if (this.isPlatformOrderMutation(fieldName)) {
+            throw new ForbiddenError();
+        }
 
         const inputs = this.getInputs(args);
+        await this.assertMerchantOrderOperation(ctx, fieldName, args, inputs);
         await this.assertExclusiveCatalogEntities(ctx, fieldName, args, inputs);
         if (fieldName === 'createProductVariants') {
             await this.assertEntitiesExclusiveToActiveChannel(
@@ -126,6 +144,77 @@ export class MerchantCatalogAccessService {
         }
     }
 
+    private isPlatformOrderMutation(fieldName: string): boolean {
+        return (
+            platformOrderMutations.has(fieldName) ||
+            fieldName.includes('DraftOrder') ||
+            /payment|refund/i.test(fieldName)
+        );
+    }
+
+    private async assertMerchantOrderOperation(
+        ctx: RequestContext,
+        fieldName: string,
+        args: Record<string, unknown>,
+        inputs: CatalogMutationInput[],
+    ): Promise<void> {
+        switch (fieldName) {
+            case 'addFulfillmentToOrder':
+                return this.assertOrderLinesBelongToActiveChannel(
+                    ctx,
+                    inputs.flatMap(input => input.lines?.map(line => line.orderLineId) ?? []),
+                );
+            case 'transitionFulfillmentToState':
+                return this.assertFulfillmentsBelongToActiveChannel(ctx, this.namedIds(args, 'id'));
+            case 'addNoteToOrder':
+                return this.assertEntitiesBelongToActiveChannel(
+                    ctx,
+                    Order,
+                    inputs.flatMap(input => (input.id == null ? [] : [input.id])),
+                );
+        }
+    }
+
+    private async assertOrderLinesBelongToActiveChannel(ctx: RequestContext, ids: ID[]): Promise<void> {
+        const uniqueIds = this.uniqueIds(ids);
+        if (uniqueIds.length === 0) {
+            throw new ForbiddenError();
+        }
+        const lines = await this.connection.getRepository(ctx, OrderLine).find({
+            where: uniqueIds.map(id => ({ id })),
+            relations: ['order', 'order.channels'],
+        });
+        if (
+            lines.length !== uniqueIds.length ||
+            lines.some(line => !line.order.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)))
+        ) {
+            throw new ForbiddenError();
+        }
+    }
+
+    private async assertFulfillmentsBelongToActiveChannel(ctx: RequestContext, ids: ID[]): Promise<void> {
+        const uniqueIds = this.uniqueIds(ids);
+        if (uniqueIds.length === 0) {
+            throw new ForbiddenError();
+        }
+        const fulfillments = await this.connection.getRepository(ctx, Fulfillment).find({
+            where: uniqueIds.map(id => ({ id })),
+            relations: ['orders', 'orders.channels'],
+        });
+        if (
+            fulfillments.length !== uniqueIds.length ||
+            fulfillments.some(
+                fulfillment =>
+                    fulfillment.orders.length === 0 ||
+                    fulfillment.orders.some(
+                        order => !order.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)),
+                    ),
+            )
+        ) {
+            throw new ForbiddenError();
+        }
+    }
+
     private async getMerchantChannelIds(ctx: RequestContext): Promise<ID[] | null> {
         const access = await this.connection
             .getRepository(ctx, StoreAdministratorAccess)
@@ -143,10 +232,7 @@ export class MerchantCatalogAccessService {
         return this.uniqueIds(user.roles.flatMap(role => role.channels.map(channel => channel.id)));
     }
 
-    private async assertStockLocationsBelongToActiveChannel(
-        ctx: RequestContext,
-        ids: ID[],
-    ): Promise<void> {
+    private async assertStockLocationsBelongToActiveChannel(ctx: RequestContext, ids: ID[]): Promise<void> {
         const uniqueIds = this.uniqueIds(ids);
         if (uniqueIds.length === 0) {
             return;
@@ -186,82 +272,70 @@ export class MerchantCatalogAccessService {
             case 'deleteProducts':
             case 'addOptionGroupToProduct':
             case 'removeOptionGroupFromProduct':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    Product,
-                    [...inputIds, ...directIds, ...this.namedIds(args, 'productId')],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, Product, [
+                    ...inputIds,
+                    ...directIds,
+                    ...this.namedIds(args, 'productId'),
+                ]);
             case 'updateProductVariant':
             case 'updateProductVariants':
             case 'deleteProductVariant':
             case 'deleteProductVariants':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    ProductVariant,
-                    [...inputIds, ...directIds],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, ProductVariant, [
+                    ...inputIds,
+                    ...directIds,
+                ]);
             case 'updateAsset':
             case 'deleteAsset':
             case 'deleteAssets':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    Asset,
-                    [
-                        ...inputIds,
-                        ...inputs.flatMap(input => input.assetId == null ? [] : [input.assetId]),
-                        ...inputs.flatMap(input => input.assetIds ?? []),
-                    ],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, Asset, [
+                    ...inputIds,
+                    ...inputs.flatMap(input => (input.assetId == null ? [] : [input.assetId])),
+                    ...inputs.flatMap(input => input.assetIds ?? []),
+                ]);
             case 'updateCollection':
             case 'deleteCollection':
             case 'deleteCollections':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    Collection,
-                    [...inputIds, ...directIds],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, Collection, [
+                    ...inputIds,
+                    ...directIds,
+                ]);
             case 'moveCollection':
                 await this.assertEntitiesExclusiveToActiveChannel(
                     ctx,
                     Collection,
-                    inputs.flatMap(input => input.collectionId == null ? [] : [input.collectionId]),
+                    inputs.flatMap(input => (input.collectionId == null ? [] : [input.collectionId])),
                 );
                 return this.assertEntitiesBelongToActiveChannel(
                     ctx,
                     Collection,
-                    inputs.flatMap(input => input.parentId == null ? [] : [input.parentId]),
+                    inputs.flatMap(input => (input.parentId == null ? [] : [input.parentId])),
                 );
             case 'updateFacet':
             case 'deleteFacet':
             case 'deleteFacets':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    Facet,
-                    [...inputIds, ...directIds],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, Facet, [...inputIds, ...directIds]);
             case 'createFacetValue':
             case 'createFacetValues':
                 return this.assertEntitiesExclusiveToActiveChannel(
                     ctx,
                     Facet,
-                    inputs.flatMap(input => input.facetId == null ? [] : [input.facetId]),
+                    inputs.flatMap(input => (input.facetId == null ? [] : [input.facetId])),
                 );
             case 'updateFacetValue':
             case 'updateFacetValues':
             case 'deleteFacetValues':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    FacetValue,
-                    [...inputIds, ...directIds],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, FacetValue, [
+                    ...inputIds,
+                    ...directIds,
+                ]);
             case 'updateProductOptionGroup':
             case 'deleteProductOptionGroup':
             case 'deleteProductOptionGroups':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    ProductOptionGroup,
-                    [...inputIds, ...directIds],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, ProductOptionGroup, [
+                    ...inputIds,
+                    ...directIds,
+                ]);
             case 'createProductOption':
                 return this.assertEntitiesExclusiveToActiveChannel(
                     ctx,
@@ -272,11 +346,10 @@ export class MerchantCatalogAccessService {
                 );
             case 'updateProductOption':
             case 'deleteProductOption':
-                return this.assertEntitiesExclusiveToActiveChannel(
-                    ctx,
-                    ProductOption,
-                    [...inputIds, ...directIds],
-                );
+                return this.assertEntitiesExclusiveToActiveChannel(ctx, ProductOption, [
+                    ...inputIds,
+                    ...directIds,
+                ]);
         }
     }
 
@@ -289,13 +362,9 @@ export class MerchantCatalogAccessService {
         if (uniqueIds.length === 0) {
             return;
         }
-        const entities = await this.connection.findByIdsInChannel(
-            ctx,
-            entity,
-            uniqueIds,
-            ctx.channelId,
-            { relations: ['channels'] },
-        );
+        const entities = await this.connection.findByIdsInChannel(ctx, entity, uniqueIds, ctx.channelId, {
+            relations: ['channels'],
+        });
         const defaultChannel = await this.channelService.getDefaultChannel(ctx);
         const allowedChannelIds = [ctx.channelId, defaultChannel.id];
         const containsForeignOrSharedEntity = entities.some(
@@ -319,23 +388,14 @@ export class MerchantCatalogAccessService {
         if (uniqueIds.length === 0) {
             return;
         }
-        const entities = await this.connection.findByIdsInChannel(
-            ctx,
-            entity,
-            uniqueIds,
-            ctx.channelId,
-            {},
-        );
+        const entities = await this.connection.findByIdsInChannel(ctx, entity, uniqueIds, ctx.channelId, {});
         if (entities.length !== uniqueIds.length) {
             throw new ForbiddenError();
         }
     }
 
     private directIds(args: Record<string, unknown>): ID[] {
-        return [
-            ...this.namedIds(args, 'id'),
-            ...this.namedIds(args, 'ids'),
-        ];
+        return [...this.namedIds(args, 'id'), ...this.namedIds(args, 'ids')];
     }
 
     private namedIds(args: Record<string, unknown>, key: string): ID[] {

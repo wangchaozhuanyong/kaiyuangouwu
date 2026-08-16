@@ -4,6 +4,8 @@ import {
     Asset,
     Collection,
     ForbiddenError,
+    Fulfillment,
+    OrderLine,
     Product,
     ProductVariant,
     StockLocation,
@@ -19,6 +21,11 @@ function createService(options?: {
     channelIds?: string[];
     visibleEntityIds?: string[];
     sharedEntityIds?: string[];
+    orderLines?: Array<{ id: string; order: { channels: Array<{ id: string }> } }>;
+    fulfillments?: Array<{
+        id: string;
+        orders: Array<{ channels: Array<{ id: string }> }>;
+    }>;
 }) {
     const channelIds = options?.channelIds ?? ['store-a'];
     const accessRepository = {
@@ -32,25 +39,38 @@ function createService(options?: {
     };
     const visibleEntityIds = options?.visibleEntityIds ?? [];
     const sharedEntityIds = new Set(options?.sharedEntityIds ?? []);
+    const orderLineRepository = { find: vi.fn().mockResolvedValue(options?.orderLines ?? []) };
+    const fulfillmentRepository = { find: vi.fn().mockResolvedValue(options?.fulfillments ?? []) };
     const connection = {
-        getRepository: vi.fn((_ctx, entity) =>
-            entity === StoreAdministratorAccess ? accessRepository : userRepository,
-        ),
+        getRepository: vi.fn((_ctx, entity) => {
+            if (entity === StoreAdministratorAccess) return accessRepository;
+            if (entity === User) return userRepository;
+            if (entity === OrderLine) return orderLineRepository;
+            if (entity === Fulfillment) return fulfillmentRepository;
+            throw new Error(`Unexpected repository: ${String(entity)}`);
+        }),
         findByIdsInChannel: vi.fn(async (_ctx, entity, ids: string[]) =>
             ids
                 .filter(id => visibleEntityIds.includes(id))
                 .map(id => ({
                     id,
                     entity,
-                    channels: sharedEntityIds.has(id) ? [{ id: 'store-a' }, { id: 'store-b' }] : [{ id: 'store-a' }],
+                    channels: sharedEntityIds.has(id)
+                        ? [{ id: 'store-a' }, { id: 'store-b' }]
+                        : [{ id: 'store-a' }],
                 })),
         ),
     };
     return {
         connection,
-        service: new MerchantCatalogAccessService(connection as any, {
-            getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
-        } as any),
+        fulfillmentRepository,
+        orderLineRepository,
+        service: new MerchantCatalogAccessService(
+            connection as any,
+            {
+                getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
+            } as any,
+        ),
     };
 }
 
@@ -99,6 +119,88 @@ describe('MerchantCatalogAccessService', () => {
         ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
+    it('reserves payments, refunds, cancellation and order administration for the platform', async () => {
+        const { service } = createService();
+
+        for (const fieldName of [
+            'settlePayment',
+            'refundOrder',
+            'cancelOrder',
+            'modifyOrder',
+            'transitionOrderToState',
+            'adjustDraftOrderLine',
+            'updateOrderNote',
+            'deleteOrderNote',
+        ]) {
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Mutation', fieldName, {
+                    id: 'foreign-id',
+                    input: { id: 'foreign-id', orderId: 'foreign-id' },
+                }),
+            ).rejects.toBeInstanceOf(ForbiddenError);
+        }
+    });
+
+    it('allows fulfillment and note operations only for the active Channel', async () => {
+        const own = createService({
+            visibleEntityIds: ['order-a'],
+            orderLines: [{ id: 'line-a', order: { channels: [{ id: 'store-a' }] } }],
+            fulfillments: [{ id: 'fulfillment-a', orders: [{ channels: [{ id: 'store-a' }] }] }],
+        });
+
+        await expect(
+            own.service.assertRootFieldAccess(merchantContext, 'Mutation', 'addFulfillmentToOrder', {
+                input: { lines: [{ orderLineId: 'line-a' }] },
+            }),
+        ).resolves.toBeUndefined();
+        await expect(
+            own.service.assertRootFieldAccess(merchantContext, 'Mutation', 'transitionFulfillmentToState', {
+                id: 'fulfillment-a',
+                state: 'Shipped',
+            }),
+        ).resolves.toBeUndefined();
+        await expect(
+            own.service.assertRootFieldAccess(merchantContext, 'Mutation', 'addNoteToOrder', {
+                input: { id: 'order-a', note: 'Packed', isPublic: false },
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(own.orderLineRepository.find).toHaveBeenCalledWith({
+            where: [{ id: 'line-a' }],
+            relations: ['order', 'order.channels'],
+        });
+        expect(own.fulfillmentRepository.find).toHaveBeenCalledWith({
+            where: [{ id: 'fulfillment-a' }],
+            relations: ['orders', 'orders.channels'],
+        });
+        const foreign = createService({
+            visibleEntityIds: [],
+            orderLines: [{ id: 'line-b', order: { channels: [{ id: 'store-b' }] } }],
+            fulfillments: [{ id: 'fulfillment-b', orders: [{ channels: [{ id: 'store-b' }] }] }],
+        });
+        await expect(
+            foreign.service.assertRootFieldAccess(merchantContext, 'Mutation', 'addFulfillmentToOrder', {
+                input: { lines: [{ orderLineId: 'line-b' }] },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+            foreign.service.assertRootFieldAccess(
+                merchantContext,
+                'Mutation',
+                'transitionFulfillmentToState',
+                {
+                    id: 'fulfillment-b',
+                    state: 'Shipped',
+                },
+            ),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+            foreign.service.assertRootFieldAccess(merchantContext, 'Mutation', 'addNoteToOrder', {
+                input: { id: 'order-b', note: 'Forbidden', isPublic: false },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
     it('allows creating variants only on an exclusive active-Channel Product', async () => {
         const own = createService({ visibleEntityIds: ['product-a', 'stock-a'] });
         await expect(
@@ -131,13 +233,18 @@ describe('MerchantCatalogAccessService', () => {
             getRepository: vi.fn((_ctx, entity) =>
                 entity === StoreAdministratorAccess ? accessRepository : userRepository,
             ),
-            findByIdsInChannel: vi.fn().mockResolvedValue([
-                { id: 'product-a', channels: [{ id: 'default-channel' }, { id: 'store-a' }] },
-            ]),
+            findByIdsInChannel: vi
+                .fn()
+                .mockResolvedValue([
+                    { id: 'product-a', channels: [{ id: 'default-channel' }, { id: 'store-a' }] },
+                ]),
         };
-        const service = new MerchantCatalogAccessService(connection as any, {
-            getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
-        } as any);
+        const service = new MerchantCatalogAccessService(
+            connection as any,
+            {
+                getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default-channel' }),
+            } as any,
+        );
 
         await expect(
             service.assertRootFieldAccess(merchantContext, 'Mutation', 'updateProduct', {
@@ -161,7 +268,10 @@ describe('MerchantCatalogAccessService', () => {
             {},
         );
 
-        const shared = createService({ visibleEntityIds: ['asset-shared'], sharedEntityIds: ['asset-shared'] });
+        const shared = createService({
+            visibleEntityIds: ['asset-shared'],
+            sharedEntityIds: ['asset-shared'],
+        });
         await expect(
             shared.service.assertRootFieldAccess(merchantContext, 'Mutation', 'updateAsset', {
                 input: { id: 'asset-shared' },

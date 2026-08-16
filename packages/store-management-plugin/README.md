@@ -48,3 +48,11 @@ catalog queries and updates provide the primary isolation, while this plugin rej
 assignment/removal mutations and validates the parent Product and StockLocation IDs used when merchants
 create or update variants. The merchant Dashboard keeps product, collection, asset, and stock-location
 tools available while hiding platform Channel, shipping, payment, country, and zone administration.
+
+## Merchant order isolation
+
+Vendure's Order and Customer queries are filtered by the active Channel. Provisioned merchants may create
+fulfillments for their own OrderLines, advance their own Fulfillments, and append order notes. The plugin
+rejects payment, refund, cancellation, draft-order, order-modification, customer-reassignment, order-state,
+and note-edit/delete mutations for merchants. The Dashboard keeps those platform operations visible only
+to SuperAdmins while retaining merchant fulfillment and append-only note workflows.

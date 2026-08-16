@@ -6,6 +6,7 @@ import { api } from '@/vdb/graphql/api.js';
 import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
+import { usePermissions } from '@/vdb/hooks/use-permissions.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
@@ -35,6 +36,8 @@ export function PaymentDetails({ payment, currencyCode, onSuccess }: Readonly<Pa
     const { formatCurrency, formatDate } = useLocalFormat();
     const { t } = useLingui();
     const { getTranslatedPaymentState, getTranslatedRefundState } = useDynamicTranslations();
+    const { hasPermissions } = usePermissions();
+    const isSuperAdmin = hasPermissions(['SuperAdmin']);
     const [settleRefundDialogOpen, setSettleRefundDialogOpen] = useState(false);
     const [selectedRefundId, setSelectedRefundId] = useState<string | null>(null);
 
@@ -262,7 +265,7 @@ export function PaymentDetails({ payment, currencyCode, onSuccess }: Readonly<Pa
                                             </div>
                                         )}
                                     </div>
-                                    {refund.state === 'Pending' && (
+                                    {isSuperAdmin && refund.state === 'Pending' && (
                                         <div className="mt-3 pt-3 border-t">
                                             <Button
                                                 size="sm"
@@ -278,18 +281,20 @@ export function PaymentDetails({ payment, currencyCode, onSuccess }: Readonly<Pa
                         </CollapsibleContent>
                     </Collapsible>
                 )}
-                <div className="mt-3 pt-3 border-t">
-                    <StateTransitionControl
-                        currentState={payment.state}
-                        statesTranslationFunction={getTranslatedPaymentState}
-                        actions={getPaymentActions()}
-                        isLoading={
-                            settlePaymentMutation.isPending ||
-                            transitionPaymentMutation.isPending ||
-                            cancelPaymentMutation.isPending
-                        }
-                    />
-                </div>
+                {isSuperAdmin && (
+                    <div className="mt-3 pt-3 border-t">
+                        <StateTransitionControl
+                            currentState={payment.state}
+                            statesTranslationFunction={getTranslatedPaymentState}
+                            actions={getPaymentActions()}
+                            isLoading={
+                                settlePaymentMutation.isPending ||
+                                transitionPaymentMutation.isPending ||
+                                cancelPaymentMutation.isPending
+                            }
+                        />
+                    </div>
+                )}
             </div>
             <SettleRefundDialog
                 open={settleRefundDialogOpen}
