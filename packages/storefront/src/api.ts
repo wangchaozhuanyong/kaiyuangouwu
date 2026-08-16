@@ -25,6 +25,8 @@ import {
 const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 const AUTH_TOKEN_STORAGE_PREFIX = 'vendure-shop-auth-token';
+const NATIVE_CATALOG_BATCH_SIZE = 100;
+const STOREFRONT_CATALOG_MAX_TAKE = 48;
 const SEND_CLIENT_CHANNEL_TOKEN =
     import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
     (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
@@ -181,9 +183,60 @@ export class ShopApiError extends Error {
     }
 }
 
+function isMissingStorefrontCatalogSchema(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    return (
+        error.message.includes('Unknown type "StorefrontCatalogInput"') ||
+        error.message.includes('Cannot query field "storefrontCatalog"')
+    );
+}
+
+function catalogVariants(product: Product, input: StorefrontCatalogInput): Product['variants'] {
+    if (!input.fulfillmentType) return product.variants;
+    return product.variants.filter(variant => variant.customFields.fulfillmentType === input.fulfillmentType);
+}
+
+function minimumCatalogPrice(product: Product, input: StorefrontCatalogInput): number {
+    const prices = catalogVariants(product, input).map(variant => variant.priceWithTax);
+    return prices.length ? Math.min(...prices) : Number.POSITIVE_INFINITY;
+}
+
+function matchesCatalogFilters(product: Product, input: StorefrontCatalogInput): boolean {
+    const variants = catalogVariants(product, input);
+    if (!variants.length) return false;
+    if (input.inStockOnly && !variants.some(variant => variant.stockLevel !== 'OUT_OF_STOCK')) {
+        return false;
+    }
+    const minimumPrice = Math.min(...variants.map(variant => variant.priceWithTax));
+    if (input.minPriceWithTax != null && minimumPrice < input.minPriceWithTax) return false;
+    if (input.maxPriceWithTax != null && minimumPrice > input.maxPriceWithTax) return false;
+    return true;
+}
+
+function sortNativeCatalogProducts(
+    products: Product[],
+    input: StorefrontCatalogInput,
+    locale: string,
+): Product[] {
+    const sorted = [...products];
+    if (input.sort === 'sales') return sorted;
+    if (input.sort === 'newest') {
+        return sorted.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+    }
+    if (input.sort === 'price-asc' || input.sort === 'price-desc') {
+        const direction = input.sort === 'price-asc' ? 1 : -1;
+        return sorted.sort(
+            (left, right) =>
+                (minimumCatalogPrice(left, input) - minimumCatalogPrice(right, input)) * direction,
+        );
+    }
+    return sorted.sort((left, right) => left.name.localeCompare(right.name, locale));
+}
+
 export class ShopApi {
     private readonly authTokenStorageKey: string | null;
     private authToken: string | null;
+    private storefrontCatalogAvailable: boolean | null = null;
 
     constructor(
         private readonly market: MarketConfig,
@@ -330,6 +383,9 @@ export class ShopApi {
     }
 
     async catalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<ProductSearchPage> {
+        if (this.storefrontCatalogAvailable === false) {
+            return this.nativeCatalog(input, signal);
+        }
         const sortMap: Record<ProductSearchSort, string> = {
             recommended: 'RECOMMENDED',
             sales: 'SALES',
@@ -338,33 +394,102 @@ export class ShopApi {
             'price-asc': 'PRICE_ASC',
             'price-desc': 'PRICE_DESC',
         };
-        const result = await this.request<{ storefrontCatalog: ProductSearchPage }>(
-            `
-                query StorefrontCatalog($input: StorefrontCatalogInput!) {
-                    storefrontCatalog(input: $input) {
-                        totalItems
-                        items { ${productFields} }
+        try {
+            const result = await this.request<{ storefrontCatalog: ProductSearchPage }>(
+                `
+                    query StorefrontCatalog($input: StorefrontCatalogInput!) {
+                        storefrontCatalog(input: $input) {
+                            totalItems
+                            items { ${productFields} }
+                        }
                     }
-                }
-            `,
-            {
-                input: {
-                    ...(input.term ? { term: input.term } : {}),
-                    ...(input.collectionId ? { collectionId: input.collectionId } : {}),
-                    sort: sortMap[input.sort ?? 'recommended'],
-                    ...(input.fulfillmentType
-                        ? { fulfillmentType: input.fulfillmentType.toUpperCase() }
-                        : {}),
-                    inStockOnly: input.inStockOnly === true,
-                    ...(input.minPriceWithTax != null ? { minPriceWithTax: input.minPriceWithTax } : {}),
-                    ...(input.maxPriceWithTax != null ? { maxPriceWithTax: input.maxPriceWithTax } : {}),
-                    skip: input.skip ?? 0,
-                    take: input.take ?? 12,
+                `,
+                {
+                    input: {
+                        ...(input.term ? { term: input.term } : {}),
+                        ...(input.collectionId ? { collectionId: input.collectionId } : {}),
+                        sort: sortMap[input.sort ?? 'recommended'],
+                        ...(input.fulfillmentType
+                            ? { fulfillmentType: input.fulfillmentType.toUpperCase() }
+                            : {}),
+                        inStockOnly: input.inStockOnly === true,
+                        ...(input.minPriceWithTax != null ? { minPriceWithTax: input.minPriceWithTax } : {}),
+                        ...(input.maxPriceWithTax != null ? { maxPriceWithTax: input.maxPriceWithTax } : {}),
+                        skip: input.skip ?? 0,
+                        take: input.take ?? 12,
+                    },
                 },
-            },
-            signal,
-        );
-        return result.storefrontCatalog;
+                signal,
+            );
+            this.storefrontCatalogAvailable = true;
+            return result.storefrontCatalog;
+        } catch (error) {
+            if (!isMissingStorefrontCatalogSchema(error)) throw error;
+            this.storefrontCatalogAvailable = false;
+            return this.nativeCatalog(input, signal);
+        }
+    }
+
+    private async nativeCatalog(
+        input: StorefrontCatalogInput,
+        signal?: AbortSignal,
+    ): Promise<ProductSearchPage> {
+        const productIds: string[] = [];
+        const seenProductIds = new Set<string>();
+        let searchSkip = 0;
+        let nativeTotalItems = Number.POSITIVE_INFINITY;
+
+        while (searchSkip < nativeTotalItems) {
+            const result = await this.request<{
+                search: { totalItems: number; items: Array<{ productId: string }> };
+            }>(
+                `
+                    query StorefrontNativeCatalog($input: SearchInput!) {
+                        search(input: $input) {
+                            totalItems
+                            items { productId }
+                        }
+                    }
+                `,
+                {
+                    input: {
+                        ...(input.term?.trim() ? { term: input.term.trim() } : {}),
+                        ...(input.collectionId ? { collectionId: input.collectionId } : {}),
+                        groupByProduct: true,
+                        ...(input.inStockOnly ? { inStock: true } : {}),
+                        skip: searchSkip,
+                        take: NATIVE_CATALOG_BATCH_SIZE,
+                    },
+                },
+                signal,
+            );
+            nativeTotalItems = result.search.totalItems;
+            for (const item of result.search.items) {
+                if (seenProductIds.has(item.productId)) continue;
+                seenProductIds.add(item.productId);
+                productIds.push(item.productId);
+            }
+            if (!result.search.items.length) break;
+            searchSkip += result.search.items.length;
+        }
+
+        const products: Product[] = [];
+        for (let offset = 0; offset < productIds.length; offset += NATIVE_CATALOG_BATCH_SIZE) {
+            products.push(
+                ...(await this.productsByIds(
+                    productIds.slice(offset, offset + NATIVE_CATALOG_BATCH_SIZE),
+                    signal,
+                )),
+            );
+        }
+        const filteredProducts = products.filter(product => matchesCatalogFilters(product, input));
+        const sortedProducts = sortNativeCatalogProducts(filteredProducts, input, this.market.locale);
+        const skip = Math.max(0, Math.trunc(input.skip ?? 0));
+        const take = Math.min(STOREFRONT_CATALOG_MAX_TAKE, Math.max(1, Math.trunc(input.take ?? 12)));
+        return {
+            items: sortedProducts.slice(skip, skip + take),
+            totalItems: sortedProducts.length,
+        };
     }
 
     async productSales(productIds: string[]): Promise<Record<string, number>> {

@@ -403,6 +403,146 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
+    it('falls back to native search when the custom catalog schema is unavailable', async () => {
+        const fallbackProducts = [
+            {
+                id: 'product-2',
+                createdAt: '2026-01-02T00:00:00.000Z',
+                name: 'Digital product',
+                variants: [
+                    {
+                        priceWithTax: 2400,
+                        stockLevel: 'IN_STOCK',
+                        customFields: { fulfillmentType: 'digital' },
+                    },
+                ],
+            },
+            {
+                id: 'product-4',
+                createdAt: '2026-01-04T00:00:00.000Z',
+                name: 'Higher price',
+                variants: [
+                    {
+                        priceWithTax: 2500,
+                        stockLevel: 'IN_STOCK',
+                        customFields: { fulfillmentType: 'physical' },
+                    },
+                ],
+            },
+            {
+                id: 'product-3',
+                createdAt: '2026-01-03T00:00:00.000Z',
+                name: 'Out of stock',
+                variants: [
+                    {
+                        priceWithTax: 2200,
+                        stockLevel: 'OUT_OF_STOCK',
+                        customFields: { fulfillmentType: 'physical' },
+                    },
+                ],
+            },
+            {
+                id: 'product-1',
+                createdAt: '2026-01-01T00:00:00.000Z',
+                name: 'Lower price',
+                variants: [
+                    {
+                        priceWithTax: 1500,
+                        stockLevel: 'IN_STOCK',
+                        customFields: { fulfillmentType: 'physical' },
+                    },
+                ],
+            },
+        ];
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+            const request = JSON.parse(String(init?.body)) as { query: string };
+            if (request.query.includes('query StorefrontCatalog(')) {
+                return new Response(
+                    JSON.stringify({
+                        errors: [{ message: 'Unknown type "StorefrontCatalogInput".' }],
+                    }),
+                    { status: 400, headers: { 'content-type': 'application/json' } },
+                );
+            }
+            if (request.query.includes('query StorefrontNativeCatalog')) {
+                return new Response(
+                    JSON.stringify({
+                        data: {
+                            search: {
+                                totalItems: 4,
+                                items: [
+                                    { productId: 'product-1' },
+                                    { productId: 'product-2' },
+                                    { productId: 'product-3' },
+                                    { productId: 'product-4' },
+                                ],
+                            },
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                );
+            }
+            if (request.query.includes('query StorefrontProductsByIds')) {
+                return new Response(JSON.stringify({ data: { products: { items: fallbackProducts } } }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                });
+            }
+            throw new Error('Unexpected GraphQL request');
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const api = new ShopApi(market);
+        const input = {
+            collectionId: 'collection-1',
+            sort: 'price-desc' as const,
+            fulfillmentType: 'physical' as const,
+            inStockOnly: true,
+            minPriceWithTax: 1000,
+            maxPriceWithTax: 2600,
+        };
+
+        const firstPage = await api.catalog(input);
+        const secondPage = await api.catalog(input);
+
+        expect(firstPage.totalItems).toBe(2);
+        expect(firstPage.items.map(product => product.id)).toEqual(['product-4', 'product-1']);
+        expect(secondPage.items.map(product => product.id)).toEqual(['product-4', 'product-1']);
+        const requests = fetchMock.mock.calls.map(
+            call =>
+                JSON.parse(String(call[1]?.body)) as { query: string; variables: Record<string, unknown> },
+        );
+        expect(requests.filter(request => request.query.includes('query StorefrontCatalog('))).toHaveLength(
+            1,
+        );
+        expect(
+            requests.filter(request => request.query.includes('query StorefrontNativeCatalog')),
+        ).toHaveLength(2);
+        expect(requests[1].variables).toEqual({
+            input: {
+                collectionId: 'collection-1',
+                groupByProduct: true,
+                inStock: true,
+                skip: 0,
+                take: 100,
+            },
+        });
+    });
+
+    it('does not hide unrelated catalog errors behind the native fallback', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ errors: [{ message: 'Catalog permission denied' }] }), {
+                status: 400,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(new ShopApi(market).catalog({ collectionId: 'collection-1' })).rejects.toThrow(
+            'Catalog permission denied',
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('loads product sales in bounded batches and removes duplicate ids', async () => {
         const productIds = Array.from({ length: 101 }, (_, index) => `product-${index + 1}`);
         const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
