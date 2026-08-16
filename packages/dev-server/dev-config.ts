@@ -34,6 +34,7 @@ import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin'
 import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
+import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import 'dotenv/config';
 import './business-time';
@@ -452,6 +453,7 @@ export const devConfig: VendureConfig = {
             ? [
                   CommerceFulfillmentPlugin,
                   StoreManagementPlugin,
+                  StorefrontCatalogPlugin,
                   StorefrontCartPlugin,
                   StorefrontContentPlugin,
                   StoreDomainPlugin.init({
@@ -484,7 +486,7 @@ export const devConfig: VendureConfig = {
                 permittedFormats: ['jpg', 'webp', 'avif'],
             }),
         }),
-        DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: false }),
+        DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
         // Enable if you need to debug the job queue
         // BullMQJobQueuePlugin.init({}),
         DefaultJobQueuePlugin.init({}),

@@ -92,6 +92,20 @@ export function responsiveImageSources(
     source: string,
     kind: StorefrontImageKind,
 ): ResponsiveImageSources | null {
+    if (kind === 'hero' && /\/storefront\/default-hero\.jpg(?:[?#]|$)/.test(source)) {
+        const jpg = source;
+        const avif = source.replace(/\.jpg(?=([?#]|$))/, '.avif');
+        const webp = source.replace(/\.jpg(?=([?#]|$))/, '.webp');
+        return {
+            avifSrcSet: `${avif} 800w`,
+            webpSrcSet: `${webp} 800w`,
+            fallbackSrc: jpg,
+            fallbackSrcSet: `${jpg} 800w`,
+            height: 496,
+            sizes: IMAGE_PRESETS.hero.sizes,
+            width: 800,
+        };
+    }
     const group = IMAGE_PRESETS[kind];
     const buildSrcSet = (format: 'avif' | 'jpg' | 'webp', quality: 55 | 75) =>
         group.presets

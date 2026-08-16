@@ -70,7 +70,7 @@ describe('StorefrontCart mutation transactions', () => {
             commitOpenTransaction: vi.fn().mockResolvedValue(undefined),
             rollBackTransaction: vi.fn().mockResolvedValue(undefined),
         };
-        const resolver = new StorefrontCartShopResolver(service as any, connection as any, {} as any);
+        const resolver = new StorefrontCartShopResolver(service as any, connection as any);
 
         await resolver.addStorefrontCartItem(ctx, {
             input: { productVariantId: '1', quantity: 1 },
@@ -94,7 +94,7 @@ describe('StorefrontCart mutation transactions', () => {
             commitOpenTransaction: vi.fn().mockResolvedValue(undefined),
             rollBackTransaction: vi.fn().mockResolvedValue(undefined),
         };
-        const resolver = new StorefrontCartShopResolver(service as any, connection as any, {} as any);
+        const resolver = new StorefrontCartShopResolver(service as any, connection as any);
 
         const result = await resolver.addStorefrontCartItem(ctx, {
             input: { productVariantId: '1', quantity: 1 },

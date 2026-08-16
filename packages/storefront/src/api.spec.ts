@@ -342,132 +342,65 @@ describe('ShopApi storefront mutations', () => {
         );
     });
 
-    it('uses server search pagination and preserves relevance order', async () => {
-        const fetchMock = vi
-            .fn()
-            .mockResolvedValueOnce(
-                new Response(
-                    JSON.stringify({
-                        data: {
-                            search: {
-                                totalItems: 22,
-                                items: [{ productId: 'product-2' }, { productId: 'product-1' }],
-                            },
-                        },
-                    }),
-                    { status: 200, headers: { 'content-type': 'application/json' } },
-                ),
-            )
-            .mockResolvedValueOnce(
-                new Response(
-                    JSON.stringify({
-                        data: {
-                            products: {
-                                items: [
-                                    { id: 'product-1', name: 'First product', variants: [] },
-                                    { id: 'product-2', name: 'Second product', variants: [] },
-                                ],
-                            },
-                        },
-                    }),
-                    { status: 200, headers: { 'content-type': 'application/json' } },
-                ),
-            );
-        vi.stubGlobal('fetch', fetchMock);
+    it('loads a sorted search page with one catalog request and preserves server order', async () => {
+        const fetchMock = mockGraphQlResponse({
+            storefrontCatalog: {
+                totalItems: 22,
+                items: [
+                    { id: 'product-2', name: 'Second product', variants: [] },
+                    { id: 'product-1', name: 'First product', variants: [] },
+                ],
+            },
+        });
 
         const page = await new ShopApi(market).searchProducts('audit', 'price-asc', 20, 10, 'collection-1');
 
-        const searchRequest = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+        const catalogRequest = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
             variables: Record<string, unknown>;
         };
-        const productRequest = JSON.parse(String(fetchMock.mock.calls[1][1]?.body)) as {
-            variables: Record<string, unknown>;
-        };
-        expect(searchRequest.variables).toEqual({
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(catalogRequest.variables).toEqual({
             input: {
                 term: 'audit',
                 collectionId: 'collection-1',
-                groupByProduct: true,
+                sort: 'PRICE_ASC',
+                inStockOnly: false,
                 skip: 20,
                 take: 10,
-                sort: { price: 'ASC' },
-            },
-        });
-        expect(productRequest.variables).toEqual({
-            options: {
-                take: 2,
-                filter: { id: { in: ['product-2', 'product-1'] } },
             },
         });
         expect(page.totalItems).toBe(22);
         expect(page.items.map(product => product.id)).toEqual(['product-2', 'product-1']);
     });
 
-    it('loads every search page before client-side filtering', async () => {
-        const firstPageIds = Array.from({ length: 100 }, (_, index) => `product-${index + 1}`);
-        const firstPageProducts = firstPageIds.map(id => ({ id, name: id, variants: [] }));
-        const fetchMock = vi
-            .fn()
-            .mockResolvedValueOnce(
-                new Response(
-                    JSON.stringify({
-                        data: {
-                            search: {
-                                totalItems: 101,
-                                items: firstPageIds.map(productId => ({ productId })),
-                            },
-                        },
-                    }),
-                    { status: 200, headers: { 'content-type': 'application/json' } },
-                ),
-            )
-            .mockResolvedValueOnce(
-                new Response(JSON.stringify({ data: { products: { items: firstPageProducts } } }), {
-                    status: 200,
-                    headers: { 'content-type': 'application/json' },
-                }),
-            )
-            .mockResolvedValueOnce(
-                new Response(
-                    JSON.stringify({
-                        data: {
-                            search: {
-                                totalItems: 101,
-                                items: [{ productId: 'product-101' }],
-                            },
-                        },
-                    }),
-                    { status: 200, headers: { 'content-type': 'application/json' } },
-                ),
-            )
-            .mockResolvedValueOnce(
-                new Response(
-                    JSON.stringify({
-                        data: {
-                            products: {
-                                items: [{ id: 'product-101', name: 'product-101', variants: [] }],
-                            },
-                        },
-                    }),
-                    { status: 200, headers: { 'content-type': 'application/json' } },
-                ),
-            );
-        vi.stubGlobal('fetch', fetchMock);
+    it('passes filters and AbortSignal to the single catalog request', async () => {
+        const fetchMock = mockGraphQlResponse({ storefrontCatalog: { totalItems: 0, items: [] } });
+        const controller = new AbortController();
 
-        const products = await new ShopApi(market).searchAllProducts('', 'name', 'collection-1');
+        await new ShopApi(market).catalog(
+            {
+                collectionId: 'collection-1',
+                fulfillmentType: 'digital',
+                inStockOnly: true,
+                minPriceWithTax: 1000,
+                maxPriceWithTax: 5000,
+            },
+            controller.signal,
+        );
 
-        const secondSearchRequest = JSON.parse(String(fetchMock.mock.calls[2][1]?.body)) as {
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
             variables: { input: Record<string, unknown> };
         };
-        expect(fetchMock).toHaveBeenCalledTimes(4);
-        expect(secondSearchRequest.variables.input).toMatchObject({
+        expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal);
+        expect(request.variables.input).toMatchObject({
             collectionId: 'collection-1',
-            skip: 100,
-            take: 100,
-            sort: { name: 'ASC' },
+            fulfillmentType: 'DIGITAL',
+            inStockOnly: true,
+            minPriceWithTax: 1000,
+            maxPriceWithTax: 5000,
+            skip: 0,
+            take: 12,
         });
-        expect(products).toHaveLength(101);
-        expect(products.at(-1)?.id).toBe('product-101');
     });
 
     it('loads product sales in bounded batches and removes duplicate ids', async () => {

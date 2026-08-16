@@ -107,7 +107,78 @@ img {
 }
 
 .responsive-picture {
-    display: contents;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.safe-image-frame {
+    background-color: #eef1f0;
+    background-position: center;
+    background-size: cover;
+}
+
+.safe-image {
+    opacity: 0;
+    transition:
+        opacity 180ms ease,
+        transform 220ms ease;
+}
+
+.safe-image.is-loaded {
+    opacity: 1;
+}
+
+.navigation-progress,
+.category-query-progress {
+    height: 2px;
+    position: relative;
+    z-index: 80;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.navigation-progress {
+    width: min(100%, var(--app-width));
+    position: fixed;
+    top: 0;
+    left: 50%;
+    z-index: 120;
+    transform: translateX(-50%);
+}
+
+.category-query-progress {
+    width: 100%;
+    margin: 0 0 6px;
+}
+
+.navigation-progress::after,
+.category-query-progress::after {
+    content: '';
+    width: 42%;
+    position: absolute;
+    inset: 0 auto 0 -42%;
+    background: var(--accent);
+    animation: storefront-progress 900ms ease-in-out infinite;
+}
+
+@keyframes storefront-progress {
+    to {
+        transform: translateX(340%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .safe-image {
+        transition: none;
+    }
+
+    .navigation-progress::after,
+    .category-query-progress::after {
+        width: 100%;
+        inset: 0;
+        animation: none;
+    }
 }
 
 .storefront-app {
@@ -867,6 +938,33 @@ img {
 .product-card {
     min-width: 0;
     position: relative;
+}
+
+.product-card-favorite {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    position: absolute;
+    z-index: 2;
+    top: 7px;
+    right: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 3px 10px rgba(31, 43, 38, 0.11);
+    backdrop-filter: blur(8px);
+}
+
+.product-card-favorite.is-active {
+    color: var(--accent);
+}
+
+.product-card-favorite svg {
+    width: 18px;
+    height: 18px;
 }
 
 .product-card-image {
@@ -2350,7 +2448,7 @@ img {
 
 .services-section > div {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .services-section button {
@@ -2368,11 +2466,29 @@ img {
 .services-section button > span {
     width: 38px;
     height: 38px;
+    position: relative;
     border-radius: 8px;
     background: #f0f3f2;
     color: #53605b;
     display: grid;
     place-items: center;
+}
+
+.services-section button > span em {
+    min-width: 33px;
+    height: 16px;
+    padding: 0 4px;
+    position: absolute;
+    top: -7px;
+    right: -18px;
+    border: 1px solid white;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font-size: 9px;
+    font-style: normal;
+    line-height: 14px;
+    white-space: nowrap;
 }
 
 .services-section button b {

@@ -15,6 +15,7 @@ import {
     RegisterCustomerInput,
     ShippingMethod,
     StorefrontCart,
+    StorefrontCatalogInput,
     StorefrontCheckoutSession,
     StorefrontConfig,
     StorefrontContentBlock,
@@ -192,11 +193,12 @@ export class ShopApi {
         this.authToken = readSessionAuthToken(this.authTokenStorageKey);
     }
 
-    async storefrontConfig(): Promise<StorefrontConfig> {
+    async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
         const result = await this.request<{
             activeChannel: Omit<StorefrontConfig, 'availableCountries'>;
             availableCountries: StorefrontConfig['availableCountries'];
-        }>(`
+        }>(
+            `
             query StorefrontConfig {
                 activeChannel {
                     code
@@ -212,15 +214,19 @@ export class ShopApi {
                     name
                 }
             }
-        `);
+        `,
+            undefined,
+            signal,
+        );
         return {
             ...result.activeChannel,
             availableCountries: result.availableCountries,
         };
     }
 
-    async storefrontContent(): Promise<StorefrontContentBlock[]> {
-        const result = await this.request<{ storefrontContent: StorefrontContentBlock[] }>(`
+    async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentBlock[]> {
+        const result = await this.request<{ storefrontContent: StorefrontContentBlock[] }>(
+            `
             query StorefrontContent {
                 storefrontContent {
                     id
@@ -251,11 +257,14 @@ export class ShopApi {
                     }
                 }
             }
-        `);
+        `,
+            undefined,
+            signal,
+        );
         return result.storefrontContent;
     }
 
-    async products(take = 16): Promise<Product[]> {
+    async products(take = 16, signal?: AbortSignal): Promise<Product[]> {
         const result = await this.request<{ products: { items: Product[] } }>(
             `
             query StorefrontProducts($options: ProductListOptions) {
@@ -265,11 +274,12 @@ export class ShopApi {
             }
         `,
             { options: { take, sort: { name: 'ASC' } } },
+            signal,
         );
         return result.products.items;
     }
 
-    async product(id: string): Promise<Product | null> {
+    async product(id: string, signal?: AbortSignal): Promise<Product | null> {
         const result = await this.request<{ product: Product | null }>(
             `
                 query StorefrontProduct($id: ID!) {
@@ -277,11 +287,12 @@ export class ShopApi {
                 }
             `,
             { id },
+            signal,
         );
         return result.product;
     }
 
-    async productsByIds(ids: string[]): Promise<Product[]> {
+    async productsByIds(ids: string[], signal?: AbortSignal): Promise<Product[]> {
         const uniqueIds = [...new Set(ids)];
         if (!uniqueIds.length) return [];
         const result = await this.request<{ products: { items: Product[] } }>(
@@ -298,6 +309,7 @@ export class ShopApi {
                     filter: { id: { in: uniqueIds } },
                 },
             },
+            signal,
         );
         const productsById = new Map(result.products.items.map(product => [product.id, product]));
         return uniqueIds.flatMap(id => {
@@ -312,87 +324,47 @@ export class ShopApi {
         skip = 0,
         take = 20,
         collectionId?: string,
+        signal?: AbortSignal,
     ): Promise<ProductSearchPage> {
-        const searchSort =
-            sort === 'name'
-                ? { name: 'ASC' }
-                : sort === 'price-asc'
-                  ? { price: 'ASC' }
-                  : sort === 'price-desc'
-                    ? { price: 'DESC' }
-                    : null;
-        const searchResult = await this.request<{
-            search: { totalItems: number; items: Array<{ productId: string }> };
-        }>(
+        return this.catalog({ term, sort, skip, take, collectionId }, signal);
+    }
+
+    async catalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<ProductSearchPage> {
+        const sortMap: Record<ProductSearchSort, string> = {
+            recommended: 'RECOMMENDED',
+            sales: 'SALES',
+            newest: 'NEWEST',
+            name: 'NAME',
+            'price-asc': 'PRICE_ASC',
+            'price-desc': 'PRICE_DESC',
+        };
+        const result = await this.request<{ storefrontCatalog: ProductSearchPage }>(
             `
-                query StorefrontSearch($input: SearchInput!) {
-                    search(input: $input) {
+                query StorefrontCatalog($input: StorefrontCatalogInput!) {
+                    storefrontCatalog(input: $input) {
                         totalItems
-                        items { productId }
-                    }
-                }
-            `,
-            {
-                input: {
-                    ...(term ? { term } : {}),
-                    ...(collectionId ? { collectionId } : {}),
-                    groupByProduct: true,
-                    skip,
-                    take,
-                    sort: searchSort,
-                },
-            },
-        );
-        const productIds = [...new Set(searchResult.search.items.map(item => item.productId))];
-        if (!productIds.length) {
-            return { items: [], totalItems: searchResult.search.totalItems };
-        }
-        const productResult = await this.request<{ products: { items: Product[] } }>(
-            `
-                query StorefrontSearchProducts($options: ProductListOptions) {
-                    products(options: $options) {
                         items { ${productFields} }
                     }
                 }
             `,
             {
-                options: {
-                    take: productIds.length,
-                    filter: { id: { in: productIds } },
+                input: {
+                    ...(input.term ? { term: input.term } : {}),
+                    ...(input.collectionId ? { collectionId: input.collectionId } : {}),
+                    sort: sortMap[input.sort ?? 'recommended'],
+                    ...(input.fulfillmentType
+                        ? { fulfillmentType: input.fulfillmentType.toUpperCase() }
+                        : {}),
+                    inStockOnly: input.inStockOnly === true,
+                    ...(input.minPriceWithTax != null ? { minPriceWithTax: input.minPriceWithTax } : {}),
+                    ...(input.maxPriceWithTax != null ? { maxPriceWithTax: input.maxPriceWithTax } : {}),
+                    skip: input.skip ?? 0,
+                    take: input.take ?? 12,
                 },
             },
+            signal,
         );
-        const productsById = new Map(productResult.products.items.map(product => [product.id, product]));
-        return {
-            items: productIds.flatMap(productId => {
-                const product = productsById.get(productId);
-                return product ? [product] : [];
-            }),
-            totalItems: searchResult.search.totalItems,
-        };
-    }
-
-    async searchAllProducts(
-        term: string,
-        sort: ProductSearchSort = 'recommended',
-        collectionId?: string,
-    ): Promise<Product[]> {
-        const pageSize = 100;
-        const productsById = new Map<string, Product>();
-        let totalItems = 0;
-
-        do {
-            const skip = productsById.size;
-            const page = await this.searchProducts(term, sort, skip, pageSize, collectionId);
-            totalItems = page.totalItems;
-            const previousSize = productsById.size;
-            for (const product of page.items) {
-                productsById.set(product.id, product);
-            }
-            if (!page.items.length || productsById.size === previousSize) break;
-        } while (productsById.size < totalItems);
-
-        return [...productsById.values()];
+        return result.storefrontCatalog;
     }
 
     async productSales(productIds: string[]): Promise<Record<string, number>> {
@@ -423,8 +395,9 @@ export class ShopApi {
         return quantities;
     }
 
-    async collections(): Promise<CollectionSummary[]> {
-        const result = await this.request<{ collections: { items: CollectionSummary[] } }>(`
+    async collections(signal?: AbortSignal): Promise<CollectionSummary[]> {
+        const result = await this.request<{ collections: { items: CollectionSummary[] } }>(
+            `
             query StorefrontCollections {
                 collections(options: { take: 50, topLevelOnly: true, sort: { position: ASC } }) {
                     items {
@@ -447,12 +420,16 @@ export class ShopApi {
                     }
                 }
             }
-        `);
+        `,
+            undefined,
+            signal,
+        );
         return result.collections.items;
     }
 
-    async activeCustomer(): Promise<ActiveCustomer | null> {
-        const result = await this.request<{ activeCustomer: ActiveCustomer | null }>(`
+    async activeCustomer(signal?: AbortSignal): Promise<ActiveCustomer | null> {
+        const result = await this.request<{ activeCustomer: ActiveCustomer | null }>(
+            `
             query StorefrontCustomer {
                 activeCustomer {
                     id
@@ -479,11 +456,20 @@ export class ShopApi {
                     }
                 }
             }
-        `);
+        `,
+            undefined,
+            signal,
+        );
         return result.activeCustomer;
     }
 
-    async customerOrders(skip = 0, take = 10, states?: string[], code?: string): Promise<OrderPage> {
+    async customerOrders(
+        skip = 0,
+        take = 10,
+        states?: string[],
+        code?: string,
+        signal?: AbortSignal,
+    ): Promise<OrderPage> {
         const filters = [
             states?.length ? { state: { in: states } } : null,
             code?.trim() ? { code: { contains: code.trim() } } : null,
@@ -513,6 +499,7 @@ export class ShopApi {
                           : {}),
                 },
             },
+            signal,
         );
         return result.activeCustomer?.orders ?? { items: [], totalItems: 0 };
     }
@@ -549,7 +536,7 @@ export class ShopApi {
         };
     }
 
-    async order(id: string): Promise<Order | null> {
+    async order(id: string, signal?: AbortSignal): Promise<Order | null> {
         const result = await this.request<{ order: Order | null }>(
             `
                 query StorefrontOrder($id: ID!) {
@@ -557,11 +544,12 @@ export class ShopApi {
                 }
             `,
             { id },
+            signal,
         );
         return result.order;
     }
 
-    async orderByCode(code: string): Promise<Order | null> {
+    async orderByCode(code: string, signal?: AbortSignal): Promise<Order | null> {
         const result = await this.request<{ orderByCode: Order | null }>(
             `
                 query StorefrontOrderByCode($code: String!) {
@@ -569,6 +557,7 @@ export class ShopApi {
                 }
             `,
             { code },
+            signal,
         );
         return result.orderByCode;
     }
@@ -733,12 +722,16 @@ export class ShopApi {
         );
     }
 
-    async cart(): Promise<StorefrontCart> {
-        const result = await this.request<{ storefrontCart: StorefrontCart }>(`
+    async cart(signal?: AbortSignal): Promise<StorefrontCart> {
+        const result = await this.request<{ storefrontCart: StorefrontCart }>(
+            `
             query StorefrontCart {
                 storefrontCart { ${cartFields} }
             }
-        `);
+        `,
+            undefined,
+            signal,
+        );
         return result.storefrontCart;
     }
 
@@ -1005,8 +998,9 @@ export class ShopApi {
         return this.assertOrder(result.setOrderShippingMethod);
     }
 
-    async eligiblePaymentMethods(): Promise<PaymentMethod[]> {
-        const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(`
+    async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
+        const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
+            `
             query EligibleStorefrontPaymentMethods {
                 eligiblePaymentMethods {
                     id
@@ -1017,7 +1011,10 @@ export class ShopApi {
                     eligibilityMessage
                 }
             }
-        `);
+        `,
+            undefined,
+            signal,
+        );
         return result.eligiblePaymentMethods;
     }
 
@@ -1037,7 +1034,11 @@ export class ShopApi {
         return this.assertOrder(result.addPaymentToOrder);
     }
 
-    private async request<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    private async request<T>(
+        query: string,
+        variables?: Record<string, unknown>,
+        signal?: AbortSignal,
+    ): Promise<T> {
         const headers: Record<string, string> = {
             'content-type': 'application/json',
             'language-code': this.languageCode,
@@ -1055,6 +1056,7 @@ export class ShopApi {
             credentials: 'include',
             headers,
             body: JSON.stringify({ query, variables }),
+            signal,
         });
         this.captureAuthToken(response);
         const rawBody = await response.text();

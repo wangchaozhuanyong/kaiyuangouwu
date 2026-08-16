@@ -455,6 +455,7 @@
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-management-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
+        "@vendure/storefront-catalog-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
         "@vendure/storefront-cart-plugin": "0.1.0",
       },
@@ -636,6 +637,7 @@
       "name": "@vendure/storefront",
       "version": "0.1.0",
       "dependencies": {
+        "@tanstack/react-query": "^5.91.0",
         "@vitejs/plugin-react": "^5.2.0",
         "lucide-react": "^0.475.0",
         "react": "^19.2.4",
@@ -646,6 +648,22 @@
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.0.4",
         "typescript": "5.8.2",
+      },
+    },
+    "packages/storefront-catalog-plugin": {
+      "name": "@vendure/storefront-catalog-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.1.0",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "typeorm": "^0.3.21",
+      },
+      "devDependencies": {
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4",
       },
     },
     "packages/storefront-cart-plugin": {
@@ -2797,6 +2815,8 @@
     "@vendure/storefront-content-plugin": ["@vendure/storefront-content-plugin@workspace:packages/storefront-content-plugin"],
 
     "@vendure/storefront": ["@vendure/storefront@workspace:packages/storefront"],
+
+    "@vendure/storefront-catalog-plugin": ["@vendure/storefront-catalog-plugin@workspace:packages/storefront-catalog-plugin"],
 
     "@vendure/storefront-cart-plugin": ["@vendure/storefront-cart-plugin@workspace:packages/storefront-cart-plugin"],
 

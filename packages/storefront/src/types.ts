@@ -50,6 +50,18 @@ export interface ProductSearchPage {
     totalItems: number;
 }
 
+export interface StorefrontCatalogInput {
+    term?: string;
+    collectionId?: string;
+    sort?: ProductSearchSort;
+    fulfillmentType?: FulfillmentType;
+    inStockOnly?: boolean;
+    minPriceWithTax?: number;
+    maxPriceWithTax?: number;
+    skip?: number;
+    take?: number;
+}
+
 export interface OrderLine {
     id: string;
     quantity: number;

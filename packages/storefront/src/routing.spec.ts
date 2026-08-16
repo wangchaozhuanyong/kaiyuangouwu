@@ -18,6 +18,23 @@ describe('storefront hash routing', () => {
         expect(routeFromHash('#/product?id=42')).toMatchObject({ name: 'product', id: '42' });
     });
 
+    it('restores category filters from hash query parameters', () => {
+        expect(
+            routeFromHash(
+                '#/category?collection=1&child=2&sort=sales&fulfillment=digital&stock=1&minPrice=10&maxPrice=50',
+            ),
+        ).toMatchObject({
+            name: 'category',
+            collectionId: '1',
+            childId: '2',
+            sort: 'sales',
+            fulfillment: 'digital',
+            inStockOnly: true,
+            minPrice: '10',
+            maxPrice: '50',
+        });
+    });
+
     it('shows the not-found page for an unknown path', () => {
         expect(routeFromHash('#/missing-page').name).toBe('not-found');
     });
@@ -38,5 +55,14 @@ describe('storefront hash routing', () => {
     it('opens temporary legal pages from managed footer links', () => {
         expect(routeFromHash('#/legal?id=privacy')).toMatchObject({ name: 'legal', id: 'privacy' });
         expect(routeFromHash('#/legal?id=terms')).toMatchObject({ name: 'legal', id: 'terms' });
+    });
+
+    it('opens account service and placeholder routes', () => {
+        expect(routeFromHash('#/favorites').name).toBe('favorites');
+        expect(routeFromHash('#/support').name).toBe('support');
+        expect(routeFromHash('#/coming-soon?id=coupons')).toMatchObject({
+            name: 'coming-soon',
+            id: 'coupons',
+        });
     });
 });

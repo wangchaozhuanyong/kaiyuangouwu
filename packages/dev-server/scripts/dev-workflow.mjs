@@ -257,6 +257,21 @@ const watchers = [
         onSuccessfulRebuild: () => server.restart(),
     }),
     startWatcher({
+        label: 'storefront-catalog-plugin',
+        command: process.execPath,
+        args: [
+            typescriptCliPath,
+            '--project',
+            path.join(repoRoot, 'packages/storefront-catalog-plugin/tsconfig.build.json'),
+            '--watch',
+            '--preserveWatchOutput',
+            '--locale',
+            'en',
+        ],
+        env: watcherEnvironment,
+        onSuccessfulRebuild: () => server.restart(),
+    }),
+    startWatcher({
         label: 'storefront-content-plugin',
         command: process.execPath,
         args: [
@@ -372,6 +387,7 @@ async function buildPrerequisites(env) {
         ['@vendure/operations-dashboard-plugin', path.join(repoRoot, 'packages/operations-dashboard-plugin')],
         ['@vendure/store-domain-plugin', path.join(repoRoot, 'packages/store-domain-plugin')],
         ['@vendure/storefront-cart-plugin', path.join(repoRoot, 'packages/storefront-cart-plugin')],
+        ['@vendure/storefront-catalog-plugin', path.join(repoRoot, 'packages/storefront-catalog-plugin')],
         ['@vendure/storefront-content-plugin', path.join(repoRoot, 'packages/storefront-content-plugin')],
         ['@vendure/store-management-plugin', path.join(repoRoot, 'packages/store-management-plugin')],
     ];

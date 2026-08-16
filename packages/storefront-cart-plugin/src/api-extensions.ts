@@ -108,11 +108,6 @@ export const shopApiExtensions = gql`
         checkout: StorefrontCartCheckout
     }
 
-    type StorefrontProductSales {
-        productId: ID!
-        quantity: Int!
-    }
-
     union StorefrontCartResult =
           StorefrontCart
         | CartRevisionConflictError
@@ -135,7 +130,6 @@ export const shopApiExtensions = gql`
 
     extend type Query {
         storefrontCart: StorefrontCart!
-        storefrontProductSales(productIds: [ID!]!): [StorefrontProductSales!]!
     }
 
     extend type Mutation {

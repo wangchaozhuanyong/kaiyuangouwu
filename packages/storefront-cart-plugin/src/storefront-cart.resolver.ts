@@ -17,7 +17,6 @@ import {
     StorefrontCheckoutSession,
     StorefrontCheckoutResult,
 } from './storefront-cart.service';
-import { StorefrontProductSalesService } from './storefront-product-sales.service';
 
 interface AddItemArgs {
     input: { productVariantId: ID; quantity: number };
@@ -33,7 +32,6 @@ export class StorefrontCartShopResolver {
     constructor(
         private readonly storefrontCartService: StorefrontCartService,
         private readonly connection: TransactionalConnection,
-        private readonly storefrontProductSalesService: StorefrontProductSalesService,
     ) {}
 
     @Transaction()
@@ -43,12 +41,6 @@ export class StorefrontCartShopResolver {
         const cart = await this.storefrontCartService.getCart(ctx);
         await this.storefrontCartService.syncActiveOrderSession(ctx, cart);
         return cart;
-    }
-
-    @Query()
-    @Allow(Permission.Public)
-    storefrontProductSales(@Ctx() ctx: RequestContext, @Args('productIds') productIds: ID[]) {
-        return this.storefrontProductSalesService.findByProductIds(ctx, productIds);
     }
 
     @Transaction('manual')

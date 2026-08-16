@@ -10,6 +10,7 @@ import {
     Coffee,
     Download,
     Fingerprint,
+    Headphones,
     Heart,
     House,
     LayoutGrid,
@@ -19,7 +20,6 @@ import {
     Navigation,
     Package,
     Pause,
-    Pencil,
     Play,
     Plus,
     RotateCcw,
@@ -40,17 +40,22 @@ import {
     X,
 } from 'lucide-react';
 import {
+    Activity,
     FormEvent,
     ImgHTMLAttributes,
+    lazy,
     ReactNode,
+    Suspense,
     useCallback,
     useEffect,
     useId,
     useMemo,
     useRef,
     useState,
+    useTransition,
 } from 'react';
 
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShopApi, ShopApiError } from './api';
 import { formatBusinessDate } from './business-time';
 import {
@@ -61,21 +66,23 @@ import {
     resolveStorefrontLanguage,
     uiCopy,
 } from './i18n';
-import { filterProductsByHanTerm, hasHanCharacters } from './search';
+import {
+    PUBLIC_QUERY_GC_TIME,
+    PUBLIC_QUERY_STALE_TIME,
+    publicQueryMeta,
+    storefrontQueryKeys,
+} from './query-client';
 import { responsiveImageSources, StorefrontImageKind } from './responsive-image';
 import {
     ActiveCustomer,
     CollectionSummary,
     CustomerAddress,
-    CustomerAddressInput,
     FulfillmentType,
     MarketConfig,
     Order,
-    PaymentMethod,
     Product,
     ProductSearchSort,
     ProductVariant,
-    ShippingMethod,
     StorefrontCart,
     StorefrontCheckoutSession,
     StorefrontConfig,
@@ -97,8 +104,11 @@ type RouteName =
     | 'order-detail'
     | 'addresses'
     | 'account-security'
+    | 'favorites'
     | 'history'
     | 'notifications'
+    | 'support'
+    | 'coming-soon'
     | 'login'
     | 'register'
     | 'verify-account'
@@ -110,14 +120,45 @@ type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 type SortMode = ProductSearchSort;
 
 const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
-const ORDER_NOTE_MAX_LENGTH = 500;
 const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
 const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 const SEARCH_HISTORY_STORAGE_KEY = 'storefront-search-history';
 const STOREFRONT_LANGUAGE_STORAGE_KEY = 'storefront-language';
 const FAVORITE_PRODUCT_LIMIT = 100;
 const RECENT_PRODUCT_LIMIT = 20;
-const LOCAL_TEST_PAYMENT_CODE = '测试支付';
+
+const LazyLoginPage = lazy(() => import('./auth-pages').then(module => ({ default: module.LoginPage })));
+const LazyRegisterPage = lazy(() =>
+    import('./auth-pages').then(module => ({ default: module.RegisterPage })),
+);
+const LazyVerifyAccountPage = lazy(() =>
+    import('./auth-pages').then(module => ({ default: module.VerifyAccountPage })),
+);
+const LazyForgotPasswordPage = lazy(() =>
+    import('./auth-pages').then(module => ({ default: module.ForgotPasswordPage })),
+);
+const LazyResetPasswordPage = lazy(() =>
+    import('./auth-pages').then(module => ({ default: module.ResetPasswordPage })),
+);
+const LazyOrdersPage = lazy(() => import('./order-pages').then(module => ({ default: module.OrdersPage })));
+const LazyOrderDetailPage = lazy(() =>
+    import('./order-pages').then(module => ({ default: module.OrderDetailPage })),
+);
+const LazyPaymentPage = lazy(() =>
+    import('./payment-pages').then(module => ({ default: module.PaymentPage })),
+);
+const LazyOrderConfirmationPage = lazy(() =>
+    import('./payment-pages').then(module => ({ default: module.OrderConfirmationPage })),
+);
+const LazyCheckoutPage = lazy(() =>
+    import('./checkout-page').then(module => ({ default: module.CheckoutPage })),
+);
+const LazyAccountSecurityPage = lazy(() =>
+    import('./account-security-page').then(module => ({ default: module.AccountSecurityPage })),
+);
+const LazyAddressesPage = lazy(() =>
+    import('./addresses-page').then(module => ({ default: module.AddressesPage })),
+);
 
 function sortCategoryProducts(
     products: Product[],
@@ -200,6 +241,13 @@ interface RouteState {
     tab?: OrderTab;
     token?: string;
     term?: string;
+    collectionId?: string;
+    childId?: string;
+    sort?: SortMode;
+    fulfillment?: 'all' | FulfillmentType;
+    inStockOnly?: boolean;
+    minPrice?: string;
+    maxPrice?: string;
 }
 
 const rootPages: MainPage[] = ['home', 'category', 'cart', 'account'];
@@ -229,8 +277,11 @@ export function routeFromHash(hash: string): RouteState {
         'order-detail',
         'addresses',
         'account-security',
+        'favorites',
         'history',
         'notifications',
+        'support',
+        'coming-soon',
         'login',
         'register',
         'verify-account',
@@ -239,12 +290,25 @@ export function routeFromHash(hash: string): RouteState {
         'legal',
     ];
     const tab = params.get('tab');
+    const sort = params.get('sort');
+    const fulfillment = params.get('fulfillment');
     return {
         name: validNames.includes(name) ? name : 'not-found',
         id: params.get('id') ?? undefined,
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: params.get('token') ?? undefined,
         term: params.get('term') ?? undefined,
+        collectionId: params.get('collection') ?? undefined,
+        childId: params.get('child') ?? undefined,
+        sort: ['recommended', 'sales', 'newest', 'name', 'price-asc', 'price-desc'].includes(sort ?? '')
+            ? (sort as SortMode)
+            : undefined,
+        fulfillment: ['all', 'physical', 'digital'].includes(fulfillment ?? '')
+            ? (fulfillment as 'all' | FulfillmentType)
+            : undefined,
+        inStockOnly: params.get('stock') === '1' || undefined,
+        minPrice: params.get('minPrice') ?? undefined,
+        maxPrice: params.get('maxPrice') ?? undefined,
     };
 }
 
@@ -254,10 +318,46 @@ function routeHash(route: RouteState): string {
     if (route.tab) params.set('tab', route.tab);
     if (route.token) params.set('token', route.token);
     if (route.term) params.set('term', route.term);
+    if (route.collectionId) params.set('collection', route.collectionId);
+    if (route.childId) params.set('child', route.childId);
+    if (route.sort && route.sort !== 'recommended') params.set('sort', route.sort);
+    if (route.fulfillment && route.fulfillment !== 'all') params.set('fulfillment', route.fulfillment);
+    if (route.inStockOnly) params.set('stock', '1');
+    if (route.minPrice) params.set('minPrice', route.minPrice);
+    if (route.maxPrice) params.set('maxPrice', route.maxPrice);
     return `#/${route.name}${params.size ? `?${params.toString()}` : ''}`;
 }
 
+function scrollStorageKey(marketCode: string, route: RouteState): string {
+    return `vendure-storefront-scroll:${marketCode}:${routeHash(route)}`;
+}
+
+function saveScrollPosition(marketCode: string, route: RouteState, scrollTop: number): void {
+    try {
+        sessionStorage.setItem(scrollStorageKey(marketCode, route), String(Math.max(0, scrollTop)));
+    } catch {
+        // Scroll restoration remains available in memory when storage is unavailable.
+    }
+}
+
+function readScrollPosition(marketCode: string, route: RouteState): number {
+    try {
+        const value = Number(sessionStorage.getItem(scrollStorageKey(marketCode, route)) ?? 0);
+        return Number.isFinite(value) && value >= 0 ? value : 0;
+    } catch {
+        return 0;
+    }
+}
+
+function priceInputToMinorUnits(value: string): number | undefined {
+    if (!value.trim()) return;
+    const amount = Number(value);
+    return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) : undefined;
+}
+
 export function App() {
+    const queryClient = useQueryClient();
+    const [isNavigationPending, startNavigationTransition] = useTransition();
     const [{ market, language }, setStorefrontContext] = useState<{
         market: MarketConfig;
         language: StorefrontLanguage;
@@ -270,14 +370,6 @@ export function App() {
     });
     const [route, setRoute] = useState<RouteState>(routeFromLocation);
     const [products, setProducts] = useState<Product[]>([]);
-    const [routeProduct, setRouteProduct] = useState<Product | null>(null);
-    const [routeProductLoading, setRouteProductLoading] = useState(false);
-    const [routeProductError, setRouteProductError] = useState('');
-    const [productReloadKey, setProductReloadKey] = useState(0);
-    const [routeOrder, setRouteOrder] = useState<Order | null>(null);
-    const [routeOrderLoading, setRouteOrderLoading] = useState(false);
-    const [routeOrderError, setRouteOrderError] = useState('');
-    const [orderReloadKey, setOrderReloadKey] = useState(0);
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
     const [collections, setCollections] = useState<CollectionSummary[]>([]);
@@ -299,21 +391,89 @@ export function App() {
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
     const [online, setOnline] = useState(navigator.onLine);
-    const [activeCollectionId, setActiveCollectionId] = useState('all');
-    const [activeChildId, setActiveChildId] = useState('all');
-    const [sortMode, setSortMode] = useState<SortMode>('recommended');
-    const [fulfillmentFilter, setFulfillmentFilter] = useState<'all' | FulfillmentType>('all');
-    const [inStockOnly, setInStockOnly] = useState(false);
+    const [activeCollectionId, setActiveCollectionId] = useState(
+        () => routeFromLocation().collectionId ?? 'all',
+    );
+    const [activeChildId, setActiveChildId] = useState(() => routeFromLocation().childId ?? 'all');
+    const [sortMode, setSortMode] = useState<SortMode>(() => routeFromLocation().sort ?? 'recommended');
+    const [fulfillmentFilter, setFulfillmentFilter] = useState<'all' | FulfillmentType>(
+        () => routeFromLocation().fulfillment ?? 'all',
+    );
+    const [inStockOnly, setInStockOnly] = useState(() => routeFromLocation().inStockOnly === true);
+    const [minimumPrice, setMinimumPrice] = useState(() => routeFromLocation().minPrice ?? '');
+    const [maximumPrice, setMaximumPrice] = useState(() => routeFromLocation().maxPrice ?? '');
+    const categoryStateRef = useRef<
+        Pick<
+            RouteState,
+            'collectionId' | 'childId' | 'sort' | 'fulfillment' | 'inStockOnly' | 'minPrice' | 'maxPrice'
+        >
+    >({});
+    categoryStateRef.current = {
+        collectionId: activeCollectionId === 'all' ? undefined : activeCollectionId,
+        childId: activeChildId === 'all' ? undefined : activeChildId,
+        sort: sortMode,
+        fulfillment: fulfillmentFilter,
+        inStockOnly,
+        minPrice: minimumPrice || undefined,
+        maxPrice: maximumPrice || undefined,
+    };
     const toastTimer = useRef<number | null>(null);
     const storefrontLoadId = useRef(0);
     const routeRef = useRef(route);
     const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
+    const restoredInitialScroll = useRef(false);
 
     const locale = localeFor(language, market);
     const text = uiCopy[language];
     const isZh = language === 'zh';
     const storefrontName = storefrontNames[language];
-    const api = useMemo(() => new ShopApi(market, languageCodeFor(language)), [language, market]);
+    const vendureLanguageCode = languageCodeFor(language);
+    const api = useMemo(() => new ShopApi(market, vendureLanguageCode), [market, vendureLanguageCode]);
+    const productQuery = useQuery({
+        queryKey: storefrontQueryKeys.product(market.code, vendureLanguageCode, route.id ?? ''),
+        queryFn: async ({ signal }) => {
+            const product = await api.product(route.id ?? '', signal);
+            if (!product) throw new Error(isZh ? '商品不存在或已下架' : 'Product not found');
+            return product;
+        },
+        enabled: route.name === 'product' && !!route.id,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const routeProduct = productQuery.data ?? null;
+    const routeProductLoading = productQuery.isPending && productQuery.fetchStatus === 'fetching';
+    const routeProductError = productQuery.error instanceof Error ? productQuery.error.message : '';
+    const orderQuery = useQuery({
+        queryKey: storefrontQueryKeys.order(market.code, vendureLanguageCode, route.id ?? ''),
+        queryFn: async ({ signal }) => {
+            const order = await api.order(route.id ?? '', signal);
+            if (!order) throw new Error(isZh ? '订单不存在或无权查看' : 'Order not found');
+            return order;
+        },
+        enabled: route.name === 'order-detail' && !!route.id,
+        staleTime: 0,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const routeOrder = orderQuery.data ?? null;
+    const routeOrderLoading = orderQuery.isPending && orderQuery.fetchStatus === 'fetching';
+    const routeOrderError = orderQuery.error instanceof Error ? orderQuery.error.message : '';
+
+    const cacheProducts = useCallback(
+        (items: Product[]) => {
+            for (const product of items) {
+                const queryKey = storefrontQueryKeys.product(market.code, vendureLanguageCode, product.id);
+                queryClient.setQueryData(queryKey, product);
+                void queryClient.prefetchQuery({
+                    queryKey,
+                    queryFn: async () => product,
+                    staleTime: PUBLIC_QUERY_STALE_TIME,
+                    meta: publicQueryMeta(),
+                });
+            }
+        },
+        [market.code, queryClient, vendureLanguageCode],
+    );
 
     const notify = useCallback((message: string) => {
         setToast(message);
@@ -321,21 +481,27 @@ export function App() {
         toastTimer.current = window.setTimeout(() => setToast(null), 2400);
     }, []);
 
-    const navigate = useCallback((next: RouteState, replace = false) => {
-        const currentRoute = routeRef.current;
-        if (rootPages.includes(currentRoute.name as MainPage)) {
-            mainPageScrollPositions.current[currentRoute.name as MainPage] = window.scrollY;
-        }
-        const hash = routeHash(next);
-        if (replace) window.history.replaceState(next, '', hash);
-        else window.history.pushState(next, '', hash);
-        routeRef.current = next;
-        setRoute(next);
-        const nextScrollTop = rootPages.includes(next.name as MainPage)
-            ? (mainPageScrollPositions.current[next.name as MainPage] ?? 0)
-            : 0;
-        window.requestAnimationFrame(() => window.scrollTo({ top: nextScrollTop, behavior: 'instant' }));
-    }, []);
+    const navigate = useCallback(
+        (next: RouteState, replace = false) => {
+            const resolvedNext = next.name === 'category' ? { ...categoryStateRef.current, ...next } : next;
+            const currentRoute = routeRef.current;
+            if (rootPages.includes(currentRoute.name as MainPage)) {
+                mainPageScrollPositions.current[currentRoute.name as MainPage] = window.scrollY;
+            }
+            saveScrollPosition(market.code, currentRoute, window.scrollY);
+            const hash = routeHash(resolvedNext);
+            if (replace) window.history.replaceState(resolvedNext, '', hash);
+            else window.history.pushState(resolvedNext, '', hash);
+            routeRef.current = resolvedNext;
+            startNavigationTransition(() => setRoute(resolvedNext));
+            const nextScrollTop = rootPages.includes(resolvedNext.name as MainPage)
+                ? (mainPageScrollPositions.current[resolvedNext.name as MainPage] ??
+                  readScrollPosition(market.code, resolvedNext))
+                : readScrollPosition(market.code, resolvedNext);
+            window.requestAnimationFrame(() => window.scrollTo({ top: nextScrollTop, behavior: 'instant' }));
+        },
+        [market.code, startNavigationTransition],
+    );
 
     const goBack = useCallback(() => {
         if (window.history.length > 1) window.history.back();
@@ -349,17 +515,34 @@ export function App() {
             if (rootPages.includes(currentRoute.name as MainPage)) {
                 mainPageScrollPositions.current[currentRoute.name as MainPage] = window.scrollY;
             }
+            saveScrollPosition(market.code, currentRoute, window.scrollY);
             const nextRoute = routeFromLocation();
             routeRef.current = nextRoute;
-            setRoute(nextRoute);
+            startNavigationTransition(() => setRoute(nextRoute));
             const nextScrollTop = rootPages.includes(nextRoute.name as MainPage)
-                ? (mainPageScrollPositions.current[nextRoute.name as MainPage] ?? 0)
-                : 0;
+                ? (mainPageScrollPositions.current[nextRoute.name as MainPage] ??
+                  readScrollPosition(market.code, nextRoute))
+                : readScrollPosition(market.code, nextRoute);
             window.requestAnimationFrame(() => window.scrollTo({ top: nextScrollTop, behavior: 'instant' }));
         };
         window.addEventListener('popstate', onPopState);
         return () => window.removeEventListener('popstate', onPopState);
-    }, [navigate]);
+    }, [market.code, navigate, startNavigationTransition]);
+
+    useEffect(() => {
+        if (!restoredInitialScroll.current) {
+            restoredInitialScroll.current = true;
+            window.requestAnimationFrame(() =>
+                window.scrollTo({
+                    top: readScrollPosition(market.code, routeRef.current),
+                    behavior: 'instant',
+                }),
+            );
+        }
+        const saveCurrentScroll = () => saveScrollPosition(market.code, routeRef.current, window.scrollY);
+        window.addEventListener('pagehide', saveCurrentScroll);
+        return () => window.removeEventListener('pagehide', saveCurrentScroll);
+    }, [market.code]);
 
     useEffect(() => {
         const setConnected = () => setOnline(navigator.onLine);
@@ -376,8 +559,16 @@ export function App() {
             setSessionLoading(true);
             setCartError(null);
             const [cartResult, customerResult] = await Promise.allSettled([
-                api.cart(),
-                api.activeCustomer(),
+                queryClient.fetchQuery({
+                    queryKey: storefrontQueryKeys.cart(market.code, vendureLanguageCode),
+                    queryFn: ({ signal }) => api.cart(signal),
+                    staleTime: 0,
+                }),
+                queryClient.fetchQuery({
+                    queryKey: storefrontQueryKeys.customer(market.code, vendureLanguageCode),
+                    queryFn: ({ signal }) => api.activeCustomer(signal),
+                    staleTime: 0,
+                }),
             ]);
             if (storefrontLoadId.current !== loadId) return;
 
@@ -390,7 +581,7 @@ export function App() {
             if (customerResult.status === 'fulfilled') setCustomer(customerResult.value);
             setSessionLoading(false);
         },
-        [api, text.loadError],
+        [api, market.code, queryClient, text.loadError, vendureLanguageCode],
     );
 
     const loadStorefront = useCallback(async () => {
@@ -399,10 +590,30 @@ export function App() {
         setError(null);
         setContentError('');
         const [productResult, collectionResult, configResult, contentResult] = await Promise.allSettled([
-            api.products(16),
-            api.collections(),
-            api.storefrontConfig(),
-            api.storefrontContent(),
+            queryClient.fetchQuery({
+                queryKey: storefrontQueryKeys.products(market.code, vendureLanguageCode, 16),
+                queryFn: ({ signal }) => api.products(16, signal),
+                staleTime: PUBLIC_QUERY_STALE_TIME,
+                meta: publicQueryMeta(),
+            }),
+            queryClient.fetchQuery({
+                queryKey: storefrontQueryKeys.collections(market.code, vendureLanguageCode),
+                queryFn: ({ signal }) => api.collections(signal),
+                staleTime: PUBLIC_QUERY_STALE_TIME,
+                meta: publicQueryMeta(),
+            }),
+            queryClient.fetchQuery({
+                queryKey: storefrontQueryKeys.config(market.code, vendureLanguageCode),
+                queryFn: ({ signal }) => api.storefrontConfig(signal),
+                staleTime: PUBLIC_QUERY_STALE_TIME,
+                meta: publicQueryMeta(),
+            }),
+            queryClient.fetchQuery({
+                queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
+                queryFn: ({ signal }) => api.storefrontContent(signal),
+                staleTime: PUBLIC_QUERY_STALE_TIME,
+                meta: publicQueryMeta(),
+            }),
         ]);
         if (storefrontLoadId.current !== loadId) return;
 
@@ -446,8 +657,11 @@ export function App() {
                 ),
             });
         }
-        if (productResult.status === 'fulfilled') setProducts(productResult.value);
-        else setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
+        if (productResult.status === 'fulfilled') {
+            setProducts(productResult.value);
+            cacheProducts(productResult.value);
+        } else
+            setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
         if (collectionResult.status === 'fulfilled') setCollections(collectionResult.value);
         if (contentResult.status === 'fulfilled') setContentBlocks(contentResult.value);
         else {
@@ -458,7 +672,7 @@ export function App() {
         }
         setLoading(false);
         void loadSession(loadId);
-    }, [api, loadSession, market, text.loadError]);
+    }, [api, cacheProducts, loadSession, market, queryClient, text.loadError, vendureLanguageCode]);
 
     useEffect(() => {
         localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, market.code), language);
@@ -474,84 +688,25 @@ export function App() {
     }, [activeCollectionId, collections]);
 
     useEffect(() => {
-        if (route.name !== 'product' || !route.id) {
-            setRouteProduct(null);
-            setRouteProductLoading(false);
-            setRouteProductError('');
-            return;
-        }
-        const cachedProduct = products.find(product => product.id === route.id);
-        if (cachedProduct) {
-            setRouteProduct(cachedProduct);
-            setRouteProductLoading(false);
-            setRouteProductError('');
-            return;
-        }
-        let cancelled = false;
-        setRouteProduct(null);
-        setRouteProductLoading(true);
-        setRouteProductError('');
-        void api
-            .product(route.id)
-            .then(product => {
-                if (cancelled) return;
-                if (!product) {
-                    throw new Error(isZh ? '商品不存在或已下架' : 'Product not found');
-                }
-                setRouteProduct(product);
-            })
-            .catch(requestError => {
-                if (!cancelled) {
-                    setRouteProductError(
-                        requestError instanceof Error ? requestError.message : text.loadError,
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setRouteProductLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, isZh, productReloadKey, products, route.id, route.name, text.loadError]);
+        if (route.name !== 'category') return;
+        setActiveCollectionId(route.collectionId ?? collections[0]?.id ?? 'all');
+        setActiveChildId(route.childId ?? collections[0]?.children?.[0]?.id ?? collections[0]?.id ?? 'all');
+        setSortMode(route.sort ?? 'recommended');
+        setFulfillmentFilter(route.fulfillment ?? 'all');
+        setInStockOnly(route.inStockOnly === true);
+        setMinimumPrice(route.minPrice ?? '');
+        setMaximumPrice(route.maxPrice ?? '');
+    }, [collections, route]);
 
     useEffect(() => {
-        if (route.name !== 'order-detail' || !route.id) {
-            setRouteOrder(null);
-            setRouteOrderLoading(false);
-            setRouteOrderError('');
-            return;
+        if (cart) {
+            queryClient.setQueryData(storefrontQueryKeys.cart(market.code, vendureLanguageCode), cart);
         }
-        const cachedOrder = customer?.orders.items.find(order => order.id === route.id);
-        if (cachedOrder) {
-            setRouteOrder(cachedOrder);
-            setRouteOrderLoading(false);
-            setRouteOrderError('');
-            return;
-        }
-        let cancelled = false;
-        setRouteOrder(null);
-        setRouteOrderLoading(true);
-        setRouteOrderError('');
-        void api
-            .order(route.id)
-            .then(order => {
-                if (cancelled) return;
-                if (!order) throw new Error(isZh ? '订单不存在或无权查看' : 'Order not found');
-                setRouteOrder(order);
-            })
-            .catch(requestError => {
-                if (!cancelled) {
-                    setRouteOrderError(requestError instanceof Error ? requestError.message : text.loadError);
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setRouteOrderLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, customer, isZh, orderReloadKey, route.id, route.name, text.loadError]);
+    }, [cart, market.code, queryClient, vendureLanguageCode]);
+
+    useEffect(() => {
+        queryClient.setQueryData(storefrontQueryKeys.customer(market.code, vendureLanguageCode), customer);
+    }, [customer, market.code, queryClient, vendureLanguageCode]);
 
     const refreshCart = useCallback(async () => {
         const latest = await api.cart();
@@ -639,7 +794,7 @@ export function App() {
             if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
                 setActiveCollectionId(value);
                 setActiveChildId(value);
-                navigate({ name: 'category' });
+                navigate({ name: 'category', collectionId: value, childId: value });
                 return;
             }
             if (targetType === 'SEARCH') {
@@ -773,14 +928,16 @@ export function App() {
     }, [api, isZh, navigate, notify]);
 
     const selectedProduct = route.id
-        ? (products.find(product => product.id === route.id) ??
-          (routeProduct?.id === route.id ? routeProduct : null))
+        ? ((routeProduct?.id === route.id ? routeProduct : null) ??
+          products.find(product => product.id === route.id) ??
+          null)
         : null;
     const selectedOrder = route.id
         ? (customer?.orders.items.find(order => order.id === route.id) ??
           (routeOrder?.id === route.id ? routeOrder : null))
         : null;
     const legalContent = contentBlocks.find(block => block.type === 'LEGAL');
+    const supportContent = contentBlocks.find(block => block.type === 'SUPPORT');
 
     useEffect(() => {
         const routeLabels: Partial<Record<RouteName, string>> = {
@@ -795,8 +952,11 @@ export function App() {
             'order-detail': isZh ? '订单详情' : 'Order details',
             addresses: isZh ? '地址管理' : 'Addresses',
             'account-security': isZh ? '账户与安全' : 'Account and security',
+            favorites: isZh ? '我的收藏' : 'My favorites',
             history: isZh ? '浏览足迹' : 'Browsing history',
             notifications: isZh ? '消息通知' : 'Notifications',
+            support: isZh ? '客服中心' : 'Customer support',
+            'coming-soon': isZh ? '功能建设中' : 'Coming soon',
             login: isZh ? '登录' : 'Sign in',
             register: isZh ? '注册账户' : 'Create account',
             'verify-account': isZh ? '验证邮箱' : 'Verify email',
@@ -906,7 +1066,35 @@ export function App() {
             language: currentContext.language === 'zh' ? 'en' : 'zh',
         }));
 
-    const page = (() => {
+    const updateCategory = useCallback(
+        (
+            updates: Partial<
+                Pick<
+                    RouteState,
+                    | 'collectionId'
+                    | 'childId'
+                    | 'sort'
+                    | 'fulfillment'
+                    | 'inStockOnly'
+                    | 'minPrice'
+                    | 'maxPrice'
+                >
+            >,
+        ) => {
+            const next = { ...categoryStateRef.current, ...updates };
+            setActiveCollectionId(next.collectionId ?? 'all');
+            setActiveChildId(next.childId ?? 'all');
+            setSortMode(next.sort ?? 'recommended');
+            setFulfillmentFilter(next.fulfillment ?? 'all');
+            setInStockOnly(next.inStockOnly === true);
+            setMinimumPrice(next.minPrice ?? '');
+            setMaximumPrice(next.maxPrice ?? '');
+            navigate({ name: 'category', ...next });
+        },
+        [navigate],
+    );
+
+    const renderPage = (route: RouteState) => {
         switch (route.name) {
             case 'home':
                 return (
@@ -926,7 +1114,11 @@ export function App() {
                         onCategorySelect={collection => {
                             setActiveCollectionId(collection.id);
                             setActiveChildId(collection.children?.[0]?.id ?? collection.id);
-                            navigate({ name: 'category' });
+                            navigate({
+                                name: 'category',
+                                collectionId: collection.id,
+                                childId: collection.children?.[0]?.id ?? collection.id,
+                            });
                         }}
                         onAdd={variant => void addToCart(variant)}
                         onToggleLanguage={toggleLanguage}
@@ -951,17 +1143,22 @@ export function App() {
                         sortMode={sortMode}
                         fulfillmentFilter={fulfillmentFilter}
                         inStockOnly={inStockOnly}
+                        minimumPrice={minimumPrice}
+                        maximumPrice={maximumPrice}
                         addingVariantId={addingVariantId}
                         onCollectionChange={(collectionId, childId) => {
-                            setActiveCollectionId(collectionId);
-                            setActiveChildId(childId);
+                            updateCategory({ collectionId, childId });
                         }}
-                        onChildChange={setActiveChildId}
-                        onSortChange={setSortMode}
-                        onFilterChange={(type, inStock) => {
-                            setFulfillmentFilter(type);
-                            setInStockOnly(inStock);
-                        }}
+                        onChildChange={childId => updateCategory({ childId })}
+                        onSortChange={sort => updateCategory({ sort })}
+                        onFilterChange={(type, inStock, nextMinimumPrice, nextMaximumPrice) =>
+                            updateCategory({
+                                fulfillment: type,
+                                inStockOnly: inStock,
+                                minPrice: nextMinimumPrice || undefined,
+                                maxPrice: nextMaximumPrice || undefined,
+                            })
+                        }
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
                         onNotify={() => navigate({ name: 'notifications' })}
@@ -1013,6 +1210,7 @@ export function App() {
                         locale={locale}
                         language={language}
                         storefrontName={storefrontName}
+                        favoriteProductCount={favoriteProductIds.length}
                         recentProductCount={recentProductIds.length}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
@@ -1057,7 +1255,7 @@ export function App() {
                             action={routeProductError ? (isZh ? '重试' : 'Retry') : text.browse}
                             onAction={() =>
                                 routeProductError
-                                    ? setProductReloadKey(value => value + 1)
+                                    ? void productQuery.refetch()
                                     : navigate({ name: 'category' })
                             }
                         />
@@ -1081,79 +1279,87 @@ export function App() {
                 );
             case 'checkout':
                 return (
-                    <CheckoutPage
-                        api={api}
-                        cart={cart}
-                        order={checkoutOrder}
-                        customer={customer}
-                        market={market}
-                        availableCountries={availableCountries}
-                        locale={locale}
-                        language={language}
-                        onBack={goBack}
-                        onSessionChange={(session: StorefrontCheckoutSession) => {
-                            setCart(session.cart);
-                            setCheckoutOrder(session.order);
-                        }}
-                        onCartChange={nextCart => {
-                            setCart(nextCart);
-                            setCheckoutOrder(nextCart.checkoutOrder);
-                        }}
-                        onNavigate={navigate}
-                        onNotify={notify}
-                        onApplyCoupon={applyCoupon}
-                        onRemoveCoupon={removeCoupon}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyCheckoutPage
+                            api={api}
+                            cart={cart}
+                            order={checkoutOrder}
+                            customer={customer}
+                            market={market}
+                            availableCountries={availableCountries}
+                            locale={locale}
+                            language={language}
+                            onBack={goBack}
+                            onSessionChange={(session: StorefrontCheckoutSession) => {
+                                setCart(session.cart);
+                                setCheckoutOrder(session.order);
+                            }}
+                            onCartChange={nextCart => {
+                                setCart(nextCart);
+                                setCheckoutOrder(nextCart.checkoutOrder);
+                            }}
+                            onNavigate={navigate}
+                            onNotify={notify}
+                            onApplyCoupon={applyCoupon}
+                            onRemoveCoupon={removeCoupon}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'payment':
                 return (
-                    <PaymentPage
-                        api={api}
-                        cart={cart}
-                        order={checkoutOrder}
-                        locale={locale}
-                        language={language}
-                        onCancel={order => void reopenPendingOrder(order)}
-                        onComplete={async order => {
-                            setCompletedOrder(order);
-                            setCheckoutOrder(order);
-                            notify(isZh ? '测试支付已完成' : 'Test payment completed');
-                            try {
-                                setCart(await api.cart());
-                            } catch {
-                                // Payment succeeded; cart refresh can recover on the next page load.
-                            }
-                            navigate({ name: 'order-confirmation', id: order.code }, true);
-                        }}
-                        onNavigate={navigate}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyPaymentPage
+                            api={api}
+                            cart={cart}
+                            order={checkoutOrder}
+                            locale={locale}
+                            language={language}
+                            onCancel={order => void reopenPendingOrder(order)}
+                            onComplete={async order => {
+                                setCompletedOrder(order);
+                                setCheckoutOrder(order);
+                                notify(isZh ? '测试支付已完成' : 'Test payment completed');
+                                try {
+                                    setCart(await api.cart());
+                                } catch {
+                                    // Payment succeeded; cart refresh can recover on the next page load.
+                                }
+                                navigate({ name: 'order-confirmation', id: order.code }, true);
+                            }}
+                            onNavigate={navigate}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'order-confirmation':
                 return (
-                    <OrderConfirmationPage
-                        api={api}
-                        code={route.id ?? ''}
-                        initialOrder={completedOrder}
-                        customer={customer}
-                        locale={locale}
-                        language={language}
-                        onNavigate={navigate}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyOrderConfirmationPage
+                            api={api}
+                            code={route.id ?? ''}
+                            initialOrder={completedOrder}
+                            customer={customer}
+                            locale={locale}
+                            language={language}
+                            onNavigate={navigate}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'orders':
                 return (
-                    <OrdersPage
-                        api={api}
-                        customer={customer}
-                        market={market}
-                        locale={locale}
-                        language={language}
-                        storefrontName={storefrontName}
-                        initialTab={route.tab ?? 'all'}
-                        onBack={goBack}
-                        onNavigate={navigate}
-                        onBuyAgain={addOrderToCart}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyOrdersPage
+                            api={api}
+                            customer={customer}
+                            market={market}
+                            locale={locale}
+                            language={language}
+                            storefrontName={storefrontName}
+                            initialTab={route.tab ?? 'all'}
+                            onBack={goBack}
+                            onNavigate={navigate}
+                            onBuyAgain={addOrderToCart}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'order-detail':
                 return routeOrderLoading || (route.id && !selectedOrder && !routeOrderError) ? (
@@ -1161,17 +1367,19 @@ export function App() {
                         <PageSkeleton />
                     </Subpage>
                 ) : selectedOrder ? (
-                    <OrderDetailPage
-                        order={selectedOrder}
-                        market={market}
-                        locale={locale}
-                        language={language}
-                        storefrontName={storefrontName}
-                        onBack={goBack}
-                        onBuyAgain={addOrderToCart}
-                        onReopen={reopenPendingOrder}
-                        onUnavailable={() => notify(text.unavailable)}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyOrderDetailPage
+                            order={selectedOrder}
+                            market={market}
+                            locale={locale}
+                            language={language}
+                            storefrontName={storefrontName}
+                            onBack={goBack}
+                            onBuyAgain={addOrderToCart}
+                            onReopen={reopenPendingOrder}
+                            onUnavailable={() => notify(text.unavailable)}
+                        />
+                    </AuthPageBoundary>
                 ) : (
                     <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={goBack}>
                         <EmptyState
@@ -1179,40 +1387,69 @@ export function App() {
                             title={isZh ? '没有找到订单' : 'Order not found'}
                             detail={routeOrderError}
                             action={routeOrderError ? (isZh ? '重试' : 'Retry') : undefined}
-                            onAction={
-                                routeOrderError ? () => setOrderReloadKey(value => value + 1) : undefined
-                            }
+                            onAction={routeOrderError ? () => void orderQuery.refetch() : undefined}
                         />
                     </Subpage>
                 );
             case 'addresses':
                 return (
-                    <AddressesPage
-                        api={api}
-                        customer={customer}
-                        market={market}
-                        availableCountries={availableCountries}
-                        language={language}
-                        onBack={goBack}
-                        onCustomerChange={setCustomer}
-                        onNavigate={navigate}
-                        onNotify={notify}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyAddressesPage
+                            api={api}
+                            customer={customer}
+                            market={market}
+                            availableCountries={availableCountries}
+                            language={language}
+                            onBack={goBack}
+                            onCustomerChange={setCustomer}
+                            onNavigate={navigate}
+                            onNotify={notify}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'account-security':
                 return (
-                    <AccountSecurityPage
-                        customer={customer}
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyAccountSecurityPage
+                            customer={customer}
+                            language={language}
+                            storefrontName={storefrontName}
+                            onBack={goBack}
+                            onNavigate={navigate}
+                            onLogout={() => {
+                                void api.logout().then(() => {
+                                    setCustomer(null);
+                                    notify(isZh ? '已退出登录' : 'Signed out');
+                                    navigate({ name: 'account' }, true);
+                                });
+                            }}
+                        />
+                    </AuthPageBoundary>
+                );
+            case 'favorites':
+                return (
+                    <FavoriteProductsPage
+                        api={api}
+                        productIds={favoriteProductIds}
+                        market={market}
+                        locale={locale}
                         language={language}
-                        storefrontName={storefrontName}
+                        addingVariantId={addingVariantId}
                         onBack={goBack}
                         onNavigate={navigate}
-                        onLogout={() => {
-                            void api.logout().then(() => {
-                                setCustomer(null);
-                                notify(isZh ? '已退出登录' : 'Signed out');
-                                navigate({ name: 'account' }, true);
-                            });
+                        onAdd={variant => void addToCart(variant)}
+                        onRemove={productId => {
+                            toggleFavoriteProduct(productId);
+                            notify(isZh ? '已取消收藏' : 'Removed from favorites');
+                        }}
+                        onClear={() => {
+                            if (storefrontCode) {
+                                localStorage.removeItem(
+                                    scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, storefrontCode),
+                                );
+                            }
+                            setFavoriteProductIds([]);
+                            notify(isZh ? '收藏已清空' : 'Favorites cleared');
                         }}
                     />
                 );
@@ -1241,64 +1478,93 @@ export function App() {
                 );
             case 'notifications':
                 return <NotificationsPage language={language} onBack={goBack} onNavigate={navigate} />;
-            case 'login':
+            case 'support':
                 return (
-                    <LoginPage
-                        api={api}
+                    <SupportPage
+                        content={supportContent}
+                        products={products}
                         language={language}
-                        storefrontName={storefrontName}
-                        legalContent={legalContent}
                         onBack={goBack}
-                        onSuccess={completeAuthentication}
-                        onNavigate={navigate}
                         onContentTarget={openContentTarget}
                     />
+                );
+            case 'coming-soon':
+                return (
+                    <ComingSoonPage
+                        feature={route.id}
+                        language={language}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'login':
+                return (
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyLoginPage
+                            api={api}
+                            language={language}
+                            storefrontName={storefrontName}
+                            legalContent={legalContent}
+                            onBack={goBack}
+                            onSuccess={completeAuthentication}
+                            onNavigate={navigate}
+                            onContentTarget={openContentTarget}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'register':
                 return (
-                    <RegisterPage
-                        api={api}
-                        language={language}
-                        storefrontName={storefrontName}
-                        legalContent={legalContent}
-                        onBack={goBack}
-                        onNavigate={navigate}
-                        onContentTarget={openContentTarget}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyRegisterPage
+                            api={api}
+                            language={language}
+                            storefrontName={storefrontName}
+                            legalContent={legalContent}
+                            onBack={goBack}
+                            onNavigate={navigate}
+                            onContentTarget={openContentTarget}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'verify-account':
                 return (
-                    <VerifyAccountPage
-                        api={api}
-                        language={language}
-                        storefrontName={storefrontName}
-                        token={route.token}
-                        onBack={goBack}
-                        onSuccess={completeAuthentication}
-                        onNavigate={navigate}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyVerifyAccountPage
+                            api={api}
+                            language={language}
+                            storefrontName={storefrontName}
+                            token={route.token}
+                            onBack={goBack}
+                            onSuccess={completeAuthentication}
+                            onNavigate={navigate}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'forgot-password':
                 return (
-                    <ForgotPasswordPage
-                        api={api}
-                        language={language}
-                        storefrontName={storefrontName}
-                        onBack={goBack}
-                        onNavigate={navigate}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyForgotPasswordPage
+                            api={api}
+                            language={language}
+                            storefrontName={storefrontName}
+                            onBack={goBack}
+                            onNavigate={navigate}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'reset-password':
                 return (
-                    <ResetPasswordPage
-                        api={api}
-                        language={language}
-                        storefrontName={storefrontName}
-                        token={route.token}
-                        onBack={goBack}
-                        onSuccess={completeAuthentication}
-                        onNavigate={navigate}
-                    />
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyResetPasswordPage
+                            api={api}
+                            language={language}
+                            storefrontName={storefrontName}
+                            token={route.token}
+                            onBack={goBack}
+                            onSuccess={completeAuthentication}
+                            onNavigate={navigate}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'legal':
                 return import.meta.env.DEV ? (
@@ -1326,7 +1592,9 @@ export function App() {
                     />
                 );
         }
-    })();
+    };
+    const page = renderPage(route);
+    const isRootRoute = rootPages.includes(route.name as MainPage);
 
     return (
         <div className="storefront-app">
@@ -1339,7 +1607,17 @@ export function App() {
                     {isZh ? '当前网络不可用，部分操作可能失败' : 'You are offline. Some actions may fail.'}
                 </div>
             )}
-            <div id="storefront-content">{page}</div>
+            {(isNavigationPending || productQuery.isFetching) && (
+                <div className="navigation-progress" role="progressbar" aria-label={text.loading} />
+            )}
+            <div id="storefront-content">
+                {rootPages.map(rootPage => (
+                    <Activity key={rootPage} mode={route.name === rootPage ? 'visible' : 'hidden'}>
+                        {renderPage({ name: rootPage })}
+                    </Activity>
+                ))}
+                {!isRootRoute && page}
+            </div>
             {rootPages.includes(route.name as MainPage) && (
                 <BottomNavigation
                     active={mainPage}
@@ -1915,11 +2193,18 @@ interface CategoryPageProps {
     sortMode: SortMode;
     fulfillmentFilter: 'all' | FulfillmentType;
     inStockOnly: boolean;
+    minimumPrice: string;
+    maximumPrice: string;
     addingVariantId: string | null;
     onCollectionChange: (collectionId: string, childId: string) => void;
     onChildChange: (childId: string) => void;
     onSortChange: (sort: SortMode) => void;
-    onFilterChange: (type: 'all' | FulfillmentType, inStockOnly: boolean) => void;
+    onFilterChange: (
+        type: 'all' | FulfillmentType,
+        inStockOnly: boolean,
+        minimumPrice: string,
+        maximumPrice: string,
+    ) => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
     onNotify: () => void;
@@ -1941,6 +2226,8 @@ function CategoryPage(props: CategoryPageProps) {
         sortMode,
         fulfillmentFilter,
         inStockOnly,
+        minimumPrice: minimumPriceInput,
+        maximumPrice: maximumPriceInput,
         addingVariantId,
         onCollectionChange,
         onChildChange,
@@ -1951,28 +2238,43 @@ function CategoryPage(props: CategoryPageProps) {
         onNotify,
         onRetry,
     } = props;
+    const queryClient = useQueryClient();
     const isZh = language === 'zh';
     const [filterOpen, setFilterOpen] = useState(false);
-    const [minimumPriceInput, setMinimumPriceInput] = useState('');
-    const [maximumPriceInput, setMaximumPriceInput] = useState('');
     const [draftType, setDraftType] = useState<'all' | FulfillmentType>(fulfillmentFilter);
     const [draftStock, setDraftStock] = useState(inStockOnly);
-    const [draftMinimumPrice, setDraftMinimumPrice] = useState('');
-    const [draftMaximumPrice, setDraftMaximumPrice] = useState('');
-    const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
-    const [totalItems, setTotalItems] = useState(0);
-    const [categoryLoading, setCategoryLoading] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [categoryError, setCategoryError] = useState('');
-    const [categoryReloadKey, setCategoryReloadKey] = useState(0);
-    const [visibleLimit, setVisibleLimit] = useState(12);
-    const activeCategoryKey = useRef('');
+    const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
+    const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
     const primary = collections.find(item => item.id === activeCollectionId) ?? collections[0];
     const children = primary?.children ?? [];
     const hasChildCategories = children.length > 0;
     const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
     const hasFilters =
         fulfillmentFilter !== 'all' || inStockOnly || minimumPriceInput !== '' || maximumPriceInput !== '';
+    const vendureLanguageCode = languageCodeFor(language);
+    const catalogInput = {
+        collectionId: selectedCollectionId === 'all' ? undefined : selectedCollectionId,
+        sort: sortMode,
+        fulfillmentType: fulfillmentFilter === 'all' ? undefined : fulfillmentFilter,
+        inStockOnly,
+        minPriceWithTax: priceInputToMinorUnits(minimumPriceInput),
+        maxPriceWithTax: priceInputToMinorUnits(maximumPriceInput),
+    };
+    const catalogQuery = useInfiniteQuery({
+        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, catalogInput),
+        queryFn: ({ pageParam, signal }) =>
+            api.catalog({ ...catalogInput, skip: pageParam, take: 12 }, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) => {
+            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
+            return loaded < lastPage.totalItems ? loaded : undefined;
+        },
+        enabled: collections.length > 0 && !!selectedCollectionId && selectedCollectionId !== 'all',
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        placeholderData: keepPreviousData,
+        meta: publicQueryMeta(),
+    });
 
     const matchesFilters = useCallback(
         (
@@ -1995,188 +2297,43 @@ function CategoryPage(props: CategoryPageProps) {
         [],
     );
 
-    useEffect(() => {
-        if (!collections.length) {
-            const fallbackType =
-                activeCollectionId === 'physical' || activeCollectionId === 'digital'
-                    ? activeCollectionId
-                    : 'all';
-            const fallbackProducts = products.filter(
-                product =>
-                    fallbackType === 'all' ||
-                    product.variants.some(variant => variant.customFields.fulfillmentType === fallbackType),
-            );
-            const filteredFallbackProducts = fallbackProducts.filter(product =>
-                matchesFilters(product, fulfillmentFilter, inStockOnly, minimumPriceInput, maximumPriceInput),
-            );
-            let fallbackCancelled = false;
-            setCategoryLoading(sortMode === 'sales');
-            setCategoryError('');
-            const salesRequest =
-                sortMode === 'sales'
-                    ? api.productSales(filteredFallbackProducts.map(product => product.id))
-                    : Promise.resolve({});
-            void salesRequest
-                .then(salesByProductId => {
-                    if (fallbackCancelled) return;
-                    setCategoryProducts(
-                        sortCategoryProducts(filteredFallbackProducts, sortMode, locale, salesByProductId),
-                    );
-                    setTotalItems(filteredFallbackProducts.length);
-                    setVisibleLimit(12);
-                    setCategoryError(error ?? '');
-                })
-                .catch(requestError => {
-                    if (!fallbackCancelled) {
-                        setCategoryError(
-                            requestError instanceof Error
-                                ? requestError.message
-                                : isZh
-                                  ? '销量加载失败'
-                                  : 'Could not load sales',
-                        );
-                    }
-                })
-                .finally(() => {
-                    if (!fallbackCancelled) setCategoryLoading(false);
-                });
-            return () => {
-                fallbackCancelled = true;
-            };
-        }
-        if (!selectedCollectionId || selectedCollectionId === 'all') return;
-        const categoryKey = [
-            selectedCollectionId,
-            sortMode,
-            fulfillmentFilter,
-            inStockOnly ? 'stock' : 'all-stock',
-            minimumPriceInput,
-            maximumPriceInput,
-            categoryReloadKey,
-        ].join('\u0000');
-        activeCategoryKey.current = categoryKey;
-        let cancelled = false;
-        setCategoryProducts([]);
-        setTotalItems(0);
-        setCategoryError('');
-        setCategoryLoading(true);
-        setVisibleLimit(12);
-        const requiresCompleteProductSet = hasFilters || sortMode === 'sales' || sortMode === 'newest';
-        const request = requiresCompleteProductSet
-            ? api.searchAllProducts('', 'recommended', selectedCollectionId).then(async items => {
-                  const filteredItems = items.filter(product =>
-                      matchesFilters(
-                          product,
-                          fulfillmentFilter,
-                          inStockOnly,
-                          minimumPriceInput,
-                          maximumPriceInput,
-                      ),
-                  );
-                  const salesByProductId =
-                      sortMode === 'sales'
-                          ? await api.productSales(filteredItems.map(product => product.id))
-                          : {};
-                  return {
-                      items: sortCategoryProducts(filteredItems, sortMode, locale, salesByProductId),
-                      totalItems: filteredItems.length,
-                  };
-              })
-            : api.searchProducts('', sortMode, 0, 12, selectedCollectionId);
-        void request
-            .then(page => {
-                if (cancelled || activeCategoryKey.current !== categoryKey) return;
-                setCategoryProducts(page.items);
-                setTotalItems(page.totalItems);
-            })
-            .catch(requestError => {
-                if (!cancelled && activeCategoryKey.current === categoryKey) {
-                    setCategoryError(
-                        requestError instanceof Error
-                            ? requestError.message
-                            : isZh
-                              ? '商品加载失败'
-                              : 'Could not load products',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled && activeCategoryKey.current === categoryKey) {
-                    setCategoryLoading(false);
-                }
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [
-        activeCollectionId,
-        api,
-        categoryReloadKey,
-        collections.length,
-        error,
-        fulfillmentFilter,
-        hasFilters,
-        inStockOnly,
-        isZh,
-        locale,
-        matchesFilters,
-        maximumPriceInput,
-        minimumPriceInput,
-        products,
-        selectedCollectionId,
+    const fallbackProducts = sortCategoryProducts(
+        products.filter(product =>
+            matchesFilters(product, fulfillmentFilter, inStockOnly, minimumPriceInput, maximumPriceInput),
+        ),
         sortMode,
-    ]);
+        locale,
+    );
+    const categoryProducts = collections.length
+        ? (catalogQuery.data?.pages.flatMap(page => page.items) ?? [])
+        : fallbackProducts;
+    const visibleProducts = categoryProducts;
+    const totalItems = collections.length
+        ? (catalogQuery.data?.pages[0]?.totalItems ?? 0)
+        : fallbackProducts.length;
+    const remainingItems = Math.max(totalItems - categoryProducts.length, 0);
+    const categoryLoading = collections.length ? catalogQuery.isPending : loading;
+    const loadingMore = catalogQuery.isFetchingNextPage;
+    const categoryError = collections.length
+        ? catalogQuery.error instanceof Error
+            ? catalogQuery.error.message
+            : ''
+        : (error ?? '');
 
-    const loadMore = async () => {
-        if (hasFilters || sortMode === 'sales' || sortMode === 'newest') {
-            setVisibleLimit(limit => Math.min(limit + 12, categoryProducts.length));
-            return;
-        }
-        if (
-            !selectedCollectionId ||
-            selectedCollectionId === 'all' ||
-            loadingMore ||
-            categoryProducts.length >= totalItems
-        ) {
-            return;
-        }
-        const categoryKey = activeCategoryKey.current;
-        setLoadingMore(true);
-        setCategoryError('');
-        try {
-            const page = await api.searchProducts(
-                '',
-                sortMode,
-                categoryProducts.length,
-                12,
-                selectedCollectionId,
-            );
-            if (activeCategoryKey.current !== categoryKey) return;
-            setCategoryProducts(current => {
-                const existingIds = new Set(current.map(product => product.id));
-                return [...current, ...page.items.filter(product => !existingIds.has(product.id))];
+    useEffect(() => {
+        for (const product of categoryProducts) {
+            const queryKey = storefrontQueryKeys.product(market.code, vendureLanguageCode, product.id);
+            queryClient.setQueryData(queryKey, product);
+            void queryClient.prefetchQuery({
+                queryKey,
+                queryFn: async () => product,
+                staleTime: PUBLIC_QUERY_STALE_TIME,
+                meta: publicQueryMeta(),
             });
-            setTotalItems(page.totalItems);
-        } catch (requestError) {
-            if (activeCategoryKey.current === categoryKey) {
-                setCategoryError(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '加载更多失败'
-                          : 'Could not load more products',
-                );
-            }
-        } finally {
-            if (activeCategoryKey.current === categoryKey) setLoadingMore(false);
         }
-    };
+    }, [categoryProducts, market.code, queryClient, vendureLanguageCode]);
 
-    const usesClientPagination = hasFilters || sortMode === 'sales' || sortMode === 'newest';
-    const visibleProducts = usesClientPagination ? categoryProducts.slice(0, visibleLimit) : categoryProducts;
-    const remainingItems = usesClientPagination
-        ? Math.max(categoryProducts.length - visibleProducts.length, 0)
-        : Math.max(totalItems - categoryProducts.length, 0);
+    const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
         const collectionMatch =
             !collections.length ||
@@ -2276,7 +2433,8 @@ function CategoryPage(props: CategoryPageProps) {
                                 fallbackSrc="/storefront/default-hero.jpg"
                                 alt={primary?.name ?? ''}
                                 imageKind="hero"
-                                loading="lazy"
+                                loading="eager"
+                                fetchPriority="high"
                             />
                         ) : (
                             <div className="image-placeholder">
@@ -2337,6 +2495,14 @@ function CategoryPage(props: CategoryPageProps) {
                         </button>
                     </nav>
 
+                    {catalogQuery.isFetching && !categoryLoading && (
+                        <div
+                            className="category-query-progress"
+                            role="progressbar"
+                            aria-label={isZh ? '正在更新商品' : 'Updating products'}
+                        />
+                    )}
+
                     {categoryLoading || (loading && !collections.length) ? (
                         <ListSkeleton />
                     ) : categoryError && !categoryProducts.length ? (
@@ -2345,9 +2511,7 @@ function CategoryPage(props: CategoryPageProps) {
                             title={isZh ? '商品加载失败' : 'Could not load products'}
                             detail={categoryError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={() =>
-                                collections.length ? setCategoryReloadKey(value => value + 1) : onRetry()
-                            }
+                            onAction={() => (collections.length ? void catalogQuery.refetch() : onRetry())}
                             compact
                         />
                     ) : categoryProducts.length ? (
@@ -2528,9 +2692,12 @@ function CategoryPage(props: CategoryPageProps) {
                                 type="button"
                                 className="primary-action"
                                 onClick={() => {
-                                    onFilterChange(draftType, draftStock);
-                                    setMinimumPriceInput(draftMinimumPrice);
-                                    setMaximumPriceInput(draftMaximumPrice);
+                                    onFilterChange(
+                                        draftType,
+                                        draftStock,
+                                        draftMinimumPrice,
+                                        draftMaximumPrice,
+                                    );
                                     setFilterOpen(false);
                                 }}
                             >
@@ -2907,6 +3074,7 @@ interface AccountPageProps {
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    favoriteProductCount: number;
     recentProductCount: number;
     addingVariantId: string | null;
     onNavigate: (route: RouteState) => void;
@@ -2923,6 +3091,7 @@ function AccountPage(props: AccountPageProps) {
         locale,
         language,
         storefrontName,
+        favoriteProductCount,
         recentProductCount,
         addingVariantId,
         onNavigate,
@@ -3068,6 +3237,19 @@ function AccountPage(props: AccountPageProps) {
                 <h2>{isZh ? '常用服务' : 'Services'}</h2>
                 <div>
                     <ServiceButton
+                        icon={<Heart />}
+                        label={
+                            favoriteProductCount
+                                ? isZh
+                                    ? `收藏 ${favoriteProductCount}`
+                                    : `Favorites ${favoriteProductCount}`
+                                : isZh
+                                  ? '我的收藏'
+                                  : 'Favorites'
+                        }
+                        onClick={() => onNavigate({ name: 'favorites' })}
+                    />
+                    <ServiceButton
                         icon={<MapPin />}
                         label={isZh ? '地址管理' : 'Addresses'}
                         onClick={() =>
@@ -3086,6 +3268,28 @@ function AccountPage(props: AccountPageProps) {
                                   : 'History'
                         }
                         onClick={() => onNavigate({ name: 'history' })}
+                    />
+                    <ServiceButton
+                        icon={<Bell />}
+                        label={isZh ? '消息通知' : 'Notifications'}
+                        onClick={() => onNavigate({ name: 'notifications' })}
+                    />
+                    <ServiceButton
+                        icon={<TicketPercent />}
+                        label={isZh ? '优惠券' : 'Coupons'}
+                        badge={isZh ? '待开放' : 'Soon'}
+                        onClick={() => onNavigate({ name: 'coming-soon', id: 'coupons' })}
+                    />
+                    <ServiceButton
+                        icon={<MessageSquare />}
+                        label={isZh ? '评价中心' : 'Reviews'}
+                        badge={isZh ? '待开放' : 'Soon'}
+                        onClick={() => onNavigate({ name: 'coming-soon', id: 'reviews' })}
+                    />
+                    <ServiceButton
+                        icon={<Headphones />}
+                        label={isZh ? '客服中心' : 'Support'}
+                        onClick={() => onNavigate({ name: 'support' })}
                     />
                     <ServiceButton
                         icon={<Store />}
@@ -3160,76 +3364,135 @@ function AccountPage(props: AccountPageProps) {
     );
 }
 
-function AccountSecurityPage({
-    customer,
+function FavoriteProductsPage({
+    api,
+    productIds,
+    market,
+    locale,
     language,
-    storefrontName,
+    addingVariantId,
     onBack,
     onNavigate,
-    onLogout,
+    onAdd,
+    onRemove,
+    onClear,
 }: {
-    customer: ActiveCustomer | null;
+    api: ShopApi;
+    productIds: string[];
+    market: MarketConfig;
+    locale: string;
     language: StorefrontLanguage;
-    storefrontName: string;
+    addingVariantId: string | null;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
-    onLogout: () => void;
+    onAdd: (variant: ProductVariant) => void;
+    onRemove: (productId: string) => void;
+    onClear: () => void;
 }) {
     const isZh = language === 'zh';
-    if (!customer) {
-        return (
-            <Subpage title={isZh ? '账户与安全' : 'Account and security'} language={language} onBack={onBack}>
-                <EmptyState
-                    icon={<UserRound />}
-                    title={isZh ? '请先登录' : 'Sign in required'}
-                    action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => onNavigate({ name: 'login' })}
-                />
-            </Subpage>
-        );
-    }
-    const fullName = `${customer.lastName}${customer.firstName}`.trim();
+    const [favoriteProducts, setFavoriteProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [favoriteError, setFavoriteError] = useState('');
+    const [retryKey, setRetryKey] = useState(0);
+    const productIdsKey = productIds.join(',');
+    const availableProducts = favoriteProducts.filter(product => productIds.includes(product.id));
+
+    useEffect(() => {
+        if (!productIds.length) {
+            setFavoriteProducts([]);
+            setLoading(false);
+            setFavoriteError('');
+            return;
+        }
+        let cancelled = false;
+        setLoading(true);
+        setFavoriteError('');
+        void api
+            .productsByIds(productIds)
+            .then(nextProducts => {
+                if (!cancelled) setFavoriteProducts(nextProducts);
+            })
+            .catch(requestError => {
+                if (!cancelled) {
+                    setFavoriteError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : isZh
+                              ? '收藏商品加载失败'
+                              : 'Could not load favorites',
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api, isZh, productIdsKey, retryKey]);
+
     return (
-        <main className="page subpage account-security-page">
+        <main className="page subpage favorites-page">
             <SubHeader
-                title={isZh ? '账户与安全' : 'Account and security'}
+                title={isZh ? '我的收藏' : 'My favorites'}
                 language={language}
                 onBack={onBack}
+                action={
+                    productIds.length ? (
+                        <button
+                            type="button"
+                            onClick={onClear}
+                            aria-label={isZh ? '清空收藏' : 'Clear favorites'}
+                        >
+                            <Trash2 />
+                        </button>
+                    ) : undefined
+                }
             />
-            <section className="account-security-profile">
-                <span className="avatar">
-                    {(fullName || customer.emailAddress).slice(0, 1).toUpperCase()}
-                </span>
-                <div>
-                    <strong>{fullName || storefrontName}</strong>
-                    <small>{customer.emailAddress}</small>
-                </div>
-            </section>
-            <section className="account-security-list">
-                <button type="button" onClick={() => onNavigate({ name: 'forgot-password' })}>
-                    <span>
-                        <Fingerprint />
-                        <b>{isZh ? '修改登录密码' : 'Change password'}</b>
-                    </span>
-                    <small>{isZh ? '通过邮箱验证后重置' : 'Reset after email verification'}</small>
-                    <ChevronRight />
-                </button>
-                <button type="button" onClick={() => onNavigate({ name: 'addresses' })}>
-                    <span>
-                        <MapPin />
-                        <b>{isZh ? '收货地址' : 'Delivery addresses'}</b>
-                    </span>
-                    <small>
-                        {isZh
-                            ? `${customer.addresses?.length ?? 0} 个地址`
-                            : `${customer.addresses?.length ?? 0} addresses`}
-                    </small>
-                    <ChevronRight />
-                </button>
-            </section>
-            <button className="logout-button" type="button" onClick={onLogout}>
-                {isZh ? '退出登录' : 'Sign out'}
-            </button>
+            {loading && !favoriteProducts.length ? (
+                <PageSkeleton />
+            ) : favoriteError ? (
+                <EmptyState
+                    icon={<WifiOff />}
+                    title={isZh ? '收藏商品加载失败' : 'Could not load favorites'}
+                    detail={favoriteError}
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={() => setRetryKey(value => value + 1)}
+                />
+            ) : availableProducts.length ? (
+                <ProductSection
+                    title={isZh ? '已收藏商品' : 'Saved products'}
+                    subtitle={
+                        isZh
+                            ? `共 ${availableProducts.length} 件商品`
+                            : `${availableProducts.length} products`
+                    }
+                    products={availableProducts}
+                    market={market}
+                    locale={locale}
+                    addingVariantId={addingVariantId}
+                    favoriteProductIds={productIds}
+                    onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                    onFavorite={product => onRemove(product.id)}
+                    onAdd={onAdd}
+                />
+            ) : (
+                <EmptyState
+                    icon={<Heart />}
+                    title={isZh ? '暂无收藏商品' : 'No favorites yet'}
+                    detail={
+                        productIds.length
+                            ? isZh
+                                ? '已收藏的商品已下架'
+                                : 'Your saved products are no longer available'
+                            : isZh
+                              ? '点击商品详情页的收藏按钮，商品会保存在这里'
+                              : 'Save products from their detail page and they will appear here'
+                    }
+                    action={isZh ? '去逛商品' : 'Browse products'}
+                    onAction={() => onNavigate({ name: 'category' })}
+                />
+            )}
         </main>
     );
 }
@@ -3360,6 +3623,84 @@ function BrowsingHistoryPage({
     );
 }
 
+function SupportPage({
+    content,
+    products,
+    language,
+    onBack,
+    onContentTarget,
+}: {
+    content?: StorefrontContentBlock;
+    products: Product[];
+    language: StorefrontLanguage;
+    onBack: () => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <Subpage title={isZh ? '客服中心' : 'Customer support'} language={language} onBack={onBack}>
+            {content ? (
+                <ManagedContentSection
+                    block={content}
+                    products={products}
+                    onContentTarget={onContentTarget}
+                />
+            ) : (
+                <EmptyState
+                    icon={<Headphones />}
+                    title={isZh ? '客服信息暂未配置' : 'Support is not configured yet'}
+                    detail={
+                        isZh
+                            ? '待商家配置电话、邮箱或在线客服后，将在这里显示'
+                            : 'Phone, email, or online support will appear here after merchant setup'
+                    }
+                />
+            )}
+        </Subpage>
+    );
+}
+
+function ComingSoonPage({
+    feature,
+    language,
+    onBack,
+    onNavigate,
+}: {
+    feature?: string;
+    language: StorefrontLanguage;
+    onBack: () => void;
+    onNavigate: (route: RouteState) => void;
+}) {
+    const isZh = language === 'zh';
+    const featureCopy =
+        feature === 'reviews'
+            ? {
+                  title: isZh ? '评价中心' : 'Reviews',
+                  detail: isZh
+                      ? '商品评价与审核流程正在建设中'
+                      : 'Product reviews and moderation are being prepared',
+                  icon: <MessageSquare />,
+              }
+            : {
+                  title: isZh ? '优惠券' : 'Coupons',
+                  detail: isZh
+                      ? '客户优惠券包正在建设中，购物车仍可输入已知优惠码'
+                      : 'The coupon wallet is being prepared; known coupon codes can still be used in cart',
+                  icon: <TicketPercent />,
+              };
+    return (
+        <Subpage title={featureCopy.title} language={language} onBack={onBack}>
+            <EmptyState
+                icon={featureCopy.icon}
+                title={isZh ? '功能建设中' : 'Coming soon'}
+                detail={featureCopy.detail}
+                action={isZh ? '返回我的' : 'Back to account'}
+                onAction={() => onNavigate({ name: 'account' })}
+            />
+        </Subpage>
+    );
+}
+
 function NotificationsPage({
     language,
     onBack,
@@ -3452,6 +3793,15 @@ function ProductDetailPage({
         return () => window.removeEventListener('scroll', updateHeader);
     }, []);
 
+    const prefetchAdjacentGalleryImages = () => {
+        scheduleIdleWork(() => {
+            for (const index of [activeImage - 1, activeImage + 1]) {
+                const asset = assets[index];
+                if (asset) prefetchStorefrontImage(asset.preview, 'detail');
+            }
+        });
+    };
+
     return (
         <main className="page subpage product-detail-page">
             <SubHeader
@@ -3475,6 +3825,10 @@ function ProductDetailPage({
                         src={assets[activeImage].preview}
                         alt={`${product.name} ${activeImage + 1}`}
                         imageKind="detail"
+                        placeholderSrc={productImage(product) ?? undefined}
+                        loading="eager"
+                        fetchPriority="high"
+                        onLoad={prefetchAdjacentGalleryImages}
                     />
                 ) : (
                     <div className="image-placeholder" aria-hidden="true">
@@ -3784,20 +4138,37 @@ function SearchPage({
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
 }) {
+    const queryClient = useQueryClient();
     const isZh = language === 'zh';
     const [query, setQuery] = useState(initialQuery);
     const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
     const [resultSort, setResultSort] = useState<ProductSearchSort>('recommended');
-    const [results, setResults] = useState<Product[]>([]);
-    const [totalItems, setTotalItems] = useState(0);
-    const [searching, setSearching] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [searchError, setSearchError] = useState('');
-    const [searchReloadKey, setSearchReloadKey] = useState(0);
-    const activeSearchKey = useRef('');
     const [history, setHistory] = useState<string[]>([]);
     const searchHistoryStorageKey = scopedStorageKey(SEARCH_HISTORY_STORAGE_KEY, storefrontCode);
     const popularSearches = products.slice(0, 6);
+    const vendureLanguageCode = languageCodeFor(language);
+    const term = submittedQuery.trim();
+    const searchInput = { term, sort: resultSort };
+    const searchQuery = useInfiniteQuery({
+        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, searchInput),
+        queryFn: ({ pageParam, signal }) =>
+            api.catalog({ ...searchInput, skip: pageParam, take: 20 }, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) => {
+            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
+            return loaded < lastPage.totalItems ? loaded : undefined;
+        },
+        enabled: !!term,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        placeholderData: keepPreviousData,
+        meta: publicQueryMeta(),
+    });
+    const results = searchQuery.data?.pages.flatMap(page => page.items) ?? [];
+    const totalItems = searchQuery.data?.pages[0]?.totalItems ?? 0;
+    const searching = searchQuery.isPending;
+    const loadingMore = searchQuery.isFetchingNextPage;
+    const searchError = searchQuery.error instanceof Error ? searchQuery.error.message : '';
     const relatedProducts = products
         .filter(product => !results.some(result => result.id === product.id))
         .slice(0, 2);
@@ -3811,6 +4182,7 @@ function SearchPage({
         if (!next) return;
         setQuery(next);
         setSubmittedQuery(next);
+        onNavigate({ name: 'search', term: next });
         const nextHistory = [next, ...history.filter(item => item !== next)].slice(0, 8);
         setHistory(nextHistory);
         if (searchHistoryStorageKey) {
@@ -3823,86 +4195,19 @@ function SearchPage({
     }, [searchHistoryStorageKey]);
 
     useEffect(() => {
-        const term = submittedQuery.trim();
-        const searchKey = `${term}\u0000${resultSort}\u0000${searchReloadKey}`;
-        activeSearchKey.current = searchKey;
-        if (!term) {
-            setResults([]);
-            setTotalItems(0);
-            setSearchError('');
-            setSearching(false);
-            return;
-        }
-        let cancelled = false;
-        setResults([]);
-        setTotalItems(0);
-        setSearchError('');
-        setSearching(true);
-        if (hasHanCharacters(term)) {
-            const matchedProducts = sortCategoryProducts(
-                filterProductsByHanTerm(products, term),
-                resultSort,
-                locale,
-            );
-            setResults(matchedProducts);
-            setTotalItems(matchedProducts.length);
-            setSearching(false);
-            return;
-        }
-        void api
-            .searchProducts(term, resultSort)
-            .then(page => {
-                if (cancelled || activeSearchKey.current !== searchKey) return;
-                setResults(page.items);
-                setTotalItems(page.totalItems);
-            })
-            .catch(requestError => {
-                if (!cancelled && activeSearchKey.current === searchKey) {
-                    setSearchError(
-                        requestError instanceof Error
-                            ? requestError.message
-                            : isZh
-                              ? '搜索失败'
-                              : 'Search failed',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled && activeSearchKey.current === searchKey) setSearching(false);
+        for (const product of results) {
+            const queryKey = storefrontQueryKeys.product(market.code, vendureLanguageCode, product.id);
+            queryClient.setQueryData(queryKey, product);
+            void queryClient.prefetchQuery({
+                queryKey,
+                queryFn: async () => product,
+                staleTime: PUBLIC_QUERY_STALE_TIME,
+                meta: publicQueryMeta(),
             });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, isZh, locale, products, resultSort, searchReloadKey, submittedQuery]);
+        }
+    }, [market.code, queryClient, results, vendureLanguageCode]);
 
-    const loadMore = async () => {
-        const term = submittedQuery.trim();
-        if (!term || loadingMore || results.length >= totalItems) return;
-        const searchKey = activeSearchKey.current;
-        setLoadingMore(true);
-        setSearchError('');
-        try {
-            const page = await api.searchProducts(term, resultSort, results.length);
-            if (activeSearchKey.current !== searchKey) return;
-            setResults(current => {
-                const existingIds = new Set(current.map(product => product.id));
-                return [...current, ...page.items.filter(product => !existingIds.has(product.id))];
-            });
-            setTotalItems(page.totalItems);
-        } catch (requestError) {
-            if (activeSearchKey.current === searchKey) {
-                setSearchError(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '加载更多失败'
-                          : 'Could not load more results',
-                );
-            }
-        } finally {
-            if (activeSearchKey.current === searchKey) setLoadingMore(false);
-        }
-    };
+    const loadMore = () => searchQuery.fetchNextPage();
 
     return (
         <main className="page subpage search-page">
@@ -4076,7 +4381,7 @@ function SearchPage({
                             title={isZh ? '搜索加载失败' : 'Search failed'}
                             detail={searchError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={() => setSearchReloadKey(value => value + 1)}
+                            onAction={() => void searchQuery.refetch()}
                         />
                     ) : results.length ? (
                         <div className="product-list">
@@ -4146,2228 +4451,25 @@ function SearchPage({
     );
 }
 
-function CheckoutPage({
-    api,
-    cart,
-    order,
-    customer,
-    market,
-    availableCountries,
-    locale,
+function AuthPageBoundary({
     language,
     onBack,
-    onSessionChange,
-    onCartChange,
-    onNavigate,
-    onNotify,
-    onApplyCoupon,
-    onRemoveCoupon,
-}: {
-    api: ShopApi;
-    cart: StorefrontCart | null;
-    order: Order | null;
-    customer: ActiveCustomer | null;
-    market: MarketConfig;
-    availableCountries: StorefrontConfig['availableCountries'];
-    locale: string;
-    language: StorefrontLanguage;
-    onBack: () => void;
-    onSessionChange: (session: StorefrontCheckoutSession) => void;
-    onCartChange: (cart: StorefrontCart) => void;
-    onNavigate: (route: RouteState, replace?: boolean) => void;
-    onNotify: (message: string) => void;
-    onApplyCoupon: (couponCode: string) => Promise<string | null>;
-    onRemoveCoupon: (couponCode: string) => Promise<string | null>;
-}) {
-    const isZh = language === 'zh';
-    const [submitting, setSubmitting] = useState(false);
-    const [formError, setFormError] = useState<string | null>(null);
-    const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
-    const [selectedShippingId, setSelectedShippingId] = useState('');
-    const [preparedAddressKey, setPreparedAddressKey] = useState('');
-    const [customerPrepared, setCustomerPrepared] = useState(Boolean(customer));
-    const [shippingUpdating, setShippingUpdating] = useState(false);
-    const [couponOpen, setCouponOpen] = useState(false);
-    const [noteOpen, setNoteOpen] = useState(false);
-    const [noteDraft, setNoteDraft] = useState('');
-    const [noteSaving, setNoteSaving] = useState(false);
-    const [noteError, setNoteError] = useState<string | null>(null);
-    const formRef = useRef<HTMLFormElement>(null);
-    const defaultAddress =
-        customer?.addresses?.find(address => address.defaultShippingAddress) ?? customer?.addresses?.[0];
-    const requiresShipping =
-        order?.checkoutFulfillment?.requiresShippingAddress ??
-        order?.lines.some(line => line.productVariant.customFields.fulfillmentType === 'physical');
-    const physicalLines =
-        order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'physical') ?? [];
-    const digitalLines =
-        order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'digital') ?? [];
-
-    const openOrderNote = () => {
-        setNoteDraft(order?.customFields.customerNote ?? '');
-        setNoteError(null);
-        setNoteOpen(true);
-    };
-
-    const saveOrderNote = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const customerNote = noteDraft.trim();
-        setNoteSaving(true);
-        setNoteError(null);
-        try {
-            await api.setOrderNote(customerNote);
-            onCartChange(await api.cart());
-            setNoteOpen(false);
-            onNotify(
-                customerNote
-                    ? isZh
-                        ? '订单备注已保存'
-                        : 'Order note saved'
-                    : isZh
-                      ? '订单备注已清空'
-                      : 'Order note cleared',
-            );
-        } catch (requestError) {
-            setNoteError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '订单备注保存失败'
-                      : 'Could not save the order note',
-            );
-        } finally {
-            setNoteSaving(false);
-        }
-    };
-
-    const selectShippingMethod = async (shippingMethodId: string) => {
-        const previousId = selectedShippingId;
-        setSelectedShippingId(shippingMethodId);
-        setShippingUpdating(true);
-        setFormError(null);
-        try {
-            await api.setShippingMethod(shippingMethodId);
-            onCartChange(await api.cart());
-        } catch (requestError) {
-            setSelectedShippingId(previousId);
-            setFormError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '配送方式更新失败'
-                      : 'Could not update the shipping method',
-            );
-        } finally {
-            setShippingUpdating(false);
-        }
-    };
-
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!cart || !order) return;
-        const data = new FormData(event.currentTarget);
-        setSubmitting(true);
-        setFormError(null);
-        try {
-            if (!customerPrepared) {
-                await api.setCustomer({
-                    firstName: String(data.get('firstName') ?? ''),
-                    lastName: String(data.get('lastName') ?? ''),
-                    emailAddress: String(data.get('emailAddress') ?? ''),
-                });
-                setCustomerPrepared(true);
-            }
-            if (requiresShipping) {
-                const shippingAddress: CustomerAddressInput = {
-                    fullName: String(data.get('fullName') ?? ''),
-                    phoneNumber: String(data.get('phoneNumber') ?? ''),
-                    streetLine1: String(data.get('streetLine1') ?? ''),
-                    city: String(data.get('city') ?? ''),
-                    province: String(data.get('province') ?? ''),
-                    postalCode: String(data.get('postalCode') ?? ''),
-                    countryCode: String(data.get('countryCode') ?? market.countryCode),
-                };
-                const addressKey = JSON.stringify(shippingAddress);
-                if (addressKey !== preparedAddressKey || !shippingMethods.length) {
-                    await api.setShippingAddress(shippingAddress);
-                    const methods = await api.eligibleShippingMethods();
-                    if (!methods.length) {
-                        throw new Error(
-                            isZh ? '当前地址没有可用配送方式' : 'No shipping method is available',
-                        );
-                    }
-                    const shippingId = methods.some(method => method.id === selectedShippingId)
-                        ? selectedShippingId
-                        : methods[0].id;
-                    await api.setShippingMethod(shippingId);
-                    setShippingMethods(methods);
-                    setSelectedShippingId(shippingId);
-                    setPreparedAddressKey(addressKey);
-                    onCartChange(await api.cart());
-                    onNotify(
-                        isZh
-                            ? '地址和运费已更新，请确认配送方式后提交订单'
-                            : 'Address and shipping updated. Confirm the method, then submit.',
-                    );
-                    return;
-                }
-                if (!selectedShippingId) {
-                    throw new Error(isZh ? '当前地址没有可用配送方式' : 'No shipping method is available');
-                }
-                await api.setShippingMethod(selectedShippingId);
-            }
-            const latestCart = await api.cart();
-            onCartChange(latestCart);
-            const session = await api.preparePayment(latestCart.revision);
-            onSessionChange(session);
-            onNotify(
-                isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.',
-            );
-            onNavigate({ name: 'payment' }, true);
-        } catch (requestError) {
-            setFormError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '提交订单失败'
-                      : 'Could not submit order',
-            );
-            try {
-                onCartChange(await api.cart());
-            } catch {
-                /* Keep the current form visible. */
-            }
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    if (!order || !cart) {
-        return (
-            <Subpage title={isZh ? '确认订单' : 'Review order'} language={language} onBack={onBack}>
-                <EmptyState
-                    icon={<ShoppingBag />}
-                    title={isZh ? '没有可结算商品' : 'Nothing to check out'}
-                    action={isZh ? '返回购物车' : 'Back to cart'}
-                    onAction={() => onNavigate({ name: 'cart' })}
-                />
-            </Subpage>
-        );
-    }
-
-    return (
-        <main className="page subpage checkout-page">
-            <SubHeader title={isZh ? '确认订单' : 'Review order'} language={language} onBack={onBack} />
-            <form ref={formRef} className="checkout-form" onSubmit={event => void submit(event)}>
-                {!customer && (
-                    <section className="checkout-section">
-                        <h2>{isZh ? '联系信息' : 'Contact'}</h2>
-                        <div className="form-grid">
-                            <Field name="firstName" label={isZh ? '名字' : 'First name'} required />
-                            <Field name="lastName" label={isZh ? '姓氏' : 'Last name'} required />
-                            <Field
-                                name="emailAddress"
-                                label={isZh ? '电子邮箱' : 'Email'}
-                                type="email"
-                                required
-                                wide
-                            />
-                        </div>
-                    </section>
-                )}
-                {requiresShipping && (
-                    <section className="checkout-section">
-                        <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
-                        {defaultAddress ? (
-                            <>
-                                <button
-                                    className="saved-address"
-                                    type="button"
-                                    onClick={() => onNavigate({ name: 'addresses' })}
-                                >
-                                    <MapPin />
-                                    <span>
-                                        <strong>
-                                            {defaultAddress.fullName} {defaultAddress.phoneNumber}
-                                        </strong>
-                                        <small>{addressText(defaultAddress)}</small>
-                                    </span>
-                                    <ChevronRight />
-                                </button>
-                                <input type="hidden" name="fullName" value={defaultAddress.fullName ?? ''} />
-                                <input
-                                    type="hidden"
-                                    name="phoneNumber"
-                                    value={defaultAddress.phoneNumber ?? ''}
-                                />
-                                <input type="hidden" name="province" value={defaultAddress.province ?? ''} />
-                                <input type="hidden" name="city" value={defaultAddress.city ?? ''} />
-                                <input type="hidden" name="streetLine1" value={defaultAddress.streetLine1} />
-                                <input type="hidden" name="countryCode" value={defaultAddress.country.code} />
-                                <input
-                                    type="hidden"
-                                    name="postalCode"
-                                    value={defaultAddress.postalCode ?? ''}
-                                />
-                            </>
-                        ) : (
-                            <div className="form-grid">
-                                <CountryField
-                                    countries={availableCountries}
-                                    defaultCountryCode={market.countryCode}
-                                    language={language}
-                                />
-                                <Field name="fullName" label={isZh ? '收货人' : 'Full name'} required />
-                                <Field name="phoneNumber" label={isZh ? '手机号' : 'Phone'} required />
-                                <Field name="province" label={isZh ? '省/州' : 'Province'} required />
-                                <Field name="city" label={isZh ? '城市' : 'City'} required />
-                                <Field
-                                    name="streetLine1"
-                                    label={isZh ? '详细地址' : 'Street address'}
-                                    required
-                                    wide
-                                />
-                                <Field
-                                    name="postalCode"
-                                    label={isZh ? '邮政编码' : 'Postal code'}
-                                    required
-                                    wide
-                                />
-                            </div>
-                        )}
-                    </section>
-                )}
-                {!!physicalLines.length && (
-                    <CheckoutItemsGroup
-                        title={isZh ? '快递配送' : 'Delivery'}
-                        hint={
-                            isZh
-                                ? `${physicalLines.length} 种 · 共 ${physicalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
-                                : `${physicalLines.length} ${physicalLines.length === 1 ? 'product' : 'products'}`
-                        }
-                        lines={physicalLines}
-                        locale={locale}
-                        language={language}
-                    />
-                )}
-                {!!digitalLines.length && (
-                    <CheckoutItemsGroup
-                        title={isZh ? '数字交付' : 'Digital delivery'}
-                        hint={
-                            isZh
-                                ? `${digitalLines.length} 种 · 共 ${digitalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
-                                : `${digitalLines.length} ${digitalLines.length === 1 ? 'product' : 'products'}`
-                        }
-                        lines={digitalLines}
-                        locale={locale}
-                        language={language}
-                    />
-                )}
-                <section className="checkout-section checkout-options">
-                    {requiresShipping && !shippingMethods.length && (
-                        <button type="button" onClick={() => formRef.current?.requestSubmit()}>
-                            <span>{isZh ? '配送方式' : 'Delivery'}</span>
-                            <small>
-                                {isZh ? '填写地址后计算' : 'Calculate after address'}
-                                <ChevronRight />
-                            </small>
-                        </button>
-                    )}
-                    {requiresShipping && !!shippingMethods.length && (
-                        <fieldset className="shipping-method-list" disabled={shippingUpdating || submitting}>
-                            <legend>{isZh ? '配送方式' : 'Delivery'}</legend>
-                            {shippingMethods.map(method => (
-                                <label key={method.id}>
-                                    <input
-                                        type="radio"
-                                        name="shippingMethod"
-                                        value={method.id}
-                                        checked={selectedShippingId === method.id}
-                                        onChange={() => void selectShippingMethod(method.id)}
-                                    />
-                                    <span>
-                                        <strong>{method.name}</strong>
-                                        {method.description && <small>{method.description}</small>}
-                                    </span>
-                                    <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
-                                </label>
-                            ))}
-                        </fieldset>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() =>
-                            onNotify(
-                                isZh
-                                    ? '订单提交后继续选择支付方式'
-                                    : 'Choose a payment method after placing the order',
-                            )
-                        }
-                    >
-                        <span>{isZh ? '支付方式' : 'Payment method'}</span>
-                        <small>
-                            {isZh ? '提交后选择' : 'Choose after submission'}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                    <button type="button" onClick={openOrderNote}>
-                        <span>{isZh ? '订单备注' : 'Order note'}</span>
-                        <small>
-                            {order.customFields.customerNote
-                                ? trimText(order.customFields.customerNote, 20)
-                                : isZh
-                                  ? '添加备注'
-                                  : 'Add a note'}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                    <button type="button" onClick={() => setCouponOpen(true)}>
-                        <span>{isZh ? '优惠券' : 'Coupon'}</span>
-                        <small>
-                            {order.couponCodes.length
-                                ? isZh
-                                    ? `已使用 ${order.couponCodes.length} 个优惠码`
-                                    : `${order.couponCodes.length} applied`
-                                : isZh
-                                  ? '输入优惠码'
-                                  : 'Enter coupon code'}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                </section>
-                <section className="checkout-section">
-                    <PriceSummary
-                        order={order}
-                        locale={locale}
-                        language={language}
-                        requiresShipping={requiresShipping}
-                    />
-                </section>
-                <section
-                    className="checkout-assurance"
-                    aria-label={isZh ? '购物保障' : 'Purchase protection'}
-                >
-                    <span>
-                        <CircleCheck />
-                        {physicalLines.length
-                            ? isZh
-                                ? '正品保障'
-                                : 'Authenticity'
-                            : isZh
-                              ? '安全购买'
-                              : 'Secure purchase'}
-                    </span>
-                    <span>
-                        <Truck />
-                        {physicalLines.length
-                            ? isZh
-                                ? '配送可追踪'
-                                : 'Tracked delivery'
-                            : isZh
-                              ? '自动交付'
-                              : 'Automatic delivery'}
-                    </span>
-                    <span>
-                        <RotateCcw />
-                        {isZh ? '售后支持' : 'After-sales'}
-                    </span>
-                </section>
-                {formError && <InlineError message={formError} />}
-                <div className="submit-order-bar">
-                    <div>
-                        <small>
-                            {isZh
-                                ? `共 ${order.totalQuantity} 件`
-                                : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
-                        </small>
-                        <span>
-                            {isZh ? '合计' : 'Total'}{' '}
-                            <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
-                        </span>
-                    </div>
-                    <button type="submit" disabled={submitting}>
-                        {submitting
-                            ? isZh
-                                ? '处理中'
-                                : 'Processing'
-                            : requiresShipping && !shippingMethods.length
-                              ? isZh
-                                  ? '下一步，选择配送'
-                                  : 'Continue to delivery'
-                              : isZh
-                                ? '提交订单'
-                                : 'Submit order'}
-                    </button>
-                </div>
-            </form>
-            {couponOpen && (
-                <CouponSheet
-                    couponCodes={order.couponCodes}
-                    language={language}
-                    loading={submitting}
-                    onApply={onApplyCoupon}
-                    onRemove={onRemoveCoupon}
-                    onClose={() => setCouponOpen(false)}
-                />
-            )}
-            {noteOpen && (
-                <Sheet
-                    title={isZh ? '订单备注' : 'Order note'}
-                    language={language}
-                    onClose={() => !noteSaving && setNoteOpen(false)}
-                >
-                    <form className="order-note-sheet" onSubmit={event => void saveOrderNote(event)}>
-                        <label>
-                            <span>{isZh ? '给商家留言' : 'Message for the store'}</span>
-                            <textarea
-                                value={noteDraft}
-                                maxLength={ORDER_NOTE_MAX_LENGTH}
-                                rows={6}
-                                autoFocus
-                                placeholder={
-                                    isZh
-                                        ? '例如配送时间、包装要求；不要填写支付密码等敏感信息'
-                                        : 'For example, delivery or packaging instructions. Do not enter passwords.'
-                                }
-                                onChange={event => setNoteDraft(event.currentTarget.value)}
-                            />
-                        </label>
-                        <div className="order-note-meta">
-                            <small>{isZh ? '最多 500 个字符' : 'Up to 500 characters'}</small>
-                            <span>
-                                {noteDraft.length}/{ORDER_NOTE_MAX_LENGTH}
-                            </span>
-                        </div>
-                        {noteError && <InlineError message={noteError} />}
-                        <div className="order-note-actions">
-                            <button
-                                type="button"
-                                disabled={noteSaving || !noteDraft}
-                                onClick={() => setNoteDraft('')}
-                            >
-                                {isZh ? '清空' : 'Clear'}
-                            </button>
-                            <button className="primary-action" type="submit" disabled={noteSaving}>
-                                {noteSaving ? (isZh ? '保存中' : 'Saving') : isZh ? '保存备注' : 'Save note'}
-                            </button>
-                        </div>
-                    </form>
-                </Sheet>
-            )}
-        </main>
-    );
-}
-
-function PaymentPage({
-    api,
-    cart,
-    order,
-    locale,
-    language,
-    onCancel,
-    onComplete,
-    onNavigate,
-}: {
-    api: ShopApi;
-    cart: StorefrontCart | null;
-    order: Order | null;
-    locale: string;
-    language: StorefrontLanguage;
-    onCancel: (order: Order) => void;
-    onComplete: (order: Order) => Promise<void>;
-    onNavigate: (route: RouteState) => void;
-}) {
-    const isZh = language === 'zh';
-    const [methods, setMethods] = useState<PaymentMethod[]>([]);
-    const [selectedMethod, setSelectedMethod] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-    const [paymentError, setPaymentError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
-    const submissionLock = useRef(false);
-    const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
-
-    useEffect(() => {
-        if (!isPending) {
-            setMethods([]);
-            setSelectedMethod('');
-            setLoading(false);
-            return;
-        }
-        let cancelled = false;
-        setLoading(true);
-        setPaymentError('');
-        void api
-            .eligiblePaymentMethods()
-            .then(result => {
-                if (cancelled) return;
-                const localMethods = import.meta.env.DEV
-                    ? result.filter(method => method.code === LOCAL_TEST_PAYMENT_CODE)
-                    : [];
-                setMethods(localMethods);
-                setSelectedMethod(localMethods.find(method => method.isEligible)?.code ?? '');
-            })
-            .catch(requestError => {
-                if (!cancelled) {
-                    setPaymentError(
-                        requestError instanceof Error
-                            ? requestError.message
-                            : isZh
-                              ? '支付方式加载失败'
-                              : 'Could not load payment methods',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, isPending, isZh, retryKey]);
-
-    const submitPayment = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!import.meta.env.DEV || !isPending || !selectedMethod || submitting || submissionLock.current) {
-            return;
-        }
-        submissionLock.current = true;
-        setSubmitting(true);
-        setPaymentError('');
-        try {
-            const paidOrder = await api.addPaymentToOrder(selectedMethod);
-            await onComplete(paidOrder);
-        } catch (requestError) {
-            setPaymentError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '测试支付失败，请重试'
-                      : 'Test payment failed. Please try again.',
-            );
-        } finally {
-            submissionLock.current = false;
-            setSubmitting(false);
-        }
-    };
-
-    if (!order || !cart || !isPending) {
-        return (
-            <Subpage
-                title={isZh ? '选择支付方式' : 'Choose payment'}
-                language={language}
-                onBack={() => onNavigate({ name: 'cart' })}
-            >
-                <EmptyState
-                    icon={<WalletCards />}
-                    title={isZh ? '没有待支付订单' : 'No order awaiting payment'}
-                    detail={isZh ? '请返回购物车重新结算' : 'Return to your cart and start checkout again.'}
-                    action={isZh ? '返回购物车' : 'Back to cart'}
-                    onAction={() => onNavigate({ name: 'cart' })}
-                />
-            </Subpage>
-        );
-    }
-
-    return (
-        <main className="page subpage payment-page">
-            <SubHeader
-                title={isZh ? '选择支付方式' : 'Choose payment'}
-                language={language}
-                onBack={() => onCancel(order)}
-            />
-            <form className="payment-layout" onSubmit={event => void submitPayment(event)}>
-                <div className="payment-main">
-                    <section className="payment-test-notice" role="note">
-                        <CircleAlert aria-hidden="true" />
-                        <div>
-                            <strong>{isZh ? '本地测试支付' : 'Local test payment'}</strong>
-                            <span>
-                                {isZh
-                                    ? '仅用于预览结账流程，不会产生真实扣款。'
-                                    : 'For previewing checkout only. No real charge will be made.'}
-                            </span>
-                        </div>
-                    </section>
-                    <section className="payment-method-section">
-                        <h2>{isZh ? '支付方式' : 'Payment method'}</h2>
-                        {loading ? (
-                            <PageSkeleton />
-                        ) : paymentError && !methods.length ? (
-                            <InlineError
-                                message={paymentError}
-                                action={isZh ? '重试' : 'Retry'}
-                                onAction={() => setRetryKey(value => value + 1)}
-                            />
-                        ) : methods.length ? (
-                            <fieldset className="payment-method-list">
-                                <legend className="sr-only">
-                                    {isZh ? '选择支付方式' : 'Choose a payment method'}
-                                </legend>
-                                {methods.map(method => (
-                                    <label
-                                        key={method.id}
-                                        className={selectedMethod === method.code ? 'is-selected' : undefined}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="paymentMethod"
-                                            value={method.code}
-                                            checked={selectedMethod === method.code}
-                                            disabled={!method.isEligible || submitting}
-                                            onChange={event => setSelectedMethod(event.currentTarget.value)}
-                                        />
-                                        <WalletCards aria-hidden="true" />
-                                        <span>
-                                            <strong>{isZh ? '测试支付' : 'Test payment'}</strong>
-                                            <small>
-                                                {method.isEligible
-                                                    ? isZh
-                                                        ? '本地即时模拟支付'
-                                                        : 'Instant local payment simulation'
-                                                    : (method.eligibilityMessage ??
-                                                      (isZh
-                                                          ? '当前订单不可用'
-                                                          : 'Unavailable for this order'))}
-                                            </small>
-                                        </span>
-                                        <Check aria-hidden="true" />
-                                    </label>
-                                ))}
-                            </fieldset>
-                        ) : (
-                            <InlineError
-                                message={
-                                    isZh
-                                        ? '当前没有可用的本地测试支付方式'
-                                        : 'No local test payment method is available'
-                                }
-                                action={isZh ? '重试' : 'Retry'}
-                                onAction={() => setRetryKey(value => value + 1)}
-                            />
-                        )}
-                        {paymentError && methods.length > 0 && <InlineError message={paymentError} />}
-                    </section>
-                </div>
-                <aside className="payment-summary" aria-label={isZh ? '订单摘要' : 'Order summary'}>
-                    <header>
-                        <span>{isZh ? '订单号' : 'Order'}</span>
-                        <strong>{order.code}</strong>
-                    </header>
-                    <div className="payment-summary-lines">
-                        {order.lines.map(line => (
-                            <div key={line.id}>
-                                <span>{line.productVariant.name}</span>
-                                <small>×{line.quantity}</small>
-                                <b>{formatMoney(line.linePriceWithTax, order.currencyCode, locale)}</b>
-                            </div>
-                        ))}
-                    </div>
-                    <dl className="price-summary">
-                        <div>
-                            <dt>{isZh ? '商品小计' : 'Subtotal'}</dt>
-                            <dd>{formatMoney(order.subTotalWithTax, order.currencyCode, locale)}</dd>
-                        </div>
-                        <div>
-                            <dt>{isZh ? '配送费' : 'Delivery'}</dt>
-                            <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
-                        </div>
-                        <div className="summary-total">
-                            <dt>{isZh ? '应付合计' : 'Total due'}</dt>
-                            <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
-                        </div>
-                    </dl>
-                    <button type="submit" disabled={!selectedMethod || submitting || loading}>
-                        <WalletCards aria-hidden="true" />
-                        {submitting
-                            ? isZh
-                                ? '正在完成测试支付'
-                                : 'Completing test payment'
-                            : isZh
-                              ? '确认测试支付'
-                              : 'Confirm test payment'}
-                    </button>
-                    <button
-                        type="button"
-                        className="payment-edit-order"
-                        disabled={submitting}
-                        onClick={() => onCancel(order)}
-                    >
-                        {isZh ? '返回修改订单' : 'Return to edit order'}
-                    </button>
-                </aside>
-            </form>
-        </main>
-    );
-}
-
-function OrderConfirmationPage({
-    api,
-    code,
-    initialOrder,
-    customer,
-    locale,
-    language,
-    onNavigate,
-}: {
-    api: ShopApi;
-    code: string;
-    initialOrder: Order | null;
-    customer: ActiveCustomer | null;
-    locale: string;
-    language: StorefrontLanguage;
-    onNavigate: (route: RouteState) => void;
-}) {
-    const isZh = language === 'zh';
-    const [order, setOrder] = useState<Order | null>(initialOrder?.code === code ? initialOrder : null);
-    const [loading, setLoading] = useState(!order && Boolean(code));
-    const [loadError, setLoadError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
-
-    useEffect(() => {
-        if (!code || order?.code === code) {
-            setLoading(false);
-            return;
-        }
-        let cancelled = false;
-        setLoading(true);
-        setLoadError('');
-        void api
-            .orderByCode(code)
-            .then(result => {
-                if (!cancelled) setOrder(result);
-            })
-            .catch(requestError => {
-                if (!cancelled) {
-                    setLoadError(
-                        requestError instanceof Error
-                            ? requestError.message
-                            : isZh
-                              ? '订单加载失败'
-                              : 'Could not load the order',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, code, isZh, order?.code, retryKey]);
-
-    if (loading) {
-        return (
-            <Subpage
-                title={isZh ? '订单已提交' : 'Order confirmed'}
-                language={language}
-                onBack={() => onNavigate({ name: 'home' })}
-            >
-                <PageSkeleton />
-            </Subpage>
-        );
-    }
-    if (!order) {
-        return (
-            <Subpage
-                title={isZh ? '订单已提交' : 'Order confirmed'}
-                language={language}
-                onBack={() => onNavigate({ name: 'home' })}
-            >
-                <EmptyState
-                    icon={<Package />}
-                    title={isZh ? '无法读取订单' : 'Could not retrieve the order'}
-                    detail={
-                        loadError ||
-                        (isZh
-                            ? '访问时间可能已超过游客查询时限'
-                            : 'The guest access window may have expired.')
-                    }
-                    action={loadError ? (isZh ? '重试' : 'Retry') : isZh ? '返回首页' : 'Back to home'}
-                    onAction={() =>
-                        loadError ? setRetryKey(value => value + 1) : onNavigate({ name: 'home' })
-                    }
-                />
-            </Subpage>
-        );
-    }
-
-    return (
-        <main className="page subpage order-confirmation-page">
-            <section className="order-confirmation-hero">
-                <span className="order-confirmation-icon">
-                    <CircleCheck aria-hidden="true" />
-                </span>
-                <p>{isZh ? '本地测试订单' : 'Local test order'}</p>
-                <h1>{isZh ? '订单提交成功' : 'Order confirmed'}</h1>
-                <span>
-                    {isZh
-                        ? '测试支付已完成，不会产生真实扣款。'
-                        : 'The test payment is complete. No real charge was made.'}
-                </span>
-            </section>
-            <section className="order-confirmation-summary">
-                <dl>
-                    <div>
-                        <dt>{isZh ? '订单号' : 'Order number'}</dt>
-                        <dd>{order.code}</dd>
-                    </div>
-                    <div>
-                        <dt>{isZh ? '订单状态' : 'Status'}</dt>
-                        <dd>{orderStateLabel(order.state, language)}</dd>
-                    </div>
-                    <div>
-                        <dt>{isZh ? '支付金额' : 'Payment total'}</dt>
-                        <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
-                    </div>
-                </dl>
-                <small>
-                    {isZh
-                        ? '请保留订单号。游客订单只能在有限时间内通过当前链接查看。'
-                        : 'Keep your order number. Guest access through this link is available for a limited time.'}
-                </small>
-            </section>
-            <div className="order-confirmation-actions">
-                <button type="button" className="primary-action" onClick={() => onNavigate({ name: 'home' })}>
-                    <House aria-hidden="true" />
-                    {isZh ? '继续购物' : 'Continue shopping'}
-                </button>
-                {customer && (
-                    <button type="button" onClick={() => onNavigate({ name: 'orders', tab: 'shipping' })}>
-                        <Package aria-hidden="true" />
-                        {isZh ? '查看我的订单' : 'View my orders'}
-                    </button>
-                )}
-            </div>
-        </main>
-    );
-}
-
-function OrdersPage({
-    api,
-    customer,
-    market,
-    locale,
-    language,
-    storefrontName,
-    initialTab,
-    onBack,
-    onNavigate,
-    onBuyAgain,
-}: {
-    api: ShopApi;
-    customer: ActiveCustomer | null;
-    market: MarketConfig;
-    locale: string;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    initialTab: OrderTab;
-    onBack: () => void;
-    onNavigate: (route: RouteState) => void;
-    onBuyAgain: (order: Order) => Promise<void>;
-}) {
-    const isZh = language === 'zh';
-    const [tab, setTab] = useState<OrderTab>(initialTab);
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [totalItems, setTotalItems] = useState(0);
-    const [loading, setLoading] = useState(false);
-    const [listError, setListError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
-    const [searchOpen, setSearchOpen] = useState(false);
-    const [searchInput, setSearchInput] = useState('');
-    const [orderCode, setOrderCode] = useState('');
-    const pageSize = 10;
-    const tabs: Array<{ id: OrderTab; label: string }> = [
-        { id: 'all', label: isZh ? '全部' : 'All' },
-        { id: 'pending', label: isZh ? '待付款' : 'To pay' },
-        { id: 'shipping', label: isZh ? '待发货' : 'To ship' },
-        { id: 'receiving', label: isZh ? '待收货' : 'To receive' },
-        { id: 'service', label: isZh ? '售后' : 'After-sales' },
-    ];
-
-    useEffect(() => setTab(initialTab), [initialTab]);
-
-    useEffect(() => {
-        if (!customer || tab === 'service') {
-            setOrders([]);
-            setTotalItems(0);
-            setLoading(false);
-            setListError('');
-            return;
-        }
-        let cancelled = false;
-        setOrders([]);
-        setTotalItems(0);
-        setLoading(true);
-        setListError('');
-        void api
-            .customerOrders(0, pageSize, orderStatesForTab(tab), orderCode)
-            .then(page => {
-                if (cancelled) return;
-                setOrders(page.items);
-                setTotalItems(page.totalItems);
-            })
-            .catch(requestError => {
-                if (!cancelled) {
-                    setListError(
-                        requestError instanceof Error
-                            ? requestError.message
-                            : isZh
-                              ? '订单加载失败'
-                              : 'Could not load orders',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, customer, isZh, orderCode, retryKey, tab]);
-
-    const loadMore = async () => {
-        if (loading || orders.length >= totalItems) return;
-        setLoading(true);
-        setListError('');
-        try {
-            const page = await api.customerOrders(orders.length, pageSize, orderStatesForTab(tab), orderCode);
-            setOrders(current => [
-                ...current,
-                ...page.items.filter(order => !current.some(item => item.id === order.id)),
-            ]);
-            setTotalItems(page.totalItems);
-        } catch (requestError) {
-            setListError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '更多订单加载失败'
-                      : 'Could not load more orders',
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <main className="page subpage orders-page">
-            <SubHeader
-                title={isZh ? '我的订单' : 'My orders'}
-                language={language}
-                onBack={onBack}
-                action={
-                    <button
-                        type="button"
-                        onClick={() => setSearchOpen(value => !value)}
-                        aria-label={isZh ? '搜索订单' : 'Search orders'}
-                        aria-expanded={searchOpen}
-                    >
-                        {searchOpen ? <X /> : <Search />}
-                    </button>
-                }
-            />
-            <nav className="order-tabs">
-                {tabs.map(item => (
-                    <button
-                        type="button"
-                        key={item.id}
-                        className={tab === item.id ? 'is-active' : undefined}
-                        onClick={() => setTab(item.id)}
-                    >
-                        {item.label}
-                    </button>
-                ))}
-            </nav>
-            {searchOpen && (
-                <form
-                    className="order-search"
-                    onSubmit={event => {
-                        event.preventDefault();
-                        setOrderCode(searchInput.trim());
-                    }}
-                >
-                    <Search aria-hidden="true" />
-                    <input
-                        value={searchInput}
-                        onChange={event => setSearchInput(event.target.value)}
-                        placeholder={isZh ? '输入订单号' : 'Enter order code'}
-                        aria-label={isZh ? '订单号' : 'Order code'}
-                    />
-                    {!!searchInput && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setSearchInput('');
-                                setOrderCode('');
-                            }}
-                            aria-label={isZh ? '清空' : 'Clear'}
-                        >
-                            <X />
-                        </button>
-                    )}
-                    <button type="submit">{isZh ? '搜索' : 'Search'}</button>
-                </form>
-            )}
-            {!customer ? (
-                <EmptyState
-                    icon={<UserRound />}
-                    title={isZh ? '登录后查看订单' : 'Sign in to view orders'}
-                    detail={
-                        isZh
-                            ? '订单和物流信息将安全保存在账户中'
-                            : 'Orders and delivery details are saved to your account'
-                    }
-                    action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => onNavigate({ name: 'login' })}
-                />
-            ) : tab === 'service' ? (
-                <EmptyState
-                    icon={<RotateCcw />}
-                    title={isZh ? '暂无售后记录' : 'No after-sales records'}
-                    detail={
-                        isZh
-                            ? '售后能力需要商家后台服务流程支持'
-                            : 'After-sales requires merchant service workflow support'
-                    }
-                />
-            ) : loading && !orders.length ? (
-                <PageSkeleton />
-            ) : listError && !orders.length ? (
-                <EmptyState
-                    icon={<WifiOff />}
-                    title={isZh ? '订单加载失败' : 'Could not load orders'}
-                    detail={listError}
-                    action={isZh ? '重试' : 'Retry'}
-                    onAction={() => setRetryKey(value => value + 1)}
-                />
-            ) : orders.length ? (
-                <div className="order-list">
-                    {orders.map(order => (
-                        <OrderCard
-                            key={order.id}
-                            order={order}
-                            market={market}
-                            locale={locale}
-                            language={language}
-                            storefrontName={storefrontName}
-                            onOpen={() => onNavigate({ name: 'order-detail', id: order.id })}
-                            onBuyAgain={() => void onBuyAgain(order)}
-                        />
-                    ))}
-                    {listError && (
-                        <InlineError
-                            message={listError}
-                            action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void loadMore()}
-                        />
-                    )}
-                    {orders.length < totalItems && (
-                        <button
-                            type="button"
-                            className="load-more-button order-load-more"
-                            disabled={loading}
-                            onClick={() => void loadMore()}
-                        >
-                            {loading
-                                ? isZh
-                                    ? '加载中…'
-                                    : 'Loading…'
-                                : isZh
-                                  ? `加载更多（${orders.length}/${totalItems}）`
-                                  : `Load more (${orders.length}/${totalItems})`}
-                        </button>
-                    )}
-                </div>
-            ) : (
-                <EmptyState
-                    icon={<Package />}
-                    title={isZh ? '暂无相关订单' : 'No orders here'}
-                    detail={isZh ? '完成购买后，订单会显示在这里' : 'Completed purchases will appear here'}
-                />
-            )}
-        </main>
-    );
-}
-
-function OrderDetailPage({
-    order,
-    market,
-    locale,
-    language,
-    storefrontName,
-    onBack,
-    onBuyAgain,
-    onReopen,
-    onUnavailable,
-}: {
-    order: Order | null;
-    market: MarketConfig;
-    locale: string;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    onBack: () => void;
-    onBuyAgain: (order: Order) => Promise<void>;
-    onReopen: (order: Order) => Promise<void>;
-    onUnavailable: () => void;
-}) {
-    const isZh = language === 'zh';
-    if (!order)
-        return (
-            <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack}>
-                <EmptyState icon={<Package />} title={isZh ? '没有找到订单' : 'Order not found'} />
-            </Subpage>
-        );
-    const inTransit = ['Shipped', 'PartiallyShipped'].includes(order.state);
-    const pending = ['AddingItems', 'ArrangingPayment'].includes(order.state);
-    const fulfillments = order.fulfillments ?? [];
-    const statusHint = pending
-        ? isZh
-            ? '订单等待支付，请在支付页完成付款'
-            : 'Complete payment to continue'
-        : inTransit
-          ? isZh
-              ? '商品正在运输中，请留意物流更新'
-              : 'Your order is in transit'
-          : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
-            ? isZh
-                ? '商家正在准备你的商品'
-                : 'The merchant is preparing your order'
-            : isZh
-              ? '订单状态已更新'
-              : 'Order status updated';
-    return (
-        <main className="page subpage order-detail-page">
-            <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
-            <section className="order-status">
-                <strong>{orderStateLabel(order.state, language)}</strong>
-                <span>{statusHint}</span>
-                <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
-            </section>
-            {(inTransit || fulfillments.length > 0) && (
-                <section className="order-logistics" id="order-logistics">
-                    <Navigation />
-                    <div className="order-logistics-content">
-                        <strong>{isZh ? '物流信息' : 'Delivery details'}</strong>
-                        {fulfillments.length ? (
-                            fulfillments.map((fulfillment, index) => (
-                                <div className="order-logistics-item" key={fulfillment.id}>
-                                    <span>
-                                        {fulfillments.length > 1
-                                            ? isZh
-                                                ? `包裹 ${index + 1}`
-                                                : `Shipment ${index + 1}`
-                                            : isZh
-                                              ? '配送包裹'
-                                              : 'Shipment'}
-                                    </span>
-                                    <small>{fulfillment.method}</small>
-                                    <b>
-                                        {fulfillment.trackingCode
-                                            ? isZh
-                                                ? `运单号 ${fulfillment.trackingCode}`
-                                                : `Tracking ${fulfillment.trackingCode}`
-                                            : isZh
-                                              ? '承运商尚未提供运单号'
-                                              : 'Tracking number is not available yet'}
-                                    </b>
-                                    <em>
-                                        {fulfillmentStateLabel(fulfillment.state, language)} ·{' '}
-                                        {formatOrderDate(fulfillment.updatedAt, locale)}
-                                    </em>
-                                </div>
-                            ))
-                        ) : (
-                            <small>
-                                {isZh
-                                    ? '物流详情将在承运商更新后显示'
-                                    : 'Updates appear when provided by the carrier'}
-                            </small>
-                        )}
-                    </div>
-                </section>
-            )}
-            <section className="order-detail-products">
-                <header>
-                    <strong>{storefrontName}</strong>
-                    <span>{isZh ? `${order.lines.length} 种商品` : `${order.lines.length} products`}</span>
-                </header>
-                {order.lines.map(line => (
-                    <article key={line.id}>
-                        <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
-                        <div>
-                            <strong>{line.productVariant.name}</strong>
-                            <small>{line.productVariant.sku}</small>
-                            <em>
-                                {line.productVariant.customFields.fulfillmentType === 'digital'
-                                    ? isZh
-                                        ? '数字商品 · 自动交付'
-                                        : 'Digital · automatic delivery'
-                                    : isZh
-                                      ? '普通商品 · 售后支持'
-                                      : 'Physical · after-sales'}
-                            </em>
-                        </div>
-                        <span>
-                            <b>
-                                {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
-                            </b>
-                            <small>×{line.quantity}</small>
-                        </span>
-                    </article>
-                ))}
-            </section>
-            <section className="order-information">
-                <div>
-                    <span>{isZh ? '下单时间' : 'Placed at'}</span>
-                    <b>{formatOrderDate(order.orderPlacedAt, locale)}</b>
-                </div>
-                <div>
-                    <span>{isZh ? '订单编号' : 'Order code'}</span>
-                    <b>{order.code}</b>
-                </div>
-            </section>
-            <section className="order-detail-summary">
-                <PriceSummary order={order} locale={locale} language={language} />
-            </section>
-            <div className="order-detail-actions">
-                <button
-                    type="button"
-                    className="primary-action"
-                    onClick={
-                        pending
-                            ? () => void onReopen(order)
-                            : inTransit
-                              ? () => {
-                                    if (fulfillments.length) {
-                                        document
-                                            .getElementById('order-logistics')
-                                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    } else {
-                                        onUnavailable();
-                                    }
-                                }
-                              : () => void onBuyAgain(order)
-                    }
-                >
-                    {pending
-                        ? isZh
-                            ? '返回修改订单'
-                            : 'Reopen order'
-                        : inTransit
-                          ? isZh
-                              ? '查看物流'
-                              : 'Track'
-                          : isZh
-                            ? '再买一单'
-                            : 'Buy again'}
-                </button>
-            </div>
-        </main>
-    );
-}
-
-function AddressesPage({
-    api,
-    customer,
-    market,
-    availableCountries,
-    language,
-    onBack,
-    onCustomerChange,
-    onNavigate,
-    onNotify,
-}: {
-    api: ShopApi;
-    customer: ActiveCustomer | null;
-    market: MarketConfig;
-    availableCountries: StorefrontConfig['availableCountries'];
-    language: StorefrontLanguage;
-    onBack: () => void;
-    onCustomerChange: (customer: ActiveCustomer | null) => void;
-    onNavigate: (route: RouteState) => void;
-    onNotify: (message: string) => void;
-}) {
-    const isZh = language === 'zh';
-    const [open, setOpen] = useState(false);
-    const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
-    const [submitting, setSubmitting] = useState(false);
-    const [formError, setFormError] = useState('');
-    if (!customer)
-        return (
-            <Subpage title={isZh ? '地址管理' : 'Addresses'} language={language} onBack={onBack}>
-                <EmptyState
-                    icon={<MapPin />}
-                    title={isZh ? '登录后管理地址' : 'Sign in to manage addresses'}
-                    action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => onNavigate({ name: 'login' })}
-                />
-            </Subpage>
-        );
-    const save = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        setSubmitting(true);
-        setFormError('');
-        try {
-            const input: CustomerAddressInput = {
-                fullName: String(data.get('fullName')),
-                phoneNumber: String(data.get('phoneNumber')),
-                province: String(data.get('province')),
-                city: String(data.get('city')),
-                streetLine1: String(data.get('streetLine1')),
-                streetLine2: String(data.get('streetLine2') ?? ''),
-                postalCode: String(data.get('postalCode')),
-                countryCode: String(data.get('countryCode') ?? market.countryCode),
-                defaultShippingAddress:
-                    customer.addresses?.length === 0 || data.get('defaultShippingAddress') === 'on',
-            };
-            if (editingAddress) await api.updateAddress({ ...input, id: editingAddress.id });
-            else await api.createAddress(input);
-            onCustomerChange(await api.activeCustomer());
-            setOpen(false);
-            setEditingAddress(null);
-            onNotify(isZh ? '地址已保存' : 'Address saved');
-        } catch (requestError) {
-            setFormError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '保存失败'
-                      : 'Could not save address',
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
-    const remove = async (id: string) => {
-        if (!window.confirm(isZh ? '确定删除这个地址吗？' : 'Delete this address?')) return;
-        try {
-            await api.deleteAddress(id);
-            onCustomerChange(await api.activeCustomer());
-            onNotify(isZh ? '地址已删除' : 'Address deleted');
-        } catch (requestError) {
-            onNotify(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '删除失败'
-                      : 'Could not delete address',
-            );
-        }
-    };
-    const makeDefault = async (address: CustomerAddress) => {
-        try {
-            await api.updateAddress({
-                id: address.id,
-                fullName: address.fullName ?? '',
-                phoneNumber: address.phoneNumber ?? '',
-                streetLine1: address.streetLine1,
-                streetLine2: address.streetLine2 ?? '',
-                city: address.city ?? '',
-                province: address.province ?? '',
-                postalCode: address.postalCode ?? '',
-                countryCode: address.country.code,
-                defaultShippingAddress: true,
-            });
-            onCustomerChange(await api.activeCustomer());
-            onNotify(isZh ? '默认地址已更新' : 'Default address updated');
-        } catch (requestError) {
-            onNotify(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '设置默认地址失败'
-                      : 'Could not set the default address',
-            );
-        }
-    };
-    return (
-        <main className="page subpage addresses-page">
-            <SubHeader
-                title={isZh ? '地址管理' : 'Addresses'}
-                language={language}
-                onBack={onBack}
-                action={
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setEditingAddress(null);
-                            setFormError('');
-                            setOpen(true);
-                        }}
-                        aria-label={isZh ? '新增地址' : 'Add address'}
-                    >
-                        <Plus />
-                    </button>
-                }
-            />
-            {customer.addresses?.length ? (
-                <div className="address-list">
-                    {customer.addresses.map(address => (
-                        <article className="address-card" key={address.id}>
-                            <header>
-                                <strong>{address.fullName}</strong>
-                                <span>{address.phoneNumber}</span>
-                                {address.defaultShippingAddress && <em>{isZh ? '默认' : 'Default'}</em>}
-                            </header>
-                            <p>{addressText(address)}</p>
-                            <footer>
-                                <span>{address.country.name}</span>
-                                <div className="address-actions">
-                                    {!address.defaultShippingAddress && (
-                                        <button type="button" onClick={() => void makeDefault(address)}>
-                                            <CircleCheck />
-                                            {isZh ? '设为默认' : 'Make default'}
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setEditingAddress(address);
-                                            setFormError('');
-                                            setOpen(true);
-                                        }}
-                                    >
-                                        <Pencil />
-                                        {isZh ? '编辑' : 'Edit'}
-                                    </button>
-                                    <button type="button" onClick={() => void remove(address.id)}>
-                                        <Trash2 />
-                                        {isZh ? '删除' : 'Delete'}
-                                    </button>
-                                </div>
-                            </footer>
-                        </article>
-                    ))}
-                </div>
-            ) : (
-                <EmptyState
-                    icon={<MapPin />}
-                    title={isZh ? '还没有收货地址' : 'No saved addresses'}
-                    detail={isZh ? '新增地址后，结算会更方便' : 'Save an address for faster checkout'}
-                    action={isZh ? '新增地址' : 'Add address'}
-                    onAction={() => {
-                        setEditingAddress(null);
-                        setFormError('');
-                        setOpen(true);
-                    }}
-                />
-            )}
-            {open && (
-                <Sheet
-                    title={
-                        editingAddress
-                            ? isZh
-                                ? '编辑收货地址'
-                                : 'Edit address'
-                            : isZh
-                              ? '新增收货地址'
-                              : 'Add address'
-                    }
-                    language={language}
-                    onClose={() => {
-                        setOpen(false);
-                        setEditingAddress(null);
-                    }}
-                >
-                    <form className="address-form" onSubmit={event => void save(event)}>
-                        <CountryField
-                            countries={availableCountries}
-                            defaultCountryCode={editingAddress?.country.code ?? market.countryCode}
-                            language={language}
-                        />
-                        <Field
-                            name="fullName"
-                            label={isZh ? '收货人' : 'Full name'}
-                            defaultValue={editingAddress?.fullName ?? ''}
-                            required
-                            wide
-                        />
-                        <Field
-                            name="phoneNumber"
-                            label={isZh ? '手机号' : 'Phone'}
-                            defaultValue={editingAddress?.phoneNumber ?? ''}
-                            required
-                            wide
-                        />
-                        <Field
-                            name="province"
-                            label={isZh ? '省/州' : 'Province'}
-                            defaultValue={editingAddress?.province ?? ''}
-                            required
-                        />
-                        <Field
-                            name="city"
-                            label={isZh ? '城市' : 'City'}
-                            defaultValue={editingAddress?.city ?? ''}
-                            required
-                        />
-                        <Field
-                            name="streetLine1"
-                            label={isZh ? '详细地址' : 'Street address'}
-                            defaultValue={editingAddress?.streetLine1 ?? ''}
-                            required
-                            wide
-                        />
-                        <Field
-                            name="streetLine2"
-                            label={isZh ? '楼栋、单元等（选填）' : 'Apartment, suite, etc. (optional)'}
-                            defaultValue={editingAddress?.streetLine2 ?? ''}
-                            wide
-                        />
-                        <Field
-                            name="postalCode"
-                            label={isZh ? '邮政编码' : 'Postal code'}
-                            defaultValue={editingAddress?.postalCode ?? ''}
-                            required
-                            wide
-                        />
-                        <label className="address-default-toggle field-wide">
-                            <input
-                                type="checkbox"
-                                name="defaultShippingAddress"
-                                defaultChecked={Boolean(editingAddress?.defaultShippingAddress)}
-                            />
-                            <span>{isZh ? '设为默认收货地址' : 'Set as default shipping address'}</span>
-                        </label>
-                        {formError && <small className="form-error">{formError}</small>}
-                        <button className="primary-action wide-action" type="submit" disabled={submitting}>
-                            {submitting ? (isZh ? '保存中' : 'Saving') : isZh ? '保存地址' : 'Save address'}
-                        </button>
-                    </form>
-                </Sheet>
-            )}
-        </main>
-    );
-}
-
-function LoginPage({
-    api,
-    language,
-    storefrontName,
-    legalContent,
-    onBack,
-    onSuccess,
-    onNavigate,
-    onContentTarget,
-}: {
-    api: ShopApi;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    legalContent?: StorefrontContentBlock;
-    onBack: () => void;
-    onSuccess: () => Promise<void>;
-    onNavigate: (route: RouteState) => void;
-    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
-}) {
-    const isZh = language === 'zh';
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        setSubmitting(true);
-        setError('');
-        try {
-            await api.login(String(data.get('emailAddress')), String(data.get('password')));
-            await onSuccess();
-        } catch (requestError) {
-            setError(
-                requestError instanceof Error ? requestError.message : isZh ? '登录失败' : 'Sign-in failed',
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
-    return (
-        <main className="page subpage login-page">
-            <SubHeader title={isZh ? '登录' : 'Sign in'} language={language} onBack={onBack} />
-            <section className="login-content">
-                <span className="login-brand">{storefrontName}</span>
-                <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
-                <p>
-                    {isZh
-                        ? '登录后查看订单、地址与售后进度'
-                        : 'Sign in to view orders, addresses and support'}
-                </p>
-                <form onSubmit={event => void submit(event)}>
-                    <Field
-                        name="emailAddress"
-                        label={isZh ? '电子邮箱' : 'Email address'}
-                        type="email"
-                        autoComplete="email"
-                        required
-                        wide
-                    />
-                    <Field
-                        name="password"
-                        label={isZh ? '密码' : 'Password'}
-                        type="password"
-                        autoComplete="current-password"
-                        required
-                        wide
-                    />
-                    <button
-                        className="auth-inline-link"
-                        type="button"
-                        onClick={() => onNavigate({ name: 'forgot-password' })}
-                    >
-                        {isZh ? '忘记密码？' : 'Forgot password?'}
-                    </button>
-                    {error && <small className="form-error">{error}</small>}
-                    <button className="primary-action wide-action" type="submit" disabled={submitting}>
-                        {submitting ? (isZh ? '登录中' : 'Signing in') : isZh ? '登录' : 'Sign in'}
-                    </button>
-                </form>
-                <div className="auth-switch">
-                    <span>{isZh ? '还没有账户？' : 'New here?'}</span>
-                    <button type="button" onClick={() => onNavigate({ name: 'register' })}>
-                        {isZh ? '注册账户' : 'Create account'}
-                    </button>
-                </div>
-                <AuthLegalNotice
-                    content={legalContent}
-                    language={language}
-                    onContentTarget={onContentTarget}
-                />
-            </section>
-        </main>
-    );
-}
-
-function RegisterPage({
-    api,
-    language,
-    storefrontName,
-    legalContent,
-    onBack,
-    onNavigate,
-    onContentTarget,
-}: {
-    api: ShopApi;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    legalContent?: StorefrontContentBlock;
-    onBack: () => void;
-    onNavigate: (route: RouteState) => void;
-    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
-}) {
-    const isZh = language === 'zh';
-    const [submitting, setSubmitting] = useState(false);
-    const [registeredEmail, setRegisteredEmail] = useState('');
-    const [error, setError] = useState('');
-    const [resendMessage, setResendMessage] = useState('');
-
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const password = String(data.get('password'));
-        if (password !== String(data.get('confirmPassword'))) {
-            setError(isZh ? '两次输入的密码不一致' : 'The passwords do not match');
-            return;
-        }
-        setSubmitting(true);
-        setError('');
-        try {
-            const emailAddress = String(data.get('emailAddress')).trim();
-            await api.registerCustomerAccount({
-                emailAddress,
-                firstName: String(data.get('firstName')).trim(),
-                lastName: String(data.get('lastName')).trim(),
-                password,
-            });
-            setRegisteredEmail(emailAddress);
-        } catch (requestError) {
-            setError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '注册失败'
-                      : 'Registration failed',
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const resend = async () => {
-        setSubmitting(true);
-        setError('');
-        setResendMessage('');
-        try {
-            await api.refreshCustomerVerification(registeredEmail);
-            setResendMessage(isZh ? '验证邮件已重新发送' : 'Verification email sent again');
-        } catch (requestError) {
-            setError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '发送失败'
-                      : 'Could not resend email',
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <main className="page subpage login-page">
-            <SubHeader title={isZh ? '注册' : 'Create account'} language={language} onBack={onBack} />
-            <section className="login-content">
-                <span className="login-brand">{storefrontName}</span>
-                {registeredEmail ? (
-                    <AuthResult
-                        icon={<CircleCheck />}
-                        title={isZh ? '请查收验证邮件' : 'Check your email'}
-                        detail={
-                            isZh
-                                ? `验证链接已发送至 ${registeredEmail}`
-                                : `We sent a verification link to ${registeredEmail}`
-                        }
-                    >
-                        {resendMessage && (
-                            <small className="auth-success-message" role="status">
-                                {resendMessage}
-                            </small>
-                        )}
-                        {error && <small className="form-error">{error}</small>}
-                        <button
-                            className="primary-action wide-action"
-                            type="button"
-                            onClick={() => void resend()}
-                            disabled={submitting}
-                        >
-                            {submitting
-                                ? isZh
-                                    ? '发送中'
-                                    : 'Sending'
-                                : isZh
-                                  ? '重新发送验证邮件'
-                                  : 'Resend verification email'}
-                        </button>
-                        <button
-                            className="auth-secondary-action"
-                            type="button"
-                            onClick={() => onNavigate({ name: 'login' })}
-                        >
-                            {isZh ? '返回登录' : 'Back to sign in'}
-                        </button>
-                    </AuthResult>
-                ) : (
-                    <>
-                        <h1>{isZh ? '创建账户' : 'Create your account'}</h1>
-                        <p>{isZh ? '注册后需通过邮件验证' : 'Email verification is required'}</p>
-                        <form onSubmit={event => void submit(event)}>
-                            <div className="auth-name-fields">
-                                <Field
-                                    name="firstName"
-                                    label={isZh ? '名' : 'First name'}
-                                    autoComplete="given-name"
-                                    required
-                                />
-                                <Field
-                                    name="lastName"
-                                    label={isZh ? '姓' : 'Last name'}
-                                    autoComplete="family-name"
-                                    required
-                                />
-                            </div>
-                            <Field
-                                name="emailAddress"
-                                label={isZh ? '电子邮箱' : 'Email address'}
-                                type="email"
-                                autoComplete="email"
-                                required
-                                wide
-                            />
-                            <Field
-                                name="password"
-                                label={isZh ? '密码' : 'Password'}
-                                type="password"
-                                autoComplete="new-password"
-                                required
-                                wide
-                            />
-                            <Field
-                                name="confirmPassword"
-                                label={isZh ? '确认密码' : 'Confirm password'}
-                                type="password"
-                                autoComplete="new-password"
-                                required
-                                wide
-                            />
-                            {error && <small className="form-error">{error}</small>}
-                            <button
-                                className="primary-action wide-action"
-                                type="submit"
-                                disabled={submitting}
-                            >
-                                {submitting
-                                    ? isZh
-                                        ? '注册中'
-                                        : 'Creating account'
-                                    : isZh
-                                      ? '注册账户'
-                                      : 'Create account'}
-                            </button>
-                        </form>
-                        <div className="auth-switch">
-                            <span>{isZh ? '已有账户？' : 'Already have an account?'}</span>
-                            <button type="button" onClick={() => onNavigate({ name: 'login' })}>
-                                {isZh ? '去登录' : 'Sign in'}
-                            </button>
-                        </div>
-                        <AuthLegalNotice
-                            content={legalContent}
-                            language={language}
-                            onContentTarget={onContentTarget}
-                        />
-                    </>
-                )}
-            </section>
-        </main>
-    );
-}
-
-function VerifyAccountPage({
-    api,
-    language,
-    storefrontName,
-    token,
-    onBack,
-    onSuccess,
-    onNavigate,
-}: {
-    api: ShopApi;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    token?: string;
-    onBack: () => void;
-    onSuccess: () => Promise<void>;
-    onNavigate: (route: RouteState) => void;
-}) {
-    const isZh = language === 'zh';
-    const [error, setError] = useState('');
-    const attempted = useRef(false);
-
-    useEffect(() => {
-        if (attempted.current) return;
-        attempted.current = true;
-        if (!token) {
-            setError(isZh ? '验证链接缺少令牌' : 'The verification link is missing its token');
-            return;
-        }
-        void api
-            .verifyCustomerAccount(token)
-            .then(onSuccess)
-            .catch(requestError => {
-                setError(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '邮箱验证失败'
-                          : 'Email verification failed',
-                );
-            });
-    }, [api, isZh, onSuccess, token]);
-
-    return (
-        <main className="page subpage login-page">
-            <SubHeader title={isZh ? '验证邮箱' : 'Verify email'} language={language} onBack={onBack} />
-            <section className="login-content">
-                <span className="login-brand">{storefrontName}</span>
-                <AuthResult
-                    icon={error ? <CircleAlert /> : <Fingerprint />}
-                    title={
-                        error
-                            ? isZh
-                                ? '无法完成验证'
-                                : 'Verification failed'
-                            : isZh
-                              ? '正在验证'
-                              : 'Verifying your email'
-                    }
-                    detail={
-                        error ||
-                        (isZh
-                            ? '请稍候，完成后将自动登录'
-                            : 'Please wait. You will be signed in automatically.')
-                    }
-                >
-                    {error && (
-                        <button
-                            className="primary-action wide-action"
-                            type="button"
-                            onClick={() => onNavigate({ name: 'login' })}
-                        >
-                            {isZh ? '返回登录' : 'Back to sign in'}
-                        </button>
-                    )}
-                </AuthResult>
-            </section>
-        </main>
-    );
-}
-
-function ForgotPasswordPage({
-    api,
-    language,
-    storefrontName,
-    onBack,
-    onNavigate,
-}: {
-    api: ShopApi;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    onBack: () => void;
-    onNavigate: (route: RouteState) => void;
-}) {
-    const isZh = language === 'zh';
-    const [submitting, setSubmitting] = useState(false);
-    const [requested, setRequested] = useState(false);
-    const [error, setError] = useState('');
-
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        setSubmitting(true);
-        setError('');
-        try {
-            await api.requestPasswordReset(String(data.get('emailAddress')).trim());
-            setRequested(true);
-        } catch (requestError) {
-            setError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '发送重置邮件失败'
-                      : 'Could not send the reset email',
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <main className="page subpage login-page">
-            <SubHeader title={isZh ? '忘记密码' : 'Forgot password'} language={language} onBack={onBack} />
-            <section className="login-content">
-                <span className="login-brand">{storefrontName}</span>
-                {requested ? (
-                    <AuthResult
-                        icon={<CircleCheck />}
-                        title={isZh ? '请查收邮件' : 'Check your email'}
-                        detail={
-                            isZh
-                                ? '如果该邮箱已注册，你将收到密码重置链接'
-                                : 'If the address is registered, a password reset link will arrive shortly.'
-                        }
-                    >
-                        <button
-                            className="primary-action wide-action"
-                            type="button"
-                            onClick={() => onNavigate({ name: 'login' })}
-                        >
-                            {isZh ? '返回登录' : 'Back to sign in'}
-                        </button>
-                    </AuthResult>
-                ) : (
-                    <>
-                        <h1>{isZh ? '重置登录密码' : 'Reset your password'}</h1>
-                        <p>
-                            {isZh
-                                ? '输入注册邮箱，我们将发送重置链接'
-                                : 'Enter your email to receive a reset link'}
-                        </p>
-                        <form onSubmit={event => void submit(event)}>
-                            <Field
-                                name="emailAddress"
-                                label={isZh ? '电子邮箱' : 'Email address'}
-                                type="email"
-                                autoComplete="email"
-                                required
-                                wide
-                            />
-                            {error && <small className="form-error">{error}</small>}
-                            <button
-                                className="primary-action wide-action"
-                                type="submit"
-                                disabled={submitting}
-                            >
-                                {submitting
-                                    ? isZh
-                                        ? '发送中'
-                                        : 'Sending'
-                                    : isZh
-                                      ? '发送重置邮件'
-                                      : 'Send reset email'}
-                            </button>
-                        </form>
-                    </>
-                )}
-            </section>
-        </main>
-    );
-}
-
-function ResetPasswordPage({
-    api,
-    language,
-    storefrontName,
-    token,
-    onBack,
-    onSuccess,
-    onNavigate,
-}: {
-    api: ShopApi;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    token?: string;
-    onBack: () => void;
-    onSuccess: () => Promise<void>;
-    onNavigate: (route: RouteState) => void;
-}) {
-    const isZh = language === 'zh';
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState(
-        token ? '' : isZh ? '重置链接缺少令牌' : 'The reset link is missing its token',
-    );
-
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!token) return;
-        const data = new FormData(event.currentTarget);
-        const password = String(data.get('password'));
-        if (password !== String(data.get('confirmPassword'))) {
-            setError(isZh ? '两次输入的密码不一致' : 'The passwords do not match');
-            return;
-        }
-        setSubmitting(true);
-        setError('');
-        try {
-            await api.resetPassword(token, password);
-            await onSuccess();
-        } catch (requestError) {
-            setError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '重置密码失败'
-                      : 'Password reset failed',
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <main className="page subpage login-page">
-            <SubHeader title={isZh ? '重置密码' : 'Reset password'} language={language} onBack={onBack} />
-            <section className="login-content">
-                <span className="login-brand">{storefrontName}</span>
-                <h1>{isZh ? '设置新密码' : 'Choose a new password'}</h1>
-                <p>{isZh ? '新密码将立即用于登录' : 'Your new password will be active immediately'}</p>
-                {token ? (
-                    <form onSubmit={event => void submit(event)}>
-                        <Field
-                            name="password"
-                            label={isZh ? '新密码' : 'New password'}
-                            type="password"
-                            autoComplete="new-password"
-                            required
-                            wide
-                        />
-                        <Field
-                            name="confirmPassword"
-                            label={isZh ? '确认新密码' : 'Confirm new password'}
-                            type="password"
-                            autoComplete="new-password"
-                            required
-                            wide
-                        />
-                        {error && <small className="form-error">{error}</small>}
-                        <button className="primary-action wide-action" type="submit" disabled={submitting}>
-                            {submitting
-                                ? isZh
-                                    ? '提交中'
-                                    : 'Updating'
-                                : isZh
-                                  ? '更新密码'
-                                  : 'Update password'}
-                        </button>
-                    </form>
-                ) : (
-                    <AuthResult
-                        icon={<CircleAlert />}
-                        title={isZh ? '重置链接无效' : 'Invalid reset link'}
-                        detail={error}
-                    >
-                        <button
-                            className="primary-action wide-action"
-                            type="button"
-                            onClick={() => onNavigate({ name: 'forgot-password' })}
-                        >
-                            {isZh ? '重新获取链接' : 'Request another link'}
-                        </button>
-                    </AuthResult>
-                )}
-            </section>
-        </main>
-    );
-}
-
-function AuthResult({
-    icon,
-    title,
-    detail,
     children,
 }: {
-    icon: ReactNode;
-    title: string;
-    detail: string;
+    language: StorefrontLanguage;
+    onBack: () => void;
     children: ReactNode;
 }) {
     return (
-        <div className="auth-result">
-            <span>{icon}</span>
-            <h1>{title}</h1>
-            <p>{detail}</p>
-            <div>{children}</div>
-        </div>
-    );
-}
-
-function AuthLegalNotice({
-    content,
-    language,
-    onContentTarget,
-}: {
-    content?: StorefrontContentBlock;
-    language: StorefrontLanguage;
-    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
-}) {
-    const items =
-        content?.items.filter(
-            item => item.enabled && item.targetType !== 'NONE' && item.targetValue?.trim(),
-        ) ?? [];
-    if (!items.length) return null;
-
-    return (
-        <small className="auth-legal-notice">
-            <span>{language === 'zh' ? '继续操作前，请阅读' : 'Before continuing, review'}</span>
-            <span className="auth-legal-links">
-                {items.map(item => (
-                    <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => onContentTarget(item.targetType, item.targetValue)}
-                    >
-                        {item.label}
-                    </button>
-                ))}
-            </span>
-        </small>
+        <Suspense
+            fallback={
+                <Subpage title={language === 'zh' ? '账户' : 'Account'} language={language} onBack={onBack}>
+                    <PageSkeleton />
+                </Subpage>
+            }
+        >
+            {children}
+        </Suspense>
     );
 }
 
@@ -6419,7 +4521,9 @@ function ProductSection({
     market,
     locale,
     addingVariantId,
+    favoriteProductIds,
     onProduct,
+    onFavorite,
     onAdd,
 }: {
     title: string;
@@ -6428,7 +4532,9 @@ function ProductSection({
     market: MarketConfig;
     locale: string;
     addingVariantId: string | null;
+    favoriteProductIds?: string[];
     onProduct: (product: Product) => void;
+    onFavorite?: (product: Product) => void;
     onAdd: (variant: ProductVariant) => void;
 }) {
     if (!products.length) return null;
@@ -6443,7 +4549,9 @@ function ProductSection({
                         market={market}
                         locale={locale}
                         adding={product.variants.some(variant => variant.id === addingVariantId)}
+                        favorite={favoriteProductIds?.includes(product.id)}
                         onOpen={() => onProduct(product)}
+                        onFavorite={onFavorite ? () => onFavorite(product) : undefined}
                         onAdd={() => product.variants[0] && onAdd(product.variants[0])}
                     />
                 ))}
@@ -6457,19 +4565,47 @@ function ProductCard({
     market,
     locale,
     adding,
+    favorite,
     onOpen,
+    onFavorite,
     onAdd,
 }: {
     product: Product;
     market: MarketConfig;
     locale: string;
     adding: boolean;
+    favorite?: boolean;
     onOpen: () => void;
+    onFavorite?: () => void;
     onAdd: () => void;
 }) {
     const variant = product.variants[0];
     return (
-        <article className="product-card">
+        <article
+            className="product-card"
+            onPointerEnter={() => prefetchProductAsset(product)}
+            onPointerDown={() => prefetchProductAsset(product)}
+            onFocus={() => prefetchProductAsset(product)}
+        >
+            {onFavorite && (
+                <button
+                    className={`product-card-favorite${favorite ? ' is-active' : ''}`}
+                    type="button"
+                    onClick={onFavorite}
+                    aria-pressed={favorite}
+                    aria-label={
+                        favorite
+                            ? locale.startsWith('zh')
+                                ? `取消收藏 ${product.name}`
+                                : `Remove ${product.name} from favorites`
+                            : locale.startsWith('zh')
+                              ? `收藏 ${product.name}`
+                              : `Add ${product.name} to favorites`
+                    }
+                >
+                    <Heart fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
+                </button>
+            )}
             <button
                 className="product-card-image"
                 type="button"
@@ -6526,7 +4662,12 @@ function ProductRow({
     const isZh = language === 'zh';
     const variant = product.variants[0];
     return (
-        <article className="product-row">
+        <article
+            className="product-row"
+            onPointerEnter={() => prefetchProductAsset(product)}
+            onPointerDown={() => prefetchProductAsset(product)}
+            onFocus={() => prefetchProductAsset(product)}
+        >
             <button
                 type="button"
                 className="product-row-image"
@@ -6698,172 +4839,6 @@ function CartGroup({
                     </article>
                 );
             })}
-        </section>
-    );
-}
-
-function OrderCard({
-    order,
-    locale,
-    language,
-    storefrontName,
-    onOpen,
-    onBuyAgain,
-}: {
-    order: Order;
-    market: MarketConfig;
-    locale: string;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    onOpen: () => void;
-    onBuyAgain: () => void;
-}) {
-    const isZh = language === 'zh';
-    const completed = ['Delivered', 'Cancelled'].includes(order.state);
-    const primaryLabel = completed
-        ? isZh
-            ? '再买一单'
-            : 'Buy again'
-        : ['Shipped', 'PartiallyShipped'].includes(order.state)
-          ? isZh
-              ? '查看物流'
-              : 'Track'
-          : isZh
-            ? '查看详情'
-            : 'View details';
-    return (
-        <article className="order-card">
-            <header>
-                <button type="button" onClick={onOpen}>
-                    <strong>{storefrontName}</strong>
-                    <ChevronRight />
-                </button>
-                <span>{orderStateLabel(order.state, language)}</span>
-            </header>
-            <button className="order-card-product" type="button" onClick={onOpen}>
-                <OrderImage order={order} />
-                <span>
-                    <strong>
-                        {order.lines[0]?.productVariant.name ?? (isZh ? '订单商品' : 'Order item')}
-                    </strong>
-                    <small>
-                        {order.lines.length > 1
-                            ? isZh
-                                ? `另有 ${order.lines.length - 1} 种商品`
-                                : `${order.lines.length - 1} more products`
-                            : order.lines[0]?.productVariant.name}
-                    </small>
-                    <em>{isZh ? '售后支持 · 正品保障' : 'After-sales support'}</em>
-                </span>
-                <span>
-                    <b>{formatMoney(order.lines[0]?.linePriceWithTax ?? 0, order.currencyCode, locale)}</b>
-                    <small>×{order.totalQuantity}</small>
-                </span>
-            </button>
-            <footer>
-                <div className="order-total">
-                    {isZh ? `共 ${order.totalQuantity} 件，实付款` : `${order.totalQuantity} items · Paid`}{' '}
-                    <b>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</b>
-                </div>
-                <div className="order-operations">
-                    <button
-                        type="button"
-                        className="primary-action"
-                        onClick={completed ? onBuyAgain : onOpen}
-                    >
-                        {primaryLabel}
-                    </button>
-                </div>
-            </footer>
-        </article>
-    );
-}
-
-function PriceSummary({
-    order,
-    locale,
-    language,
-    requiresShipping = true,
-}: {
-    order: Order;
-    locale: string;
-    language: StorefrontLanguage;
-    requiresShipping?: boolean;
-}) {
-    const isZh = language === 'zh';
-    const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
-    return (
-        <dl className="price-summary">
-            <div>
-                <dt>{isZh ? '商品金额' : 'Items'}</dt>
-                <dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd>
-            </div>
-            <div>
-                <dt>
-                    {requiresShipping ? (isZh ? '运费' : 'Shipping') : isZh ? '数字交付' : 'Digital delivery'}
-                </dt>
-                <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
-            </div>
-            {discount > 0 && (
-                <div className="discount">
-                    <dt>{isZh ? '优惠' : 'Discount'}</dt>
-                    <dd>-{formatMoney(discount, order.currencyCode, locale)}</dd>
-                </div>
-            )}
-            <div className="summary-total">
-                <dt>{isZh ? '合计' : 'Total'}</dt>
-                <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
-            </div>
-        </dl>
-    );
-}
-
-function CheckoutItemsGroup({
-    title,
-    hint,
-    lines,
-    locale,
-    language,
-}: {
-    title: string;
-    hint: string;
-    lines: Order['lines'];
-    locale: string;
-    language: StorefrontLanguage;
-}) {
-    const isZh = language === 'zh';
-    return (
-        <section className="checkout-section checkout-product-group">
-            <header className="checkout-section-title">
-                <h2>{title}</h2>
-                <span>{hint}</span>
-            </header>
-            <div className="checkout-items">
-                {lines.map(line => (
-                    <article key={line.id}>
-                        <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
-                        <div>
-                            <strong>{line.productVariant.name}</strong>
-                            <small>{line.productVariant.sku}</small>
-                            <em>
-                                {line.productVariant.customFields.fulfillmentType === 'digital'
-                                    ? isZh
-                                        ? '付款后自动交付'
-                                        : 'Delivered after payment'
-                                    : isZh
-                                      ? '售后支持 · 正品保障'
-                                      : 'After-sales support'}
-                            </em>
-                        </div>
-                        <span>
-                            <b>
-                                {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
-                            </b>
-                            <small>×{line.quantity}</small>
-                        </span>
-                    </article>
-                ))}
-            </div>
         </section>
     );
 }
@@ -7111,10 +5086,23 @@ function AccountShortcut({
         </button>
     );
 }
-function ServiceButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function ServiceButton({
+    icon,
+    label,
+    badge,
+    onClick,
+}: {
+    icon: ReactNode;
+    label: string;
+    badge?: string;
+    onClick: () => void;
+}) {
     return (
         <button type="button" onClick={onClick}>
-            <span>{icon}</span>
+            <span>
+                {icon}
+                {badge && <em>{badge}</em>}
+            </span>
             <b>{label}</b>
         </button>
     );
@@ -7161,6 +5149,42 @@ function ProductImage({ product }: { product: Product }) {
         </div>
     );
 }
+
+function shouldPrefetchMedia(): boolean {
+    const connection = (
+        navigator as Navigator & {
+            connection?: { saveData?: boolean; effectiveType?: string };
+        }
+    ).connection;
+    return !connection?.saveData && !['slow-2g', '2g'].includes(connection?.effectiveType ?? '');
+}
+
+function scheduleIdleWork(work: () => void): void {
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(work, { timeout: 1_500 });
+    } else {
+        setTimeout(work, 120);
+    }
+}
+
+function prefetchStorefrontImage(src: string, imageKind: StorefrontImageKind): void {
+    if (!shouldPrefetchMedia()) return;
+    const responsiveSource = responsiveImageSources(src, imageKind);
+    const image = new Image();
+    if (responsiveSource) {
+        image.srcset = responsiveSource.avifSrcSet;
+        image.sizes = responsiveSource.sizes;
+        image.src = responsiveSource.fallbackSrc;
+    } else {
+        image.src = src;
+    }
+    void image.decode().catch(() => undefined);
+}
+
+function prefetchProductAsset(product: Product): void {
+    const image = productImage(product);
+    if (image) prefetchStorefrontImage(image, 'detail');
+}
 function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) {
     const image = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
     return image ? (
@@ -7175,28 +5199,33 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
 function SafeImage({
     src,
     fallbackSrc,
+    placeholderSrc,
     alt,
     imageKind,
+    onLoad,
+    className,
     ...imageProps
 }: {
     src: string;
     fallbackSrc?: string;
+    placeholderSrc?: string;
     alt: string;
     imageKind?: StorefrontImageKind;
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>) {
     const [currentSrc, setCurrentSrc] = useState(src);
     const [failed, setFailed] = useState(false);
     const [useResponsiveSource, setUseResponsiveSource] = useState(true);
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         setCurrentSrc(src);
         setFailed(false);
         setUseResponsiveSource(true);
+        setLoaded(false);
     }, [fallbackSrc, src]);
 
     const responsiveSource = useMemo(
-        () =>
-            imageKind && useResponsiveSource ? responsiveImageSources(currentSrc, imageKind) : null,
+        () => (imageKind && useResponsiveSource ? responsiveImageSources(currentSrc, imageKind) : null),
         [currentSrc, imageKind, useResponsiveSource],
     );
 
@@ -7222,7 +5251,12 @@ function SafeImage({
             width={imageProps.width ?? responsiveSource?.width}
             height={imageProps.height ?? responsiveSource?.height}
             decoding={imageProps.decoding ?? 'async'}
+            className={`safe-image${loaded ? ' is-loaded' : ''}${className ? ` ${className}` : ''}`}
             alt={alt}
+            onLoad={event => {
+                setLoaded(true);
+                onLoad?.(event);
+            }}
             onError={() => {
                 if (responsiveSource) {
                     setUseResponsiveSource(false);
@@ -7239,7 +5273,10 @@ function SafeImage({
     );
 
     return responsiveSource ? (
-        <picture className="responsive-picture">
+        <picture
+            className={`responsive-picture safe-image-frame${loaded ? ' is-loaded' : ''}`}
+            style={placeholderSrc ? { backgroundImage: `url("${placeholderSrc}")` } : undefined}
+        >
             <source type="image/avif" srcSet={responsiveSource.avifSrcSet} sizes={responsiveSource.sizes} />
             <source type="image/webp" srcSet={responsiveSource.webpSrcSet} sizes={responsiveSource.sizes} />
             {image}
@@ -7566,9 +5603,7 @@ function CountryField({
     defaultCountryCode: string;
     language: StorefrontLanguage;
 }) {
-    const options = countries.length
-        ? countries
-        : [{ code: defaultCountryCode, name: defaultCountryCode }];
+    const options = countries.length ? countries : [{ code: defaultCountryCode, name: defaultCountryCode }];
     const selectedCode = options.some(country => country.code === defaultCountryCode)
         ? defaultCountryCode
         : options[0].code;

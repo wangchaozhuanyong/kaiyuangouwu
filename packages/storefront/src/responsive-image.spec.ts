@@ -19,8 +19,14 @@ describe('responsiveImageSources', () => {
         expect(sources?.fallbackSrc).toContain('preset=storefront-card-640');
     });
 
-    it('keeps external non-Vendure and bundled static images unchanged', () => {
+    it('keeps external non-Vendure images unchanged and serves the bundled hero in modern formats', () => {
         expect(responsiveImageSources('https://images.example.com/product.jpg', 'card')).toBeNull();
-        expect(responsiveImageSources('/storefront/default-hero.jpg', 'hero')).toBeNull();
+        expect(responsiveImageSources('/storefront/default-hero.jpg', 'hero')).toMatchObject({
+            avifSrcSet: '/storefront/default-hero.avif 800w',
+            webpSrcSet: '/storefront/default-hero.webp 800w',
+            fallbackSrc: '/storefront/default-hero.jpg',
+            width: 800,
+            height: 496,
+        });
     });
 });
