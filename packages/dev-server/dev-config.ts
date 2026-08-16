@@ -36,6 +36,7 @@ import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import 'dotenv/config';
+import './business-time';
 import { createRequire } from 'node:module';
 import path from 'path';
 import { DataSourceOptions } from 'typeorm';
@@ -556,6 +557,7 @@ function getDbConfig(): DataSourceOptions {
                 username: configuredValue('DB_USERNAME', 'vendure'),
                 password: configuredValue('DB_PASSWORD', 'password'),
                 database: configuredValue('DB_NAME', 'vendure-dev'),
+                timezone: 'Z',
             };
     }
 }

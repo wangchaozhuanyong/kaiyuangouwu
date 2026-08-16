@@ -6,8 +6,8 @@ import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { Trans } from '@lingui/react/macro';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { PlusIcon } from 'lucide-react';
-import { DeleteApiKeysBulkAction } from './components/api-key-bulk-actions.js';
 import { apiKeyListQuery } from './api-keys.graphql.js';
+import { DeleteApiKeysBulkAction } from './components/api-key-bulk-actions.js';
 
 export const Route = createFileRoute('/_authenticated/_api-keys/api-keys')({
     component: ApiKeyListPage,
@@ -15,7 +15,7 @@ export const Route = createFileRoute('/_authenticated/_api-keys/api-keys')({
 });
 
 function ApiKeyListPage() {
-    const { formatRelativeDate } = useLocalFormat();
+    const { formatDate, formatRelativeDate } = useLocalFormat();
 
     return (
         <ListPage
@@ -47,10 +47,14 @@ function ApiKeyListPage() {
                     cell: ({ row }) => {
                         const lastUsed = row.original.lastUsedAt;
                         if (!lastUsed) {
-                            return <span className="text-muted-foreground"><Trans>Never</Trans></span>;
+                            return (
+                                <span className="text-muted-foreground">
+                                    <Trans>Never</Trans>
+                                </span>
+                            );
                         }
                         return (
-                            <time title={new Date(lastUsed).toLocaleString()}>
+                            <time title={formatDate(lastUsed, { dateStyle: 'medium', timeStyle: 'medium' })}>
                                 {formatRelativeDate(new Date(lastUsed))}
                             </time>
                         );
@@ -58,9 +62,7 @@ function ApiKeyListPage() {
                 },
                 lookupId: {
                     header: () => <Trans>Lookup ID</Trans>,
-                    cell: ({ row }) => (
-                        <code className="font-mono text-xs">{row.original.lookupId}</code>
-                    ),
+                    cell: ({ row }) => <code className="font-mono text-xs">{row.original.lookupId}</code>,
                 },
                 owner: {
                     header: () => <Trans>Created by</Trans>,

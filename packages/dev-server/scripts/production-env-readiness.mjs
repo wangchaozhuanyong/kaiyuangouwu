@@ -115,6 +115,12 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
             normalized(env.NODE_ENV) === 'production' ? 'NODE_ENV=production' : 'NODE_ENV is not production',
     });
     pushCheck(checks, {
+        id: 'business-time-zone',
+        title: '业务时区使用北京时间',
+        passed: normalized(env.TZ) === 'Asia/Shanghai',
+        detail: normalized(env.TZ) === 'Asia/Shanghai' ? 'Asia/Shanghai' : 'must be Asia/Shanghai',
+    });
+    pushCheck(checks, {
         id: 'runtime-listener',
         title: '服务监听配置',
         passed: Boolean(normalized(env.VENDURE_HOSTNAME)) && isPort(env.PORT),

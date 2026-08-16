@@ -52,6 +52,7 @@ import {
 } from 'react';
 
 import { ShopApi, ShopApiError } from './api';
+import { formatBusinessDate } from './business-time';
 import {
     enabledMarkets,
     languageCodeFor,
@@ -7616,12 +7617,12 @@ function formatMoney(value: number, currency: string, locale: string): string {
 }
 function formatOrderDate(value: string | null | undefined, locale: string): string {
     if (!value) return '--';
-    return new Intl.DateTimeFormat(locale, {
+    return formatBusinessDate(locale, value, {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-    }).format(new Date(value));
+    });
 }
 function addressText(address: CustomerAddress): string {
     return [address.province, address.city, address.streetLine1, address.streetLine2, address.postalCode]

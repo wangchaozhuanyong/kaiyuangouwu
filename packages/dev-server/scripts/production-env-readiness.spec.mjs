@@ -10,6 +10,7 @@ import {
 function readyEnvironment(overrides = {}) {
     return {
         NODE_ENV: 'production',
+        TZ: 'Asia/Shanghai',
         VENDURE_HOSTNAME: '0.0.0.0',
         PORT: '3000',
         VENDURE_SERVE_GRAPHIQL: 'false',
@@ -60,7 +61,7 @@ const confirmedControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 24, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 25, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -78,6 +79,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     const report = evaluateProductionEnvironment(
         readyEnvironment({
             NODE_ENV: 'development',
+            TZ: 'America/Los_Angeles',
             VENDURE_DASHBOARD_URL: 'http://localhost:3000/dashboard',
             VENDURE_CORS_ORIGINS: 'http://localhost:5173',
             SUPERADMIN_USERNAME: 'superadmin',
@@ -99,6 +101,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     );
     assert.equal(report.ready, false);
     assert.ok(blockers.has('node-environment'));
+    assert.ok(blockers.has('business-time-zone'));
     assert.ok(blockers.has('public-https-urls'));
     assert.ok(blockers.has('cors-origins'));
     assert.ok(blockers.has('admin-identifier'));

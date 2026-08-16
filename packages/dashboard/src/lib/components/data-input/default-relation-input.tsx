@@ -1,4 +1,5 @@
 import { graphql } from '@/vdb/graphql/graphql.js';
+import { formatBusinessDate } from '@/vdb/utils/business-time.js';
 import { useLingui } from '@lingui/react/macro';
 import { useMemo } from 'react';
 import { MultiRelationInput, SingleRelationInput } from './relation-input.js';
@@ -535,8 +536,9 @@ const createEntityConfigs = (i18n: any) => ({
         label: (item: any) => {
             const parts = [
                 item.couponCode,
-                item.startsAt && `Starts: ${new Date(item.startsAt).toLocaleDateString()}`,
-                item.endsAt && `Ends: ${new Date(item.endsAt).toLocaleDateString()}`,
+                item.startsAt &&
+                    `Starts: ${formatBusinessDate(undefined, item.startsAt, { dateStyle: 'short' })}`,
+                item.endsAt && `Ends: ${formatBusinessDate(undefined, item.endsAt, { dateStyle: 'short' })}`,
             ].filter(Boolean);
 
             return (

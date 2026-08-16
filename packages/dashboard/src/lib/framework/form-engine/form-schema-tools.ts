@@ -16,6 +16,7 @@ import {
 } from '@/vdb/framework/form-engine/form-engine-types.js';
 import { isStringFieldWithOptions, isStructCustomFieldConfig } from '@/vdb/framework/form-engine/utils.js';
 import { z, ZodRawShape, ZodType, ZodTypeAny } from '@/vdb/lib/zod.js';
+import { formatBusinessDate } from '@/vdb/utils/business-time.js';
 
 /**
  * Centralized validation messages for form schema generation.
@@ -101,8 +102,8 @@ function createDateValidationSchema(minDate: Date | undefined, maxDate: Date | u
     const baseSchema = z.union([z.string(), z.date()]);
     if (!minDate && !maxDate) return baseSchema;
 
-    const dateMinString = minDate?.toLocaleDateString() ?? '';
-    const dateMaxString = maxDate?.toLocaleDateString() ?? '';
+    const dateMinString = minDate ? formatBusinessDate(undefined, minDate, { dateStyle: 'short' }) : '';
+    const dateMaxString = maxDate ? formatBusinessDate(undefined, maxDate, { dateStyle: 'short' }) : '';
     const dateMinMessage = minDate ? VALIDATION_MESSAGES.dateAfter(dateMinString) : '';
     const dateMaxMessage = maxDate ? VALIDATION_MESSAGES.dateBefore(dateMaxString) : '';
 

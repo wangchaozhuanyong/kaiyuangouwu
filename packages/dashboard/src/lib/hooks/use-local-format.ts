@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 
+import { formatBusinessDate } from '../utils/business-time.js';
 import { useDisplayLocale } from './use-display-locale.js';
 import { useServerConfig } from './use-server-config.js';
 
@@ -65,7 +66,7 @@ export function useLocalFormat() {
 
     const formatDate = useCallback(
         (value: string | Date, options?: Intl.DateTimeFormatOptions) => {
-            return new Intl.DateTimeFormat(locale, options).format(new Date(value));
+            return formatBusinessDate(locale, value, options);
         },
         [locale],
     );

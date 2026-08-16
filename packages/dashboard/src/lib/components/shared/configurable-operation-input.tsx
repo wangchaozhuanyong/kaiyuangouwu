@@ -1,5 +1,6 @@
 import { FieldHelpButton } from '@/vdb/components/help/field-help-button.js';
 import { ConfigurableOperationDefFragment } from '@/vdb/graphql/fragments.js';
+import { formatBusinessDate } from '@/vdb/utils/business-time.js';
 import { ConfigurableOperationInput as ConfigurableOperationInputType } from '@vendure/common/lib/generated-types';
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
@@ -179,7 +180,9 @@ export function interpolateDescription(
                 formatted = (Number(value) / Math.pow(10, precisionFactor)).toString();
             }
             if (argDef && argDef.type === 'datetime' && (value as any) instanceof Date) {
-                formatted = (value as any).toLocaleDateString();
+                formatted = formatBusinessDate(undefined, value as unknown as Date, {
+                    dateStyle: 'short',
+                });
             }
             return formatted;
         },
