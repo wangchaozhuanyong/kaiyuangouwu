@@ -38,6 +38,7 @@ export function OperationsTodoWidget() {
         queryFn: () => api.query(operationsTodoQuery),
         refetchInterval: 60_000,
     });
+    const pendingShipment = data?.pendingShipment;
 
     const items = [
         {
@@ -51,7 +52,7 @@ export function OperationsTodoWidget() {
             id: 'pending-shipment',
             label: t(messages.pendingShipment),
             description: t(messages.pendingShipmentDescription),
-            count: data?.pendingShipment.totalItems ?? 0,
+            count: typeof pendingShipment === 'number' ? pendingShipment : 0,
             icon: PackageCheck,
         },
         {

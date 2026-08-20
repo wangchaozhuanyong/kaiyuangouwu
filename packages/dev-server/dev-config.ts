@@ -52,6 +52,7 @@ import {
     type StorefrontNameFields,
 } from './email-localization';
 import { devServerMigrations } from './migrations';
+import { StorefrontNativeAuthenticationStrategy } from './storefront-native-authentication-strategy';
 // import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -65,6 +66,9 @@ if (IS_PRODUCTION && SERVE_GRAPHIQL) {
     throw new Error('VENDURE_SERVE_GRAPHIQL must be false in production');
 }
 const SERVE_STATIC_DASHBOARD = process.env.VENDURE_SERVE_STATIC_DASHBOARD !== 'false';
+if (IS_PRODUCTION) {
+    configuredValue('ORDER_CONFIRMATION_TOKEN_SECRET', '');
+}
 const loadPackage = createRequire(__filename);
 const serverRoot = path.basename(__dirname) === 'dist' ? path.dirname(__dirname) : __dirname;
 const dashboardUrl = configuredUrl('VENDURE_DASHBOARD_URL', 'http://localhost:3000/dashboard');
@@ -377,6 +381,7 @@ export const devConfig: VendureConfig = {
         tokenMethod: ['bearer', 'cookie', 'api-key'] as const,
         requireVerification: true,
         verificationTokenDuration: ACCOUNT_TOKEN_DURATION,
+        shopAuthenticationStrategy: [new StorefrontNativeAuthenticationStrategy()],
         passwordValidationStrategy: new DefaultPasswordValidationStrategy({ minLength: 8, maxLength: 72 }),
         customPermissions: [],
         superadminCredentials: {

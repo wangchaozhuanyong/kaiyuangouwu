@@ -205,6 +205,11 @@ export interface DigitalDelivery {
     expiresAt?: string | null;
 }
 
+export interface OrderConfirmationToken {
+    token: string;
+    expiresAt: string;
+}
+
 export interface OrderTaxSummary {
     description: string;
     taxRate: number;

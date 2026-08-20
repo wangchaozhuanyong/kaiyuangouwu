@@ -3,8 +3,10 @@ import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, Vendure
 import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.resolver';
 import { AfterSalesService } from './after-sales.service';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
+import { AuthenticatedOrderByCodeAccessStrategy } from './authenticated-order-by-code-access-strategy';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { commerceOrderProcess } from './commerce-order-process';
+import { commercePaymentProcess } from './commerce-payment-process';
 import { CommerceShippingLineAssignmentStrategy } from './commerce-shipping-line-assignment-strategy';
 import {
     physicalSubtotalShippingCalculator,
@@ -19,7 +21,11 @@ import { AfterSalesEvent } from './entities/after-sales-event.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
 import { FulfillmentModelService } from './fulfillment-model.service';
+import { OrderConfirmationTokenService } from './order-confirmation-token.service';
+import { OrderConfirmationResolver } from './order-confirmation.resolver';
 import { CustomerOrderCancellationResolver, OrderFulfillmentResolver } from './order-fulfillment.resolver';
+import { OrderOperationsAdminResolver } from './order-operations.resolver';
+import { OrderOperationsService } from './order-operations.service';
 import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-allocation-strategy';
 import './types';
 
@@ -34,14 +40,21 @@ import './types';
         CustomerOrderCancellationService,
         DigitalDeliveryService,
         DigitalDeliveryTokenService,
+        OrderConfirmationTokenService,
+        OrderOperationsService,
     ],
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [AfterSalesAdminResolver],
+        resolvers: [AfterSalesAdminResolver, OrderOperationsAdminResolver],
     },
     shopApiExtensions: {
         schema: shopApiExtensions,
-        resolvers: [OrderFulfillmentResolver, CustomerOrderCancellationResolver, AfterSalesShopResolver],
+        resolvers: [
+            OrderFulfillmentResolver,
+            OrderConfirmationResolver,
+            CustomerOrderCancellationResolver,
+            AfterSalesShopResolver,
+        ],
     },
     configuration: config => {
         config.customFields.ProductVariant.push({
@@ -97,6 +110,7 @@ import './types';
         config.shippingOptions.shippingEligibilityCheckers.push(supportedDestinationEligibilityChecker);
         config.shippingOptions.shippingLineAssignmentStrategy = new CommerceShippingLineAssignmentStrategy();
         config.orderOptions.stockAllocationStrategy = new PhysicalOnlyStockAllocationStrategy();
+        config.orderOptions.orderByCodeAccessStrategy = new AuthenticatedOrderByCodeAccessStrategy();
         config.orderOptions.process = [
             commerceOrderProcess,
             configureDefaultOrderProcess({
@@ -104,6 +118,7 @@ import './types';
                 arrangingPaymentRequiresStock: false,
             }),
         ];
+        config.paymentOptions.process = [...(config.paymentOptions.process ?? []), commercePaymentProcess];
         return config;
     },
     compatibility: '^3.7.0',

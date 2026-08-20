@@ -1,0 +1,50 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { StorefrontActivationService } from './storefront-activation.service';
+
+function createService(status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | null, sellerId = 'merchant-seller') {
+    const repository = {
+        findOne: vi.fn().mockResolvedValue(status ? { id: 'profile-1', status } : null),
+    };
+    const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+    const channelService = {
+        findOne: vi.fn().mockResolvedValue({ id: 'channel-1', sellerId }),
+        getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform-seller' }),
+    };
+    return new StorefrontActivationService(connection as any, channelService as any);
+}
+
+describe('StorefrontActivationService', () => {
+    it.each(['DRAFT', 'SUSPENDED'] as const)('blocks Shop API access for %s stores', async status => {
+        await expect(
+            createService(status).assertActive({ apiType: 'shop', channelId: 'channel-1' } as any),
+        ).rejects.toThrow();
+    });
+
+    it('allows active stores', async () => {
+        await expect(
+            createService('ACTIVE').assertActive({ apiType: 'shop', channelId: 'channel-1' } as any),
+        ).resolves.toBeUndefined();
+    });
+
+    it('blocks merchant Channels when provisioning left no managed profile', async () => {
+        await expect(
+            createService(null).assertActive({ apiType: 'shop', channelId: 'default' } as any),
+        ).rejects.toThrow();
+    });
+
+    it('does not affect Admin API operations', async () => {
+        await expect(
+            createService('DRAFT').assertActive({ apiType: 'admin', channelId: 'channel-1' } as any),
+        ).resolves.toBeUndefined();
+    });
+
+    it('keeps platform-owned regional Channels backward compatible', async () => {
+        await expect(
+            createService(null, 'platform-seller').assertActive({
+                apiType: 'shop',
+                channelId: 'channel-1',
+            } as any),
+        ).resolves.toBeUndefined();
+    });
+});

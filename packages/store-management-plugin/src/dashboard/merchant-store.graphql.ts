@@ -25,6 +25,15 @@ const myStoreProfileFields = gql`
         descriptionEn
         primaryDomain
         storefrontUrl
+        activationReadiness {
+            ready
+            checks {
+                code
+                ready
+                message
+                messageEn
+            }
+        }
         logoAsset {
             id
             createdAt
@@ -99,6 +108,10 @@ export interface MyStoreProfileRecord {
     primaryDomain: string | null;
     storefrontUrl: string | null;
     logoAsset: Asset | null;
+    activationReadiness: {
+        ready: boolean;
+        checks: Array<{ code: string; ready: boolean; message: string; messageEn: string }>;
+    };
     channel: {
         id: string;
         code: string;

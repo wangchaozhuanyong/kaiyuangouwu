@@ -15,6 +15,7 @@ import {
 } from '@vendure/dashboard';
 import { RefreshCw, Store } from 'lucide-react';
 
+import { normalizeStoreMetrics, StoreMetrics } from './store-overview-metrics';
 import { storeOverviewQuery } from './store-overview-widget.graphql';
 
 const messages = {
@@ -32,13 +33,6 @@ const messages = {
     loadError: msg({ id: 'operations.stores.loadError', message: 'Could not load store data' }),
     unavailable: msg({ id: 'operations.stores.unavailable', message: 'Data unavailable' }),
     retry: msg({ id: 'operations.stores.retry', message: 'Retry' }),
-};
-
-type StoreMetrics = {
-    storeId: string;
-    orderCount: number;
-    sales: number;
-    error: boolean;
 };
 
 export function StoreOverviewWidget() {
@@ -72,9 +66,21 @@ export function StoreOverviewWidget() {
                                 .find(summary => summary.type === 'OrderTotal')
                                 ?.entries.reduce((total, entry) => total + entry.value, 0) ?? 0;
 
-                        return { storeId: channel.id, orderCount, sales, error: false };
+                        return {
+                            storeId: channel.id,
+                            channelCode: channel.code,
+                            orderCount,
+                            sales,
+                            error: false,
+                        };
                     } catch {
-                        return { storeId: channel.id, orderCount: 0, sales: 0, error: true };
+                        return {
+                            storeId: channel.id,
+                            channelCode: channel.code,
+                            orderCount: 0,
+                            sales: 0,
+                            error: true,
+                        };
                     }
                 }),
             ),
@@ -82,7 +88,7 @@ export function StoreOverviewWidget() {
         refetchInterval: 60_000,
     });
 
-    const totalOrders = data?.reduce((total, item) => total + item.orderCount, 0) ?? 0;
+    const normalizedMetrics = normalizeStoreMetrics(data ?? []);
 
     return (
         <DashboardBaseWidget
@@ -128,14 +134,16 @@ export function StoreOverviewWidget() {
                     <div className="mb-2 grid grid-cols-[minmax(0,1fr)_6rem_8rem] gap-4 border-b pb-2 text-xs text-muted-foreground">
                         <span>
                             {channels.length} {t(messages.stores)} · {t(messages.total)}{' '}
-                            {formatNumber(totalOrders)} {t(messages.orders).toLowerCase()}
+                            {formatNumber(normalizedMetrics.totalOrders)} {t(messages.orders).toLowerCase()}
                         </span>
                         <span className="text-right">{t(messages.orders)}</span>
                         <span className="text-right">{t(messages.sales)}</span>
                     </div>
                     <div className="max-h-52 overflow-y-auto">
                         {channels.map(channel => {
-                            const metrics = data?.find(item => item.storeId === channel.id);
+                            const metrics = normalizedMetrics.metrics.find(
+                                item => item.storeId === channel.id,
+                            );
                             const isCurrent = channel.id === activeChannel?.id;
                             return (
                                 <div

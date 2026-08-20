@@ -23,7 +23,7 @@ import {
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import { Globe2, ImagePlus, LoaderCircle, RefreshCw, Save, Store, X } from 'lucide-react';
+import { Check, CircleAlert, Globe2, ImagePlus, LoaderCircle, RefreshCw, Save, Store, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -67,6 +67,9 @@ const zhCopy = {
     draft: '待启用',
     suspended: '已停用',
     invalidName: '中英文店铺名称都必须是 1 至 16 个显示单位',
+    readiness: '上线检查',
+    ready: '已满足全部上线条件',
+    notReady: '仍有未完成项目，请完成后联系平台管理员启用店铺',
 };
 
 const enCopy: typeof zhCopy = {
@@ -94,6 +97,9 @@ const enCopy: typeof zhCopy = {
     draft: 'Pending',
     suspended: 'Suspended',
     invalidName: 'Both store names must use 1 to 16 display units',
+    readiness: 'Launch checks',
+    ready: 'All launch requirements are complete',
+    notReady: 'Complete the remaining items, then ask the platform administrator to activate the store',
 };
 
 export const myStoreProfileRoute: DashboardRouteDefinition = {
@@ -113,7 +119,8 @@ export const myStoreProfileRoute: DashboardRouteDefinition = {
 
 function MyStoreProfilePage() {
     const { i18n } = useLingui();
-    const text = i18n.locale.toLowerCase().startsWith('zh') ? zhCopy : enCopy;
+    const isZh = i18n.locale.toLowerCase().startsWith('zh');
+    const text = isZh ? zhCopy : enCopy;
     const { activeChannel } = useChannel();
     const [draft, setDraft] = useState<ProfileDraft | null>(null);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
@@ -291,7 +298,11 @@ function MyStoreProfilePage() {
                     ) : null}
                 </PageBlock>
                 <PageBlock column="side" blockId="merchant-store-operation" title={text.operation}>
-                    {profile ? <StoreOperation profile={profile} text={text} /> : <ProfileSkeleton />}
+                    {profile ? (
+                        <StoreOperation profile={profile} text={text} isZh={isZh} />
+                    ) : (
+                        <ProfileSkeleton />
+                    )}
                 </PageBlock>
             </PageLayout>
             {draft && (
@@ -307,7 +318,11 @@ function MyStoreProfilePage() {
     );
 }
 
-function StoreOperation({ profile, text }: Readonly<{ profile: MyStoreProfileRecord; text: typeof zhCopy }>) {
+function StoreOperation({
+    profile,
+    text,
+    isZh,
+}: Readonly<{ profile: MyStoreProfileRecord; text: typeof zhCopy; isZh: boolean }>) {
     const statusLabel =
         profile.status === 'ACTIVE'
             ? text.active
@@ -342,6 +357,32 @@ function StoreOperation({ profile, text }: Readonly<{ profile: MyStoreProfileRec
                     ) : (
                         <span className="text-muted-foreground">{text.noDomain}</span>
                     )}
+                </dd>
+            </div>
+            <div className="py-3 last:pb-0">
+                <dt className="text-muted-foreground">{text.readiness}</dt>
+                <dd className="mt-2">
+                    <p className="text-xs text-muted-foreground">
+                        {profile.activationReadiness.ready ? text.ready : text.notReady}
+                    </p>
+                    <ul className="mt-3 space-y-2">
+                        {profile.activationReadiness.checks.map(check => (
+                            <li key={check.code} className="flex items-start gap-2 text-xs">
+                                {check.ready ? (
+                                    <Check
+                                        className="mt-0.5 size-3.5 shrink-0 text-success"
+                                        aria-hidden="true"
+                                    />
+                                ) : (
+                                    <CircleAlert
+                                        className="mt-0.5 size-3.5 shrink-0 text-destructive"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                <span>{isZh ? check.message : check.messageEn}</span>
+                            </li>
+                        ))}
+                    </ul>
                 </dd>
             </div>
         </dl>

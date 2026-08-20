@@ -14,6 +14,7 @@ import { StoreDomain } from '@vendure/store-domain-plugin';
 import { In } from 'typeorm';
 
 import { StoreProfile } from './entities/store-profile.entity';
+import { StoreActivationReadinessService } from './store-activation-readiness.service';
 import { StoreProfileStatus, UpdateMyStoreProfileInput, UpdateStoreProfileInput } from './types';
 
 interface StorefrontChannelFields {
@@ -26,6 +27,7 @@ export class StoreProfileService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly channelService: ChannelService,
+        private readonly activationReadinessService: StoreActivationReadinessService,
     ) {}
 
     async createDraft(ctx: RequestContext, channel: Channel): Promise<StoreProfile> {
@@ -55,12 +57,12 @@ export class StoreProfileService {
             relations: { channel: { seller: true }, logoAsset: true },
             order: { sortOrder: 'ASC', createdAt: 'ASC' },
         });
-        return this.attachDomains(ctx, profiles);
+        return this.attachOperationalState(ctx, profiles);
     }
 
     async findForMerchant(ctx: RequestContext): Promise<StoreProfile> {
         const profile = await this.findByChannel(ctx, ctx.channelId);
-        return (await this.attachDomains(ctx, [profile]))[0];
+        return (await this.attachOperationalState(ctx, [profile]))[0];
     }
 
     async update(ctx: RequestContext, input: UpdateStoreProfileInput): Promise<StoreProfile> {
@@ -74,6 +76,7 @@ export class StoreProfileService {
         }
 
         const status = input.status ?? profile.status;
+        const activating = profile.status !== 'ACTIVE' && status === 'ACTIVE';
         this.assertStatus(status);
         if (input.sortOrder != null && (!Number.isInteger(input.sortOrder) || input.sortOrder < 0)) {
             throw new UserInputError('网店排序必须是大于或等于 0 的整数');
@@ -92,12 +95,7 @@ export class StoreProfileService {
             profile.descriptionEn,
             '英文简介',
         );
-        await this.updateStorefrontNames(
-            ctx,
-            profile,
-            input.storefrontNameZh,
-            input.storefrontNameEn,
-        );
+        await this.updateStorefrontNames(ctx, profile, input.storefrontNameZh, input.storefrontNameEn);
 
         if (input.logoAssetId !== undefined) {
             const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
@@ -105,8 +103,19 @@ export class StoreProfileService {
             profile.logoAssetId = asset?.id ?? null;
         }
 
+        if (activating) {
+            const readiness = await this.activationReadinessService.get(ctx, profile);
+            if (!readiness.ready) {
+                const missing = readiness.checks
+                    .filter(check => !check.ready)
+                    .map(check => check.message)
+                    .join('；');
+                throw new UserInputError(`店铺尚未达到上线条件：${missing}`);
+            }
+        }
+
         const saved = await repository.save(profile);
-        return (await this.attachDomains(ctx, [saved]))[0];
+        return (await this.attachOperationalState(ctx, [saved]))[0];
     }
 
     async updateForMerchant(ctx: RequestContext, input: UpdateMyStoreProfileInput): Promise<StoreProfile> {
@@ -128,15 +137,23 @@ export class StoreProfileService {
             profile.logoAssetId = asset?.id ?? null;
         }
 
-        await this.updateStorefrontNames(
-            ctx,
-            profile,
-            input.storefrontNameZh,
-            input.storefrontNameEn,
-        );
+        await this.updateStorefrontNames(ctx, profile, input.storefrontNameZh, input.storefrontNameEn);
 
         const saved = await repository.save(profile);
-        return (await this.attachDomains(ctx, [saved]))[0];
+        return (await this.attachOperationalState(ctx, [saved]))[0];
+    }
+
+    private async attachOperationalState(
+        ctx: RequestContext,
+        profiles: StoreProfile[],
+    ): Promise<StoreProfile[]> {
+        await this.attachDomains(ctx, profiles);
+        await Promise.all(
+            profiles.map(async profile => {
+                profile.activationReadiness = await this.activationReadinessService.get(ctx, profile);
+            }),
+        );
+        return profiles;
     }
 
     private async attachDomains(ctx: RequestContext, profiles: StoreProfile[]): Promise<StoreProfile[]> {

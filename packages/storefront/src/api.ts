@@ -9,6 +9,7 @@ import {
     CustomerOrderCounts,
     MarketConfig,
     Order,
+    OrderConfirmationToken,
     OrderPage,
     PaymentMethod,
     Product,
@@ -236,6 +237,7 @@ interface ErrorResult {
     __typename?: string;
     errorCode?: string;
     message?: string;
+    authenticationError?: string;
 }
 
 function authTokenStorageKey(marketCode: string): string | null {
@@ -258,6 +260,7 @@ export class ShopApiError extends Error {
     constructor(
         readonly errorCode: string,
         message: string,
+        readonly authenticationError?: string,
     ) {
         super(message);
         this.name = 'ShopApiError';
@@ -759,17 +762,31 @@ export class ShopApi {
         return result.order;
     }
 
-    async orderByCode(code: string, signal?: AbortSignal): Promise<Order | null> {
-        const result = await this.request<{ orderByCode: Order | null }>(
+    async orderByConfirmationToken(token: string, signal?: AbortSignal): Promise<Order | null> {
+        const result = await this.request<{ storefrontOrderByConfirmationToken: Order | null }>(
             `
-                query StorefrontOrderByCode($code: String!) {
-                    orderByCode(code: $code) { ${orderFields} }
+                query StorefrontOrderByConfirmationToken($token: String!) {
+                    storefrontOrderByConfirmationToken(token: $token) { ${orderFields} }
                 }
             `,
-            { code },
+            { token },
             signal,
         );
-        return result.orderByCode;
+        return result.storefrontOrderByConfirmationToken;
+    }
+
+    async createOrderConfirmationToken(): Promise<OrderConfirmationToken> {
+        const result = await this.request<{
+            createStorefrontOrderConfirmationToken: OrderConfirmationToken;
+        }>(`
+            mutation CreateStorefrontOrderConfirmationToken {
+                createStorefrontOrderConfirmationToken {
+                    token
+                    expiresAt
+                }
+            }
+        `);
+        return result.createStorefrontOrderConfirmationToken;
     }
 
     async cancelMyAuthorizedOrder(orderId: string, reason: string): Promise<Order> {
@@ -896,6 +913,7 @@ export class ShopApi {
                         __typename
                         ... on CurrentUser { id identifier }
                         ... on ErrorResult { errorCode message }
+                        ... on InvalidCredentialsError { authenticationError }
                     }
                 }
             `,
@@ -1443,7 +1461,11 @@ export class ShopApi {
 
     private assertNoError(result: ErrorResult): void {
         if (result.errorCode) {
-            throw new ShopApiError(result.errorCode, result.message ?? result.errorCode);
+            throw new ShopApiError(
+                result.errorCode,
+                result.message ?? result.errorCode,
+                result.authenticationError,
+            );
         }
     }
 }

@@ -1,7 +1,17 @@
-import { ArrowLeft, CircleAlert, CircleCheck, Fingerprint } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
+import {
+    ArrowLeft,
+    CircleAlert,
+    CircleCheck,
+    Eye,
+    EyeOff,
+    Fingerprint,
+    LockKeyhole,
+    Mail,
+    UserRound,
+} from 'lucide-react';
+import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
-import { ShopApi } from './api';
+import { ShopApi, ShopApiError } from './api';
 import {
     ACCOUNT_PASSWORD_MAX_LENGTH,
     ACCOUNT_PASSWORD_MIN_LENGTH,
@@ -10,6 +20,81 @@ import {
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
 
 type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
+
+const COMMON_CHINESE_COMPOUND_SURNAMES = [
+    '欧阳',
+    '司马',
+    '上官',
+    '诸葛',
+    '夏侯',
+    '东方',
+    '皇甫',
+    '尉迟',
+    '公孙',
+    '慕容',
+    '万俟',
+    '闻人',
+    '宇文',
+    '长孙',
+    '司徒',
+    '司空',
+    '令狐',
+    '钟离',
+    '轩辕',
+    '端木',
+    '百里',
+    '东郭',
+    '南宫',
+    '呼延',
+    '东门',
+    '西门',
+] as const;
+
+export function splitCustomerName(
+    value: string,
+    language: StorefrontLanguage,
+): { firstName: string; lastName: string } {
+    const normalized = value.trim().replace(/\s+/g, ' ');
+    if (!normalized) return { firstName: '', lastName: '' };
+
+    if (language === 'zh') {
+        const compactName = normalized.replace(/\s/g, '');
+        const surname = COMMON_CHINESE_COMPOUND_SURNAMES.find(item => compactName.startsWith(item));
+        const surnameLength = surname ? Array.from(surname).length : 1;
+        const characters = Array.from(compactName);
+        return {
+            lastName: characters.slice(0, surnameLength).join(''),
+            firstName: characters.slice(surnameLength).join(''),
+        };
+    }
+
+    const parts = normalized.split(' ');
+    return {
+        firstName: parts.slice(0, -1).join(' '),
+        lastName: parts.at(-1) ?? '',
+    };
+}
+
+export function loginErrorMessage(error: unknown, language: StorefrontLanguage): string {
+    const isZh = language === 'zh';
+    if (error instanceof ShopApiError) {
+        if (error.authenticationError === 'STOREFRONT_ACCOUNT_NOT_FOUND') {
+            return isZh ? '该电子邮箱尚未注册' : 'No account was found for this email address';
+        }
+        if (error.authenticationError === 'STOREFRONT_INVALID_PASSWORD') {
+            return isZh ? '密码错误，请重新输入' : 'The password is incorrect. Please try again';
+        }
+        if (error.errorCode === 'NOT_VERIFIED_ERROR') {
+            return isZh
+                ? '该电子邮箱尚未验证，请先查收验证邮件'
+                : 'This email address has not been verified. Check your verification email first';
+        }
+        if (error.errorCode === 'INVALID_CREDENTIALS_ERROR') {
+            return isZh ? '电子邮箱或密码错误，请检查后重试' : 'The email address or password is incorrect';
+        }
+    }
+    return error instanceof Error ? error.message : isZh ? '登录失败' : 'Sign-in failed';
+}
 
 interface AuthPageBaseProps {
     api: ShopApi;
@@ -50,9 +135,7 @@ export function LoginPage({
             await api.login(String(data.get('emailAddress')), String(data.get('password')));
             await onSuccess();
         } catch (requestError) {
-            setError(
-                requestError instanceof Error ? requestError.message : isZh ? '登录失败' : 'Sign-in failed',
-            );
+            setError(loginErrorMessage(requestError, language));
         } finally {
             setSubmitting(false);
         }
@@ -68,12 +151,16 @@ export function LoginPage({
                     label={isZh ? '电子邮箱' : 'Email address'}
                     type="email"
                     autoComplete="email"
+                    icon={<Mail />}
                 />
                 <Field
                     name="password"
                     label={isZh ? '密码' : 'Password'}
                     type="password"
                     autoComplete="current-password"
+                    icon={<LockKeyhole />}
+                    revealPassword
+                    language={language}
                 />
                 <button
                     className="auth-inline-link"
@@ -117,14 +204,21 @@ export function RegisterPage({
     const [registeredEmail, setRegisteredEmail] = useState('');
     const [error, setError] = useState('');
     const [resendMessage, setResendMessage] = useState('');
+    const [resendSeconds, setResendSeconds] = useState(0);
+
+    useEffect(() => {
+        if (resendSeconds <= 0) return;
+        const timeout = window.setTimeout(() => setResendSeconds(seconds => seconds - 1), 1000);
+        return () => window.clearTimeout(timeout);
+    }, [resendSeconds]);
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
-        const firstName = String(data.get('firstName')).trim();
-        const lastName = String(data.get('lastName')).trim();
+        const fullName = String(data.get('fullName')).trim();
+        const { firstName, lastName } = splitCustomerName(fullName, language);
         if (!firstName || !lastName) {
-            setError(isZh ? '请输入完整姓名' : 'Enter your first and last name');
+            setError(isZh ? '请输入完整姓名' : 'Enter your full name');
             return;
         }
         const password = String(data.get('password'));
@@ -148,6 +242,7 @@ export function RegisterPage({
                 password,
             });
             setRegisteredEmail(emailAddress);
+            setResendSeconds(60);
         } catch (requestError) {
             setError(
                 requestError instanceof Error
@@ -162,12 +257,14 @@ export function RegisterPage({
     };
 
     const resend = async () => {
+        if (resendSeconds > 0) return;
         setSubmitting(true);
         setError('');
         setResendMessage('');
         try {
             await api.refreshCustomerVerification(registeredEmail);
             setResendMessage(isZh ? '验证邮件已重新发送' : 'Verification email sent again');
+            setResendSeconds(60);
         } catch (requestError) {
             setError(
                 requestError instanceof Error
@@ -206,10 +303,31 @@ export function RegisterPage({
                     <SubmitButton
                         type="button"
                         submitting={submitting}
-                        idle={isZh ? '重新发送验证邮件' : 'Resend verification email'}
+                        disabled={resendSeconds > 0}
+                        idle={
+                            resendSeconds > 0
+                                ? isZh
+                                    ? `${resendSeconds} 秒后可重新发送`
+                                    : `Resend in ${resendSeconds}s`
+                                : isZh
+                                  ? '重新发送验证邮件'
+                                  : 'Resend verification email'
+                        }
                         busy={isZh ? '发送中' : 'Sending'}
                         onClick={() => void resend()}
                     />
+                    <button
+                        className="auth-secondary-action"
+                        type="button"
+                        onClick={() => {
+                            setRegisteredEmail('');
+                            setResendMessage('');
+                            setError('');
+                            setResendSeconds(0);
+                        }}
+                    >
+                        {isZh ? '修改电子邮箱' : 'Change email address'}
+                    </button>
                     <button
                         className="auth-secondary-action"
                         type="button"
@@ -220,28 +338,25 @@ export function RegisterPage({
                 </AuthResult>
             ) : (
                 <>
-                    <h1>{isZh ? '创建账户' : 'Create your account'}</h1>
-                    <p>{isZh ? '注册后需通过邮件验证' : 'Email verification is required'}</p>
+                    <h1>{isZh ? '注册' : 'Create your account'}</h1>
+                    <p>
+                        {isZh
+                            ? '验证邮箱后即可完成注册'
+                            : 'Verify your email to finish creating your account'}
+                    </p>
                     <form onSubmit={event => void submit(event)}>
-                        <div className="auth-name-fields">
-                            <Field
-                                name="firstName"
-                                label={isZh ? '名' : 'First name'}
-                                autoComplete="given-name"
-                                wide={false}
-                            />
-                            <Field
-                                name="lastName"
-                                label={isZh ? '姓' : 'Last name'}
-                                autoComplete="family-name"
-                                wide={false}
-                            />
-                        </div>
+                        <Field
+                            name="fullName"
+                            label={isZh ? '姓名' : 'Full name'}
+                            autoComplete="name"
+                            icon={<UserRound />}
+                        />
                         <Field
                             name="emailAddress"
                             label={isZh ? '电子邮箱' : 'Email address'}
                             type="email"
                             autoComplete="email"
+                            icon={<Mail />}
                         />
                         <Field
                             name="password"
@@ -250,6 +365,9 @@ export function RegisterPage({
                             autoComplete="new-password"
                             minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
                             maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                            icon={<LockKeyhole />}
+                            revealPassword
+                            language={language}
                         />
                         <Field
                             name="confirmPassword"
@@ -258,6 +376,9 @@ export function RegisterPage({
                             autoComplete="new-password"
                             minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
                             maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                            icon={<LockKeyhole />}
+                            revealPassword
+                            language={language}
                         />
                         {error && (
                             <small className="form-error" role="alert">
@@ -278,6 +399,7 @@ export function RegisterPage({
                     <AuthLegalNotice
                         content={legalContent}
                         language={language}
+                        prefix={isZh ? '注册即表示您同意我们的' : 'By registering, you agree to our'}
                         onContentTarget={onContentTarget}
                     />
                 </>
@@ -373,6 +495,7 @@ export function VerifyAccountPage({
                                 label={isZh ? '注册邮箱' : 'Account email'}
                                 type="email"
                                 autoComplete="email"
+                                icon={<Mail />}
                             />
                             {resendMessage && (
                                 <small className="auth-success-message" role="status">
@@ -464,6 +587,7 @@ export function ForgotPasswordPage({ api, language, storefrontName, onBack, onNa
                             label={isZh ? '电子邮箱' : 'Email address'}
                             type="email"
                             autoComplete="email"
+                            icon={<Mail />}
                         />
                         {error && (
                             <small className="form-error" role="alert">
@@ -541,6 +665,9 @@ export function ResetPasswordPage({
                         autoComplete="new-password"
                         minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
                         maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                        icon={<LockKeyhole />}
+                        revealPassword
+                        language={language}
                     />
                     <Field
                         name="confirmPassword"
@@ -549,6 +676,9 @@ export function ResetPasswordPage({
                         autoComplete="new-password"
                         minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
                         maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                        icon={<LockKeyhole />}
+                        revealPassword
+                        language={language}
                     />
                     {error && (
                         <small className="form-error" role="alert">
@@ -594,17 +724,31 @@ function AuthLayout({
     children: ReactNode;
 }) {
     return (
-        <main className="page subpage login-page">
-            <header className="topbar subpage-header">
-                <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
+        <main className="page subpage auth-page" aria-label={title}>
+            <section className="auth-hero">
+                <img src="/storefront/auth-ai-bridge-hero.jpg" alt="" />
+                <button
+                    className="auth-back-button"
+                    type="button"
+                    onClick={onBack}
+                    aria-label={language === 'zh' ? '返回' : 'Back'}
+                >
                     <ArrowLeft aria-hidden="true" />
                 </button>
-                <strong>{title}</strong>
-                <span />
-            </header>
+                <div className="auth-brand-lockup">
+                    <div className="auth-brand-main">
+                        <span className="auth-brand-mark" aria-hidden="true">
+                            桥
+                        </span>
+                        <strong>{storefrontName}</strong>
+                    </div>
+                    <small>
+                        {language === 'zh' ? '智联云端 · 桥接未来' : 'Cloud intelligence · Bridging tomorrow'}
+                    </small>
+                </div>
+            </section>
             <section className="login-content">
-                <span className="login-brand">{storefrontName}</span>
-                {children}
+                <div className="auth-card-content">{children}</div>
             </section>
         </main>
     );
@@ -617,6 +761,9 @@ function Field({
     autoComplete,
     minLength,
     maxLength,
+    icon,
+    revealPassword = false,
+    language = 'en',
     wide = true,
 }: {
     name: string;
@@ -625,20 +772,64 @@ function Field({
     autoComplete?: string;
     minLength?: number;
     maxLength?: number;
+    icon?: ReactNode;
+    revealPassword?: boolean;
+    language?: StorefrontLanguage;
     wide?: boolean;
 }) {
+    const inputId = useId();
+    const [passwordVisible, setPasswordVisible] = useState(false);
+    const hasPasswordToggle = type === 'password' && revealPassword;
+    const inputType = hasPasswordToggle && passwordVisible ? 'text' : type;
+    const passwordToggleLabel = passwordVisible
+        ? language === 'zh'
+            ? '隐藏密码'
+            : 'Hide password'
+        : language === 'zh'
+          ? '显示密码'
+          : 'Show password';
+    const input = (
+        <input
+            id={inputId}
+            name={name}
+            type={inputType}
+            required
+            autoComplete={autoComplete}
+            minLength={minLength}
+            maxLength={maxLength}
+            placeholder={label}
+        />
+    );
+
     return (
-        <label className={wide ? 'field-wide' : undefined}>
-            <span>{label}</span>
-            <input
-                name={name}
-                type={type}
-                required
-                autoComplete={autoComplete}
-                minLength={minLength}
-                maxLength={maxLength}
-            />
-        </label>
+        <div className={`auth-field${wide ? ' field-wide' : ''}`}>
+            <label className="visually-hidden" htmlFor={inputId}>
+                {label}
+            </label>
+            <div className={`auth-input-shell${hasPasswordToggle ? ' auth-password-input' : ''}`}>
+                {icon && (
+                    <span className="auth-field-icon" aria-hidden="true">
+                        {icon}
+                    </span>
+                )}
+                {hasPasswordToggle ? (
+                    <>
+                        {input}
+                        <button
+                            className="auth-password-toggle"
+                            type="button"
+                            aria-label={passwordToggleLabel}
+                            aria-pressed={passwordVisible}
+                            onClick={() => setPasswordVisible(visible => !visible)}
+                        >
+                            {passwordVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                        </button>
+                    </>
+                ) : (
+                    input
+                )}
+            </div>
+        </div>
     );
 }
 
@@ -647,19 +838,21 @@ function SubmitButton({
     idle,
     busy,
     type = 'submit',
+    disabled = false,
     onClick,
 }: {
     submitting: boolean;
     idle: string;
     busy: string;
     type?: 'submit' | 'button';
+    disabled?: boolean;
     onClick?: () => void;
 }) {
     return (
         <button
             className="primary-action wide-action"
             type={type}
-            disabled={submitting}
+            disabled={submitting || disabled}
             aria-busy={submitting}
             onClick={onClick}
         >
@@ -703,10 +896,12 @@ function AuthResult({
 function AuthLegalNotice({
     content,
     language,
+    prefix,
     onContentTarget,
 }: {
     content?: StorefrontContentBlock;
     language: StorefrontLanguage;
+    prefix?: string;
     onContentTarget: AuthLegalProps['onContentTarget'];
 }) {
     const items =
@@ -716,7 +911,7 @@ function AuthLegalNotice({
     if (!items.length) return null;
     return (
         <small className="auth-legal-notice">
-            <span>{language === 'zh' ? '继续操作前，请阅读' : 'Before continuing, review'}</span>
+            <span>{prefix ?? (language === 'zh' ? '继续操作前，请阅读' : 'Before continuing, review')}</span>
             <span className="auth-legal-links">
                 {items.map(item => (
                     <button

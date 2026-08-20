@@ -28,6 +28,26 @@ afterEach(() => {
 });
 
 describe('ShopApi storefront mutations', () => {
+    it('surfaces the specific native authentication failure returned by the Shop API', async () => {
+        const fetchMock = mockGraphQlResponse({
+            login: {
+                __typename: 'InvalidCredentialsError',
+                errorCode: 'INVALID_CREDENTIALS_ERROR',
+                message: 'The provided credentials are invalid',
+                authenticationError: 'STOREFRONT_ACCOUNT_NOT_FOUND',
+            },
+        });
+
+        await expect(new ShopApi(market).login('missing@example.com', 'password')).rejects.toEqual(
+            expect.objectContaining<Partial<ShopApiError>>({
+                errorCode: 'INVALID_CREDENTIALS_ERROR',
+                authenticationError: 'STOREFRONT_ACCOUNT_NOT_FOUND',
+            }),
+        );
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('... on InvalidCredentialsError { authenticationError }');
+    });
+
     it('limits the initial storefront product request to 16 items', async () => {
         const fetchMock = mockGraphQlResponse({ products: { items: [] } });
 
@@ -210,16 +230,36 @@ describe('ShopApi storefront mutations', () => {
         );
     });
 
-    it('retrieves a guest order by its public order code', async () => {
-        const fetchMock = mockGraphQlResponse({
-            orderByCode: { id: 'order-1', code: 'T0001', state: 'PaymentAuthorized', lines: [] },
+    it('creates a signed token before payment and retrieves the guest order with it', async () => {
+        const tokenFetch = mockGraphQlResponse({
+            createStorefrontOrderConfirmationToken: {
+                token: 'signed-confirmation-token',
+                expiresAt: '2026-08-20T12:00:00.000Z',
+            },
         });
 
-        await expect(new ShopApi(market).orderByCode('T0001')).resolves.toMatchObject({ code: 'T0001' });
+        await expect(new ShopApi(market).createOrderConfirmationToken()).resolves.toEqual({
+            token: 'signed-confirmation-token',
+            expiresAt: '2026-08-20T12:00:00.000Z',
+        });
+        expect(String(tokenFetch.mock.calls[0][1]?.body)).toContain('createStorefrontOrderConfirmationToken');
+
+        const fetchMock = mockGraphQlResponse({
+            storefrontOrderByConfirmationToken: {
+                id: 'order-1',
+                code: 'T0001',
+                state: 'PaymentAuthorized',
+                lines: [],
+            },
+        });
+
+        await expect(
+            new ShopApi(market).orderByConfirmationToken('signed-confirmation-token'),
+        ).resolves.toMatchObject({ code: 'T0001' });
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
             variables: Record<string, unknown>;
         };
-        expect(request.variables).toEqual({ code: 'T0001' });
+        expect(request.variables).toEqual({ token: 'signed-confirmation-token' });
     });
 
     it('updates the customer note through active-order custom fields', async () => {

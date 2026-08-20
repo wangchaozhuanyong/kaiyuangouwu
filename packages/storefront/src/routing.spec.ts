@@ -46,13 +46,14 @@ describe('storefront hash routing', () => {
 
     it('opens payment and guest order confirmation routes', () => {
         expect(routeFromHash('#/payment').name).toBe('payment');
-        expect(routeFromHash('#/order-confirmation?id=T0001')).toMatchObject({
+        expect(routeFromHash('#/order-confirmation?id=T0001&token=signed%2Btoken')).toMatchObject({
             name: 'order-confirmation',
             id: 'T0001',
+            token: 'signed+token',
         });
     });
 
-    it('opens temporary legal pages from managed footer links', () => {
+    it('opens managed legal pages from storefront content links', () => {
         expect(routeFromHash('#/legal?id=privacy')).toMatchObject({ name: 'legal', id: 'privacy' });
         expect(routeFromHash('#/legal?id=terms')).toMatchObject({ name: 'legal', id: 'terms' });
     });

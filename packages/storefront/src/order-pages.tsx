@@ -19,6 +19,7 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
 import { languageCodeFor } from './i18n';
+import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { responsiveImageSources } from './responsive-image';
 import { PageSkeleton } from './route-loading';
@@ -86,7 +87,14 @@ export function OrdersPage({
             return loaded < lastPage.totalItems ? loaded : undefined;
         },
         enabled: !!customer && tab !== 'service',
-        staleTime: ROUTE_QUERY_STALE_TIME,
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchInterval: query =>
+            query.state.data?.pages.some(page =>
+                page.items.some(order => orderNeedsStatusRefresh(order.state)),
+            )
+                ? ORDER_STATUS_REFRESH_INTERVAL
+                : false,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const orders = Array.from(

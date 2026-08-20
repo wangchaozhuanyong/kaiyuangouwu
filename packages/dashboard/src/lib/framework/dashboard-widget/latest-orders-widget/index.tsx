@@ -45,11 +45,17 @@ export function LatestOrdersWidget() {
         code: true,
         customer: true,
         state: true,
-        total: true,
+        totalWithTax: true,
         orderPlacedAt: true,
     };
 
-    const columnVisibility = tableSettings?.columnVisibility ?? defaultVisibility;
+    const columnVisibility = {
+        ...defaultVisibility,
+        ...tableSettings?.columnVisibility,
+        // The operational dashboard must always show the customer-facing,
+        // tax-inclusive order amount, including for users with legacy settings.
+        totalWithTax: true,
+    };
 
     return (
         <DashboardBaseWidget
@@ -108,15 +114,9 @@ export function LatestOrdersWidget() {
                             );
                         },
                     },
-                    total: {
-                        meta: {
-                            dependencies: ['currencyCode'],
-                        },
-                        header: t`Order amount`,
-                        cell: OrderMoneyCell,
-                    },
                     totalWithTax: {
                         meta: { dependencies: ['currencyCode'] },
+                        header: t`Order amount`,
                         cell: OrderMoneyCell,
                     },
                     state: { cell: OrderStateCell },

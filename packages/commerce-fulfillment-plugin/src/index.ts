@@ -6,6 +6,7 @@ export type {
 } from './after-sales.constants';
 export { AfterSalesService } from './after-sales.service';
 export type { AfterSalesRequestList } from './after-sales.service';
+export { AuthenticatedOrderByCodeAccessStrategy } from './authenticated-order-by-code-access-strategy';
 export { CommerceFulfillmentPlugin } from './commerce-fulfillment.plugin';
 export {
     physicalOrderQuantity,
@@ -34,4 +35,13 @@ export {
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
 export type { CheckoutFulfillmentSummary } from './fulfillment-classification';
+export {
+    ORDER_CONFIRMATION_TOKEN_CONFIGURATION,
+    OrderConfirmationTokenService,
+} from './order-confirmation-token.service';
+export type {
+    OrderConfirmationTokenConfiguration,
+    OrderConfirmationTokenPayload,
+    OrderConfirmationTokenResult,
+} from './order-confirmation-token.service';
 export type { FulfillmentType } from './types';

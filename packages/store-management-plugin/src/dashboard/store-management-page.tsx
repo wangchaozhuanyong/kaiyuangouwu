@@ -33,7 +33,17 @@ import {
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import { Globe2, ImagePlus, LoaderCircle, Pencil, RefreshCw, Store, X } from 'lucide-react';
+import {
+    Check,
+    CircleAlert,
+    Globe2,
+    ImagePlus,
+    LoaderCircle,
+    Pencil,
+    RefreshCw,
+    Store,
+    X,
+} from 'lucide-react';
 import { ReactNode, useState } from 'react';
 
 import {
@@ -54,6 +64,7 @@ interface ProfileDraft {
     descriptionZh: string;
     descriptionEn: string;
     logoAsset: Asset | null;
+    activationReadiness: StoreProfileRecord['activationReadiness'];
 }
 
 const zhCopy = {
@@ -88,6 +99,9 @@ const zhCopy = {
     saved: '网店资料已保存',
     invalidOrder: '排序必须是大于或等于 0 的整数',
     invalidName: '中英文店铺名称都必须是 1 至 16 个显示单位',
+    readiness: '上线检查',
+    ready: '已满足全部上线条件',
+    notReady: '完成全部检查后才能设为正常运营',
 };
 
 const enCopy: typeof zhCopy = {
@@ -122,6 +136,9 @@ const enCopy: typeof zhCopy = {
     saved: 'Store profile saved',
     invalidOrder: 'Order must be an integer greater than or equal to 0',
     invalidName: 'Both store names must use 1 to 16 display units',
+    readiness: 'Launch checks',
+    ready: 'All launch requirements are complete',
+    notReady: 'Complete every check before activating the store',
 };
 
 export const storeManagementRoute: DashboardRouteDefinition = {
@@ -181,6 +198,7 @@ function StoreManagementPage() {
             descriptionZh: profile.descriptionZh,
             descriptionEn: profile.descriptionEn,
             logoAsset: profile.logoAsset,
+            activationReadiness: profile.activationReadiness,
         });
     };
     const save = () => {
@@ -258,7 +276,8 @@ function StoreManagementPage() {
                         <>
                             <div className="pb-3 text-sm text-muted-foreground">
                                 {profiles.length} {text.stores} ·{' '}
-                                {profiles.filter(profile => profile.status === 'ACTIVE').length} {text.enabled}
+                                {profiles.filter(profile => profile.status === 'ACTIVE').length}{' '}
+                                {text.enabled}
                             </div>
                             <div className="divide-y">
                                 {profiles.map(profile => (
@@ -278,6 +297,7 @@ function StoreManagementPage() {
             <ProfileEditor
                 draft={draft}
                 text={text}
+                isZh={isZh}
                 pending={mutation.isPending}
                 assetPickerOpen={assetPickerOpen}
                 onAssetPickerOpen={setAssetPickerOpen}
@@ -359,6 +379,7 @@ function StatusBadge({ status, text }: Readonly<{ status: StoreProfileStatus; te
 function ProfileEditor({
     draft,
     text,
+    isZh,
     pending,
     assetPickerOpen,
     onAssetPickerOpen,
@@ -368,6 +389,7 @@ function ProfileEditor({
 }: Readonly<{
     draft: ProfileDraft | null;
     text: typeof zhCopy;
+    isZh: boolean;
     pending: boolean;
     assetPickerOpen: boolean;
     onAssetPickerOpen: (open: boolean) => void;
@@ -444,6 +466,32 @@ function ProfileEditor({
                                 onChange={event => update('descriptionEn', event.target.value)}
                             />
                         </Field>
+                        <div className="space-y-3 border-t pt-4 sm:col-span-2">
+                            <div>
+                                <Label>{text.readiness}</Label>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {draft.activationReadiness.ready ? text.ready : text.notReady}
+                                </p>
+                            </div>
+                            <ul className="grid gap-2 sm:grid-cols-2">
+                                {draft.activationReadiness.checks.map(check => (
+                                    <li key={check.code} className="flex items-start gap-2 text-sm">
+                                        {check.ready ? (
+                                            <Check
+                                                className="mt-0.5 size-4 shrink-0 text-success"
+                                                aria-hidden="true"
+                                            />
+                                        ) : (
+                                            <CircleAlert
+                                                className="mt-0.5 size-4 shrink-0 text-destructive"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                        <span>{isZh ? check.message : check.messageEn}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                         <div className="space-y-2 sm:col-span-2">
                             <Label>{text.logo}</Label>
                             <div className="flex flex-wrap items-center gap-3">

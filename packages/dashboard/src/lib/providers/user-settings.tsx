@@ -97,6 +97,7 @@ export const UserSettingsProvider: React.FC<UserSettingsProviderProps> = ({ quer
     const [isReady, setIsReady] = useState(false);
     const previousContentLanguage = useRef(settings.contentLanguage);
     const saveInProgressRef = useRef(false);
+    const failedServerSaveRef = useRef<string | null>(null);
 
     // Load settings from server on mount
     const {
@@ -131,10 +132,14 @@ export const UserSettingsProvider: React.FC<UserSettingsProviderProps> = ({ quer
             // Only update serverSettings after successful save
             setServerSettings(settingsSaved);
             saveInProgressRef.current = false;
+            failedServerSaveRef.current = null;
         },
-        onError: error => {
+        onError: (error, settingsFailed) => {
             console.error('Failed to save user settings to server:', error);
             saveInProgressRef.current = false;
+            // Do not immediately retry an identical value forever. A later
+            // local settings change will produce a new snapshot and retry.
+            failedServerSaveRef.current = JSON.stringify(settingsFailed);
         },
     });
 
@@ -176,8 +181,9 @@ export const UserSettingsProvider: React.FC<UserSettingsProviderProps> = ({ quer
     useEffect(() => {
         if (settingsStoreIsAvailable && isReady && serverSettings && !saveInProgressRef.current) {
             const serverDiffers = JSON.stringify(serverSettings) !== JSON.stringify(settings);
+            const settingsSnapshot = JSON.stringify(settings);
 
-            if (serverDiffers) {
+            if (serverDiffers && failedServerSaveRef.current !== settingsSnapshot) {
                 saveInProgressRef.current = true;
                 saveToServerMutation.mutate(settings);
                 // Don't update serverSettings here - wait for mutation success

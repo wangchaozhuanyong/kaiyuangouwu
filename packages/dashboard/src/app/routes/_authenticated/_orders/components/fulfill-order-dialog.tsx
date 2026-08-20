@@ -19,7 +19,7 @@ import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ConfigurableOperationInput as ConfigurableOperationInputType } from '@vendure/common/lib/generated-types';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -204,11 +204,11 @@ export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDi
         setOpen(false);
     };
 
-    const handleOpen = () => {
-        setOpen(true);
-        // Initialize quantities after a short delay to ensure data is loaded
-        setTimeout(initializeFulfillmentQuantities, 100);
-    };
+    useEffect(() => {
+        if (open) {
+            initializeFulfillmentQuantities();
+        }
+    }, [open, globalSettingsData, fulfillmentHandlersData, order]);
 
     const fulfillmentHandlers = fulfillmentHandlersData?.fulfillmentHandlers;
     const selectedHandler = fulfillmentHandlers?.find(h => h.code === form.watch('handler.code'));
@@ -218,7 +218,7 @@ export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDi
             <Button
                 onClick={e => {
                     e.stopPropagation();
-                    handleOpen();
+                    setOpen(true);
                 }}
                 className="mr-2"
             >

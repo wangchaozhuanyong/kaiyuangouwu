@@ -80,7 +80,10 @@ describe('StoreCommerceSettingsService', () => {
     it('creates isolated zones, tax rates and shipping configuration for the active store', async () => {
         const zoneRepository = { findOne: vi.fn().mockResolvedValue(null) };
         const taxCategory = { id: 'tax-category-1', name: 'Standard', isDefault: true };
-        const taxCategoryRepository = { find: vi.fn().mockResolvedValue([taxCategory]) };
+        const exemptTaxCategory = { id: 'tax-category-2', name: 'Exempt', isDefault: false };
+        const taxCategoryRepository = {
+            find: vi.fn().mockResolvedValue([taxCategory, exemptTaxCategory]),
+        };
         const taxRateRepository = { findOne: vi.fn().mockResolvedValue(null) };
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
@@ -124,6 +127,7 @@ describe('StoreCommerceSettingsService', () => {
         const placeholders = [
             { id: 'standard-method', code: 'standard-shipping' },
             { id: 'express-method', code: 'express-shipping' },
+            { id: 'legacy-standard-method', code: '标准配送' },
         ];
         const shippingMethodService = {
             findAll: vi
@@ -164,6 +168,10 @@ describe('StoreCommerceSettingsService', () => {
             ctx,
             expect.objectContaining({ categoryId: taxCategory.id, zoneId: 'tax-zone-1', value: 6 }),
         );
+        expect(taxRateService.create).not.toHaveBeenCalledWith(
+            ctx,
+            expect.objectContaining({ categoryId: exemptTaxCategory.id }),
+        );
         expect(shippingMethodService.create).toHaveBeenCalledWith(
             ctx,
             expect.objectContaining({
@@ -181,6 +189,12 @@ describe('StoreCommerceSettingsService', () => {
             ctx,
             ShippingMethod,
             'express-method',
+            [channel.id],
+        );
+        expect(channelService.removeFromChannels).toHaveBeenCalledWith(
+            ctx,
+            ShippingMethod,
+            'legacy-standard-method',
             [channel.id],
         );
     });

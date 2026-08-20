@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StoreProfile } from './entities/store-profile.entity';
 import { StoreProfileService } from './store-profile.service';
+import { StoreActivationReadiness } from './types';
 
 function channel(id = 'channel-1') {
     return {
@@ -38,6 +39,10 @@ function profile(overrides: Record<string, unknown> = {}) {
 function createService(
     profileRepository: Record<string, unknown>,
     domainRepository: Record<string, unknown>,
+    readiness: StoreActivationReadiness = {
+        ready: true,
+        checks: [],
+    },
 ) {
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
@@ -46,9 +51,15 @@ function createService(
         }),
     };
     const channelService = { update: vi.fn(async (_ctx, input) => ({ ...channel(), ...input })) };
+    const activationReadinessService = { get: vi.fn().mockResolvedValue(readiness) };
     return {
+        activationReadinessService,
         channelService,
-        service: new StoreProfileService(connection as any, channelService as any),
+        service: new StoreProfileService(
+            connection as any,
+            channelService as any,
+            activationReadinessService as any,
+        ),
     };
 }
 
@@ -86,6 +97,32 @@ describe('StoreProfileService', () => {
         const updated = await service.update({} as any, { id: current.id, status: 'ACTIVE' });
 
         expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false });
+    });
+
+    it('rejects activation until every launch check passes', async () => {
+        const current = profile({ status: 'DRAFT' });
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(async value => value),
+        };
+        const readiness: StoreActivationReadiness = {
+            ready: false,
+            checks: [
+                { code: 'DOMAIN', ready: false, message: '验证并设置主域名', messageEn: '' },
+                {
+                    code: 'PAYMENT',
+                    ready: false,
+                    message: '启用至少一种非测试支付方式',
+                    messageEn: '',
+                },
+            ],
+        };
+        const { service } = createService(profileRepository, {}, readiness);
+
+        await expect(service.update({} as any, { id: current.id, status: 'ACTIVE' })).rejects.toThrow(
+            '验证并设置主域名；启用至少一种非测试支付方式',
+        );
+        expect(profileRepository.save).not.toHaveBeenCalled();
     });
 
     it('allows a SuperAdmin to update both storefront names', async () => {

@@ -52,6 +52,7 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 
 ## Production Deployment
 
+- Canonical runbook: `deploy/DEPLOYMENT_RUNBOOK.md`. Read it before every production release and update it when the topology changes.
 - Production storefront: `https://damatong.net` (also `www.damatong.net`).
 - Production dashboard: `https://console.damatong.net/dashboard/`.
 - AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-06e8d9728be77c331`; security group: `sg-068b47d4049f71176`.

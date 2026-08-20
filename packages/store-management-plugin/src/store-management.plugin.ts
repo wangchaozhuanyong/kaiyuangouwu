@@ -10,12 +10,15 @@ import { MerchantCatalogAccessService } from './merchant-catalog-access.service'
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import { StoreActivationReadinessService } from './store-activation-readiness.service';
 import { StoreCommerceSettingsResolver } from './store-commerce-settings.resolver';
 import { StoreCommerceSettingsService } from './store-commerce-settings.service';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
 import { StoreProvisioningResolver } from './store-provisioning.resolver';
 import { StoreProvisioningService } from './store-provisioning.service';
+import { StorefrontActivationInterceptor } from './storefront-activation.interceptor';
+import { StorefrontActivationService } from './storefront-activation.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
@@ -23,7 +26,9 @@ import { StoreProvisioningService } from './store-provisioning.service';
     providers: [
         MerchantCatalogAccessService,
         MerchantInitialPasswordService,
+        StoreActivationReadinessService,
         StoreProfileService,
+        StorefrontActivationService,
         StoreCommerceSettingsService,
         StoreProvisioningService,
         {
@@ -33,6 +38,10 @@ import { StoreProvisioningService } from './store-provisioning.service';
         {
             provide: APP_INTERCEPTOR,
             useClass: MerchantCatalogAccessInterceptor,
+        },
+        {
+            provide: APP_INTERCEPTOR,
+            useClass: StorefrontActivationInterceptor,
         },
     ],
     configuration: config => {

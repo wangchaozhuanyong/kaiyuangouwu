@@ -9,7 +9,6 @@ export const latestOrderItemFragment = graphql(`
         orderPlacedAt
         code
         state
-        total
         totalWithTax
         currencyCode
         customer {

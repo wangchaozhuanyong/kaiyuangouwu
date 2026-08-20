@@ -7,6 +7,7 @@ import { differenceInDays, subDays } from 'date-fns';
 import { useMemo } from 'react';
 import { DashboardBaseWidget } from '../base-widget.js';
 import { orderSummaryQuery } from './order-summary-widget.graphql.js';
+import { metricSummaryTotal } from './order-summary.js';
 
 const WIDGET_ID = 'orders-summary-widget';
 
@@ -68,11 +69,10 @@ export function OrdersSummaryWidget() {
         return ((current - previous) / previous) * 100;
     };
 
-    const currentTotalOrders = data?.orders.totalItems ?? 0;
-    const previousTotalOrders = previousData?.orders.totalItems ?? 0;
-    const currentRevenue = data?.orders.items.reduce((acc, order) => acc + order.totalWithTax, 0) ?? 0;
-    const previousRevenue =
-        previousData?.orders.items.reduce((acc, order) => acc + order.totalWithTax, 0) ?? 0;
+    const currentTotalOrders = metricSummaryTotal(data?.dashboardMetricSummary, 'OrderCount');
+    const previousTotalOrders = metricSummaryTotal(previousData?.dashboardMetricSummary, 'OrderCount');
+    const currentRevenue = metricSummaryTotal(data?.dashboardMetricSummary, 'OrderTotal');
+    const previousRevenue = metricSummaryTotal(previousData?.dashboardMetricSummary, 'OrderTotal');
 
     const orderChange = calculatePercentChange(currentTotalOrders, previousTotalOrders);
     const revenueChange = calculatePercentChange(currentRevenue, previousRevenue);

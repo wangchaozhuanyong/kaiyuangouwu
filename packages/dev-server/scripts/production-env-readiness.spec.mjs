@@ -20,6 +20,8 @@ function readyEnvironment(overrides = {}) {
         SUPERADMIN_USERNAME: 'operations-admin',
         SUPERADMIN_PASSWORD: 'p4ssword-that-is-long-and-random',
         COOKIE_SECRET: 'cookie-secret-that-is-longer-than-thirty-two-characters',
+        ORDER_CONFIRMATION_TOKEN_SECRET:
+            'order-confirmation-secret-that-is-longer-than-thirty-two-characters',
         DB: 'postgres',
         DB_HOST: 'database.internal',
         DB_PORT: '5432',
@@ -64,7 +66,7 @@ const confirmedControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 26, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 27, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -87,6 +89,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
             VENDURE_CORS_ORIGINS: 'http://localhost:5173',
             SUPERADMIN_USERNAME: 'superadmin',
             SUPERADMIN_PASSWORD: 'replace-with-password',
+            ORDER_CONFIRMATION_TOKEN_SECRET: 'replace-with-a-secret',
             DB: 'sqlite',
             DB_HOST: '127.0.0.1',
             DB_NAME: 'vendure-dev',
@@ -111,6 +114,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('cors-origins'));
     assert.ok(blockers.has('admin-identifier'));
     assert.ok(blockers.has('admin-password'));
+    assert.ok(blockers.has('order-confirmation-token-secret'));
     assert.ok(blockers.has('database-engine'));
     assert.ok(blockers.has('database-connection'));
     assert.ok(blockers.has('digital-delivery'));

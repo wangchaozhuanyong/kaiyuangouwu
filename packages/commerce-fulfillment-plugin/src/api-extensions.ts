@@ -133,6 +133,11 @@ export const shopApiExtensions = gql`
         freeShippingApplied: Boolean!
     }
 
+    type StorefrontOrderConfirmationToken {
+        token: String!
+        expiresAt: DateTime!
+    }
+
     extend type Order {
         checkoutFulfillment: CheckoutFulfillmentSummary!
         checkoutShipping: CheckoutShippingSummary
@@ -140,12 +145,14 @@ export const shopApiExtensions = gql`
     }
 
     extend type Mutation {
+        createStorefrontOrderConfirmationToken: StorefrontOrderConfirmationToken!
         cancelMyAuthorizedOrder(orderId: ID!, reason: String!): Order!
         createAfterSalesRequest(input: CreateAfterSalesRequestInput!): AfterSalesRequest!
         cancelMyAfterSalesRequest(id: ID!): AfterSalesRequest!
     }
 
     extend type Query {
+        storefrontOrderByConfirmationToken(token: String!): Order
         myAfterSalesRequests: [AfterSalesRequest!]!
         myAfterSalesRequest(id: ID!): AfterSalesRequest
     }
@@ -178,6 +185,7 @@ export const adminApiExtensions = gql`
 
     extend type Query {
         afterSalesRequests(options: AfterSalesRequestListOptions): AfterSalesRequestList!
+        physicalFulfillmentTodoCount: Int!
     }
 
     extend type Mutation {

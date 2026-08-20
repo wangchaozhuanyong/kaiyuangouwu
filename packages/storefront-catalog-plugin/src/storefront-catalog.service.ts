@@ -76,6 +76,12 @@ export class StorefrontCatalogService {
             pageQuery.getRawMany<CatalogRow>(),
         ]);
         const productIds = rows.map(row => row.productId);
+        if (productIds.length === 0) {
+            return {
+                items: [],
+                totalItems: Number(countRow?.totalItems ?? 0),
+            };
+        }
         const products = await this.productService.findByIds(ctx, productIds);
         const productsById = new Map(products.map(product => [String(product.id), product]));
 

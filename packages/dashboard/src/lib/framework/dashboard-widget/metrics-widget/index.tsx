@@ -10,6 +10,7 @@ import { RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { DashboardBaseWidget } from '../base-widget.js';
 import { MetricsChart } from './chart.js';
+import { metricLabelDate } from './metric-date.js';
 import { orderChartDataQuery } from './metrics-widget.graphql.js';
 
 enum DATA_TYPES {
@@ -57,7 +58,7 @@ export function MetricsWidget() {
         const { type, entries } = entry;
 
         const values = entries.map(({ label, value }: { label: string; value: number }) => ({
-            name: formatDate(label, { month: 'short', day: 'numeric' }),
+            name: formatDate(metricLabelDate(label), { month: 'short', day: 'numeric' }),
             sales: value,
         }));
 

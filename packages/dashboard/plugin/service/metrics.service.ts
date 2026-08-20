@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CacheService, Logger, Order, RequestContext, TransactionalConnection } from '@vendure/core';
-import { endOfDay, startOfDay } from 'date-fns';
+import { addDays, differenceInCalendarDays, endOfDay, startOfDay } from 'date-fns';
 import { createHash } from 'node:crypto';
 
 import {
@@ -18,8 +18,86 @@ import {
 
 export type MetricData = {
     date: Date;
+    dateKey: string;
     orders: Order[];
+    countedOrders: Order[];
+    netSales: number;
 };
+
+const metricDateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+export function metricDateKey(date: Date, timeZone = process.env.TZ?.trim()): string {
+    const cacheKey = timeZone || 'system';
+    let formatter = metricDateFormatters.get(cacheKey);
+    if (!formatter) {
+        formatter = new Intl.DateTimeFormat('en', {
+            ...(timeZone ? { timeZone } : {}),
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        });
+        metricDateFormatters.set(cacheKey, formatter);
+    }
+    const parts = Object.fromEntries(
+        formatter
+            .formatToParts(date)
+            .filter(part => part.type === 'year' || part.type === 'month' || part.type === 'day')
+            .map(part => [part.type, part.value]),
+    );
+    return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function orderNetSales(order: Pick<Order, 'payments'>): number {
+    return (order.payments ?? []).reduce((orderTotal, payment) => {
+        if (payment.state !== 'Settled') {
+            return orderTotal;
+        }
+        const refunded = (payment.refunds ?? [])
+            .filter(refund => refund.state === 'Settled')
+            .reduce((total, refund) => total + refund.total, 0);
+        return orderTotal + Math.max(0, payment.amount - refunded);
+    }, 0);
+}
+
+export function orderCountsTowardsSales(order: Pick<Order, 'state' | 'payments'>): boolean {
+    return (
+        order.state !== 'Cancelled' &&
+        order.state !== 'Draft' &&
+        (order.payments ?? []).some(payment => payment.state === 'Settled')
+    );
+}
+
+export function buildMetricDataByDay(
+    orders: Order[],
+    startDate: Date,
+    endDate: Date,
+): Map<string, MetricData> {
+    const dataPerDay = new Map<string, MetricData>();
+    const dayCount = differenceInCalendarDays(endDate, startDate) + 1;
+    for (let index = 0; index < dayCount; index++) {
+        const currentDate = addDays(startDate, index);
+        const dateKey = metricDateKey(currentDate);
+        dataPerDay.set(dateKey, {
+            orders: [],
+            countedOrders: [],
+            netSales: 0,
+            date: currentDate,
+            dateKey,
+        });
+    }
+
+    for (const order of orders) {
+        if (!order.orderPlacedAt) continue;
+        const entry = dataPerDay.get(metricDateKey(new Date(order.orderPlacedAt)));
+        if (!entry) continue;
+        entry.orders.push(order);
+        if (orderCountsTowardsSales(order)) {
+            entry.countedOrders.push(order);
+        }
+        entry.netSales += orderNetSales(order);
+    }
+    return dataPerDay;
+}
 
 @Injectable()
 export class MetricsService {
@@ -92,10 +170,6 @@ export class MetricsService {
     async loadData(ctx: RequestContext, startDate: Date, endDate: Date): Promise<Map<string, MetricData>> {
         const orderRepo = this.connection.getRepository(ctx, Order);
 
-        // Calculate number of days between start and end
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-        const nrOfDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
         // Get orders in a loop until we have all
         let skip = 0;
         const take = 1000;
@@ -105,6 +179,8 @@ export class MetricsService {
             const query = orderRepo
                 .createQueryBuilder('order')
                 .leftJoin('order.channels', 'orderChannel')
+                .leftJoinAndSelect('order.payments', 'metricPayment')
+                .leftJoinAndSelect('metricPayment.refunds', 'metricRefund')
                 .where('orderChannel.id=:channelId', { channelId: ctx.channelId })
                 .andWhere('order.orderPlacedAt >= :startDate', {
                     startDate: startDate.toISOString(),
@@ -123,7 +199,7 @@ export class MetricsService {
                 loggerCtx,
             );
             skip += items.length;
-            if (orders.length >= nrOfOrders) {
+            if (items.length === 0 || orders.length >= nrOfOrders) {
                 hasMoreOrders = false;
             }
         }
@@ -132,27 +208,6 @@ export class MetricsService {
             loggerCtx,
         );
 
-        const dataPerDay = new Map<string, MetricData>();
-
-        // Create a map entry for each day in the range
-        for (let i = 0; i < nrOfDays; i++) {
-            const currentDate = new Date(startDate);
-            currentDate.setDate(startDate.getDate() + i);
-            const dateKey = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-
-            // Filter orders for this specific day
-            const ordersForDay = orders.filter(order => {
-                if (!order.orderPlacedAt) return false;
-                const orderDate = new Date(order.orderPlacedAt).toISOString().split('T')[0];
-                return orderDate === dateKey;
-            });
-
-            dataPerDay.set(dateKey, {
-                orders: ordersForDay,
-                date: currentDate,
-            });
-        }
-
-        return dataPerDay;
+        return buildMetricDataByDay(orders, startDate, endDate);
     }
 }

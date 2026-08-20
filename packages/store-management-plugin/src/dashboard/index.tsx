@@ -14,7 +14,7 @@ defineDashboardExtension({
         {
             id: 'merchant-initial-password-gate',
             component: MerchantPasswordGate,
-            location: 'layout',
+            location: 'app',
             order: -100,
         },
     ],

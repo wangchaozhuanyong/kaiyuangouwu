@@ -13,6 +13,7 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
+import { orderStatusRefreshInterval } from './order-refresh';
 import { paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
@@ -39,7 +40,7 @@ export function PaymentPage({
     locale: string;
     language: StorefrontLanguage;
     onCancel: (order: Order) => void;
-    onComplete: (order: Order) => Promise<void>;
+    onComplete: (order: Order, confirmationToken: string) => Promise<void>;
     onNavigate: (route: PaymentRoute) => void;
 }) {
     const isZh = language === 'zh';
@@ -96,8 +97,9 @@ export function PaymentPage({
         setSubmitting(true);
         setPaymentError('');
         try {
+            const confirmation = await api.createOrderConfirmationToken();
             const paidOrder = await api.addPaymentToOrder(selectedMethod);
-            await onComplete(paidOrder);
+            await onComplete(paidOrder, confirmation.token);
         } catch (requestError) {
             setPaymentError(
                 requestError instanceof Error
@@ -321,6 +323,7 @@ export function PaymentPage({
 export function OrderConfirmationPage({
     api,
     code,
+    confirmationToken,
     initialOrder,
     customer,
     market,
@@ -330,6 +333,7 @@ export function OrderConfirmationPage({
 }: {
     api: ShopApi;
     code: string;
+    confirmationToken: string;
     initialOrder: Order | null;
     customer: ActiveCustomer | null;
     market: MarketConfig;
@@ -345,14 +349,16 @@ export function OrderConfirmationPage({
             customer?.id ?? 'guest',
             code,
         ),
-        queryFn: ({ signal }) => api.orderByCode(code, signal),
-        enabled: !!code,
-        initialData: initialOrder?.code === code ? initialOrder : undefined,
-        staleTime: ROUTE_QUERY_STALE_TIME,
+        queryFn: ({ signal }) => api.orderByConfirmationToken(confirmationToken, signal),
+        enabled: Boolean(code && confirmationToken),
+        initialData: confirmationToken && initialOrder?.code === code ? initialOrder : undefined,
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchInterval: query => orderStatusRefreshInterval(query.state.data?.state),
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const order = code ? (orderQuery.data ?? null) : null;
-    const loading = !!code && orderQuery.isPending;
+    const loading = Boolean(code && confirmationToken && orderQuery.isPending);
     const loadError = orderQuery.error instanceof Error ? orderQuery.error.message : '';
 
     if (loading) {
@@ -379,8 +385,12 @@ export function OrderConfirmationPage({
                     detail={
                         loadError ||
                         (isZh
-                            ? '访问时间可能已超过游客查询时限'
-                            : 'The guest access window may have expired.')
+                            ? confirmationToken
+                                ? '确认链接可能已过期，请登录账户后从订单列表查看'
+                                : '确认链接缺少安全令牌，请登录账户后从订单列表查看'
+                            : confirmationToken
+                              ? 'The confirmation link may have expired. Sign in to view your orders.'
+                              : 'The confirmation link is missing its security token. Sign in to view your orders.')
                     }
                     action={loadError ? (isZh ? '重试' : 'Retry') : isZh ? '返回首页' : 'Back to home'}
                     onAction={() => (loadError ? void orderQuery.refetch() : onNavigate({ name: 'home' }))}
@@ -513,7 +523,11 @@ function shippingEstimate(order: Order, language: StorefrontLanguage): string {
               : language === 'zh'
                 ? `预计 ${minimum ?? maximum}–${maximum} 天`
                 : `Estimated ${minimum ?? maximum}–${maximum} days`;
-    return [shipping.methodName, estimate, shipping.freeShippingApplied ? (language === 'zh' ? '免邮' : 'Free') : '']
+    return [
+        shipping.methodName,
+        estimate,
+        shipping.freeShippingApplied ? (language === 'zh' ? '免邮' : 'Free') : '',
+    ]
         .filter(Boolean)
         .join(' · ');
 }

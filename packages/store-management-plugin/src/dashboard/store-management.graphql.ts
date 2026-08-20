@@ -57,6 +57,11 @@ export interface ProvisionStoreResult {
 
 export type StoreProfileStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 
+export interface StoreActivationReadiness {
+    ready: boolean;
+    checks: Array<{ code: string; ready: boolean; message: string; messageEn: string }>;
+}
+
 export interface StoreProfileRecord {
     id: string;
     status: StoreProfileStatus;
@@ -66,6 +71,7 @@ export interface StoreProfileRecord {
     primaryDomain: string | null;
     storefrontUrl: string | null;
     logoAsset: Asset | null;
+    activationReadiness: StoreActivationReadiness;
     channel: {
         id: string;
         code: string;
@@ -94,6 +100,15 @@ const storeProfileFields = gql`
         descriptionEn
         primaryDomain
         storefrontUrl
+        activationReadiness {
+            ready
+            checks {
+                code
+                ready
+                message
+                messageEn
+            }
+        }
         logoAsset {
             id
             createdAt

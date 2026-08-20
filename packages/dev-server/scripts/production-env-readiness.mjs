@@ -184,6 +184,14 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         passed: isConfiguredSecret(env.COOKIE_SECRET, 32),
         detail: isConfiguredSecret(env.COOKIE_SECRET, 32) ? 'configured' : 'missing, short, or placeholder',
     });
+    pushCheck(checks, {
+        id: 'order-confirmation-token-secret',
+        title: '游客订单确认链接签名密钥',
+        passed: isConfiguredSecret(env.ORDER_CONFIRMATION_TOKEN_SECRET, 32),
+        detail: isConfiguredSecret(env.ORDER_CONFIRMATION_TOKEN_SECRET, 32)
+            ? 'configured'
+            : 'missing, short, or placeholder',
+    });
 
     const databaseType = normalized(env.DB);
     const databaseFields = [env.DB_HOST, env.DB_USERNAME, env.DB_PASSWORD, env.DB_NAME];

@@ -28,6 +28,30 @@ export interface ProvisionStoreResult {
 
 export type StoreProfileStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 
+export type StoreActivationCheckCode =
+    | 'PROFILE'
+    | 'DOMAIN'
+    | 'PASSWORD'
+    | 'CATALOG'
+    | 'SUPPORT'
+    | 'PRIVACY'
+    | 'TERMS'
+    | 'TAX'
+    | 'SHIPPING'
+    | 'PAYMENT';
+
+export interface StoreActivationCheck {
+    code: StoreActivationCheckCode;
+    ready: boolean;
+    message: string;
+    messageEn: string;
+}
+
+export interface StoreActivationReadiness {
+    ready: boolean;
+    checks: StoreActivationCheck[];
+}
+
 export interface UpdateStoreProfileInput {
     id: ID;
     storefrontNameZh?: string | null;

@@ -177,4 +177,19 @@ describe('StorefrontCatalogService query construction', () => {
         expect(candidates.limit).toHaveBeenCalledWith(2);
         expect(productService.findByIds).toHaveBeenCalledWith(context, ['2', '1']);
     });
+
+    it('does not hydrate an empty result set', async () => {
+        const candidates = fluentQueryBuilder();
+        const { service, countBuilder, productService } = createCatalogService(candidates);
+        countBuilder.getRawOne.mockResolvedValue({ totalItems: '0' });
+        vi.spyOn(service as any, 'createCandidateQuery').mockReturnValue(candidates);
+
+        await expect(
+            service.find(context, {
+                collectionId: 'collection-1',
+                fulfillmentType: 'DIGITAL',
+            }),
+        ).resolves.toEqual({ items: [], totalItems: 0 });
+        expect(productService.findByIds).not.toHaveBeenCalled();
+    });
 });

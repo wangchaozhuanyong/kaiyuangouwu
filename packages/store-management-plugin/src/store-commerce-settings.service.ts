@@ -25,7 +25,7 @@ import { StoreCommerceConfiguration, UpdateMyStoreCommerceConfigurationInput } f
 const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
 const SHIPPING_CHECKER_CODE = 'supported-destination-eligibility-checker';
 const DEFAULT_FULFILLMENT_HANDLER = 'manual-fulfillment';
-const PLACEHOLDER_SHIPPING_CODES = new Set(['standard-shipping', 'express-shipping']);
+const PLACEHOLDER_SHIPPING_CODES = new Set(['standard-shipping', 'express-shipping', '标准配送']);
 
 const defaultShippingCopy = {
     nameZh: '标准配送',
@@ -141,7 +141,7 @@ export class StoreCommerceSettingsService {
             throw new UserInputError(updatedChannel.message);
         }
 
-        await this.ensureTaxRates(ctx, updatedChannel, taxZone, normalized.taxRate);
+        await this.ensureDefaultTaxRate(ctx, updatedChannel, taxZone, normalized.taxRate);
         const shippingMethod = await this.ensureShippingMethod(ctx, updatedChannel, normalized);
         await this.detachPlaceholderShippingMethods(ctx, updatedChannel, shippingMethod.id);
 
@@ -183,34 +183,33 @@ export class StoreCommerceSettingsService {
         return (await this.zoneService.findOne(ctx, existing.id)) ?? existing;
     }
 
-    private async ensureTaxRates(ctx: RequestContext, channel: Channel, zone: Zone, value: number) {
+    private async ensureDefaultTaxRate(ctx: RequestContext, channel: Channel, zone: Zone, value: number) {
         const categories = await this.connection.getRepository(ctx, TaxCategory).find({
             order: { isDefault: 'DESC', createdAt: 'ASC' },
         });
-        if (categories.length === 0) {
+        const category = categories.find(item => item.isDefault) ?? categories[0];
+        if (!category) {
             throw new UserInputError('系统尚未建立商品税种，无法保存店铺税率');
         }
-        for (const category of categories) {
-            const existing = await this.findTaxRate(ctx, zone.id, category.id);
-            const name = `${channel.code} ${category.name} tax`;
-            if (existing) {
-                await this.taxRateService.update(ctx, {
-                    id: existing.id,
-                    name,
-                    enabled: true,
-                    value,
-                    categoryId: category.id,
-                    zoneId: zone.id,
-                });
-            } else {
-                await this.taxRateService.create(ctx, {
-                    name,
-                    enabled: true,
-                    value,
-                    categoryId: category.id,
-                    zoneId: zone.id,
-                });
-            }
+        const existing = await this.findTaxRate(ctx, zone.id, category.id);
+        const name = `${channel.code} ${category.name} tax`;
+        if (existing) {
+            await this.taxRateService.update(ctx, {
+                id: existing.id,
+                name,
+                enabled: true,
+                value,
+                categoryId: category.id,
+                zoneId: zone.id,
+            });
+        } else {
+            await this.taxRateService.create(ctx, {
+                name,
+                enabled: true,
+                value,
+                categoryId: category.id,
+                zoneId: zone.id,
+            });
         }
     }
 

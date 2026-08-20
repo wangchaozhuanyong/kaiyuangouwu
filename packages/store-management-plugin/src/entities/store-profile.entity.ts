@@ -1,7 +1,7 @@
 import { Asset, Channel, DeepPartial, EntityId, ID, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
-import { StoreProfileStatus } from '../types';
+import { StoreActivationReadiness, StoreProfileStatus } from '../types';
 
 @Entity({ name: 'store_profile' })
 @Index('IDX_store_profile_channel', ['channelId'], { unique: true })
@@ -44,4 +44,6 @@ export class StoreProfile extends VendureEntity {
     primaryDomain?: string | null;
 
     storefrontUrl?: string | null;
+
+    activationReadiness?: StoreActivationReadiness;
 }

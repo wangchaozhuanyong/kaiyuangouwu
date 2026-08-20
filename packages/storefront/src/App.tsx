@@ -6,7 +6,9 @@ import {
     ChevronRight,
     CircleAlert,
     CircleCheck,
+    ClipboardList,
     Clock3,
+    Cloud,
     Coffee,
     Download,
     Fingerprint,
@@ -65,6 +67,8 @@ import {
     resolveStorefrontLanguage,
     uiCopy,
 } from './i18n';
+import { resolveManagedLegalDocument } from './legal-content';
+import { orderStatusRefreshInterval } from './order-refresh';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -476,7 +480,9 @@ export function App() {
             return order;
         },
         enabled: route.name === 'order-detail' && !!route.id,
-        staleTime: ROUTE_QUERY_STALE_TIME,
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchInterval: query => orderStatusRefreshInterval((query.state.data as Order | undefined)?.state),
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const routeOrder = orderQuery.data ?? null;
@@ -1013,6 +1019,7 @@ export function App() {
         const [nextCustomer, nextCart] = await Promise.all([api.activeCustomer(), api.cart()]);
         setCustomer(nextCustomer);
         setCart(nextCart);
+        setCartError(null);
         setCheckoutOrder(nextCart.checkoutOrder);
         notify(isZh ? '登录成功' : 'Signed in');
         navigate({ name: 'account' }, true);
@@ -1261,6 +1268,7 @@ export function App() {
                 return (
                     <CartPage
                         cart={cart}
+                        customer={customer}
                         products={products}
                         market={market}
                         locale={locale}
@@ -1411,7 +1419,7 @@ export function App() {
                             locale={locale}
                             language={language}
                             onCancel={order => void reopenPendingOrder(order)}
-                            onComplete={async order => {
+                            onComplete={async (order, confirmationToken) => {
                                 setCompletedOrder(order);
                                 setCheckoutOrder(order);
                                 await invalidateCustomerRouteQueries();
@@ -1429,7 +1437,14 @@ export function App() {
                                 } catch {
                                     // Payment succeeded; cart refresh can recover on the next page load.
                                 }
-                                navigate({ name: 'order-confirmation', id: order.code }, true);
+                                navigate(
+                                    {
+                                        name: 'order-confirmation',
+                                        id: order.code,
+                                        token: confirmationToken,
+                                    },
+                                    true,
+                                );
                             }}
                             onNavigate={navigate}
                         />
@@ -1441,6 +1456,7 @@ export function App() {
                         <LazyOrderConfirmationPage
                             api={api}
                             code={route.id ?? ''}
+                            confirmationToken={route.token ?? ''}
                             initialOrder={completedOrder}
                             customer={customer}
                             market={market}
@@ -1704,19 +1720,13 @@ export function App() {
                     </AuthPageBoundary>
                 );
             case 'legal':
-                return import.meta.env.DEV ? (
-                    <TemporaryLegalPage
+                return (
+                    <ManagedLegalPage
                         kind={route.id === 'terms' ? 'terms' : 'privacy'}
                         language={language}
                         storefrontName={storefrontName}
+                        contentBlocks={contentBlocks}
                         onBack={goBack}
-                    />
-                ) : (
-                    <NotFoundPage
-                        language={language}
-                        storefrontName={storefrontName}
-                        onBack={goBack}
-                        onNavigate={navigate}
                     />
                 );
             case 'not-found':
@@ -2290,28 +2300,33 @@ function ManagedContentItemButton({
         item.targetType === 'PRODUCT' ? products.find(product => product.id === item.targetValue) : undefined;
     return (
         <button
+            className={`managed-content-card${targetProduct ? ' is-product-media' : ''}`}
             type="button"
             disabled={disabled}
             onClick={() => onContentTarget(item.targetType, item.targetValue)}
         >
-            {item.imageUrl ? (
-                <SafeImage
-                    src={item.imageUrl}
-                    fallbackSrc={productImage(targetProduct) ?? undefined}
-                    alt=""
-                    imageKind="card"
-                    loading="lazy"
-                />
-            ) : (
-                <span className="managed-content-placeholder">
-                    <LayoutGrid aria-hidden="true" />
-                </span>
-            )}
-            <span className="managed-content-copy">
-                <strong>{item.label}</strong>
-                {item.description && <small>{item.description}</small>}
+            <span className="managed-content-media" aria-hidden="true">
+                {item.imageUrl ? (
+                    <SafeImage
+                        src={item.imageUrl}
+                        fallbackSrc={productImage(targetProduct) ?? undefined}
+                        alt=""
+                        imageKind="card"
+                        loading="lazy"
+                    />
+                ) : (
+                    <span className="managed-content-placeholder">
+                        <LayoutGrid aria-hidden="true" />
+                    </span>
+                )}
             </span>
-            {!disabled && <ChevronRight aria-hidden="true" />}
+            <span className="managed-content-copy">
+                <span>
+                    <strong>{item.label}</strong>
+                    {item.description && <small>{item.description}</small>}
+                </span>
+                {!disabled && <ChevronRight aria-hidden="true" />}
+            </span>
         </button>
     );
 }
@@ -2853,6 +2868,7 @@ function CategoryPage(props: CategoryPageProps) {
 
 interface CartPageProps {
     cart: StorefrontCart | null;
+    customer: ActiveCustomer | null;
     products: Product[];
     market: MarketConfig;
     locale: string;
@@ -2877,6 +2893,7 @@ interface CartPageProps {
 function CartPage(props: CartPageProps) {
     const {
         cart,
+        customer,
         products,
         market,
         locale,
@@ -2986,8 +3003,10 @@ function CartPage(props: CartPageProps) {
                 </div>
             )}
 
-            {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
-            {locked && (
+            {customer && error && (
+                <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />
+            )}
+            {customer && locked && (
                 <div className="cart-pending-actions">
                     <InlineError
                         message={
@@ -3003,8 +3022,30 @@ function CartPage(props: CartPageProps) {
                     </button>
                 </div>
             )}
-            {!cart && loading ? (
+            {loading && (!customer || !cart) ? (
                 <ListSkeleton />
+            ) : !customer ? (
+                <section className="empty-state cart-auth-state" aria-labelledby="cart-auth-title">
+                    <span>
+                        <ShoppingBag />
+                    </span>
+                    <strong id="cart-auth-title">
+                        {isZh ? '登录后使用购物车' : 'Sign in to use your cart'}
+                    </strong>
+                    <small>
+                        {isZh
+                            ? '请先登录或注册账户，再添加商品并完成结算'
+                            : 'Sign in or create an account to add products and complete checkout'}
+                    </small>
+                    <div className="guest-profile-actions cart-auth-actions">
+                        <button type="button" onClick={() => onNavigate({ name: 'login' })}>
+                            {isZh ? '登录' : 'Sign in'}
+                        </button>
+                        <button type="button" onClick={() => onNavigate({ name: 'register' })}>
+                            {isZh ? '注册账户' : 'Create account'}
+                        </button>
+                    </div>
+                </section>
             ) : !lines.length ? (
                 <EmptyState
                     icon={<ShoppingBag />}
@@ -3278,58 +3319,75 @@ function AccountPage(props: AccountPageProps) {
 
     return (
         <main className="page account-page">
-            <header className="topbar account-topbar">
-                <h1 className="topbar-title">{isZh ? '我的' : 'Account'}</h1>
-                <div>
-                    <button
-                        type="button"
-                        onClick={() =>
-                            customer
-                                ? onNavigate({ name: 'account-security' })
-                                : onNavigate({ name: 'login' })
-                        }
-                        aria-label={isZh ? '设置' : 'Settings'}
-                    >
-                        <Settings />
-                    </button>
+            <section
+                className={`account-identity-hero${customer ? ' is-authenticated' : ' is-guest'}`}
+                aria-labelledby={customer ? undefined : 'guest-account-title'}
+            >
+                <div className="account-hero-brand" aria-label={storefrontName}>
+                    <span className="account-hero-brand-mark">
+                        <Cloud aria-hidden="true" />
+                    </span>
+                    <strong>{storefrontName.replace(/ai$/i, '')}</strong>
+                    {/ai$/i.test(storefrontName) && <b>{storefrontName.slice(-2)}</b>}
                 </div>
-            </header>
-            <section className="profile-band">
-                <span className="avatar">
-                    {customerName ? customerName.slice(0, 1).toUpperCase() : <UserRound />}
-                </span>
-                <button
-                    type="button"
-                    onClick={() =>
-                        customer ? onNavigate({ name: 'account-security' }) : onNavigate({ name: 'login' })
-                    }
-                >
-                    <strong>
-                        {customer
-                            ? isZh
-                                ? `${customerName}，你好`
-                                : `Hello, ${customerName}`
-                            : isZh
-                              ? `登录${storefrontName}账户`
-                              : `Sign in to ${storefrontName}`}
-                    </strong>
-                    <small>
-                        {customer
-                            ? customer.emailAddress
-                            : isZh
-                              ? '查看订单、地址和售后进度'
-                              : 'View orders, addresses and support'}
-                    </small>
-                </button>
-                <ChevronRight />
+                {customer ? (
+                    <div className="account-hero-customer">
+                        <button
+                            className="account-hero-customer-summary"
+                            type="button"
+                            onClick={() => onNavigate({ name: 'account-security' })}
+                        >
+                            <span className="account-hero-avatar">
+                                {customerName.slice(0, 1).toUpperCase()}
+                            </span>
+                            <span>
+                                <strong>{isZh ? `${customerName}，你好` : `Hello, ${customerName}`}</strong>
+                                <small>{isZh ? '普通会员' : 'Member'}</small>
+                                <em>{customer.emailAddress}</em>
+                            </span>
+                        </button>
+                        <div className="account-hero-manage">
+                            <button
+                                type="button"
+                                onClick={() => onNavigate({ name: 'account-security' })}
+                            >
+                                {isZh ? '管理账户' : 'Manage account'}
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onNavigate({ name: 'account-security' })}
+                                aria-label={isZh ? '账户设置' : 'Account settings'}
+                            >
+                                <Settings aria-hidden="true" />
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="account-hero-guest">
+                        <div>
+                            <h1 id="guest-account-title">
+                                {isZh ? `登录${storefrontName}账户` : `Sign in to ${storefrontName}`}
+                            </h1>
+                            <p>
+                                {isZh
+                                    ? '连接订单、服务与智能体验'
+                                    : 'Connect orders, services and intelligent experiences'}
+                            </p>
+                        </div>
+                        <div className="account-hero-actions">
+                            <button type="button" onClick={() => onNavigate({ name: 'login' })}>
+                                {isZh ? '登录' : 'Sign in'}
+                            </button>
+                            <button type="button" onClick={() => onNavigate({ name: 'register' })}>
+                                {isZh ? '注册账户' : 'Create account'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </section>
 
             <section className="account-section order-shortcuts">
-                <SectionHeader
-                    title={isZh ? '我的订单' : 'My orders'}
-                    action={isZh ? '全部订单' : 'All orders'}
-                    onAction={() => onNavigate({ name: 'orders', tab: 'all' })}
-                />
                 <nav>
                     <AccountShortcut
                         icon={<WalletCards />}
@@ -3354,6 +3412,12 @@ function AccountPage(props: AccountPageProps) {
                         label={isZh ? '退款/售后' : 'After-sales'}
                         count={activeAfterSalesCount}
                         onClick={() => onNavigate({ name: 'orders', tab: 'service' })}
+                    />
+                    <AccountShortcut
+                        icon={<ClipboardList />}
+                        label={isZh ? '全部订单' : 'All orders'}
+                        count={0}
+                        onClick={() => onNavigate({ name: 'orders', tab: 'all' })}
                     />
                 </nav>
             </section>
@@ -5219,101 +5283,57 @@ function NotFoundPage({
         </main>
     );
 }
-function TemporaryLegalPage({
+function ManagedLegalPage({
     kind,
     language,
     storefrontName,
+    contentBlocks,
     onBack,
 }: {
     kind: 'privacy' | 'terms';
     language: StorefrontLanguage;
     storefrontName: string;
+    contentBlocks: StorefrontContentBlock[];
     onBack: () => void;
 }) {
     const isZh = language === 'zh';
     const isPrivacy = kind === 'privacy';
-    const title = isPrivacy ? (isZh ? '隐私说明' : 'Privacy notice') : isZh ? '使用条款' : 'Terms of use';
-    const sections = isPrivacy
+    const fallbackTitle = isPrivacy
         ? isZh
-            ? [
-                  ['适用范围', '本页仅用于本地开发和界面验证，描述演示环境中的账户、购物车和订单数据。'],
-                  ['演示数据', '临时商品、价格、订单和客户资料只用于功能测试，不应录入真实敏感信息。'],
-                  [
-                      '上线前要求',
-                      '正式上线前必须由业务与法务负责人根据实际数据流向、保留期限和用户权利替换本页。',
-                  ],
-              ]
-            : [
-                  [
-                      'Scope',
-                      'This page exists only for local development and interface testing. It describes sample account, cart and order data in the demo environment.',
-                  ],
-                  [
-                      'Demo data',
-                      'Temporary products, prices, orders and customer records are for functional testing only. Do not enter real sensitive information.',
-                  ],
-                  [
-                      'Before launch',
-                      'The business and legal owners must replace this page before production based on actual data flows, retention periods and customer rights.',
-                  ],
-              ]
+            ? '隐私说明'
+            : 'Privacy notice'
         : isZh
-          ? [
-                ['演示用途', '本页只是商品浏览、购物车、结算和数字交付流程的临时说明。'],
-                [
-                    '商品与价格',
-                    '当前商品名称、图片、库存、价格与配送信息均为本地测试数据，不构成交易要约或承诺。',
-                ],
-                [
-                    '上线前要求',
-                    '正式条款应根据实际运营主体、退换货规则、支付、配送和数字商品履约方式另行审核。',
-                ],
-            ]
-          : [
-                [
-                    'Demo purpose',
-                    'This page is temporary copy for testing product browsing, cart, checkout and digital-delivery flows.',
-                ],
-                [
-                    'Products and prices',
-                    'Current names, images, stock, prices and delivery information are local test data. They do not form an offer or commitment.',
-                ],
-                [
-                    'Before launch',
-                    'Reviewed terms must be prepared for the real operator, returns, payments, shipping and digital fulfilment model before production.',
-                ],
-            ];
+          ? '使用条款'
+          : 'Terms of use';
+    const document = resolveManagedLegalDocument(contentBlocks, kind, fallbackTitle);
+    const title = document?.title ?? fallbackTitle;
 
     return (
-        <main className="page subpage legal-draft-page">
+        <main className="page subpage legal-page">
             <SubHeader title={title} language={language} onBack={onBack} />
-            <article className="legal-draft-content">
-                <header className="legal-draft-intro">
-                    <span>
-                        <CircleAlert aria-hidden="true" />
-                        {isZh ? '临时演示文本' : 'Temporary demo copy'}
-                    </span>
+            <article className="legal-managed-content">
+                <header className="legal-managed-intro">
                     <h1>{title}</h1>
-                    <p>
-                        {isZh
-                            ? '这不是已审核的法律文件，不能作为正式站点政策使用。'
-                            : 'This is not a reviewed legal document and must not be used as a production policy.'}
-                    </p>
+                    {document?.subtitle && <p>{document.subtitle}</p>}
                 </header>
-                <div className="legal-draft-sections">
-                    {sections.map(([sectionTitle, body], index) => (
-                        <section key={sectionTitle}>
-                            <small>{String(index + 1).padStart(2, '0')}</small>
-                            <div>
-                                <h2>{sectionTitle}</h2>
-                                <p>{body}</p>
-                            </div>
-                        </section>
-                    ))}
-                </div>
+                {document ? (
+                    <div className="legal-managed-body">{document.body}</div>
+                ) : (
+                    <div className="legal-managed-empty" role="status">
+                        <CircleAlert aria-hidden="true" />
+                        <div>
+                            <strong>{isZh ? '法律文件暂未发布' : 'Legal document not published'}</strong>
+                            <p>
+                                {isZh
+                                    ? '请联系店铺客服获取最新政策内容。'
+                                    : 'Contact store support for the current policy.'}
+                            </p>
+                        </div>
+                    </div>
+                )}
                 <footer>
                     <strong>{storefrontName}</strong>
-                    <span>{isZh ? '本地开发环境' : 'Local development environment'}</span>
+                    <span>{title}</span>
                 </footer>
             </article>
         </main>

@@ -49,10 +49,23 @@ export const adminApiExtensions = gql`
         logoAsset: Asset
         primaryDomain: String
         storefrontUrl: String
+        activationReadiness: StoreActivationReadiness!
     }
 
     type MerchantInitialPasswordStatus {
         mustChangePassword: Boolean!
+    }
+
+    type StoreActivationCheck {
+        code: String!
+        ready: Boolean!
+        message: String!
+        messageEn: String!
+    }
+
+    type StoreActivationReadiness {
+        ready: Boolean!
+        checks: [StoreActivationCheck!]!
     }
 
     input UpdateStoreProfileInput {
