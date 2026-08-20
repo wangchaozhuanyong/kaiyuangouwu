@@ -1,4 +1,4 @@
-import type { ID } from '@vendure/core';
+import type { CurrencyCode, ID } from '@vendure/core';
 
 export interface ProvisionStoreAdministratorInput {
     firstName: string;
@@ -45,4 +45,47 @@ export interface UpdateMyStoreProfileInput {
     descriptionZh?: string | null;
     descriptionEn?: string | null;
     logoAssetId?: ID | null;
+}
+
+export interface StoreCommerceConfiguration {
+    channelId: ID;
+    channelCode: string;
+    currencyCode: CurrencyCode;
+    pricesIncludeTax: boolean;
+    countryCode: string | null;
+    taxRate: number;
+    taxCategoryName: string | null;
+    taxZoneName: string | null;
+    shippingZoneName: string | null;
+    shippingMethodId: ID | null;
+    shippingMethodCode: string;
+    shippingMethodNameZh: string;
+    shippingMethodNameEn: string;
+    shippingDescriptionZh: string;
+    shippingDescriptionEn: string;
+    baseRate: number;
+    freeShippingThreshold: number;
+    shippingTaxRate: number;
+    shippingPriceIncludesTax: boolean;
+    estimateMinDays: number;
+    estimateMaxDays: number;
+    blockedPostalPrefixes: string;
+    ready: boolean;
+}
+
+export interface UpdateMyStoreCommerceConfigurationInput {
+    pricesIncludeTax: boolean;
+    countryCode: string;
+    taxRate: number;
+    shippingMethodNameZh: string;
+    shippingMethodNameEn: string;
+    shippingDescriptionZh: string;
+    shippingDescriptionEn: string;
+    baseRate: number;
+    freeShippingThreshold: number;
+    shippingTaxRate: number;
+    shippingPriceIncludesTax: boolean;
+    estimateMinDays: number;
+    estimateMaxDays: number;
+    blockedPostalPrefixes: string;
 }

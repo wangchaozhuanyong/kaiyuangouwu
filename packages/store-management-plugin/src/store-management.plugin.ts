@@ -10,6 +10,8 @@ import { MerchantCatalogAccessService } from './merchant-catalog-access.service'
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import { StoreCommerceSettingsResolver } from './store-commerce-settings.resolver';
+import { StoreCommerceSettingsService } from './store-commerce-settings.service';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
 import { StoreProvisioningResolver } from './store-provisioning.resolver';
@@ -22,6 +24,7 @@ import { StoreProvisioningService } from './store-provisioning.service';
         MerchantCatalogAccessService,
         MerchantInitialPasswordService,
         StoreProfileService,
+        StoreCommerceSettingsService,
         StoreProvisioningService,
         {
             provide: APP_INTERCEPTOR,
@@ -38,7 +41,12 @@ import { StoreProvisioningService } from './store-provisioning.service';
     },
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [MerchantInitialPasswordResolver, StoreProvisioningResolver, StoreProfileAdminResolver],
+        resolvers: [
+            MerchantInitialPasswordResolver,
+            StoreProvisioningResolver,
+            StoreProfileAdminResolver,
+            StoreCommerceSettingsResolver,
+        ],
     },
     dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',

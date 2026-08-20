@@ -74,9 +74,53 @@ export const adminApiExtensions = gql`
         logoAssetId: ID
     }
 
+    type StoreCommerceConfiguration {
+        channelId: ID!
+        channelCode: String!
+        currencyCode: CurrencyCode!
+        pricesIncludeTax: Boolean!
+        countryCode: String
+        taxRate: Float!
+        taxCategoryName: String
+        taxZoneName: String
+        shippingZoneName: String
+        shippingMethodId: ID
+        shippingMethodCode: String!
+        shippingMethodNameZh: String!
+        shippingMethodNameEn: String!
+        shippingDescriptionZh: String!
+        shippingDescriptionEn: String!
+        baseRate: Money!
+        freeShippingThreshold: Money!
+        shippingTaxRate: Float!
+        shippingPriceIncludesTax: Boolean!
+        estimateMinDays: Int!
+        estimateMaxDays: Int!
+        blockedPostalPrefixes: String!
+        ready: Boolean!
+    }
+
+    input UpdateMyStoreCommerceConfigurationInput {
+        pricesIncludeTax: Boolean!
+        countryCode: String!
+        taxRate: Float!
+        shippingMethodNameZh: String!
+        shippingMethodNameEn: String!
+        shippingDescriptionZh: String!
+        shippingDescriptionEn: String!
+        baseRate: Money!
+        freeShippingThreshold: Money!
+        shippingTaxRate: Float!
+        shippingPriceIncludesTax: Boolean!
+        estimateMinDays: Int!
+        estimateMaxDays: Int!
+        blockedPostalPrefixes: String!
+    }
+
     extend type Query {
         storeProfiles: [StoreProfile!]!
         myStoreProfile: StoreProfile!
+        myStoreCommerceConfiguration: StoreCommerceConfiguration!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
     }
 
@@ -84,6 +128,9 @@ export const adminApiExtensions = gql`
         provisionStore(input: ProvisionStoreInput!): ProvisionStoreResult!
         updateStoreProfile(input: UpdateStoreProfileInput!): StoreProfile!
         updateMyStoreProfile(input: UpdateMyStoreProfileInput!): StoreProfile!
+        updateMyStoreCommerceConfiguration(
+            input: UpdateMyStoreCommerceConfigurationInput!
+        ): StoreCommerceConfiguration!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
     }
 `;
