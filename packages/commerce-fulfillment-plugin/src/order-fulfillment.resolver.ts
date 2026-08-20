@@ -5,6 +5,7 @@ import {
     Order,
     Permission,
     RequestContext,
+    ShippingMethod,
     Transaction,
     TransactionalConnection,
 } from '@vendure/core';
@@ -36,6 +37,7 @@ export class OrderFulfillmentResolver {
                 'lines.productVariant',
                 'shippingLines',
                 'shippingLines.shippingMethod',
+                'shippingLines.shippingMethod.translations',
             ],
         });
         const shippingLine = orderWithShipping.shippingLines?.[0];
@@ -49,7 +51,7 @@ export class OrderFulfillmentResolver {
         const freeShippingThreshold = optionalNonNegativeInteger(metadata.freeShippingThreshold);
         return {
             methodCode: shippingLine.shippingMethod.code,
-            methodName: shippingLine.shippingMethod.name,
+            methodName: checkoutShippingMethodName(ctx, shippingLine.shippingMethod),
             priceWithTax: shippingLine.discountedPriceWithTax,
             estimateMinDays,
             estimateMaxDays,
@@ -81,6 +83,18 @@ export class CustomerOrderCancellationResolver {
     ) {
         return this.cancellationService.cancelAuthorizedPhysicalOrder(ctx, orderId, reason);
     }
+}
+
+function checkoutShippingMethodName(ctx: RequestContext, shippingMethod: ShippingMethod): string {
+    const translations = shippingMethod.translations ?? [];
+    const localizedName = translations
+        .find(translation => translation.languageCode === ctx.languageCode)
+        ?.name?.trim();
+    const directName = shippingMethod.name?.trim();
+    const translatedName = translations
+        .map(translation => translation.name?.trim())
+        .find((name): name is string => Boolean(name));
+    return localizedName || directName || translatedName || shippingMethod.code;
 }
 
 function optionalNonNegativeInteger(value: unknown): number | null {
