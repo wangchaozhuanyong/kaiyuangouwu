@@ -1,0 +1,171 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { StorefrontReviewService } from './storefront-review.service';
+
+function createHarness(
+    overrides: {
+        orderState?: string;
+        fulfillmentType?: 'physical' | 'digital';
+        existingReview?: any;
+        reviewState?: string;
+    } = {},
+) {
+    const customer = {
+        id: 'customer-1',
+        firstName: '王',
+        lastName: '小明',
+        emailAddress: 'customer@example.com',
+    } as any;
+    const product = { id: 'product-1', name: 'Production guide', translations: [] } as any;
+    const variant = {
+        id: 'variant-1',
+        productId: product.id,
+        product,
+        name: 'Standard edition',
+        sku: 'GUIDE-1',
+        translations: [],
+        customFields: { fulfillmentType: overrides.fulfillmentType ?? 'physical' },
+    } as any;
+    const order = {
+        id: 'order-1',
+        state: overrides.orderState ?? 'Delivered',
+        customerId: customer.id,
+        channels: [{ id: 'channel-1' }],
+    } as any;
+    const line = {
+        id: 'line-1',
+        order,
+        productVariant: variant,
+        customFields: { fulfillmentTypeSnapshot: overrides.fulfillmentType ?? 'physical' },
+    } as any;
+    let savedReview: any;
+    const reviewRepository = {
+        findOne: vi.fn(async (options: any) => {
+            if (options.where.orderLineId) return overrides.existingReview ?? null;
+            if (!savedReview) return null;
+            return { ...savedReview, state: overrides.reviewState ?? savedReview.state };
+        }),
+        find: vi.fn().mockResolvedValue([]),
+        findAndCount: vi.fn().mockResolvedValue([[], 0]),
+        average: vi.fn().mockResolvedValue(4.5),
+        save: vi.fn(async (review: any) => {
+            savedReview = { ...review, id: 'review-1', createdAt: new Date(), updatedAt: new Date() };
+            return savedReview;
+        }),
+        update: vi.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const orderLineQueryBuilder = {
+        setLock: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getOne: vi.fn().mockResolvedValue(line),
+    };
+    const orderLineRepository = {
+        createQueryBuilder: vi.fn().mockReturnValue(orderLineQueryBuilder),
+        findOne: vi.fn().mockResolvedValue(line),
+        find: vi.fn().mockResolvedValue([line]),
+    };
+    const connection = {
+        getRepository: vi.fn((_ctx: any, entity: any) => {
+            if (entity.name === 'StorefrontReview') return reviewRepository;
+            if (entity.name === 'OrderLine') return orderLineRepository;
+            throw new Error(`Unexpected entity ${entity.name}`);
+        }),
+    };
+    const customerService = { findOneByUserId: vi.fn().mockResolvedValue(customer) };
+    const service = new StorefrontReviewService(connection as any, customerService as any);
+    const ctx = {
+        activeUserId: 'user-1',
+        channelId: 'channel-1',
+        channel: { id: 'channel-1' },
+        languageCode: 'en',
+    } as any;
+    return { service, ctx, reviewRepository, orderLineQueryBuilder };
+}
+
+const validInput = {
+    orderLineId: 'line-1',
+    rating: 5,
+    title: 'Very useful',
+    body: 'The guide was clear, practical, and easy to follow.',
+};
+
+describe('StorefrontReviewService', () => {
+    it('returns an exact database aggregate for public product ratings', async () => {
+        const test = createHarness();
+
+        await expect(test.service.findApprovedForProduct(test.ctx, 'product-1')).resolves.toMatchObject({
+            items: [],
+            totalItems: 0,
+            averageRating: 4.5,
+        });
+    });
+
+    it('finds review candidates independently of the account order preview limit', async () => {
+        const test = createHarness();
+
+        await expect(test.service.findCandidates(test.ctx)).resolves.toEqual([
+            expect.objectContaining({
+                orderLineId: 'line-1',
+                orderId: 'order-1',
+                productId: 'product-1',
+                productName: 'Production guide',
+                fulfillmentType: 'physical',
+            }),
+        ]);
+    });
+
+    it('creates a verified pending review from a customer-owned delivered order line', async () => {
+        const test = createHarness();
+
+        const result = await test.service.submit(test.ctx, validInput);
+
+        expect(result).toMatchObject({
+            id: 'review-1',
+            state: 'PENDING',
+            rating: 5,
+            productId: 'product-1',
+            orderLineId: 'line-1',
+        });
+        expect(result.customerName).toBe('王***明');
+        expect(test.orderLineQueryBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
+    });
+
+    it('requires physical orders to be delivered', async () => {
+        const test = createHarness({ orderState: 'Shipped' });
+
+        await expect(test.service.submit(test.ctx, validInput)).rejects.toThrow(
+            '实物商品需在订单完成后才能评价',
+        );
+    });
+
+    it('allows paid digital products to be reviewed', async () => {
+        const test = createHarness({ fulfillmentType: 'digital', orderState: 'PaymentSettled' });
+
+        await expect(test.service.submit(test.ctx, validInput)).resolves.toMatchObject({ state: 'PENDING' });
+    });
+
+    it('prevents duplicate reviews for the same order line', async () => {
+        const test = createHarness({ existingReview: { id: 'existing-review' } });
+
+        await expect(test.service.submit(test.ctx, validInput)).rejects.toThrow('该订单商品已经提交过评价');
+    });
+
+    it('uses guarded moderation and requires a rejection reason', async () => {
+        const test = createHarness({ reviewState: 'PENDING' });
+        await test.service.submit(test.ctx, validInput);
+
+        await expect(
+            test.service.moderate(test.ctx, { id: 'review-1', state: 'REJECTED', response: '' }),
+        ).rejects.toThrow('驳回评价时请填写');
+
+        await test.service.moderate(test.ctx, {
+            id: 'review-1',
+            state: 'APPROVED',
+            response: '感谢您的真实反馈。',
+        });
+        expect(test.reviewRepository.update).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'review-1', state: 'PENDING' }),
+            expect.objectContaining({ state: 'APPROVED', merchantResponse: '感谢您的真实反馈。' }),
+        );
+    });
+});
