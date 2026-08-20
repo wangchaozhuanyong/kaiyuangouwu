@@ -2,7 +2,9 @@ import { msg } from '@lingui/core/macro';
 import { defineDashboardExtension, NavMenuConfig, NavMenuItem, NavMenuSection } from '@vendure/dashboard';
 import { Boxes, ShieldCheck } from 'lucide-react';
 
+import { afterSalesRoute } from './after-sales-page';
 import { OperationsTodoWidget } from './operations-todo-widget';
+import { reviewModerationRoute } from './review-moderation-page';
 import { StoreOverviewWidget } from './store-overview-widget';
 
 const navigationMessages = {
@@ -66,6 +68,7 @@ function takeItems(config: NavMenuConfig, ids: string[]): NavMenuItem[] {
 }
 
 defineDashboardExtension({
+    routes: [afterSalesRoute, reviewModerationRoute],
     widgets: [
         {
             id: 'store-overview-widget',

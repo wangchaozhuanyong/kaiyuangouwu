@@ -11,6 +11,7 @@
     "dependencies": {
         "@lingui/core": "^5.9.3",
         "@lingui/react": "^5.9.3",
+        "graphql-tag": "^2.12.6",
         "lucide-react": "^0.475.0"
     },
     "peerDependencies": {
