@@ -33,11 +33,11 @@ export class DigitalDeliveryService {
 
     async deliveriesForOrder(ctx: RequestContext, orderId: string): Promise<DigitalDeliveryItem[]> {
         const order = await this.connection.getEntityOrThrow(ctx, Order, orderId, {
-            relations: ['lines', 'lines.productVariant', 'payments'],
+            relations: ['lines', 'lines.productVariant', 'lines.productVariant.translations', 'payments'],
         });
         return order.lines
             .filter(line => getOrderLineFulfillmentType(line) === 'digital')
-            .map(line => this.deliveryForLine(order, line));
+            .map(line => this.deliveryForLine(ctx, order, line));
     }
 
     async authorizeDownload(token: string): Promise<AuthorizedDigitalDownload | undefined> {
@@ -64,11 +64,11 @@ export class DigitalDeliveryService {
         return resource ? { resource, payload } : undefined;
     }
 
-    private deliveryForLine(order: Order, line: OrderLine): DigitalDeliveryItem {
+    private deliveryForLine(ctx: RequestContext, order: Order, line: OrderLine): DigitalDeliveryItem {
         const base = {
             orderLineId: String(line.id),
             sku: line.productVariant.sku,
-            name: line.productVariant.name,
+            name: digitalDeliveryName(ctx, line),
         };
         if (!this.isPaid(order)) {
             return { ...base, status: 'PAYMENT_REQUIRED' };
@@ -95,4 +95,17 @@ export class DigitalDeliveryService {
     private isPaid(order: Order): boolean {
         return (order.payments ?? []).some(payment => ['Authorized', 'Settled'].includes(payment.state));
     }
+}
+
+function digitalDeliveryName(ctx: RequestContext, line: OrderLine): string {
+    const variant = line.productVariant;
+    const translations = variant.translations ?? [];
+    const localizedName = translations
+        .find(translation => translation.languageCode === ctx.languageCode)
+        ?.name?.trim();
+    const directName = variant.name?.trim();
+    const translatedName = translations
+        .map(translation => translation.name?.trim())
+        .find((name): name is string => Boolean(name));
+    return localizedName || directName || translatedName || variant.sku;
 }

@@ -74,4 +74,22 @@ describe('DigitalDeliveryService', () => {
         });
         await expect(service.authorizeDownload(`${token}x`)).resolves.toBeUndefined();
     });
+
+    it('returns a translated name or SKU when the raw variant name is unavailable', async () => {
+        const order = digitalOrder('Settled');
+        order.lines[0].productVariant.name = undefined;
+        order.lines[0].productVariant.translations = [
+            { languageCode: 'en', name: 'Translated digital product' },
+        ];
+        const { service } = createService(order);
+
+        await expect(service.deliveriesForOrder({ languageCode: 'en' } as any, 'order-1')).resolves.toEqual([
+            expect.objectContaining({ name: 'Translated digital product' }),
+        ]);
+
+        order.lines[0].productVariant.translations = [];
+        await expect(service.deliveriesForOrder({ languageCode: 'en' } as any, 'order-1')).resolves.toEqual([
+            expect.objectContaining({ name: 'DIGITAL-001' }),
+        ]);
+    });
 });
