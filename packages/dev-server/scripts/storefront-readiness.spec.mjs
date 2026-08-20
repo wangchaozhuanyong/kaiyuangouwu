@@ -25,6 +25,7 @@ function product(overrides = {}) {
                 enabled: true,
                 price: 1000,
                 currencyCode: 'CNY',
+                taxCategory: { id: 'standard-tax', name: 'Standard Tax' },
                 translations: [
                     { languageCode: 'en', name: 'Standard' },
                     { languageCode: 'zh_Hans', name: '标准版' },
@@ -69,6 +70,16 @@ function channel(code, overrides = {}) {
         shippingMethods: [
             { code: `${String(code)}-delivery`, name: 'Delivery', description: 'Approved delivery' },
         ],
+        taxRates: [
+            {
+                name: `${String(code)} standard tax`,
+                enabled: true,
+                value: 0,
+                zone: { id: `${String(countryCode)}-tax`, name: `${String(countryCode)} tax` },
+                category: { id: 'standard-tax', name: 'Standard Tax' },
+                customerGroup: null,
+            },
+        ],
         products: [product({ variants: [{ ...product().variants[0], currencyCode }] })],
         contentBlocks: [
             {
@@ -95,8 +106,8 @@ function readySnapshot() {
 }
 
 const approvedTaxPolicy = {
-    'cn-mainland': { pricesIncludeTax: false },
-    'my-malaysia': { pricesIncludeTax: false },
+    'cn-mainland': { pricesIncludeTax: false, rates: { 'Standard Tax': 0 } },
+    'my-malaysia': { pricesIncludeTax: false, rates: { 'Standard Tax': 0 } },
 };
 
 void test('accepts HTTPS targets and local HTTP only', () => {
@@ -109,6 +120,10 @@ void test('accepts HTTPS targets and local HTTP only', () => {
 void test('parses an explicit approved tax policy', () => {
     assert.deepEqual(parseTaxPolicy(JSON.stringify(approvedTaxPolicy)), approvedTaxPolicy);
     assert.throws(() => parseTaxPolicy('{"cn-mainland":{}}'), /pricesIncludeTax as a boolean/);
+    assert.throws(
+        () => parseTaxPolicy('{"cn-mainland":{"pricesIncludeTax":false,"rates":{"Standard":120}}}'),
+        /between 0 and 100/,
+    );
 });
 
 void test('passes a complete production snapshot', () => {
@@ -152,6 +167,7 @@ void test('reports demo data, test payment, bad zones and missing domains', () =
     assert.ok(failedIds.has('public-cname-target'));
     assert.ok(failedIds.has('demo-assets'));
     assert.ok(failedIds.has('tax-zone-my-malaysia'));
+    assert.ok(failedIds.has('tax-rate-coverage-my-malaysia'));
     assert.ok(failedIds.has('shipping-zone-my-malaysia'));
     assert.ok(failedIds.has('primary-domain-my-malaysia'));
     assert.ok(failedIds.has('payments-my-malaysia'));
@@ -164,5 +180,16 @@ void test('reports demo data, test payment, bad zones and missing domains', () =
 void test('keeps tax mode approval as an explicit manual gate', () => {
     const report = evaluateStorefrontReadiness(readySnapshot());
     assert.equal(report.ready, false);
-    assert.equal(report.summary.manual, 2);
+    assert.equal(report.summary.manual, 4);
+});
+
+void test('blocks an enabled but unapproved tax rate', () => {
+    const snapshot = readySnapshot();
+    snapshot.channels[1].taxRates[0].value = 20;
+    const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
+
+    assert.equal(
+        report.checks.find(check => check.id === 'tax-rates-approved-my-malaysia')?.status,
+        'blocker',
+    );
 });

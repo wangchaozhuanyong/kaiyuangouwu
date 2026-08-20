@@ -29,6 +29,9 @@ function readyEnvironment(overrides = {}) {
         DB_SYNCHRONIZE: 'false',
         VENDURE_ASSET_UPLOAD_DIR: '/srv/vendure/assets',
         VENDURE_IMPORT_ASSETS_DIR: '/srv/vendure/import-assets',
+        DIGITAL_DELIVERY_ROOT: '/srv/vendure/digital-delivery',
+        DIGITAL_DELIVERY_SIGNING_SECRET: '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b',
+        DIGITAL_DELIVERY_LINK_TTL_SECONDS: '300',
         VENDURE_EMAIL_FROM: 'Store <orders@shop.test>',
         SMTP_HOST: 'smtp.shop.test',
         SMTP_PORT: '587',
@@ -61,7 +64,7 @@ const confirmedControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 25, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 26, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -87,6 +90,8 @@ void test('blocks local services, placeholders, unsafe routing and default crede
             DB: 'sqlite',
             DB_HOST: '127.0.0.1',
             DB_NAME: 'vendure-dev',
+            DIGITAL_DELIVERY_ROOT: './digital-delivery-assets',
+            DIGITAL_DELIVERY_SIGNING_SECRET: 'replace-with-a-secret',
             SMTP_HOST: 'smtp.example.com',
             STORE_DOMAIN_CNAME_TARGET: 'stores.example.com',
             STORE_DOMAIN_ROUTING_MODE: 'prefer-domain',
@@ -108,6 +113,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('admin-password'));
     assert.ok(blockers.has('database-engine'));
     assert.ok(blockers.has('database-connection'));
+    assert.ok(blockers.has('digital-delivery'));
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
     assert.ok(blockers.has('observability-export'));

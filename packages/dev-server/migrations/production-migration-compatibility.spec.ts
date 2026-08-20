@@ -8,6 +8,8 @@ import { AddStoreProfiles1786765800000 } from './1786765800000-add-store-profile
 import { AddStoreAdministratorAccess1786767600000 } from './1786767600000-add-store-administrator-access';
 import { HardenStoreAdministratorPermissions1786769400000 } from './1786769400000-harden-store-administrator-permissions';
 import { EnableMainlandChineseLanguage1786771200000 } from './1786771200000-enable-mainland-chinese-language';
+import { AddAfterSalesCenter1787203000000 } from './1787203000000-add-after-sales-center';
+import { AddStorefrontReviews1787204800000 } from './1787204800000-add-storefront-reviews';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -25,6 +27,71 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it('creates portable verified review storage with one review per order line', async () => {
+        const { createdTables, queryRunner } = mysqlQueryRunner();
+
+        await new AddStorefrontReviews1787204800000().up(queryRunner);
+
+        expect(createdTables).toHaveLength(1);
+        expect(createdTables[0].name).toBe('storefront_review');
+        expect(createdTables[0].findColumnByName('createdAt')).toMatchObject({
+            type: 'datetime',
+            precision: 6,
+            default: 'CURRENT_TIMESTAMP(6)',
+        });
+        expect(createdTables[0].findColumnByName('merchantResponse')).toMatchObject({
+            type: 'text',
+            isNullable: true,
+        });
+        expect(createdTables[0].indices).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'IDX_storefront_review_order_line',
+                    isUnique: true,
+                }),
+            ]),
+        );
+    });
+
+    it('creates portable after-sales request, item and event tables', async () => {
+        const { createdTables, queryRunner } = mysqlQueryRunner();
+
+        await new AddAfterSalesCenter1787203000000().up(queryRunner);
+
+        expect(createdTables.map(table => table.name)).toEqual([
+            'after_sales_request',
+            'after_sales_item',
+            'after_sales_event',
+        ]);
+        const columns = createdTables.flatMap(table => table.columns);
+        expect(columns.find(column => column.name === 'createdAt')).toMatchObject({
+            type: 'datetime',
+            precision: 6,
+            default: 'CURRENT_TIMESTAMP(6)',
+        });
+        expect(columns.find(column => column.name === 'updatedAt')).toMatchObject({
+            type: 'datetime',
+            precision: 6,
+            onUpdate: 'CURRENT_TIMESTAMP(6)',
+        });
+        expect(columns.filter(column => ['description', 'resolution', 'note'].includes(column.name))).toEqual(
+            expect.arrayContaining([expect.objectContaining({ type: 'text' })]),
+        );
+        expect(createdTables[0].indices).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ name: 'IDX_after_sales_request_code', isUnique: true }),
+            ]),
+        );
+    });
+
+    it('resumes the after-sales migration without recreating existing tables', async () => {
+        const { createdTables, queryRunner } = mysqlQueryRunner(['after_sales_request']);
+
+        await new AddAfterSalesCenter1787203000000().up(queryRunner);
+
+        expect(createdTables.map(table => table.name)).toEqual(['after_sales_item', 'after_sales_event']);
+    });
+
     it('enables simplified Chinese globally without replacing existing languages', async () => {
         const query = vi
             .fn()

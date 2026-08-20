@@ -236,6 +236,24 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
                 ? 'configured'
                 : 'paths must be absolute, non-root, and distinct',
     });
+    if (role === 'server') {
+        const digitalDeliveryRoot = normalized(env.DIGITAL_DELIVERY_ROOT);
+        const digitalDeliveryTtl = Number(env.DIGITAL_DELIVERY_LINK_TTL_SECONDS);
+        const digitalDeliveryReady =
+            isPersistentDirectory(digitalDeliveryRoot) &&
+            isConfiguredSecret(env.DIGITAL_DELIVERY_SIGNING_SECRET, 32) &&
+            Number.isInteger(digitalDeliveryTtl) &&
+            digitalDeliveryTtl >= 60 &&
+            digitalDeliveryTtl <= 900;
+        pushCheck(checks, {
+            id: 'digital-delivery',
+            title: '数字商品安全交付配置',
+            passed: digitalDeliveryReady,
+            detail: digitalDeliveryReady
+                ? 'protected storage and short-lived signing configured'
+                : 'root must be persistent, secret must be strong, and TTL must be 60-900 seconds',
+        });
+    }
 
     const smtpCredentialsMatch =
         Boolean(normalized(env.SMTP_USER)) === Boolean(normalized(env.SMTP_PASSWORD));
