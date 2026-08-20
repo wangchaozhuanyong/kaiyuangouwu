@@ -325,6 +325,28 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ emailAddress: 'customer@example.com' });
     });
 
+    it('passes account verification tokens and resend addresses to Vendure', async () => {
+        const resendFetchMock = mockGraphQlResponse({
+            refreshCustomerVerification: { __typename: 'Success', success: true },
+        });
+        const api = new ShopApi(market);
+
+        await api.refreshCustomerVerification('customer@example.com');
+        let request = JSON.parse(String(resendFetchMock.mock.calls[0][1]?.body)) as {
+            variables: Record<string, unknown>;
+        };
+        expect(request.variables).toEqual({ emailAddress: 'customer@example.com' });
+
+        const verificationFetchMock = mockGraphQlResponse({
+            verifyCustomerAccount: { __typename: 'CurrentUser', id: '1' },
+        });
+        await api.verifyCustomerAccount('verify+token');
+        request = JSON.parse(String(verificationFetchMock.mock.calls[0][1]?.body)) as {
+            variables: Record<string, unknown>;
+        };
+        expect(request.variables).toEqual({ token: 'verify+token' });
+    });
+
     it('surfaces an expired password reset token', async () => {
         mockGraphQlResponse({
             resetPassword: {

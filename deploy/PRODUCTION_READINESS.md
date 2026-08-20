@@ -12,7 +12,7 @@
 2. 确认马来西亚站价格是否含税，以及应使用的税区和税率。当前马来西亚 Channel 仍引用中国税区。
 3. 删除测试配送方式，为两个市场配置真实配送范围、费用、免邮门槛和无法配送规则。
 4. 选择真实支付渠道并完成服务端回调、退款、失败重试和对账测试。当前仅有 `dummy-payment-handler`。
-5. 选择支持 SMTP 的邮件服务商，并配置正式发件地址和连接参数。
+5. 在 Resend 验证正式发件域名，创建仅发信权限的 API Key，并配置生产 SMTP Secret。
 6. 确认生产数据库、持久化商品图片方案、备份恢复方案和监控方案。
 
 以上事项完成前，只能视为本地或预览环境，不应开放真实下单。
@@ -47,10 +47,30 @@
 - 生产环境使用 `STORE_DOMAIN_ROUTING_MODE=require-domain`。
 - 生产环境清空 `STORE_DOMAIN_BYPASS_HOSTS`，除非入口层已明确禁止公网访问旁路主机。
 - `VITE_CLIENT_CHANNEL_SWITCHING=false`，由已验证域名决定 Channel，不在浏览器中暴露固定 Channel Token。
-- 选择支持 SMTP 的邮件服务商，配置发件域名、SPF、DKIM 和 DMARC。
+- 使用 Resend SMTP，配置发件域名、SPF、DKIM 和 DMARC。
+- Resend API Key 使用 `sending_access` 权限，并限制到已验证的发件域名；密钥只注入 Server 与 Worker 的 Secret 环境。
 - 验证注册、邮箱验证、忘记密码、修改邮箱、订单确认五类邮件。
 
 验收标准：两个域名访问到正确市场；邮件中的链接回到对应站点，不串 Channel、不使用本地地址。
+
+### Resend 生产配置
+
+1. 在 Resend 添加正式发件域名，按控制台给出的值配置 SPF 与 DKIM；确认送达后再逐步启用 DMARC。
+2. 在 API Keys 页面创建 `sending_access` Key，并限制到该发件域名。Key 只显示一次，不写入仓库或前端变量。
+3. 将以下变量同时注入 API Server 与 Worker；`SMTP_PASSWORD` 的值由生产 Secret 管理提供。
+
+```dotenv
+VENDURE_EMAIL_FROM="Yunqiao Ai <noreply@damatong.net>"
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=resend
+SMTP_PASSWORD=<resend-sending-api-key>
+```
+
+Resend 也支持 `587` + `SMTP_SECURE=false` 的 STARTTLS 组合。当前默认使用官方 Nodemailer 示例中的 `465` + 隐式 TLS。发件地址的域名必须与 Resend 中已验证并授权给 API Key 的域名完全一致。
+
+注册验证、重置密码和修改邮箱链接统一使用 24 小时有效期。上线验收需至少覆盖 Gmail、Outlook/Hotmail 和一个中国大陆常用邮箱，并检查垃圾箱、SPF、DKIM、DMARC 与邮件内链接。
 
 ### P0：建立生产基础设施
 
@@ -247,7 +267,7 @@ bun run build
 2. 马来西亚站商品价格是否含税，以及采用的税务规则。
 3. 两个市场各自的配送公司、区域、价格和免邮规则。
 4. 两个市场各自的支付渠道与收款主体。
-5. 邮件服务商、发件域名和发件人名称。
+5. Resend 发件域名和发件人名称。
 6. 生产数据库类型与托管位置。
 7. 商品图片使用服务器持久磁盘还是对象存储。
 8. 监控平台、备份保留周期和可接受恢复时间。

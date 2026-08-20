@@ -6119,6 +6119,10 @@ img {
     gap: 10px;
 }
 
+.auth-result .auth-recovery-form {
+    margin-top: 0;
+}
+
 .auth-result .form-error,
 .auth-success-message {
     display: block;

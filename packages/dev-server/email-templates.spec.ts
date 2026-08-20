@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { ACCOUNT_TOKEN_EXPIRY_HOURS, buildAccountActionUrl } from './account-auth';
 import { emailLanguageVariables } from './email-localization';
 
 const templatePath = path.join(__dirname, 'email-templates');
@@ -17,12 +18,19 @@ async function renderTemplate(type: string, languageCode: string) {
     const template = await fs.readFile(path.join(templatePath, type, 'body.hbs'), 'utf8');
     const templateVars = {
         ...emailLanguageVariables(languageCode),
-        verifyEmailAddressUrl: 'https://shop.example.com/#/verify-account',
-        passwordResetUrl: 'https://shop.example.com/#/reset-password',
-        changeEmailAddressUrl: 'https://shop.example.com/#/change-email-address',
-        verificationToken: 'verify-token',
-        passwordResetToken: 'reset-token',
-        identifierChangeToken: 'change-token',
+        accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
+        verifyEmailAddressActionUrl: buildAccountActionUrl(
+            'https://shop.example.com/#/verify-account',
+            'verify+token',
+        ),
+        passwordResetActionUrl: buildAccountActionUrl(
+            'https://shop.example.com/#/reset-password',
+            'reset+token',
+        ),
+        changeEmailAddressActionUrl: buildAccountActionUrl(
+            'https://shop.example.com/#/change-email-address',
+            'change+token',
+        ),
         order: {
             code: 'ORDER-1001',
             currencyCode: 'USD',
@@ -85,5 +93,15 @@ describe('localized email templates', () => {
         expect(result.body).toContain(bodyCopy);
         expect(result.body).toContain(actionCopy);
         expect(result.body).not.toContain('明集市');
+    });
+
+    it('renders encoded account action tokens and their expiry', async () => {
+        const verification = await renderTemplate('email-verification', 'en');
+        const passwordReset = await renderTemplate('password-reset', 'zh_Hans');
+
+        expect(verification.body).toContain('token&#x3D;verify%2Btoken');
+        expect(verification.body).toContain(`${ACCOUNT_TOKEN_EXPIRY_HOURS} hours`);
+        expect(passwordReset.body).toContain('token&#x3D;reset%2Btoken');
+        expect(passwordReset.body).toContain(`${ACCOUNT_TOKEN_EXPIRY_HOURS} 小时`);
     });
 });

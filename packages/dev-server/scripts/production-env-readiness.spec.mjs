@@ -33,11 +33,11 @@ function readyEnvironment(overrides = {}) {
         DIGITAL_DELIVERY_SIGNING_SECRET: '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b',
         DIGITAL_DELIVERY_LINK_TTL_SECONDS: '300',
         VENDURE_EMAIL_FROM: 'Store <orders@shop.test>',
-        SMTP_HOST: 'smtp.shop.test',
-        SMTP_PORT: '587',
-        SMTP_SECURE: 'false',
-        SMTP_USER: 'smtp-user',
-        SMTP_PASSWORD: 'smtp-password',
+        SMTP_HOST: 'smtp.resend.com',
+        SMTP_PORT: '465',
+        SMTP_SECURE: 'true',
+        SMTP_USER: 'resend',
+        SMTP_PASSWORD: 're_sending_only_api_key_for_tests',
         STORE_DOMAIN_CNAME_TARGET: 'stores.shop.test',
         STORE_DOMAIN_ROUTING_MODE: 'require-domain',
         STORE_DOMAIN_BYPASS_HOSTS: '',
@@ -119,6 +119,28 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('observability-export'));
 });
 
+void test('blocks incomplete authentication and invalid Resend TLS settings', () => {
+    const missingCredentials = evaluateProductionEnvironment(
+        readyEnvironment({ SMTP_USER: '', SMTP_PASSWORD: '' }),
+        'server',
+        confirmedControls,
+    );
+    const wrongResendUser = evaluateProductionEnvironment(
+        readyEnvironment({ SMTP_USER: 'api-user' }),
+        'server',
+        confirmedControls,
+    );
+    const wrongTlsPair = evaluateProductionEnvironment(
+        readyEnvironment({ SMTP_PORT: '587', SMTP_SECURE: 'true' }),
+        'server',
+        confirmedControls,
+    );
+
+    expectSmtpBlocker(missingCredentials);
+    expectSmtpBlocker(wrongResendUser);
+    expectSmtpBlocker(wrongTlsPair);
+});
+
 void test('keeps operational evidence as explicit manual gates', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server');
     assert.equal(report.ready, false);
@@ -140,3 +162,11 @@ void test('parses controls and never prints secret values', () => {
     assert.equal(formatProductionEnvironmentReport(report).includes(password), false);
     assert.equal(JSON.stringify(report).includes(password), false);
 });
+
+function expectSmtpBlocker(report) {
+    assert.equal(report.ready, false);
+    assert.equal(
+        report.checks.some(check => check.id === 'smtp-transport' && check.status === 'blocker'),
+        true,
+    );
+}

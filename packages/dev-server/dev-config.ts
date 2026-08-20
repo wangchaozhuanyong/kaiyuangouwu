@@ -6,6 +6,7 @@ import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/sha
 import {
     DefaultJobQueuePlugin,
     DefaultLogger,
+    DefaultPasswordValidationStrategy,
     DefaultProductVariantPriceUpdateStrategy,
     DefaultSchedulerPlugin,
     DefaultSearchPlugin,
@@ -43,6 +44,7 @@ import path from 'path';
 import { DataSourceOptions } from 'typeorm';
 import './business-time';
 
+import { ACCOUNT_TOKEN_DURATION, ACCOUNT_TOKEN_EXPIRY_HOURS, buildAccountActionUrl } from './account-auth';
 import {
     emailLanguageVariables,
     localizedEmailSubjects,
@@ -75,6 +77,28 @@ const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
 const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
+    if (handler.type === 'email-verification') {
+        handler.setTemplateVars((event, globals) => ({
+            verifyEmailAddressActionUrl: buildAccountActionUrl(
+                globals.verifyEmailAddressUrl,
+                event.user.getNativeAuthenticationMethod().verificationToken,
+            ),
+        }));
+    } else if (handler.type === 'password-reset') {
+        handler.setTemplateVars((event, globals) => ({
+            passwordResetActionUrl: buildAccountActionUrl(
+                globals.passwordResetUrl,
+                event.user.getNativeAuthenticationMethod().passwordResetToken,
+            ),
+        }));
+    } else if (handler.type === 'email-address-change') {
+        handler.setTemplateVars((event, globals) => ({
+            changeEmailAddressActionUrl: buildAccountActionUrl(
+                globals.changeEmailAddressUrl,
+                event.user.getNativeAuthenticationMethod().identifierChangeToken,
+            ),
+        }));
+    }
     const subjects = localizedEmailSubjects[handler.type];
     return subjects
         ? handler.setSubject((_event, ctx) => localizedEmailText(subjects, ctx.languageCode))
@@ -184,6 +208,7 @@ async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAd
     return {
         ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields as StorefrontNameFields),
         fromAddress,
+        accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
         verifyEmailAddressUrl: `${storefrontUrl}/#/verify-account`,
         passwordResetUrl: `${storefrontUrl}/#/reset-password`,
         changeEmailAddressUrl: `${dashboardUrl}/change-email-address`,
@@ -209,25 +234,37 @@ function emailPluginOptions(): EmailPluginOptions | EmailPluginDevModeOptions {
 
     const smtpUser = process.env.SMTP_USER?.trim();
     const smtpPassword = process.env.SMTP_PASSWORD?.trim();
-    if (Boolean(smtpUser) !== Boolean(smtpPassword)) {
-        throw new Error('SMTP_USER and SMTP_PASSWORD must either both be configured or both be omitted');
+    if (!smtpUser || !smtpPassword) {
+        throw new Error('SMTP_USER and SMTP_PASSWORD must both be configured in production');
+    }
+
+    const smtpHost = configuredValue('SMTP_HOST', '127.0.0.1');
+    const smtpPort = configuredPort('SMTP_PORT', 1025);
+    const smtpSecure = configuredBoolean('SMTP_SECURE', false);
+    if (smtpHost.toLowerCase() === 'smtp.resend.com') {
+        const validTlsMode =
+            (smtpSecure && (smtpPort === 465 || smtpPort === 2465)) ||
+            (!smtpSecure && (smtpPort === 25 || smtpPort === 587 || smtpPort === 2587));
+        if (smtpUser !== 'resend') {
+            throw new Error('SMTP_USER must be resend when SMTP_HOST is smtp.resend.com');
+        }
+        if (!validTlsMode) {
+            throw new Error('SMTP_PORT and SMTP_SECURE do not form a supported Resend TLS configuration');
+        }
     }
 
     return {
         ...commonOptions,
         transport: {
             type: 'smtp',
-            host: configuredValue('SMTP_HOST', '127.0.0.1'),
-            port: configuredPort('SMTP_PORT', 1025),
-            secure: configuredBoolean('SMTP_SECURE', false),
-            ...(smtpUser && smtpPassword
-                ? {
-                      auth: {
-                          user: smtpUser,
-                          pass: smtpPassword,
-                      },
-                  }
-                : {}),
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpSecure,
+            requireTLS: !smtpSecure,
+            auth: {
+                user: smtpUser,
+                pass: smtpPassword,
+            },
         },
     };
 }
@@ -339,6 +376,8 @@ export const devConfig: VendureConfig = {
         disableAuth: false,
         tokenMethod: ['bearer', 'cookie', 'api-key'] as const,
         requireVerification: true,
+        verificationTokenDuration: ACCOUNT_TOKEN_DURATION,
+        passwordValidationStrategy: new DefaultPasswordValidationStrategy({ minLength: 8, maxLength: 72 }),
         customPermissions: [],
         superadminCredentials: {
             identifier: configuredValue('SUPERADMIN_USERNAME', 'superadmin'),

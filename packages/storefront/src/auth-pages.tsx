@@ -2,6 +2,11 @@ import { ArrowLeft, CircleAlert, CircleCheck, Fingerprint } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
+import {
+    ACCOUNT_PASSWORD_MAX_LENGTH,
+    ACCOUNT_PASSWORD_MIN_LENGTH,
+    validateAccountPassword,
+} from './auth-validation';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
 
 type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
@@ -77,7 +82,11 @@ export function LoginPage({
                 >
                     {isZh ? '忘记密码？' : 'Forgot password?'}
                 </button>
-                {error && <small className="form-error">{error}</small>}
+                {error && (
+                    <small className="form-error" role="alert">
+                        {error}
+                    </small>
+                )}
                 <SubmitButton
                     submitting={submitting}
                     idle={isZh ? '登录' : 'Sign in'}
@@ -112,9 +121,20 @@ export function RegisterPage({
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
+        const firstName = String(data.get('firstName')).trim();
+        const lastName = String(data.get('lastName')).trim();
+        if (!firstName || !lastName) {
+            setError(isZh ? '请输入完整姓名' : 'Enter your first and last name');
+            return;
+        }
         const password = String(data.get('password'));
-        if (password !== String(data.get('confirmPassword'))) {
-            setError(isZh ? '两次输入的密码不一致' : 'The passwords do not match');
+        const passwordError = validateAccountPassword(
+            password,
+            String(data.get('confirmPassword')),
+            language,
+        );
+        if (passwordError) {
+            setError(passwordError);
             return;
         }
         setSubmitting(true);
@@ -123,8 +143,8 @@ export function RegisterPage({
             const emailAddress = String(data.get('emailAddress')).trim();
             await api.registerCustomerAccount({
                 emailAddress,
-                firstName: String(data.get('firstName')).trim(),
-                lastName: String(data.get('lastName')).trim(),
+                firstName,
+                lastName,
                 password,
             });
             setRegisteredEmail(emailAddress);
@@ -178,7 +198,11 @@ export function RegisterPage({
                             {resendMessage}
                         </small>
                     )}
-                    {error && <small className="form-error">{error}</small>}
+                    {error && (
+                        <small className="form-error" role="alert">
+                            {error}
+                        </small>
+                    )}
                     <SubmitButton
                         type="button"
                         submitting={submitting}
@@ -224,14 +248,22 @@ export function RegisterPage({
                             label={isZh ? '密码' : 'Password'}
                             type="password"
                             autoComplete="new-password"
+                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                         />
                         <Field
                             name="confirmPassword"
                             label={isZh ? '确认密码' : 'Confirm password'}
                             type="password"
                             autoComplete="new-password"
+                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                         />
-                        {error && <small className="form-error">{error}</small>}
+                        {error && (
+                            <small className="form-error" role="alert">
+                                {error}
+                            </small>
+                        )}
                         <SubmitButton
                             submitting={submitting}
                             idle={isZh ? '注册账户' : 'Create account'}
@@ -265,7 +297,36 @@ export function VerifyAccountPage({
 }: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
     const isZh = language === 'zh';
     const [error, setError] = useState('');
+    const [resending, setResending] = useState(false);
+    const [resendError, setResendError] = useState('');
+    const [resendMessage, setResendMessage] = useState('');
     const attempted = useRef(false);
+
+    const resend = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        setResending(true);
+        setResendError('');
+        setResendMessage('');
+        try {
+            await api.refreshCustomerVerification(String(data.get('emailAddress')).trim());
+            setResendMessage(
+                isZh
+                    ? '如果该邮箱仍待验证，新的验证邮件将很快送达'
+                    : 'If this account still needs verification, a new email will arrive shortly.',
+            );
+        } catch (requestError) {
+            setResendError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '无法重新发送验证邮件'
+                      : 'Could not resend the verification email',
+            );
+        } finally {
+            setResending(false);
+        }
+    };
 
     useEffect(() => {
         if (attempted.current) return;
@@ -277,13 +338,11 @@ export function VerifyAccountPage({
         void api
             .verifyCustomerAccount(token)
             .then(onSuccess)
-            .catch(requestError => {
+            .catch(() => {
                 setError(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '邮箱验证失败'
-                          : 'Email verification failed',
+                    isZh
+                        ? '验证链接无效、已过期或已经使用'
+                        : 'This verification link is invalid, expired, or has already been used.',
                 );
             });
     }, [api, isZh, onSuccess, token]);
@@ -307,13 +366,38 @@ export function VerifyAccountPage({
                 }
             >
                 {error && (
-                    <SubmitButton
-                        type="button"
-                        idle={isZh ? '返回登录' : 'Back to sign in'}
-                        busy=""
-                        submitting={false}
-                        onClick={() => onNavigate({ name: 'login' })}
-                    />
+                    <>
+                        <form className="auth-recovery-form" onSubmit={event => void resend(event)}>
+                            <Field
+                                name="emailAddress"
+                                label={isZh ? '注册邮箱' : 'Account email'}
+                                type="email"
+                                autoComplete="email"
+                            />
+                            {resendMessage && (
+                                <small className="auth-success-message" role="status">
+                                    {resendMessage}
+                                </small>
+                            )}
+                            {resendError && (
+                                <small className="form-error" role="alert">
+                                    {resendError}
+                                </small>
+                            )}
+                            <SubmitButton
+                                submitting={resending}
+                                idle={isZh ? '重新发送验证邮件' : 'Resend verification email'}
+                                busy={isZh ? '发送中' : 'Sending'}
+                            />
+                        </form>
+                        <button
+                            className="auth-secondary-action"
+                            type="button"
+                            onClick={() => onNavigate({ name: 'login' })}
+                        >
+                            {isZh ? '返回登录' : 'Back to sign in'}
+                        </button>
+                    </>
                 )}
             </AuthResult>
         </AuthLayout>
@@ -381,7 +465,11 @@ export function ForgotPasswordPage({ api, language, storefrontName, onBack, onNa
                             type="email"
                             autoComplete="email"
                         />
-                        {error && <small className="form-error">{error}</small>}
+                        {error && (
+                            <small className="form-error" role="alert">
+                                {error}
+                            </small>
+                        )}
                         <SubmitButton
                             submitting={submitting}
                             idle={isZh ? '发送重置邮件' : 'Send reset email'}
@@ -413,8 +501,13 @@ export function ResetPasswordPage({
         if (!token) return;
         const data = new FormData(event.currentTarget);
         const password = String(data.get('password'));
-        if (password !== String(data.get('confirmPassword'))) {
-            setError(isZh ? '两次输入的密码不一致' : 'The passwords do not match');
+        const passwordError = validateAccountPassword(
+            password,
+            String(data.get('confirmPassword')),
+            language,
+        );
+        if (passwordError) {
+            setError(passwordError);
             return;
         }
         setSubmitting(true);
@@ -446,14 +539,22 @@ export function ResetPasswordPage({
                         label={isZh ? '新密码' : 'New password'}
                         type="password"
                         autoComplete="new-password"
+                        minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                        maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                     />
                     <Field
                         name="confirmPassword"
                         label={isZh ? '确认新密码' : 'Confirm new password'}
                         type="password"
                         autoComplete="new-password"
+                        minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                        maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
                     />
-                    {error && <small className="form-error">{error}</small>}
+                    {error && (
+                        <small className="form-error" role="alert">
+                            {error}
+                        </small>
+                    )}
                     <SubmitButton
                         submitting={submitting}
                         idle={isZh ? '更新密码' : 'Update password'}
@@ -514,18 +615,29 @@ function Field({
     label,
     type = 'text',
     autoComplete,
+    minLength,
+    maxLength,
     wide = true,
 }: {
     name: string;
     label: string;
     type?: string;
     autoComplete?: string;
+    minLength?: number;
+    maxLength?: number;
     wide?: boolean;
 }) {
     return (
         <label className={wide ? 'field-wide' : undefined}>
             <span>{label}</span>
-            <input name={name} type={type} required autoComplete={autoComplete} />
+            <input
+                name={name}
+                type={type}
+                required
+                autoComplete={autoComplete}
+                minLength={minLength}
+                maxLength={maxLength}
+            />
         </label>
     );
 }
@@ -544,7 +656,13 @@ function SubmitButton({
     onClick?: () => void;
 }) {
     return (
-        <button className="primary-action wide-action" type={type} disabled={submitting} onClick={onClick}>
+        <button
+            className="primary-action wide-action"
+            type={type}
+            disabled={submitting}
+            aria-busy={submitting}
+            onClick={onClick}
+        >
             {submitting ? busy : idle}
         </button>
     );

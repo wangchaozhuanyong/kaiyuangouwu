@@ -255,25 +255,32 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         });
     }
 
-    const smtpCredentialsMatch =
-        Boolean(normalized(env.SMTP_USER)) === Boolean(normalized(env.SMTP_PASSWORD));
+    const smtpHost = normalized(env.SMTP_HOST).toLowerCase();
+    const smtpPort = Number(env.SMTP_PORT);
+    const smtpSecure = normalized(env.SMTP_SECURE);
+    const smtpUser = normalized(env.SMTP_USER);
+    const smtpPassword = normalized(env.SMTP_PASSWORD);
+    const smtpCredentialsReady =
+        Boolean(smtpUser) && Boolean(smtpPassword) && !placeholderPattern.test(smtpPassword);
+    const resendTransportReady =
+        smtpHost !== 'smtp.resend.com' ||
+        (smtpUser === 'resend' &&
+            ((smtpSecure === 'true' && [465, 2465].includes(smtpPort)) ||
+                (smtpSecure === 'false' && [25, 587, 2587].includes(smtpPort))));
+    const smtpReady =
+        hasRealEmailFrom(env.VENDURE_EMAIL_FROM) &&
+        isPublicHostname(smtpHost) &&
+        isPort(smtpPort) &&
+        ['true', 'false'].includes(smtpSecure) &&
+        smtpCredentialsReady &&
+        resendTransportReady;
     pushCheck(checks, {
         id: 'smtp-transport',
         title: '生产邮件传输配置',
-        passed:
-            hasRealEmailFrom(env.VENDURE_EMAIL_FROM) &&
-            isPublicHostname(env.SMTP_HOST) &&
-            isPort(env.SMTP_PORT) &&
-            ['true', 'false'].includes(normalized(env.SMTP_SECURE)) &&
-            smtpCredentialsMatch,
-        detail:
-            hasRealEmailFrom(env.VENDURE_EMAIL_FROM) &&
-            isPublicHostname(env.SMTP_HOST) &&
-            isPort(env.SMTP_PORT) &&
-            ['true', 'false'].includes(normalized(env.SMTP_SECURE)) &&
-            smtpCredentialsMatch
-                ? 'configured'
-                : 'missing, placeholder, invalid, or incomplete credentials',
+        passed: smtpReady,
+        detail: smtpReady
+            ? 'configured'
+            : 'missing, placeholder, unauthenticated, or invalid Resend TLS configuration',
     });
 
     pushCheck(checks, {

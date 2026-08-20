@@ -8,10 +8,12 @@
     <mj-column>
         {{#if isChinese}}
             <mj-text padding="0 0 16px">感谢您注册 {{ brandName }}。请点击下方按钮验证电子邮箱并完成注册。</mj-text>
-            <mj-button href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}">验证电子邮箱</mj-button>
+            <mj-button href="{{ verifyEmailAddressActionUrl }}">验证电子邮箱</mj-button>
+            <mj-text color="#66727c" padding="16px 0 0">此链接将在 {{ accountTokenExpiryHours }} 小时后失效。</mj-text>
         {{else}}
             <mj-text padding="0 0 16px">Thank you for creating a {{ brandName }} account. Verify your email address to complete registration.</mj-text>
-            <mj-button href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}">Verify email address</mj-button>
+            <mj-button href="{{ verifyEmailAddressActionUrl }}">Verify email address</mj-button>
+            <mj-text color="#66727c" padding="16px 0 0">This link expires in {{ accountTokenExpiryHours }} hours.</mj-text>
         {{/if}}
     </mj-column>
 </mj-section>

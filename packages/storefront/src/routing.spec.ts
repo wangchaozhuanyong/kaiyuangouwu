@@ -63,4 +63,15 @@ describe('storefront hash routing', () => {
         expect(routeFromHash('#/coupons').name).toBe('coupons');
         expect(routeFromHash('#/reviews').name).toBe('reviews');
     });
+
+    it('preserves email verification and password reset tokens', () => {
+        expect(routeFromHash('#/verify-account?token=verify%2Btoken')).toMatchObject({
+            name: 'verify-account',
+            token: 'verify+token',
+        });
+        expect(routeFromHash('#/reset-password?token=reset%2Btoken')).toMatchObject({
+            name: 'reset-password',
+            token: 'reset+token',
+        });
+    });
 });
