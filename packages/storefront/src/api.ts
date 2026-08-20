@@ -1,6 +1,8 @@
 import {
     ActiveCustomer,
+    AfterSalesRequest,
     CollectionSummary,
+    CreateAfterSalesRequestInput,
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
@@ -19,6 +21,10 @@ import {
     StorefrontCheckoutSession,
     StorefrontConfig,
     StorefrontContentBlock,
+    StorefrontReview,
+    StorefrontReviewCandidate,
+    StorefrontReviewList,
+    SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
 
@@ -48,7 +54,7 @@ const productFields = `
         currencyCode
         stockLevel
         featuredAsset { id preview }
-        product { featuredAsset { id preview } }
+        product { id name featuredAsset { id preview } }
         customFields { fulfillmentType }
     }
 `;
@@ -65,6 +71,7 @@ const orderFields = `
     currencyCode
     customer { id emailAddress }
     discounts { description amountWithTax }
+    taxSummary { description taxRate taxBase taxTotal }
     couponCodes
     customFields { customerNote }
     fulfillments {
@@ -75,10 +82,19 @@ const orderFields = `
         createdAt
         updatedAt
     }
+    digitalDeliveries {
+        orderLineId
+        sku
+        name
+        status
+        downloadUrl
+        expiresAt
+    }
     lines {
         id
         quantity
         linePriceWithTax
+        proratedUnitPriceWithTax
         productVariant {
             id
             name
@@ -87,7 +103,7 @@ const orderFields = `
             currencyCode
             stockLevel
             featuredAsset { id preview }
-            product { featuredAsset { id preview } }
+            product { id name featuredAsset { id preview } }
             customFields { fulfillmentType }
         }
         customFields { fulfillmentTypeSnapshot }
@@ -99,6 +115,71 @@ const orderFields = `
         requiresShippingAddress
         requiresShippingMethod
     }
+    checkoutShipping {
+        methodCode
+        methodName
+        priceWithTax
+        estimateMinDays
+        estimateMaxDays
+        freeShippingThreshold
+        freeShippingApplied
+    }
+`;
+
+const afterSalesFields = `
+    id
+    createdAt
+    updatedAt
+    code
+    type
+    state
+    reason
+    description
+    currencyCode
+    requestedAmount
+    approvedAmount
+    resolution
+    respondedAt
+    completedAt
+    cancelledAt
+    order { id code state }
+    items {
+        id
+        orderLineId
+        quantity
+        unitPriceWithTax
+        lineAmountWithTax
+        productName
+        sku
+        fulfillmentType
+    }
+    events {
+        id
+        createdAt
+        state
+        actorType
+        actorLabel
+        note
+    }
+`;
+
+const storefrontReviewFields = `
+    id
+    createdAt
+    updatedAt
+    state
+    rating
+    title
+    body
+    customerName
+    productName
+    sku
+    merchantResponse
+    moderatedAt
+    orderLineId
+    productId
+    productVariantId
+    verifiedPurchase
 `;
 
 const cartFields = `
@@ -691,6 +772,122 @@ export class ShopApi {
         return result.orderByCode;
     }
 
+    async cancelMyAuthorizedOrder(orderId: string, reason: string): Promise<Order> {
+        const result = await this.request<{ cancelMyAuthorizedOrder: Order }>(
+            `
+                mutation CancelMyAuthorizedOrder($orderId: ID!, $reason: String!) {
+                    cancelMyAuthorizedOrder(orderId: $orderId, reason: $reason) { ${orderFields} }
+                }
+            `,
+            { orderId, reason },
+        );
+        return result.cancelMyAuthorizedOrder;
+    }
+
+    async afterSalesRequests(signal?: AbortSignal): Promise<AfterSalesRequest[]> {
+        const result = await this.request<{ myAfterSalesRequests: AfterSalesRequest[] }>(
+            `
+                query MyAfterSalesRequests {
+                    myAfterSalesRequests { ${afterSalesFields} }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myAfterSalesRequests;
+    }
+
+    async createAfterSalesRequest(input: CreateAfterSalesRequestInput): Promise<AfterSalesRequest> {
+        const result = await this.request<{ createAfterSalesRequest: AfterSalesRequest }>(
+            `
+                mutation CreateAfterSalesRequest($input: CreateAfterSalesRequestInput!) {
+                    createAfterSalesRequest(input: $input) { ${afterSalesFields} }
+                }
+            `,
+            { input },
+        );
+        return result.createAfterSalesRequest;
+    }
+
+    async cancelAfterSalesRequest(id: string): Promise<AfterSalesRequest> {
+        const result = await this.request<{ cancelMyAfterSalesRequest: AfterSalesRequest }>(
+            `
+                mutation CancelMyAfterSalesRequest($id: ID!) {
+                    cancelMyAfterSalesRequest(id: $id) { ${afterSalesFields} }
+                }
+            `,
+            { id },
+        );
+        return result.cancelMyAfterSalesRequest;
+    }
+
+    async productReviews(productId: string, signal?: AbortSignal): Promise<StorefrontReviewList> {
+        const result = await this.request<{ storefrontProductReviews: StorefrontReviewList }>(
+            `
+                query StorefrontProductReviews($productId: ID!) {
+                    storefrontProductReviews(productId: $productId, options: { take: 20 }) {
+                        totalItems
+                        averageRating
+                        items { ${storefrontReviewFields} }
+                    }
+                }
+            `,
+            { productId },
+            signal,
+        );
+        return result.storefrontProductReviews;
+    }
+
+    async myReviews(signal?: AbortSignal): Promise<StorefrontReview[]> {
+        const result = await this.request<{ myStorefrontReviews: StorefrontReview[] }>(
+            `
+                query MyStorefrontReviews {
+                    myStorefrontReviews { ${storefrontReviewFields} }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myStorefrontReviews;
+    }
+
+    async reviewCandidates(signal?: AbortSignal): Promise<StorefrontReviewCandidate[]> {
+        const result = await this.request<{ myStorefrontReviewCandidates: StorefrontReviewCandidate[] }>(
+            `
+                query MyStorefrontReviewCandidates {
+                    myStorefrontReviewCandidates {
+                        orderLineId
+                        orderId
+                        orderCode
+                        orderState
+                        orderPlacedAt
+                        productId
+                        productVariantId
+                        productName
+                        variantName
+                        sku
+                        fulfillmentType
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myStorefrontReviewCandidates;
+    }
+
+    async submitReview(input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {
+        const result = await this.request<{ submitStorefrontReview: StorefrontReview }>(
+            `
+                mutation SubmitStorefrontReview($input: SubmitStorefrontReviewInput!) {
+                    submitStorefrontReview(input: $input) { ${storefrontReviewFields} }
+                }
+            `,
+            { input },
+        );
+        return result.submitStorefrontReview;
+    }
+
     async login(emailAddress: string, password: string): Promise<void> {
         const result = await this.request<{ login: ErrorResult }>(
             `
@@ -1106,7 +1303,7 @@ export class ShopApi {
     async eligibleShippingMethods(): Promise<ShippingMethod[]> {
         const result = await this.request<{ eligibleShippingMethods: ShippingMethod[] }>(`
             query EligibleShippingMethods {
-                eligibleShippingMethods { id code name description priceWithTax }
+                eligibleShippingMethods { id code name description priceWithTax metadata }
             }
         `);
         return result.eligibleShippingMethods;

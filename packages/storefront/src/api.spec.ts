@@ -647,6 +647,146 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ id: 'order-31' });
     });
 
+    it('requests tax and persisted checkout shipping details with an order', async () => {
+        const fetchMock = mockGraphQlResponse({ order: null });
+
+        await new ShopApi(market).order('order-32');
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('taxSummary { description taxRate taxBase taxTotal }');
+        expect(request.query).toContain('checkoutShipping {');
+        expect(request.query).toContain('estimateMinDays');
+        expect(request.query).toContain('freeShippingApplied');
+    });
+
+    it('cancels only through the customer-authorized order mutation with an explicit reason', async () => {
+        const cancelledOrder = { id: 'order-33', state: 'Cancelled' };
+        const fetchMock = mockGraphQlResponse({ cancelMyAuthorizedOrder: cancelledOrder });
+
+        await expect(
+            new ShopApi(market).cancelMyAuthorizedOrder('order-33', 'Changed my mind'),
+        ).resolves.toEqual(cancelledOrder);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation CancelMyAuthorizedOrder');
+        expect(request.variables).toEqual({ orderId: 'order-33', reason: 'Changed my mind' });
+    });
+
+    it('requests calculator metadata for eligible shipping methods', async () => {
+        const methods = [
+            {
+                id: 'shipping-1',
+                code: 'standard',
+                name: 'Standard',
+                description: '',
+                priceWithTax: 1200,
+                metadata: { estimateMinDays: 2, estimateMaxDays: 4 },
+            },
+        ];
+        const fetchMock = mockGraphQlResponse({ eligibleShippingMethods: methods });
+
+        await expect(new ShopApi(market).eligibleShippingMethods()).resolves.toEqual(methods);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('priceWithTax metadata');
+    });
+
+    it('loads customer after-sales timelines', async () => {
+        const fetchMock = mockGraphQlResponse({ myAfterSalesRequests: [] });
+
+        await expect(new ShopApi(market).afterSalesRequests()).resolves.toEqual([]);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('query MyAfterSalesRequests');
+        expect(request.query).toContain('events {');
+        expect(request.query).toContain('lineAmountWithTax');
+    });
+
+    it('submits after-sales selections without client-calculated money values', async () => {
+        const response = { id: 'request-1', state: 'PENDING' };
+        const fetchMock = mockGraphQlResponse({ createAfterSalesRequest: response });
+        const input = {
+            orderId: 'order-1',
+            type: 'REFUND_ONLY' as const,
+            reason: 'DAMAGED' as const,
+            description: 'The product arrived damaged.',
+            items: [{ orderLineId: 'line-1', quantity: 1 }],
+        };
+
+        await expect(new ShopApi(market).createAfterSalesRequest(input)).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation CreateAfterSalesRequest');
+        expect(request.variables).toEqual({ input });
+        expect(JSON.stringify(request.variables)).not.toContain('requestedAmount');
+    });
+
+    it('loads only server-approved product reviews through the public review query', async () => {
+        const response = { items: [], totalItems: 0, averageRating: 4.25 };
+        const fetchMock = mockGraphQlResponse({ storefrontProductReviews: response });
+
+        await expect(new ShopApi(market).productReviews('product-1')).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('query StorefrontProductReviews');
+        expect(request.query).toContain('verifiedPurchase');
+        expect(request.query).toContain('averageRating');
+        expect(request.variables).toEqual({ productId: 'product-1' });
+    });
+
+    it('loads customer review moderation states', async () => {
+        const fetchMock = mockGraphQlResponse({ myStorefrontReviews: [] });
+
+        await expect(new ShopApi(market).myReviews()).resolves.toEqual([]);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('query MyStorefrontReviews');
+        expect(request.query).toContain('merchantResponse');
+    });
+
+    it('loads review candidates from the authenticated server query', async () => {
+        const response = [{ orderLineId: 'line-7', productId: 'product-3' }];
+        const fetchMock = mockGraphQlResponse({ myStorefrontReviewCandidates: response });
+
+        await expect(new ShopApi(market).reviewCandidates()).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('query MyStorefrontReviewCandidates');
+        expect(request.query).toContain('orderLineId');
+        expect(request.query).toContain('fulfillmentType');
+    });
+
+    it('submits reviews without client-controlled customer or moderation fields', async () => {
+        const response = { id: 'review-1', state: 'PENDING' };
+        const fetchMock = mockGraphQlResponse({ submitStorefrontReview: response });
+        const input = {
+            orderLineId: 'line-1',
+            rating: 5,
+            title: 'Very useful',
+            body: 'The product was clear, practical, and easy to use.',
+        };
+
+        await expect(new ShopApi(market).submitReview(input)).resolves.toEqual(response);
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation SubmitStorefrontReview');
+        expect(request.variables).toEqual({ input });
+        expect(JSON.stringify(request.variables)).not.toContain('customerId');
+        expect(JSON.stringify(request.variables)).not.toContain('state');
+    });
+
     it('returns exact order shortcut counts', async () => {
         const fetchMock = mockGraphQlResponse({
             activeCustomer: {

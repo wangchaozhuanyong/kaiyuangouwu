@@ -1,7 +1,11 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     ArrowLeft,
     ChevronRight,
+    CircleAlert,
+    CircleCheck,
+    Clock3,
+    Download,
     Navigation,
     Package,
     RotateCcw,
@@ -10,7 +14,7 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { ReactNode, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
@@ -18,7 +22,19 @@ import { languageCodeFor } from './i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { responsiveImageSources } from './responsive-image';
 import { PageSkeleton } from './route-loading';
-import { ActiveCustomer, MarketConfig, Order, ProductVariant, StorefrontLanguage } from './types';
+import { TaxSummaryRows } from './tax-summary';
+import {
+    ActiveCustomer,
+    AfterSalesReason,
+    AfterSalesRequest,
+    AfterSalesState,
+    AfterSalesType,
+    CreateAfterSalesRequestInput,
+    MarketConfig,
+    Order,
+    ProductVariant,
+    StorefrontLanguage,
+} from './types';
 
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 type OrderRoute = { name: 'login' | 'order-detail'; id?: string };
@@ -34,6 +50,7 @@ export function OrdersPage({
     onBack,
     onNavigate,
     onBuyAgain,
+    onNotify,
 }: {
     api: ShopApi;
     customer: ActiveCustomer | null;
@@ -45,6 +62,7 @@ export function OrdersPage({
     onBack: () => void;
     onNavigate: (route: OrderRoute) => void;
     onBuyAgain: (order: Order) => Promise<void>;
+    onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
     const [tab, setTab] = useState<OrderTab>(initialTab);
@@ -52,6 +70,7 @@ export function OrdersPage({
     const [searchInput, setSearchInput] = useState('');
     const [orderCode, setOrderCode] = useState('');
     const pageSize = 10;
+    const queryClient = useQueryClient();
     const ordersQuery = useInfiniteQuery({
         queryKey: storefrontQueryKeys.customerOrders(
             market.code,
@@ -75,6 +94,44 @@ export function OrdersPage({
             (ordersQuery.data?.pages.flatMap(page => page.items) ?? []).map(order => [order.id, order]),
         ).values(),
     );
+    const afterSalesQuery = useQuery({
+        queryKey: storefrontQueryKeys.afterSalesRequests(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.afterSalesRequests(signal),
+        enabled: Boolean(customer) && tab === 'service',
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const [cancellingAfterSalesId, setCancellingAfterSalesId] = useState('');
+    const cancelAfterSales = async (id: string) => {
+        if (cancellingAfterSalesId) return;
+        setCancellingAfterSalesId(id);
+        try {
+            const cancelled = await api.cancelAfterSalesRequest(id);
+            queryClient.setQueryData<AfterSalesRequest[]>(
+                storefrontQueryKeys.afterSalesRequests(
+                    market.code,
+                    languageCodeFor(language),
+                    customer?.id ?? '',
+                ),
+                current => current?.map(item => (item.id === cancelled.id ? cancelled : item)) ?? [cancelled],
+            );
+            onNotify(isZh ? '售后申请已撤销' : 'After-sales request cancelled');
+        } catch (requestError) {
+            onNotify(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '撤销售后申请失败'
+                      : 'Could not cancel the request',
+            );
+        } finally {
+            setCancellingAfterSalesId('');
+        }
+    };
     const totalItems = ordersQuery.data?.pages[0]?.totalItems ?? 0;
     const loading = ordersQuery.isPending;
     const loadingMore = ordersQuery.isFetchingNextPage;
@@ -168,14 +225,16 @@ export function OrdersPage({
                     onAction={() => onNavigate({ name: 'login' })}
                 />
             ) : tab === 'service' ? (
-                <EmptyState
-                    icon={<RotateCcw />}
-                    title={isZh ? '暂无售后记录' : 'No after-sales records'}
-                    detail={
-                        isZh
-                            ? '售后能力需要商家后台服务流程支持'
-                            : 'After-sales requires merchant service workflow support'
-                    }
+                <AfterSalesList
+                    requests={afterSalesQuery.data ?? []}
+                    loading={afterSalesQuery.isPending}
+                    error={afterSalesQuery.error instanceof Error ? afterSalesQuery.error.message : ''}
+                    cancellingId={cancellingAfterSalesId}
+                    locale={locale}
+                    language={language}
+                    onRetry={() => void afterSalesQuery.refetch()}
+                    onOpenOrder={orderId => onNavigate({ name: 'order-detail', id: orderId })}
+                    onCancel={id => void cancelAfterSales(id)}
                 />
             ) : loading && !orders.length ? (
                 <PageSkeleton />
@@ -235,6 +294,133 @@ export function OrdersPage({
     );
 }
 
+function AfterSalesList({
+    requests,
+    loading,
+    error,
+    cancellingId,
+    locale,
+    language,
+    onRetry,
+    onOpenOrder,
+    onCancel,
+}: {
+    requests: AfterSalesRequest[];
+    loading: boolean;
+    error: string;
+    cancellingId: string;
+    locale: string;
+    language: StorefrontLanguage;
+    onRetry: () => void;
+    onOpenOrder: (orderId: string) => void;
+    onCancel: (id: string) => void;
+}) {
+    const isZh = language === 'zh';
+    if (loading && !requests.length) return <PageSkeleton />;
+    if (error && !requests.length) {
+        return (
+            <EmptyState
+                icon={<WifiOff />}
+                title={isZh ? '售后记录加载失败' : 'Could not load after-sales requests'}
+                detail={error}
+                action={isZh ? '重试' : 'Retry'}
+                onAction={onRetry}
+            />
+        );
+    }
+    if (!requests.length) {
+        return (
+            <EmptyState
+                icon={<RotateCcw />}
+                title={isZh ? '暂无售后记录' : 'No after-sales requests'}
+                detail={
+                    isZh
+                        ? '可在已付款订单详情中选择“申请售后”'
+                        : 'Open a paid order and choose “Request after-sales”'
+                }
+            />
+        );
+    }
+    return (
+        <section className="after-sales-list" aria-label={isZh ? '售后申请' : 'After-sales requests'}>
+            {requests.map(request => (
+                <article key={request.id} className={`after-sales-card is-${request.state.toLowerCase()}`}>
+                    <header>
+                        <span>
+                            {afterSalesStateIcon(request.state)}
+                            <strong>{afterSalesStateLabel(request.state, language)}</strong>
+                        </span>
+                        <small>{request.code}</small>
+                    </header>
+                    <button
+                        type="button"
+                        className="after-sales-order-link"
+                        onClick={() => onOpenOrder(request.order.id)}
+                    >
+                        <span>{isZh ? `订单 ${request.order.code}` : `Order ${request.order.code}`}</span>
+                        <ChevronRight aria-hidden="true" />
+                    </button>
+                    <div className="after-sales-items">
+                        {request.items.map(item => (
+                            <span key={item.id}>
+                                <strong>{item.productName}</strong>
+                                <small>
+                                    {item.sku} ×{item.quantity}
+                                </small>
+                            </span>
+                        ))}
+                    </div>
+                    <dl>
+                        <div>
+                            <dt>{isZh ? '类型' : 'Type'}</dt>
+                            <dd>{afterSalesTypeLabel(request.type, language)}</dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '申请金额' : 'Requested'}</dt>
+                            <dd>{formatMoney(request.requestedAmount, request.currencyCode, locale)}</dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '更新时间' : 'Updated'}</dt>
+                            <dd>{formatOrderDate(request.updatedAt, locale)}</dd>
+                        </div>
+                    </dl>
+                    <details>
+                        <summary>{isZh ? '查看处理时间线' : 'View timeline'}</summary>
+                        <ol>
+                            {request.events.map(event => (
+                                <li key={event.id}>
+                                    <span />
+                                    <div>
+                                        <strong>{afterSalesStateLabel(event.state, language)}</strong>
+                                        <p>{event.note}</p>
+                                        <small>{formatOrderDate(event.createdAt, locale)}</small>
+                                    </div>
+                                </li>
+                            ))}
+                        </ol>
+                    </details>
+                    {request.state === 'PENDING' && (
+                        <button
+                            type="button"
+                            className="after-sales-cancel"
+                            disabled={Boolean(cancellingId)}
+                            onClick={() => onCancel(request.id)}
+                        >
+                            {cancellingId === request.id
+                                ? isZh
+                                    ? '正在撤销'
+                                    : 'Cancelling'
+                                : isZh
+                                  ? '撤销申请'
+                                  : 'Cancel request'}
+                        </button>
+                    )}
+                </article>
+            ))}
+        </section>
+    );
+}
+
 export function OrderDetailPage({
     order,
     locale,
@@ -243,6 +429,8 @@ export function OrderDetailPage({
     onBack,
     onBuyAgain,
     onReopen,
+    onCancelOrder,
+    onCreateAfterSales,
     onUnavailable,
 }: {
     order: Order | null;
@@ -253,9 +441,13 @@ export function OrderDetailPage({
     onBack: () => void;
     onBuyAgain: (order: Order) => Promise<void>;
     onReopen: (order: Order) => Promise<void>;
+    onCancelOrder: (order: Order, reason: string) => Promise<void>;
+    onCreateAfterSales: (input: CreateAfterSalesRequestInput) => Promise<void>;
     onUnavailable: () => void;
 }) {
     const isZh = language === 'zh';
+    const [cancelOpen, setCancelOpen] = useState(false);
+    const [afterSalesOpen, setAfterSalesOpen] = useState(false);
     if (!order) {
         return (
             <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack}>
@@ -266,21 +458,40 @@ export function OrderDetailPage({
     const inTransit = ['Shipped', 'PartiallyShipped'].includes(order.state);
     const pending = ['AddingItems', 'ArrangingPayment'].includes(order.state);
     const fulfillments = order.fulfillments ?? [];
-    const statusHint = pending
+    const digitalDeliveries = order.digitalDeliveries ?? [];
+    const readyDownloads = digitalDeliveries.filter(
+        delivery => delivery.status === 'READY' && delivery.downloadUrl,
+    );
+    const canCancel =
+        order.state === 'PaymentAuthorized' &&
+        fulfillments.length === 0 &&
+        order.lines.every(
+            line =>
+                line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
+                line.productVariant.customFields.fulfillmentType !== 'digital',
+        );
+    const canRequestAfterSales = ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'].includes(
+        order.state,
+    );
+    const statusHint = readyDownloads.length
         ? isZh
-            ? '订单等待支付，请在支付页完成付款'
-            : 'Complete payment to continue'
-        : inTransit
+            ? '数字商品已可下载，链接为短效安全链接'
+            : 'Your digital products are ready. Download links are short-lived.'
+        : pending
           ? isZh
-              ? '商品正在运输中，请留意物流更新'
-              : 'Your order is in transit'
-          : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+              ? '订单等待支付，请在支付页完成付款'
+              : 'Complete payment to continue'
+          : inTransit
             ? isZh
-                ? '商家正在准备你的商品'
-                : 'The merchant is preparing your order'
-            : isZh
-              ? '订单状态已更新'
-              : 'Order status updated';
+                ? '商品正在运输中，请留意物流更新'
+                : 'Your order is in transit'
+            : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+              ? isZh
+                  ? '商家正在准备你的商品'
+                  : 'The merchant is preparing your order'
+              : isZh
+                ? '订单状态已更新'
+                : 'Order status updated';
     return (
         <main className="page subpage order-detail-page">
             <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
@@ -362,6 +573,41 @@ export function OrderDetailPage({
                     </article>
                 ))}
             </section>
+            {!!digitalDeliveries.length && (
+                <section className="digital-delivery-panel" aria-labelledby="digital-delivery-title">
+                    <header>
+                        <div>
+                            <Download aria-hidden="true" />
+                            <strong id="digital-delivery-title">
+                                {isZh ? '我的数字商品' : 'My digital products'}
+                            </strong>
+                        </div>
+                        <small>
+                            {isZh
+                                ? '每次打开订单都会生成新的安全链接'
+                                : 'Fresh secure links are generated per order view'}
+                        </small>
+                    </header>
+                    <div>
+                        {digitalDeliveries.map(delivery => (
+                            <article key={delivery.orderLineId}>
+                                <span>
+                                    <strong>{delivery.name}</strong>
+                                    <small>{delivery.sku}</small>
+                                </span>
+                                {delivery.status === 'READY' && delivery.downloadUrl ? (
+                                    <a href={delivery.downloadUrl} rel="noreferrer">
+                                        <Download aria-hidden="true" />
+                                        {isZh ? '安全下载' : 'Secure download'}
+                                    </a>
+                                ) : (
+                                    <em>{digitalDeliveryStatus(delivery.status, language)}</em>
+                                )}
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
             <section className="order-information">
                 <div>
                     <span>{isZh ? '下单时间' : 'Placed at'}</span>
@@ -371,11 +617,27 @@ export function OrderDetailPage({
                     <span>{isZh ? '订单编号' : 'Order code'}</span>
                     <b>{order.code}</b>
                 </div>
+                {order.checkoutShipping && (
+                    <div>
+                        <span>{isZh ? '配送时效' : 'Delivery estimate'}</span>
+                        <b>{shippingEstimate(order, language)}</b>
+                    </div>
+                )}
             </section>
             <section className="order-detail-summary">
                 <PriceSummary order={order} locale={locale} language={language} />
             </section>
             <div className="order-detail-actions">
+                {canCancel && (
+                    <button type="button" className="danger-action" onClick={() => setCancelOpen(true)}>
+                        {isZh ? '取消订单' : 'Cancel order'}
+                    </button>
+                )}
+                {canRequestAfterSales && (
+                    <button type="button" onClick={() => setAfterSalesOpen(true)}>
+                        {isZh ? '申请售后' : 'Request after-sales'}
+                    </button>
+                )}
                 <button
                     type="button"
                     className="primary-action"
@@ -406,7 +668,314 @@ export function OrderDetailPage({
                             : 'Buy again'}
                 </button>
             </div>
+            {cancelOpen && (
+                <CancelOrderSheet
+                    order={order}
+                    language={language}
+                    onClose={() => setCancelOpen(false)}
+                    onConfirm={async reason => {
+                        await onCancelOrder(order, reason);
+                        setCancelOpen(false);
+                    }}
+                />
+            )}
+            {afterSalesOpen && (
+                <AfterSalesRequestSheet
+                    order={order}
+                    locale={locale}
+                    language={language}
+                    onClose={() => setAfterSalesOpen(false)}
+                    onConfirm={async input => {
+                        await onCreateAfterSales(input);
+                        setAfterSalesOpen(false);
+                    }}
+                />
+            )}
         </main>
+    );
+}
+
+function AfterSalesRequestSheet({
+    order,
+    locale,
+    language,
+    onClose,
+    onConfirm,
+}: {
+    order: Order;
+    locale: string;
+    language: StorefrontLanguage;
+    onClose: () => void;
+    onConfirm: (input: CreateAfterSalesRequestInput) => Promise<void>;
+}) {
+    const isZh = language === 'zh';
+    const [quantities, setQuantities] = useState<Record<string, number>>({});
+    const [type, setType] = useState<AfterSalesType>('REFUND_ONLY');
+    const [reason, setReason] = useState<AfterSalesReason>('OTHER');
+    const [description, setDescription] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const dialogRef = useRef<HTMLElement>(null);
+    const closeRef = useRef(onClose);
+    const submittingRef = useRef(submitting);
+    const previousFocus = useRef<HTMLElement | null>(null);
+    const titleId = useId();
+    const selectedLines = order.lines.filter(line => (quantities[line.id] ?? 0) > 0);
+    const containsDigital = selectedLines.some(
+        line => line.customFields.fulfillmentTypeSnapshot === 'digital',
+    );
+    const requestedPreview = selectedLines.reduce(
+        (total, line) => total + line.proratedUnitPriceWithTax * (quantities[line.id] ?? 0),
+        0,
+    );
+
+    useEffect(() => {
+        closeRef.current = onClose;
+    }, [onClose]);
+    useEffect(() => {
+        submittingRef.current = submitting;
+    }, [submitting]);
+    useEffect(() => {
+        if (containsDigital && type !== 'REFUND_ONLY') setType('REFUND_ONLY');
+    }, [containsDigital, type]);
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const previousOverflow = document.body.style.overflow;
+        const selector =
+            'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+        const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
+        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
+        const keydown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && !submittingRef.current) {
+                event.preventDefault();
+                closeRef.current();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const items = focusable();
+            if (!items.length) {
+                event.preventDefault();
+                dialog.focus();
+                return;
+            }
+            const first = items[0];
+            const last = items[items.length - 1];
+            const active = document.activeElement;
+            if (event.shiftKey && (active === first || !dialog.contains(active))) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', keydown);
+        return () => {
+            cancelAnimationFrame(frame);
+            document.removeEventListener('keydown', keydown);
+            document.body.style.overflow = previousOverflow;
+            previousFocus.current?.focus();
+        };
+    }, []);
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!selectedLines.length || description.trim().length < 3 || submitting) return;
+        setSubmitting(true);
+        setError('');
+        try {
+            await onConfirm({
+                orderId: order.id,
+                type,
+                reason,
+                description: description.trim(),
+                items: selectedLines.map(line => ({
+                    orderLineId: line.id,
+                    quantity: quantities[line.id] ?? 1,
+                })),
+            });
+        } catch (requestError) {
+            setError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '提交售后申请失败'
+                      : 'Could not submit the request',
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="sheet-layer" role="presentation">
+            <button
+                className="sheet-mask"
+                type="button"
+                disabled={submitting}
+                onClick={onClose}
+                aria-label={isZh ? '关闭' : 'Close'}
+            />
+            <section
+                ref={dialogRef}
+                className="sheet after-sales-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
+            >
+                <header>
+                    <strong id={titleId}>{isZh ? '申请售后' : 'Request after-sales'}</strong>
+                    <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={onClose}
+                        aria-label={isZh ? '关闭' : 'Close'}
+                    >
+                        <X aria-hidden="true" />
+                    </button>
+                </header>
+                <form onSubmit={event => void submit(event)}>
+                    <fieldset className="after-sales-line-selection">
+                        <legend>{isZh ? '选择商品和数量' : 'Select products and quantities'}</legend>
+                        {order.lines.map(line => {
+                            const selected = (quantities[line.id] ?? 0) > 0;
+                            return (
+                                <div key={line.id}>
+                                    <label>
+                                        <input
+                                            type="checkbox"
+                                            checked={selected}
+                                            disabled={submitting}
+                                            onChange={event =>
+                                                setQuantities(current => ({
+                                                    ...current,
+                                                    [line.id]: event.currentTarget.checked ? 1 : 0,
+                                                }))
+                                            }
+                                        />
+                                        <span>
+                                            <strong>{line.productVariant.name}</strong>
+                                            <small>{line.productVariant.sku}</small>
+                                        </span>
+                                    </label>
+                                    {selected && (
+                                        <label className="after-sales-quantity">
+                                            <span>{isZh ? '数量' : 'Qty'}</span>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={line.quantity}
+                                                value={quantities[line.id] ?? 1}
+                                                disabled={submitting}
+                                                onChange={event => {
+                                                    const value = Number(event.currentTarget.value);
+                                                    setQuantities(current => ({
+                                                        ...current,
+                                                        [line.id]: Math.max(
+                                                            1,
+                                                            Math.min(line.quantity, value || 1),
+                                                        ),
+                                                    }));
+                                                }}
+                                            />
+                                        </label>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </fieldset>
+                    <label className="after-sales-field">
+                        <span>{isZh ? '售后类型' : 'Request type'}</span>
+                        <select
+                            value={type}
+                            disabled={submitting}
+                            onChange={event => setType(event.currentTarget.value as AfterSalesType)}
+                        >
+                            <option value="REFUND_ONLY">
+                                {afterSalesTypeLabel('REFUND_ONLY', language)}
+                            </option>
+                            <option value="RETURN_AND_REFUND" disabled={containsDigital}>
+                                {afterSalesTypeLabel('RETURN_AND_REFUND', language)}
+                            </option>
+                        </select>
+                        {containsDigital && (
+                            <small>
+                                {isZh
+                                    ? '数字商品只能申请仅退款'
+                                    : 'Digital products support refund-only requests'}
+                            </small>
+                        )}
+                    </label>
+                    <label className="after-sales-field">
+                        <span>{isZh ? '申请原因' : 'Reason'}</span>
+                        <select
+                            value={reason}
+                            disabled={submitting}
+                            onChange={event => setReason(event.currentTarget.value as AfterSalesReason)}
+                        >
+                            {afterSalesReasonOptions.map(option => (
+                                <option key={option} value={option}>
+                                    {afterSalesReasonLabel(option, language)}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="after-sales-field">
+                        <span>{isZh ? '问题描述' : 'Description'}</span>
+                        <textarea
+                            value={description}
+                            rows={5}
+                            minLength={3}
+                            maxLength={2000}
+                            required
+                            disabled={submitting}
+                            placeholder={
+                                isZh
+                                    ? '请说明问题、期望处理方式；不要填写密码等敏感信息'
+                                    : 'Describe the issue and expected resolution. Do not include passwords.'
+                            }
+                            onChange={event => setDescription(event.currentTarget.value)}
+                        />
+                    </label>
+                    <div className="after-sales-request-total">
+                        <span>{isZh ? '预计申请金额' : 'Estimated request amount'}</span>
+                        <strong>{formatMoney(requestedPreview, order.currencyCode, locale)}</strong>
+                        <small>
+                            {isZh
+                                ? '最终金额由商家审核，当前不会发起真实退款'
+                                : 'The store will review the final amount. No payment refund is initiated now.'}
+                        </small>
+                    </div>
+                    {error && (
+                        <div className="inline-error" role="alert">
+                            {error}
+                        </div>
+                    )}
+                    <div className="after-sales-submit-actions">
+                        <button type="button" disabled={submitting} onClick={onClose}>
+                            {isZh ? '取消' : 'Cancel'}
+                        </button>
+                        <button
+                            className="primary-action"
+                            type="submit"
+                            disabled={submitting || !selectedLines.length || description.trim().length < 3}
+                        >
+                            {submitting
+                                ? isZh
+                                    ? '提交中'
+                                    : 'Submitting'
+                                : isZh
+                                  ? '提交申请'
+                                  : 'Submit request'}
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </div>
     );
 }
 
@@ -640,12 +1209,203 @@ function PriceSummary({
                     <dd>-{formatMoney(discount, order.currencyCode, locale)}</dd>
                 </div>
             )}
+            <TaxSummaryRows order={order} locale={locale} language={language} />
             <div className="summary-total">
                 <dt>{isZh ? '合计' : 'Total'}</dt>
                 <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
             </div>
         </dl>
     );
+}
+
+function CancelOrderSheet({
+    order,
+    language,
+    onClose,
+    onConfirm,
+}: {
+    order: Order;
+    language: StorefrontLanguage;
+    onClose: () => void;
+    onConfirm: (reason: string) => Promise<void>;
+}) {
+    const isZh = language === 'zh';
+    const [reason, setReason] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const dialogRef = useRef<HTMLElement>(null);
+    const closeRef = useRef(onClose);
+    const submittingRef = useRef(submitting);
+    const previousFocus = useRef<HTMLElement | null>(null);
+    const titleId = useId();
+
+    useEffect(() => {
+        closeRef.current = onClose;
+    }, [onClose]);
+    useEffect(() => {
+        submittingRef.current = submitting;
+    }, [submitting]);
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const previousOverflow = document.body.style.overflow;
+        const selector = 'button:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+        const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
+        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
+        const keydown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && !submittingRef.current) {
+                event.preventDefault();
+                closeRef.current();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const items = focusable();
+            if (!items.length) {
+                event.preventDefault();
+                dialog.focus();
+                return;
+            }
+            const first = items[0];
+            const last = items[items.length - 1];
+            const active = document.activeElement;
+            if (event.shiftKey && (active === first || !dialog.contains(active))) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', keydown);
+        return () => {
+            cancelAnimationFrame(frame);
+            document.removeEventListener('keydown', keydown);
+            document.body.style.overflow = previousOverflow;
+            previousFocus.current?.focus();
+        };
+    }, []);
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const normalizedReason = reason.trim();
+        if (!normalizedReason || submitting) return;
+        setSubmitting(true);
+        setError('');
+        try {
+            await onConfirm(normalizedReason);
+        } catch (requestError) {
+            setError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '订单取消失败，请稍后重试'
+                      : 'Could not cancel the order. Try again later.',
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="sheet-layer" role="presentation">
+            <button
+                className="sheet-mask"
+                type="button"
+                disabled={submitting}
+                onClick={onClose}
+                aria-label={isZh ? '关闭' : 'Close'}
+            />
+            <section
+                ref={dialogRef}
+                className="sheet order-cancel-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
+            >
+                <header>
+                    <strong id={titleId}>{isZh ? '取消订单' : 'Cancel order'}</strong>
+                    <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={onClose}
+                        aria-label={isZh ? '关闭' : 'Close'}
+                    >
+                        <X aria-hidden="true" />
+                    </button>
+                </header>
+                <form onSubmit={event => void submit(event)}>
+                    <p>
+                        {isZh
+                            ? `订单 ${order.code} 尚未扣款和发货。确认后将撤销支付授权并释放库存。`
+                            : `Order ${order.code} has not been charged or shipped. Confirming will void the payment authorization and release stock.`}
+                    </p>
+                    <label>
+                        <span>{isZh ? '取消原因' : 'Reason for cancellation'}</span>
+                        <textarea
+                            value={reason}
+                            rows={4}
+                            maxLength={500}
+                            required
+                            autoFocus
+                            placeholder={isZh ? '请简要说明原因' : 'Briefly tell us why'}
+                            onChange={event => setReason(event.currentTarget.value)}
+                        />
+                    </label>
+                    <small>{reason.length}/500</small>
+                    {error && (
+                        <div className="inline-error" role="alert">
+                            {error}
+                        </div>
+                    )}
+                    <div className="order-cancel-actions">
+                        <button type="button" disabled={submitting} onClick={onClose}>
+                            {isZh ? '暂不取消' : 'Keep order'}
+                        </button>
+                        <button
+                            className="danger-action"
+                            type="submit"
+                            disabled={submitting || !reason.trim()}
+                        >
+                            {submitting
+                                ? isZh
+                                    ? '正在取消'
+                                    : 'Cancelling'
+                                : isZh
+                                  ? '确认取消'
+                                  : 'Confirm cancellation'}
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    );
+}
+
+function shippingEstimate(order: Order, language: StorefrontLanguage): string {
+    const shipping = order.checkoutShipping;
+    if (!shipping) return language === 'zh' ? '无需配送' : 'No delivery required';
+    const minimum = shipping.estimateMinDays;
+    const maximum = shipping.estimateMaxDays;
+    const estimate =
+        minimum == null && maximum == null
+            ? ''
+            : minimum === maximum || maximum == null
+              ? language === 'zh'
+                  ? `预计 ${minimum ?? maximum} 天`
+                  : `Estimated ${minimum ?? maximum} days`
+              : language === 'zh'
+                ? `预计 ${minimum ?? maximum}–${maximum} 天`
+                : `Estimated ${minimum ?? maximum}–${maximum} days`;
+    return [
+        shipping.methodName,
+        estimate,
+        shipping.freeShippingApplied ? (language === 'zh' ? '免邮' : 'Free') : '',
+    ]
+        .filter(Boolean)
+        .join(' · ');
 }
 
 function formatMoney(value: number, currency: string, locale: string): string {
@@ -665,6 +1425,51 @@ function formatOrderDate(value: string | null | undefined, locale: string): stri
         hour: '2-digit',
         minute: '2-digit',
     });
+}
+
+const afterSalesReasonOptions: AfterSalesReason[] = [
+    'CHANGED_MIND',
+    'NOT_AS_DESCRIBED',
+    'DAMAGED',
+    'WRONG_ITEM',
+    'DELIVERY_ISSUE',
+    'DIGITAL_CONTENT_ISSUE',
+    'OTHER',
+];
+
+function afterSalesStateLabel(state: AfterSalesState, language: StorefrontLanguage): string {
+    const labels: Record<AfterSalesState, { zh: string; en: string }> = {
+        PENDING: { zh: '待商家处理', en: 'Awaiting review' },
+        APPROVED: { zh: '商家已同意', en: 'Approved' },
+        REJECTED: { zh: '申请未通过', en: 'Not approved' },
+        CANCELLED: { zh: '申请已撤销', en: 'Cancelled' },
+        COMPLETED: { zh: '售后已完成', en: 'Completed' },
+    };
+    return labels[state][language];
+}
+
+function afterSalesStateIcon(state: AfterSalesState): ReactNode {
+    if (state === 'PENDING') return <Clock3 aria-hidden="true" />;
+    if (state === 'APPROVED' || state === 'COMPLETED') return <CircleCheck aria-hidden="true" />;
+    return <CircleAlert aria-hidden="true" />;
+}
+
+function afterSalesTypeLabel(type: AfterSalesType, language: StorefrontLanguage): string {
+    if (type === 'RETURN_AND_REFUND') return language === 'zh' ? '退货退款' : 'Return and refund';
+    return language === 'zh' ? '仅退款' : 'Refund only';
+}
+
+function afterSalesReasonLabel(reason: AfterSalesReason, language: StorefrontLanguage): string {
+    const labels: Record<AfterSalesReason, { zh: string; en: string }> = {
+        CHANGED_MIND: { zh: '不想要了', en: 'Changed my mind' },
+        NOT_AS_DESCRIBED: { zh: '与描述不符', en: 'Not as described' },
+        DAMAGED: { zh: '商品损坏', en: 'Damaged' },
+        WRONG_ITEM: { zh: '发错商品', en: 'Wrong item' },
+        DELIVERY_ISSUE: { zh: '配送问题', en: 'Delivery issue' },
+        DIGITAL_CONTENT_ISSUE: { zh: '数字内容问题', en: 'Digital content issue' },
+        OTHER: { zh: '其他原因', en: 'Other' },
+    };
+    return labels[reason][language];
 }
 
 function orderStateLabel(state: string, language: StorefrontLanguage): string {
@@ -707,6 +1512,19 @@ function fulfillmentStateLabel(state: string, language: StorefrontLanguage): str
         Cancelled: 'Cancelled',
     };
     return (language === 'zh' ? zh : en)[state] ?? state;
+}
+
+function digitalDeliveryStatus(
+    status: NonNullable<Order['digitalDeliveries']>[number]['status'],
+    language: StorefrontLanguage,
+): string {
+    const labels = {
+        READY: language === 'zh' ? '可下载' : 'Ready',
+        PAYMENT_REQUIRED: language === 'zh' ? '付款后开放' : 'Available after payment',
+        NOT_CONFIGURED: language === 'zh' ? '交付服务配置中' : 'Delivery is being configured',
+        FILE_MISSING: language === 'zh' ? '内容准备中，请联系商家' : 'Content is being prepared',
+    };
+    return labels[status];
 }
 
 function orderStatesForTab(tab: OrderTab): string[] | undefined {

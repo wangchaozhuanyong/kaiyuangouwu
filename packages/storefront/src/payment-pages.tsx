@@ -1,14 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Check, CircleAlert, CircleCheck, House, Package, WalletCards } from 'lucide-react';
+import {
+    ArrowLeft,
+    Check,
+    CircleAlert,
+    CircleCheck,
+    Download,
+    House,
+    Package,
+    WalletCards,
+} from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
+import { paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
+import { TaxSummaryRows } from './tax-summary';
 import { ActiveCustomer, MarketConfig, Order, StorefrontCart, StorefrontLanguage } from './types';
 
-const LOCAL_TEST_PAYMENT_CODE = '测试支付';
 type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' };
 
 export function PaymentPage({
@@ -37,20 +47,19 @@ export function PaymentPage({
     const [submitting, setSubmitting] = useState(false);
     const [paymentError, setPaymentError] = useState('');
     const submissionLock = useRef(false);
+    const isTestMode = import.meta.env.DEV;
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
     const methodsQuery = useQuery({
         queryKey: storefrontQueryKeys.paymentMethods(market.code, languageCodeFor(language), order?.id ?? ''),
-        queryFn: async ({ signal }) => {
-            const result = await api.eligiblePaymentMethods(signal);
-            return import.meta.env.DEV
-                ? result.filter(method => method.code === LOCAL_TEST_PAYMENT_CODE)
-                : [];
-        },
+        queryFn: ({ signal }) => api.eligiblePaymentMethods(signal),
         enabled: isPending,
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
-    const methods = isPending ? (methodsQuery.data ?? []) : [];
+    const availability = paymentAvailability(isPending ? (methodsQuery.data ?? []) : [], {
+        allowTestMethods: isTestMode,
+    });
+    const methods = availability.methods;
     const loading = isPending && methodsQuery.isPending;
     const methodLoadError =
         methodsQuery.error instanceof Error
@@ -75,7 +84,13 @@ export function PaymentPage({
 
     const submitPayment = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!import.meta.env.DEV || !isPending || !selectedMethod || submitting || submissionLock.current)
+        if (
+            availability.status !== 'READY' ||
+            !isPending ||
+            !selectedMethod ||
+            submitting ||
+            submissionLock.current
+        )
             return;
         submissionLock.current = true;
         setSubmitting(true);
@@ -88,8 +103,8 @@ export function PaymentPage({
                 requestError instanceof Error
                     ? requestError.message
                     : isZh
-                      ? '测试支付失败，请重试'
-                      : 'Test payment failed. Please try again.',
+                      ? '支付提交失败，请重试'
+                      : 'Payment failed. Please try again.',
             );
         } finally {
             submissionLock.current = false;
@@ -124,14 +139,37 @@ export function PaymentPage({
             />
             <form className="payment-layout" onSubmit={event => void submitPayment(event)}>
                 <div className="payment-main">
-                    <section className="payment-test-notice" role="note">
+                    <section
+                        className={`payment-test-notice${isTestMode ? '' : ' is-production'}`}
+                        role="note"
+                    >
                         <CircleAlert aria-hidden="true" />
                         <div>
-                            <strong>{isZh ? '本地测试支付' : 'Local test payment'}</strong>
+                            <strong>
+                                {isTestMode
+                                    ? isZh
+                                        ? '本地测试支付'
+                                        : 'Local test payment'
+                                    : availability.status === 'READY'
+                                      ? isZh
+                                          ? '安全支付'
+                                          : 'Secure payment'
+                                      : isZh
+                                        ? '支付暂未开放'
+                                        : 'Payment is not available yet'}
+                            </strong>
                             <span>
-                                {isZh
-                                    ? '仅用于预览结账流程，不会产生真实扣款。'
-                                    : 'For previewing checkout only. No real charge will be made.'}
+                                {isTestMode
+                                    ? isZh
+                                        ? '仅用于预览结账流程，不会产生真实扣款。'
+                                        : 'For previewing checkout only. No real charge will be made.'
+                                    : availability.status === 'READY'
+                                      ? isZh
+                                          ? '请确认订单和金额后选择支付方式。'
+                                          : 'Review the order and amount before choosing a payment method.'
+                                      : isZh
+                                        ? '订单已保留，不会发起扣款。你可以返回购物车继续修改。'
+                                        : 'Your order is preserved and no charge will be attempted. You can return to edit it.'}
                             </span>
                         </div>
                     </section>
@@ -165,12 +203,17 @@ export function PaymentPage({
                                         />
                                         <WalletCards aria-hidden="true" />
                                         <span>
-                                            <strong>{isZh ? '测试支付' : 'Test payment'}</strong>
+                                            <strong>{method.name}</strong>
                                             <small>
                                                 {method.isEligible
-                                                    ? isZh
-                                                        ? '本地即时模拟支付'
-                                                        : 'Instant local payment simulation'
+                                                    ? method.description ||
+                                                      (isTestMode
+                                                          ? isZh
+                                                              ? '本地即时模拟支付'
+                                                              : 'Instant local payment simulation'
+                                                          : isZh
+                                                            ? '可用于当前订单'
+                                                            : 'Available for this order')
                                                     : (method.eligibilityMessage ??
                                                       (isZh
                                                           ? '当前订单不可用'
@@ -181,15 +224,28 @@ export function PaymentPage({
                                     </label>
                                 ))}
                             </fieldset>
-                        ) : (
+                        ) : availability.status === 'NOT_CONFIGURED' ? (
                             <InlineError
                                 message={
                                     isZh
-                                        ? '当前没有可用的本地测试支付方式'
-                                        : 'No local test payment method is available'
+                                        ? isTestMode
+                                            ? '当前没有可用的本地测试支付方式'
+                                            : '当前店铺尚未接入支付方式，订单已保留'
+                                        : isTestMode
+                                          ? 'No local test payment method is available'
+                                          : 'No payment provider is configured for this store. Your order is preserved.'
                                 }
                                 action={isZh ? '重试' : 'Retry'}
                                 onAction={() => void methodsQuery.refetch()}
+                            />
+                        ) : (
+                            <InlineError
+                                message={
+                                    methods[0]?.eligibilityMessage ??
+                                    (isZh
+                                        ? '当前订单暂不满足支付条件，请返回修改订单'
+                                        : 'This order is not currently eligible for payment. Return to edit it.')
+                                }
                             />
                         )}
                         {paymentError && methods.length > 0 && <InlineError message={paymentError} />}
@@ -218,6 +274,13 @@ export function PaymentPage({
                             <dt>{isZh ? '配送费' : 'Delivery'}</dt>
                             <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
                         </div>
+                        {order.checkoutShipping && (
+                            <div className="shipping-estimate-detail">
+                                <dt>{isZh ? '配送时效' : 'Delivery estimate'}</dt>
+                                <dd>{shippingEstimate(order, language)}</dd>
+                            </div>
+                        )}
+                        <TaxSummaryRows order={order} locale={locale} language={language} />
                         <div className="summary-total">
                             <dt>{isZh ? '应付合计' : 'Total due'}</dt>
                             <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
@@ -226,12 +289,20 @@ export function PaymentPage({
                     <button type="submit" disabled={!selectedMethod || submitting || loading}>
                         <WalletCards aria-hidden="true" />
                         {submitting
-                            ? isZh
-                                ? '正在完成测试支付'
-                                : 'Completing test payment'
-                            : isZh
-                              ? '确认测试支付'
-                              : 'Confirm test payment'}
+                            ? isTestMode
+                                ? isZh
+                                    ? '正在完成测试支付'
+                                    : 'Completing test payment'
+                                : isZh
+                                  ? '正在提交支付'
+                                  : 'Submitting payment'
+                            : isTestMode
+                              ? isZh
+                                  ? '确认测试支付'
+                                  : 'Confirm test payment'
+                              : isZh
+                                ? '确认支付'
+                                : 'Confirm payment'}
                     </button>
                     <button
                         type="button"
@@ -323,12 +394,24 @@ export function OrderConfirmationPage({
                 <span className="order-confirmation-icon">
                     <CircleCheck aria-hidden="true" />
                 </span>
-                <p>{isZh ? '本地测试订单' : 'Local test order'}</p>
+                <p>
+                    {import.meta.env.DEV
+                        ? isZh
+                            ? '本地测试订单'
+                            : 'Local test order'
+                        : isZh
+                          ? '订单状态'
+                          : 'Order status'}
+                </p>
                 <h1>{isZh ? '订单提交成功' : 'Order confirmed'}</h1>
                 <span>
-                    {isZh
-                        ? '测试支付已完成，不会产生真实扣款。'
-                        : 'The test payment is complete. No real charge was made.'}
+                    {import.meta.env.DEV
+                        ? isZh
+                            ? '测试支付已完成，不会产生真实扣款。'
+                            : 'The test payment is complete. No real charge was made.'
+                        : isZh
+                          ? '支付状态已更新，请保留订单号。'
+                          : 'The payment status has been updated. Keep your order number.'}
                 </span>
             </section>
             <section className="order-confirmation-summary">
@@ -345,6 +428,12 @@ export function OrderConfirmationPage({
                         <dt>{isZh ? '支付金额' : 'Payment total'}</dt>
                         <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
                     </div>
+                    {order.checkoutShipping && (
+                        <div>
+                            <dt>{isZh ? '配送时效' : 'Delivery estimate'}</dt>
+                            <dd>{shippingEstimate(order, language)}</dd>
+                        </div>
+                    )}
                 </dl>
                 <small>
                     {isZh
@@ -352,6 +441,47 @@ export function OrderConfirmationPage({
                         : 'Keep your order number. Guest access through this link is available for a limited time.'}
                 </small>
             </section>
+            {!!order.digitalDeliveries?.length && (
+                <section className="digital-delivery-panel order-confirmation-downloads">
+                    <header>
+                        <div>
+                            <Download aria-hidden="true" />
+                            <strong>{isZh ? '数字商品交付' : 'Digital delivery'}</strong>
+                        </div>
+                        <small>
+                            {isZh
+                                ? '请立即保存内容；过期后可从订单详情生成新链接'
+                                : 'Save your files now. New links are available from order details.'}
+                        </small>
+                    </header>
+                    <div>
+                        {order.digitalDeliveries.map(delivery => (
+                            <article key={delivery.orderLineId}>
+                                <span>
+                                    <strong>{delivery.name}</strong>
+                                    <small>{delivery.sku}</small>
+                                </span>
+                                {delivery.status === 'READY' && delivery.downloadUrl ? (
+                                    <a href={delivery.downloadUrl} rel="noreferrer">
+                                        <Download aria-hidden="true" />
+                                        {isZh ? '下载' : 'Download'}
+                                    </a>
+                                ) : (
+                                    <em>
+                                        {delivery.status === 'PAYMENT_REQUIRED'
+                                            ? isZh
+                                                ? '付款后开放'
+                                                : 'Available after payment'
+                                            : isZh
+                                              ? '内容准备中'
+                                              : 'Content is being prepared'}
+                                    </em>
+                                )}
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
             <div className="order-confirmation-actions">
                 <button type="button" className="primary-action" onClick={() => onNavigate({ name: 'home' })}>
                     <House aria-hidden="true" />
@@ -366,6 +496,26 @@ export function OrderConfirmationPage({
             </div>
         </main>
     );
+}
+
+function shippingEstimate(order: Order, language: StorefrontLanguage): string {
+    const shipping = order.checkoutShipping;
+    if (!shipping) return language === 'zh' ? '无需配送' : 'No delivery required';
+    const minimum = shipping.estimateMinDays;
+    const maximum = shipping.estimateMaxDays;
+    const estimate =
+        minimum == null && maximum == null
+            ? ''
+            : minimum === maximum || maximum == null
+              ? language === 'zh'
+                  ? `预计 ${minimum ?? maximum} 天`
+                  : `Estimated ${minimum ?? maximum} days`
+              : language === 'zh'
+                ? `预计 ${minimum ?? maximum}–${maximum} 天`
+                : `Estimated ${minimum ?? maximum}–${maximum} days`;
+    return [shipping.methodName, estimate, shipping.freeShippingApplied ? (language === 'zh' ? '免邮' : 'Free') : '']
+        .filter(Boolean)
+        .join(' · ');
 }
 
 function SubHeader({

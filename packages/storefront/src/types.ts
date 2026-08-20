@@ -27,7 +27,7 @@ export interface ProductVariant {
     currencyCode: string;
     stockLevel: 'IN_STOCK' | 'OUT_OF_STOCK';
     featuredAsset: Asset | null;
-    product: { featuredAsset: Asset | null };
+    product: { id: string; name: string; featuredAsset: Asset | null };
     customFields: { fulfillmentType: FulfillmentType };
 }
 
@@ -66,8 +66,117 @@ export interface OrderLine {
     id: string;
     quantity: number;
     linePriceWithTax: number;
+    proratedUnitPriceWithTax: number;
     productVariant: ProductVariant;
     customFields: { fulfillmentTypeSnapshot: FulfillmentType };
+}
+
+export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND';
+export type AfterSalesState = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
+export type AfterSalesReason =
+    | 'CHANGED_MIND'
+    | 'NOT_AS_DESCRIBED'
+    | 'DAMAGED'
+    | 'WRONG_ITEM'
+    | 'DELIVERY_ISSUE'
+    | 'DIGITAL_CONTENT_ISSUE'
+    | 'OTHER';
+
+export interface AfterSalesItem {
+    id: string;
+    orderLineId?: string | null;
+    quantity: number;
+    unitPriceWithTax: number;
+    lineAmountWithTax: number;
+    productName: string;
+    sku: string;
+    fulfillmentType: FulfillmentType;
+}
+
+export interface AfterSalesEvent {
+    id: string;
+    createdAt: string;
+    state: AfterSalesState;
+    actorType: 'CUSTOMER' | 'ADMIN' | 'SYSTEM';
+    actorLabel: string;
+    note: string;
+}
+
+export interface AfterSalesRequest {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    code: string;
+    type: AfterSalesType;
+    state: AfterSalesState;
+    reason: AfterSalesReason;
+    description: string;
+    currencyCode: string;
+    requestedAmount: number;
+    approvedAmount?: number | null;
+    resolution?: string | null;
+    respondedAt?: string | null;
+    completedAt?: string | null;
+    cancelledAt?: string | null;
+    order: Pick<Order, 'id' | 'code' | 'state'>;
+    items: AfterSalesItem[];
+    events: AfterSalesEvent[];
+}
+
+export interface CreateAfterSalesRequestInput {
+    orderId: string;
+    type: AfterSalesType;
+    reason: AfterSalesReason;
+    description: string;
+    items: Array<{ orderLineId: string; quantity: number }>;
+}
+
+export type StorefrontReviewState = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface StorefrontReview {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    state: StorefrontReviewState;
+    rating: number;
+    title: string;
+    body: string;
+    customerName: string;
+    productName: string;
+    sku: string;
+    merchantResponse?: string | null;
+    moderatedAt?: string | null;
+    orderLineId?: string | null;
+    productId?: string | null;
+    productVariantId?: string | null;
+    verifiedPurchase: boolean;
+}
+
+export interface StorefrontReviewList {
+    items: StorefrontReview[];
+    totalItems: number;
+    averageRating: number;
+}
+
+export interface StorefrontReviewCandidate {
+    orderLineId: string;
+    orderId: string;
+    orderCode: string;
+    orderState: string;
+    orderPlacedAt?: string | null;
+    productId: string;
+    productVariantId: string;
+    productName: string;
+    variantName: string;
+    sku: string;
+    fulfillmentType: FulfillmentType;
+}
+
+export interface SubmitStorefrontReviewInput {
+    orderLineId: string;
+    rating: number;
+    title: string;
+    body: string;
 }
 
 export interface CheckoutFulfillment {
@@ -87,6 +196,32 @@ export interface OrderFulfillment {
     updatedAt: string;
 }
 
+export interface DigitalDelivery {
+    orderLineId: string;
+    sku: string;
+    name: string;
+    status: 'READY' | 'PAYMENT_REQUIRED' | 'NOT_CONFIGURED' | 'FILE_MISSING';
+    downloadUrl?: string | null;
+    expiresAt?: string | null;
+}
+
+export interface OrderTaxSummary {
+    description: string;
+    taxRate: number;
+    taxBase: number;
+    taxTotal: number;
+}
+
+export interface CheckoutShipping {
+    methodCode: string;
+    methodName: string;
+    priceWithTax: number;
+    estimateMinDays?: number | null;
+    estimateMaxDays?: number | null;
+    freeShippingThreshold?: number | null;
+    freeShippingApplied: boolean;
+}
+
 export interface Order {
     id: string;
     code: string;
@@ -100,12 +235,15 @@ export interface Order {
     customer?: { id: string; emailAddress: string } | null;
     lines: OrderLine[];
     discounts: Array<{ description: string; amountWithTax: number }>;
+    taxSummary: OrderTaxSummary[];
     couponCodes: string[];
     customFields: {
         customerNote?: string | null;
     };
     fulfillments?: OrderFulfillment[] | null;
+    digitalDeliveries?: DigitalDelivery[] | null;
     checkoutFulfillment?: CheckoutFulfillment;
+    checkoutShipping?: CheckoutShipping | null;
 }
 
 export interface OrderPage {
@@ -210,6 +348,14 @@ export interface ShippingMethod {
     name: string;
     description: string;
     priceWithTax: number;
+    metadata?: {
+        physicalSubtotalWithTax?: number;
+        physicalQuantity?: number;
+        freeShippingThreshold?: number;
+        freeShippingApplied?: boolean;
+        estimateMinDays?: number;
+        estimateMaxDays?: number;
+    } | null;
 }
 
 export interface PaymentMethod {

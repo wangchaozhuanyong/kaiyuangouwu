@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
-import { OrdersPage } from './order-pages';
+import { OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { ActiveCustomer, MarketConfig, Order } from './types';
 
@@ -27,11 +27,13 @@ const order: Order = {
     shippingWithTax: 0,
     totalWithTax: 12900,
     currencyCode: 'MYR',
+    taxSummary: [],
     lines: [
         {
             id: 'line-1',
             quantity: 1,
             linePriceWithTax: 12900,
+            proratedUnitPriceWithTax: 12900,
             productVariant: {
                 id: 'variant-1',
                 name: '订单测试商品',
@@ -40,7 +42,7 @@ const order: Order = {
                 currencyCode: 'MYR',
                 stockLevel: 'IN_STOCK',
                 featuredAsset: null,
-                product: { featuredAsset: null },
+                product: { id: 'product-1', name: '订单测试商品', featuredAsset: null },
                 customFields: { fulfillmentType: 'physical' },
             },
             customFields: { fulfillmentTypeSnapshot: 'physical' },
@@ -86,6 +88,7 @@ function renderOrders(cachedOrders?: Order[]) {
         onBack: vi.fn(),
         onNavigate: vi.fn(),
         onBuyAgain: vi.fn(),
+        onNotify: vi.fn(),
     });
     return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
 }
@@ -103,5 +106,71 @@ describe('OrdersPage route query', () => {
 
         expect(markup).toContain('订单测试商品');
         expect(markup).not.toContain('aria-label="Loading"');
+    });
+});
+
+describe('OrderDetailPage fulfillment actions', () => {
+    function renderDetail(detailOrder: Order) {
+        return renderToStaticMarkup(
+            createElement(OrderDetailPage, {
+                order: detailOrder,
+                market,
+                locale: market.locale,
+                language: 'zh' as const,
+                storefrontName: '测试商城',
+                onBack: vi.fn(),
+                onBuyAgain: vi.fn(),
+                onReopen: vi.fn(),
+                onCancelOrder: vi.fn(),
+                onCreateAfterSales: vi.fn(),
+                onUnavailable: vi.fn(),
+            }),
+        );
+    }
+
+    it('shows included tax, delivery timing and the safe cancellation entry for authorized physical orders', () => {
+        const markup = renderDetail({
+            ...order,
+            state: 'PaymentAuthorized',
+            taxSummary: [{ description: 'SST', taxRate: 8, taxBase: 11944, taxTotal: 956 }],
+            checkoutShipping: {
+                methodCode: 'standard',
+                methodName: '标准配送',
+                priceWithTax: 0,
+                estimateMinDays: 2,
+                estimateMaxDays: 4,
+                freeShippingApplied: true,
+            },
+        });
+
+        expect(markup).toContain('其中 SST (8%)');
+        expect(markup).toContain('标准配送 · 预计 2–4 天 · 免邮');
+        expect(markup).toContain('取消订单');
+    });
+
+    it('does not offer direct cancellation for digitally delivered orders', () => {
+        const markup = renderDetail({
+            ...order,
+            state: 'PaymentAuthorized',
+            lines: [
+                {
+                    ...order.lines[0],
+                    customFields: { fulfillmentTypeSnapshot: 'digital' },
+                    productVariant: {
+                        ...order.lines[0].productVariant,
+                        customFields: { fulfillmentType: 'digital' },
+                    },
+                },
+            ],
+        });
+
+        expect(markup).not.toContain('取消订单');
+    });
+
+    it('offers the after-sales entry for settled orders', () => {
+        const markup = renderDetail(order);
+
+        expect(markup).toContain('申请售后');
+        expect(markup).not.toContain('取消订单');
     });
 });

@@ -14,6 +14,7 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { ShopApi } from './api';
 import { responsiveImageSources } from './responsive-image';
+import { TaxSummaryRows } from './tax-summary';
 import {
     ActiveCustomer,
     CustomerAddress,
@@ -354,6 +355,16 @@ export function CheckoutPage({
                                     <span>
                                         <strong>{method.name}</strong>
                                         {method.description && <small>{method.description}</small>}
+                                        {shippingMethodDetails(method, order.currencyCode, locale, language) && (
+                                            <small className="shipping-method-meta">
+                                                {shippingMethodDetails(
+                                                    method,
+                                                    order.currencyCode,
+                                                    locale,
+                                                    language,
+                                                )}
+                                            </small>
+                                        )}
                                     </span>
                                     <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
                                 </label>
@@ -611,12 +622,37 @@ function PriceSummary({
                     <dd>-{formatMoney(discount, order.currencyCode, locale)}</dd>
                 </div>
             )}
+            <TaxSummaryRows order={order} locale={locale} language={language} />
             <div className="summary-total">
                 <dt>{isZh ? '合计' : 'Total'}</dt>
                 <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
             </div>
         </dl>
     );
+}
+
+function shippingMethodDetails(
+    method: ShippingMethod,
+    currencyCode: string,
+    locale: string,
+    language: StorefrontLanguage,
+): string {
+    const metadata = method.metadata;
+    if (!metadata) return '';
+    const details: string[] = [];
+    if (metadata.estimateMinDays != null || metadata.estimateMaxDays != null) {
+        const minimum = metadata.estimateMinDays ?? metadata.estimateMaxDays ?? 0;
+        const maximum = metadata.estimateMaxDays ?? minimum;
+        const range = minimum === maximum ? String(minimum) : `${minimum}–${maximum}`;
+        details.push(language === 'zh' ? `预计 ${range} 天送达` : `Estimated ${range} days`);
+    }
+    if (metadata.freeShippingApplied) {
+        details.push(language === 'zh' ? '已享免邮' : 'Free shipping applied');
+    } else if ((metadata.freeShippingThreshold ?? 0) > 0) {
+        const threshold = formatMoney(metadata.freeShippingThreshold ?? 0, currencyCode, locale);
+        details.push(language === 'zh' ? `实物商品满 ${threshold} 免邮` : `Free over ${threshold} physical subtotal`);
+    }
+    return details.join(' · ');
 }
 function CouponSheet({
     couponCodes,
