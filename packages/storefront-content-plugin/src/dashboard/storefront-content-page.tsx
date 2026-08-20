@@ -591,13 +591,13 @@ function BlockEditor({
 
     return (
         <Dialog open onOpenChange={open => !open && onClose()}>
-            <DialogContent className="max-h-[92vh] max-w-[min(1180px,96vw)] overflow-hidden p-0">
-                <DialogHeader className="border-b px-6 py-4">
+            <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1180px,96vw)]">
+                <DialogHeader className="shrink-0 border-b px-6 py-4">
                     <DialogTitle>{draft.id ? text.updateTitle : text.createTitle}</DialogTitle>
                     <DialogDescription>{text.editorDescription}</DialogDescription>
                 </DialogHeader>
-                <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px]">
-                    <div className="space-y-7 px-6 py-5">
+                <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
+                    <div className="min-w-0 space-y-7 px-6 py-5 lg:overflow-y-auto">
                         <section className="space-y-4">
                             <h3 className="text-sm font-medium">{text.basic}</h3>
                             <div className="grid gap-4 sm:grid-cols-2">
@@ -616,7 +616,7 @@ function BlockEditor({
                                             value && update('type', value as ContentBlockType)
                                         }
                                     >
-                                        <SelectTrigger>
+                                        <SelectTrigger className="w-full min-w-0">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -640,14 +640,15 @@ function BlockEditor({
                                         }
                                     />
                                 </Field>
-                                <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
-                                    <div>
+                                <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+                                    <div className="min-w-0">
                                         <Label>{text.status}</Label>
                                         <p className="mt-1 text-xs text-muted-foreground">
                                             {text.statusHint}
                                         </p>
                                     </div>
                                     <Switch
+                                        className="shrink-0"
                                         checked={draft.enabled}
                                         onCheckedChange={value => update('enabled', value)}
                                     />
@@ -809,7 +810,7 @@ function BlockEditor({
                         </section>
                     </div>
 
-                    <aside className="border-t bg-muted/30 px-5 py-5 lg:border-l lg:border-t-0">
+                    <aside className="min-w-0 border-t bg-muted/30 px-5 py-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
                         <h3 className="mb-4 text-sm font-medium">{text.preview}</h3>
                         <div className="mx-auto w-full max-w-[300px] overflow-hidden rounded-[8px] border bg-background shadow-sm">
                             <div className="flex h-7 items-center justify-center border-b bg-muted text-[10px] text-muted-foreground">
@@ -885,7 +886,7 @@ function BlockEditor({
                         </div>
                     </aside>
                 </div>
-                <DialogFooter className="border-t px-6 py-4">
+                <DialogFooter className="shrink-0 border-t px-6 py-4">
                     <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
                         {text.cancel}
                     </Button>
@@ -1012,7 +1013,7 @@ function Field({
     children,
 }: Readonly<{ label: string; hint?: string; className?: string; children: React.ReactNode }>) {
     return (
-        <div className={`space-y-2 ${className ?? ''}`}>
+        <div className={`min-w-0 space-y-2 ${className ?? ''}`}>
             <Label>{label}</Label>
             {children}
             {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -1025,7 +1026,7 @@ function ColorInput({
     onChange,
 }: Readonly<{ value: string | null; onChange: (value: string | null) => void }>) {
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
             <input
                 className="size-9 shrink-0 cursor-pointer rounded border bg-transparent p-1"
                 type="color"
@@ -1034,6 +1035,7 @@ function ColorInput({
                 onChange={event => onChange(event.target.value)}
             />
             <Input
+                className="min-w-0"
                 value={value ?? ''}
                 placeholder="#ffffff"
                 onChange={event => onChange(event.target.value || null)}
@@ -1049,7 +1051,7 @@ function TargetSelect({
 }: Readonly<{ value: ContentTargetType; isZh: boolean; onChange: (value: ContentTargetType) => void }>) {
     return (
         <Select value={value} onValueChange={next => next && onChange(next as ContentTargetType)}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full min-w-0">
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>

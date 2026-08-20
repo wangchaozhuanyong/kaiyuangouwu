@@ -382,7 +382,7 @@ export function ProductMultiSelectorDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[95vw] md:max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-[95vw] md:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>
                         {mode === 'product' ? <Trans>Select products</Trans> : <Trans>Select variants</Trans>}

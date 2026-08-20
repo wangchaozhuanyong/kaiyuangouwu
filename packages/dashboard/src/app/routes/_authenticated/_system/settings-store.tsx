@@ -117,7 +117,7 @@ function JsonValueDialog({
                 <Braces className="size-3.5 shrink-0" />
                 <span className="truncate">{t`View configuration content`}</span>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>
                         <code>{fieldKey}</code>

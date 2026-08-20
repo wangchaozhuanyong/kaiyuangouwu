@@ -3,6 +3,7 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
@@ -27,6 +28,7 @@ import { useState } from 'react';
 
 export function OverlayLayeringTestPage() {
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [wideDialogOpen, setWideDialogOpen] = useState(false);
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [lastAction, setLastAction] = useState('None');
 
@@ -108,6 +110,46 @@ export function OverlayLayeringTestPage() {
 
                                     <output data-testid="overlay-last-action">{lastAction}</output>
                                 </div>
+                            </DialogContent>
+                        </Dialog>
+
+                        <Dialog open={wideDialogOpen} onOpenChange={setWideDialogOpen}>
+                            <DialogTrigger render={<Button variant="outline" />}>
+                                Open wide dialog
+                            </DialogTrigger>
+                            <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1180px,96vw)]">
+                                <DialogHeader className="shrink-0 border-b px-6 py-4">
+                                    <DialogTitle>Wide dialog</DialogTitle>
+                                    <DialogDescription>
+                                        Verifies custom dialog widths override the responsive default safely.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div
+                                    className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden"
+                                    data-testid="wide-dialog-layout"
+                                >
+                                    <div
+                                        className="min-w-0 px-6 py-5 lg:overflow-y-auto"
+                                        data-testid="wide-dialog-form-pane"
+                                    >
+                                        <div className="h-[900px] rounded-md border" />
+                                    </div>
+                                    <aside
+                                        className="min-w-0 border-t px-5 py-5 lg:overflow-y-auto lg:border-l lg:border-t-0"
+                                        data-testid="wide-dialog-preview-pane"
+                                    >
+                                        <div className="mx-auto h-[420px] w-full max-w-[300px] rounded-md border" />
+                                    </aside>
+                                </div>
+                                <DialogFooter
+                                    className="shrink-0 border-t px-6 py-4"
+                                    data-testid="wide-dialog-footer"
+                                >
+                                    <Button variant="outline" onClick={() => setWideDialogOpen(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button onClick={() => setWideDialogOpen(false)}>Save</Button>
+                                </DialogFooter>
                             </DialogContent>
                         </Dialog>
                     </div>

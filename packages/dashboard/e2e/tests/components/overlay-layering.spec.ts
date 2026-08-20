@@ -116,4 +116,84 @@ test.describe('floating controls inside modal layers', () => {
         await expect(dialog).toBeVisible();
         await expect(dialog).toBeInViewport();
     });
+
+    test('a responsive width override expands on desktop and stays inside a narrow viewport', async ({
+        page,
+    }) => {
+        const setStableViewport = async (width: number, height: number) => {
+            await page.setViewportSize({ width, height });
+            await page.waitForFunction(expectedWidth => window.innerWidth === expectedWidth, width);
+            await page.waitForTimeout(150);
+        };
+
+        await page.locator('[data-slot="dialog-close"]').click();
+        await setStableViewport(1440, 900);
+        await page.getByRole('button', { name: 'Open wide dialog' }).click();
+
+        const wideDialog = page.getByRole('dialog', { name: 'Wide dialog' });
+        await expect(wideDialog).toBeVisible();
+        await expect(wideDialog).toBeInViewport();
+        await page.waitForTimeout(150);
+
+        const desktopBox = await wideDialog.boundingBox();
+        expect(desktopBox).not.toBeNull();
+        expect(desktopBox?.width).toBeGreaterThan(1100);
+        expect(desktopBox?.width).toBeLessThanOrEqual(1181);
+
+        const formPane = page.getByTestId('wide-dialog-form-pane');
+        const previewPane = page.getByTestId('wide-dialog-preview-pane');
+        const footer = page.getByTestId('wide-dialog-footer');
+        const desktopFormBox = await formPane.boundingBox();
+        const desktopPreviewBox = await previewPane.boundingBox();
+        expect(desktopFormBox).not.toBeNull();
+        expect(desktopPreviewBox).not.toBeNull();
+        expect(Math.abs((desktopFormBox?.y ?? 0) - (desktopPreviewBox?.y ?? 0))).toBeLessThan(6);
+        await expect(footer).toBeInViewport();
+
+        await setStableViewport(1024, 768);
+        const tabletLandscapeBox = await wideDialog.boundingBox();
+        expect(tabletLandscapeBox).not.toBeNull();
+        expect(tabletLandscapeBox?.width).toBeGreaterThan(980);
+        expect(tabletLandscapeBox?.width).toBeLessThanOrEqual(984);
+        const landscapeFormBox = await formPane.boundingBox();
+        const landscapePreviewBox = await previewPane.boundingBox();
+        expect(Math.abs((landscapeFormBox?.y ?? 0) - (landscapePreviewBox?.y ?? 0))).toBeLessThan(6);
+        await expect(footer).toBeInViewport();
+
+        await setStableViewport(768, 1024);
+        const tabletPortraitBox = await wideDialog.boundingBox();
+        expect(tabletPortraitBox).not.toBeNull();
+        expect(tabletPortraitBox?.width).toBeGreaterThan(735);
+        expect(tabletPortraitBox?.width).toBeLessThanOrEqual(738);
+        const portraitFormBox = await formPane.boundingBox();
+        const portraitPreviewBox = await previewPane.boundingBox();
+        expect(portraitPreviewBox?.y ?? 0).toBeGreaterThan(
+            (portraitFormBox?.y ?? 0) + (portraitFormBox?.height ?? 0) - 1,
+        );
+        await expect(footer).toBeInViewport();
+
+        await setStableViewport(375, 812);
+        await expect(wideDialog).toBeInViewport();
+
+        const mobileBox = await wideDialog.boundingBox();
+        expect(mobileBox).not.toBeNull();
+        expect(mobileBox?.width).toBeLessThanOrEqual(343);
+        await expect(footer).toBeInViewport();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+            true,
+        );
+
+        // A 720 × 450 CSS viewport is equivalent to viewing 1440 × 900 at 200% browser zoom.
+        await setStableViewport(720, 450);
+        await expect(wideDialog).toBeInViewport();
+        await expect(footer).toBeInViewport();
+        const zoomedFormBox = await formPane.boundingBox();
+        const zoomedPreviewBox = await previewPane.boundingBox();
+        expect(zoomedPreviewBox?.y ?? 0).toBeGreaterThan(
+            (zoomedFormBox?.y ?? 0) + (zoomedFormBox?.height ?? 0) - 1,
+        );
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+            true,
+        );
+    });
 });

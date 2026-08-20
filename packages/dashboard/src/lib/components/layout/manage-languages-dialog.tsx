@@ -236,7 +236,7 @@ export function ManageLanguagesDialog({ open, onClose }: ManageLanguagesDialogPr
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>
                         <Trans>Manage Languages</Trans>

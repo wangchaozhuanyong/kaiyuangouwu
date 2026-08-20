@@ -49,3 +49,15 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 ## Gotchas
 
 - **Dashboard stale build**: `packages/dev-server/dist/` accumulates stale Vite build artifacts across branch switches. Vite doesn't clean old hashed files, so old chunks can interfere (e.g. overwriting `window.schemaInfo`). Always `rm -rf packages/dev-server/dist` before rebuilding. Build with `bunx vite build --base /dashboard/ --outDir ../dev-server/dist` from `packages/dashboard/`. Also check no stale Vite dev server is running on port 5173 — `DashboardPlugin` auto-proxies to it instead of serving static files.
+
+## Production Deployment
+
+- Production storefront: `https://damatong.net` (also `www.damatong.net`).
+- Production dashboard: `https://console.damatong.net/dashboard/`.
+- AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-06e8d9728be77c331`; security group: `sg-068b47d4049f71176`.
+- Current public IPv4: `3.113.54.188`; SSH user: `ubuntu`; local key path: `/Users/wangchao/Desktop/yamaxunmishi/aws-key.pem`.
+- Server repository: `/var/www/kaiyuangouwu`; branch: `main`; Vendure upstream: `127.0.0.1:3002`.
+- PM2 processes: `vendure-api` and `vendure-worker`.
+- Nginx storefront root: `/var/www/kaiyuangouwu/packages/storefront/dist`; the dashboard is served from `/var/www/kaiyuangouwu/packages/dev-server/dist/dashboard` by Vendure.
+- Never commit the SSH private key or credentials. If port 22 is closed, temporarily allow only the current public CIDR in the production security group, deploy, verify, and remove that temporary rule immediately.
+- Deploy only an isolated committed release. Build from a clean checkout of that commit, upload to a versioned candidate directory, verify checksums/health, atomically switch directories with a rollback directory, then confirm the public health endpoint and deployed Git SHA.
