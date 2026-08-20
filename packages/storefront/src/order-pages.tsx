@@ -1,3 +1,4 @@
+import { useInfiniteQuery } from '@tanstack/react-query';
 import {
     ArrowLeft,
     ChevronRight,
@@ -13,7 +14,10 @@ import { ReactNode, useEffect, useState } from 'react';
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
+import { languageCodeFor } from './i18n';
+import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { responsiveImageSources } from './responsive-image';
+import { PageSkeleton } from './route-loading';
 import { ActiveCustomer, MarketConfig, Order, ProductVariant, StorefrontLanguage } from './types';
 
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
@@ -22,6 +26,7 @@ type OrderRoute = { name: 'login' | 'order-detail'; id?: string };
 export function OrdersPage({
     api,
     customer,
+    market,
     locale,
     language,
     storefrontName,
@@ -43,15 +48,44 @@ export function OrdersPage({
 }) {
     const isZh = language === 'zh';
     const [tab, setTab] = useState<OrderTab>(initialTab);
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [totalItems, setTotalItems] = useState(0);
-    const [loading, setLoading] = useState(false);
-    const [listError, setListError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchInput, setSearchInput] = useState('');
     const [orderCode, setOrderCode] = useState('');
     const pageSize = 10;
+    const ordersQuery = useInfiniteQuery({
+        queryKey: storefrontQueryKeys.customerOrders(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+            { tab, orderCode },
+        ),
+        queryFn: ({ pageParam, signal }) =>
+            api.customerOrders(pageParam, pageSize, orderStatesForTab(tab), orderCode, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) => {
+            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
+            return loaded < lastPage.totalItems ? loaded : undefined;
+        },
+        enabled: !!customer && tab !== 'service',
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const orders = Array.from(
+        new Map(
+            (ordersQuery.data?.pages.flatMap(page => page.items) ?? []).map(order => [order.id, order]),
+        ).values(),
+    );
+    const totalItems = ordersQuery.data?.pages[0]?.totalItems ?? 0;
+    const loading = ordersQuery.isPending;
+    const loadingMore = ordersQuery.isFetchingNextPage;
+    const listError =
+        ordersQuery.error instanceof Error
+            ? ordersQuery.error.message
+            : ordersQuery.error
+              ? isZh
+                  ? '订单加载失败'
+                  : 'Could not load orders'
+              : '';
     const tabs: Array<{ id: OrderTab; label: string }> = [
         { id: 'all', label: isZh ? '全部' : 'All' },
         { id: 'pending', label: isZh ? '待付款' : 'To pay' },
@@ -61,64 +95,6 @@ export function OrdersPage({
     ];
 
     useEffect(() => setTab(initialTab), [initialTab]);
-    useEffect(() => {
-        if (!customer || tab === 'service') {
-            setOrders([]);
-            setTotalItems(0);
-            setLoading(false);
-            setListError('');
-            return;
-        }
-        const controller = new AbortController();
-        setOrders([]);
-        setTotalItems(0);
-        setLoading(true);
-        setListError('');
-        void api
-            .customerOrders(0, pageSize, orderStatesForTab(tab), orderCode, controller.signal)
-            .then(page => {
-                setOrders(page.items);
-                setTotalItems(page.totalItems);
-            })
-            .catch(requestError => {
-                if (controller.signal.aborted) return;
-                setListError(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '订单加载失败'
-                          : 'Could not load orders',
-                );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setLoading(false);
-            });
-        return () => controller.abort();
-    }, [api, customer, isZh, orderCode, retryKey, tab]);
-
-    const loadMore = async () => {
-        if (loading || orders.length >= totalItems) return;
-        setLoading(true);
-        setListError('');
-        try {
-            const page = await api.customerOrders(orders.length, pageSize, orderStatesForTab(tab), orderCode);
-            setOrders(current => [
-                ...current,
-                ...page.items.filter(order => !current.some(item => item.id === order.id)),
-            ]);
-            setTotalItems(page.totalItems);
-        } catch (requestError) {
-            setListError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '更多订单加载失败'
-                      : 'Could not load more orders',
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
 
     return (
         <main className="page subpage orders-page">
@@ -209,7 +185,7 @@ export function OrdersPage({
                     title={isZh ? '订单加载失败' : 'Could not load orders'}
                     detail={listError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() => setRetryKey(value => value + 1)}
+                    onAction={() => void ordersQuery.refetch()}
                 />
             ) : orders.length ? (
                 <div className="order-list">
@@ -228,17 +204,17 @@ export function OrdersPage({
                         <InlineError
                             message={listError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void loadMore()}
+                            onAction={() => void ordersQuery.fetchNextPage()}
                         />
                     )}
                     {orders.length < totalItems && (
                         <button
                             type="button"
                             className="load-more-button order-load-more"
-                            disabled={loading}
-                            onClick={() => void loadMore()}
+                            disabled={loadingMore}
+                            onClick={() => void ordersQuery.fetchNextPage()}
                         >
-                            {loading
+                            {loadingMore
                                 ? isZh
                                     ? '加载中…'
                                     : 'Loading…'
@@ -593,16 +569,6 @@ function InlineError({
             <button type="button" onClick={onAction}>
                 {action}
             </button>
-        </div>
-    );
-}
-
-function PageSkeleton() {
-    return (
-        <div className="page-skeleton" aria-hidden="true">
-            <span />
-            <span />
-            <span />
         </div>
     );
 }

@@ -70,9 +70,12 @@ import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
     publicQueryMeta,
+    ROUTE_QUERY_STALE_TIME,
     storefrontQueryKeys,
 } from './query-client';
 import { responsiveImageSources, StorefrontImageKind } from './responsive-image';
+import { PageSkeleton } from './route-loading';
+import { useProductsByIdsQuery } from './route-queries';
 import {
     ActiveCustomer,
     CollectionSummary,
@@ -429,6 +432,18 @@ export function App() {
     const storefrontName = storefrontNames[language];
     const vendureLanguageCode = languageCodeFor(language);
     const api = useMemo(() => new ShopApi(market, vendureLanguageCode), [market, vendureLanguageCode]);
+    const clearPrivateQueryCache = useCallback(() => {
+        queryClient.removeQueries({
+            queryKey: storefrontQueryKeys.privateScope(market.code, vendureLanguageCode),
+        });
+    }, [market.code, queryClient, vendureLanguageCode]);
+    const invalidateCustomerRouteQueries = useCallback(async () => {
+        if (!customer) return;
+        await queryClient.invalidateQueries({
+            queryKey: storefrontQueryKeys.customerScope(market.code, vendureLanguageCode, customer.id),
+            refetchType: 'none',
+        });
+    }, [customer, market.code, queryClient, vendureLanguageCode]);
     const productQuery = useQuery({
         queryKey: storefrontQueryKeys.product(market.code, vendureLanguageCode, route.id ?? ''),
         queryFn: async ({ signal }) => {
@@ -445,14 +460,19 @@ export function App() {
     const routeProductLoading = productQuery.isPending && productQuery.fetchStatus === 'fetching';
     const routeProductError = productQuery.error instanceof Error ? productQuery.error.message : '';
     const orderQuery = useQuery({
-        queryKey: storefrontQueryKeys.order(market.code, vendureLanguageCode, route.id ?? ''),
+        queryKey: storefrontQueryKeys.order(
+            market.code,
+            vendureLanguageCode,
+            customer?.id ?? 'guest',
+            route.id ?? '',
+        ),
         queryFn: async ({ signal }) => {
             const order = await api.order(route.id ?? '', signal);
             if (!order) throw new Error(isZh ? '订单不存在或无权查看' : 'Order not found');
             return order;
         },
         enabled: route.name === 'order-detail' && !!route.id,
-        staleTime: 0,
+        staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const routeOrder = orderQuery.data ?? null;
@@ -878,6 +898,7 @@ export function App() {
                 const reopened = await api.reopenCart(current.revision);
                 setCart(reopened);
                 setCheckoutOrder(reopened.checkoutOrder);
+                await invalidateCustomerRouteQueries();
                 notify(isZh ? '订单已恢复，可以继续修改' : 'Order restored for editing');
                 navigate({ name: 'cart' });
             } catch (requestError) {
@@ -887,7 +908,7 @@ export function App() {
                 setCartLoading(false);
             }
         },
-        [api, cart, isZh, navigate, notify, text.loadError],
+        [api, cart, invalidateCustomerRouteQueries, isZh, navigate, notify, text.loadError],
     );
 
     const beginCheckout = useCallback(async () => {
@@ -919,13 +940,14 @@ export function App() {
     }, [api, cart, isZh, navigate, refreshCart, text.loadError]);
 
     const completeAuthentication = useCallback(async () => {
+        clearPrivateQueryCache();
         const [nextCustomer, nextCart] = await Promise.all([api.activeCustomer(), api.cart()]);
         setCustomer(nextCustomer);
         setCart(nextCart);
         setCheckoutOrder(nextCart.checkoutOrder);
         notify(isZh ? '登录成功' : 'Signed in');
         navigate({ name: 'account' }, true);
-    }, [api, isZh, navigate, notify]);
+    }, [api, clearPrivateQueryCache, isZh, navigate, notify]);
 
     const selectedProduct = route.id
         ? ((routeProduct?.id === route.id ? routeProduct : null) ??
@@ -1217,6 +1239,7 @@ export function App() {
                         onAdd={variant => void addToCart(variant)}
                         onLogout={() => {
                             void api.logout().then(() => {
+                                clearPrivateQueryCache();
                                 setCustomer(null);
                                 notify(isZh ? '已退出登录' : 'Signed out');
                             });
@@ -1312,12 +1335,14 @@ export function App() {
                             api={api}
                             cart={cart}
                             order={checkoutOrder}
+                            market={market}
                             locale={locale}
                             language={language}
                             onCancel={order => void reopenPendingOrder(order)}
                             onComplete={async order => {
                                 setCompletedOrder(order);
                                 setCheckoutOrder(order);
+                                await invalidateCustomerRouteQueries();
                                 notify(isZh ? '测试支付已完成' : 'Test payment completed');
                                 try {
                                     setCart(await api.cart());
@@ -1338,6 +1363,7 @@ export function App() {
                             code={route.id ?? ''}
                             initialOrder={completedOrder}
                             customer={customer}
+                            market={market}
                             locale={locale}
                             language={language}
                             onNavigate={navigate}
@@ -1418,6 +1444,7 @@ export function App() {
                             onNavigate={navigate}
                             onLogout={() => {
                                 void api.logout().then(() => {
+                                    clearPrivateQueryCache();
                                     setCustomer(null);
                                     notify(isZh ? '已退出登录' : 'Signed out');
                                     navigate({ name: 'account' }, true);
@@ -3101,7 +3128,18 @@ function AccountPage(props: AccountPageProps) {
     } = props;
     const isZh = language === 'zh';
     const orders = customer?.orders.items ?? [];
-    const [counts, setCounts] = useState({ pending: 0, shipping: 0, receiving: 0 });
+    const countsQuery = useQuery({
+        queryKey: storefrontQueryKeys.customerOrderCounts(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.customerOrderCounts(signal),
+        enabled: !!customer,
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0 };
     const latestOrder = orders[0];
     const recentVariants = Array.from(
         new Map(
@@ -3111,23 +3149,6 @@ function AccountPage(props: AccountPageProps) {
     const customerName = customer
         ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress
         : '';
-
-    useEffect(() => {
-        if (!customer) {
-            setCounts({ pending: 0, shipping: 0, receiving: 0 });
-            return;
-        }
-        let cancelled = false;
-        void api
-            .customerOrderCounts()
-            .then(nextCounts => {
-                if (!cancelled) setCounts(nextCounts);
-            })
-            .catch(() => undefined);
-        return () => {
-            cancelled = true;
-        };
-    }, [api, customer]);
 
     return (
         <main className="page account-page">
@@ -3365,7 +3386,7 @@ function AccountPage(props: AccountPageProps) {
     );
 }
 
-function FavoriteProductsPage({
+export function FavoriteProductsPage({
     api,
     productIds,
     market,
@@ -3391,46 +3412,12 @@ function FavoriteProductsPage({
     onClear: () => void;
 }) {
     const isZh = language === 'zh';
-    const [favoriteProducts, setFavoriteProducts] = useState<Product[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [favoriteError, setFavoriteError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
-    const productIdsKey = productIds.join(',');
+    const favoritesQuery = useProductsByIdsQuery({ api, productIds, market, language });
+    const favoriteProducts = productIds.length ? (favoritesQuery.data ?? []) : [];
+    const loading = productIds.length > 0 && favoritesQuery.isPending;
+    const favoriteError =
+        !favoriteProducts.length && favoritesQuery.error instanceof Error ? favoritesQuery.error.message : '';
     const availableProducts = favoriteProducts.filter(product => productIds.includes(product.id));
-
-    useEffect(() => {
-        if (!productIds.length) {
-            setFavoriteProducts([]);
-            setLoading(false);
-            setFavoriteError('');
-            return;
-        }
-        let cancelled = false;
-        setLoading(true);
-        setFavoriteError('');
-        void api
-            .productsByIds(productIds)
-            .then(nextProducts => {
-                if (!cancelled) setFavoriteProducts(nextProducts);
-            })
-            .catch(requestError => {
-                if (!cancelled) {
-                    setFavoriteError(
-                        requestError instanceof Error
-                            ? requestError.message
-                            : isZh
-                              ? '收藏商品加载失败'
-                              : 'Could not load favorites',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, isZh, productIdsKey, retryKey]);
 
     return (
         <main className="page subpage favorites-page">
@@ -3458,7 +3445,7 @@ function FavoriteProductsPage({
                     title={isZh ? '收藏商品加载失败' : 'Could not load favorites'}
                     detail={favoriteError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() => setRetryKey(value => value + 1)}
+                    onAction={() => void favoritesQuery.refetch()}
                 />
             ) : availableProducts.length ? (
                 <ProductSection
@@ -3498,7 +3485,7 @@ function FavoriteProductsPage({
     );
 }
 
-function BrowsingHistoryPage({
+export function BrowsingHistoryPage({
     api,
     productIds,
     market,
@@ -3522,45 +3509,11 @@ function BrowsingHistoryPage({
     onClear: () => void;
 }) {
     const isZh = language === 'zh';
-    const [historyProducts, setHistoryProducts] = useState<Product[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [historyError, setHistoryError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
-    const productIdsKey = productIds.join(',');
-
-    useEffect(() => {
-        if (!productIds.length) {
-            setHistoryProducts([]);
-            setLoading(false);
-            setHistoryError('');
-            return;
-        }
-        let cancelled = false;
-        setLoading(true);
-        setHistoryError('');
-        void api
-            .productsByIds(productIds)
-            .then(nextProducts => {
-                if (!cancelled) setHistoryProducts(nextProducts);
-            })
-            .catch(requestError => {
-                if (!cancelled) {
-                    setHistoryError(
-                        requestError instanceof Error
-                            ? requestError.message
-                            : isZh
-                              ? '浏览足迹加载失败'
-                              : 'Could not load browsing history',
-                    );
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [api, isZh, productIdsKey, retryKey]);
+    const historyQuery = useProductsByIdsQuery({ api, productIds, market, language });
+    const historyProducts = productIds.length ? (historyQuery.data ?? []) : [];
+    const loading = productIds.length > 0 && historyQuery.isPending;
+    const historyError =
+        !historyProducts.length && historyQuery.error instanceof Error ? historyQuery.error.message : '';
 
     return (
         <main className="page subpage history-page">
@@ -3588,7 +3541,7 @@ function BrowsingHistoryPage({
                     title={isZh ? '浏览足迹加载失败' : 'Could not load browsing history'}
                     detail={historyError}
                     action={isZh ? '重试' : 'Retry'}
-                    onAction={() => setRetryKey(value => value + 1)}
+                    onAction={() => void historyQuery.refetch()}
                 />
             ) : historyProducts.length ? (
                 <ProductSection
@@ -5353,22 +5306,6 @@ function InlineError({
                     {action}
                 </button>
             )}
-        </div>
-    );
-}
-function PageSkeleton() {
-    return (
-        <div className="page-skeleton" aria-label="Loading">
-            <span className="skeleton-hero" />
-            <span className="skeleton-line" />
-            <div>
-                <span />
-                <span />
-                <span />
-                <span />
-            </div>
-            <span className="skeleton-block" />
-            <span className="skeleton-block" />
         </div>
     );
 }

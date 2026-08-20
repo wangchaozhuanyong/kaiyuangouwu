@@ -73,6 +73,29 @@ describe('public React Query session cache', () => {
         );
     });
 
+    it('isolates private route data by customer and filter conditions', () => {
+        const firstCustomerOrders = storefrontQueryKeys.customerOrders('my', 'zh_Hans', 'customer-1', {
+            tab: 'all',
+            orderCode: '',
+        });
+
+        expect(firstCustomerOrders).not.toEqual(
+            storefrontQueryKeys.customerOrders('my', 'zh_Hans', 'customer-2', {
+                tab: 'all',
+                orderCode: '',
+            }),
+        );
+        expect(firstCustomerOrders).not.toEqual(
+            storefrontQueryKeys.customerOrders('my', 'zh_Hans', 'customer-1', {
+                tab: 'shipping',
+                orderCode: '',
+            }),
+        );
+        expect(storefrontQueryKeys.order('my', 'zh_Hans', 'customer-1', 'order-1')).not.toEqual(
+            storefrontQueryKeys.order('my', 'zh_Hans', 'customer-2', 'order-1'),
+        );
+    });
+
     it('persists only explicitly public successful queries', async () => {
         const client = createStorefrontQueryClient();
         await client.fetchQuery({

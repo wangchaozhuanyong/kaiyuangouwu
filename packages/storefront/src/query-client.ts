@@ -1,6 +1,7 @@
 import { DehydratedState, QueryClient, dehydrate, hydrate } from '@tanstack/react-query';
 
 export const PUBLIC_QUERY_STALE_TIME = 60_000;
+export const ROUTE_QUERY_STALE_TIME = 30_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
 export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v1';
@@ -17,6 +18,7 @@ export function createStorefrontQueryClient(): QueryClient {
         defaultOptions: {
             queries: {
                 retry: 1,
+                staleTime: ROUTE_QUERY_STALE_TIME,
                 gcTime: PUBLIC_QUERY_GC_TIME,
                 refetchOnWindowFocus: true,
                 networkMode: 'online',
@@ -111,15 +113,51 @@ export const storefrontQueryKeys = {
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'products', { take }] as const,
     product: (marketCode: string, languageCode: string, productId: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'product', productId] as const,
+    productsByIds: (marketCode: string, languageCode: string, productIds: readonly string[]) =>
+        [...storefrontQueryKeys.scope(marketCode, languageCode), 'products-by-ids', [...productIds]] as const,
     catalog: (
         marketCode: string,
         languageCode: string,
         input: Record<string, string | number | boolean | undefined>,
     ) => [...storefrontQueryKeys.scope(marketCode, languageCode), 'catalog', input] as const,
+    privateScope: (marketCode: string, languageCode: string) =>
+        [...storefrontQueryKeys.scope(marketCode, languageCode), 'private'] as const,
     cart: (marketCode: string, languageCode: string) =>
-        [...storefrontQueryKeys.scope(marketCode, languageCode), 'private', 'cart'] as const,
+        [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'cart'] as const,
     customer: (marketCode: string, languageCode: string) =>
-        [...storefrontQueryKeys.scope(marketCode, languageCode), 'private', 'customer'] as const,
-    order: (marketCode: string, languageCode: string, orderId: string) =>
-        [...storefrontQueryKeys.scope(marketCode, languageCode), 'private', 'order', orderId] as const,
+        [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer'] as const,
+    customerScope: (marketCode: string, languageCode: string, customerId: string) =>
+        [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer', customerId] as const,
+    customerOrderCounts: (marketCode: string, languageCode: string, customerId: string) =>
+        [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'order-counts'] as const,
+    customerOrders: (
+        marketCode: string,
+        languageCode: string,
+        customerId: string,
+        input: Record<string, string | number | boolean | undefined>,
+    ) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'orders',
+            input,
+        ] as const,
+    order: (marketCode: string, languageCode: string, customerId: string, orderId: string) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'order',
+            orderId,
+        ] as const,
+    orderByCode: (marketCode: string, languageCode: string, customerId: string, code: string) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'order-by-code',
+            code,
+        ] as const,
+    paymentMethods: (marketCode: string, languageCode: string, orderId: string) =>
+        [
+            ...storefrontQueryKeys.privateScope(marketCode, languageCode),
+            'order',
+            orderId,
+            'payment-methods',
+        ] as const,
 };

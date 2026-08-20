@@ -629,31 +629,35 @@ export class ShopApi {
         return result.activeCustomer?.orders ?? { items: [], totalItems: 0 };
     }
 
-    async customerOrderCounts(): Promise<CustomerOrderCounts> {
+    async customerOrderCounts(signal?: AbortSignal): Promise<CustomerOrderCounts> {
         const result = await this.request<{
             activeCustomer: {
                 pending: { totalItems: number };
                 shipping: { totalItems: number };
                 receiving: { totalItems: number };
             } | null;
-        }>(`
-            query StorefrontOrderCounts {
-                activeCustomer {
-                    pending: orders(options: {
-                        take: 0
-                        filter: { state: { in: ["AddingItems", "ArrangingPayment"] } }
-                    }) { totalItems }
-                    shipping: orders(options: {
-                        take: 0
-                        filter: { state: { in: ["PaymentAuthorized", "PaymentSettled"] } }
-                    }) { totalItems }
-                    receiving: orders(options: {
-                        take: 0
-                        filter: { state: { in: ["Shipped", "PartiallyShipped"] } }
-                    }) { totalItems }
+        }>(
+            `
+                query StorefrontOrderCounts {
+                    activeCustomer {
+                        pending: orders(options: {
+                            take: 0
+                            filter: { state: { in: ["AddingItems", "ArrangingPayment"] } }
+                        }) { totalItems }
+                        shipping: orders(options: {
+                            take: 0
+                            filter: { state: { in: ["PaymentAuthorized", "PaymentSettled"] } }
+                        }) { totalItems }
+                        receiving: orders(options: {
+                            take: 0
+                            filter: { state: { in: ["Shipped", "PartiallyShipped"] } }
+                        }) { totalItems }
+                    }
                 }
-            }
-        `);
+            `,
+            undefined,
+            signal,
+        );
         return {
             pending: result.activeCustomer?.pending.totalItems ?? 0,
             shipping: result.activeCustomer?.shipping.totalItems ?? 0,

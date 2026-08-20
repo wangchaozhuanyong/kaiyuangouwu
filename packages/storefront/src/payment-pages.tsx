@@ -1,8 +1,12 @@
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Check, CircleAlert, CircleCheck, House, Package, WalletCards } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
-import { ActiveCustomer, Order, PaymentMethod, StorefrontCart, StorefrontLanguage } from './types';
+import { languageCodeFor } from './i18n';
+import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
+import { PageSkeleton } from './route-loading';
+import { ActiveCustomer, MarketConfig, Order, StorefrontCart, StorefrontLanguage } from './types';
 
 const LOCAL_TEST_PAYMENT_CODE = '测试支付';
 type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' };
@@ -11,6 +15,7 @@ export function PaymentPage({
     api,
     cart,
     order,
+    market,
     locale,
     language,
     onCancel,
@@ -20,6 +25,7 @@ export function PaymentPage({
     api: ShopApi;
     cart: StorefrontCart | null;
     order: Order | null;
+    market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
     onCancel: (order: Order) => void;
@@ -27,49 +33,45 @@ export function PaymentPage({
     onNavigate: (route: PaymentRoute) => void;
 }) {
     const isZh = language === 'zh';
-    const [methods, setMethods] = useState<PaymentMethod[]>([]);
     const [selectedMethod, setSelectedMethod] = useState('');
-    const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [paymentError, setPaymentError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
     const submissionLock = useRef(false);
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
+    const methodsQuery = useQuery({
+        queryKey: storefrontQueryKeys.paymentMethods(market.code, languageCodeFor(language), order?.id ?? ''),
+        queryFn: async ({ signal }) => {
+            const result = await api.eligiblePaymentMethods(signal);
+            return import.meta.env.DEV
+                ? result.filter(method => method.code === LOCAL_TEST_PAYMENT_CODE)
+                : [];
+        },
+        enabled: isPending,
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const methods = isPending ? (methodsQuery.data ?? []) : [];
+    const loading = isPending && methodsQuery.isPending;
+    const methodLoadError =
+        methodsQuery.error instanceof Error
+            ? methodsQuery.error.message
+            : methodsQuery.error
+              ? isZh
+                  ? '支付方式加载失败'
+                  : 'Could not load payment methods'
+              : '';
 
     useEffect(() => {
         if (!isPending) {
-            setMethods([]);
             setSelectedMethod('');
-            setLoading(false);
             return;
         }
-        const controller = new AbortController();
-        setLoading(true);
-        setPaymentError('');
-        void api
-            .eligiblePaymentMethods(controller.signal)
-            .then(result => {
-                const localMethods = import.meta.env.DEV
-                    ? result.filter(method => method.code === LOCAL_TEST_PAYMENT_CODE)
-                    : [];
-                setMethods(localMethods);
-                setSelectedMethod(localMethods.find(method => method.isEligible)?.code ?? '');
-            })
-            .catch(requestError => {
-                if (controller.signal.aborted) return;
-                setPaymentError(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '支付方式加载失败'
-                          : 'Could not load payment methods',
-                );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setLoading(false);
-            });
-        return () => controller.abort();
-    }, [api, isPending, isZh, retryKey]);
+        setSelectedMethod(current =>
+            methods.some(method => method.code === current && method.isEligible)
+                ? current
+                : (methods.find(method => method.isEligible)?.code ?? ''),
+        );
+    }, [isPending, methods]);
 
     const submitPayment = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -137,11 +139,11 @@ export function PaymentPage({
                         <h2>{isZh ? '支付方式' : 'Payment method'}</h2>
                         {loading ? (
                             <PageSkeleton />
-                        ) : paymentError && !methods.length ? (
+                        ) : methodLoadError && !methods.length ? (
                             <InlineError
-                                message={paymentError}
+                                message={methodLoadError}
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => setRetryKey(value => value + 1)}
+                                onAction={() => void methodsQuery.refetch()}
                             />
                         ) : methods.length ? (
                             <fieldset className="payment-method-list">
@@ -187,7 +189,7 @@ export function PaymentPage({
                                         : 'No local test payment method is available'
                                 }
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => setRetryKey(value => value + 1)}
+                                onAction={() => void methodsQuery.refetch()}
                             />
                         )}
                         {paymentError && methods.length > 0 && <InlineError message={paymentError} />}
@@ -250,6 +252,7 @@ export function OrderConfirmationPage({
     code,
     initialOrder,
     customer,
+    market,
     locale,
     language,
     onNavigate,
@@ -258,42 +261,28 @@ export function OrderConfirmationPage({
     code: string;
     initialOrder: Order | null;
     customer: ActiveCustomer | null;
+    market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
     onNavigate: (route: PaymentRoute) => void;
 }) {
     const isZh = language === 'zh';
-    const [order, setOrder] = useState<Order | null>(initialOrder?.code === code ? initialOrder : null);
-    const [loading, setLoading] = useState(!order && Boolean(code));
-    const [loadError, setLoadError] = useState('');
-    const [retryKey, setRetryKey] = useState(0);
-
-    useEffect(() => {
-        if (!code || order?.code === code) {
-            setLoading(false);
-            return;
-        }
-        const controller = new AbortController();
-        setLoading(true);
-        setLoadError('');
-        void api
-            .orderByCode(code, controller.signal)
-            .then(setOrder)
-            .catch(requestError => {
-                if (controller.signal.aborted) return;
-                setLoadError(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '订单加载失败'
-                          : 'Could not load the order',
-                );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setLoading(false);
-            });
-        return () => controller.abort();
-    }, [api, code, isZh, order?.code, retryKey]);
+    const orderQuery = useQuery({
+        queryKey: storefrontQueryKeys.orderByCode(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? 'guest',
+            code,
+        ),
+        queryFn: ({ signal }) => api.orderByCode(code, signal),
+        enabled: !!code,
+        initialData: initialOrder?.code === code ? initialOrder : undefined,
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const order = code ? (orderQuery.data ?? null) : null;
+    const loading = !!code && orderQuery.isPending;
+    const loadError = orderQuery.error instanceof Error ? orderQuery.error.message : '';
 
     if (loading) {
         return (
@@ -323,9 +312,7 @@ export function OrderConfirmationPage({
                             : 'The guest access window may have expired.')
                     }
                     action={loadError ? (isZh ? '重试' : 'Retry') : isZh ? '返回首页' : 'Back to home'}
-                    onAction={() =>
-                        loadError ? setRetryKey(value => value + 1) : onNavigate({ name: 'home' })
-                    }
+                    onAction={() => (loadError ? void orderQuery.refetch() : onNavigate({ name: 'home' }))}
                 />
             </Subpage>
         );
@@ -461,15 +448,6 @@ function InlineError({
                     {action}
                 </button>
             )}
-        </div>
-    );
-}
-function PageSkeleton() {
-    return (
-        <div className="page-skeleton" aria-hidden="true">
-            <span />
-            <span />
-            <span />
         </div>
     );
 }
