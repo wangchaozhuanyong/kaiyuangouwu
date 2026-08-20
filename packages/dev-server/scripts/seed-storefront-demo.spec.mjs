@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import test from 'node:test';
 
 import {
-    demoCollections,
     createUploadMap,
+    demoCollections,
+    demoInventoryTracking,
     demoProducts,
     isLocalApiOrigin,
     validateDemoCollections,
@@ -15,6 +17,24 @@ void test('accepts only local API origins', () => {
     assert.equal(isLocalApiOrigin('https://vendure.localhost:1355'), true);
     assert.equal(isLocalApiOrigin('https://example.com'), false);
     assert.equal(isLocalApiOrigin('not-a-url'), false);
+});
+
+void test('digital demos match delivery assets and do not track inventory', () => {
+    const digitalProducts = demoProducts.filter(product => product.fulfillmentType === 'digital');
+    assert.deepEqual(digitalProducts.map(product => product.sku).sort(), [
+        'DEMO-DIGITAL-AI-STARTER',
+        'DEMO-DIGITAL-ECOMMERCE',
+        'DEMO-DIGITAL-PROMPTS',
+        'DEMO-DIGITAL-SUPPORT',
+        'DEMO-DIGITAL-VIDEO',
+    ]);
+    for (const product of digitalProducts) {
+        assert.equal(demoInventoryTracking(product), 'FALSE');
+        assert.equal(
+            existsSync(new URL(`../digital-delivery-assets/${product.sku}.txt`, import.meta.url)),
+            true,
+        );
+    }
 });
 
 void test('demo products have unique bilingual identifiers and regional prices', () => {

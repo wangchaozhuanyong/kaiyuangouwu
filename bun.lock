@@ -458,6 +458,7 @@
         "@vendure/storefront-catalog-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
         "@vendure/storefront-cart-plugin": "0.1.0",
+        "@vendure/storefront-review-plugin": "0.1.0",
       },
       "devDependencies": {
         "@typescript/native-preview": "7.0.0-dev.20260515.1",
@@ -561,6 +562,7 @@
       "dependencies": {
         "@lingui/core": "^5.9.3",
         "@lingui/react": "^5.9.3",
+        "graphql-tag": "^2.12.6",
         "lucide-react": "^0.475.0",
       },
       "peerDependencies": {
@@ -668,6 +670,22 @@
     },
     "packages/storefront-cart-plugin": {
       "name": "@vendure/storefront-cart-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.1.0",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "typeorm": "^0.3.21",
+      },
+      "devDependencies": {
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4",
+      },
+    },
+    "packages/storefront-review-plugin": {
+      "name": "@vendure/storefront-review-plugin",
       "version": "0.1.0",
       "dependencies": {
         "@nestjs/common": "^11.0.12",
@@ -2819,6 +2837,8 @@
     "@vendure/storefront-catalog-plugin": ["@vendure/storefront-catalog-plugin@workspace:packages/storefront-catalog-plugin"],
 
     "@vendure/storefront-cart-plugin": ["@vendure/storefront-cart-plugin@workspace:packages/storefront-cart-plugin"],
+
+    "@vendure/storefront-review-plugin": ["@vendure/storefront-review-plugin@workspace:packages/storefront-review-plugin"],
 
     "@vendure/telemetry-plugin": ["@vendure/telemetry-plugin@workspace:packages/telemetry-plugin"],
 

@@ -57,12 +57,10 @@ describe('storefront hash routing', () => {
         expect(routeFromHash('#/legal?id=terms')).toMatchObject({ name: 'legal', id: 'terms' });
     });
 
-    it('opens account service and placeholder routes', () => {
+    it('opens account service, coupon, and review routes', () => {
         expect(routeFromHash('#/favorites').name).toBe('favorites');
         expect(routeFromHash('#/support').name).toBe('support');
-        expect(routeFromHash('#/coming-soon?id=coupons')).toMatchObject({
-            name: 'coming-soon',
-            id: 'coupons',
-        });
+        expect(routeFromHash('#/coupons').name).toBe('coupons');
+        expect(routeFromHash('#/reviews').name).toBe('reviews');
     });
 });

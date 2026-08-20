@@ -36,11 +36,12 @@ import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
+import { StorefrontReviewPlugin } from '@vendure/storefront-review-plugin';
 import 'dotenv/config';
-import './business-time';
 import { createRequire } from 'node:module';
 import path from 'path';
 import { DataSourceOptions } from 'typeorm';
+import './business-time';
 
 import {
     emailLanguageVariables,
@@ -50,7 +51,6 @@ import {
 } from './email-localization';
 import { devServerMigrations } from './migrations';
 // import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
-import { ReviewsPlugin } from './test-plugins/reviews/reviews-plugin';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const IS_INSTRUMENTED = process.env.IS_INSTRUMENTED === 'true';
@@ -446,7 +446,7 @@ export const devConfig: VendureConfig = {
         //     platformFeePercent: 10,
         //     platformFeeSKU: 'FEE',
         // }),
-        ...(!IS_PRODUCTION && !BOOTSTRAP_BASE_SCHEMA ? [ReadonlySettingsTestPlugin, ReviewsPlugin] : []),
+        ...(!IS_PRODUCTION && !BOOTSTRAP_BASE_SCHEMA ? [ReadonlySettingsTestPlugin] : []),
         // FieldTestPlugin,
         OperationsDashboardPlugin,
         ...(!BOOTSTRAP_BASE_SCHEMA
@@ -456,6 +456,7 @@ export const devConfig: VendureConfig = {
                   StorefrontCatalogPlugin,
                   StorefrontCartPlugin,
                   StorefrontContentPlugin,
+                  StorefrontReviewPlugin,
                   StoreDomainPlugin.init({
                       cnameTarget: process.env.STORE_DOMAIN_CNAME_TARGET || 'vendure.localhost',
                       routingMode: storeDomainRoutingMode(),

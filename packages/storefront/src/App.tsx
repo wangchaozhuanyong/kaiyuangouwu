@@ -15,7 +15,6 @@ import {
     House,
     LayoutGrid,
     MapPin,
-    MessageSquare,
     Minus,
     Navigation,
     Package,
@@ -74,11 +73,14 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { responsiveImageSources, StorefrontImageKind } from './responsive-image';
+import { ProductReviewsSection, ReviewCenterPage } from './review-pages';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
 import {
     ActiveCustomer,
+    AfterSalesRequest,
     CollectionSummary,
+    CreateAfterSalesRequestInput,
     CustomerAddress,
     FulfillmentType,
     MarketConfig,
@@ -110,8 +112,9 @@ type RouteName =
     | 'favorites'
     | 'history'
     | 'notifications'
+    | 'coupons'
     | 'support'
-    | 'coming-soon'
+    | 'reviews'
     | 'login'
     | 'register'
     | 'verify-account'
@@ -283,8 +286,9 @@ export function routeFromHash(hash: string): RouteState {
         'favorites',
         'history',
         'notifications',
+        'coupons',
         'support',
-        'coming-soon',
+        'reviews',
         'login',
         'register',
         'verify-account',
@@ -911,6 +915,71 @@ export function App() {
         [api, cart, invalidateCustomerRouteQueries, isZh, navigate, notify, text.loadError],
     );
 
+    const cancelAuthorizedOrder = useCallback(
+        async (order: Order, reason: string) => {
+            const cancelledOrder = await api.cancelMyAuthorizedOrder(order.id, reason);
+            queryClient.setQueryData(
+                storefrontQueryKeys.order(
+                    market.code,
+                    vendureLanguageCode,
+                    customer?.id ?? 'guest',
+                    order.id,
+                ),
+                cancelledOrder,
+            );
+            setCustomer(current =>
+                current
+                    ? {
+                          ...current,
+                          orders: {
+                              ...current.orders,
+                              items: current.orders.items.map(item =>
+                                  item.id === cancelledOrder.id ? cancelledOrder : item,
+                              ),
+                          },
+                      }
+                    : current,
+            );
+            await invalidateCustomerRouteQueries();
+            const refreshedCustomer = await api.activeCustomer().catch(() => undefined);
+            if (refreshedCustomer !== undefined) setCustomer(refreshedCustomer);
+            notify(
+                isZh
+                    ? '订单已取消，支付授权和库存已释放'
+                    : 'Order cancelled. Authorization and stock were released.',
+            );
+        },
+        [
+            api,
+            customer?.id,
+            invalidateCustomerRouteQueries,
+            isZh,
+            market.code,
+            notify,
+            queryClient,
+            vendureLanguageCode,
+        ],
+    );
+
+    const createAfterSalesRequest = useCallback(
+        async (input: CreateAfterSalesRequestInput) => {
+            await api.createAfterSalesRequest(input);
+            if (customer) {
+                await queryClient.invalidateQueries({
+                    queryKey: storefrontQueryKeys.afterSalesRequests(
+                        market.code,
+                        vendureLanguageCode,
+                        customer.id,
+                    ),
+                    refetchType: 'none',
+                });
+            }
+            notify(isZh ? '售后申请已提交' : 'After-sales request submitted');
+            navigate({ name: 'orders', tab: 'service' });
+        },
+        [api, customer, isZh, market.code, navigate, notify, queryClient, vendureLanguageCode],
+    );
+
     const beginCheckout = useCallback(async () => {
         if (!cart || cart.selectedQuantity === 0) return;
         setCartLoading(true);
@@ -977,8 +1046,9 @@ export function App() {
             favorites: isZh ? '我的收藏' : 'My favorites',
             history: isZh ? '浏览足迹' : 'Browsing history',
             notifications: isZh ? '消息通知' : 'Notifications',
+            coupons: isZh ? '优惠券' : 'Coupons',
             support: isZh ? '客服中心' : 'Customer support',
-            'coming-soon': isZh ? '功能建设中' : 'Coming soon',
+            reviews: isZh ? '评价中心' : 'Reviews',
             login: isZh ? '登录' : 'Sign in',
             register: isZh ? '注册账户' : 'Create account',
             'verify-account': isZh ? '验证邮箱' : 'Verify email',
@@ -1234,6 +1304,7 @@ export function App() {
                         storefrontName={storefrontName}
                         favoriteProductCount={favoriteProductIds.length}
                         recentProductCount={recentProductIds.length}
+                        couponCount={cart?.checkoutOrder?.couponCodes.length ?? 0}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
@@ -1254,6 +1325,7 @@ export function App() {
                 ) : selectedProduct ? (
                     <ProductDetailPage
                         key={selectedProduct.id}
+                        api={api}
                         product={selectedProduct}
                         products={products}
                         cartQuantity={cart?.totalQuantity ?? 0}
@@ -1343,7 +1415,15 @@ export function App() {
                                 setCompletedOrder(order);
                                 setCheckoutOrder(order);
                                 await invalidateCustomerRouteQueries();
-                                notify(isZh ? '测试支付已完成' : 'Test payment completed');
+                                notify(
+                                    import.meta.env.DEV
+                                        ? isZh
+                                            ? '测试支付已完成'
+                                            : 'Test payment completed'
+                                        : isZh
+                                          ? '支付状态已更新'
+                                          : 'Payment status updated',
+                                );
                                 try {
                                     setCart(await api.cart());
                                 } catch {
@@ -1384,6 +1464,7 @@ export function App() {
                             onBack={goBack}
                             onNavigate={navigate}
                             onBuyAgain={addOrderToCart}
+                            onNotify={notify}
                         />
                     </AuthPageBoundary>
                 );
@@ -1403,6 +1484,8 @@ export function App() {
                             onBack={goBack}
                             onBuyAgain={addOrderToCart}
                             onReopen={reopenPendingOrder}
+                            onCancelOrder={cancelAuthorizedOrder}
+                            onCreateAfterSales={createAfterSalesRequest}
                             onUnavailable={() => notify(text.unavailable)}
                         />
                     </AuthPageBoundary>
@@ -1504,7 +1587,43 @@ export function App() {
                     />
                 );
             case 'notifications':
-                return <NotificationsPage language={language} onBack={goBack} onNavigate={navigate} />;
+                return (
+                    <NotificationsPage
+                        api={api}
+                        customer={customer}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                    />
+                );
+            case 'coupons':
+                return (
+                    <CouponCenterPage
+                        order={cart?.checkoutOrder ?? null}
+                        language={language}
+                        loading={cartLoading}
+                        onBack={goBack}
+                        onNavigate={navigate}
+                        onApply={applyCoupon}
+                        onRemove={removeCoupon}
+                    />
+                );
+            case 'reviews':
+                return (
+                    <ReviewCenterPage
+                        api={api}
+                        customer={customer}
+                        market={market}
+                        language={language}
+                        onBack={goBack}
+                        onProduct={productId => navigate({ name: 'product', id: productId })}
+                        onShop={() => navigate({ name: 'category' })}
+                        onSignIn={() => navigate({ name: 'login' })}
+                        onNotify={notify}
+                    />
+                );
             case 'support':
                 return (
                     <SupportPage
@@ -1513,15 +1632,6 @@ export function App() {
                         language={language}
                         onBack={goBack}
                         onContentTarget={openContentTarget}
-                    />
-                );
-            case 'coming-soon':
-                return (
-                    <ComingSoonPage
-                        feature={route.id}
-                        language={language}
-                        onBack={goBack}
-                        onNavigate={navigate}
                     />
                 );
             case 'login':
@@ -3104,6 +3214,7 @@ interface AccountPageProps {
     storefrontName: string;
     favoriteProductCount: number;
     recentProductCount: number;
+    couponCount: number;
     addingVariantId: string | null;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
@@ -3121,6 +3232,7 @@ function AccountPage(props: AccountPageProps) {
         storefrontName,
         favoriteProductCount,
         recentProductCount,
+        couponCount,
         addingVariantId,
         onNavigate,
         onAdd,
@@ -3140,6 +3252,20 @@ function AccountPage(props: AccountPageProps) {
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0 };
+    const afterSalesQuery = useQuery({
+        queryKey: storefrontQueryKeys.afterSalesRequests(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.afterSalesRequests(signal),
+        enabled: Boolean(customer),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const activeAfterSalesCount = (afterSalesQuery.data ?? []).filter(request =>
+        ['PENDING', 'APPROVED'].includes(request.state),
+    ).length;
     const latestOrder = orders[0];
     const recentVariants = Array.from(
         new Map(
@@ -3226,7 +3352,7 @@ function AccountPage(props: AccountPageProps) {
                     <AccountShortcut
                         icon={<RotateCcw />}
                         label={isZh ? '退款/售后' : 'After-sales'}
-                        count={0}
+                        count={activeAfterSalesCount}
                         onClick={() => onNavigate({ name: 'orders', tab: 'service' })}
                     />
                 </nav>
@@ -3299,14 +3425,13 @@ function AccountPage(props: AccountPageProps) {
                     <ServiceButton
                         icon={<TicketPercent />}
                         label={isZh ? '优惠券' : 'Coupons'}
-                        badge={isZh ? '待开放' : 'Soon'}
-                        onClick={() => onNavigate({ name: 'coming-soon', id: 'coupons' })}
+                        badge={couponCount > 0 ? String(couponCount) : undefined}
+                        onClick={() => onNavigate({ name: 'coupons' })}
                     />
                     <ServiceButton
-                        icon={<MessageSquare />}
+                        icon={<CircleCheck />}
                         label={isZh ? '评价中心' : 'Reviews'}
-                        badge={isZh ? '待开放' : 'Soon'}
-                        onClick={() => onNavigate({ name: 'coming-soon', id: 'reviews' })}
+                        onClick={() => onNavigate({ name: 'reviews' })}
                     />
                     <ServiceButton
                         icon={<Headphones />}
@@ -3614,73 +3739,324 @@ function SupportPage({
     );
 }
 
-function ComingSoonPage({
-    feature,
+function CouponCenterPage({
+    order,
     language,
+    loading,
     onBack,
     onNavigate,
+    onApply,
+    onRemove,
 }: {
-    feature?: string;
+    order: Order | null;
     language: StorefrontLanguage;
+    loading: boolean;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
+    onApply: (couponCode: string) => Promise<string | null>;
+    onRemove: (couponCode: string) => Promise<string | null>;
 }) {
     const isZh = language === 'zh';
-    const featureCopy =
-        feature === 'reviews'
-            ? {
-                  title: isZh ? '评价中心' : 'Reviews',
-                  detail: isZh
-                      ? '商品评价与审核流程正在建设中'
-                      : 'Product reviews and moderation are being prepared',
-                  icon: <MessageSquare />,
-              }
-            : {
-                  title: isZh ? '优惠券' : 'Coupons',
-                  detail: isZh
-                      ? '客户优惠券包正在建设中，购物车仍可输入已知优惠码'
-                      : 'The coupon wallet is being prepared; known coupon codes can still be used in cart',
-                  icon: <TicketPercent />,
-              };
+    const [couponCode, setCouponCode] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const normalizedCode = couponCode.trim();
+        if (!normalizedCode || submitting) return;
+        setSubmitting(true);
+        setError('');
+        const nextError = await onApply(normalizedCode);
+        setSubmitting(false);
+        if (nextError) setError(nextError);
+        else setCouponCode('');
+    };
+    const remove = async (code: string) => {
+        if (submitting) return;
+        setSubmitting(true);
+        setError('');
+        const nextError = await onRemove(code);
+        setSubmitting(false);
+        if (nextError) setError(nextError);
+    };
     return (
-        <Subpage title={featureCopy.title} language={language} onBack={onBack}>
-            <EmptyState
-                icon={featureCopy.icon}
-                title={isZh ? '功能建设中' : 'Coming soon'}
-                detail={featureCopy.detail}
-                action={isZh ? '返回我的' : 'Back to account'}
-                onAction={() => onNavigate({ name: 'account' })}
-            />
+        <Subpage title={isZh ? '优惠券' : 'Coupons'} language={language} onBack={onBack}>
+            {!order ? (
+                <EmptyState
+                    icon={<TicketPercent />}
+                    title={isZh ? '还没有可使用优惠码的订单' : 'No active order for coupons'}
+                    detail={
+                        isZh
+                            ? '将商品加入购物车后，可在这里录入商家发放的优惠码'
+                            : 'Add an item to cart, then enter a coupon code issued by the store here'
+                    }
+                    action={isZh ? '去选购' : 'Shop now'}
+                    onAction={() => onNavigate({ name: 'category' })}
+                />
+            ) : (
+                <section className="coupon-center" aria-busy={loading || submitting}>
+                    <div className="coupon-center-intro">
+                        <TicketPercent aria-hidden="true" />
+                        <span>
+                            <strong>{isZh ? '使用商家优惠码' : 'Use a store coupon code'}</strong>
+                            <small>
+                                {isZh
+                                    ? '优惠码由商家活动发放，应用后会自动重新计算当前订单优惠'
+                                    : 'Codes are issued by store campaigns and recalculate the active order automatically'}
+                            </small>
+                        </span>
+                    </div>
+                    <form
+                        className="coupon-code-form coupon-center-form"
+                        onSubmit={event => void submit(event)}
+                    >
+                        <label>
+                            <span>{isZh ? '输入优惠码' : 'Enter coupon code'}</span>
+                            <input
+                                value={couponCode}
+                                onChange={event => setCouponCode(event.target.value)}
+                                autoComplete="off"
+                                placeholder={isZh ? '例如 SAVE10' : 'For example, SAVE10'}
+                                disabled={loading || submitting}
+                            />
+                        </label>
+                        <button type="submit" disabled={loading || submitting || !couponCode.trim()}>
+                            {submitting ? (isZh ? '处理中' : 'Applying') : isZh ? '应用' : 'Apply'}
+                        </button>
+                    </form>
+                    <section className="applied-coupons coupon-center-applied">
+                        <strong>{isZh ? '当前订单已使用' : 'Applied to the active order'}</strong>
+                        {order.couponCodes.length ? (
+                            order.couponCodes.map(code => (
+                                <div key={code}>
+                                    <span>
+                                        <TicketPercent aria-hidden="true" />
+                                        {code}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => void remove(code)}
+                                        disabled={loading || submitting}
+                                    >
+                                        {isZh ? '移除' : 'Remove'}
+                                    </button>
+                                </div>
+                            ))
+                        ) : (
+                            <p>{isZh ? '暂未应用优惠码' : 'No coupon code applied yet'}</p>
+                        )}
+                    </section>
+                    {error && (
+                        <small className="form-error" role="alert">
+                            {error}
+                        </small>
+                    )}
+                    <button
+                        className="coupon-center-cart-link"
+                        type="button"
+                        onClick={() => onNavigate({ name: 'cart' })}
+                    >
+                        {isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}
+                        <ChevronRight aria-hidden="true" />
+                    </button>
+                </section>
+            )}
         </Subpage>
     );
 }
 
 function NotificationsPage({
+    api,
+    customer,
+    market,
+    locale,
     language,
     onBack,
     onNavigate,
 }: {
+    api: ShopApi;
+    customer: ActiveCustomer | null;
+    market: MarketConfig;
+    locale: string;
     language: StorefrontLanguage;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
 }) {
     const isZh = language === 'zh';
+    const orders = customer?.orders.items ?? [];
+    const afterSalesQuery = useQuery({
+        queryKey: storefrontQueryKeys.afterSalesRequests(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.afterSalesRequests(signal),
+        enabled: Boolean(customer),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const afterSalesRequests = afterSalesQuery.data ?? [];
     return (
         <Subpage title={isZh ? '消息通知' : 'Notifications'} language={language} onBack={onBack}>
-            <EmptyState
-                icon={<Bell />}
-                title={isZh ? '暂无消息' : 'No notifications'}
-                detail={
-                    isZh ? '订单和店铺通知会显示在这里' : 'Order and store notifications will appear here'
-                }
-                action={isZh ? '返回首页' : 'Back to home'}
-                onAction={() => onNavigate({ name: 'home' })}
-            />
+            {!customer ? (
+                <EmptyState
+                    icon={<Bell />}
+                    title={isZh ? '登录后查看通知' : 'Sign in to view notifications'}
+                    detail={isZh ? '订单状态更新会显示在这里' : 'Order status updates will appear here'}
+                    action={isZh ? '去登录' : 'Sign in'}
+                    onAction={() => onNavigate({ name: 'login' })}
+                />
+            ) : orders.length || afterSalesRequests.length ? (
+                <section
+                    className="notification-list"
+                    aria-label={isZh ? '最近通知' : 'Recent notifications'}
+                >
+                    {afterSalesRequests.map(request => {
+                        const notification = afterSalesNotification(request, language);
+                        return (
+                            <button
+                                type="button"
+                                key={`after-sales-${request.id}`}
+                                onClick={() => onNavigate({ name: 'orders', tab: 'service' })}
+                            >
+                                <span className={`notification-icon is-${notification.tone}`}>
+                                    <RotateCcw aria-hidden="true" />
+                                </span>
+                                <span>
+                                    <strong>{notification.title}</strong>
+                                    <small>{notification.detail}</small>
+                                    <em>
+                                        {formatBusinessDate(locale, request.updatedAt, {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </em>
+                                </span>
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                        );
+                    })}
+                    {orders.map(order => {
+                        const notification = orderNotification(order, language);
+                        return (
+                            <button
+                                type="button"
+                                key={order.id}
+                                onClick={() => onNavigate({ name: 'order-detail', id: order.id })}
+                            >
+                                <span className={`notification-icon is-${notification.tone}`}>
+                                    <Bell aria-hidden="true" />
+                                </span>
+                                <span>
+                                    <strong>{notification.title}</strong>
+                                    <small>{notification.detail}</small>
+                                    <em>
+                                        {order.orderPlacedAt
+                                            ? formatBusinessDate(locale, order.orderPlacedAt, {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                              })
+                                            : '--'}
+                                    </em>
+                                </span>
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                        );
+                    })}
+                </section>
+            ) : (
+                <EmptyState
+                    icon={<Bell />}
+                    title={isZh ? '暂无消息' : 'No notifications'}
+                    detail={isZh ? '订单状态更新会显示在这里' : 'Order status updates will appear here'}
+                    action={isZh ? '返回首页' : 'Back to home'}
+                    onAction={() => onNavigate({ name: 'home' })}
+                />
+            )}
         </Subpage>
     );
 }
 
+function afterSalesNotification(
+    request: AfterSalesRequest,
+    language: StorefrontLanguage,
+): { title: string; detail: string; tone: 'pending' | 'progress' | 'complete' | 'muted' } {
+    const isZh = language === 'zh';
+    const titleByState: Record<AfterSalesRequest['state'], string> = {
+        PENDING: isZh ? '售后申请等待处理' : 'After-sales request awaiting review',
+        APPROVED: isZh ? '售后申请已通过' : 'After-sales request approved',
+        REJECTED: isZh ? '售后申请未通过' : 'After-sales request not approved',
+        CANCELLED: isZh ? '售后申请已撤销' : 'After-sales request cancelled',
+        COMPLETED: isZh ? '售后处理已完成' : 'After-sales request completed',
+    };
+    return {
+        title: titleByState[request.state],
+        detail: isZh
+            ? `申请 ${request.code} · 订单 ${request.order.code}`
+            : `${request.code} · Order ${request.order.code}`,
+        tone:
+            request.state === 'PENDING'
+                ? 'pending'
+                : request.state === 'APPROVED'
+                  ? 'progress'
+                  : request.state === 'COMPLETED'
+                    ? 'complete'
+                    : 'muted',
+    };
+}
+
+function orderNotification(
+    order: Order,
+    language: StorefrontLanguage,
+): { title: string; detail: string; tone: 'pending' | 'progress' | 'complete' | 'muted' } {
+    const isZh = language === 'zh';
+    if (['AddingItems', 'ArrangingPayment'].includes(order.state)) {
+        return {
+            title: isZh ? '订单等待支付' : 'Order awaiting payment',
+            detail: isZh ? `订单 ${order.code} 已保留，可继续支付或修改` : `Order ${order.code} is saved`,
+            tone: 'pending',
+        };
+    }
+    if (['PaymentAuthorized', 'PaymentSettled'].includes(order.state)) {
+        return {
+            title: order.checkoutFulfillment?.containsDigitalProducts
+                ? isZh
+                    ? '数字商品已进入交付流程'
+                    : 'Digital delivery is ready'
+                : isZh
+                  ? '商家正在准备订单'
+                  : 'Your order is being prepared',
+            detail: isZh ? `查看订单 ${order.code} 的最新状态` : `View the latest status for ${order.code}`,
+            tone: 'progress',
+        };
+    }
+    if (['Shipped', 'PartiallyShipped'].includes(order.state)) {
+        return {
+            title: isZh ? '订单已发货' : 'Order shipped',
+            detail: isZh ? `订单 ${order.code} 已有物流更新` : `Tracking is available for ${order.code}`,
+            tone: 'progress',
+        };
+    }
+    if (order.state === 'Delivered') {
+        return {
+            title: isZh ? '订单已完成' : 'Order completed',
+            detail: isZh ? `订单 ${order.code} 已完成交付` : `Order ${order.code} was delivered`,
+            tone: 'complete',
+        };
+    }
+    return {
+        title: order.state === 'Cancelled' ? (isZh ? '订单已取消' : 'Order cancelled') : order.state,
+        detail: isZh ? `查看订单 ${order.code}` : `View order ${order.code}`,
+        tone: 'muted',
+    };
+}
+
 function ProductDetailPage({
+    api,
     product,
     products,
     cartQuantity,
@@ -3696,6 +4072,7 @@ function ProductDetailPage({
     onFavorite,
     onNotify,
 }: {
+    api: ShopApi;
     product: Product;
     products: Product[];
     cartQuantity: number;
@@ -3912,23 +4289,7 @@ function ProductDetailPage({
                     {isZh ? '售后支持' : 'After-sales support'}
                 </span>
             </section>
-            <section className="detail-block detail-review-block">
-                <header>
-                    <strong>{isZh ? '用户评价' : 'Reviews'}</strong>
-                    <span>{isZh ? '暂无评价' : 'No reviews yet'}</span>
-                </header>
-                <div className="detail-empty-review">
-                    <MessageSquare />
-                    <span>
-                        <strong>
-                            {isZh ? '等待第一条真实评价' : 'Waiting for the first verified review'}
-                        </strong>
-                        <small>
-                            {isZh ? '评价将在用户完成订单后显示' : 'Reviews appear after completed orders'}
-                        </small>
-                    </span>
-                </div>
-            </section>
+            <ProductReviewsSection api={api} productId={product.id} market={market} language={language} />
             <section className="detail-block detail-shop-block">
                 <header>
                     <strong>{isZh ? '店铺信息' : 'Store'}</strong>

@@ -130,6 +130,17 @@ export const storefrontQueryKeys = {
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer', customerId] as const,
     customerOrderCounts: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'order-counts'] as const,
+    afterSalesRequests: (marketCode: string, languageCode: string, customerId: string) =>
+        [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'after-sales'] as const,
+    customerReviews: (marketCode: string, languageCode: string, customerId: string) =>
+        [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'reviews'] as const,
+    reviewCandidates: (marketCode: string, languageCode: string, customerId: string) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'review-candidates',
+        ] as const,
+    productReviews: (marketCode: string, languageCode: string, productId: string) =>
+        [...storefrontQueryKeys.scope(marketCode, languageCode), 'product-reviews', productId] as const,
     customerOrders: (
         marketCode: string,
         languageCode: string,

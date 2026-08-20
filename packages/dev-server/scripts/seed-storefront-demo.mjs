@@ -91,6 +91,111 @@ export const demoProducts = [
         },
         variant: { en: '75% layout · Tactile switch', zh: '75% 配列 · 段落轴' },
     },
+    {
+        sku: 'DEMO-DIGITAL-AI-STARTER',
+        image: 'florian-olivo-1166419-unsplash.jpg',
+        fulfillmentType: 'digital',
+        stockOnHand: 0,
+        prices: { USD: 1900, CNY: 9900, MYR: 5900 },
+        product: {
+            en: {
+                name: 'AI Workflow Starter Course',
+                slug: 'ai-workflow-starter-course',
+                description:
+                    'Temporary digital demo. A concise starter course covering practical research, writing, planning and review workflows.',
+            },
+            zh: {
+                name: 'AI 工作效率入门课',
+                slug: 'ai-workflow-starter-course',
+                description: '临时数字商品。覆盖调研、写作、规划与复盘的实用 AI 工作流入门内容。',
+            },
+        },
+        variant: { en: 'Digital download · Starter edition', zh: '数字下载 · 入门版' },
+    },
+    {
+        sku: 'DEMO-DIGITAL-ECOMMERCE',
+        image: 'kari-shea-398668-unsplash.jpg',
+        fulfillmentType: 'digital',
+        stockOnHand: 0,
+        prices: { USD: 2900, CNY: 15900, MYR: 9900 },
+        product: {
+            en: {
+                name: 'E-commerce Copywriting Toolkit',
+                slug: 'ecommerce-copywriting-toolkit',
+                description:
+                    'Temporary digital demo. A reusable product-page structure and evidence checklist for e-commerce operations.',
+            },
+            zh: {
+                name: '电商文案工具包',
+                slug: 'ecommerce-copywriting-toolkit',
+                description: '临时数字商品。包含可复用的商品详情页结构、卖点组织与证据检查清单。',
+            },
+        },
+        variant: { en: 'Digital download · Toolkit', zh: '数字下载 · 工具包' },
+    },
+    {
+        sku: 'DEMO-DIGITAL-PROMPTS',
+        image: 'brandi-redd-104140-unsplash.jpg',
+        fulfillmentType: 'digital',
+        stockOnHand: 0,
+        prices: { USD: 900, CNY: 4900, MYR: 2900 },
+        product: {
+            en: {
+                name: 'Business Prompt Template Library',
+                slug: 'business-prompt-template-library',
+                description:
+                    'Temporary digital demo. Structured prompt templates for common business writing and analysis tasks.',
+            },
+            zh: {
+                name: '商务提示词模板库',
+                slug: 'business-prompt-template-library',
+                description: '临时数字商品。面向常见商务写作与分析任务的结构化提示词模板。',
+            },
+        },
+        variant: { en: 'Digital download · Template pack', zh: '数字下载 · 模板包' },
+    },
+    {
+        sku: 'DEMO-DIGITAL-SUPPORT',
+        image: 'nik-shuliahin-619349-unsplash.jpg',
+        fulfillmentType: 'digital',
+        stockOnHand: 0,
+        prices: { USD: 1200, CNY: 6900, MYR: 3900 },
+        product: {
+            en: {
+                name: 'Customer Support Reply Library',
+                slug: 'customer-support-reply-library',
+                description:
+                    'Temporary digital demo. Practical response structures for order, delivery and after-sales conversations.',
+            },
+            zh: {
+                name: '客服回复模板库',
+                slug: 'customer-support-reply-library',
+                description: '临时数字商品。适用于订单、配送与售后沟通的客服回复结构和示例。',
+            },
+        },
+        variant: { en: 'Digital download · Response pack', zh: '数字下载 · 回复模板包' },
+    },
+    {
+        sku: 'DEMO-DIGITAL-VIDEO',
+        image: 'jakob-owens-274337-unsplash.jpg',
+        fulfillmentType: 'digital',
+        stockOnHand: 0,
+        prices: { USD: 1500, CNY: 7900, MYR: 4900 },
+        product: {
+            en: {
+                name: 'Short Video Script Pack',
+                slug: 'short-video-script-pack',
+                description:
+                    'Temporary digital demo. A concise script framework and production checklist for short-form video.',
+            },
+            zh: {
+                name: '短视频脚本素材包',
+                slug: 'short-video-script-pack',
+                description: '临时数字商品。包含短视频脚本结构、画面证据与制作检查清单。',
+            },
+        },
+        variant: { en: 'Digital download · Script pack', zh: '数字下载 · 脚本包' },
+    },
 ];
 
 export const demoCollections = [
@@ -170,6 +275,56 @@ export const demoCollections = [
             },
         ],
     },
+    {
+        channelCode: 'cn-mainland',
+        code: 'cn-digital-library',
+        productSkus: [
+            'DEMO-DIGITAL-AI-STARTER',
+            'DEMO-DIGITAL-ECOMMERCE',
+            'DEMO-DIGITAL-PROMPTS',
+            'DEMO-DIGITAL-SUPPORT',
+            'DEMO-DIGITAL-VIDEO',
+        ],
+        translations: [
+            {
+                languageCode: 'en',
+                name: 'Digital Library',
+                slug: 'cn-digital-library',
+                description: 'Temporary digital product category for the mainland China store.',
+            },
+            {
+                languageCode: 'zh_Hans',
+                name: '数字内容库',
+                slug: 'cn-digital-library',
+                description: '中国大陆店铺的临时数字商品分类。',
+            },
+        ],
+    },
+    {
+        channelCode: 'my-malaysia',
+        code: 'my-digital-library',
+        productSkus: [
+            'DEMO-DIGITAL-AI-STARTER',
+            'DEMO-DIGITAL-ECOMMERCE',
+            'DEMO-DIGITAL-PROMPTS',
+            'DEMO-DIGITAL-SUPPORT',
+            'DEMO-DIGITAL-VIDEO',
+        ],
+        translations: [
+            {
+                languageCode: 'en',
+                name: 'Digital Library',
+                slug: 'my-digital-library',
+                description: 'Temporary digital product category for the Malaysia store.',
+            },
+            {
+                languageCode: 'zh_Hans',
+                name: '数字内容库',
+                slug: 'my-digital-library',
+                description: '马来西亚店铺的临时数字商品分类。',
+            },
+        ],
+    },
 ];
 
 export function isLocalApiOrigin(value) {
@@ -205,6 +360,7 @@ export function validateDemoProducts(products) {
         );
         assert.ok(product.prices.USD > 0 && product.prices.CNY > 0 && product.prices.MYR > 0);
         assert.ok(product.stockOnHand >= 0);
+        assert.ok(['physical', 'digital'].includes(product.fulfillmentType));
         skus.add(product.sku);
         slugs.add(product.product.en.slug);
     }
@@ -217,7 +373,10 @@ export function validateDemoCollections(collections, products = demoProducts) {
     const channelCodes = new Set();
 
     for (const collection of collections) {
-        assert.ok(!collectionCodes.has(collection.code), `Duplicate demo collection code: ${collection.code}`);
+        assert.ok(
+            !collectionCodes.has(collection.code),
+            `Duplicate demo collection code: ${collection.code}`,
+        );
         assert.ok(collection.productSkus.length > 0, `Demo collection has no products: ${collection.code}`);
         assert.ok(
             collection.translations.some(translation => translation.languageCode === 'en') &&
@@ -237,6 +396,10 @@ export function validateDemoCollections(collections, products = demoProducts) {
 
 export function createUploadMap(variablePath) {
     return { 0: [variablePath] };
+}
+
+export function demoInventoryTracking(product) {
+    return product.fulfillmentType === 'digital' ? 'FALSE' : 'TRUE';
 }
 
 function headers(authToken, channelToken) {
@@ -334,14 +497,7 @@ async function uploadAsset(fetchImpl, apiOrigin, authToken, channelToken, produc
     return result.id;
 }
 
-async function upsertDemoCollection(
-    fetchImpl,
-    apiOrigin,
-    authToken,
-    channel,
-    collection,
-    productIdsBySku,
-) {
+async function upsertDemoCollection(fetchImpl, apiOrigin, authToken, channel, collection, productIdsBySku) {
     const existing = await graphql(
         fetchImpl,
         apiOrigin,
@@ -560,7 +716,7 @@ export async function seedStorefrontDemo({ apiOrigin, username, password, fetchI
                             featuredAssetId: assetId,
                             assetIds: [assetId],
                             stockOnHand: product.stockOnHand,
-                            trackInventory: 'TRUE',
+                            trackInventory: demoInventoryTracking(product),
                             customFields: { fulfillmentType: product.fulfillmentType },
                         },
                     ],
@@ -612,7 +768,7 @@ export async function seedStorefrontDemo({ apiOrigin, username, password, fetchI
                     featuredAssetId: assetId,
                     assetIds: [assetId],
                     stockOnHand: product.stockOnHand,
-                    trackInventory: 'TRUE',
+                    trackInventory: demoInventoryTracking(product),
                     customFields: { fulfillmentType: product.fulfillmentType },
                 },
             },

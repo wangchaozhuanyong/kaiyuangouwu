@@ -63,6 +63,19 @@ export function parseTaxPolicy(value) {
             policy && typeof policy === 'object' && typeof policy.pricesIncludeTax === 'boolean',
             `Tax policy for ${String(channelCode)} must define pricesIncludeTax as a boolean`,
         );
+        if (policy.rates !== undefined) {
+            assert.ok(
+                policy.rates && typeof policy.rates === 'object' && !Array.isArray(policy.rates),
+                `Tax policy rates for ${String(channelCode)} must be an object`,
+            );
+            for (const [category, value] of Object.entries(policy.rates)) {
+                assert.ok(category.trim(), `Tax category for ${String(channelCode)} cannot be empty`);
+                assert.ok(
+                    typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100,
+                    `Tax rate for ${String(channelCode)}/${String(category)} must be between 0 and 100`,
+                );
+            }
+        }
     }
     return parsed;
 }
@@ -242,6 +255,59 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
                     : `configured=${String(channel.pricesIncludeTax)}, no approved policy supplied`,
         });
 
+        const enabledDefaultZoneRates = (channel.taxRates ?? []).filter(
+            rate => rate.enabled && String(rate.zone?.id) === String(channel.defaultTaxZone?.id),
+        );
+        const usedTaxCategories = new Map();
+        for (const product of channel.products ?? []) {
+            for (const variant of product.variants ?? []) {
+                if (variant.taxCategory?.id) {
+                    usedTaxCategories.set(String(variant.taxCategory.id), variant.taxCategory.name);
+                }
+            }
+        }
+        const missingTaxCategories = [...usedTaxCategories.entries()].filter(
+            ([categoryId]) =>
+                !enabledDefaultZoneRates.some(
+                    rate =>
+                        String(rate.category?.id) === categoryId &&
+                        !rate.customerGroup,
+                ),
+        );
+        pushCheck(checks, {
+            id: `tax-rate-coverage-${expected.code}`,
+            scope: expected.code,
+            title: '在售商品税类已有默认税率',
+            passed: usedTaxCategories.size > 0 && missingTaxCategories.length === 0,
+            detail: missingTaxCategories.length
+                ? `missing: ${missingTaxCategories.map(([, name]) => String(name)).join(', ')}`
+                : `${String(usedTaxCategories.size)} categories covered`,
+        });
+
+        const approvedRates = taxPolicy[expected.code]?.rates;
+        const taxRatesApproved =
+            approvedRates &&
+            Object.entries(approvedRates).every(([categoryName, approvedValue]) =>
+                enabledDefaultZoneRates.some(
+                    rate =>
+                        !rate.customerGroup &&
+                        rate.category?.name === categoryName &&
+                        rate.value === approvedValue,
+                ),
+            );
+        pushCheck(checks, {
+            id: `tax-rates-approved-${expected.code}`,
+            scope: expected.code,
+            title: '税率数值已批准',
+            passed: Boolean(taxRatesApproved),
+            unresolved: !approvedRates,
+            detail: approvedRates
+                ? Object.entries(approvedRates)
+                      .map(([category, value]) => `${String(category)}=${String(value)}%`)
+                      .join(', ')
+                : 'no approved category rates supplied',
+        });
+
         const activePrimaryDomains = (channel.domains ?? []).filter(
             domain => domain.isPrimary && domain.status === 'ACTIVE' && isPublicHostname(domain.domain),
         );
@@ -417,6 +483,10 @@ async function fetchProducts(fetchImpl, apiOrigin, authToken, channelToken) {
                                 price
                                 currencyCode
                                 trackInventory
+                                taxCategory {
+                                    id
+                                    name
+                                }
                                 translations {
                                     languageCode
                                     name
@@ -562,6 +632,24 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                             }
                         }
                     }
+                    taxRates(options: { take: 100 }) {
+                        items {
+                            name
+                            enabled
+                            value
+                            zone {
+                                id
+                                name
+                            }
+                            category {
+                                id
+                                name
+                            }
+                            customerGroup {
+                                id
+                            }
+                        }
+                    }
                     storefrontContentBlocks {
                         code
                         enabled
@@ -598,6 +686,7 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
             domains: result.data.storeDomains,
             paymentMethods: result.data.paymentMethods.items,
             shippingMethods: result.data.shippingMethods.items,
+            taxRates: result.data.taxRates.items,
             contentBlocks: result.data.storefrontContentBlocks,
             products: await fetchProducts(fetchImpl, normalizedOrigin, authToken, loginChannel.token),
         });
