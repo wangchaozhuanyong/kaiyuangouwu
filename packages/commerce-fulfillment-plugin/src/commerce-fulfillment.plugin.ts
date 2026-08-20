@@ -1,21 +1,47 @@
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
-import { shopApiExtensions } from './api-extensions';
+import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.resolver';
+import { AfterSalesService } from './after-sales.service';
+import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { commerceOrderProcess } from './commerce-order-process';
 import { CommerceShippingLineAssignmentStrategy } from './commerce-shipping-line-assignment-strategy';
+import {
+    physicalSubtotalShippingCalculator,
+    supportedDestinationEligibilityChecker,
+} from './commerce-shipping-options';
+import { CustomerOrderCancellationService } from './customer-order-cancellation.service';
+import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
+import { DigitalDeliveryController } from './digital-delivery.controller';
+import { DigitalDeliveryService } from './digital-delivery.service';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
+import { AfterSalesEvent } from './entities/after-sales-event.entity';
+import { AfterSalesItem } from './entities/after-sales-item.entity';
+import { AfterSalesRequest } from './entities/after-sales-request.entity';
 import { FulfillmentModelService } from './fulfillment-model.service';
-import { OrderFulfillmentResolver } from './order-fulfillment.resolver';
+import { CustomerOrderCancellationResolver, OrderFulfillmentResolver } from './order-fulfillment.resolver';
 import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-allocation-strategy';
 import './types';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
-    providers: [FulfillmentModelService, CommerceI18nService],
+    entities: [AfterSalesRequest, AfterSalesItem, AfterSalesEvent],
+    controllers: [DigitalDeliveryController],
+    providers: [
+        AfterSalesService,
+        FulfillmentModelService,
+        CommerceI18nService,
+        CustomerOrderCancellationService,
+        DigitalDeliveryService,
+        DigitalDeliveryTokenService,
+    ],
+    adminApiExtensions: {
+        schema: adminApiExtensions,
+        resolvers: [AfterSalesAdminResolver],
+    },
     shopApiExtensions: {
         schema: shopApiExtensions,
-        resolvers: [OrderFulfillmentResolver],
+        resolvers: [OrderFulfillmentResolver, CustomerOrderCancellationResolver, AfterSalesShopResolver],
     },
     configuration: config => {
         config.customFields.ProductVariant.push({
@@ -67,6 +93,8 @@ import './types';
         });
 
         config.shippingOptions.fulfillmentHandlers.push(digitalFulfillmentHandler);
+        config.shippingOptions.shippingCalculators.push(physicalSubtotalShippingCalculator);
+        config.shippingOptions.shippingEligibilityCheckers.push(supportedDestinationEligibilityChecker);
         config.shippingOptions.shippingLineAssignmentStrategy = new CommerceShippingLineAssignmentStrategy();
         config.orderOptions.stockAllocationStrategy = new PhysicalOnlyStockAllocationStrategy();
         config.orderOptions.process = [
