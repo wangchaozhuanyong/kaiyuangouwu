@@ -21,6 +21,7 @@ import { EnableMainlandChineseLanguage1786771200000 } from './1786771200000-enab
 import { EnableSearchStockIndex1786773000000 } from './1786773000000-enable-search-stock-index';
 import { AddAfterSalesCenter1787203000000 } from './1787203000000-add-after-sales-center';
 import { AddStorefrontReviews1787204800000 } from './1787204800000-add-storefront-reviews';
+import { AddOrderDeliveryEmail1787206600000 } from './1787206600000-add-order-delivery-email';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -46,4 +47,5 @@ export const devServerMigrations = [
     EnableSearchStockIndex1786773000000,
     AddAfterSalesCenter1787203000000,
     AddStorefrontReviews1787204800000,
+    AddOrderDeliveryEmail1787206600000,
 ];

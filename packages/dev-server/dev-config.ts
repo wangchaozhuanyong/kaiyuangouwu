@@ -1,7 +1,11 @@
 /* eslint-disable no-console */
 import { OnApplicationBootstrap } from '@nestjs/common';
 import { AssetServerPlugin, PresetOnlyStrategy } from '@vendure/asset-server-plugin';
-import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin';
+import {
+    CommerceFulfillmentPlugin,
+    OrderConfirmationTokenService,
+    summarizeOrderFulfillment,
+} from '@vendure/commerce-fulfillment-plugin';
 import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/shared-constants';
 import {
     DefaultJobQueuePlugin,
@@ -14,11 +18,13 @@ import {
     Injector,
     LanguageCode,
     LogLevel,
+    OrderStateTransitionEvent,
     PluginCommonModule,
     RequestContext,
     RequestContextService,
     SettingsStoreScopes,
     SettingsStoreService,
+    ShippingLine,
     TransactionalConnection,
     VendureConfig,
     VendurePlugin,
@@ -26,7 +32,9 @@ import {
 import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import {
     defaultEmailHandlers,
+    EmailEventHandlerWithAsyncData,
     EmailPlugin,
+    type EventWithAsyncData,
     type EmailPluginDevModeOptions,
     type EmailPluginOptions,
     FileBasedTemplateLoader,
@@ -52,6 +60,11 @@ import {
     type StorefrontNameFields,
 } from './email-localization';
 import { devServerMigrations } from './migrations';
+import {
+    buildOrderConfirmationUrl,
+    normalizeDeliveryEmail,
+    orderConfirmationRecipient,
+} from './order-confirmation-email';
 import { StorefrontNativeAuthenticationStrategy } from './storefront-native-authentication-strategy';
 // import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
 
@@ -81,7 +94,72 @@ const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
 const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
-    if (handler.type === 'email-verification') {
+    if (handler.type === 'order-confirmation') {
+        type DefaultOrderEmailData = { shippingLines: ShippingLine[] };
+        type StorefrontOrderEmailData = DefaultOrderEmailData & {
+            isDigitalOrder: boolean;
+            recipientEmail: string;
+            digitalDeliveryActionUrl?: string;
+        };
+        type DefaultOrderEmailEvent = EventWithAsyncData<
+            OrderStateTransitionEvent,
+            DefaultOrderEmailData
+        >;
+        const orderHandler = handler as EmailEventHandlerWithAsyncData<
+            DefaultOrderEmailData,
+            'order-confirmation',
+            OrderStateTransitionEvent,
+            DefaultOrderEmailEvent
+        >;
+        const loadDefaultOrderData = orderHandler._loadDataFn.bind(orderHandler);
+        orderHandler._loadDataFn = async context => {
+            const data = await loadDefaultOrderData(context);
+            const isDigitalOrder =
+                summarizeOrderFulfillment(context.event.order).fulfillmentType === 'DIGITAL';
+            const recipientEmail = orderConfirmationRecipient(
+                isDigitalOrder,
+                context.event.order.customFields?.deliveryEmail,
+                context.event.order.customer!.emailAddress,
+            );
+            let digitalDeliveryActionUrl: string | undefined;
+            if (isDigitalOrder) {
+                const confirmation = context.injector
+                    .get(OrderConfirmationTokenService)
+                    .createForSettledOrder(context.event.ctx, {
+                        id: context.event.order.id,
+                        state: context.event.toState,
+                    });
+                const storefrontUrl = await storefrontUrlForChannel(
+                    context.event.ctx,
+                    context.injector.get(TransactionalConnection),
+                );
+                digitalDeliveryActionUrl = buildOrderConfirmationUrl(
+                    storefrontUrl,
+                    context.event.order.code,
+                    confirmation.token,
+                );
+            }
+            return {
+                ...data,
+                isDigitalOrder,
+                recipientEmail,
+                digitalDeliveryActionUrl,
+            } satisfies StorefrontOrderEmailData;
+        };
+        orderHandler.setRecipient(event => {
+            const data = event.data as StorefrontOrderEmailData;
+            return data.recipientEmail;
+        });
+        orderHandler.setTemplateVars(event => {
+            const data = event.data as StorefrontOrderEmailData;
+            return {
+                order: event.order,
+                shippingLines: data.shippingLines,
+                isDigitalOrder: data.isDigitalOrder,
+                digitalDeliveryActionUrl: data.digitalDeliveryActionUrl,
+            };
+        });
+    } else if (handler.type === 'email-verification') {
         handler.setTemplateVars((event, globals) => ({
             verifyEmailAddressActionUrl: buildAccountActionUrl(
                 globals.verifyEmailAddressUrl,
@@ -302,6 +380,15 @@ function validateCustomerOrderNote(value: string) {
     }
 }
 
+function validateOrderDeliveryEmail(value: string) {
+    if (value && !normalizeDeliveryEmail(value)) {
+        return [
+            { languageCode: LanguageCode.zh_Hans, value: '请填写有效的交付邮箱' },
+            { languageCode: LanguageCode.en, value: 'Enter a valid delivery email address' },
+        ];
+    }
+}
+
 function trustProxySetting(): boolean | number | string {
     const value = process.env.VENDURE_TRUST_PROXY?.trim();
     if (!value || value === 'false') {
@@ -435,6 +522,28 @@ export const devConfig: VendureConfig = {
                 description: [
                     { languageCode: LanguageCode.zh_Hans, value: '客户在确认订单时提交的备注' },
                     { languageCode: LanguageCode.en, value: 'Note submitted during checkout' },
+                ],
+            },
+            {
+                name: 'deliveryEmail',
+                type: 'string',
+                length: 254,
+                nullable: true,
+                public: true,
+                validate: validateOrderDeliveryEmail,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '数字商品交付邮箱' },
+                    { languageCode: LanguageCode.en, value: 'Digital delivery email' },
+                ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '用于接收数字商品订单确认与安全领取入口',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Receives the digital order confirmation and secure delivery link',
+                    },
                 ],
             },
         ],

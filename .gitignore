@@ -403,6 +403,10 @@ plans/
 
 # Local development data and generated test artifacts
 *.sqlite
+
+# Local visual QA evidence (not part of production artifacts)
+/design-qa.md
+/packages/storefront/design-qa/
 backups/
 **/.angular/cache/
 playwright-report/

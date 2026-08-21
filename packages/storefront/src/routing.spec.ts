@@ -45,6 +45,7 @@ describe('storefront hash routing', () => {
     });
 
     it('opens payment and guest order confirmation routes', () => {
+        expect(routeFromHash('#/purchase').name).toBe('purchase');
         expect(routeFromHash('#/payment').name).toBe('payment');
         expect(routeFromHash('#/order-confirmation?id=T0001&token=signed%2Btoken')).toMatchObject({
             name: 'order-confirmation',
@@ -60,6 +61,7 @@ describe('storefront hash routing', () => {
 
     it('opens account service, coupon, and review routes', () => {
         expect(routeFromHash('#/favorites').name).toBe('favorites');
+        expect(routeFromHash('#/logistics').name).toBe('logistics');
         expect(routeFromHash('#/support').name).toBe('support');
         expect(routeFromHash('#/coupons').name).toBe('coupons');
         expect(routeFromHash('#/reviews').name).toBe('reviews');

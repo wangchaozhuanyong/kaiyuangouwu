@@ -14,7 +14,7 @@ beforeAll(async () => {
     await generator.onInit({ templateLoader } as never);
 });
 
-async function renderTemplate(type: string, languageCode: string) {
+async function renderTemplate(type: string, languageCode: string, digitalOrder = false) {
     const template = await fs.readFile(path.join(templatePath, type, 'body.hbs'), 'utf8');
     const templateVars = {
         ...emailLanguageVariables(languageCode),
@@ -31,21 +31,27 @@ async function renderTemplate(type: string, languageCode: string) {
             'https://shop.example.com/#/change-email-address',
             'change+token',
         ),
+        isDigitalOrder: digitalOrder,
+        digitalDeliveryActionUrl: digitalOrder
+            ? 'https://shop.example.com/#/order-confirmation?id=ORDER-1001&token=signed%2Btoken'
+            : undefined,
         order: {
             code: 'ORDER-1001',
             currencyCode: 'USD',
             totalWithTax: 2599,
             subTotalWithTax: 1999,
             customer: { firstName: 'Alex', lastName: 'Chen' },
-            shippingAddress: {
-                fullName: 'Alex Chen',
-                streetLine1: '1 Market Street',
-                city: 'San Francisco',
-                province: 'California',
-                postalCode: '94105',
-                country: 'United States',
-                phoneNumber: '555-0100',
-            },
+            shippingAddress: digitalOrder
+                ? {}
+                : {
+                      fullName: 'Alex Chen',
+                      streetLine1: '1 Market Street',
+                      city: 'San Francisco',
+                      province: 'California',
+                      postalCode: '94105',
+                      country: 'United States',
+                      phoneNumber: '555-0100',
+                  },
             lines: [
                 {
                     quantity: 1,
@@ -54,12 +60,16 @@ async function renderTemplate(type: string, languageCode: string) {
                 },
             ],
         },
-        shippingLines: [
-            {
-                priceWithTax: 600,
-                shippingMethod: { name: languageCode === 'zh_Hans' ? '标准配送' : 'Standard shipping' },
-            },
-        ],
+        shippingLines: digitalOrder
+            ? []
+            : [
+                  {
+                      priceWithTax: 600,
+                      shippingMethod: {
+                          name: languageCode === 'zh_Hans' ? '标准配送' : 'Standard shipping',
+                      },
+                  },
+              ],
     };
 
     return generator.generate('store@example.com', 'Subject', template, templateVars);
@@ -103,5 +113,18 @@ describe('localized email templates', () => {
         expect(verification.body).toContain(`${ACCOUNT_TOKEN_EXPIRY_HOURS} hours`);
         expect(passwordReset.body).toContain('token&#x3D;reset%2Btoken');
         expect(passwordReset.body).toContain(`${ACCOUNT_TOKEN_EXPIRY_HOURS} 小时`);
+    });
+
+    it.each([
+        ['zh_Hans', '数字内容已准备', '查看订单并领取'],
+        ['en', 'Your digital content is ready', 'View order and collect'],
+    ])('renders the secure digital delivery entry in %s', async (languageCode, heading, action) => {
+        const result = await renderTemplate('order-confirmation', languageCode, true);
+
+        expect(result.body).toContain(heading);
+        expect(result.body).toContain(action);
+        expect(result.body).toContain('token&#x3D;signed%2Btoken');
+        expect(result.body).not.toContain('1 Market Street');
+        expect(result.body).not.toContain('Alex Chen');
     });
 });

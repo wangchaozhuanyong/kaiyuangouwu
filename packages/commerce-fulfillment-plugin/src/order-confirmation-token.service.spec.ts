@@ -60,6 +60,30 @@ describe('OrderConfirmationTokenService', () => {
         expect(connection.findOneInChannel).not.toHaveBeenCalled();
     });
 
+    it('issues a seven-day email entry only for a settled order', async () => {
+        const order = { id: 'order-2', active: false, state: 'PaymentSettled' } as Order;
+        const service = new OrderConfirmationTokenService(
+            {} as ActiveOrderService,
+            {} as TransactionalConnection,
+            {
+                signingSecret,
+                emailTokenTtlSeconds: 7 * 24 * 60 * 60,
+            },
+        );
+        const ctx = { channelId: 'channel-1' } as RequestContext;
+
+        const result = service.createForSettledOrder(ctx, order, now);
+
+        expect(result.expiresAt).toEqual(new Date(now + 7 * 24 * 60 * 60 * 1000));
+        expect(service.verifyToken(result.token, now + 6 * 24 * 60 * 60 * 1000)).toMatchObject({
+            orderId: 'order-2',
+            channelId: 'channel-1',
+        });
+        expect(() =>
+            service.createForSettledOrder(ctx, { id: 'order-3', state: 'ArrangingPayment' }, now),
+        ).toThrow(/settled orders/u);
+    });
+
     it('requires a strong configured secret in production', () => {
         expect(
             () =>

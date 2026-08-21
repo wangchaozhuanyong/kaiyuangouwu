@@ -74,7 +74,7 @@ const orderFields = `
     discounts { description amountWithTax }
     taxSummary { description taxRate taxBase taxTotal }
     couponCodes
-    customFields { customerNote }
+    customFields { customerNote deliveryEmail }
     fulfillments {
         id
         state
@@ -205,7 +205,7 @@ const cartFields = `
             currencyCode
             stockLevel
             featuredAsset { id preview }
-            product { featuredAsset { id preview } }
+            product { id name featuredAsset { id preview } }
             customFields { fulfillmentType }
         }
     }
@@ -1284,6 +1284,22 @@ export class ShopApi {
                 }
             `,
             { input: { customFields: { customerNote } } },
+        );
+        return this.assertOrder(result.setOrderCustomFields);
+    }
+
+    async setDeliveryEmail(deliveryEmail: string): Promise<Order> {
+        const result = await this.request<{ setOrderCustomFields: Order & ErrorResult }>(
+            `
+                mutation SetStorefrontDeliveryEmail($input: UpdateOrderInput!) {
+                    setOrderCustomFields(input: $input) {
+                        __typename
+                        ... on Order { ${orderFields} }
+                        ... on ErrorResult { errorCode message }
+                    }
+                }
+            `,
+            { input: { customFields: { deliveryEmail } } },
         );
         return this.assertOrder(result.setOrderCustomFields);
     }

@@ -8,8 +8,10 @@ import {
     Download,
     Navigation,
     Package,
+    PackageCheck,
     RotateCcw,
     Search,
+    Truck,
     UserRound,
     WifiOff,
     X,
@@ -40,6 +42,8 @@ import {
 
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 type OrderRoute = { name: 'login' | 'order-detail'; id?: string };
+type LogisticsFilter = 'all' | 'transit' | 'preparing' | 'delivered';
+type LogisticsStatus = Exclude<LogisticsFilter, 'all'> | 'cancelled';
 
 export function OrdersPage({
     api,
@@ -308,6 +312,286 @@ export function OrdersPage({
                 />
             )}
         </main>
+    );
+}
+
+export function LogisticsPage({
+    api,
+    customer,
+    market,
+    locale,
+    language,
+    onBack,
+    onNavigate,
+}: {
+    api: ShopApi;
+    customer: ActiveCustomer | null;
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    onBack: () => void;
+    onNavigate: (route: OrderRoute) => void;
+}) {
+    const isZh = language === 'zh';
+    const [filter, setFilter] = useState<LogisticsFilter>('all');
+    const pageSize = 10;
+    const logisticsQuery = useInfiniteQuery({
+        queryKey: storefrontQueryKeys.customerOrders(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+            { view: 'logistics' },
+        ),
+        queryFn: ({ pageParam, signal }) =>
+            api.customerOrders(pageParam, pageSize, undefined, undefined, signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage, pages) => {
+            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
+            return loaded < lastPage.totalItems ? loaded : undefined;
+        },
+        enabled: Boolean(customer),
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchInterval: query =>
+            query.state.data?.pages.some(page =>
+                page.items.some(order => orderNeedsStatusRefresh(order.state)),
+            )
+                ? ORDER_STATUS_REFRESH_INTERVAL
+                : false,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const orders = Array.from(
+        new Map(
+            (logisticsQuery.data?.pages.flatMap(page => page.items) ?? []).map(order => [order.id, order]),
+        ).values(),
+    );
+    const logisticsOrders = orders.filter(order => {
+        const physical = order.lines.some(
+            line =>
+                line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
+                line.productVariant.customFields.fulfillmentType !== 'digital',
+        );
+        const paidOrShipped = !['AddingItems', 'ArrangingPayment'].includes(order.state);
+        return physical && (paidOrShipped || Boolean(order.fulfillments?.length));
+    });
+    const visibleOrders = logisticsOrders.filter(
+        order => filter === 'all' || logisticsStatusForOrder(order) === filter,
+    );
+    const loading = logisticsQuery.isLoading;
+    const loadingMore = logisticsQuery.isFetchingNextPage;
+    const listError =
+        logisticsQuery.isPaused && logisticsQuery.data === undefined
+            ? offlineLoadError(language)
+            : logisticsQuery.error instanceof Error
+              ? logisticsQuery.error.message
+              : logisticsQuery.error
+                ? isZh
+                    ? '物流信息加载失败'
+                    : 'Could not load delivery updates'
+                : '';
+    const filters: Array<{ id: LogisticsFilter; label: string }> = [
+        { id: 'all', label: isZh ? '全部' : 'All' },
+        { id: 'transit', label: isZh ? '运输中' : 'In transit' },
+        { id: 'preparing', label: isZh ? '待发货' : 'Preparing' },
+        { id: 'delivered', label: isZh ? '已签收' : 'Delivered' },
+    ];
+
+    return (
+        <main className="page subpage logistics-page">
+            <SubHeader title={isZh ? '物流动态' : 'Delivery updates'} language={language} onBack={onBack} />
+            <nav className="logistics-tabs" aria-label={isZh ? '物流状态筛选' : 'Filter delivery status'}>
+                {filters.map(item => (
+                    <button
+                        type="button"
+                        key={item.id}
+                        className={filter === item.id ? 'is-active' : undefined}
+                        aria-pressed={filter === item.id}
+                        onClick={() => setFilter(item.id)}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </nav>
+            {!customer ? (
+                <EmptyState
+                    icon={<UserRound />}
+                    title={isZh ? '登录后查看物流' : 'Sign in to view deliveries'}
+                    detail={
+                        isZh
+                            ? '全部实物订单的配送进度会集中显示在这里'
+                            : 'Delivery progress for physical orders appears here'
+                    }
+                    action={isZh ? '去登录' : 'Sign in'}
+                    onAction={() => onNavigate({ name: 'login' })}
+                />
+            ) : loading && !orders.length ? (
+                <PageSkeleton label={isZh ? '正在加载物流信息' : 'Loading delivery updates'} />
+            ) : listError && !orders.length ? (
+                <EmptyState
+                    icon={<WifiOff />}
+                    title={isZh ? '物流信息加载失败' : 'Could not load delivery updates'}
+                    detail={listError}
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={() => void logisticsQuery.refetch()}
+                />
+            ) : logisticsOrders.length ? (
+                <div className="logistics-list">
+                    {visibleOrders.length ? (
+                        visibleOrders.map(order => (
+                            <LogisticsCard
+                                key={order.id}
+                                order={order}
+                                locale={locale}
+                                language={language}
+                                onOpen={() => onNavigate({ name: 'order-detail', id: order.id })}
+                            />
+                        ))
+                    ) : (
+                        <EmptyState
+                            icon={<Navigation />}
+                            title={isZh ? '当前状态暂无物流' : 'No deliveries in this status'}
+                            detail={
+                                isZh ? '切换到其他状态继续查看' : 'Choose another status to keep browsing'
+                            }
+                        />
+                    )}
+                    {listError && (
+                        <InlineError
+                            message={listError}
+                            action={isZh ? '重试' : 'Retry'}
+                            onAction={() => void logisticsQuery.fetchNextPage()}
+                        />
+                    )}
+                    {logisticsQuery.hasNextPage && (
+                        <button
+                            type="button"
+                            className="load-more-button logistics-load-more"
+                            disabled={loadingMore}
+                            onClick={() => void logisticsQuery.fetchNextPage()}
+                        >
+                            {loadingMore ? (isZh ? '加载中' : 'Loading') : isZh ? '加载更多' : 'Load more'}
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <EmptyState
+                    icon={<Package />}
+                    title={isZh ? '暂无物流动态' : 'No delivery updates'}
+                    detail={
+                        isZh
+                            ? '购买实物商品并完成付款后，配送进度会显示在这里'
+                            : 'Delivery progress appears after a physical order is paid'
+                    }
+                />
+            )}
+        </main>
+    );
+}
+
+function LogisticsCard({
+    order,
+    locale,
+    language,
+    onOpen,
+}: {
+    order: Order;
+    locale: string;
+    language: StorefrontLanguage;
+    onOpen: () => void;
+}) {
+    const isZh = language === 'zh';
+    const fulfillment = latestOrderFulfillment(order);
+    const status = logisticsStatusForOrder(order);
+    const physicalLines = order.lines.filter(
+        line =>
+            line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
+            line.productVariant.customFields.fulfillmentType !== 'digital',
+    );
+    const updatedAt = fulfillment?.updatedAt ?? order.orderPlacedAt;
+    const method = fulfillment?.method ?? order.checkoutShipping?.methodName;
+    const trackingCode = fulfillment?.trackingCode;
+
+    return (
+        <article className={`logistics-card is-${status}`}>
+            <header>
+                <span className="logistics-status-icon">{logisticsStatusIcon(status)}</span>
+                <span>
+                    <strong>{logisticsStatusLabel(status, language)}</strong>
+                    <small>{logisticsStatusHint(status, language)}</small>
+                </span>
+                <time dateTime={updatedAt ?? undefined}>
+                    {updatedAt ? formatOrderDate(updatedAt, locale) : isZh ? '时间待更新' : 'Time pending'}
+                </time>
+            </header>
+            <div className="logistics-products">
+                {physicalLines.map(line => (
+                    <div className="logistics-product" key={line.id}>
+                        <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
+                        <span>
+                            <strong>{line.productVariant.name}</strong>
+                            <small>{line.productVariant.sku}</small>
+                        </span>
+                        <b>×{line.quantity}</b>
+                    </div>
+                ))}
+            </div>
+            <details className="logistics-detail" open={status === 'transit'}>
+                <summary>
+                    <span>{isZh ? '查看物流详情' : 'View delivery details'}</span>
+                    <ChevronRight aria-hidden="true" />
+                </summary>
+                <div className="logistics-detail-body">
+                    <dl>
+                        <div>
+                            <dt>{isZh ? '配送方式' : 'Delivery method'}</dt>
+                            <dd>{method ?? (isZh ? '承运商待分配' : 'Carrier pending')}</dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '运单号' : 'Tracking number'}</dt>
+                            <dd>
+                                {trackingCode ??
+                                    (isZh ? '承运商尚未提供运单号' : 'Tracking number is not available yet')}
+                            </dd>
+                        </div>
+                    </dl>
+                    <ol className="logistics-timeline">
+                        <li className="is-current">
+                            <span />
+                            <div>
+                                <strong>{logisticsStatusLabel(status, language)}</strong>
+                                <small>
+                                    {updatedAt
+                                        ? formatOrderDate(updatedAt, locale)
+                                        : isZh
+                                          ? '时间待更新'
+                                          : 'Time pending'}
+                                </small>
+                            </div>
+                        </li>
+                        <li>
+                            <span />
+                            <div>
+                                <strong>{isZh ? '订单已创建' : 'Order created'}</strong>
+                                <small>
+                                    {order.orderPlacedAt
+                                        ? formatOrderDate(order.orderPlacedAt, locale)
+                                        : isZh
+                                          ? '时间待更新'
+                                          : 'Time pending'}
+                                </small>
+                            </div>
+                        </li>
+                    </ol>
+                    <button type="button" className="logistics-order-link" onClick={onOpen}>
+                        <span>{isZh ? `订单 ${order.code}` : `Order ${order.code}`}</span>
+                        <span>
+                            {isZh ? '查看订单详情' : 'View order'}
+                            <ChevronRight aria-hidden="true" />
+                        </span>
+                    </button>
+                </div>
+            </details>
+        </article>
     );
 }
 
@@ -1532,6 +1816,51 @@ function fulfillmentStateLabel(state: string, language: StorefrontLanguage): str
         Cancelled: 'Cancelled',
     };
     return (language === 'zh' ? zh : en)[state] ?? state;
+}
+
+function latestOrderFulfillment(order: Order): NonNullable<Order['fulfillments']>[number] | null {
+    return (
+        [...(order.fulfillments ?? [])].sort(
+            (first, second) => Date.parse(second.updatedAt) - Date.parse(first.updatedAt),
+        )[0] ?? null
+    );
+}
+
+function logisticsStatusForOrder(order: Order): LogisticsStatus {
+    const fulfillmentState = latestOrderFulfillment(order)?.state;
+    if (fulfillmentState === 'Delivered' || order.state === 'Delivered') return 'delivered';
+    if (fulfillmentState === 'Shipped' || order.state === 'Shipped' || order.state === 'PartiallyShipped') {
+        return 'transit';
+    }
+    if (fulfillmentState === 'Cancelled' || order.state === 'Cancelled') return 'cancelled';
+    return 'preparing';
+}
+
+function logisticsStatusLabel(status: LogisticsStatus, language: StorefrontLanguage): string {
+    const labels: Record<LogisticsStatus, { zh: string; en: string }> = {
+        preparing: { zh: '待发货', en: 'Preparing' },
+        transit: { zh: '运输中', en: 'In transit' },
+        delivered: { zh: '已签收', en: 'Delivered' },
+        cancelled: { zh: '配送已取消', en: 'Delivery cancelled' },
+    };
+    return labels[status][language];
+}
+
+function logisticsStatusHint(status: LogisticsStatus, language: StorefrontLanguage): string {
+    const labels: Record<LogisticsStatus, { zh: string; en: string }> = {
+        preparing: { zh: '商家正在准备商品', en: 'The merchant is preparing your items' },
+        transit: { zh: '商品正在由承运商配送', en: 'Your items are with the carrier' },
+        delivered: { zh: '商品已完成配送', en: 'Your items have been delivered' },
+        cancelled: { zh: '本次配送已停止', en: 'This delivery has stopped' },
+    };
+    return labels[status][language];
+}
+
+function logisticsStatusIcon(status: LogisticsStatus): ReactNode {
+    if (status === 'transit') return <Truck aria-hidden="true" />;
+    if (status === 'delivered') return <CircleCheck aria-hidden="true" />;
+    if (status === 'cancelled') return <CircleAlert aria-hidden="true" />;
+    return <PackageCheck aria-hidden="true" />;
 }
 
 function digitalDeliveryStatus(

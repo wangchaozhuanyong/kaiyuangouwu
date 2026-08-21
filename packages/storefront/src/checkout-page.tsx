@@ -3,7 +3,9 @@ import {
     ChevronRight,
     CircleCheck,
     MapPin,
+    Minus,
     Package,
+    Plus,
     RotateCcw,
     ShoppingBag,
     TicketPercent,
@@ -31,8 +33,10 @@ import {
 
 const ORDER_NOTE_MAX_LENGTH = 500;
 type CheckoutRoute = { name: 'payment' | 'cart' | 'addresses' };
+type CheckoutMode = 'checkout' | 'purchase';
 
 export function CheckoutPage({
+    mode = 'checkout',
     api,
     cart,
     order,
@@ -49,6 +53,7 @@ export function CheckoutPage({
     onApplyCoupon,
     onRemoveCoupon,
 }: {
+    mode?: CheckoutMode;
     api: ShopApi;
     cart: StorefrontCart | null;
     order: Order | null;
@@ -66,28 +71,56 @@ export function CheckoutPage({
     onRemoveCoupon: (couponCode: string) => Promise<string | null>;
 }) {
     const isZh = language === 'zh';
+    const directPurchase = mode === 'purchase';
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
     const [selectedShippingId, setSelectedShippingId] = useState('');
     const [preparedAddressKey, setPreparedAddressKey] = useState('');
-    const [customerPrepared, setCustomerPrepared] = useState(Boolean(customer));
+    const [customerPrepared, setCustomerPrepared] = useState(Boolean(customer || order?.customer));
     const [shippingUpdating, setShippingUpdating] = useState(false);
     const [couponOpen, setCouponOpen] = useState(false);
     const [noteOpen, setNoteOpen] = useState(false);
     const [noteDraft, setNoteDraft] = useState('');
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
+    const [quantityUpdatingVariantId, setQuantityUpdatingVariantId] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const defaultAddress =
         customer?.addresses?.find(address => address.defaultShippingAddress) ?? customer?.addresses?.[0];
+    const isDigitalOnly = order?.checkoutFulfillment?.fulfillmentType === 'DIGITAL';
     const requiresShipping =
-        order?.checkoutFulfillment?.requiresShippingAddress ??
-        order?.lines.some(line => line.productVariant.customFields.fulfillmentType === 'physical');
+        !isDigitalOnly &&
+        (order?.checkoutFulfillment?.requiresShippingAddress ??
+            order?.lines.some(line => line.productVariant.customFields.fulfillmentType === 'physical'));
     const physicalLines =
         order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'physical') ?? [];
     const digitalLines =
         order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'digital') ?? [];
+
+    const updateDirectQuantity = async (productVariantId: string, quantity: number) => {
+        if (!cart || quantity < 1) return;
+        const cartLine = cart.lines.find(line => line.productVariant?.id === productVariantId);
+        if (!cartLine) {
+            setFormError(isZh ? '未找到本次购买商品' : 'The purchase item could not be found.');
+            return;
+        }
+        setQuantityUpdatingVariantId(productVariantId);
+        setFormError(null);
+        try {
+            onCartChange(await api.setLineQuantity(cartLine.id, quantity, cart.revision));
+        } catch (requestError) {
+            setFormError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '购买数量更新失败'
+                      : 'Could not update the purchase quantity',
+            );
+        } finally {
+            setQuantityUpdatingVariantId(null);
+        }
+    };
 
     const saveOrderNote = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -149,7 +182,24 @@ export function CheckoutPage({
         setSubmitting(true);
         setFormError(null);
         try {
-            if (!customerPrepared) {
+            if (isDigitalOnly) {
+                const deliveryEmail = normalizeDeliveryEmail(String(data.get('deliveryEmail') ?? ''));
+                if (!deliveryEmail) {
+                    throw new Error(
+                        isZh ? '请填写有效的交付邮箱' : 'Enter a valid delivery email address',
+                    );
+                }
+                await api.setDeliveryEmail(deliveryEmail);
+                if (!customerPrepared) {
+                    await api.setCustomer({
+                        firstName: 'Digital',
+                        lastName: 'Customer',
+                        emailAddress: deliveryEmail,
+                    });
+                    setCustomerPrepared(true);
+                }
+            }
+            if (!isDigitalOnly && !customerPrepared) {
                 await api.setCustomer({
                     firstName: String(data.get('firstName') ?? ''),
                     lastName: String(data.get('lastName') ?? ''),
@@ -222,23 +272,147 @@ export function CheckoutPage({
 
     if (!order || !cart) {
         return (
-            <Subpage title={isZh ? '确认订单' : 'Review order'} language={language} onBack={onBack}>
+            <Subpage
+                title={
+                    directPurchase
+                        ? isZh
+                            ? '确认购买'
+                            : 'Confirm purchase'
+                        : isZh
+                          ? '确认订单'
+                          : 'Review order'
+                }
+                language={language}
+                onBack={onBack}
+            >
                 <EmptyState
                     icon={<ShoppingBag />}
                     title={isZh ? '没有可结算商品' : 'Nothing to check out'}
-                    action={isZh ? '返回购物车' : 'Back to cart'}
-                    onAction={() => onNavigate({ name: 'cart' })}
+                    action={
+                        directPurchase
+                            ? isZh
+                                ? '返回商品'
+                                : 'Back to product'
+                            : isZh
+                              ? '返回购物车'
+                              : 'Back to cart'
+                    }
+                    onAction={directPurchase ? onBack : () => onNavigate({ name: 'cart' })}
                 />
             </Subpage>
         );
     }
 
+    const renderCheckoutItems = () => (
+        <>
+            {!!physicalLines.length && (
+                <CheckoutItemsGroup
+                    title={
+                        directPurchase
+                            ? isZh
+                                ? '本次购买'
+                                : 'Your purchase'
+                            : isZh
+                              ? '快递配送'
+                              : 'Delivery'
+                    }
+                    hint={
+                        directPurchase
+                            ? isZh
+                                ? '单品直购'
+                                : 'Buy now'
+                            : isZh
+                              ? `${physicalLines.length} 种 · 共 ${physicalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
+                              : `${physicalLines.length} ${physicalLines.length === 1 ? 'product' : 'products'}`
+                    }
+                    lines={physicalLines}
+                    locale={locale}
+                    language={language}
+                    directPurchase={directPurchase}
+                    quantityUpdatingVariantId={quantityUpdatingVariantId}
+                    onQuantity={updateDirectQuantity}
+                />
+            )}
+            {!!digitalLines.length && (
+                <CheckoutItemsGroup
+                    title={
+                        directPurchase
+                            ? isZh
+                                ? '本次购买'
+                                : 'Your purchase'
+                            : isZh
+                              ? '数字交付'
+                              : 'Digital delivery'
+                    }
+                    hint={
+                        directPurchase
+                            ? isZh
+                                ? '单品直购'
+                                : 'Buy now'
+                            : isZh
+                              ? `${digitalLines.length} 种 · 共 ${digitalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
+                              : `${digitalLines.length} ${digitalLines.length === 1 ? 'product' : 'products'}`
+                    }
+                    lines={digitalLines}
+                    locale={locale}
+                    language={language}
+                    directPurchase={directPurchase}
+                    quantityUpdatingVariantId={quantityUpdatingVariantId}
+                    onQuantity={updateDirectQuantity}
+                />
+            )}
+        </>
+    );
+
     return (
-        <main className="page subpage checkout-page">
-            <SubHeader title={isZh ? '确认订单' : 'Review order'} language={language} onBack={onBack} />
+        <main className={`page subpage checkout-page${directPurchase ? ' purchase-page' : ''}`}>
+            <SubHeader
+                title={
+                    directPurchase
+                        ? isZh
+                            ? '确认购买'
+                            : 'Confirm purchase'
+                        : isZh
+                          ? '确认订单'
+                          : 'Review order'
+                }
+                language={language}
+                onBack={onBack}
+            />
             <form ref={formRef} className="checkout-form" onSubmit={event => void submit(event)}>
-                {!customer && (
-                    <section className="checkout-section">
+                {directPurchase && renderCheckoutItems()}
+                {isDigitalOnly ? (
+                    <section className="checkout-section checkout-digital-delivery-section">
+                        <header className="digital-delivery-heading">
+                            <div>
+                                <h2>{isZh ? '接收方式' : 'Delivery contact'}</h2>
+                                <p>
+                                    {isZh
+                                        ? '付款成功后，订单与数字内容领取入口将发送至此邮箱。'
+                                        : 'After payment, the order and secure digital-content entry will be sent here.'}
+                                </p>
+                            </div>
+                            <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
+                        </header>
+                        <label className="digital-delivery-email-field">
+                            <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
+                            <input
+                                name="deliveryEmail"
+                                type="email"
+                                inputMode="email"
+                                autoComplete="email"
+                                defaultValue={
+                                    order.customFields.deliveryEmail ??
+                                    customer?.emailAddress ??
+                                    order.customer?.emailAddress ??
+                                    ''
+                                }
+                                required
+                            />
+                        </label>
+                    </section>
+                ) : !customer ? (
+                    <section className="checkout-section checkout-contact-section">
                         <h2>{isZh ? '联系信息' : 'Contact'}</h2>
                         <div className="form-grid">
                             <Field name="firstName" label={isZh ? '名字' : 'First name'} />
@@ -251,9 +425,9 @@ export function CheckoutPage({
                             />
                         </div>
                     </section>
-                )}
+                ) : null}
                 {requiresShipping && (
-                    <section className="checkout-section">
+                    <section className="checkout-section checkout-address-section">
                         <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
                         {defaultAddress ? (
                             <>
@@ -304,33 +478,17 @@ export function CheckoutPage({
                         )}
                     </section>
                 )}
-                {!!physicalLines.length && (
-                    <CheckoutItemsGroup
-                        title={isZh ? '快递配送' : 'Delivery'}
-                        hint={
-                            isZh
-                                ? `${physicalLines.length} 种 · 共 ${physicalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
-                                : `${physicalLines.length} ${physicalLines.length === 1 ? 'product' : 'products'}`
-                        }
-                        lines={physicalLines}
-                        locale={locale}
-                        language={language}
-                    />
-                )}
-                {!!digitalLines.length && (
-                    <CheckoutItemsGroup
-                        title={isZh ? '数字交付' : 'Digital delivery'}
-                        hint={
-                            isZh
-                                ? `${digitalLines.length} 种 · 共 ${digitalLines.reduce((sum, line) => sum + line.quantity, 0)} 件`
-                                : `${digitalLines.length} ${digitalLines.length === 1 ? 'product' : 'products'}`
-                        }
-                        lines={digitalLines}
-                        locale={locale}
-                        language={language}
-                    />
-                )}
+                {!directPurchase && renderCheckoutItems()}
                 <section className="checkout-section checkout-options">
+                    {isDigitalOnly && (
+                        <div className="digital-delivery-method" aria-label={isZh ? '交付方式' : 'Delivery method'}>
+                            <span>{isZh ? '交付方式' : 'Delivery method'}</span>
+                            <small>
+                                <strong>{isZh ? '邮箱自动交付' : 'Automatic email delivery'}</strong>
+                                <em>{isZh ? '免费' : 'Free'}</em>
+                            </small>
+                        </div>
+                    )}
                     {requiresShipping && !shippingMethods.length && (
                         <button type="button" onClick={() => formRef.current?.requestSubmit()}>
                             <span>{isZh ? '配送方式' : 'Delivery'}</span>
@@ -419,7 +577,7 @@ export function CheckoutPage({
                         </small>
                     </button>
                 </section>
-                <section className="checkout-section">
+                <section className="checkout-section checkout-summary-section">
                     <PriceSummary
                         order={order}
                         locale={locale}
@@ -428,7 +586,7 @@ export function CheckoutPage({
                     />
                 </section>
                 <section
-                    className="checkout-assurance"
+                    className="checkout-assurance checkout-protection-section"
                     aria-label={isZh ? '购物保障' : 'Purchase protection'}
                 >
                     <span>
@@ -447,9 +605,9 @@ export function CheckoutPage({
                             ? isZh
                                 ? '配送可追踪'
                                 : 'Tracked delivery'
-                            : isZh
-                              ? '自动交付'
-                              : 'Automatic delivery'}
+                                : isZh
+                              ? '邮箱交付'
+                              : 'Email delivery'}
                     </span>
                     <span>
                         <RotateCcw />
@@ -458,16 +616,25 @@ export function CheckoutPage({
                 </section>
                 {formError && <InlineError message={formError} />}
                 <div className="submit-order-bar">
-                    <div>
-                        <small>
-                            {isZh
-                                ? `共 ${order.totalQuantity} 件`
-                                : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
-                        </small>
-                        <span>
-                            {isZh ? '合计' : 'Total'}{' '}
-                            <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
-                        </span>
+                    <div className={directPurchase ? 'purchase-submit-total' : undefined}>
+                        {directPurchase ? (
+                            <>
+                                <small>{isZh ? '合计' : 'Total'}</small>
+                                <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
+                            </>
+                        ) : (
+                            <>
+                                <small>
+                                    {isZh
+                                        ? `共 ${order.totalQuantity} 件`
+                                        : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
+                                </small>
+                                <span>
+                                    {isZh ? '合计' : 'Total'}{' '}
+                                    <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
+                                </span>
+                            </>
+                        )}
                     </div>
                     <button type="submit" disabled={submitting}>
                         {submitting
@@ -478,9 +645,13 @@ export function CheckoutPage({
                               ? isZh
                                   ? '下一步，选择配送'
                                   : 'Continue to delivery'
-                              : isZh
-                                ? '提交订单'
-                                : 'Submit order'}
+                              : directPurchase
+                                ? isZh
+                                    ? '确认并支付'
+                                    : 'Confirm and pay'
+                                : isZh
+                                  ? '提交订单'
+                                  : 'Submit order'}
                     </button>
                 </div>
             </form>
@@ -548,12 +719,18 @@ function CheckoutItemsGroup({
     lines,
     locale,
     language,
+    directPurchase = false,
+    quantityUpdatingVariantId,
+    onQuantity,
 }: {
     title: string;
     hint: string;
     lines: Order['lines'];
     locale: string;
     language: StorefrontLanguage;
+    directPurchase?: boolean;
+    quantityUpdatingVariantId?: string | null;
+    onQuantity?: (productVariantId: string, quantity: number) => void;
 }) {
     const isZh = language === 'zh';
     return (
@@ -572,18 +749,43 @@ function CheckoutItemsGroup({
                             <em>
                                 {line.productVariant.customFields.fulfillmentType === 'digital'
                                     ? isZh
-                                        ? '付款后自动交付'
-                                        : 'Delivered after payment'
+                                        ? '付款后发送至邮箱'
+                                        : 'Sent by email after payment'
                                     : isZh
                                       ? '售后支持 · 正品保障'
                                       : 'After-sales support'}
                             </em>
                         </div>
-                        <span>
+                        <span className="checkout-line-meta">
                             <b>
                                 {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
                             </b>
-                            <small>×{line.quantity}</small>
+                            {directPurchase ? (
+                                <span className="purchase-quantity-control" aria-label={isZh ? '购买数量' : 'Quantity'}>
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            line.quantity <= 1 ||
+                                            quantityUpdatingVariantId === line.productVariant.id
+                                        }
+                                        onClick={() => onQuantity?.(line.productVariant.id, line.quantity - 1)}
+                                        aria-label={isZh ? '减少数量' : 'Decrease quantity'}
+                                    >
+                                        <Minus aria-hidden="true" />
+                                    </button>
+                                    <small aria-live="polite">{line.quantity}</small>
+                                    <button
+                                        type="button"
+                                        disabled={quantityUpdatingVariantId === line.productVariant.id}
+                                        onClick={() => onQuantity?.(line.productVariant.id, line.quantity + 1)}
+                                        aria-label={isZh ? '增加数量' : 'Increase quantity'}
+                                    >
+                                        <Plus aria-hidden="true" />
+                                    </button>
+                                </span>
+                            ) : (
+                                <small>×{line.quantity}</small>
+                            )}
                         </span>
                     </article>
                 ))}
@@ -612,7 +814,7 @@ function PriceSummary({
             </div>
             <div>
                 <dt>
-                    {requiresShipping ? (isZh ? '运费' : 'Shipping') : isZh ? '数字交付' : 'Digital delivery'}
+                    {requiresShipping ? (isZh ? '运费' : 'Shipping') : isZh ? '邮箱交付' : 'Email delivery'}
                 </dt>
                 <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
             </div>
@@ -629,6 +831,11 @@ function PriceSummary({
             </div>
         </dl>
     );
+}
+
+function normalizeDeliveryEmail(value: string): string | null {
+    const email = value.trim().toLowerCase();
+    return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) ? email : null;
 }
 
 function shippingMethodDetails(

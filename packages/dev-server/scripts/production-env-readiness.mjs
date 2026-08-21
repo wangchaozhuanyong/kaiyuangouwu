@@ -204,13 +204,19 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         passed: isConfiguredSecret(env.COOKIE_SECRET, 32),
         detail: isConfiguredSecret(env.COOKIE_SECRET, 32) ? 'configured' : 'missing, short, or placeholder',
     });
+    const orderEmailTokenTtl = Number(env.ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS);
+    const orderConfirmationTokensReady =
+        isConfiguredSecret(env.ORDER_CONFIRMATION_TOKEN_SECRET, 32) &&
+        Number.isInteger(orderEmailTokenTtl) &&
+        orderEmailTokenTtl >= 60 &&
+        orderEmailTokenTtl <= 30 * 24 * 60 * 60;
     pushCheck(checks, {
         id: 'order-confirmation-token-secret',
-        title: '游客订单确认链接签名密钥',
-        passed: isConfiguredSecret(env.ORDER_CONFIRMATION_TOKEN_SECRET, 32),
-        detail: isConfiguredSecret(env.ORDER_CONFIRMATION_TOKEN_SECRET, 32)
+        title: '订单确认与邮件交付令牌',
+        passed: orderConfirmationTokensReady,
+        detail: orderConfirmationTokensReady
             ? 'configured'
-            : 'missing, short, or placeholder',
+            : 'secret missing/unsafe or email token TTL outside 60-2592000 seconds',
     });
 
     const databaseType = normalized(env.DB);

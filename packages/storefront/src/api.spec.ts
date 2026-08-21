@@ -280,9 +280,33 @@ describe('ShopApi storefront mutations', () => {
             variables: Record<string, unknown>;
         };
         expect(request.query).toContain('setOrderCustomFields(input: $input)');
-        expect(request.query).toContain('customFields { customerNote }');
+        expect(request.query).toContain('customFields { customerNote deliveryEmail }');
         expect(request.variables).toEqual({
             input: { customFields: { customerNote: '请放在门口' } },
+        });
+    });
+
+    it('stores the normalized digital delivery email on the active order', async () => {
+        const fetchMock = mockGraphQlResponse({
+            setOrderCustomFields: {
+                __typename: 'Order',
+                id: 'order-1',
+                customFields: { deliveryEmail: 'buyer@example.com' },
+            },
+        });
+
+        await expect(new ShopApi(market).setDeliveryEmail('buyer@example.com')).resolves.toMatchObject({
+            customFields: { deliveryEmail: 'buyer@example.com' },
+        });
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('mutation SetStorefrontDeliveryEmail');
+        expect(request.query).toContain('customFields { customerNote deliveryEmail }');
+        expect(request.variables).toEqual({
+            input: { customFields: { deliveryEmail: 'buyer@example.com' } },
         });
     });
 

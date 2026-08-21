@@ -10,6 +10,7 @@ import { HardenStoreAdministratorPermissions1786769400000 } from './178676940000
 import { EnableMainlandChineseLanguage1786771200000 } from './1786771200000-enable-mainland-chinese-language';
 import { AddAfterSalesCenter1787203000000 } from './1787203000000-add-after-sales-center';
 import { AddStorefrontReviews1787204800000 } from './1787204800000-add-storefront-reviews';
+import { AddOrderDeliveryEmail1787206600000 } from './1787206600000-add-order-delivery-email';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -317,4 +318,28 @@ describe('production migration compatibility', () => {
             }),
         );
     });
+
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'adds a portable nullable delivery email column on %s',
+        async databaseType => {
+            const addColumn = vi.fn(async () => undefined);
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                getTable: vi.fn(async () => new Table({ name: 'order', columns: [] })),
+                addColumn,
+            } as unknown as QueryRunner;
+
+            await new AddOrderDeliveryEmail1787206600000().up(queryRunner);
+
+            expect(addColumn).toHaveBeenCalledWith(
+                'order',
+                expect.objectContaining({
+                    name: 'customFieldsDeliveryemail',
+                    type: 'varchar',
+                    length: '254',
+                    isNullable: true,
+                }),
+            );
+        },
+    );
 });

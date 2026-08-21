@@ -55,10 +55,12 @@ const callbacks = {
     onSelectGroup: vi.fn(),
     onQuantity: vi.fn(),
     onRemove: vi.fn(),
+    onFavorite: vi.fn(),
     onCheckout: vi.fn(),
     onReopen: vi.fn(),
     onNavigate: vi.fn(),
     onAdd: vi.fn(),
+    onNotify: vi.fn(),
     onRetry: vi.fn(),
     onApplyCoupon: vi.fn().mockResolvedValue(null),
     onRemoveCoupon: vi.fn().mockResolvedValue(null),
@@ -76,6 +78,7 @@ function renderCart(value: StorefrontCart | null) {
             loading: false,
             error: null,
             addingVariantId: null,
+            favoriteProductIds: [],
             ...callbacks,
         }),
     );
@@ -89,6 +92,13 @@ describe('CartPage guest cart', () => {
         expect(markup).toContain('可以直接结算');
         expect(markup).toContain('32 英寸显示器');
         expect(markup).toContain('aria-label="删除 32 英寸显示器"');
+        expect(markup).toContain('class="cart-line-swipe-actions"');
+        expect(markup).toContain('data-cart-action="favorite"');
+        expect(markup).toContain('data-cart-action="share"');
+        expect(markup).toContain('data-cart-action="pin"');
+        expect(markup).toContain('data-cart-action="remove"');
+        expect(markup).toContain('class="cart-line-purchase-row"');
+        expect(markup).not.toContain('class="cart-line-actions"><button');
         expect(markup).toContain('aria-label="减少 32 英寸显示器 数量"');
         expect(markup).toContain('aria-label="增加 32 英寸显示器 数量"');
         expect(markup).toContain('结算（1）');

@@ -1,5 +1,6 @@
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    CustomOrderFields,
     CustomOrderLineFields,
     CustomProductVariantFields,
 } from '@vendure/core/dist/entity/custom-entity-fields';
@@ -35,6 +36,10 @@ export interface TransitionAfterSalesRequestInput {
 }
 
 declare module '@vendure/core/dist/entity/custom-entity-fields' {
+    interface CustomOrderFields {
+        deliveryEmail?: string | null;
+    }
+
     interface CustomProductVariantFields {
         fulfillmentType: FulfillmentType;
     }

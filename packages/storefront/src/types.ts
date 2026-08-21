@@ -244,6 +244,7 @@ export interface Order {
     couponCodes: string[];
     customFields: {
         customerNote?: string | null;
+        deliveryEmail?: string | null;
     };
     fulfillments?: OrderFulfillment[] | null;
     digitalDeliveries?: DigitalDelivery[] | null;

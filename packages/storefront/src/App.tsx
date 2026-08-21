@@ -11,6 +11,7 @@ import {
     Bell,
     Check,
     ChevronDown,
+    ChevronLeft,
     ChevronRight,
     ChevronUp,
     CircleAlert,
@@ -30,6 +31,7 @@ import {
     Navigation,
     Package,
     Pause,
+    Pin,
     Play,
     Plus,
     RotateCcw,
@@ -55,6 +57,7 @@ import {
     ImgHTMLAttributes,
     lazy,
     ReactNode,
+    PointerEvent as ReactPointerEvent,
     Suspense,
     useCallback,
     useEffect,
@@ -115,10 +118,12 @@ type RouteName =
     | MainPage
     | 'product'
     | 'search'
+    | 'purchase'
     | 'checkout'
     | 'payment'
     | 'order-confirmation'
     | 'orders'
+    | 'logistics'
     | 'order-detail'
     | 'addresses'
     | 'account-security'
@@ -160,6 +165,9 @@ const LazyResetPasswordPage = lazy(() =>
     import('./auth-pages').then(module => ({ default: module.ResetPasswordPage })),
 );
 const LazyOrdersPage = lazy(() => import('./order-pages').then(module => ({ default: module.OrdersPage })));
+const LazyLogisticsPage = lazy(() =>
+    import('./order-pages').then(module => ({ default: module.LogisticsPage })),
+);
 const LazyOrderDetailPage = lazy(() =>
     import('./order-pages').then(module => ({ default: module.OrderDetailPage })),
 );
@@ -274,17 +282,19 @@ const orderTabs: OrderTab[] = ['all', 'pending', 'shipping', 'receiving', 'servi
 const customerResolvedRoutes: RouteName[] = [
     'account',
     'cart',
+    'purchase',
     'checkout',
     'payment',
     'coupons',
     'orders',
+    'logistics',
     'order-detail',
     'addresses',
     'account-security',
     'notifications',
     'reviews',
 ];
-const cartResolvedRoutes: RouteName[] = ['cart', 'checkout', 'payment', 'coupons'];
+const cartResolvedRoutes: RouteName[] = ['cart', 'purchase', 'checkout', 'payment', 'coupons'];
 
 function routeFromLocation(): RouteState {
     return routeFromHash(window.location.hash);
@@ -303,10 +313,12 @@ export function routeFromHash(hash: string): RouteState {
         'account',
         'product',
         'search',
+        'purchase',
         'checkout',
         'payment',
         'order-confirmation',
         'orders',
+        'logistics',
         'order-detail',
         'addresses',
         'account-security',
@@ -847,17 +859,82 @@ export function App() {
     );
 
     const addToCart = useCallback(
-        async (variant: ProductVariant, openCart = false) => {
+        async (variant: ProductVariant) => {
             setAddingVariantId(variant.id);
             const updated = await mutateCart(revision => api.addItem(variant.id, revision));
             setAddingVariantId(null);
             if (updated) {
                 notify(isZh ? '已加入购物车' : 'Added to cart');
-                if (openCart) navigate({ name: 'cart' });
             }
             return updated;
         },
-        [api, isZh, mutateCart, navigate, notify],
+        [api, isZh, mutateCart, notify],
+    );
+
+    const startDirectPurchase = useCallback(
+        async (variant: ProductVariant) => {
+            setAddingVariantId(variant.id);
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                const current = cart ?? (await api.cart());
+                let directCart = await api.addItem(variant.id, current.revision);
+                let directLine = directCart.lines.find(line => line.productVariant?.id === variant.id);
+                if (!directLine) {
+                    throw new Error(
+                        isZh ? '商品未能加入本次购买' : 'The product could not be prepared for purchase.',
+                    );
+                }
+                const directLineId = directLine.id;
+
+                const otherSelectedLineIds = directCart.lines
+                    .filter(line => line.id !== directLineId && line.selected)
+                    .map(line => line.id);
+                if (otherSelectedLineIds.length) {
+                    directCart = await api.setLinesSelected(otherSelectedLineIds, false, directCart.revision);
+                    directLine = directCart.lines.find(line => line.id === directLineId);
+                    if (!directLine) {
+                        throw new Error(
+                            isZh ? '商品未能加入本次购买' : 'The product could not be prepared for purchase.',
+                        );
+                    }
+                }
+                if (directLine && !directLine.selected) {
+                    directCart = await api.setLinesSelected([directLine.id], true, directCart.revision);
+                }
+
+                const session = await api.beginCheckout(directCart.revision);
+                setCart(session.cart);
+                setCheckoutOrder(session.order);
+                notify(isZh ? '已准备本次购买' : 'Your purchase is ready to review');
+                navigate({ name: 'purchase' });
+            } catch (requestError) {
+                if (
+                    requestError instanceof ShopApiError &&
+                    requestError.errorCode === 'CART_REVISION_CONFLICT_ERROR'
+                ) {
+                    await refreshCart().catch(() => undefined);
+                    setCartError(
+                        isZh
+                            ? '购物车已更新，请重新点击立即购买'
+                            : 'Your cart was updated. Please try Buy now again.',
+                    );
+                } else {
+                    setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                }
+                notify(
+                    requestError instanceof Error
+                        ? requestError.message
+                        : isZh
+                          ? '暂时无法发起购买'
+                          : 'Could not start the purchase',
+                );
+            } finally {
+                setAddingVariantId(null);
+                setCartLoading(false);
+            }
+        },
+        [api, cart, isZh, navigate, notify, refreshCart, setCart, text.loadError],
     );
 
     const addOrderToCart = useCallback(
@@ -1113,10 +1190,12 @@ export function App() {
             cart: isZh ? '购物车' : 'Cart',
             account: isZh ? '我的账户' : 'Account',
             search: isZh ? '搜索商品' : 'Search products',
+            purchase: isZh ? '确认购买' : 'Confirm purchase',
             checkout: isZh ? '确认订单' : 'Review order',
             payment: isZh ? '选择支付方式' : 'Choose payment',
             'order-confirmation': isZh ? '订单已提交' : 'Order confirmed',
             orders: isZh ? '我的订单' : 'My orders',
+            logistics: isZh ? '物流动态' : 'Delivery updates',
             'order-detail': isZh ? '订单详情' : 'Order details',
             addresses: isZh ? '地址管理' : 'Addresses',
             'account-security': isZh ? '账户与安全' : 'Account and security',
@@ -1225,7 +1304,7 @@ export function App() {
         ? (route.name as MainPage)
         : route.name === 'product' || route.name === 'search'
           ? 'category'
-          : route.name === 'checkout' || route.name === 'payment'
+          : route.name === 'purchase' || route.name === 'checkout' || route.name === 'payment'
             ? 'cart'
             : 'account';
 
@@ -1288,7 +1367,7 @@ export function App() {
                 />
             );
         }
-        if (pageRoute.name === 'checkout' && publicLoadState !== 'ready') {
+        if ((pageRoute.name === 'purchase' || pageRoute.name === 'checkout') && publicLoadState !== 'ready') {
             return (
                 <AsyncRouteStatePage
                     routeName={pageRoute.name}
@@ -1383,6 +1462,7 @@ export function App() {
                         loading={cartLoading}
                         error={cartError ?? cartQueryError}
                         addingVariantId={addingVariantId}
+                        favoriteProductIds={favoriteProductIds}
                         onToggleAll={() =>
                             void mutateCart(revision =>
                                 api.setAllLinesSelected(cart?.selectionState !== 'ALL', revision),
@@ -1398,10 +1478,12 @@ export function App() {
                             void mutateCart(revision => api.setLineQuantity(lineId, quantity, revision))
                         }
                         onRemove={lineId => void mutateCart(revision => api.removeLines([lineId], revision))}
+                        onFavorite={productId => toggleFavoriteProduct(productId)}
                         onCheckout={() => void beginCheckout()}
                         onReopen={() => cart?.checkoutOrder && void reopenPendingOrder(cart.checkoutOrder)}
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
+                        onNotify={notify}
                         onRetry={() => void refreshCart()}
                         onApplyCoupon={applyCoupon}
                         onRemoveCoupon={removeCoupon}
@@ -1452,7 +1534,8 @@ export function App() {
                         favorite={favoriteProductIds.includes(selectedProduct.id)}
                         onBack={goBack}
                         onNavigate={navigate}
-                        onAdd={(variant, buyNow) => void addToCart(variant, buyNow)}
+                        onAdd={variant => void addToCart(variant)}
+                        onBuyNow={variant => void startDirectPurchase(variant)}
                         onFavorite={() => toggleFavoriteProduct(selectedProduct.id)}
                         onNotify={notify}
                     />
@@ -1486,6 +1569,35 @@ export function App() {
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
                     />
+                );
+            case 'purchase':
+                return (
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyCheckoutPage
+                            mode="purchase"
+                            api={api}
+                            cart={cart}
+                            order={currentCheckoutOrder}
+                            customer={customer}
+                            market={market}
+                            availableCountries={availableCountries}
+                            locale={locale}
+                            language={language}
+                            onBack={goBack}
+                            onSessionChange={(session: StorefrontCheckoutSession) => {
+                                setCart(session.cart);
+                                setCheckoutOrder(session.order);
+                            }}
+                            onCartChange={nextCart => {
+                                setCart(nextCart);
+                                setCheckoutOrder(nextCart.checkoutOrder);
+                            }}
+                            onNavigate={navigate}
+                            onNotify={notify}
+                            onApplyCoupon={applyCoupon}
+                            onRemoveCoupon={removeCoupon}
+                        />
+                    </AuthPageBoundary>
                 );
             case 'checkout':
                 return (
@@ -1588,6 +1700,20 @@ export function App() {
                             onNavigate={navigate}
                             onBuyAgain={addOrderToCart}
                             onNotify={notify}
+                        />
+                    </AuthPageBoundary>
+                );
+            case 'logistics':
+                return (
+                    <AuthPageBoundary language={language} onBack={goBack}>
+                        <LazyLogisticsPage
+                            api={api}
+                            customer={customer}
+                            market={market}
+                            locale={locale}
+                            language={language}
+                            onBack={goBack}
+                            onNavigate={navigate}
                         />
                     </AuthPageBoundary>
                 );
@@ -3105,15 +3231,18 @@ interface CartPageProps {
     loading: boolean;
     error: string | null;
     addingVariantId: string | null;
+    favoriteProductIds: string[];
     onToggleAll: () => void;
     onSelect: (lineId: string, selected: boolean) => void;
     onSelectGroup: (lineIds: string[], selected: boolean) => void;
     onQuantity: (lineId: string, quantity: number) => void;
     onRemove: (lineId: string) => void;
+    onFavorite: (productId: string) => void;
     onCheckout: () => void;
     onReopen: () => void;
     onNavigate: (route: RouteState) => void;
     onAdd: (variant: ProductVariant) => void;
+    onNotify: (message: string) => void;
     onRetry: () => void;
     onApplyCoupon: (couponCode: string) => Promise<string | null>;
     onRemoveCoupon: (couponCode: string) => Promise<string | null>;
@@ -3130,15 +3259,18 @@ export function CartPage(props: CartPageProps) {
         loading,
         error,
         addingVariantId,
+        favoriteProductIds,
         onToggleAll,
         onSelect,
         onSelectGroup,
         onQuantity,
         onRemove,
+        onFavorite,
         onCheckout,
         onReopen,
         onNavigate,
         onAdd,
+        onNotify,
         onRetry,
         onApplyCoupon,
         onRemoveCoupon,
@@ -3147,6 +3279,8 @@ export function CartPage(props: CartPageProps) {
     const lines = cart?.lines ?? [];
     const [invalidOpen, setInvalidOpen] = useState(false);
     const [couponOpen, setCouponOpen] = useState(false);
+    const [openActionLineId, setOpenActionLineId] = useState<string | null>(null);
+    const [pinnedLineIds, setPinnedLineIds] = useState<string[]>([]);
     const activeLines = lines.filter(line => line.available && line.productVariant);
     const invalidLines = lines.filter(line => !line.available || !line.productVariant);
     const physical = activeLines.filter(
@@ -3160,6 +3294,79 @@ export function CartPage(props: CartPageProps) {
     const locked = cart?.state === 'PAYMENT_PENDING';
     const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
     const amount = locked && order ? order.totalWithTax : (order?.subTotalWithTax ?? 0);
+
+    useEffect(() => {
+        const currentLineIds = new Set(lines.map(line => line.id));
+        setPinnedLineIds(current => {
+            const next = current.filter(lineId => currentLineIds.has(lineId));
+            return next.length === current.length ? current : next;
+        });
+        setOpenActionLineId(current => (current && currentLineIds.has(current) ? current : null));
+    }, [lines]);
+
+    const sortPinnedLines = useCallback(
+        (groupLines: StorefrontCart['lines']) =>
+            [...groupLines].sort((left, right) => {
+                const leftIndex = pinnedLineIds.indexOf(left.id);
+                const rightIndex = pinnedLineIds.indexOf(right.id);
+                if (leftIndex === -1 && rightIndex === -1) return 0;
+                if (leftIndex === -1) return 1;
+                if (rightIndex === -1) return -1;
+                return leftIndex - rightIndex;
+            }),
+        [pinnedLineIds],
+    );
+
+    const togglePinnedLine = (lineId: string, productName: string) => {
+        const pinning = !pinnedLineIds.includes(lineId);
+        setPinnedLineIds(current =>
+            pinning
+                ? [lineId, ...current.filter(currentId => currentId !== lineId)]
+                : current.filter(currentId => currentId !== lineId),
+        );
+        setOpenActionLineId(null);
+        onNotify(
+            pinning
+                ? isZh
+                    ? `${productName} 已置顶`
+                    : `${productName} pinned`
+                : isZh
+                  ? `${productName} 已取消置顶`
+                  : `${productName} unpinned`,
+        );
+    };
+
+    const toggleFavoriteLine = (productId: string, productName: string) => {
+        const saving = !favoriteProductIds.includes(productId);
+        onFavorite(productId);
+        setOpenActionLineId(null);
+        onNotify(
+            saving
+                ? isZh
+                    ? `${productName} 已收藏`
+                    : `${productName} saved`
+                : isZh
+                  ? `${productName} 已取消收藏`
+                  : `${productName} removed from favorites`,
+        );
+    };
+
+    const shareCartProduct = async (productId: string, productName: string) => {
+        const productUrl = new URL(window.location.href);
+        productUrl.hash = routeHash({ name: 'product', id: productId }).slice(1);
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: productName, url: productUrl.toString() });
+            } else {
+                await navigator.clipboard.writeText(productUrl.toString());
+                onNotify(isZh ? '商品链接已复制' : 'Product link copied');
+            }
+            setOpenActionLineId(null);
+        } catch (shareError) {
+            if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
+            onNotify(isZh ? '暂时无法分享商品' : 'Could not share this product');
+        }
+    };
 
     return (
         <main className="page cart-page">
@@ -3291,30 +3498,44 @@ export function CartPage(props: CartPageProps) {
                             <CartGroup
                                 title={isZh ? '普通商品' : 'Physical products'}
                                 hint={isZh ? '配送方式结算时确认' : 'Delivery confirmed at checkout'}
-                                lines={physical}
+                                lines={sortPinnedLines(physical)}
                                 market={market}
                                 locale={locale}
                                 language={language}
                                 loading={loading || locked}
+                                favoriteProductIds={favoriteProductIds}
+                                pinnedLineIds={pinnedLineIds}
+                                openActionLineId={openActionLineId}
                                 onSelect={onSelect}
                                 onSelectAll={onSelectGroup}
                                 onQuantity={onQuantity}
                                 onRemove={onRemove}
+                                onFavorite={toggleFavoriteLine}
+                                onPin={togglePinnedLine}
+                                onShare={shareCartProduct}
+                                onActionOpenChange={lineId => setOpenActionLineId(lineId)}
                             />
                         )}
                         {!!digital.length && (
                             <CartGroup
                                 title={isZh ? '数字商品' : 'Digital products'}
                                 hint={isZh ? '付款后自动交付' : 'Delivered after payment'}
-                                lines={digital}
+                                lines={sortPinnedLines(digital)}
                                 market={market}
                                 locale={locale}
                                 language={language}
                                 loading={loading || locked}
+                                favoriteProductIds={favoriteProductIds}
+                                pinnedLineIds={pinnedLineIds}
+                                openActionLineId={openActionLineId}
                                 onSelect={onSelect}
                                 onSelectAll={onSelectGroup}
                                 onQuantity={onQuantity}
                                 onRemove={onRemove}
+                                onFavorite={toggleFavoriteLine}
+                                onPin={togglePinnedLine}
+                                onShare={shareCartProduct}
+                                onActionOpenChange={lineId => setOpenActionLineId(lineId)}
                             />
                         )}
                     </div>
@@ -3537,7 +3758,13 @@ function AccountPage(props: AccountPageProps) {
     const activeAfterSalesCount = (afterSalesQuery.data ?? []).filter(request =>
         ['PENDING', 'APPROVED'].includes(request.state),
     ).length;
-    const latestOrder = orders[0];
+    const latestLogisticsOrder = orders.find(order =>
+        order.lines.some(
+            line =>
+                line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
+                line.productVariant.customFields.fulfillmentType !== 'digital',
+        ),
+    );
     const recentVariants = Array.from(
         new Map(
             orders.flatMap(order => order.lines).map(line => [line.productVariant.id, line.productVariant]),
@@ -3642,26 +3869,51 @@ function AccountPage(props: AccountPageProps) {
                 </nav>
             </section>
 
-            {latestOrder && (
+            {customer && (
                 <section className="account-section tracking-card">
                     <header>
                         <span>
                             <Navigation />
                             <strong>{isZh ? '最新物流' : 'Latest delivery'}</strong>
                         </span>
-                        <small>{formatOrderDate(latestOrder.orderPlacedAt, locale)}</small>
+                        <button
+                            className="tracking-more"
+                            type="button"
+                            onClick={() => onNavigate({ name: 'logistics' })}
+                        >
+                            {isZh ? '更多' : 'More'}
+                            <ChevronRight aria-hidden="true" />
+                        </button>
                     </header>
-                    <button
-                        type="button"
-                        onClick={() => onNavigate({ name: 'order-detail', id: latestOrder.id })}
-                    >
-                        <OrderImage order={latestOrder} />
-                        <span>
-                            <strong>{orderStateLabel(latestOrder.state, language)}</strong>
-                            <small>{isZh ? `订单号 ${latestOrder.code}` : `Order ${latestOrder.code}`}</small>
-                        </span>
-                        <ChevronRight />
-                    </button>
+                    {latestLogisticsOrder ? (
+                        <button
+                            type="button"
+                            onClick={() => onNavigate({ name: 'order-detail', id: latestLogisticsOrder.id })}
+                        >
+                            <OrderImage order={latestLogisticsOrder} />
+                            <span>
+                                <strong>{orderStateLabel(latestLogisticsOrder.state, language)}</strong>
+                                <small>
+                                    {isZh
+                                        ? `订单号 ${latestLogisticsOrder.code}`
+                                        : `Order ${latestLogisticsOrder.code}`}
+                                </small>
+                            </span>
+                            <ChevronRight />
+                        </button>
+                    ) : (
+                        <div className="tracking-empty">
+                            <Package aria-hidden="true" />
+                            <span>
+                                <strong>{isZh ? '暂无物流动态' : 'No delivery updates'}</strong>
+                                <small>
+                                    {isZh
+                                        ? '实物商品发货后会显示在这里'
+                                        : 'Physical orders will appear here after purchase'}
+                                </small>
+                            </span>
+                        </div>
+                    )}
                 </section>
             )}
 
@@ -3780,7 +4032,6 @@ function AccountPage(props: AccountPageProps) {
             )}
 
             <ProductSection
-                title={isZh ? '为你推荐' : 'Recommended for you'}
                 centerLabel={isZh ? '专属推荐' : 'Just for you'}
                 className="account-recommendation-section"
                 products={products.slice(0, 4)}
@@ -4379,6 +4630,7 @@ function ProductDetailPage({
     onBack,
     onNavigate,
     onAdd,
+    onBuyNow,
     onFavorite,
     onNotify,
 }: {
@@ -4394,7 +4646,8 @@ function ProductDetailPage({
     favorite: boolean;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
-    onAdd: (variant: ProductVariant, buyNow?: boolean) => void;
+    onAdd: (variant: ProductVariant) => void;
+    onBuyNow: (variant: ProductVariant) => void;
     onFavorite: () => void;
     onNotify: (message: string) => void;
 }) {
@@ -4729,9 +4982,19 @@ function ProductDetailPage({
                 <button
                     type="button"
                     disabled={unavailable || addingVariantId !== null}
-                    onClick={() => variant && onAdd(variant, true)}
+                    onClick={() => variant && onBuyNow(variant)}
                 >
-                    {unavailable ? (isZh ? '暂时缺货' : 'Unavailable') : isZh ? '立即购买' : 'Buy now'}
+                    {unavailable
+                        ? isZh
+                            ? '暂时缺货'
+                            : 'Unavailable'
+                        : addingVariantId === variant?.id
+                          ? isZh
+                              ? '准备中'
+                              : 'Preparing'
+                          : isZh
+                            ? '立即购买'
+                            : 'Buy now'}
                 </button>
             </div>
         </main>
@@ -5086,10 +5349,12 @@ function asyncRouteTitle(routeName: RouteName, language: StorefrontLanguage): st
     const routeTitles: Partial<Record<RouteName, string>> = {
         account: isZh ? '我的账户' : 'Account',
         cart: isZh ? '购物车' : 'Cart',
+        purchase: isZh ? '确认购买' : 'Confirm purchase',
         checkout: isZh ? '确认订单' : 'Review order',
         payment: isZh ? '选择支付方式' : 'Choose payment',
         'order-confirmation': isZh ? '订单已提交' : 'Order confirmed',
         orders: isZh ? '我的订单' : 'My orders',
+        logistics: isZh ? '物流动态' : 'Delivery updates',
         'order-detail': isZh ? '订单详情' : 'Order details',
         addresses: isZh ? '地址管理' : 'Addresses',
         'account-security': isZh ? '账户与安全' : 'Account and security',
@@ -5225,7 +5490,7 @@ function ProductSection({
     onFavorite,
     onAdd,
 }: {
-    title: string;
+    title?: string;
     subtitle?: string;
     centerLabel?: string;
     className?: string;
@@ -5288,6 +5553,12 @@ function ProductCard({
             onPointerDown={() => prefetchProductAsset(product)}
             onFocus={() => prefetchProductAsset(product)}
         >
+            <button
+                className="product-card-detail-link"
+                type="button"
+                onClick={onOpen}
+                aria-label={`${locale.startsWith('zh') ? '查看' : 'View'} ${product.name}`}
+            />
             {onFavorite && (
                 <button
                     className={`product-card-favorite${favorite ? ' is-active' : ''}`}
@@ -5307,17 +5578,10 @@ function ProductCard({
                     <Heart fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
                 </button>
             )}
-            <button
-                className="product-card-image"
-                type="button"
-                onClick={onOpen}
-                aria-label={`${locale.startsWith('zh') ? '查看' : 'View'} ${product.name}`}
-            >
+            <div className="product-card-image">
                 <ProductImage product={product} />
-            </button>
-            <button className="product-card-name" type="button" onClick={onOpen}>
-                {product.name}
-            </button>
+            </div>
+            <strong className="product-card-name">{product.name}</strong>
             <span>{trimText(product.description, 26) || variant?.sku}</span>
             <footer>
                 <b>
@@ -5371,16 +5635,15 @@ function ProductRow({
         >
             <button
                 type="button"
-                className="product-row-image"
+                className="product-row-detail-link"
                 onClick={onOpen}
                 aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
-            >
+            />
+            <div className="product-row-image">
                 <ProductImage product={product} />
-            </button>
+            </div>
             <div>
-                <button type="button" className="product-row-name" onClick={onOpen}>
-                    {product.name}
-                </button>
+                <strong className="product-row-name">{product.name}</strong>
                 <span>{trimText(product.description, 34) || variant?.sku}</span>
                 <small>
                     {variant?.customFields.fulfillmentType === 'digital'
@@ -5427,10 +5690,17 @@ function CartGroup({
     locale,
     language,
     loading,
+    favoriteProductIds,
+    pinnedLineIds,
+    openActionLineId,
     onSelect,
     onSelectAll,
     onQuantity,
     onRemove,
+    onFavorite,
+    onPin,
+    onShare,
+    onActionOpenChange,
 }: {
     title: string;
     hint: string;
@@ -5439,12 +5709,18 @@ function CartGroup({
     locale: string;
     language: StorefrontLanguage;
     loading: boolean;
+    favoriteProductIds: string[];
+    pinnedLineIds: string[];
+    openActionLineId: string | null;
     onSelect: (lineId: string, selected: boolean) => void;
     onSelectAll: (lineIds: string[], selected: boolean) => void;
     onQuantity: (lineId: string, quantity: number) => void;
     onRemove: (lineId: string) => void;
+    onFavorite: (productId: string, productName: string) => void;
+    onPin: (lineId: string, productName: string) => void;
+    onShare: (productId: string, productName: string) => Promise<void>;
+    onActionOpenChange: (lineId: string | null) => void;
 }) {
-    const isZh = language === 'zh';
     const allSelected = lines.every(line => line.selected);
     const partiallySelected = !allSelected && lines.some(line => line.selected);
     return (
@@ -5466,93 +5742,342 @@ function CartGroup({
                 </button>
                 <span>{hint}</span>
             </header>
-            {lines.map(line => {
-                const variant = line.productVariant;
-                return (
-                    <article className={`cart-line ${line.selected ? '' : 'is-unselected'}`} key={line.id}>
-                        <label className="round-check">
-                            <input
-                                type="checkbox"
-                                aria-label={
-                                    isZh
-                                        ? `选择 ${variant?.name ?? '商品'}`
-                                        : `Select ${variant?.name ?? 'item'}`
-                                }
-                                checked={line.selected}
-                                disabled={!line.available || loading}
-                                onChange={event => onSelect(line.id, event.target.checked)}
-                            />
-                            <span>
-                                <Check />
-                            </span>
-                        </label>
-                        <div className="cart-line-image">
-                            {variant ? (
-                                <ProductVariantImage variant={variant} alt={variant.name} />
-                            ) : (
-                                <div className="image-placeholder">
-                                    <Package />
-                                </div>
-                            )}
+            {lines.map(line => (
+                <SwipeableCartLine
+                    key={line.id}
+                    line={line}
+                    market={market}
+                    locale={locale}
+                    language={language}
+                    loading={loading}
+                    open={openActionLineId === line.id}
+                    favorite={
+                        !!line.productVariant?.product.id &&
+                        favoriteProductIds.includes(line.productVariant.product.id)
+                    }
+                    pinned={pinnedLineIds.includes(line.id)}
+                    onSelect={onSelect}
+                    onQuantity={onQuantity}
+                    onRemove={onRemove}
+                    onFavorite={onFavorite}
+                    onPin={onPin}
+                    onShare={onShare}
+                    onActionOpenChange={onActionOpenChange}
+                />
+            ))}
+        </section>
+    );
+}
+
+const CART_SWIPE_FALLBACK_WIDTH = 240;
+const CART_SWIPE_THRESHOLD = 48;
+
+function SwipeableCartLine({
+    line,
+    market,
+    locale,
+    language,
+    loading,
+    open,
+    favorite,
+    pinned,
+    onSelect,
+    onQuantity,
+    onRemove,
+    onFavorite,
+    onPin,
+    onShare,
+    onActionOpenChange,
+}: {
+    line: StorefrontCart['lines'][number];
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    loading: boolean;
+    open: boolean;
+    favorite: boolean;
+    pinned: boolean;
+    onSelect: (lineId: string, selected: boolean) => void;
+    onQuantity: (lineId: string, quantity: number) => void;
+    onRemove: (lineId: string) => void;
+    onFavorite: (productId: string, productName: string) => void;
+    onPin: (lineId: string, productName: string) => void;
+    onShare: (productId: string, productName: string) => Promise<void>;
+    onActionOpenChange: (lineId: string | null) => void;
+}) {
+    const isZh = language === 'zh';
+    const variant = line.productVariant;
+    const productId = variant?.product.id;
+    const productName = variant?.name ?? (isZh ? '商品' : 'item');
+    const frontRef = useRef<HTMLDivElement>(null);
+    const actionsRef = useRef<HTMLDivElement>(null);
+    const gestureRef = useRef({
+        active: false,
+        horizontal: false,
+        startX: 0,
+        startY: 0,
+        startOffset: 0,
+        suppressClick: false,
+    });
+
+    useEffect(() => {
+        const front = frontRef.current;
+        if (!front) return;
+        front.classList.remove('is-dragging');
+        front.style.transform = '';
+    }, [open]);
+
+    const actionWidth = () => actionsRef.current?.offsetWidth ?? CART_SWIPE_FALLBACK_WIDTH;
+
+    const beginSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (
+            loading ||
+            event.button !== 0 ||
+            (event.target instanceof Element && event.target.closest('button, input, label'))
+        ) {
+            return;
+        }
+        const front = event.currentTarget;
+        const width = actionWidth();
+        gestureRef.current = {
+            active: true,
+            horizontal: false,
+            startX: event.clientX,
+            startY: event.clientY,
+            startOffset: open ? -width : 0,
+            suppressClick: false,
+        };
+        front.setPointerCapture(event.pointerId);
+        front.classList.add('is-dragging');
+    };
+
+    const moveSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const gesture = gestureRef.current;
+        if (!gesture.active) return;
+        const deltaX = event.clientX - gesture.startX;
+        const deltaY = event.clientY - gesture.startY;
+        if (!gesture.horizontal) {
+            if (Math.abs(deltaY) > Math.abs(deltaX) + 6) {
+                gesture.active = false;
+                event.currentTarget.classList.remove('is-dragging');
+                event.currentTarget.style.transform = '';
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+                return;
+            }
+            if (Math.abs(deltaX) < 6) return;
+            gesture.horizontal = true;
+        }
+        event.preventDefault();
+        const nextOffset = Math.max(-actionWidth(), Math.min(0, gesture.startOffset + deltaX));
+        event.currentTarget.style.transform = `translate3d(${nextOffset}px, 0, 0)`;
+    };
+
+    const finishSwipe = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => {
+        const gesture = gestureRef.current;
+        if (!gesture.active && !gesture.horizontal) return;
+        const deltaX = event.clientX - gesture.startX;
+        let shouldOpen = open;
+        if (!cancelled && gesture.horizontal) {
+            if (deltaX <= -CART_SWIPE_THRESHOLD) shouldOpen = true;
+            if (deltaX >= CART_SWIPE_THRESHOLD) shouldOpen = false;
+            gesture.suppressClick = true;
+        }
+        gesture.active = false;
+        gesture.horizontal = false;
+        const front = event.currentTarget;
+        front.classList.remove('is-dragging');
+        front.style.transform = `translate3d(${shouldOpen ? -actionWidth() : 0}px, 0, 0)`;
+        if (front.hasPointerCapture(event.pointerId)) front.releasePointerCapture(event.pointerId);
+        onActionOpenChange(shouldOpen ? line.id : null);
+        requestAnimationFrame(() => {
+            front.style.transform = '';
+        });
+    };
+
+    const closeAfterAction = () => onActionOpenChange(null);
+
+    return (
+        <article
+            className={`cart-line-swipe${open ? ' is-open' : ''}`}
+            data-swipe-open={open ? 'true' : 'false'}
+            onKeyDown={event => {
+                if (event.key === 'Escape') closeAfterAction();
+            }}
+        >
+            <div
+                className="cart-line-swipe-actions"
+                ref={actionsRef}
+                aria-label={isZh ? `${productName} 商品操作` : `${productName} actions`}
+            >
+                <button
+                    className={favorite ? 'is-active' : ''}
+                    type="button"
+                    data-cart-action="favorite"
+                    aria-pressed={favorite}
+                    aria-label={
+                        favorite
+                            ? isZh
+                                ? `取消收藏 ${productName}`
+                                : `Remove ${productName} from favorites`
+                            : isZh
+                              ? `收藏 ${productName}`
+                              : `Save ${productName}`
+                    }
+                    disabled={loading || !productId}
+                    onFocus={() => onActionOpenChange(line.id)}
+                    onClick={() => productId && onFavorite(productId, productName)}
+                >
+                    <Heart fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
+                    <span>{favorite ? (isZh ? '已收藏' : 'Saved') : isZh ? '收藏' : 'Save'}</span>
+                </button>
+                <button
+                    type="button"
+                    data-cart-action="share"
+                    aria-label={isZh ? `分享 ${productName}` : `Share ${productName}`}
+                    disabled={loading || !productId}
+                    onFocus={() => onActionOpenChange(line.id)}
+                    onClick={() => {
+                        if (!productId) return;
+                        closeAfterAction();
+                        void onShare(productId, productName);
+                    }}
+                >
+                    <Share2 aria-hidden="true" />
+                    <span>{isZh ? '分享' : 'Share'}</span>
+                </button>
+                <button
+                    className={pinned ? 'is-active' : ''}
+                    type="button"
+                    data-cart-action="pin"
+                    aria-pressed={pinned}
+                    aria-label={
+                        pinned
+                            ? isZh
+                                ? `取消置顶 ${productName}`
+                                : `Unpin ${productName}`
+                            : isZh
+                              ? `置顶 ${productName}`
+                              : `Pin ${productName}`
+                    }
+                    disabled={loading}
+                    onFocus={() => onActionOpenChange(line.id)}
+                    onClick={() => onPin(line.id, productName)}
+                >
+                    <Pin fill={pinned ? 'currentColor' : 'none'} aria-hidden="true" />
+                    <span>{pinned ? (isZh ? '已置顶' : 'Pinned') : isZh ? '置顶' : 'Pin'}</span>
+                </button>
+                <button
+                    className="cart-line-delete-action"
+                    type="button"
+                    data-cart-action="remove"
+                    aria-label={isZh ? `删除 ${productName}` : `Remove ${productName}`}
+                    disabled={loading}
+                    onFocus={() => onActionOpenChange(line.id)}
+                    onClick={() => onRemove(line.id)}
+                >
+                    <Trash2 aria-hidden="true" />
+                    <span>{isZh ? '删除' : 'Remove'}</span>
+                </button>
+            </div>
+
+            <div
+                ref={frontRef}
+                className={`cart-line ${line.selected ? '' : 'is-unselected'}`}
+                onPointerDown={beginSwipe}
+                onPointerMove={moveSwipe}
+                onPointerUp={event => finishSwipe(event)}
+                onPointerCancel={event => finishSwipe(event, true)}
+                onClick={event => {
+                    if (gestureRef.current.suppressClick) {
+                        gestureRef.current.suppressClick = false;
+                        return;
+                    }
+                    if (
+                        open &&
+                        !(event.target instanceof Element && event.target.closest('button, input, label'))
+                    ) {
+                        closeAfterAction();
+                    }
+                }}
+            >
+                <label className="round-check">
+                    <input
+                        type="checkbox"
+                        aria-label={isZh ? `选择 ${productName}` : `Select ${productName}`}
+                        checked={line.selected}
+                        disabled={!line.available || loading}
+                        onChange={event => onSelect(line.id, event.target.checked)}
+                    />
+                    <span>
+                        <Check />
+                    </span>
+                </label>
+                <div className="cart-line-image">
+                    {variant ? (
+                        <ProductVariantImage variant={variant} alt={variant.name} />
+                    ) : (
+                        <div className="image-placeholder">
+                            <Package />
                         </div>
-                        <div className="cart-line-copy">
-                            <strong>{variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item')}</strong>
-                            <small>{variant?.sku}</small>
-                            <b>
-                                {variant
-                                    ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                                    : formatMoney(0, market.currencyCode, locale)}
-                            </b>
-                            <div className="cart-line-actions">
+                    )}
+                </div>
+                <div className="cart-line-copy">
+                    <button
+                        className="cart-line-swipe-toggle"
+                        type="button"
+                        aria-expanded={open}
+                        aria-label={
+                            open
+                                ? isZh
+                                    ? `收起 ${productName} 的商品操作`
+                                    : `Close ${productName} actions`
+                                : isZh
+                                  ? `展开 ${productName} 的商品操作`
+                                  : `Open ${productName} actions`
+                        }
+                        onClick={() => onActionOpenChange(open ? null : line.id)}
+                    >
+                        <ChevronLeft aria-hidden="true" />
+                    </button>
+                    <strong>{variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item')}</strong>
+                    <small>{variant?.sku}</small>
+                    <div className="cart-line-purchase-row">
+                        <b>
+                            {variant
+                                ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                                : formatMoney(0, market.currencyCode, locale)}
+                        </b>
+                        <div className="cart-line-actions">
+                            <div>
                                 <button
                                     type="button"
                                     aria-label={
-                                        isZh
-                                            ? `删除 ${variant?.name ?? '商品'}`
-                                            : `Remove ${variant?.name ?? 'item'}`
+                                        isZh ? `减少 ${productName} 数量` : `Decrease ${productName} quantity`
                                     }
-                                    onClick={() => onRemove(line.id)}
-                                    disabled={loading}
+                                    onClick={() => onQuantity(line.id, line.quantity - 1)}
+                                    disabled={loading || line.quantity <= 1}
                                 >
-                                    <Trash2 />
+                                    <Minus />
                                 </button>
-                                <div>
-                                    <button
-                                        type="button"
-                                        aria-label={
-                                            isZh
-                                                ? `减少 ${variant?.name ?? '商品'} 数量`
-                                                : `Decrease ${variant?.name ?? 'item'} quantity`
-                                        }
-                                        onClick={() =>
-                                            line.quantity > 1
-                                                ? onQuantity(line.id, line.quantity - 1)
-                                                : onRemove(line.id)
-                                        }
-                                        disabled={loading}
-                                    >
-                                        <Minus />
-                                    </button>
-                                    <span>{line.quantity}</span>
-                                    <button
-                                        type="button"
-                                        aria-label={
-                                            isZh
-                                                ? `增加 ${variant?.name ?? '商品'} 数量`
-                                                : `Increase ${variant?.name ?? 'item'} quantity`
-                                        }
-                                        onClick={() => onQuantity(line.id, line.quantity + 1)}
-                                        disabled={loading || !line.available}
-                                    >
-                                        <Plus />
-                                    </button>
-                                </div>
+                                <span>{line.quantity}</span>
+                                <button
+                                    type="button"
+                                    aria-label={
+                                        isZh ? `增加 ${productName} 数量` : `Increase ${productName} quantity`
+                                    }
+                                    onClick={() => onQuantity(line.id, line.quantity + 1)}
+                                    disabled={loading || !line.available}
+                                >
+                                    <Plus />
+                                </button>
                             </div>
                         </div>
-                    </article>
-                );
-            })}
-        </section>
+                    </div>
+                </div>
+            </div>
+        </article>
     );
 }
 
@@ -5715,7 +6240,7 @@ function SectionHeader({
     action,
     onAction,
 }: {
-    title: string;
+    title?: string;
     subtitle?: string;
     centerLabel?: string;
     action?: string;
@@ -5723,11 +6248,18 @@ function SectionHeader({
 }) {
     return (
         <header className="section-header">
-            <div>
-                <h2>{title}</h2>
-                {subtitle && <p>{subtitle}</p>}
-            </div>
-            {centerLabel && <span className="section-header-center-label">{centerLabel}</span>}
+            {(title || subtitle) && (
+                <div>
+                    {title && <h2>{title}</h2>}
+                    {subtitle && <p>{subtitle}</p>}
+                </div>
+            )}
+            {centerLabel &&
+                (title ? (
+                    <span className="section-header-center-label">{centerLabel}</span>
+                ) : (
+                    <h2 className="section-header-center-label">{centerLabel}</h2>
+                ))}
             {action && (
                 <button type="button" onClick={onAction}>
                     {action}

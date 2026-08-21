@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
-import { OrderDetailPage, OrdersPage } from './order-pages';
+import { LogisticsPage, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { ActiveCustomer, MarketConfig, Order } from './types';
 
@@ -93,6 +93,31 @@ function renderOrders(cachedOrders?: Order[]) {
     return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
 }
 
+function renderLogistics(cachedOrders?: Order[]) {
+    const client = createStorefrontQueryClient();
+    if (cachedOrders) {
+        client.setQueryData(
+            storefrontQueryKeys.customerOrders(market.code, market.defaultLanguageCode, customer.id, {
+                view: 'logistics',
+            }),
+            {
+                pages: [{ items: cachedOrders, totalItems: cachedOrders.length }],
+                pageParams: [0],
+            },
+        );
+    }
+    const page = createElement(LogisticsPage, {
+        api: { customerOrders: vi.fn() } as unknown as ShopApi,
+        customer,
+        market,
+        locale: market.locale,
+        language: 'zh' as const,
+        onBack: vi.fn(),
+        onNavigate: vi.fn(),
+    });
+    return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
+}
+
 describe('OrdersPage route query', () => {
     it('shows a stable loading state instead of flashing the empty state on first entry', () => {
         const markup = renderOrders();
@@ -106,6 +131,33 @@ describe('OrdersPage route query', () => {
 
         expect(markup).toContain('订单测试商品');
         expect(markup).not.toContain('aria-label="Loading"');
+    });
+});
+
+describe('LogisticsPage delivery overview', () => {
+    it('renders product, carrier and tracking details from cached physical orders', () => {
+        const markup = renderLogistics([
+            {
+                ...order,
+                fulfillments: [
+                    {
+                        id: 'fulfillment-1',
+                        state: 'Shipped',
+                        method: '标准配送',
+                        trackingCode: 'TRACK-20841',
+                        createdAt: '2026-08-17T00:00:00.000Z',
+                        updatedAt: '2026-08-18T03:42:00.000Z',
+                    },
+                ],
+            },
+        ]);
+
+        expect(markup).toContain('物流动态');
+        expect(markup).toContain('运输中');
+        expect(markup).toContain('订单测试商品');
+        expect(markup).toContain('标准配送');
+        expect(markup).toContain('TRACK-20841');
+        expect(markup).toContain('查看订单详情');
     });
 });
 

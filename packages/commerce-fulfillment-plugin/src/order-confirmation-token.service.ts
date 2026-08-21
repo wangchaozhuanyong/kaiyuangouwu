@@ -19,6 +19,7 @@ export interface OrderConfirmationTokenPayload {
 export interface OrderConfirmationTokenConfiguration {
     signingSecret?: string;
     tokenTtlSeconds?: number;
+    emailTokenTtlSeconds?: number;
     production?: boolean;
 }
 
@@ -31,6 +32,8 @@ export const ORDER_CONFIRMATION_TOKEN_CONFIGURATION = 'ORDER_CONFIRMATION_TOKEN_
 
 const MINIMUM_SECRET_LENGTH = 32;
 const DEFAULT_TOKEN_TTL_SECONDS = 2 * 60 * 60;
+const DEFAULT_EMAIL_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+const MAX_EMAIL_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const MAXIMUM_TOKEN_LENGTH = 2048;
 const MAXIMUM_ID_LENGTH = 128;
 
@@ -38,6 +41,7 @@ const MAXIMUM_ID_LENGTH = 128;
 export class OrderConfirmationTokenService {
     private readonly signingSecret: string;
     private readonly tokenTtlSeconds: number;
+    private readonly emailTokenTtlSeconds: number;
 
     constructor(
         private readonly activeOrderService: ActiveOrderService,
@@ -61,6 +65,15 @@ export class OrderConfirmationTokenService {
         this.tokenTtlSeconds = Number.isInteger(configuredTtl)
             ? Math.min(DEFAULT_TOKEN_TTL_SECONDS, Math.max(60, configuredTtl))
             : DEFAULT_TOKEN_TTL_SECONDS;
+        const configuredEmailTtl =
+            configuration?.emailTokenTtlSeconds ??
+            Number(
+                process.env.ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS ||
+                    DEFAULT_EMAIL_TOKEN_TTL_SECONDS,
+            );
+        this.emailTokenTtlSeconds = Number.isInteger(configuredEmailTtl)
+            ? Math.min(MAX_EMAIL_TOKEN_TTL_SECONDS, Math.max(60, configuredEmailTtl))
+            : DEFAULT_EMAIL_TOKEN_TTL_SECONDS;
     }
 
     async createForActiveOrder(
@@ -71,11 +84,41 @@ export class OrderConfirmationTokenService {
         if (!order || !order.active || order.state !== 'ArrangingPayment') {
             throw new UserInputError('No active order is ready for payment confirmation');
         }
+        return this.issueToken(
+            String(order.id),
+            String(ctx.channelId),
+            this.tokenTtlSeconds,
+            nowMilliseconds,
+        );
+    }
+
+    createForSettledOrder(
+        ctx: RequestContext,
+        order: Pick<Order, 'id' | 'state'>,
+        nowMilliseconds = Date.now(),
+    ): OrderConfirmationTokenResult {
+        if (order.state !== 'PaymentSettled') {
+            throw new UserInputError('Only settled orders can receive an email confirmation token');
+        }
+        return this.issueToken(
+            String(order.id),
+            String(ctx.channelId),
+            this.emailTokenTtlSeconds,
+            nowMilliseconds,
+        );
+    }
+
+    private issueToken(
+        orderId: string,
+        channelId: string,
+        ttlSeconds: number,
+        nowMilliseconds: number,
+    ): OrderConfirmationTokenResult {
         const payload: OrderConfirmationTokenPayload = {
             version: 1,
-            orderId: String(order.id),
-            channelId: String(ctx.channelId),
-            expiresAt: Math.floor(nowMilliseconds / 1000) + this.tokenTtlSeconds,
+            orderId,
+            channelId,
+            expiresAt: Math.floor(nowMilliseconds / 1000) + ttlSeconds,
         };
         const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
         return {

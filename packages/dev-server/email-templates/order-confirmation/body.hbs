@@ -7,10 +7,18 @@
 <mj-section background-color="#ffffff" padding="12px 28px">
     <mj-column>
         {{#if isChinese}}
-            <mj-text padding="0 0 8px">{{ order.customer.firstName }} {{ order.customer.lastName }}，您好：</mj-text>
+            {{#if isDigitalOrder}}
+                <mj-text padding="0 0 8px">您好：</mj-text>
+            {{else}}
+                <mj-text padding="0 0 8px">{{ order.customer.firstName }} {{ order.customer.lastName }}，您好：</mj-text>
+            {{/if}}
             <mj-text padding="0">感谢您的购买，订单已经确认。</mj-text>
         {{else}}
-            <mj-text padding="0 0 8px">Hello {{ order.customer.firstName }} {{ order.customer.lastName }},</mj-text>
+            {{#if isDigitalOrder}}
+                <mj-text padding="0 0 8px">Hello,</mj-text>
+            {{else}}
+                <mj-text padding="0 0 8px">Hello {{ order.customer.firstName }} {{ order.customer.lastName }},</mj-text>
+            {{/if}}
             <mj-text padding="0">Thank you for your purchase. Your order is confirmed.</mj-text>
         {{/if}}
     </mj-column>
@@ -26,6 +34,16 @@
         <mj-text padding="0">{{ formatMoney order.totalWithTax order.currencyCode emailLocale }}</mj-text>
     </mj-column>
 </mj-section>
+
+{{#if digitalDeliveryActionUrl}}
+<mj-section background-color="#f3f8f5" padding="20px 28px">
+    <mj-column>
+        <mj-text font-size="17px" font-weight="700" padding="0 0 6px">{{#if isChinese}}数字内容已准备{{else}}Your digital content is ready{{/if}}</mj-text>
+        <mj-text color="#53625b" padding="0 0 14px">{{#if isChinese}}请通过安全入口查看订单并领取数字内容。为保护订单信息，入口会在一段时间后失效。{{else}}Use the secure entry to view your order and collect your digital content. The entry expires after a limited time to protect your order.{{/if}}</mj-text>
+        <mj-button href="{{ digitalDeliveryActionUrl }}" background-color="#d94a3d" border-radius="8px" font-weight="700" inner-padding="12px 22px" padding="0">{{#if isChinese}}查看订单并领取{{else}}View order and collect{{/if}}</mj-button>
+    </mj-column>
+</mj-section>
+{{/if}}
 
 {{#if order.shippingAddress.streetLine1}}
 <mj-section background-color="#ffffff" padding="20px 28px 8px">

@@ -23,6 +23,7 @@ function readyEnvironment(overrides = {}) {
         COOKIE_SECRET: 'cookie-secret-that-is-longer-than-thirty-two-characters',
         ORDER_CONFIRMATION_TOKEN_SECRET:
             'order-confirmation-secret-that-is-longer-than-thirty-two-characters',
+        ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS: '604800',
         DB: 'postgres',
         DB_HOST: 'database.internal',
         DB_PORT: '5432',
@@ -131,6 +132,16 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
     assert.ok(blockers.has('observability-export'));
+});
+
+void test('blocks an unsafe digital order email token lifetime', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({ ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS: '2592001' }),
+        'server',
+        confirmedControls,
+    );
+    const check = report.checks.find(item => item.id === 'order-confirmation-token-secret');
+    assert.equal(check?.status, 'blocker');
 });
 
 void test('blocks incomplete authentication and invalid Resend TLS settings', () => {
