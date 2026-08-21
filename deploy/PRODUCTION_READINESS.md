@@ -129,6 +129,7 @@ bun run --cwd packages/dev-server audit:storefront-readiness
 
 ```bash
 READINESS_PROCESS_ROLE=server \
+PRODUCTION_DEPLOYMENT_PROFILE=managed-services \
 READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true,"restoreDrill":true,"externalHealthChecks":true,"alerting":true,"secretManager":true}' \
 bun run --cwd packages/dev-server audit:production-env
 ```
@@ -136,6 +137,14 @@ bun run --cwd packages/dev-server audit:production-env
 将 `READINESS_PROCESS_ROLE` 依次改为 `server`、`worker`、`migration`，并使用对应部署环境执行。迁移进程要求 `RUN_MIGRATIONS=true`，API Server 和 Worker 要求为 `false`；非 Worker 进程还要求 `RUN_JOB_QUEUE=0`。
 
 `READINESS_OPERATIONS_JSON` 是运维证据确认，不是默认配置。只有持久资源、自动备份、恢复演练、外部健康检查、告警和 Secret 管理已经真实完成时才可填 `true`；缺少字段会保留人工阻塞，显式填写 `false` 会成为发布阻塞。预检不会输出管理员、数据库、SMTP 或 Cookie 密钥值。
+
+单机生产部署必须显式设置 `PRODUCTION_DEPLOYMENT_PROFILE=single-host`。此模式只在本机数据库自动备份与恢复演练均已确认时接受 `localhost` 数据库，并要求 `PRODUCTION_OBSERVABILITY_MODE=system`、公网健康检查、关键告警和本机加密密钥存储证据。对应的运维证据为：
+
+```bash
+READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true,"restoreDrill":true,"externalHealthChecks":true,"alerting":true,"encryptedLocalSecrets":true}'
+```
+
+`single-host` 不是跳过生产要求：备份必须位于受保护目录并由定时任务执行，至少完成一次可核验的恢复演练，磁盘和数据库故障必须能触发告警，密钥文件必须限制权限且底层卷已加密。
 
 ## 生产环境变量
 
@@ -146,6 +155,8 @@ bun run --cwd packages/dev-server audit:production-env
 | 变量                                    | 生产要求                                 |
 | --------------------------------------- | ---------------------------------------- |
 | `NODE_ENV`                              | `production`                             |
+| `PRODUCTION_DEPLOYMENT_PROFILE`         | `managed-services` 或 `single-host`      |
+| `PRODUCTION_OBSERVABILITY_MODE`         | 单机系统监控使用 `system`                |
 | `VENDURE_HOSTNAME`                      | 只监听预期网络接口                       |
 | `PORT`                                  | 与反向代理 upstream 一致                 |
 | `VENDURE_TRUST_PROXY`                   | 仅在可信代理前设置正确跳数或地址         |

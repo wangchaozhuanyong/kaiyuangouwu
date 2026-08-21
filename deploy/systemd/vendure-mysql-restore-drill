@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
+readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
+readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
+readonly vendure_evidence_dir="${VENDURE_READINESS_EVIDENCE_DIR:-/var/lib/vendure-readiness}"
+readonly restore_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+readonly restore_database="vendure_restore_drill_${restore_stamp}"
+
+set -a
+# shellcheck disable=SC1090
+source "${vendure_env_file}"
+set +a
+
+readonly backup_file="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
+if [[ -z "${backup_file}" ]]; then
+    printf 'No verified backup is available for the restore drill\n' >&2
+    exit 1
+fi
+
+sha256sum --check "${backup_file}.sha256"
+gzip -t "${backup_file}"
+
+mysql --protocol=socket --user=root --execute="CREATE DATABASE \`${restore_database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+gzip -dc "${backup_file}" | mysql --protocol=socket --user=root "${restore_database}"
+
+readonly source_tables="$(MYSQL_PWD="${DB_PASSWORD}" mysql --host="${DB_HOST}" --port="${DB_PORT}" --user="${DB_USERNAME}" --batch --skip-column-names --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'" "${DB_NAME}")"
+readonly restored_tables="$(mysql --protocol=socket --user=root --batch --skip-column-names --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '${restore_database}' AND table_type = 'BASE TABLE'")"
+
+if [[ "${source_tables}" -eq 0 || "${source_tables}" -ne "${restored_tables}" ]]; then
+    printf 'Restore drill table count mismatch: source=%s restored=%s\n' "${source_tables}" "${restored_tables}" >&2
+    exit 1
+fi
+
+install -d -m 0700 "${vendure_evidence_dir}"
+printf '{"completedAt":"%s","backupFile":"%s","restoreDatabase":"%s","sourceTables":%s,"restoredTables":%s}\n' \
+    "${restore_stamp}" "${backup_file}" "${restore_database}" "${source_tables}" "${restored_tables}" \
+    > "${vendure_evidence_dir}/restore-drill.json"
+
+printf 'Restore drill passed: database=%s tables=%s\n' "${restore_database}" "${restored_tables}"

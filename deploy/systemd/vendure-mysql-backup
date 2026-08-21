@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
+readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
+readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
+
+if [[ ! -r "${vendure_env_file}" ]]; then
+    printf 'Production environment file is not readable: %s\n' "${vendure_env_file}" >&2
+    exit 1
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "${vendure_env_file}"
+set +a
+
+for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD DB_NAME; do
+    if [[ -z "${!required_name:-}" ]]; then
+        printf 'Required database setting is missing: %s\n' "${required_name}" >&2
+        exit 1
+    fi
+done
+
+install -d -m 0700 "${vendure_backup_dir}"
+
+readonly backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+readonly backup_file="${vendure_backup_dir}/vendure-${backup_stamp}.sql.gz"
+readonly backup_partial="${backup_file}.part"
+
+preserve_failed_backup() {
+    if [[ -f "${backup_partial}" ]]; then
+        mv "${backup_partial}" "${backup_partial}.failed"
+    fi
+}
+trap preserve_failed_backup EXIT
+
+MYSQL_PWD="${DB_PASSWORD}" mysqldump \
+    --host="${DB_HOST}" \
+    --port="${DB_PORT}" \
+    --user="${DB_USERNAME}" \
+    --single-transaction \
+    --routines \
+    --triggers \
+    --events \
+    --hex-blob \
+    --set-gtid-purged=OFF \
+    --no-tablespaces \
+    "${DB_NAME}" | gzip -9 > "${backup_partial}"
+
+gzip -t "${backup_partial}"
+mv "${backup_partial}" "${backup_file}"
+sha256sum "${backup_file}" > "${backup_file}.sha256"
+trap - EXIT
+
+printf 'Created verified MySQL backup: %s\n' "${backup_file}"

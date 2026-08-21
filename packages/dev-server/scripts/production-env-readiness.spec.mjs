@@ -10,6 +10,7 @@ import {
 function readyEnvironment(overrides = {}) {
     return {
         NODE_ENV: 'production',
+        PRODUCTION_DEPLOYMENT_PROFILE: 'managed-services',
         TZ: 'Asia/Shanghai',
         VENDURE_HOSTNAME: '0.0.0.0',
         PORT: '3000',
@@ -63,10 +64,19 @@ const confirmedControls = {
     secretManager: true,
 };
 
+const confirmedSingleHostControls = {
+    persistentAssetStorage: true,
+    databaseBackups: true,
+    restoreDrill: true,
+    externalHealthChecks: true,
+    alerting: true,
+    encryptedLocalSecrets: true,
+};
+
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 27, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 28, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -151,11 +161,52 @@ void test('keeps operational evidence as explicit manual gates', () => {
     assert.equal(report.summary.manual, 6);
 });
 
+void test('allows a verified single-host database and system monitoring profile', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            PRODUCTION_DEPLOYMENT_PROFILE: 'single-host',
+            PRODUCTION_OBSERVABILITY_MODE: 'system',
+            DB_HOST: '127.0.0.1',
+            IS_INSTRUMENTED: 'false',
+            OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: '',
+            OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: '',
+            OTEL_SERVICE_NAME: '',
+        }),
+        'server',
+        confirmedSingleHostControls,
+    );
+
+    assert.equal(report.ready, true);
+    assert.deepEqual(report.summary, { pass: 28, manual: 0, blocker: 0 });
+});
+
+void test('blocks an unverified local database in the single-host profile', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            PRODUCTION_DEPLOYMENT_PROFILE: 'single-host',
+            PRODUCTION_OBSERVABILITY_MODE: 'system',
+            DB_HOST: '127.0.0.1',
+        }),
+        'server',
+        { ...confirmedSingleHostControls, restoreDrill: false },
+    );
+
+    assert.equal(report.ready, false);
+    assert.equal(
+        report.checks.some(check => check.id === 'database-connection' && check.status === 'blocker'),
+        true,
+    );
+});
+
 void test('parses controls and never prints secret values', () => {
     assert.deepEqual(parseOperationsControls(JSON.stringify(confirmedControls)), confirmedControls);
     assert.throws(
         () => parseOperationsControls('{"databaseBackups":"yes"}'),
         /databaseBackups must be a boolean/,
+    );
+    assert.throws(
+        () => parseOperationsControls('{"encryptedLocalSecrets":"yes"}'),
+        /encryptedLocalSecrets must be a boolean/,
     );
     const password = 'private-password-value-that-must-not-leak';
     const report = evaluateProductionEnvironment(

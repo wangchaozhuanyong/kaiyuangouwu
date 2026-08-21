@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Vendure MySQL backup every day
+
+[Timer]
+OnCalendar=*-*-* 19:15:00 UTC
+RandomizedDelaySec=5m
+Persistent=true
+Unit=vendure-mysql-backup.service
+
+[Install]
+WantedBy=timers.target

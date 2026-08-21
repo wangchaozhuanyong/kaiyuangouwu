@@ -3,13 +3,22 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const processRoles = new Set(['server', 'worker', 'migration']);
-const operationsControls = [
+const deploymentProfiles = new Set(['managed-services', 'single-host']);
+const commonOperationsControls = [
     ['persistentAssetStorage', '持久化商品资源存储已验证'],
     ['databaseBackups', '数据库自动备份已启用'],
     ['restoreDrill', '数据库恢复演练已完成'],
     ['externalHealthChecks', '公网健康检查已启用'],
     ['alerting', '关键生产告警已启用'],
-    ['secretManager', '生产密钥由 Secret 管理'],
+];
+const profileOperationsControls = {
+    'managed-services': [['secretManager', '生产密钥由 Secret 管理']],
+    'single-host': [['encryptedLocalSecrets', '本机生产密钥已加密且限制访问']],
+};
+const operationsControls = [
+    ...commonOperationsControls,
+    ...profileOperationsControls['managed-services'],
+    ...profileOperationsControls['single-host'],
 ];
 const placeholderPattern = /^(?:abc|admin|changeme|example|password|superadmin|vendure-dev|replace[-_])/iu;
 
@@ -106,6 +115,17 @@ export function parseOperationsControls(value) {
 export function evaluateProductionEnvironment(env, role, controls = {}) {
     assert.ok(processRoles.has(role), 'READINESS_PROCESS_ROLE must be server, worker, or migration');
     const checks = [];
+    const deploymentProfile = normalized(env.PRODUCTION_DEPLOYMENT_PROFILE);
+    const isSingleHost = deploymentProfile === 'single-host';
+
+    pushCheck(checks, {
+        id: 'deployment-profile',
+        title: '生产部署模式',
+        passed: deploymentProfiles.has(deploymentProfile),
+        detail: deploymentProfiles.has(deploymentProfile)
+            ? deploymentProfile
+            : 'must be managed-services or single-host',
+    });
 
     pushCheck(checks, {
         id: 'node-environment',
@@ -195,6 +215,16 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
 
     const databaseType = normalized(env.DB);
     const databaseFields = [env.DB_HOST, env.DB_USERNAME, env.DB_PASSWORD, env.DB_NAME];
+    const databaseHost = normalized(env.DB_HOST).toLowerCase();
+    const isLocalDatabaseHost = ['localhost', '127.0.0.1', '::1'].includes(databaseHost);
+    const singleHostDatabaseReady =
+        isSingleHost && controls.databaseBackups === true && controls.restoreDrill === true;
+    const databaseConnectionReady =
+        databaseFields.every(value => Boolean(normalized(value))) &&
+        (!isLocalDatabaseHost || singleHostDatabaseReady) &&
+        isPort(env.DB_PORT) &&
+        isConfiguredSecret(env.DB_PASSWORD, 12) &&
+        !placeholderPattern.test(normalized(env.DB_NAME));
     pushCheck(checks, {
         id: 'database-engine',
         title: '生产数据库引擎',
@@ -206,20 +236,12 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
     pushCheck(checks, {
         id: 'database-connection',
         title: '生产数据库连接参数',
-        passed:
-            databaseFields.every(value => Boolean(normalized(value))) &&
-            !['localhost', '127.0.0.1'].includes(normalized(env.DB_HOST).toLowerCase()) &&
-            isPort(env.DB_PORT) &&
-            isConfiguredSecret(env.DB_PASSWORD, 12) &&
-            !placeholderPattern.test(normalized(env.DB_NAME)),
-        detail:
-            databaseFields.every(value => Boolean(normalized(value))) &&
-            !['localhost', '127.0.0.1'].includes(normalized(env.DB_HOST).toLowerCase()) &&
-            isPort(env.DB_PORT) &&
-            isConfiguredSecret(env.DB_PASSWORD, 12) &&
-            !placeholderPattern.test(normalized(env.DB_NAME))
-                ? 'configured'
-                : 'missing, local, invalid, or placeholder',
+        passed: databaseConnectionReady,
+        detail: databaseConnectionReady
+            ? isLocalDatabaseHost
+                ? 'verified single-host database with backup and restore controls'
+                : 'configured'
+            : 'missing, unverified local, invalid, or placeholder',
     });
     pushCheck(checks, {
         id: 'database-synchronize',
@@ -334,14 +356,27 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         isServiceUrl(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT) &&
         Boolean(normalized(env.OTEL_SERVICE_NAME)) &&
         normalized(env.OTEL_SERVICE_NAME) !== 'vendure-dev-server';
+    const systemMonitoringReady =
+        isSingleHost &&
+        normalized(env.PRODUCTION_OBSERVABILITY_MODE) === 'system' &&
+        controls.externalHealthChecks === true &&
+        controls.alerting === true;
     pushCheck(checks, {
         id: 'observability-export',
         title: '生产遥测导出配置',
-        passed: instrumentationReady,
-        detail: instrumentationReady ? 'configured' : 'instrumentation or OTEL endpoints missing or local',
+        passed: instrumentationReady || systemMonitoringReady,
+        detail: instrumentationReady
+            ? 'OpenTelemetry configured'
+            : systemMonitoringReady
+              ? 'single-host system monitoring confirmed'
+              : 'instrumentation or confirmed single-host monitoring is missing',
     });
 
-    for (const [name, title] of operationsControls) {
+    const requiredOperationsControls = [
+        ...commonOperationsControls,
+        ...(profileOperationsControls[deploymentProfile] ?? []),
+    ];
+    for (const [name, title] of requiredOperationsControls) {
         const value = controls[name];
         pushCheck(checks, {
             id: `operations-${String(name)}`,

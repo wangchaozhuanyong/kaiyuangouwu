@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
+readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
+readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
+readonly maximum_backup_age_seconds="${VENDURE_MAXIMUM_BACKUP_AGE_SECONDS:-129600}"
+readonly maximum_disk_usage_percent="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
+
+set -a
+# shellcheck disable=SC1090
+source "${vendure_env_file}"
+set +a
+
+failures=()
+
+if ! MYSQL_PWD="${DB_PASSWORD}" mysqladmin --host="${DB_HOST}" --port="${DB_PORT}" --user="${DB_USERNAME}" ping --silent; then
+    failures+=("mysql-unreachable")
+fi
+
+if ! curl --fail --silent --show-error --max-time 10 https://damatong.net/health | grep --quiet '"status":"ok"'; then
+    failures+=("public-health-failed")
+fi
+
+latest_backup_epoch="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@\n' | sort -nr | head -1 | cut -d. -f1)"
+current_epoch="$(date +%s)"
+if [[ -z "${latest_backup_epoch}" ]] || ((current_epoch - latest_backup_epoch > maximum_backup_age_seconds)); then
+    failures+=("backup-missing-or-stale")
+fi
+
+disk_usage_percent="$(df --output=pcent / | tail -1 | tr -dc '0-9')"
+if [[ -z "${disk_usage_percent}" ]] || ((disk_usage_percent >= maximum_disk_usage_percent)); then
+    failures+=("root-disk-high")
+fi
+
+if ((${#failures[@]} > 0)); then
+    printf 'CRITICAL vendure production health check failed: %s\n' "${failures[*]}" >&2
+    exit 1
+fi
+
+printf 'Vendure production health check passed\n'

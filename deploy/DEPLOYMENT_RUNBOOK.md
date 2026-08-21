@@ -29,12 +29,15 @@
 - Storefront 静态目录：`/var/www/kaiyuangouwu/packages/storefront/dist`
 - Dashboard 静态目录：`/var/www/kaiyuangouwu/packages/dev-server/dist/dashboard`
 - Nginx 配置基线：`deploy/nginx/damatong.conf`
+- 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
 
 Cloudflare DNS 才是当前源站地址的准确信息来源。2026-08-20 的快照是 `damatong.net`、`console.damatong.net`、`cdn.damatong.net` 均指向 `3.113.54.188`；不要把该 IP 当成永久地址。发布前先从 Cloudflare DNS 和 EC2 实例详情重新核对。
 
 当前 EC2 没有 SSM 托管状态。若本机公网 SSH 不通，使用 AWS CloudShell 生成临时密钥，通过 EC2 Instance Connect 写入 60 秒公钥，再从 CloudShell 连接；只临时开放 CloudShell 当前公网 IP 的 `22/tcp`，发布完成后立即撤销。不要把本地私钥上传到 CloudShell。
 
 ## 发布门禁
+
+当前单机生产拓扑必须设置 `PRODUCTION_DEPLOYMENT_PROFILE=single-host` 和 `PRODUCTION_OBSERVABILITY_MODE=system`。只有数据库自动备份、恢复演练、外部健康检查、关键告警、持久资源与加密密钥存储均有真实证据时，才可将对应 `READINESS_OPERATIONS_JSON` 字段设为 `true`。
 
 在发布提交上依次通过：
 
