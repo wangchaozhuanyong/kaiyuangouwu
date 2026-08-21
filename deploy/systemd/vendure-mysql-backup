@@ -17,12 +17,24 @@ set -a
 source "${vendure_env_file}"
 set +a
 
+readonly offsite_backup_required="${VENDURE_REQUIRE_OFFSITE_BACKUP:-false}"
+readonly offsite_backup_uri="${VENDURE_BACKUP_S3_URI:-}"
+
 for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD DB_NAME; do
     if [[ -z "${!required_name:-}" ]]; then
         printf 'Required database setting is missing: %s\n' "${required_name}" >&2
         exit 1
     fi
 done
+
+if [[ "${offsite_backup_required}" == "true" && -z "${offsite_backup_uri}" ]]; then
+    printf 'VENDURE_BACKUP_S3_URI is required when offsite backups are mandatory\n' >&2
+    exit 1
+fi
+if [[ -n "${offsite_backup_uri}" && "${offsite_backup_uri}" != s3://* ]]; then
+    printf 'VENDURE_BACKUP_S3_URI must start with s3://\n' >&2
+    exit 1
+fi
 
 install -d -m 0700 "${vendure_backup_dir}"
 
@@ -52,7 +64,20 @@ MYSQL_PWD="${DB_PASSWORD}" mysqldump \
 
 gzip -t "${backup_partial}"
 mv "${backup_partial}" "${backup_file}"
-sha256sum "${backup_file}" > "${backup_file}.sha256"
+(
+    cd "${vendure_backup_dir}"
+    sha256sum "$(basename "${backup_file}")" > "$(basename "${backup_file}.sha256")"
+)
+
+if [[ -n "${offsite_backup_uri}" ]]; then
+    if ! command -v aws >/dev/null 2>&1; then
+        printf 'AWS CLI is required to upload the offsite backup\n' >&2
+        exit 1
+    fi
+    readonly offsite_prefix="${offsite_backup_uri%/}"
+    aws s3 cp "${backup_file}" "${offsite_prefix}/$(basename "${backup_file}")" --only-show-errors
+    aws s3 cp "${backup_file}.sha256" "${offsite_prefix}/$(basename "${backup_file}.sha256")" --only-show-errors
+fi
 trap - EXIT
 
-printf 'Created verified MySQL backup: %s\n' "${backup_file}"
+printf 'Created verified MySQL backup: %s offsite=%s\n' "${backup_file}" "$([[ -n "${offsite_backup_uri}" ]] && printf yes || printf no)"

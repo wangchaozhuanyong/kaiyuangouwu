@@ -11,11 +11,13 @@
 1. 确认两个站点的正式域名，并分别绑定、验证对应的 Vendure Channel。
 2. 确认马来西亚站价格是否含税，以及应使用的税区和税率。当前马来西亚 Channel 仍引用中国税区。
 3. 删除测试配送方式，为两个市场配置真实配送范围、费用、免邮门槛和无法配送规则。
-4. 选择真实支付渠道并完成服务端回调、退款、失败重试和对账测试。当前仅有 `dummy-payment-handler`。
+4. 选择真实支付渠道并完成服务端回调、退款、失败重试和对账测试。开发环境仅有 `dummy-payment-handler`，生产环境当前没有正式处理器。
 5. 在 Resend 验证正式发件域名，创建仅发信权限的 API Key，并配置生产 SMTP Secret。
 6. 确认生产数据库、持久化商品图片方案、备份恢复方案和监控方案。
 
 以上事项完成前，只能视为本地或预览环境，不应开放真实下单。
+
+服务端已增加失败关闭保护：生产环境没有“已注册且非测试”的支付处理器时，结账会明确拒绝；有退款金额的售后申请在尚未关联真实退款时也不能标记完成。这些保护不等于已接入支付服务商。
 
 ## 本地预览验收状态
 
@@ -161,6 +163,7 @@ READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true
 | `PORT`                                  | 与反向代理 upstream 一致                 |
 | `VENDURE_TRUST_PROXY`                   | 仅在可信代理前设置正确跳数或地址         |
 | `VENDURE_SERVE_GRAPHIQL`                | `false`                                  |
+| `VENDURE_MAX_QUERY_COMPLEXITY`          | 默认 `1000`，根据真实查询测量后调整      |
 | `VENDURE_SERVE_STATIC_DASHBOARD`        | 按部署拓扑设置                           |
 | `VENDURE_DASHBOARD_URL`                 | 正式管理后台 HTTPS 地址                  |
 | `VENDURE_STOREFRONT_URL`                | 没有有效主域名时的安全兜底地址           |
@@ -174,6 +177,8 @@ READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true
 | `DB_SCHEMA`                             | PostgreSQL 使用的 Schema，未使用时可省略 |
 | `DB_SYNCHRONIZE`                        | `false`                                  |
 | `RUN_MIGRATIONS`                        | 只在受控迁移进程中为 `true`              |
+| `VENDURE_REQUIRE_OFFSITE_BACKUP`        | 单机生产必须为 `true`                    |
+| `VENDURE_BACKUP_S3_URI`                 | 单机生产必须为可写的 `s3://` 路径        |
 | `RUN_JOB_QUEUE`                         | 独立 Worker 模式下 Server 设为 `0`       |
 | `VENDURE_ASSET_UPLOAD_DIR`              | Server 与 Worker 可访问的绝对持久目录    |
 | `VENDURE_IMPORT_ASSETS_DIR`             | 受控且持久的绝对导入目录                 |
@@ -208,6 +213,7 @@ READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true
 
 ```bash
 cd packages/dev-server
+bun run --cwd ../.. build:core-common
 bun run build
 bun run start:server
 bun run start:worker
@@ -231,26 +237,30 @@ bun run build
 
 失败回滚必须同时考虑应用版本与数据库迁移，不能只替换前台静态文件。
 
-## 当前 Nginx 配置差距
+## 当前 Nginx 配置状态
 
-`deploy/nginx/damatong.conf` 当前仅配置：
+`deploy/nginx/damatong.conf` 已配置：
 
 - `damatong.net` 与 `www.damatong.net` 前台；
 - `console.damatong.net` 管理后台；
 - Vendure upstream `127.0.0.1:3002`；
 - `/shop-api`、`/health`、`/assets` 反向代理；
 - 公共域名禁止 `/admin-api`。
+- `/digital-delivery/` 安全代理到 Vendure；
+- Shop API 与 Admin API 按 IP 限流；
+- HSTS、CSP、Permissions Policy、禁止嵌入和 MIME 防嗅探响应头。
 
-仍需确认：
+仍需在每次接入真实支付、CDN 或外部资源时确认：
 
 - 中国站与马来西亚站最终分别使用哪个域名；
 - 两个站点是同机静态目录、独立构建目录，还是由 CDN 分发；
 - 正式 API 监听端口是否为 `3002`；
 - TLS 证书是否覆盖全部前台与管理域名；
-- 是否需要 CDN、WAF、限流和真实客户端 IP 传递；
+- 是否需要 CDN、WAF 和真实客户端 IP 传递；
+- CSP 是否需放行支付服务商的脚本、连接、iframe 或图片域名；
 - 新域名加入前不可直接复用现有证书路径与跳转规则。
 
-在上述信息确认前，不修改现有 Nginx 文件。
+新域名加入前不可直接复用现有证书路径与跳转规则。
 
 ## 上线放行表
 

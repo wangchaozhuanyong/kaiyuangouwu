@@ -32,6 +32,8 @@
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
 - 异地备份：`yunqiao-vendure-backups-079740175286-ap-northeast-1`，实例角色上传，S3 保留 30 天，本地保留 14 天。
 
+单机生产环境必须在 `.env` 中设置 `VENDURE_REQUIRE_OFFSITE_BACKUP=true` 和可写的 `VENDURE_BACKUP_S3_URI=s3://<bucket>/<prefix>`。备份脚本会上传压缩备份与 SHA-256 文件；未配置或上传失败时 systemd 任务失败。恢复演练完成后会自动删除临时数据库。
+
 Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源。2026-08-21 核对的 EC2 公网 IPv4 是 `52.196.65.143`；不要把该 IP 当成永久地址。发布前必须重新核对。
 
 当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。优先使用 Session Manager 维护；只有需要传输发布产物时才使用仓库外私钥，并将 `22/tcp` 临时限制为当前管理员公网地址的 `/32`。发布完成后立即撤销临时规则，不要上传或提交私钥。
@@ -40,10 +42,11 @@ Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源
 
 当前单机生产拓扑必须设置 `PRODUCTION_DEPLOYMENT_PROFILE=single-host` 和 `PRODUCTION_OBSERVABILITY_MODE=system`。只有数据库自动备份、恢复演练、外部健康检查、关键告警、持久资源与加密密钥存储均有真实证据时，才可将对应 `READINESS_OPERATIONS_JSON` 字段设为 `true`。
 
-在发布提交上依次通过：
+在发布提交的干净隔离工作树中，通过进程环境安全注入生产等价的构建配置（密钥不得写入仓库或发布记录），并依次通过。必须先完成 monorepo 依赖拓扑构建再运行全量测试，禁止依赖开发工作区残留的 `lib`、`dist` 或 `package` 目录：
 
 ```bash
 bun run lint
+bun run build
 bun run test
 READINESS_PROCESS_ROLE=server bun run --cwd packages/dev-server audit:production-env
 READINESS_PROCESS_ROLE=worker bun run --cwd packages/dev-server audit:production-env
@@ -54,6 +57,57 @@ bun run --cwd packages/dev-server build
 ```
 
 若仓库根命令与当次改动范围不匹配，以 `package.json` 的现有脚本和本次实际测试清单为准，并在发布记录中写明。构建 Dashboard 前必须使用干净的 `packages/dev-server/dist`，避免旧 Vite 哈希文件混入。
+
+## 防止旧代码覆盖新代码的强制协议
+
+正常发布必须满足以下不变量；任一不满足都立即停止，不允许通过手工复制文件继续：
+
+1. **单一版本标识**：发布开始时锁定一个完整的 40 位 `TARGET_SHA`。远端分支、隔离工作树、构建产物、服务器代码和发布记录必须全部等于该 SHA。
+2. **远端只能快进**：推送前记录 `origin/main` 的 `BASE_MAIN_SHA`，确认它是 `TARGET_SHA` 的祖先；使用普通 `git push`，禁止 `--force`。如果推送因远端已更新而失败，重新拉取、验证和构建，不能用旧本地分支覆盖远端。
+3. **只从干净提交构建**：从 `TARGET_SHA` 创建 detached 隔离工作树；要求 `git status --porcelain` 为空。构建前明确清空该隔离工作树内的 `packages/dev-server/dist` 和 `packages/storefront/dist`，不复用开发目录或上次发布目录。
+4. **产物不可变且可验证**：候选目录名必须包含 `TARGET_SHA` 与 UTC 时间且不得复用。发布包内必须包含 Git SHA、构建时间、Bun/Node 版本和所有产物的 SHA-256 清单；上传后先校验清单，再允许替换线上文件。
+5. **服务器串行发布**：服务器使用 `flock` 获取唯一发布锁。锁内再次确认 `origin/main == TARGET_SHA`、当前运行提交是 `TARGET_SHA` 的祖先、受版本控制文件无本地修改；不满足时拒绝部署。
+6. **代码只做快进更新**：服务器仓库只允许 `git merge --ff-only origin/main`，正常发布禁止 `reset --hard`、强制切分支或覆盖式同步。数据库、`.env`、上传资产和数字交付文件不参与代码同步。
+7. **先备份、后原子替换**：当前构建产物先移动到带旧 SHA 的回滚目录，再在同一文件系统中用 `mv` 原子替换候选产物。禁止直接向正在服务的 `dist` 增量复制，避免新旧哈希文件混用。
+8. **验证成功才登记版本**：PM2 重启及前台、后台、API、静态资源检查全部通过后，才原子更新 `/var/www/kaiyuangouwu-releases/current-sha`。最终必须同时满足服务器 `git rev-parse HEAD == TARGET_SHA`、版本标记等于 `TARGET_SHA`、线上健康检查成功。
+
+显式回滚不走正常发布通道。只有在记录回滚原因、指定完整 `ROLLBACK_SHA` 并人工确认后才允许回到旧版本；不得把 `origin/main` 强制回退。回滚完成后同样要验证 Git SHA、构建产物清单和线上健康状态。
+
+### 发布前的版本关系检查
+
+以下检查在本地隔离构建前执行，其中两个 SHA 都必须先解析为完整提交：
+
+```bash
+git fetch origin main
+BASE_MAIN_SHA="$(git rev-parse origin/main^{commit})"
+TARGET_SHA="$(git rev-parse HEAD^{commit})"
+test "$(printf '%s' "${TARGET_SHA}" | wc -c | tr -d ' ')" -eq 40
+git merge-base --is-ancestor "${BASE_MAIN_SHA}" "${TARGET_SHA}"
+```
+
+推送 `main` 时不使用强制参数：
+
+```bash
+git push origin "${TARGET_SHA}:refs/heads/main"
+test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "${TARGET_SHA}"
+```
+
+服务器发布锁内必须执行同等关系检查：
+
+```bash
+exec 9>/run/lock/vendure-production-deploy.lock
+flock --exclusive 9
+git -C /var/www/kaiyuangouwu fetch origin main
+CURRENT_SHA="$(git -C /var/www/kaiyuangouwu rev-parse HEAD^{commit})"
+REMOTE_SHA="$(git -C /var/www/kaiyuangouwu rev-parse origin/main^{commit})"
+test "${REMOTE_SHA}" = "${TARGET_SHA}"
+git -C /var/www/kaiyuangouwu merge-base --is-ancestor "${CURRENT_SHA}" "${TARGET_SHA}"
+test -z "$(git -C /var/www/kaiyuangouwu status --porcelain --untracked-files=no)"
+git -C /var/www/kaiyuangouwu merge --ff-only origin/main
+test "$(git -C /var/www/kaiyuangouwu rev-parse HEAD^{commit})" = "${TARGET_SHA}"
+```
+
+上述命令只是门禁骨架；发布锁必须保持到产物替换、PM2 重启、健康检查和版本标记更新全部结束。
 
 ## 标准发布流程
 

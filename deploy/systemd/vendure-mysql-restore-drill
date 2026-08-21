@@ -10,10 +10,30 @@ readonly vendure_evidence_dir="${VENDURE_READINESS_EVIDENCE_DIR:-/var/lib/vendur
 readonly restore_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 readonly restore_database="vendure_restore_drill_${restore_stamp}"
 
+if [[ ! -r "${vendure_env_file}" ]]; then
+    printf 'Production environment file is not readable: %s\n' "${vendure_env_file}" >&2
+    exit 1
+fi
+
 set -a
 # shellcheck disable=SC1090
 source "${vendure_env_file}"
 set +a
+
+for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD DB_NAME; do
+    if [[ -z "${!required_name:-}" ]]; then
+        printf 'Required database setting is missing: %s\n' "${required_name}" >&2
+        exit 1
+    fi
+done
+
+restore_database_created=false
+cleanup_restore_database() {
+    if [[ "${restore_database_created}" == "true" ]]; then
+        mysql --protocol=socket --user=root --execute="DROP DATABASE IF EXISTS \`${restore_database}\`"
+    fi
+}
+trap cleanup_restore_database EXIT
 
 readonly backup_file="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
 if [[ -z "${backup_file}" ]]; then
@@ -21,10 +41,14 @@ if [[ -z "${backup_file}" ]]; then
     exit 1
 fi
 
-sha256sum --check "${backup_file}.sha256"
+(
+    cd "${vendure_backup_dir}"
+    sha256sum --check "$(basename "${backup_file}.sha256")"
+)
 gzip -t "${backup_file}"
 
 mysql --protocol=socket --user=root --execute="CREATE DATABASE \`${restore_database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+restore_database_created=true
 gzip -dc "${backup_file}" | mysql --protocol=socket --user=root "${restore_database}"
 
 readonly source_tables="$(MYSQL_PWD="${DB_PASSWORD}" mysql --host="${DB_HOST}" --port="${DB_PORT}" --user="${DB_USERNAME}" --batch --skip-column-names --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'" "${DB_NAME}")"
@@ -35,9 +59,12 @@ if [[ "${source_tables}" -eq 0 || "${source_tables}" -ne "${restored_tables}" ]]
     exit 1
 fi
 
+mysql --protocol=socket --user=root --execute="DROP DATABASE \`${restore_database}\`"
+restore_database_created=false
+
 install -d -m 0700 "${vendure_evidence_dir}"
-printf '{"completedAt":"%s","backupFile":"%s","restoreDatabase":"%s","sourceTables":%s,"restoredTables":%s}\n' \
+printf '{"completedAt":"%s","backupFile":"%s","temporaryRestoreDatabase":"%s","sourceTables":%s,"restoredTables":%s}\n' \
     "${restore_stamp}" "${backup_file}" "${restore_database}" "${source_tables}" "${restored_tables}" \
     > "${vendure_evidence_dir}/restore-drill.json"
 
-printf 'Restore drill passed: database=%s tables=%s\n' "${restore_database}" "${restored_tables}"
+printf 'Restore drill passed and temporary database removed: database=%s tables=%s\n' "${restore_database}" "${restored_tables}"

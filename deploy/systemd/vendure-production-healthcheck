@@ -8,10 +8,22 @@ readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
 readonly maximum_backup_age_seconds="${VENDURE_MAXIMUM_BACKUP_AGE_SECONDS:-129600}"
 readonly maximum_disk_usage_percent="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
 
+if [[ ! -r "${vendure_env_file}" ]]; then
+    printf 'Production environment file is not readable: %s\n' "${vendure_env_file}" >&2
+    exit 1
+fi
+
 set -a
 # shellcheck disable=SC1090
 source "${vendure_env_file}"
 set +a
+
+for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD; do
+    if [[ -z "${!required_name:-}" ]]; then
+        printf 'Required database setting is missing: %s\n' "${required_name}" >&2
+        exit 1
+    fi
+done
 
 failures=()
 
@@ -23,10 +35,19 @@ if ! curl --fail --silent --show-error --max-time 10 https://damatong.net/health
     failures+=("public-health-failed")
 fi
 
-latest_backup_epoch="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@\n' | sort -nr | head -1 | cut -d. -f1)"
+latest_backup_file="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
+latest_backup_epoch=""
+if [[ -n "${latest_backup_file}" ]]; then
+    latest_backup_epoch="$(stat --format='%Y' "${latest_backup_file}")"
+fi
 current_epoch="$(date +%s)"
 if [[ -z "${latest_backup_epoch}" ]] || ((current_epoch - latest_backup_epoch > maximum_backup_age_seconds)); then
     failures+=("backup-missing-or-stale")
+elif [[ ! -f "${latest_backup_file}.sha256" ]] || ! (
+    cd "${vendure_backup_dir}"
+    sha256sum --check --status "$(basename "${latest_backup_file}.sha256")"
+); then
+    failures+=("backup-checksum-invalid")
 fi
 
 disk_usage_percent="$(df --output=pcent / | tail -1 | tr -dc '0-9')"
