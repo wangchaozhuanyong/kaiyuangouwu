@@ -2641,8 +2641,11 @@ function CategoryPage(props: CategoryPageProps) {
     } = props;
     const queryClient = useQueryClient();
     const isZh = language === 'zh';
+    const categoryPageRef = useRef<HTMLElement>(null);
+    const sortBarRef = useRef<HTMLElement>(null);
     const [filterOpen, setFilterOpen] = useState(false);
     const [allCategoriesOpen, setAllCategoriesOpen] = useState(false);
+    const [stickyState, setStickyState] = useState({ navigation: false, sort: false });
     const [draftType, setDraftType] = useState<'all' | FulfillmentType>(fulfillmentFilter);
     const [draftStock, setDraftStock] = useState(inStockOnly);
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
@@ -2759,6 +2762,41 @@ function CategoryPage(props: CategoryPageProps) {
         return () => document.removeEventListener('keydown', closeOnEscape);
     }, [allCategoriesOpen]);
 
+    useEffect(() => {
+        let animationFrame = 0;
+        const updateStickyState = () => {
+            if (animationFrame) return;
+            animationFrame = window.requestAnimationFrame(() => {
+                animationFrame = 0;
+                const page = categoryPageRef.current;
+                const sortBar = sortBarRef.current;
+                if (!page || !sortBar) return;
+
+                const stickyTop = Number.parseFloat(
+                    getComputedStyle(page).getPropertyValue('--category-content-sticky-top'),
+                );
+                const nextState = {
+                    navigation: window.scrollY > 2,
+                    sort: Number.isFinite(stickyTop) && sortBar.getBoundingClientRect().top <= stickyTop + 1,
+                };
+                setStickyState(current =>
+                    current.navigation === nextState.navigation && current.sort === nextState.sort
+                        ? current
+                        : nextState,
+                );
+            });
+        };
+
+        updateStickyState();
+        window.addEventListener('scroll', updateStickyState, { passive: true });
+        window.addEventListener('resize', updateStickyState);
+        return () => {
+            window.removeEventListener('scroll', updateStickyState);
+            window.removeEventListener('resize', updateStickyState);
+            window.cancelAnimationFrame(animationFrame);
+        };
+    }, []);
+
     const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
         const collectionMatch =
@@ -2778,7 +2816,10 @@ function CategoryPage(props: CategoryPageProps) {
         '/storefront/default-hero.jpg';
 
     return (
-        <main className="page category-page">
+        <main
+            ref={categoryPageRef}
+            className={`page category-page${stickyState.navigation ? ' is-navigation-scrolled' : ''}${stickyState.sort ? ' is-sort-stuck' : ''}`}
+        >
             <header className="topbar category-topbar">
                 <h1 className="topbar-title">{isZh ? '商品' : 'Shop'}</h1>
                 <button
@@ -2963,6 +3004,7 @@ function CategoryPage(props: CategoryPageProps) {
                         </span>
                     </button>
                     <nav
+                        ref={sortBarRef}
                         className="sort-bar sort-bar-five"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
                     >
