@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
@@ -11,6 +9,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { randomBytes } from 'node:crypto';
 import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import {
@@ -135,8 +134,8 @@ export class AfterSalesService {
             relations: { items: true },
         });
         const usedQuantityByLineId = new Map<string, number>();
-        for (const request of existingRequests) {
-            for (const item of request.items ?? []) {
+        for (const existingRequest of existingRequests) {
+            for (const item of existingRequest.items ?? []) {
                 if (item.orderLineId == null) continue;
                 const key = String(item.orderLineId);
                 usedQuantityByLineId.set(key, (usedQuantityByLineId.get(key) ?? 0) + item.quantity);
@@ -266,6 +265,9 @@ export class AfterSalesService {
         ) {
             throw new UserInputError('通过金额必须是 0 到申请金额之间的整数金额');
         }
+        if (input.state === 'COMPLETED' && approvedAmount > 0) {
+            throw new UserInputError('尚未关联已成功的实际退款，不能将售后申请标记为已完成');
+        }
 
         const now = new Date();
         const result = await this.connection.getRepository(ctx, AfterSalesRequest).update(
@@ -372,19 +374,17 @@ export class AfterSalesService {
         actorId: string | null,
         note: string,
     ): Promise<AfterSalesEvent> {
-        return this.connection
-            .getRepository(ctx, AfterSalesEvent)
-            .save(
-                new AfterSalesEvent({
-                    request,
-                    requestId: request.id,
-                    state,
-                    actorType,
-                    actorLabel,
-                    actorId,
-                    note,
-                }),
-            );
+        return this.connection.getRepository(ctx, AfterSalesEvent).save(
+            new AfterSalesEvent({
+                request,
+                requestId: request.id,
+                state,
+                actorType,
+                actorLabel,
+                actorId,
+                note,
+            }),
+        );
     }
 
     private normalizeRelations(request: AfterSalesRequest): AfterSalesRequest {

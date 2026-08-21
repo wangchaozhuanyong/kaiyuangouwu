@@ -22,14 +22,14 @@ export class StorefrontActivationService {
             this.channelService.findOne(ctx, ctx.channelId),
             this.channelService.getDefaultChannel(ctx),
         ]);
-        if (channel?.sellerId && idsAreEqual(channel.sellerId, defaultChannel.sellerId)) {
+        if (channel && idsAreEqual(channel.id, defaultChannel.id)) {
             return;
         }
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
             where: { channelId: ctx.channelId },
             select: { id: true, status: true },
         });
-        // Merchant-owned Channels must fail closed. A missing profile can be
+        // Every non-default Channel must fail closed. A missing profile can be
         // caused by partial provisioning and must never publish a storefront.
         if (profile?.status !== 'ACTIVE') {
             throw new ForbiddenError();

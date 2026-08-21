@@ -8,8 +8,10 @@ import {
     idsAreEqual,
     InternalServerError,
     isGraphQlErrorResult,
+    LanguageCode,
     OrderLimitError,
     OrderService,
+    PaymentMethod,
     ProductVariantService,
     RequestContext,
     SessionService,
@@ -58,6 +60,24 @@ interface CartOwner {
 interface AddStorefrontCartItemInput {
     productVariantId: ID;
     quantity: number;
+}
+
+const NON_PRODUCTION_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
+
+export function isRegisteredProductionPaymentMethod(
+    method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
+    registeredHandlerCodes: ReadonlySet<string>,
+): boolean {
+    const handlerCode = method.handler?.code;
+    if (!handlerCode || !registeredHandlerCodes.has(handlerCode)) {
+        return false;
+    }
+    const searchable = [
+        method.code,
+        handlerCode,
+        ...(method.translations ?? []).flatMap(translation => [translation.name, translation.description]),
+    ].join(' ');
+    return !NON_PRODUCTION_PAYMENT_PATTERN.test(searchable);
 }
 
 @Injectable()
@@ -313,6 +333,17 @@ export class StorefrontCartService {
         if (!projected.checkoutOrder) {
             return new CartProjectionError('ORDER_MISSING', 'No checkout order exists for the selection.');
         }
+        if (
+            process.env.NODE_ENV === 'production' &&
+            projected.checkoutOrder.totalWithTax > 0 &&
+            !(await this.hasProductionPaymentMethod(ctx))
+        ) {
+            const message =
+                ctx.languageCode === LanguageCode.zh_Hans
+                    ? '当前店铺尚未配置可用的正式支付方式，暂时无法提交订单'
+                    : 'This store does not have an available production payment method yet.';
+            return new CartProjectionError('PAYMENT_UNAVAILABLE', message, message);
+        }
         const lock = await this.connection.getRepository(ctx, StorefrontCart).update(
             {
                 id: projected.id,
@@ -341,6 +372,20 @@ export class StorefrontCartService {
         lockedCart.checkoutOrder = transition;
         checkout.order = transition;
         return new StorefrontCheckoutSession(lockedCart, transition, checkout);
+    }
+
+    private async hasProductionPaymentMethod(ctx: RequestContext): Promise<boolean> {
+        const registeredHandlerCodes = new Set(
+            this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
+        );
+        if (registeredHandlerCodes.size === 0) {
+            return false;
+        }
+        const methods = await this.connection.getRepository(ctx, PaymentMethod).find({
+            where: { enabled: true, channels: { id: ctx.channelId } },
+            relations: { channels: true, translations: true },
+        });
+        return methods.some(method => isRegisteredProductionPaymentMethod(method, registeredHandlerCodes));
     }
 
     async reopenCart(ctx: RequestContext, expectedRevision: number): Promise<StorefrontCartMutationResult> {
@@ -488,7 +533,7 @@ export class StorefrontCartService {
         const mergedCart = await this.loadCart(ctx, customerCart.id, customerOwner);
         const projected = await this.projectCart(ctx, mergedCart, customerOwner, true);
         if (isGraphQlErrorResult(projected)) {
-            throw new Error(`${projected.errorCode}: ${projected.message}`);
+            throw new Error(`${String(projected.errorCode)}: ${String(projected.message)}`);
         }
     }
 
@@ -581,7 +626,7 @@ export class StorefrontCartService {
         if (!order) {
             return;
         }
-        const orderLinesByVariant = new Map<string, (typeof order.lines)[number][]>();
+        const orderLinesByVariant = new Map<string, Array<(typeof order.lines)[number]>>();
         for (const orderLine of order.lines) {
             const key = orderLine.productVariantId.toString();
             orderLinesByVariant.set(key, [...(orderLinesByVariant.get(key) ?? []), orderLine]);

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
     Channel,
+    ConfigService,
     ID,
     PaymentMethod,
     ProductVariant,
@@ -18,14 +19,21 @@ import { StoreProfile } from './entities/store-profile.entity';
 import { storeShippingMethodCode, storeZoneName } from './store-commerce-settings.service';
 import { StoreActivationCheck, StoreActivationCheckCode, StoreActivationReadiness } from './types';
 
-const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|test)(?:$|[-_\s])|测试/iu;
+const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 const PLACEHOLDER_TAX_RATE = 1.23;
 const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
 const SHIPPING_CHECKER_CODE = 'supported-destination-eligibility-checker';
 
 export function isProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
+    registeredHandlerCodes?: ReadonlySet<string>,
 ): boolean {
+    if (
+        registeredHandlerCodes &&
+        (!method.handler?.code || !registeredHandlerCodes.has(method.handler.code))
+    ) {
+        return false;
+    }
     const searchable = [
         method.code,
         method.handler?.code,
@@ -92,7 +100,10 @@ export function evaluateStoreActivationReadiness(
 
 @Injectable()
 export class StoreActivationReadinessService {
-    constructor(private readonly connection: TransactionalConnection) {}
+    constructor(
+        private readonly connection: TransactionalConnection,
+        private readonly configService: ConfigService,
+    ) {}
 
     async get(ctx: RequestContext, profile: StoreProfile): Promise<StoreActivationReadiness> {
         const channel = await this.connection.getRepository(ctx, Channel).findOne({
@@ -126,7 +137,7 @@ export class StoreActivationReadinessService {
                 }),
                 this.connection.getRepository(ctx, PaymentMethod).find({
                     where: { enabled: true, channels: { id: profile.channelId } },
-                    relations: { channels: true },
+                    relations: { channels: true, translations: true },
                 }),
                 this.connection.getRepository(ctx, ShippingMethod).find({
                     where: { channels: { id: profile.channelId }, deletedAt: IsNull() },
@@ -148,6 +159,9 @@ export class StoreActivationReadinessService {
             method => method.code === storeShippingMethodCode(channel.code),
         );
         const activeContent = contentBlocks.filter(block => this.isActiveContent(block));
+        const registeredPaymentHandlers = new Set(
+            this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
+        );
 
         return evaluateStoreActivationReadiness({
             profile: this.hasCompleteProfile(profile),
@@ -168,7 +182,9 @@ export class StoreActivationReadinessService {
                 channel.defaultShippingZone?.name === storeZoneName(channel.code, 'shipping') &&
                 storeShippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
                 storeShippingMethod?.checker?.code === SHIPPING_CHECKER_CODE,
-            payment: paymentMethods.some(isProductionPaymentMethod),
+            payment: paymentMethods.some(method =>
+                isProductionPaymentMethod(method, registeredPaymentHandlers),
+            ),
         });
     }
 

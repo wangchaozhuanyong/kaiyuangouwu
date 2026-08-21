@@ -65,11 +65,11 @@ export class InvalidCartQuantityError extends StorefrontCartError {
 export class CartProjectionError extends StorefrontCartError {
     readonly __typename = 'CartProjectionError';
     readonly errorCode = 'CART_PROJECTION_ERROR';
-    readonly message = 'The selected cart items could not be synchronized to checkout.';
 
     constructor(
         readonly causeCode: string,
         readonly causeMessage: string,
+        readonly message = 'The selected cart items could not be synchronized to checkout.',
     ) {
         super();
     }

@@ -54,6 +54,15 @@ describe('store activation readiness', () => {
         expect(isProductionPaymentMethod(method('dummy', 'dummy-payment-handler', 'Test payment'))).toBe(
             false,
         );
+        expect(isProductionPaymentMethod(method('stripe-sandbox', 'stripe-payment', 'Card payment'))).toBe(
+            false,
+        );
         expect(isProductionPaymentMethod(method('stripe', 'stripe-payment', 'Card payment'))).toBe(true);
+        expect(
+            isProductionPaymentMethod(
+                method('stripe', 'stripe-payment', 'Card payment'),
+                new Set(['another-handler']),
+            ),
+        ).toBe(false);
     });
 });

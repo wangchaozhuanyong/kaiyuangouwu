@@ -16,7 +16,14 @@ function orderLine(type: 'physical' | 'digital' = 'physical') {
     } as any;
 }
 
-function createHarness(overrides: { line?: any; existingRequests?: any[]; requestState?: string } = {}) {
+function createHarness(
+    overrides: {
+        line?: any;
+        existingRequests?: any[];
+        requestState?: string;
+        requestApprovedAmount?: number;
+    } = {},
+) {
     const customer = {
         id: 'customer-1',
         firstName: 'Test',
@@ -38,13 +45,14 @@ function createHarness(overrides: { line?: any; existingRequests?: any[]; reques
     const requestRepository = {
         find: vi.fn().mockResolvedValue(overrides.existingRequests ?? []),
         findAndCount: vi.fn(),
-        save: vi.fn(async (request: any) => {
+        save: vi.fn((request: any) => {
             savedRequest = { ...request, id: 'request-1', createdAt: new Date(), updatedAt: new Date() };
             return savedRequest;
         }),
-        findOne: vi.fn(async () => ({
+        findOne: vi.fn(() => ({
             ...savedRequest,
             state: overrides.requestState ?? savedRequest?.state ?? 'PENDING',
+            approvedAmount: overrides.requestApprovedAmount ?? savedRequest?.approvedAmount ?? null,
             order,
             items: savedItems,
             events: savedEvents,
@@ -52,13 +60,13 @@ function createHarness(overrides: { line?: any; existingRequests?: any[]; reques
         update: vi.fn().mockResolvedValue({ affected: 1 }),
     };
     const itemRepository = {
-        save: vi.fn(async (items: any[]) => {
+        save: vi.fn((items: any[]) => {
             savedItems.push(...items.map((item, index) => ({ ...item, id: `item-${index + 1}` })));
             return savedItems;
         }),
     };
     const eventRepository = {
-        save: vi.fn(async (event: any) => {
+        save: vi.fn((event: any) => {
             const saved = { ...event, id: `event-${savedEvents.length + 1}`, createdAt: new Date() };
             savedEvents.push(saved);
             return saved;
@@ -79,7 +87,7 @@ function createHarness(overrides: { line?: any; existingRequests?: any[]; reques
             if (entity.name === 'AfterSalesItem') return itemRepository;
             if (entity.name === 'AfterSalesEvent') return eventRepository;
             if (entity.name === 'Order') return orderRepository;
-            throw new Error(`Unexpected entity ${entity.name}`);
+            throw new Error(`Unexpected entity ${String(entity.name)}`);
         }),
     };
     const customerService = { findOneByUserId: vi.fn().mockResolvedValue(customer) };
@@ -199,5 +207,18 @@ describe('AfterSalesService', () => {
             actorType: 'ADMIN',
             actorId: 'user-1',
         });
+    });
+
+    it('does not mark a paid refund request completed without a linked real refund', async () => {
+        const test = createHarness({ requestState: 'APPROVED', requestApprovedAmount: 4_900 });
+
+        await expect(
+            test.service.transitionForAdmin(test.ctx, {
+                id: 'request-1',
+                state: 'COMPLETED',
+                resolution: 'Refund completed.',
+            }),
+        ).rejects.toThrow('尚未关联已成功的实际退款');
+        expect(test.requestRepository.update).not.toHaveBeenCalled();
     });
 });

@@ -89,14 +89,14 @@ export class StockLevelService {
         stockLocationId: ID,
         change: number,
     ) {
-        const stockLevel = await this.connection.getRepository(ctx, StockLevel).findOne({
-            where: {
-                productVariantId,
-                stockLocationId,
-            },
-        });
-        if (!stockLevel) {
-            await this.connection.getRepository(ctx, StockLevel).save(
+        const repository = this.connection.getRepository(ctx, StockLevel);
+        const result = await repository.increment(
+            { productVariantId, stockLocationId },
+            'stockOnHand',
+            change,
+        );
+        if (!result.affected) {
+            await repository.save(
                 new StockLevel({
                     productVariantId,
                     stockLocationId,
@@ -104,11 +104,6 @@ export class StockLevelService {
                     stockAllocated: 0,
                 }),
             );
-        }
-        if (stockLevel) {
-            await this.connection
-                .getRepository(ctx, StockLevel)
-                .update(stockLevel.id, { stockOnHand: stockLevel.stockOnHand + change });
         }
     }
 
@@ -122,16 +117,8 @@ export class StockLevelService {
         stockLocationId: ID,
         change: number,
     ) {
-        const stockLevel = await this.connection.getRepository(ctx, StockLevel).findOne({
-            where: {
-                productVariantId,
-                stockLocationId,
-            },
-        });
-        if (stockLevel) {
-            await this.connection
-                .getRepository(ctx, StockLevel)
-                .update(stockLevel.id, { stockAllocated: stockLevel.stockAllocated + change });
-        }
+        await this.connection
+            .getRepository(ctx, StockLevel)
+            .increment({ productVariantId, stockLocationId }, 'stockAllocated', change);
     }
 }

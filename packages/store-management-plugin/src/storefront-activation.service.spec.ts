@@ -2,13 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontActivationService } from './storefront-activation.service';
 
-function createService(status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | null, sellerId = 'merchant-seller') {
+function createService(
+    status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | null,
+    sellerId = 'merchant-seller',
+    channelId = 'channel-1',
+) {
     const repository = {
         findOne: vi.fn().mockResolvedValue(status ? { id: 'profile-1', status } : null),
     };
     const connection = { getRepository: vi.fn().mockReturnValue(repository) };
     const channelService = {
-        findOne: vi.fn().mockResolvedValue({ id: 'channel-1', sellerId }),
+        findOne: vi.fn().mockResolvedValue({ id: channelId, sellerId }),
         getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform-seller' }),
     };
     return new StorefrontActivationService(connection as any, channelService as any);
@@ -39,11 +43,20 @@ describe('StorefrontActivationService', () => {
         ).resolves.toBeUndefined();
     });
 
-    it('keeps platform-owned regional Channels backward compatible', async () => {
+    it('blocks platform-owned regional Channels without a managed profile', async () => {
         await expect(
             createService(null, 'platform-seller').assertActive({
                 apiType: 'shop',
                 channelId: 'channel-1',
+            } as any),
+        ).rejects.toThrow();
+    });
+
+    it('allows only the actual default Channel without a managed profile', async () => {
+        await expect(
+            createService(null, 'platform-seller', 'default').assertActive({
+                apiType: 'shop',
+                channelId: 'default',
             } as any),
         ).resolves.toBeUndefined();
     });

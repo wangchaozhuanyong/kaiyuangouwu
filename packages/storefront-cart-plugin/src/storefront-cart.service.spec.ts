@@ -3,7 +3,42 @@ import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontCart } from './entities/storefront-cart.entity';
-import { StorefrontCartService } from './storefront-cart.service';
+import { isRegisteredProductionPaymentMethod, StorefrontCartService } from './storefront-cart.service';
+
+describe('production payment readiness', () => {
+    const method = (code: string, handlerCode: string, name: string) =>
+        ({
+            code,
+            handler: { code: handlerCode },
+            translations: [{ name, description: '' }],
+        }) as any;
+
+    it('requires a registered non-test payment handler', () => {
+        const handlers = new Set(['stripe-payment']);
+
+        expect(
+            isRegisteredProductionPaymentMethod(method('stripe', 'stripe-payment', 'Card payment'), handlers),
+        ).toBe(true);
+        expect(
+            isRegisteredProductionPaymentMethod(
+                method('dummy', 'dummy-payment-handler', 'Test payment'),
+                new Set(['dummy-payment-handler']),
+            ),
+        ).toBe(false);
+        expect(
+            isRegisteredProductionPaymentMethod(
+                method('stripe-sandbox', 'stripe-payment', 'Card payment'),
+                handlers,
+            ),
+        ).toBe(false);
+        expect(
+            isRegisteredProductionPaymentMethod(
+                method('stripe', 'unregistered-handler', 'Card payment'),
+                handlers,
+            ),
+        ).toBe(false);
+    });
+});
 
 describe('StorefrontCartService Channel isolation', () => {
     it('keeps separate carts for the same owner in different Channels', async () => {
@@ -24,13 +59,14 @@ describe('StorefrontCartService Channel isolation', () => {
             }),
         ];
         const repository = {
-            findOne: vi.fn(async ({ where }) =>
-                carts.find(
-                    cart =>
-                        String(cart.channelId) === String(where.channelId) &&
-                        cart.ownerType === where.ownerType &&
-                        String(cart.ownerId) === String(where.ownerId),
-                ) ?? null,
+            findOne: vi.fn(
+                ({ where }) =>
+                    carts.find(
+                        cart =>
+                            String(cart.channelId) === String(where.channelId) &&
+                            cart.ownerType === where.ownerType &&
+                            String(cart.ownerId) === String(where.ownerId),
+                    ) ?? null,
             ),
         };
         const connection = { getRepository: vi.fn().mockReturnValue(repository) };

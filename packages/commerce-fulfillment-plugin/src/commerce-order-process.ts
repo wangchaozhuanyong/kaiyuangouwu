@@ -1,11 +1,16 @@
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
 import {
+    ConfigService,
+    GlobalSettingsService,
     isGraphQlErrorResult,
     OrderProcess,
     OrderService,
     ProductVariantService,
+    StockLevel,
     StockMovementService,
+    TransactionalConnection,
 } from '@vendure/core';
+import { LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import {
@@ -17,16 +22,26 @@ import {
 let orderService: OrderService;
 let productVariantService: ProductVariantService;
 let stockMovementService: StockMovementService;
+let connection: TransactionalConnection;
+let configService: ConfigService;
+let globalSettingsService: GlobalSettingsService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
     init(injector) {
         orderService = injector.get(OrderService);
         productVariantService = injector.get(ProductVariantService);
         stockMovementService = injector.get(StockMovementService);
+        connection = injector.get(TransactionalConnection);
+        configService = injector.get(ConfigService);
+        globalSettingsService = injector.get(GlobalSettingsService);
     },
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
-        if (toState !== 'ArrangingPayment') {
+        const entersPayment = toState === 'ArrangingPayment';
+        const confirmsPayment =
+            fromState === 'ArrangingPayment' &&
+            (toState === 'PaymentAuthorized' || toState === 'PaymentSettled');
+        if (!entersPayment && !confirmsPayment) {
             return;
         }
 
@@ -35,21 +50,42 @@ export const commerceOrderProcess: OrderProcess<string> = {
             return;
         }
 
-        if (!hasCompleteShippingAddress(ctx, order.shippingAddress)) {
-            return ctx.translate('message.commerce-physical-order-requires-complete-address');
-        }
-        if (!order.shippingLines?.length) {
-            return ctx.translate('message.commerce-physical-order-requires-shipping-method');
+        if (entersPayment) {
+            if (!hasCompleteShippingAddress(ctx, order.shippingAddress)) {
+                return ctx.translate('message.commerce-physical-order-requires-complete-address');
+            }
+            if (!order.shippingLines?.length) {
+                return ctx.translate('message.commerce-physical-order-requires-shipping-method');
+            }
         }
 
-        for (const line of order.lines) {
-            if (getOrderLineFulfillmentType(line) !== 'physical') {
-                continue;
+        const physicalLines = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
+        let lockedStockLevels: StockLevel[] | undefined;
+        if (confirmsPayment) {
+            const variantIds = [...new Set(physicalLines.map(line => String(line.productVariant.id)))].sort();
+            try {
+                lockedStockLevels = await connection
+                    .getRepository(ctx, StockLevel)
+                    .createQueryBuilder('stock')
+                    .setLock('pessimistic_write')
+                    .where('stock.productVariantId IN (:...variantIds)', { variantIds })
+                    .orderBy('stock.productVariantId', 'ASC')
+                    .addOrderBy('stock.stockLocationId', 'ASC')
+                    .getMany();
+            } catch (error) {
+                if (!(error instanceof LockNotSupportedOnGivenDriverError)) {
+                    throw error;
+                }
             }
-            const availableStock = await productVariantService.getSaleableStockLevel(
-                ctx,
-                line.productVariant,
-            );
+        }
+
+        for (const line of physicalLines) {
+            // Under MySQL REPEATABLE READ, a normal query after waiting for a row lock can
+            // still see the transaction's older snapshot. Calculate from the locking read
+            // itself so concurrent payment confirmations cannot both consume the same stock.
+            const availableStock = lockedStockLevels
+                ? await saleableStockFromLockedRows(ctx, line.productVariant, lockedStockLevels)
+                : await productVariantService.getSaleableStockLevel(ctx, line.productVariant);
             if (line.productVariant.trackInventory !== GlobalFlag.FALSE && line.quantity > availableStock) {
                 return ctx.translate('message.commerce-physical-product-insufficient-stock', {
                     productVariantName: line.productVariant.name,
@@ -60,18 +96,22 @@ export const commerceOrderProcess: OrderProcess<string> = {
 
     async onTransitionEnd(fromState, toState, { ctx, order }) {
         if (
-            fromState !== 'ArrangingPayment' ||
-            (toState !== 'PaymentAuthorized' && toState !== 'PaymentSettled')
+            fromState === 'ArrangingPayment' &&
+            (toState === 'PaymentAuthorized' || toState === 'PaymentSettled')
         ) {
-            return;
+            const physicalLines = order.lines.filter(
+                line => getOrderLineFulfillmentType(line) === 'physical',
+            );
+            if (physicalLines.length) {
+                await stockMovementService.createAllocationsForOrderLines(
+                    ctx,
+                    physicalLines.map(line => ({ orderLineId: line.id, quantity: line.quantity })),
+                );
+            }
         }
 
-        const physicalLines = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
-        if (physicalLines.length) {
-            await stockMovementService.createAllocationsForOrderLines(
-                ctx,
-                physicalLines.map(line => ({ orderLineId: line.id, quantity: line.quantity })),
-            );
+        if (toState !== 'PaymentSettled') {
+            return;
         }
 
         const digitalLines = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'digital');
@@ -86,3 +126,30 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
     },
 };
+
+async function saleableStockFromLockedRows(
+    ctx: Parameters<typeof productVariantService.getSaleableStockLevel>[0],
+    variant: Parameters<typeof productVariantService.getSaleableStockLevel>[1],
+    lockedStockLevels: StockLevel[],
+): Promise<number> {
+    const settings = await globalSettingsService.getSettings(ctx);
+    const inventoryNotTracked =
+        variant.trackInventory === GlobalFlag.FALSE ||
+        (variant.trackInventory === GlobalFlag.INHERIT && settings.trackInventory === false);
+    if (inventoryNotTracked) {
+        return Number.MAX_SAFE_INTEGER;
+    }
+    const stockLevels = lockedStockLevels.filter(
+        stockLevel => String(stockLevel.productVariantId) === String(variant.id),
+    );
+    const { stockOnHand, stockAllocated } =
+        await configService.catalogOptions.stockLocationStrategy.getAvailableStock(
+            ctx,
+            variant.id,
+            stockLevels,
+        );
+    const threshold = variant.useGlobalOutOfStockThreshold
+        ? settings.outOfStockThreshold
+        : variant.outOfStockThreshold;
+    return stockOnHand - stockAllocated - threshold;
+}
