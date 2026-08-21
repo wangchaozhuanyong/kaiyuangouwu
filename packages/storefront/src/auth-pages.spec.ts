@@ -21,26 +21,26 @@ const authPageProps = {
 };
 
 describe('loginErrorMessage', () => {
-    it('identifies an email address which has not been registered', () => {
+    it('does not reveal whether an account exists', () => {
         const error = new ShopApiError(
             'INVALID_CREDENTIALS_ERROR',
             'The provided credentials are invalid',
             'STOREFRONT_ACCOUNT_NOT_FOUND',
         );
 
-        expect(loginErrorMessage(error, 'zh')).toBe('该电子邮箱尚未注册');
-        expect(loginErrorMessage(error, 'en')).toBe('No account was found for this email address');
+        expect(loginErrorMessage(error, 'zh')).toBe('电子邮箱或密码错误，请检查后重试');
+        expect(loginErrorMessage(error, 'en')).toBe('The email address or password is incorrect');
     });
 
-    it('identifies an incorrect password', () => {
+    it('uses the same message for legacy wrong-password responses', () => {
         const error = new ShopApiError(
             'INVALID_CREDENTIALS_ERROR',
             'The provided credentials are invalid',
             'STOREFRONT_INVALID_PASSWORD',
         );
 
-        expect(loginErrorMessage(error, 'zh')).toBe('密码错误，请重新输入');
-        expect(loginErrorMessage(error, 'en')).toBe('The password is incorrect. Please try again');
+        expect(loginErrorMessage(error, 'zh')).toBe('电子邮箱或密码错误，请检查后重试');
+        expect(loginErrorMessage(error, 'en')).toBe('The email address or password is incorrect');
     });
 
     it('identifies an account which still needs email verification', () => {

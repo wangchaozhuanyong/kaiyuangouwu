@@ -78,11 +78,12 @@ export function splitCustomerName(
 export function loginErrorMessage(error: unknown, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
     if (error instanceof ShopApiError) {
-        if (error.authenticationError === 'STOREFRONT_ACCOUNT_NOT_FOUND') {
-            return isZh ? '该电子邮箱尚未注册' : 'No account was found for this email address';
-        }
-        if (error.authenticationError === 'STOREFRONT_INVALID_PASSWORD') {
-            return isZh ? '密码错误，请重新输入' : 'The password is incorrect. Please try again';
+        if (
+            error.authenticationError === 'STOREFRONT_INVALID_CREDENTIALS' ||
+            error.authenticationError === 'STOREFRONT_ACCOUNT_NOT_FOUND' ||
+            error.authenticationError === 'STOREFRONT_INVALID_PASSWORD'
+        ) {
+            return isZh ? '电子邮箱或密码错误，请检查后重试' : 'The email address or password is incorrect';
         }
         if (error.errorCode === 'NOT_VERIFIED_ERROR') {
             return isZh

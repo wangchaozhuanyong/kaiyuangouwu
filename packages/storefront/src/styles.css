@@ -36,7 +36,7 @@
     --bottom-navigation-height: 66px;
     --root-page-end-gap: 12px;
     --subpage-end-gap: 24px;
-    --footer-end-gap: 12px;
+    --footer-end-gap: 0px;
     --layer-nav: 20;
     --layer-sticky: 10;
     --layer-sheet: 50;
@@ -1573,7 +1573,7 @@ img {
 
 .legal-footer {
     margin: 0 10px;
-    padding: 22px 0 var(--footer-end-gap);
+    padding: 16px 0 var(--footer-end-gap);
     color: var(--muted);
     text-align: center;
     font-size: 12px;
