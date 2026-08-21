@@ -12,6 +12,7 @@ import { AddAfterSalesCenter1787203000000 } from './1787203000000-add-after-sale
 import { AddStorefrontReviews1787204800000 } from './1787204800000-add-storefront-reviews';
 import { AddOrderDeliveryEmail1787206600000 } from './1787206600000-add-order-delivery-email';
 import { AlignSearchStockDefaults1787328000000 } from './1787328000000-align-search-stock-defaults';
+import { NormalizeSearchStockMysqlColumns1787331600000 } from './1787331600000-normalize-search-stock-mysql-columns';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -374,4 +375,58 @@ describe('production migration compatibility', () => {
             }
         },
     );
+
+    it.each(['mysql', 'mariadb'] as const)(
+        'normalizes legacy search stock display widths on %s',
+        async databaseType => {
+            const table = new Table({
+                name: 'search_index_item',
+                columns: [
+                    new TableColumn({
+                        name: 'inStock',
+                        type: 'tinyint',
+                        width: 1,
+                        default: "'1'",
+                    }),
+                    new TableColumn({
+                        name: 'productInStock',
+                        type: 'tinyint',
+                        width: 1,
+                        default: "'1'",
+                    }),
+                ],
+            });
+            const changeColumn = vi.fn(() => Promise.resolve(undefined));
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                getTable: vi.fn(() => Promise.resolve(table)),
+                changeColumn,
+            } as unknown as QueryRunner;
+
+            await new NormalizeSearchStockMysqlColumns1787331600000().up(queryRunner);
+
+            expect(changeColumn).toHaveBeenCalledTimes(2);
+            for (const [, originalColumn, updatedColumn] of changeColumn.mock.calls) {
+                expect(updatedColumn).not.toBe(originalColumn);
+                expect(updatedColumn).toMatchObject({
+                    type: 'tinyint',
+                    default: 1,
+                    isNullable: false,
+                });
+                expect(updatedColumn.width).toBeUndefined();
+            }
+        },
+    );
+
+    it.each(['postgres', 'sqlite'] as const)('skips MySQL column normalization on %s', async databaseType => {
+        const getTable = vi.fn(() => Promise.resolve(undefined));
+        const queryRunner = {
+            connection: { options: { type: databaseType } },
+            getTable,
+        } as unknown as QueryRunner;
+
+        await new NormalizeSearchStockMysqlColumns1787331600000().up(queryRunner);
+
+        expect(getTable).not.toHaveBeenCalled();
+    });
 });
