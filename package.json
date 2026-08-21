@@ -117,5 +117,8 @@
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-jsdoc": "^45.0.0",
     "eslint-plugin-prefer-arrow": "^1.2.3"
+  },
+  "patchedDependencies": {
+    "husky@4.3.8": "patches/husky@4.3.8.patch"
   }
 }

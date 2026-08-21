@@ -1,0 +1,11 @@
+diff --git a/sh/husky.sh b/sh/husky.sh
+index c29bfbcf576e0f8ec2038fbb1ed5c6eba0643e2a..cd968b165ad8871d50bd19b137ce2550d5906fbe 100644
+--- a/sh/husky.sh
++++ b/sh/husky.sh
+@@ -86,5 +86,6 @@ case $packageManager in
+   "npminstall") run_command npx --no-install;;
+   "pnpm") run_command pnpx --no-install;;
+   "yarn") run_command yarn run --silent;;
++  "bun") run_command bun x;;
+   *) echo "Unknown package manager: $packageManager"; exit 0;;
+ esac
