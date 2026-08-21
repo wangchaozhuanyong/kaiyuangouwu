@@ -22,6 +22,7 @@ import { EnableSearchStockIndex1786773000000 } from './1786773000000-enable-sear
 import { AddAfterSalesCenter1787203000000 } from './1787203000000-add-after-sales-center';
 import { AddStorefrontReviews1787204800000 } from './1787204800000-add-storefront-reviews';
 import { AddOrderDeliveryEmail1787206600000 } from './1787206600000-add-order-delivery-email';
+import { AlignSearchStockDefaults1787328000000 } from './1787328000000-align-search-stock-defaults';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -48,4 +49,5 @@ export const devServerMigrations = [
     AddAfterSalesCenter1787203000000,
     AddStorefrontReviews1787204800000,
     AddOrderDeliveryEmail1787206600000,
+    AlignSearchStockDefaults1787328000000,
 ];

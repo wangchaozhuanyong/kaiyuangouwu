@@ -11,6 +11,7 @@ import { EnableMainlandChineseLanguage1786771200000 } from './1786771200000-enab
 import { AddAfterSalesCenter1787203000000 } from './1787203000000-add-after-sales-center';
 import { AddStorefrontReviews1787204800000 } from './1787204800000-add-storefront-reviews';
 import { AddOrderDeliveryEmail1787206600000 } from './1787206600000-add-order-delivery-email';
+import { AlignSearchStockDefaults1787328000000 } from './1787328000000-align-search-stock-defaults';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -340,6 +341,37 @@ describe('production migration compatibility', () => {
                     isNullable: true,
                 }),
             );
+        },
+    );
+
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'aligns search stock defaults without changing column metadata on %s',
+        async databaseType => {
+            const table = new Table({
+                name: 'search_index_item',
+                columns: [
+                    new TableColumn({ name: 'inStock', type: 'boolean', isNullable: false }),
+                    new TableColumn({ name: 'productInStock', type: 'boolean', isNullable: false }),
+                ],
+            });
+            const changeColumn = vi.fn(() => Promise.resolve(undefined));
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                getTable: vi.fn(() => Promise.resolve(table)),
+                changeColumn,
+            } as unknown as QueryRunner;
+
+            await new AlignSearchStockDefaults1787328000000().up(queryRunner);
+
+            expect(changeColumn).toHaveBeenCalledTimes(2);
+            for (const [, originalColumn, updatedColumn] of changeColumn.mock.calls) {
+                expect(updatedColumn).not.toBe(originalColumn);
+                expect(updatedColumn).toMatchObject({
+                    type: 'boolean',
+                    isNullable: false,
+                    default: true,
+                });
+            }
         },
     );
 });
