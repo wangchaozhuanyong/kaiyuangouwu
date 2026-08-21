@@ -21,7 +21,7 @@
 - 实例：`i-041a146558e432cbf`（`yunqiao-vendure-prod`）
 - 安全组：`sg-013cf38df187011ca`（`yunqiao-vendure-web`）
 - SSH 用户：`ubuntu`
-- 本机访问：未配置当前实例私钥，优先使用 AWS 控制台的 EC2 Instance Connect 浏览器终端
+- 本机访问：优先使用 AWS Systems Manager Session Manager；SSH 私钥仅保存在仓库外，发布时只允许当前管理员公网地址的 `/32`
 - 服务器仓库：`/var/www/kaiyuangouwu`
 - 候选/回滚目录：`/var/www/kaiyuangouwu-releases`
 - Vendure 上游：`127.0.0.1:3002`
@@ -30,10 +30,11 @@
 - Dashboard 静态目录：`/var/www/kaiyuangouwu/packages/dev-server/dist/dashboard`
 - Nginx 配置基线：`deploy/nginx/damatong.conf`
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
+- 异地备份：`yunqiao-vendure-backups-079740175286-ap-northeast-1`，实例角色上传，S3 保留 30 天，本地保留 14 天。
 
 Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源。2026-08-21 核对的 EC2 公网 IPv4 是 `52.196.65.143`；不要把该 IP 当成永久地址。发布前必须重新核对。
 
-当前 EC2 没有 SSM 托管状态，本机也没有当前实例私钥。若需要维护，使用 AWS 控制台的 EC2 Instance Connect 浏览器终端；连接前从 AWS 官方 `ip-ranges.json` 核对东京区 EC2 Instance Connect 服务前缀，只对该前缀临时开放 `22/tcp`，发布完成后立即撤销。2026-08-21 使用的前缀快照为 `3.112.23.0/29`，不得视为永久值。不要上传或提交私钥。
+当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。优先使用 Session Manager 维护；只有需要传输发布产物时才使用仓库外私钥，并将 `22/tcp` 临时限制为当前管理员公网地址的 `/32`。发布完成后立即撤销临时规则，不要上传或提交私钥。
 
 ## 发布门禁
 

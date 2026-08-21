@@ -3119,7 +3119,7 @@ interface CartPageProps {
     onRemoveCoupon: (couponCode: string) => Promise<string | null>;
 }
 
-function CartPage(props: CartPageProps) {
+export function CartPage(props: CartPageProps) {
     const {
         cart,
         customer,
@@ -3232,10 +3232,8 @@ function CartPage(props: CartPageProps) {
                 </div>
             )}
 
-            {customer && error && (
-                <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />
-            )}
-            {customer && locked && (
+            {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
+            {locked && (
                 <div className="cart-pending-actions">
                     <InlineError
                         message={
@@ -3251,30 +3249,33 @@ function CartPage(props: CartPageProps) {
                     </button>
                 </div>
             )}
-            {loading && (!customer || !cart) ? (
-                <ListSkeleton label={isZh ? '正在加载购物车' : 'Loading cart'} />
-            ) : !customer ? (
-                <section className="empty-state cart-auth-state" aria-labelledby="cart-auth-title">
-                    <span>
+            {!customer && !!lines.length && (
+                <section className="cart-guest-notice" aria-labelledby="cart-guest-title">
+                    <span className="cart-guest-icon">
                         <ShoppingBag />
                     </span>
-                    <strong id="cart-auth-title">
-                        {isZh ? '登录后使用购物车' : 'Sign in to use your cart'}
-                    </strong>
-                    <small>
-                        {isZh
-                            ? '请先登录或注册账户，再添加商品并完成结算'
-                            : 'Sign in or create an account to add products and complete checkout'}
-                    </small>
-                    <div className="guest-profile-actions cart-auth-actions">
+                    <div className="cart-guest-copy">
+                        <strong id="cart-guest-title">
+                            {isZh ? '游客购物车已保存' : 'Your guest cart is saved'}
+                        </strong>
+                        <small>
+                            {isZh
+                                ? '可以直接结算；登录后可同步购物车、订单和收货地址'
+                                : 'Check out now, or sign in to sync your cart, orders and addresses'}
+                        </small>
+                    </div>
+                    <div className="cart-guest-actions">
                         <button type="button" onClick={() => onNavigate({ name: 'login' })}>
-                            {isZh ? '登录' : 'Sign in'}
+                            {isZh ? '登录并同步' : 'Sign in and sync'}
                         </button>
                         <button type="button" onClick={() => onNavigate({ name: 'register' })}>
                             {isZh ? '注册账户' : 'Create account'}
                         </button>
                     </div>
                 </section>
+            )}
+            {loading && !cart ? (
+                <ListSkeleton label={isZh ? '正在加载购物车' : 'Loading cart'} />
             ) : !lines.length ? (
                 <EmptyState
                     icon={<ShoppingBag />}
@@ -5503,6 +5504,18 @@ function CartGroup({
                                     : formatMoney(0, market.currencyCode, locale)}
                             </b>
                             <div className="cart-line-actions">
+                                <button
+                                    type="button"
+                                    aria-label={
+                                        isZh
+                                            ? `删除 ${variant?.name ?? '商品'}`
+                                            : `Remove ${variant?.name ?? 'item'}`
+                                    }
+                                    onClick={() => onRemove(line.id)}
+                                    disabled={loading}
+                                >
+                                    <Trash2 />
+                                </button>
                                 <div>
                                     <button
                                         type="button"
