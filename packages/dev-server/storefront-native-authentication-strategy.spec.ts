@@ -1,9 +1,8 @@
-import { NativeAuthenticationStrategy, RequestContext, User, UserService } from '@vendure/core';
+import { NativeAuthenticationStrategy, RequestContext, User } from '@vendure/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-    STOREFRONT_ACCOUNT_NOT_FOUND,
-    STOREFRONT_INVALID_PASSWORD,
+    STOREFRONT_INVALID_CREDENTIALS,
     StorefrontNativeAuthenticationStrategy,
 } from './storefront-native-authentication-strategy';
 
@@ -14,37 +13,19 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-function strategyWithAccount(account?: User) {
-    const strategy = new StorefrontNativeAuthenticationStrategy();
-    const getUserByEmailAddress = vi.fn().mockResolvedValue(account);
-    Object.assign(strategy, {
-        storefrontUserService: { getUserByEmailAddress } as Pick<UserService, 'getUserByEmailAddress'>,
-    });
-    return { strategy, getUserByEmailAddress };
-}
-
 describe('StorefrontNativeAuthenticationStrategy', () => {
-    it('returns the authenticated user without running a second lookup', async () => {
+    it('returns the authenticated user', async () => {
         const user = { id: 'customer-user-1' } as User;
         vi.spyOn(NativeAuthenticationStrategy.prototype, 'authenticate').mockResolvedValue(user);
-        const { strategy, getUserByEmailAddress } = strategyWithAccount();
+        const strategy = new StorefrontNativeAuthenticationStrategy();
 
         await expect(strategy.authenticate(ctx, credentials)).resolves.toBe(user);
-        expect(getUserByEmailAddress).not.toHaveBeenCalled();
     });
 
-    it('reports an unknown account separately from a wrong password', async () => {
-        const account = { id: 'customer-user-1' } as User;
+    it('uses the same result for every invalid username or password', async () => {
         vi.spyOn(NativeAuthenticationStrategy.prototype, 'authenticate').mockResolvedValue(false);
+        const strategy = new StorefrontNativeAuthenticationStrategy();
 
-        const missingAccount = strategyWithAccount();
-        await expect(missingAccount.strategy.authenticate(ctx, credentials)).resolves.toBe(
-            STOREFRONT_ACCOUNT_NOT_FOUND,
-        );
-
-        const existingAccount = strategyWithAccount(account);
-        await expect(existingAccount.strategy.authenticate(ctx, credentials)).resolves.toBe(
-            STOREFRONT_INVALID_PASSWORD,
-        );
+        await expect(strategy.authenticate(ctx, credentials)).resolves.toBe(STOREFRONT_INVALID_CREDENTIALS);
     });
 });

@@ -6,21 +6,17 @@ import {
     NativeAuthenticationStrategy,
     RequestContext,
     User,
-    UserService,
 } from '@vendure/core';
 
-export const STOREFRONT_ACCOUNT_NOT_FOUND = 'STOREFRONT_ACCOUNT_NOT_FOUND';
-export const STOREFRONT_INVALID_PASSWORD = 'STOREFRONT_INVALID_PASSWORD';
+export const STOREFRONT_INVALID_CREDENTIALS = 'STOREFRONT_INVALID_CREDENTIALS';
 
 export class StorefrontNativeAuthenticationStrategy implements AuthenticationStrategy<NativeAuthenticationData> {
     readonly name = 'native';
 
     private readonly nativeStrategy = new NativeAuthenticationStrategy();
-    private storefrontUserService: UserService;
 
     async init(injector: Injector): Promise<void> {
         await this.nativeStrategy.init(injector);
-        this.storefrontUserService = injector.get(UserService);
     }
 
     defineInputType() {
@@ -32,9 +28,7 @@ export class StorefrontNativeAuthenticationStrategy implements AuthenticationStr
         if (user) {
             return user;
         }
-
-        const account = await this.storefrontUserService.getUserByEmailAddress(ctx, data.username);
-        return account ? STOREFRONT_INVALID_PASSWORD : STOREFRONT_ACCOUNT_NOT_FOUND;
+        return STOREFRONT_INVALID_CREDENTIALS;
     }
 
     verifyUserPassword(ctx: RequestContext, userId: ID, password: string): Promise<boolean> {

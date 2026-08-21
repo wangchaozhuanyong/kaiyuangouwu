@@ -34,11 +34,12 @@ import {
     defaultEmailHandlers,
     EmailEventHandlerWithAsyncData,
     EmailPlugin,
-    type EventWithAsyncData,
     type EmailPluginDevModeOptions,
     type EmailPluginOptions,
+    type EventWithAsyncData,
     FileBasedTemplateLoader,
 } from '@vendure/email-plugin';
+import { HardenPlugin } from '@vendure/harden-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
@@ -101,10 +102,7 @@ const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
             recipientEmail: string;
             digitalDeliveryActionUrl?: string;
         };
-        type DefaultOrderEmailEvent = EventWithAsyncData<
-            OrderStateTransitionEvent,
-            DefaultOrderEmailData
-        >;
+        type DefaultOrderEmailEvent = EventWithAsyncData<OrderStateTransitionEvent, DefaultOrderEmailData>;
         const orderHandler = handler as EmailEventHandlerWithAsyncData<
             DefaultOrderEmailData,
             'order-confirmation',
@@ -116,10 +114,14 @@ const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
             const data = await loadDefaultOrderData(context);
             const isDigitalOrder =
                 summarizeOrderFulfillment(context.event.order).fulfillmentType === 'DIGITAL';
+            const customerEmail = context.event.order.customer?.emailAddress;
+            if (!customerEmail) {
+                throw new Error('Order confirmation email requires an order customer email address');
+            }
             const recipientEmail = orderConfirmationRecipient(
                 isDigitalOrder,
                 context.event.order.customFields?.deliveryEmail,
-                context.event.order.customer!.emailAddress,
+                customerEmail,
             );
             let digitalDeliveryActionUrl: string | undefined;
             if (isDigitalOrder) {
@@ -600,6 +602,15 @@ export const devConfig: VendureConfig = {
         //     platformFeeSKU: 'FEE',
         // }),
         ...(!IS_PRODUCTION && !BOOTSTRAP_BASE_SCHEMA ? [ReadonlySettingsTestPlugin] : []),
+        ...(IS_PRODUCTION
+            ? [
+                  HardenPlugin.init({
+                      apiMode: 'prod',
+                      hideFieldSuggestions: true,
+                      maxQueryComplexity: productionQueryComplexity(),
+                  }),
+              ]
+            : []),
         // FieldTestPlugin,
         OperationsDashboardPlugin,
         ...(!BOOTSTRAP_BASE_SCHEMA
@@ -656,6 +667,14 @@ export const devConfig: VendureConfig = {
             : DashboardPlugin,
     ],
 };
+
+function productionQueryComplexity(): number {
+    const value = Number(process.env.VENDURE_MAX_QUERY_COMPLEXITY ?? 1_000);
+    if (!Number.isInteger(value) || value < 100 || value > 5_000) {
+        throw new Error('VENDURE_MAX_QUERY_COMPLEXITY must be an integer between 100 and 5000');
+    }
+    return value;
+}
 
 function getDbConfig(): DataSourceOptions {
     const dbType = process.env.DB || 'mysql';

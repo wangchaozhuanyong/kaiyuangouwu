@@ -92,6 +92,15 @@ function isPersistentDirectory(value) {
     return path.isAbsolute(directory) && directory !== path.parse(directory).root;
 }
 
+function isS3Uri(value) {
+    try {
+        const url = new URL(normalized(value));
+        return url.protocol === 's3:' && Boolean(url.hostname);
+    } catch {
+        return false;
+    }
+}
+
 function hasRealEmailFrom(value) {
     const from = normalized(value).toLowerCase();
     return /@[^\s<>@]+\.[^\s<>@]+/u.test(from) && !from.includes('@example.com');
@@ -255,6 +264,18 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         passed: normalized(env.DB_SYNCHRONIZE) === 'false',
         detail: normalized(env.DB_SYNCHRONIZE) === 'false' ? 'disabled' : 'must be false',
     });
+    if (isSingleHost) {
+        const offsiteBackupReady =
+            normalized(env.VENDURE_REQUIRE_OFFSITE_BACKUP) === 'true' && isS3Uri(env.VENDURE_BACKUP_S3_URI);
+        pushCheck(checks, {
+            id: 'offsite-database-backup',
+            title: '数据库异地备份',
+            passed: offsiteBackupReady,
+            detail: offsiteBackupReady
+                ? 'required S3 destination configured'
+                : 'single-host production requires VENDURE_REQUIRE_OFFSITE_BACKUP=true and an s3:// destination',
+        });
+    }
 
     const assetUploadDir = normalized(env.VENDURE_ASSET_UPLOAD_DIR);
     const importAssetsDir = normalized(env.VENDURE_IMPORT_ASSETS_DIR);

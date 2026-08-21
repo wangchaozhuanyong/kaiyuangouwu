@@ -1,11 +1,12 @@
 import { bootstrap, JobQueueService, runMigrations } from '@vendure/core';
 
 import { devConfig } from './dev-config';
+import { shouldRunMigrations } from './runtime-flags';
 
 /**
  * This bootstraps the dev server, used for testing Vendure during development.
  */
-const prepareDatabase = process.env.RUN_MIGRATIONS === 'false' ? Promise.resolve() : runMigrations(devConfig);
+const prepareDatabase = shouldRunMigrations() ? runMigrations(devConfig) : Promise.resolve();
 
 prepareDatabase
     .then(() => bootstrap(devConfig))

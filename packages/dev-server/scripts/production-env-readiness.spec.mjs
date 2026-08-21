@@ -182,13 +182,35 @@ void test('allows a verified single-host database and system monitoring profile'
             OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: '',
             OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: '',
             OTEL_SERVICE_NAME: '',
+            VENDURE_REQUIRE_OFFSITE_BACKUP: 'true',
+            VENDURE_BACKUP_S3_URI: 's3://production-backups/vendure/mysql',
         }),
         'server',
         confirmedSingleHostControls,
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 28, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 29, manual: 0, blocker: 0 });
+});
+
+void test('blocks a single-host release without a required offsite backup destination', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            PRODUCTION_DEPLOYMENT_PROFILE: 'single-host',
+            PRODUCTION_OBSERVABILITY_MODE: 'system',
+            DB_HOST: '127.0.0.1',
+            IS_INSTRUMENTED: 'false',
+            VENDURE_REQUIRE_OFFSITE_BACKUP: 'false',
+            VENDURE_BACKUP_S3_URI: '',
+        }),
+        'server',
+        confirmedSingleHostControls,
+    );
+
+    assert.equal(
+        report.checks.some(check => check.id === 'offsite-database-backup' && check.status === 'blocker'),
+        true,
+    );
 });
 
 void test('blocks an unverified local database in the single-host profile', () => {
