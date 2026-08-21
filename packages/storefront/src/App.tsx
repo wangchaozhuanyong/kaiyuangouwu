@@ -70,6 +70,7 @@ import {
 
 import { ShopApi, ShopApiError } from './api';
 import { formatBusinessDate } from './business-time';
+import { centeredHorizontalScrollLeft } from './category-navigation';
 import {
     enabledMarkets,
     languageCodeFor,
@@ -2641,11 +2642,8 @@ function CategoryPage(props: CategoryPageProps) {
     } = props;
     const queryClient = useQueryClient();
     const isZh = language === 'zh';
-    const categoryPageRef = useRef<HTMLElement>(null);
-    const sortBarRef = useRef<HTMLElement>(null);
     const [filterOpen, setFilterOpen] = useState(false);
     const [allCategoriesOpen, setAllCategoriesOpen] = useState(false);
-    const [stickyState, setStickyState] = useState({ navigation: false, sort: false });
     const [draftType, setDraftType] = useState<'all' | FulfillmentType>(fulfillmentFilter);
     const [draftStock, setDraftStock] = useState(inStockOnly);
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
@@ -2762,41 +2760,6 @@ function CategoryPage(props: CategoryPageProps) {
         return () => document.removeEventListener('keydown', closeOnEscape);
     }, [allCategoriesOpen]);
 
-    useEffect(() => {
-        let animationFrame = 0;
-        const updateStickyState = () => {
-            if (animationFrame) return;
-            animationFrame = window.requestAnimationFrame(() => {
-                animationFrame = 0;
-                const page = categoryPageRef.current;
-                const sortBar = sortBarRef.current;
-                if (!page || !sortBar) return;
-
-                const stickyTop = Number.parseFloat(
-                    getComputedStyle(page).getPropertyValue('--category-content-sticky-top'),
-                );
-                const nextState = {
-                    navigation: window.scrollY > 2,
-                    sort: Number.isFinite(stickyTop) && sortBar.getBoundingClientRect().top <= stickyTop + 1,
-                };
-                setStickyState(current =>
-                    current.navigation === nextState.navigation && current.sort === nextState.sort
-                        ? current
-                        : nextState,
-                );
-            });
-        };
-
-        updateStickyState();
-        window.addEventListener('scroll', updateStickyState, { passive: true });
-        window.addEventListener('resize', updateStickyState);
-        return () => {
-            window.removeEventListener('scroll', updateStickyState);
-            window.removeEventListener('resize', updateStickyState);
-            window.cancelAnimationFrame(animationFrame);
-        };
-    }, []);
-
     const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
         const collectionMatch =
@@ -2816,148 +2779,149 @@ function CategoryPage(props: CategoryPageProps) {
         '/storefront/default-hero.jpg';
 
     return (
-        <main
-            ref={categoryPageRef}
-            className={`page category-page${stickyState.navigation ? ' is-navigation-scrolled' : ''}${stickyState.sort ? ' is-sort-stuck' : ''}`}
-        >
-            <header className="topbar category-topbar">
-                <h1 className="topbar-title">{isZh ? '商品' : 'Shop'}</h1>
-                <button
-                    className="search-trigger"
-                    type="button"
-                    onClick={() => onNavigate({ name: 'search' })}
-                >
-                    <Search aria-hidden="true" />
-                    <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
-                </button>
-                <NoticeButton language={language} onClick={onNotify} />
-            </header>
+        <main className="page category-page">
+            <div className="category-navigation-shell">
+                <header className="topbar category-topbar">
+                    <h1 className="topbar-title">{isZh ? '商品' : 'Shop'}</h1>
+                    <button
+                        className="search-trigger"
+                        type="button"
+                        onClick={() => onNavigate({ name: 'search' })}
+                    >
+                        <Search aria-hidden="true" />
+                        <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
+                    </button>
+                    <NoticeButton language={language} onClick={onNotify} />
+                </header>
 
-            <section
-                className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
-                aria-label={isZh ? '商品分类切换' : 'Category switcher'}
-            >
-                {!allCategoriesOpen ? (
-                    <div className="primary-category-strip">
-                        <nav
-                            className="primary-categories"
-                            aria-label={isZh ? '一级分类' : 'Main categories'}
-                        >
-                            {primaryCollections.map(collection => {
-                                const image = primaryCollectionImage(collection);
-                                return (
-                                    <button
-                                        type="button"
-                                        key={collection.id}
-                                        className={
-                                            collection.id === activeCollectionId ? 'is-active' : undefined
-                                        }
-                                        aria-pressed={collection.id === activeCollectionId}
-                                        onClick={event => {
-                                            onCollectionChange(
-                                                collection.id,
-                                                collection.children?.[0]?.id ?? collection.id,
-                                            );
-                                            event.currentTarget.scrollIntoView({
-                                                behavior: 'smooth',
-                                                block: 'nearest',
-                                                inline: 'center',
-                                            });
-                                        }}
-                                    >
-                                        <span className="primary-category-image" aria-hidden="true">
-                                            {image ? (
-                                                <SafeImage
-                                                    src={image}
-                                                    alt=""
-                                                    imageKind="thumbnail"
-                                                    loading="lazy"
-                                                />
-                                            ) : (
-                                                <span className="primary-category-placeholder">
-                                                    <LayoutGrid aria-hidden="true" />
-                                                </span>
-                                            )}
-                                        </span>
-                                        <span className="primary-category-label">{collection.name}</span>
-                                    </button>
-                                );
-                            })}
-                        </nav>
-                        <button
-                            type="button"
-                            className="primary-categories-all"
-                            aria-expanded="false"
-                            aria-label={isZh ? '展开全部分类' : 'Expand all categories'}
-                            onClick={() => setAllCategoriesOpen(true)}
-                        >
-                            <span aria-hidden="true">
-                                {isZh ? (
-                                    <>
-                                        全<br />部
-                                    </>
-                                ) : (
-                                    'All'
-                                )}
-                            </span>
-                            <ChevronDown aria-hidden="true" />
-                        </button>
-                    </div>
-                ) : (
-                    <div className="all-primary-categories">
-                        <h2>{isZh ? '全部分类' : 'All categories'}</h2>
-                        <nav
-                            className="all-primary-category-grid"
-                            aria-label={isZh ? '全部分类' : 'All categories'}
-                        >
-                            {primaryCollections.map(collection => {
-                                const image = primaryCollectionImage(collection);
-                                return (
-                                    <button
-                                        type="button"
-                                        key={collection.id}
-                                        className={
-                                            collection.id === activeCollectionId ? 'is-active' : undefined
-                                        }
-                                        aria-pressed={collection.id === activeCollectionId}
-                                        onClick={() => {
-                                            onCollectionChange(
-                                                collection.id,
-                                                collection.children?.[0]?.id ?? collection.id,
-                                            );
-                                            setAllCategoriesOpen(false);
-                                        }}
-                                    >
-                                        <span className="all-primary-category-image" aria-hidden="true">
-                                            {image ? (
-                                                <SafeImage
-                                                    src={image}
-                                                    alt=""
-                                                    imageKind="thumbnail"
-                                                    loading="lazy"
-                                                />
-                                            ) : (
-                                                <span className="primary-category-placeholder">
-                                                    <LayoutGrid aria-hidden="true" />
-                                                </span>
-                                            )}
-                                        </span>
-                                        <span>{collection.name}</span>
-                                    </button>
-                                );
-                            })}
-                        </nav>
-                        <button
-                            type="button"
-                            className="all-primary-categories-collapse"
-                            onClick={() => setAllCategoriesOpen(false)}
-                        >
-                            <span>{isZh ? '点击收起' : 'Collapse'}</span>
-                            <ChevronUp aria-hidden="true" />
-                        </button>
-                    </div>
-                )}
-            </section>
+                <section
+                    className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
+                    aria-label={isZh ? '商品分类切换' : 'Category switcher'}
+                >
+                    {!allCategoriesOpen ? (
+                        <div className="primary-category-strip">
+                            <nav
+                                className="primary-categories"
+                                aria-label={isZh ? '一级分类' : 'Main categories'}
+                            >
+                                {primaryCollections.map(collection => {
+                                    const image = primaryCollectionImage(collection);
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={collection.id}
+                                            className={
+                                                collection.id === activeCollectionId ? 'is-active' : undefined
+                                            }
+                                            aria-pressed={collection.id === activeCollectionId}
+                                            onClick={event => {
+                                                onCollectionChange(
+                                                    collection.id,
+                                                    collection.children?.[0]?.id ?? collection.id,
+                                                );
+                                                const item = event.currentTarget;
+                                                const scroller = item.parentElement;
+                                                if (!scroller) return;
+                                                scroller.scrollTo({
+                                                    left: centeredHorizontalScrollLeft(scroller, item),
+                                                    behavior: 'smooth',
+                                                });
+                                            }}
+                                        >
+                                            <span className="primary-category-image" aria-hidden="true">
+                                                {image ? (
+                                                    <SafeImage
+                                                        src={image}
+                                                        alt=""
+                                                        imageKind="thumbnail"
+                                                        loading="lazy"
+                                                    />
+                                                ) : (
+                                                    <span className="primary-category-placeholder">
+                                                        <LayoutGrid aria-hidden="true" />
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className="primary-category-label">{collection.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </nav>
+                            <button
+                                type="button"
+                                className="primary-categories-all"
+                                aria-expanded="false"
+                                aria-label={isZh ? '展开全部分类' : 'Expand all categories'}
+                                onClick={() => setAllCategoriesOpen(true)}
+                            >
+                                <span aria-hidden="true">
+                                    {isZh ? (
+                                        <>
+                                            全<br />部
+                                        </>
+                                    ) : (
+                                        'All'
+                                    )}
+                                </span>
+                                <ChevronDown aria-hidden="true" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="all-primary-categories">
+                            <h2>{isZh ? '全部分类' : 'All categories'}</h2>
+                            <nav
+                                className="all-primary-category-grid"
+                                aria-label={isZh ? '全部分类' : 'All categories'}
+                            >
+                                {primaryCollections.map(collection => {
+                                    const image = primaryCollectionImage(collection);
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={collection.id}
+                                            className={
+                                                collection.id === activeCollectionId ? 'is-active' : undefined
+                                            }
+                                            aria-pressed={collection.id === activeCollectionId}
+                                            onClick={() => {
+                                                onCollectionChange(
+                                                    collection.id,
+                                                    collection.children?.[0]?.id ?? collection.id,
+                                                );
+                                                setAllCategoriesOpen(false);
+                                            }}
+                                        >
+                                            <span className="all-primary-category-image" aria-hidden="true">
+                                                {image ? (
+                                                    <SafeImage
+                                                        src={image}
+                                                        alt=""
+                                                        imageKind="thumbnail"
+                                                        loading="lazy"
+                                                    />
+                                                ) : (
+                                                    <span className="primary-category-placeholder">
+                                                        <LayoutGrid aria-hidden="true" />
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span>{collection.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </nav>
+                            <button
+                                type="button"
+                                className="all-primary-categories-collapse"
+                                onClick={() => setAllCategoriesOpen(false)}
+                            >
+                                <span>{isZh ? '点击收起' : 'Collapse'}</span>
+                                <ChevronUp aria-hidden="true" />
+                            </button>
+                        </div>
+                    )}
+                </section>
+            </div>
 
             <div className={`category-layout ${hasChildCategories ? '' : 'is-single-level'}`}>
                 {hasChildCategories && (
@@ -3004,7 +2968,6 @@ function CategoryPage(props: CategoryPageProps) {
                         </span>
                     </button>
                     <nav
-                        ref={sortBarRef}
                         className="sort-bar sort-bar-five"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
                     >
