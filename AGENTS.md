@@ -55,8 +55,8 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 - Canonical runbook: `deploy/DEPLOYMENT_RUNBOOK.md`. Read it before every production release and update it when the topology changes.
 - Production storefront: `https://damatong.net` (also `www.damatong.net`).
 - Production dashboard: `https://console.damatong.net/dashboard/`.
-- AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-06e8d9728be77c331`; security group: `sg-068b47d4049f71176`.
-- Current public IPv4: `3.113.54.188`; SSH user: `ubuntu`; local key path: `/Users/wangchao/Desktop/yamaxunmishi/aws-key.pem`.
+- AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-041a146558e432cbf`; security group: `sg-013cf38df187011ca`.
+- Current public IPv4 snapshot: `52.196.65.143`; SSH user: `ubuntu`. No current-instance private key is configured locally; use the access procedure in the deployment runbook.
 - Server repository: `/var/www/kaiyuangouwu`; branch: `main`; Vendure upstream: `127.0.0.1:3002`.
 - PM2 processes: `vendure-api` and `vendure-worker`.
 - Nginx storefront root: `/var/www/kaiyuangouwu/packages/storefront/dist`; the dashboard is served from `/var/www/kaiyuangouwu/packages/dev-server/dist/dashboard` by Vendure.

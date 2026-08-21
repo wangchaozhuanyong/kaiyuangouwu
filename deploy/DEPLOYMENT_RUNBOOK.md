@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-20
+最后核对：2026-08-21
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -18,10 +18,10 @@
 
 - 云平台：AWS EC2
 - 区域：`ap-northeast-1`（东京）
-- 实例：`i-06e8d9728be77c331`（`yunqiao-vendure-tokyo`）
-- 安全组：`sg-068b47d4049f71176`
+- 实例：`i-041a146558e432cbf`（`yunqiao-vendure-prod`）
+- 安全组：`sg-013cf38df187011ca`（`yunqiao-vendure-web`）
 - SSH 用户：`ubuntu`
-- 本机私钥路径：`/Users/wangchao/Desktop/yamaxunmishi/aws-key.pem`
+- 本机访问：未配置当前实例私钥，优先使用 AWS 控制台的 EC2 Instance Connect 浏览器终端
 - 服务器仓库：`/var/www/kaiyuangouwu`
 - 候选/回滚目录：`/var/www/kaiyuangouwu-releases`
 - Vendure 上游：`127.0.0.1:3002`
@@ -31,9 +31,9 @@
 - Nginx 配置基线：`deploy/nginx/damatong.conf`
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
 
-Cloudflare DNS 才是当前源站地址的准确信息来源。2026-08-20 的快照是 `damatong.net`、`console.damatong.net`、`cdn.damatong.net` 均指向 `3.113.54.188`；不要把该 IP 当成永久地址。发布前先从 Cloudflare DNS 和 EC2 实例详情重新核对。
+Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源。2026-08-21 核对的 EC2 公网 IPv4 是 `52.196.65.143`；不要把该 IP 当成永久地址。发布前必须重新核对。
 
-当前 EC2 没有 SSM 托管状态。若本机公网 SSH 不通，使用 AWS CloudShell 生成临时密钥，通过 EC2 Instance Connect 写入 60 秒公钥，再从 CloudShell 连接；只临时开放 CloudShell 当前公网 IP 的 `22/tcp`，发布完成后立即撤销。不要把本地私钥上传到 CloudShell。
+当前 EC2 没有 SSM 托管状态，本机也没有当前实例私钥。若需要维护，使用 AWS 控制台的 EC2 Instance Connect 浏览器终端；连接前从 AWS 官方 `ip-ranges.json` 核对东京区 EC2 Instance Connect 服务前缀，只对该前缀临时开放 `22/tcp`，发布完成后立即撤销。2026-08-21 使用的前缀快照为 `3.112.23.0/29`，不得视为永久值。不要上传或提交私钥。
 
 ## 发布门禁
 
