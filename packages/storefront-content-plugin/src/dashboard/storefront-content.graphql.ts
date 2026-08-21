@@ -2,6 +2,9 @@ import { gql } from 'graphql-tag';
 
 export const storefrontContentBlocksQuery = gql`
     query StorefrontContentBlocks {
+        storefrontContentSettings {
+            heroAutoplayIntervalSeconds
+        }
         storefrontContentBlocks {
             id
             createdAt
@@ -61,6 +64,14 @@ export const updateStorefrontContentBlockMutation = gql`
     mutation UpdateStorefrontContentBlock($input: UpdateStorefrontContentBlockInput!) {
         updateStorefrontContentBlock(input: $input) {
             id
+        }
+    }
+`;
+
+export const updateStorefrontContentSettingsMutation = gql`
+    mutation UpdateStorefrontContentSettings($input: UpdateStorefrontContentSettingsInput!) {
+        updateStorefrontContentSettings(input: $input) {
+            heroAutoplayIntervalSeconds
         }
     }
 `;
@@ -153,5 +164,8 @@ export interface ContentBlock {
 }
 
 export interface StorefrontContentBlocksResult {
+    storefrontContentSettings: {
+        heroAutoplayIntervalSeconds: number;
+    };
     storefrontContentBlocks: ContentBlock[];
 }

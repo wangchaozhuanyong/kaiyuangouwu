@@ -22,6 +22,7 @@ import {
     StorefrontCheckoutSession,
     StorefrontConfig,
     StorefrontContentBlock,
+    StorefrontContentResponse,
     StorefrontReview,
     StorefrontReviewCandidate,
     StorefrontReviewList,
@@ -361,10 +362,16 @@ export class ShopApi {
         };
     }
 
-    async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentBlock[]> {
-        const result = await this.request<{ storefrontContent: StorefrontContentBlock[] }>(
+    async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
+        const result = await this.request<{
+            storefrontContent: StorefrontContentBlock[];
+            storefrontContentSettings?: { heroAutoplayIntervalSeconds: number };
+        }>(
             `
             query StorefrontContent {
+                storefrontContentSettings {
+                    heroAutoplayIntervalSeconds
+                }
                 storefrontContent {
                     id
                     code
@@ -398,7 +405,13 @@ export class ShopApi {
             undefined,
             signal,
         );
-        return result.storefrontContent;
+        return {
+            blocks: result.storefrontContent,
+            settings: {
+                heroAutoplayIntervalSeconds:
+                    result.storefrontContentSettings?.heroAutoplayIntervalSeconds ?? 5,
+            },
+        };
     }
 
     async products(take = 16, signal?: AbortSignal): Promise<Product[]> {

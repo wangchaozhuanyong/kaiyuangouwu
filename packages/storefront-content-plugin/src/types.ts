@@ -52,3 +52,7 @@ export interface UpdateStorefrontContentBlockInput extends Partial<
     translations?: StorefrontContentBlockTranslationInput[] | null;
     items?: StorefrontContentItemInput[] | null;
 }
+
+export interface UpdateStorefrontContentSettingsInput {
+    heroAutoplayIntervalSeconds: number;
+}

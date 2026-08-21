@@ -57,6 +57,10 @@ const commonTypes = gql`
         ctaLabel: String!
         items: [StorefrontContentItem!]!
     }
+
+    type StorefrontContentSettings {
+        heroAutoplayIntervalSeconds: Int!
+    }
 `;
 
 export const shopApiExtensions = gql`
@@ -64,6 +68,7 @@ export const shopApiExtensions = gql`
 
     extend type Query {
         storefrontContent: [StorefrontContentBlock!]!
+        storefrontContentSettings: StorefrontContentSettings!
     }
 `;
 
@@ -151,9 +156,14 @@ export const adminApiExtensions = gql`
         items: [StorefrontContentItemInput!]
     }
 
+    input UpdateStorefrontContentSettingsInput {
+        heroAutoplayIntervalSeconds: Int!
+    }
+
     extend type Query {
         storefrontContentBlocks: [StorefrontContentBlock!]!
         storefrontContentBlock(id: ID!): StorefrontContentBlock
+        storefrontContentSettings: StorefrontContentSettings!
     }
 
     extend type Mutation {
@@ -161,5 +171,8 @@ export const adminApiExtensions = gql`
         updateStorefrontContentBlock(input: UpdateStorefrontContentBlockInput!): StorefrontContentBlock!
         reorderStorefrontContentBlocks(ids: [ID!]!): [StorefrontContentBlock!]!
         deleteStorefrontContentBlock(id: ID!): DeletionResponse!
+        updateStorefrontContentSettings(
+            input: UpdateStorefrontContentSettingsInput!
+        ): StorefrontContentSettings!
     }
 `;

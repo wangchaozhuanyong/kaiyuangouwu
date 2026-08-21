@@ -10,6 +10,9 @@ import {
 } from '@vendure/core';
 
 import {
+    DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    MAX_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    MIN_HERO_AUTOPLAY_INTERVAL_SECONDS,
     storefrontContentBlockTypes,
     StorefrontContentTargetType,
     storefrontContentTargetTypes,
@@ -18,12 +21,14 @@ import { StorefrontContentBlockTranslation } from './entities/storefront-content
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
+import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import {
     CreateStorefrontContentBlockInput,
     StorefrontContentBlockTranslationInput,
     StorefrontContentItemInput,
     StorefrontContentItemTranslationInput,
     UpdateStorefrontContentBlockInput,
+    UpdateStorefrontContentSettingsInput,
 } from './types';
 
 @Injectable()
@@ -59,6 +64,33 @@ export class StorefrontContentService {
                 block => (!block.startsAt || block.startsAt <= now) && (!block.endsAt || block.endsAt > now),
             )
             .map(block => this.translateBlock(block, ctx, true));
+    }
+
+    async getSettings(ctx: RequestContext): Promise<{ heroAutoplayIntervalSeconds: number }> {
+        const settings = await this.connection.getRepository(ctx, StorefrontContentSettings).findOne({
+            where: { channelId: ctx.channelId },
+        });
+        return {
+            heroAutoplayIntervalSeconds:
+                settings?.heroAutoplayIntervalSeconds ?? DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
+        };
+    }
+
+    async updateSettings(
+        ctx: RequestContext,
+        input: UpdateStorefrontContentSettingsInput,
+    ): Promise<{ heroAutoplayIntervalSeconds: number }> {
+        this.validateHeroAutoplayInterval(input.heroAutoplayIntervalSeconds);
+        const repository = this.connection.getRepository(ctx, StorefrontContentSettings);
+        const settings =
+            (await repository.findOne({ where: { channelId: ctx.channelId } })) ??
+            new StorefrontContentSettings({
+                channel: ctx.channel,
+                channelId: ctx.channelId,
+            });
+        settings.heroAutoplayIntervalSeconds = input.heroAutoplayIntervalSeconds;
+        const saved = await repository.save(settings);
+        return { heroAutoplayIntervalSeconds: saved.heroAutoplayIntervalSeconds };
     }
 
     async create(
@@ -411,6 +443,18 @@ export class StorefrontContentService {
         const normalized = this.optionalText(value);
         if (normalized && !/^#[0-9a-f]{6}$/i.test(normalized)) {
             throw new UserInputError(`${label}必须使用六位十六进制颜色，例如 #ffffff`);
+        }
+    }
+
+    private validateHeroAutoplayInterval(value: number): void {
+        if (
+            !Number.isInteger(value) ||
+            value < MIN_HERO_AUTOPLAY_INTERVAL_SECONDS ||
+            value > MAX_HERO_AUTOPLAY_INTERVAL_SECONDS
+        ) {
+            throw new UserInputError(
+                `轮播自动切换间隔必须是 ${MIN_HERO_AUTOPLAY_INTERVAL_SECONDS} 到 ${MAX_HERO_AUTOPLAY_INTERVAL_SECONDS} 秒之间的整数`,
+            );
         }
     }
 

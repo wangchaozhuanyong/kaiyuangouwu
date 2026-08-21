@@ -7,9 +7,10 @@ import { StorefrontContentBlockTranslation } from './storefront-content-block-tr
 import { StorefrontContentBlock } from './storefront-content-block.entity';
 import { StorefrontContentItemTranslation } from './storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './storefront-content-item.entity';
+import { StorefrontContentSettings } from './storefront-content-settings.entity';
 
 describe('storefront content entity metadata', () => {
-    it('registers all four plugin entities', () => {
+    it('registers all five plugin entities', () => {
         const targets = getMetadataArgsStorage().tables.map(table => table.target);
 
         expect(targets).toEqual(
@@ -18,6 +19,7 @@ describe('storefront content entity metadata', () => {
                 StorefrontContentBlockTranslation,
                 StorefrontContentItem,
                 StorefrontContentItemTranslation,
+                StorefrontContentSettings,
             ]),
         );
     });
@@ -31,6 +33,19 @@ describe('storefront content entity metadata', () => {
 
         expect(index).toMatchObject({
             columns: ['channelId', 'code'],
+            unique: true,
+        });
+    });
+
+    it('keeps one settings record per Channel', () => {
+        const index = getMetadataArgsStorage().indices.find(
+            item =>
+                item.target === StorefrontContentSettings &&
+                item.name === 'IDX_storefront_content_settings_channel',
+        );
+
+        expect(index).toMatchObject({
+            columns: ['channelId'],
             unique: true,
         });
     });
@@ -64,12 +79,16 @@ describe('storefront content entity metadata', () => {
         const itemTranslationRelation = relations.find(
             item => item.target === StorefrontContentItemTranslation && item.propertyName === 'base',
         );
+        const settingsChannelRelation = relations.find(
+            item => item.target === StorefrontContentSettings && item.propertyName === 'channel',
+        );
 
         for (const relation of [
             channelRelation,
             itemRelation,
             blockTranslationRelation,
             itemTranslationRelation,
+            settingsChannelRelation,
         ]) {
             expect(relation?.options).toMatchObject({ nullable: false, onDelete: 'CASCADE' });
         }
@@ -82,6 +101,7 @@ describe('storefront content entity metadata', () => {
             [StorefrontContentBlockTranslation, 'base', 'FK_storefront_content_block_translation_base'],
             [StorefrontContentItem, 'block', 'FK_storefront_content_item_block'],
             [StorefrontContentItemTranslation, 'base', 'FK_storefront_content_item_translation_base'],
+            [StorefrontContentSettings, 'channel', 'FK_storefront_content_settings_channel'],
         ] as const;
 
         for (const [target, propertyName, foreignKeyConstraintName] of expected) {

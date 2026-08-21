@@ -3,7 +3,11 @@ import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendur
 
 import { storefrontContentPermission } from './constants';
 import { StorefrontContentService } from './storefront-content.service';
-import { CreateStorefrontContentBlockInput, UpdateStorefrontContentBlockInput } from './types';
+import {
+    CreateStorefrontContentBlockInput,
+    UpdateStorefrontContentBlockInput,
+    UpdateStorefrontContentSettingsInput,
+} from './types';
 
 @Resolver()
 export class StorefrontContentShopResolver {
@@ -13,6 +17,12 @@ export class StorefrontContentShopResolver {
     @Allow(Permission.Public)
     storefrontContent(@Ctx() ctx: RequestContext) {
         return this.storefrontContentService.findPublished(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.Public)
+    storefrontContentSettings(@Ctx() ctx: RequestContext) {
+        return this.storefrontContentService.getSettings(ctx);
     }
 }
 
@@ -30,6 +40,12 @@ export class StorefrontContentAdminResolver {
     @Allow(storefrontContentPermission.Read)
     storefrontContentBlock(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.storefrontContentService.findOneForAdmin(ctx, id);
+    }
+
+    @Query()
+    @Allow(storefrontContentPermission.Read)
+    storefrontContentSettings(@Ctx() ctx: RequestContext) {
+        return this.storefrontContentService.getSettings(ctx);
     }
 
     @Transaction()
@@ -64,5 +80,15 @@ export class StorefrontContentAdminResolver {
     @Allow(storefrontContentPermission.Delete)
     deleteStorefrontContentBlock(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.storefrontContentService.delete(ctx, id);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(storefrontContentPermission.Update)
+    updateStorefrontContentSettings(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateStorefrontContentSettingsInput,
+    ) {
+        return this.storefrontContentService.updateSettings(ctx, input);
     }
 }

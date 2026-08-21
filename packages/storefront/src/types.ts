@@ -446,3 +446,12 @@ export interface StorefrontContentBlock {
     ctaLabel: string;
     items: StorefrontContentItem[];
 }
+
+export interface StorefrontContentSettings {
+    heroAutoplayIntervalSeconds: number;
+}
+
+export interface StorefrontContentResponse {
+    blocks: StorefrontContentBlock[];
+    settings: StorefrontContentSettings;
+}

@@ -56,7 +56,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
     ContentBlock,
@@ -70,6 +70,7 @@ import {
     reorderStorefrontContentBlocksMutation,
     storefrontContentBlocksQuery,
     updateStorefrontContentBlockMutation,
+    updateStorefrontContentSettingsMutation,
 } from './storefront-content.graphql';
 
 const blockTypes: ContentBlockType[] = [
@@ -153,6 +154,14 @@ const zhCopy = {
     reordered: '区块顺序已更新',
     validation: '请填写区块编码以及中英文标题',
     activeChannel: '当前店铺',
+    carouselSettings: '首页轮播设置',
+    carouselSettingsDescription:
+        '配置当前店铺首页广告的自动切换速度。用户手动切换后，本次访问将停止自动轮播。',
+    autoplayInterval: '自动切换间隔',
+    autoplayIntervalHint: '填写 3 到 30 之间的整数，单位为秒；默认 5 秒。',
+    autoplayIntervalInvalid: '自动切换间隔必须是 3 到 30 秒之间的整数',
+    saveCarouselSettings: '保存轮播设置',
+    carouselSettingsUpdated: '轮播设置已更新',
 };
 
 const enCopy: typeof zhCopy = {
@@ -217,6 +226,14 @@ const enCopy: typeof zhCopy = {
     reordered: 'Block order updated',
     validation: 'Enter a block code and both Chinese and English titles',
     activeChannel: 'Active store',
+    carouselSettings: 'Homepage carousel settings',
+    carouselSettingsDescription:
+        'Set the automatic rotation speed for this store. Autoplay stops for the visit after a customer changes slides manually.',
+    autoplayInterval: 'Autoplay interval',
+    autoplayIntervalHint: 'Enter a whole number from 3 to 30 seconds. The default is 5 seconds.',
+    autoplayIntervalInvalid: 'The autoplay interval must be a whole number from 3 to 30 seconds',
+    saveCarouselSettings: 'Save carousel settings',
+    carouselSettingsUpdated: 'Carousel settings updated',
 };
 
 const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
@@ -263,14 +280,26 @@ function StorefrontContentPage() {
     const queryKey = ['storefront-content-blocks', activeChannel?.id];
     const [draft, setDraft] = useState<ContentBlock | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<ContentBlock | null>(null);
+    const [heroAutoplayIntervalInput, setHeroAutoplayIntervalInput] = useState('5');
 
     const contentQuery = useQuery({
         queryKey,
-        queryFn: () => api.query(storefrontContentBlocksQuery) as Promise<StorefrontContentBlocksResult>,
+        queryFn: () => api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery),
         enabled: Boolean(activeChannel?.id),
     });
     const blocks = contentQuery.data?.storefrontContentBlocks ?? [];
     const refresh = () => queryClient.invalidateQueries({ queryKey });
+    const heroAutoplayIntervalSeconds = Number(heroAutoplayIntervalInput);
+    const heroAutoplayIntervalValid =
+        Number.isInteger(heroAutoplayIntervalSeconds) &&
+        heroAutoplayIntervalSeconds >= 3 &&
+        heroAutoplayIntervalSeconds <= 30;
+
+    useEffect(() => {
+        setHeroAutoplayIntervalInput(
+            String(contentQuery.data?.storefrontContentSettings?.heroAutoplayIntervalSeconds ?? 5),
+        );
+    }, [activeChannel?.id, contentQuery.data?.storefrontContentSettings?.heroAutoplayIntervalSeconds]);
 
     const saveMutation = useMutation({
         mutationFn: (block: ContentBlock) => {
@@ -309,6 +338,17 @@ function StorefrontContentPage() {
         },
         onError: error => toast.error(errorMessage(error)),
     });
+    const settingsMutation = useMutation({
+        mutationFn: (value: number) =>
+            api.mutate(updateStorefrontContentSettingsMutation, {
+                input: { heroAutoplayIntervalSeconds: value },
+            }),
+        onSuccess: async () => {
+            toast.success(text.carouselSettingsUpdated);
+            await refresh();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
 
     const move = (index: number, direction: -1 | 1) => {
         const targetIndex = index + direction;
@@ -330,6 +370,61 @@ function StorefrontContentPage() {
                 </PageActionBarRight>
             </PageActionBar>
             <PageLayout>
+                <PageBlock
+                    column="full"
+                    blockId="storefront-content-carousel-settings"
+                    title={text.carouselSettings}
+                    description={text.carouselSettingsDescription}
+                >
+                    <div className="flex max-w-xl flex-col gap-4 sm:flex-row sm:items-end">
+                        <Field
+                            label={text.autoplayInterval}
+                            hint={text.autoplayIntervalHint}
+                            className="flex-1"
+                        >
+                            <div className="relative">
+                                <Input
+                                    type="number"
+                                    min={3}
+                                    max={30}
+                                    step={1}
+                                    inputMode="numeric"
+                                    value={heroAutoplayIntervalInput}
+                                    aria-invalid={!heroAutoplayIntervalValid}
+                                    aria-describedby={
+                                        heroAutoplayIntervalValid ? undefined : 'autoplay-interval-error'
+                                    }
+                                    disabled={contentQuery.isPending || contentQuery.isError}
+                                    onChange={event => setHeroAutoplayIntervalInput(event.target.value)}
+                                />
+                                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                                    {isZh ? '秒' : 'sec'}
+                                </span>
+                            </div>
+                            {!heroAutoplayIntervalValid && (
+                                <p
+                                    id="autoplay-interval-error"
+                                    className="text-xs text-destructive"
+                                    role="alert"
+                                >
+                                    {text.autoplayIntervalInvalid}
+                                </p>
+                            )}
+                        </Field>
+                        <Button
+                            type="button"
+                            disabled={
+                                !heroAutoplayIntervalValid ||
+                                contentQuery.isPending ||
+                                contentQuery.isError ||
+                                settingsMutation.isPending
+                            }
+                            onClick={() => settingsMutation.mutate(heroAutoplayIntervalSeconds)}
+                        >
+                            {settingsMutation.isPending ? text.saving : text.saveCarouselSettings}
+                        </Button>
+                    </div>
+                </PageBlock>
                 <PageBlock
                     column="full"
                     blockId="storefront-content-list"

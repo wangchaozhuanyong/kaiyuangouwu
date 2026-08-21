@@ -6,6 +6,7 @@ import { StorefrontContentBlockTranslation } from './entities/storefront-content
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
+import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { StorefrontContentAdminResolver, StorefrontContentShopResolver } from './storefront-content.resolver';
 import { StorefrontContentService } from './storefront-content.service';
 
@@ -16,6 +17,7 @@ import { StorefrontContentService } from './storefront-content.service';
         StorefrontContentBlockTranslation,
         StorefrontContentItem,
         StorefrontContentItemTranslation,
+        StorefrontContentSettings,
     ],
     providers: [StorefrontContentService],
     configuration: config => {

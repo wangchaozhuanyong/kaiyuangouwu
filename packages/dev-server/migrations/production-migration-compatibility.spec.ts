@@ -13,6 +13,7 @@ import { AddStorefrontReviews1787204800000 } from './1787204800000-add-storefron
 import { AddOrderDeliveryEmail1787206600000 } from './1787206600000-add-order-delivery-email';
 import { AlignSearchStockDefaults1787328000000 } from './1787328000000-align-search-stock-defaults';
 import { NormalizeSearchStockMysqlColumns1787331600000 } from './1787331600000-normalize-search-stock-mysql-columns';
+import { AddStorefrontContentSettings1787335200000 } from './1787335200000-add-storefront-content-settings';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -30,6 +31,37 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'creates portable per-Channel storefront content settings on %s',
+        async databaseType => {
+            const createdTables: Table[] = [];
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                hasTable: vi.fn(async () => false),
+                createTable: vi.fn(async (table: Table) => {
+                    createdTables.push(table);
+                }),
+            } as unknown as QueryRunner;
+
+            await new AddStorefrontContentSettings1787335200000().up(queryRunner);
+
+            expect(createdTables).toHaveLength(1);
+            expect(createdTables[0].name).toBe('storefront_content_settings');
+            expect(createdTables[0].findColumnByName('heroAutoplayIntervalSeconds')).toMatchObject({
+                type: 'int',
+                default: 5,
+            });
+            expect(createdTables[0].indices).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'IDX_storefront_content_settings_channel',
+                        isUnique: true,
+                    }),
+                ]),
+            );
+        },
+    );
+
     it('creates portable verified review storage with one review per order line', async () => {
         const { createdTables, queryRunner } = mysqlQueryRunner();
 

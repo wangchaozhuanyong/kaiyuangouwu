@@ -30,9 +30,7 @@ import {
     Minus,
     Navigation,
     Package,
-    Pause,
     Pin,
-    Play,
     Plus,
     RotateCcw,
     Search,
@@ -71,6 +69,11 @@ import {
 import { ShopApi, ShopApiError } from './api';
 import { formatBusinessDate } from './business-time';
 import { centeredHorizontalScrollLeft } from './category-navigation';
+import {
+    heroIndexAfterManualMove,
+    isCompletedHeroSwipe,
+    normalizeHeroAutoplayIntervalSeconds,
+} from './hero-carousel';
 import {
     enabledMarkets,
     languageCodeFor,
@@ -510,7 +513,10 @@ export function App() {
 
     const products = productsQuery.data ?? [];
     const collections = collectionsQuery.data ?? [];
-    const contentBlocks = contentQuery.data ?? [];
+    const contentBlocks = contentQuery.data?.blocks ?? [];
+    const heroAutoplayIntervalSeconds = normalizeHeroAutoplayIntervalSeconds(
+        contentQuery.data?.settings?.heroAutoplayIntervalSeconds ?? 5,
+    );
     const cart = cartQuery.data ?? null;
     const customer = customerQuery.data ?? null;
     const currentCheckoutOrder = cart?.checkoutOrder ?? checkoutOrder;
@@ -1387,6 +1393,7 @@ export function App() {
                         products={products}
                         collections={collections}
                         contentBlocks={contentBlocks}
+                        heroAutoplayIntervalSeconds={heroAutoplayIntervalSeconds}
                         contentError={contentError}
                         loading={loading}
                         error={error}
@@ -2034,6 +2041,7 @@ interface HomePageProps {
     products: Product[];
     collections: CollectionSummary[];
     contentBlocks: StorefrontContentBlock[];
+    heroAutoplayIntervalSeconds: number;
     contentError: string;
     loading: boolean;
     error: string | null;
@@ -2057,6 +2065,7 @@ function HomePage(props: HomePageProps) {
         products,
         collections,
         contentBlocks,
+        heroAutoplayIntervalSeconds,
         contentError,
         loading,
         error,
@@ -2088,8 +2097,16 @@ function HomePage(props: HomePageProps) {
     const heroProducts = products.slice(0, 2);
     const [heroIndex, setHeroIndex] = useState(0);
     const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
-    const [heroUserPaused, setHeroUserPaused] = useState(false);
+    const [heroGestureActive, setHeroGestureActive] = useState(false);
+    const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+    const [pageVisible, setPageVisible] = useState(true);
+    const heroGestureRef = useRef({
+        active: false,
+        horizontal: false,
+        startX: 0,
+        startY: 0,
+    });
     const heroCount = managedHeroes.length || heroProducts.length;
     const managedHero = managedHeroes[heroIndex];
     const hero = heroProducts[heroIndex] ?? products[0];
@@ -2110,14 +2127,105 @@ function HomePage(props: HomePageProps) {
     }, []);
 
     useEffect(() => {
-        if (heroCount < 2 || heroInteractionPaused || heroUserPaused || prefersReducedMotion) return;
-        const timer = window.setInterval(() => setHeroIndex(index => (index + 1) % heroCount), 5200);
-        return () => window.clearInterval(timer);
-    }, [heroCount, heroInteractionPaused, heroUserPaused, prefersReducedMotion]);
+        const updatePageVisibility = () => setPageVisible(!document.hidden);
+        updatePageVisibility();
+        document.addEventListener('visibilitychange', updatePageVisibility);
+        return () => document.removeEventListener('visibilitychange', updatePageVisibility);
+    }, []);
+
+    useEffect(() => {
+        if (
+            heroCount < 2 ||
+            heroInteractionPaused ||
+            heroGestureActive ||
+            heroAutoplayStopped ||
+            prefersReducedMotion ||
+            !pageVisible
+        ) {
+            return;
+        }
+        const timer = window.setTimeout(
+            () => setHeroIndex(index => heroIndexAfterManualMove(index, heroCount, 1)),
+            heroAutoplayIntervalSeconds * 1000,
+        );
+        return () => window.clearTimeout(timer);
+    }, [
+        heroAutoplayIntervalSeconds,
+        heroAutoplayStopped,
+        heroCount,
+        heroGestureActive,
+        heroIndex,
+        heroInteractionPaused,
+        pageVisible,
+        prefersReducedMotion,
+    ]);
 
     useEffect(() => {
         if (heroIndex >= heroCount) setHeroIndex(0);
     }, [heroCount, heroIndex]);
+
+    const selectHeroManually = (index: number) => {
+        setHeroAutoplayStopped(true);
+        setHeroIndex(index);
+    };
+
+    const beginHeroSwipe = (event: ReactPointerEvent<HTMLElement>) => {
+        if (
+            heroCount < 2 ||
+            event.button !== 0 ||
+            (event.target instanceof Element && event.target.closest('button, a, input, label'))
+        ) {
+            return;
+        }
+        heroGestureRef.current = {
+            active: true,
+            horizontal: false,
+            startX: event.clientX,
+            startY: event.clientY,
+        };
+        setHeroGestureActive(true);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.currentTarget.classList.add('is-dragging');
+    };
+
+    const moveHeroSwipe = (event: ReactPointerEvent<HTMLElement>) => {
+        const gesture = heroGestureRef.current;
+        if (!gesture.active) return;
+        const deltaX = event.clientX - gesture.startX;
+        const deltaY = event.clientY - gesture.startY;
+        if (!gesture.horizontal) {
+            if (Math.abs(deltaY) > Math.abs(deltaX) + 6) {
+                gesture.active = false;
+                setHeroGestureActive(false);
+                event.currentTarget.classList.remove('is-dragging');
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+                return;
+            }
+            if (Math.abs(deltaX) < 6) return;
+            gesture.horizontal = true;
+        }
+        event.preventDefault();
+    };
+
+    const finishHeroSwipe = (event: ReactPointerEvent<HTMLElement>, cancelled = false) => {
+        const gesture = heroGestureRef.current;
+        if (!gesture.active && !gesture.horizontal) return;
+        const deltaX = event.clientX - gesture.startX;
+        const deltaY = event.clientY - gesture.startY;
+        const completed = !cancelled && gesture.horizontal && isCompletedHeroSwipe(deltaX, deltaY);
+        gesture.active = false;
+        gesture.horizontal = false;
+        setHeroGestureActive(false);
+        event.currentTarget.classList.remove('is-dragging');
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        if (completed) {
+            selectHeroManually(heroIndexAfterManualMove(heroIndex, heroCount, deltaX < 0 ? 1 : -1));
+        }
+    };
 
     const quickLinks: Array<{
         id: string;
@@ -2248,8 +2356,10 @@ function HomePage(props: HomePageProps) {
                 <>
                     <div className="home-intro-grid">
                         <section
-                            className="hero"
+                            className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
+                            role="region"
                             aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
+                            aria-roledescription={isZh ? '轮播' : 'carousel'}
                             onMouseEnter={() => setHeroInteractionPaused(true)}
                             onMouseLeave={() => setHeroInteractionPaused(false)}
                             onFocus={() => setHeroInteractionPaused(true)}
@@ -2258,6 +2368,11 @@ function HomePage(props: HomePageProps) {
                                     setHeroInteractionPaused(false);
                                 }
                             }}
+                            onPointerDown={beginHeroSwipe}
+                            onPointerMove={moveHeroSwipe}
+                            onPointerUp={event => finishHeroSwipe(event)}
+                            onPointerCancel={event => finishHeroSwipe(event, true)}
+                            onDragStart={event => event.preventDefault()}
                             style={{
                                 backgroundColor: managedHero?.backgroundColor ?? undefined,
                                 color: managedHero?.textColor ?? undefined,
@@ -2315,37 +2430,6 @@ function HomePage(props: HomePageProps) {
                                     className="hero-pagination"
                                     aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
                                 >
-                                    {!prefersReducedMotion && (
-                                        <button
-                                            className="hero-playback"
-                                            type="button"
-                                            aria-label={
-                                                heroUserPaused
-                                                    ? isZh
-                                                        ? '继续自动播放'
-                                                        : 'Resume autoplay'
-                                                    : isZh
-                                                      ? '暂停自动播放'
-                                                      : 'Pause autoplay'
-                                            }
-                                            title={
-                                                heroUserPaused
-                                                    ? isZh
-                                                        ? '继续自动播放'
-                                                        : 'Resume autoplay'
-                                                    : isZh
-                                                      ? '暂停自动播放'
-                                                      : 'Pause autoplay'
-                                            }
-                                            onClick={() => setHeroUserPaused(paused => !paused)}
-                                        >
-                                            {heroUserPaused ? (
-                                                <Play aria-hidden="true" />
-                                            ) : (
-                                                <Pause aria-hidden="true" />
-                                            )}
-                                        </button>
-                                    )}
                                     {(managedHeroes.length ? managedHeroes : heroProducts).map(
                                         (item, index) => (
                                             <button
@@ -2356,12 +2440,22 @@ function HomePage(props: HomePageProps) {
                                                     isZh ? `第${index + 1}张广告` : `Promotion ${index + 1}`
                                                 }
                                                 aria-current={index === heroIndex}
-                                                onClick={() => setHeroIndex(index)}
+                                                onClick={() => selectHeroManually(index)}
                                             />
                                         ),
                                     )}
                                 </div>
                             )}
+                            <span
+                                className="visually-hidden"
+                                aria-live={heroAutoplayStopped ? 'polite' : 'off'}
+                            >
+                                {heroAutoplayStopped
+                                    ? isZh
+                                        ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
+                                        : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
+                                    : ''}
+                            </span>
                         </section>
 
                         <nav

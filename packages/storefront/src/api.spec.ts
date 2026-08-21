@@ -62,9 +62,15 @@ describe('ShopApi storefront mutations', () => {
     });
 
     it('requests localized content with Vendure language query context', async () => {
-        const fetchMock = mockGraphQlResponse({ storefrontContent: [] });
+        const fetchMock = mockGraphQlResponse({
+            storefrontContent: [],
+            storefrontContentSettings: { heroAutoplayIntervalSeconds: 8 },
+        });
 
-        await new ShopApi(market, 'en').storefrontContent();
+        await expect(new ShopApi(market, 'en').storefrontContent()).resolves.toEqual({
+            blocks: [],
+            settings: { heroAutoplayIntervalSeconds: 8 },
+        });
 
         expect(fetchMock).toHaveBeenCalledWith(
             expect.stringContaining('languageCode=en'),
@@ -72,8 +78,18 @@ describe('ShopApi storefront mutations', () => {
         );
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('storefrontContent');
+        expect(request.query).toContain('storefrontContentSettings');
         expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
             'vendure-token': 'cn-mainland',
+        });
+    });
+
+    it('falls back to a five-second carousel interval when settings are absent', async () => {
+        mockGraphQlResponse({ storefrontContent: [] });
+
+        await expect(new ShopApi(market).storefrontContent()).resolves.toEqual({
+            blocks: [],
+            settings: { heroAutoplayIntervalSeconds: 5 },
         });
     });
 

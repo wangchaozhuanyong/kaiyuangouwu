@@ -33,6 +33,10 @@
     --warning: #9a5b14;
     --danger: #b42318;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --bottom-navigation-height: 66px;
+    --root-page-end-gap: 12px;
+    --subpage-end-gap: 24px;
+    --footer-end-gap: 12px;
     --layer-nav: 20;
     --layer-sticky: 10;
     --layer-sheet: 50;
@@ -631,12 +635,24 @@ img {
 
 .page {
     min-height: 100dvh;
-    padding-bottom: calc(78px + var(--safe-bottom));
-    background: var(--bg);
+    padding-bottom: calc(var(--bottom-navigation-height) + var(--root-page-end-gap) + var(--safe-bottom));
+    background: var(--page-surface, var(--bg));
 }
 
 .subpage {
-    padding-bottom: calc(24px + var(--safe-bottom));
+    padding-bottom: calc(var(--subpage-end-gap) + var(--safe-bottom));
+}
+
+:where(
+    .orders-page,
+    .logistics-page,
+    .addresses-page,
+    .favorites-page,
+    .history-page,
+    .review-center-page,
+    .account-security-page
+) {
+    --page-surface: var(--paper);
 }
 
 .topbar {
@@ -869,6 +885,16 @@ img {
     background: #dfe3e1;
 }
 
+.hero.is-swipeable {
+    touch-action: pan-y;
+    cursor: grab;
+    user-select: none;
+}
+
+.hero.is-swipeable.is-dragging {
+    cursor: grabbing;
+}
+
 .hero > img,
 .hero > .responsive-picture > img,
 .hero > .image-placeholder {
@@ -974,28 +1000,6 @@ img {
     width: 18px;
     border-radius: 4px;
     background: white;
-}
-
-.hero-pagination .hero-playback::before {
-    width: 28px;
-    height: 28px;
-    position: absolute;
-    border: 1px solid rgba(255, 255, 255, 0.48);
-    border-radius: 50%;
-    background: rgba(20, 23, 22, 0.34);
-    content: '';
-    backdrop-filter: blur(4px);
-}
-
-.hero-pagination .hero-playback {
-    position: relative;
-}
-
-.hero-pagination .hero-playback svg {
-    width: 14px;
-    height: 14px;
-    z-index: 1;
-    color: white;
 }
 
 .quick-grid {
@@ -1569,7 +1573,7 @@ img {
 
 .legal-footer {
     margin: 0 10px;
-    padding: 22px 0 94px;
+    padding: 22px 0 var(--footer-end-gap);
     color: var(--muted);
     text-align: center;
     font-size: 12px;
@@ -6527,7 +6531,7 @@ img {
 }
 
 .logistics-page {
-    background: #eef1ef;
+    --page-surface: var(--paper);
 }
 
 .logistics-page > .subpage-header {
@@ -6948,8 +6952,9 @@ img {
 }
 
 .order-card {
-    margin-top: 9px;
+    margin-top: 0;
     padding: 0 13px 10px;
+    border-top: 9px solid var(--bg);
     background: white;
 }
 
@@ -7690,8 +7695,9 @@ img {
 }
 
 .address-card {
-    margin-top: 9px;
+    margin-top: 0;
     padding: 14px;
+    border-top: 9px solid var(--bg);
     background: white;
 }
 
@@ -8382,7 +8388,7 @@ img {
 
 .bottom-navigation {
     width: min(100%, var(--app-width));
-    height: calc(66px + var(--safe-bottom));
+    height: calc(var(--bottom-navigation-height) + var(--safe-bottom));
     padding: 5px 5px calc(7px + var(--safe-bottom));
     position: fixed;
     z-index: var(--layer-nav);
@@ -8459,7 +8465,7 @@ img {
     padding: 10px 15px;
     position: fixed;
     z-index: var(--layer-toast);
-    bottom: calc(86px + var(--safe-bottom));
+    bottom: calc(var(--bottom-navigation-height) + 20px + var(--safe-bottom));
     left: 50%;
     border-radius: 7px;
     background: rgba(28, 31, 30, 0.94);
