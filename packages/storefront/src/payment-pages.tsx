@@ -13,6 +13,7 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
+import { offlineLoadError } from './loading-state';
 import { orderStatusRefreshInterval } from './order-refresh';
 import { paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -61,15 +62,17 @@ export function PaymentPage({
         allowTestMethods: isTestMode,
     });
     const methods = availability.methods;
-    const loading = isPending && methodsQuery.isPending;
+    const loading = isPending && methodsQuery.isLoading;
     const methodLoadError =
-        methodsQuery.error instanceof Error
-            ? methodsQuery.error.message
-            : methodsQuery.error
-              ? isZh
-                  ? '支付方式加载失败'
-                  : 'Could not load payment methods'
-              : '';
+        methodsQuery.isPaused && methodsQuery.data === undefined
+            ? offlineLoadError(language)
+            : methodsQuery.error instanceof Error
+              ? methodsQuery.error.message
+              : methodsQuery.error
+                ? isZh
+                    ? '支付方式加载失败'
+                    : 'Could not load payment methods'
+                : '';
 
     useEffect(() => {
         if (!isPending) {
@@ -178,7 +181,7 @@ export function PaymentPage({
                     <section className="payment-method-section">
                         <h2>{isZh ? '支付方式' : 'Payment method'}</h2>
                         {loading ? (
-                            <PageSkeleton />
+                            <PageSkeleton label={isZh ? '正在加载支付方式' : 'Loading payment methods'} />
                         ) : methodLoadError && !methods.length ? (
                             <InlineError
                                 message={methodLoadError}
@@ -343,12 +346,7 @@ export function OrderConfirmationPage({
 }) {
     const isZh = language === 'zh';
     const orderQuery = useQuery({
-        queryKey: storefrontQueryKeys.orderByCode(
-            market.code,
-            languageCodeFor(language),
-            customer?.id ?? 'guest',
-            code,
-        ),
+        queryKey: storefrontQueryKeys.orderByCode(market.code, languageCodeFor(language), code),
         queryFn: ({ signal }) => api.orderByConfirmationToken(confirmationToken, signal),
         enabled: Boolean(code && confirmationToken),
         initialData: confirmationToken && initialOrder?.code === code ? initialOrder : undefined,
@@ -358,8 +356,13 @@ export function OrderConfirmationPage({
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const order = code ? (orderQuery.data ?? null) : null;
-    const loading = Boolean(code && confirmationToken && orderQuery.isPending);
-    const loadError = orderQuery.error instanceof Error ? orderQuery.error.message : '';
+    const loading = Boolean(code && confirmationToken && orderQuery.isLoading);
+    const loadError =
+        orderQuery.isPaused && orderQuery.data === undefined
+            ? offlineLoadError(language)
+            : orderQuery.error instanceof Error
+              ? orderQuery.error.message
+              : '';
 
     if (loading) {
         return (
@@ -368,7 +371,7 @@ export function OrderConfirmationPage({
                 language={language}
                 onBack={() => onNavigate({ name: 'home' })}
             >
-                <PageSkeleton />
+                <PageSkeleton label={isZh ? '正在加载订单结果' : 'Loading order result'} />
             </Subpage>
         );
     }
@@ -513,16 +516,17 @@ function shippingEstimate(order: Order, language: StorefrontLanguage): string {
     if (!shipping) return language === 'zh' ? '无需配送' : 'No delivery required';
     const minimum = shipping.estimateMinDays;
     const maximum = shipping.estimateMaxDays;
+    const firstAvailableDay = minimum ?? maximum;
     const estimate =
-        minimum == null && maximum == null
+        firstAvailableDay == null
             ? ''
             : minimum === maximum || maximum == null
               ? language === 'zh'
-                  ? `预计 ${minimum ?? maximum} 天`
-                  : `Estimated ${minimum ?? maximum} days`
+                  ? `预计 ${firstAvailableDay} 天`
+                  : `Estimated ${firstAvailableDay} days`
               : language === 'zh'
-                ? `预计 ${minimum ?? maximum}–${maximum} 天`
-                : `Estimated ${minimum ?? maximum}–${maximum} days`;
+                ? `预计 ${firstAvailableDay}–${maximum} 天`
+                : `Estimated ${firstAvailableDay}–${maximum} days`;
     return [
         shipping.methodName,
         estimate,

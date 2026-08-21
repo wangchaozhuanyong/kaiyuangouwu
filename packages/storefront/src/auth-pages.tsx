@@ -92,8 +92,65 @@ export function loginErrorMessage(error: unknown, language: StorefrontLanguage):
         if (error.errorCode === 'INVALID_CREDENTIALS_ERROR') {
             return isZh ? '电子邮箱或密码错误，请检查后重试' : 'The email address or password is incorrect';
         }
+        return isZh ? `登录失败（错误代码：${error.errorCode}）` : error.message;
     }
-    return error instanceof Error ? error.message : isZh ? '登录失败' : 'Sign-in failed';
+    if (isNetworkError(error)) {
+        return isZh
+            ? '网络连接失败，请检查网络后重试'
+            : 'Network connection failed. Check your connection and try again';
+    }
+    return error instanceof Error
+        ? isZh
+            ? `登录失败：${error.message}`
+            : error.message
+        : isZh
+          ? '登录失败，请稍后重试'
+          : 'Sign-in failed. Please try again later';
+}
+
+export function registerErrorMessage(error: unknown, language: StorefrontLanguage): string {
+    const isZh = language === 'zh';
+    if (error instanceof ShopApiError) {
+        if (error.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR') {
+            return isZh
+                ? '该电子邮箱已注册，请直接登录或使用其他邮箱'
+                : 'This email address is already registered. Sign in or use another email';
+        }
+        if (error.errorCode === 'PASSWORD_VALIDATION_ERROR') {
+            return isZh
+                ? '密码不符合安全要求，请重新设置'
+                : 'The password does not meet the security requirements';
+        }
+        if (error.errorCode === 'MISSING_PASSWORD_ERROR') {
+            return isZh ? '请输入密码' : 'Enter a password';
+        }
+        if (error.errorCode === 'NATIVE_AUTH_STRATEGY_ERROR') {
+            return isZh
+                ? '账户注册服务暂时不可用，请稍后重试'
+                : 'Account registration is temporarily unavailable. Please try again later';
+        }
+        return isZh ? `注册失败（错误代码：${error.errorCode}）` : error.message;
+    }
+    if (isNetworkError(error)) {
+        return isZh
+            ? '网络连接失败，请检查网络后重试'
+            : 'Network connection failed. Check your connection and try again';
+    }
+    return error instanceof Error
+        ? isZh
+            ? `注册失败：${error.message}`
+            : error.message
+        : isZh
+          ? '注册失败，请稍后重试'
+          : 'Registration failed. Please try again later';
+}
+
+function isNetworkError(error: unknown): boolean {
+    return (
+        error instanceof TypeError ||
+        (error instanceof Error &&
+            /failed to fetch|network(?:error| request)?|load failed/i.test(error.message))
+    );
 }
 
 interface AuthPageBaseProps {
@@ -244,13 +301,7 @@ export function RegisterPage({
             setRegisteredEmail(emailAddress);
             setResendSeconds(60);
         } catch (requestError) {
-            setError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '注册失败'
-                      : 'Registration failed',
-            );
+            setError(registerErrorMessage(requestError, language));
         } finally {
             setSubmitting(false);
         }
@@ -726,7 +777,17 @@ function AuthLayout({
     return (
         <main className="page subpage auth-page" aria-label={title}>
             <section className="auth-hero">
-                <img src="/storefront/auth-ai-bridge-hero.jpg" alt="" />
+                <picture>
+                    <source srcSet="/storefront/auth-ai-bridge-hero.webp" type="image/webp" />
+                    <img
+                        src="/storefront/auth-ai-bridge-hero.jpg"
+                        width={1659}
+                        height={948}
+                        alt=""
+                        decoding="async"
+                        fetchPriority="high"
+                    />
+                </picture>
                 <button
                     className="auth-back-button"
                     type="button"

@@ -26,7 +26,7 @@ describe('public React Query session cache', () => {
         let requestCount = 0;
         const options = {
             queryKey: storefrontQueryKeys.product('cn', 'zh_Hans', '1'),
-            queryFn: async () => {
+            queryFn: () => {
                 requestCount += 1;
                 return { id: '1', requestCount };
             },
@@ -100,12 +100,12 @@ describe('public React Query session cache', () => {
         const client = createStorefrontQueryClient();
         await client.fetchQuery({
             queryKey: ['storefront', 'cn', 'zh', 'product', '1'],
-            queryFn: async () => ({ id: '1' }),
+            queryFn: () => ({ id: '1' }),
             meta: publicQueryMeta(),
         });
         await client.fetchQuery({
             queryKey: ['storefront', 'cn', 'zh', 'private', 'customer'],
-            queryFn: async () => ({ emailAddress: 'private@example.com' }),
+            queryFn: () => ({ emailAddress: 'private@example.com' }),
         });
         const storage = memoryStorage();
 
@@ -121,7 +121,7 @@ describe('public React Query session cache', () => {
         const source = createStorefrontQueryClient();
         await source.fetchQuery({
             queryKey: ['storefront', 'my', 'en', 'content'],
-            queryFn: async () => ['hero'],
+            queryFn: () => ['hero'],
             meta: publicQueryMeta(),
         });
         const storage = memoryStorage();

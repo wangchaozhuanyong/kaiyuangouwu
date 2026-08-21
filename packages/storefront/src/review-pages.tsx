@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
+import { offlineLoadError } from './loading-state';
 import {
     PUBLIC_QUERY_GC_TIME,
     ROUTE_QUERY_STALE_TIME,
@@ -106,22 +107,27 @@ export function ReviewCenterPage({
                     action={isZh ? '去登录' : 'Sign in'}
                     onAction={onSignIn}
                 />
-            ) : reviewsQuery.isPending || candidatesQuery.isPending ? (
+            ) : reviewsQuery.isLoading || candidatesQuery.isLoading ? (
                 <div className="review-center-loading" aria-busy="true">
                     <span />
                     <span />
                     <span />
                 </div>
-            ) : reviewsQuery.isError || candidatesQuery.isError ? (
+            ) : (reviewsQuery.isPaused && reviewsQuery.data === undefined) ||
+              (candidatesQuery.isPaused && candidatesQuery.data === undefined) ||
+              reviewsQuery.isError ||
+              candidatesQuery.isError ? (
                 <ReviewEmptyState
                     icon={<RefreshCw />}
                     title={isZh ? '评价记录加载失败' : 'Could not load reviews'}
                     detail={
-                        reviewsQuery.error instanceof Error
-                            ? reviewsQuery.error.message
-                            : candidatesQuery.error instanceof Error
-                              ? candidatesQuery.error.message
-                              : ''
+                        reviewsQuery.isPaused || candidatesQuery.isPaused
+                            ? offlineLoadError(language)
+                            : reviewsQuery.error instanceof Error
+                              ? reviewsQuery.error.message
+                              : candidatesQuery.error instanceof Error
+                                ? candidatesQuery.error.message
+                                : ''
                     }
                     action={isZh ? '重试' : 'Retry'}
                     onAction={() => void Promise.all([reviewsQuery.refetch(), candidatesQuery.refetch()])}
@@ -258,15 +264,19 @@ export function ProductReviewsSection({
                           : 'No reviews yet'}
                 </span>
             </header>
-            {query.isPending ? (
+            {query.isLoading ? (
                 <div className="product-review-loading" aria-busy="true">
                     <span />
                     <span />
                 </div>
-            ) : query.isError ? (
+            ) : (query.isPaused && query.data === undefined) || query.isError ? (
                 <button className="product-review-retry" type="button" onClick={() => void query.refetch()}>
                     <RefreshCw aria-hidden="true" />
-                    {isZh ? '加载失败，点击重试' : 'Could not load reviews. Retry'}
+                    {query.isPaused
+                        ? offlineLoadError(language)
+                        : isZh
+                          ? '加载失败，点击重试'
+                          : 'Could not load reviews. Retry'}
                 </button>
             ) : reviews.length ? (
                 <div className="product-review-list">

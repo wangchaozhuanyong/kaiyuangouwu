@@ -1,9 +1,18 @@
 import {
+    keepPreviousData,
+    useInfiniteQuery,
+    useIsFetching,
+    useQuery,
+    useQueryClient,
+} from '@tanstack/react-query';
+import {
     ArrowLeft,
     ArrowUpDown,
     Bell,
     Check,
+    ChevronDown,
     ChevronRight,
+    ChevronUp,
     CircleAlert,
     CircleCheck,
     ClipboardList,
@@ -56,7 +65,6 @@ import {
     useTransition,
 } from 'react';
 
-import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShopApi, ShopApiError } from './api';
 import { formatBusinessDate } from './business-time';
 import {
@@ -68,6 +76,7 @@ import {
     uiCopy,
 } from './i18n';
 import { resolveManagedLegalDocument } from './legal-content';
+import { offlineLoadError, QueryLoadState, resolveQueryLoadState } from './loading-state';
 import { orderStatusRefreshInterval } from './order-refresh';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -184,8 +193,8 @@ function sortCategoryProducts(
         }
         if (sortMode === 'newest') return Date.parse(second.createdAt) - Date.parse(first.createdAt);
         if (sortMode === 'name') return first.name.localeCompare(second.name, locale);
-        if (sortMode === 'price-asc') return minimumPrice(first) - minimumPrice(second);
-        if (sortMode === 'price-desc') return minimumPrice(second) - minimumPrice(first);
+        if (sortMode === 'price-asc') return minimumProductPrice(first) - minimumProductPrice(second);
+        if (sortMode === 'price-desc') return minimumProductPrice(second) - minimumProductPrice(first);
         return 0;
     });
 }
@@ -262,6 +271,20 @@ interface RouteState {
 
 const rootPages: MainPage[] = ['home', 'category', 'cart', 'account'];
 const orderTabs: OrderTab[] = ['all', 'pending', 'shipping', 'receiving', 'service'];
+const customerResolvedRoutes: RouteName[] = [
+    'account',
+    'cart',
+    'checkout',
+    'payment',
+    'coupons',
+    'orders',
+    'order-detail',
+    'addresses',
+    'account-security',
+    'notifications',
+    'reviews',
+];
+const cartResolvedRoutes: RouteName[] = ['cart', 'checkout', 'payment', 'coupons'];
 
 function routeFromLocation(): RouteState {
     return routeFromHash(window.location.hash);
@@ -380,24 +403,15 @@ export function App() {
         };
     });
     const [route, setRoute] = useState<RouteState>(routeFromLocation);
-    const [products, setProducts] = useState<Product[]>([]);
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
-    const [collections, setCollections] = useState<CollectionSummary[]>([]);
-    const [contentBlocks, setContentBlocks] = useState<StorefrontContentBlock[]>([]);
-    const [contentError, setContentError] = useState('');
     const [storefrontNames, setStorefrontNames] =
         useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
     const [storefrontCode, setStorefrontCode] = useState('');
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
-    const [cart, setCart] = useState<StorefrontCart | null>(null);
-    const [customer, setCustomer] = useState<ActiveCustomer | null>(null);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [sessionLoading, setSessionLoading] = useState(true);
     const [cartLoading, setCartLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [cartError, setCartError] = useState<string | null>(null);
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
@@ -429,7 +443,6 @@ export function App() {
         maxPrice: maximumPrice || undefined,
     };
     const toastTimer = useRef<number | null>(null);
-    const storefrontLoadId = useRef(0);
     const routeRef = useRef(route);
     const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
     const restoredInitialScroll = useRef(false);
@@ -440,6 +453,131 @@ export function App() {
     const storefrontName = storefrontNames[language];
     const vendureLanguageCode = languageCodeFor(language);
     const api = useMemo(() => new ShopApi(market, vendureLanguageCode), [market, vendureLanguageCode]);
+
+    const productsQuery = useQuery({
+        queryKey: storefrontQueryKeys.products(market.code, vendureLanguageCode, 16),
+        queryFn: ({ signal }) => api.products(16, signal),
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const collectionsQuery = useQuery({
+        queryKey: storefrontQueryKeys.collections(market.code, vendureLanguageCode),
+        queryFn: ({ signal }) => api.collections(signal),
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const configQuery = useQuery({
+        queryKey: storefrontQueryKeys.config(market.code, vendureLanguageCode),
+        queryFn: ({ signal }) => api.storefrontConfig(signal),
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const contentQuery = useQuery({
+        queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
+        queryFn: ({ signal }) => api.storefrontContent(signal),
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const cartQueryKey = storefrontQueryKeys.cart(market.code, vendureLanguageCode);
+    const customerQueryKey = storefrontQueryKeys.customer(market.code, vendureLanguageCode);
+    const cartQuery = useQuery({
+        queryKey: cartQueryKey,
+        queryFn: ({ signal }) => api.cart(signal),
+        staleTime: 0,
+    });
+    const customerQuery = useQuery({
+        queryKey: customerQueryKey,
+        queryFn: ({ signal }) => api.activeCustomer(signal),
+        staleTime: 0,
+    });
+
+    const products = productsQuery.data ?? [];
+    const collections = collectionsQuery.data ?? [];
+    const contentBlocks = contentQuery.data ?? [];
+    const cart = cartQuery.data ?? null;
+    const customer = customerQuery.data ?? null;
+    const currentCheckoutOrder = cart?.checkoutOrder ?? checkoutOrder;
+    const customerLoadState = resolveQueryLoadState({
+        hasData: customerQuery.data !== undefined,
+        isLoading: customerQuery.isLoading,
+        isPaused: customerQuery.isPaused,
+        isError: customerQuery.isError,
+    });
+    const cartLoadState = resolveQueryLoadState({
+        hasData: cartQuery.data !== undefined,
+        isLoading: cartQuery.isLoading,
+        isPaused: cartQuery.isPaused,
+        isError: cartQuery.isError,
+    });
+    const criticalPublicQueries = [productsQuery, collectionsQuery, configQuery];
+    const loading = criticalPublicQueries.some(query => query.isLoading && query.data === undefined);
+    const publicPaused = criticalPublicQueries.some(query => query.isPaused && query.data === undefined);
+    const publicQueryError = criticalPublicQueries.find(
+        query => query.error && query.data === undefined,
+    )?.error;
+    const error = publicPaused
+        ? offlineLoadError(language)
+        : publicQueryError instanceof Error
+          ? publicQueryError.message
+          : publicQueryError
+            ? text.loadError
+            : null;
+    const publicLoadState: QueryLoadState = publicPaused
+        ? 'paused'
+        : loading
+          ? 'loading'
+          : error
+            ? 'error'
+            : 'ready';
+    const contentError = error
+        ? ''
+        : contentQuery.isPaused && contentQuery.data === undefined
+          ? offlineLoadError(language)
+          : contentQuery.data !== undefined
+            ? ''
+            : contentQuery.error instanceof Error
+              ? contentQuery.error.message
+              : contentQuery.error
+                ? text.loadError
+                : '';
+    const customerLoadError =
+        customerLoadState === 'paused'
+            ? offlineLoadError(language)
+            : customerQuery.error instanceof Error
+              ? customerQuery.error.message
+              : text.loadError;
+    const cartQueryError =
+        cartLoadState === 'paused'
+            ? offlineLoadError(language)
+            : cartQuery.error instanceof Error
+              ? cartQuery.error.message
+              : cartQuery.error
+                ? text.loadError
+                : null;
+    const activeQueryFetchCount = useIsFetching({
+        queryKey: storefrontQueryKeys.scope(market.code, vendureLanguageCode),
+    });
+    const setCart = useCallback(
+        (nextCart: StorefrontCart) => queryClient.setQueryData(cartQueryKey, nextCart),
+        [market.code, queryClient, vendureLanguageCode],
+    );
+    const setCustomer = useCallback(
+        (
+            nextCustomer:
+                | ActiveCustomer
+                | null
+                | ((currentCustomer: ActiveCustomer | null) => ActiveCustomer | null),
+        ) => {
+            queryClient.setQueryData<ActiveCustomer | null>(customerQueryKey, currentCustomer =>
+                typeof nextCustomer === 'function' ? nextCustomer(currentCustomer ?? null) : nextCustomer,
+            );
+        },
+        [market.code, queryClient, vendureLanguageCode],
+    );
     const clearPrivateQueryCache = useCallback(() => {
         queryClient.removeQueries({
             queryKey: storefrontQueryKeys.privateScope(market.code, vendureLanguageCode),
@@ -465,13 +603,18 @@ export function App() {
         meta: publicQueryMeta(),
     });
     const routeProduct = productQuery.data ?? null;
-    const routeProductLoading = productQuery.isPending && productQuery.fetchStatus === 'fetching';
-    const routeProductError = productQuery.error instanceof Error ? productQuery.error.message : '';
+    const routeProductLoading = productQuery.isLoading;
+    const routeProductError =
+        productQuery.isPaused && productQuery.data === undefined
+            ? offlineLoadError(language)
+            : productQuery.error instanceof Error
+              ? productQuery.error.message
+              : '';
     const orderQuery = useQuery({
         queryKey: storefrontQueryKeys.order(
             market.code,
             vendureLanguageCode,
-            customer?.id ?? 'guest',
+            customer?.id ?? '',
             route.id ?? '',
         ),
         queryFn: async ({ signal }) => {
@@ -479,15 +622,20 @@ export function App() {
             if (!order) throw new Error(isZh ? '订单不存在或无权查看' : 'Order not found');
             return order;
         },
-        enabled: route.name === 'order-detail' && !!route.id,
+        enabled: customerLoadState === 'ready' && !!customer && route.name === 'order-detail' && !!route.id,
         staleTime: 0,
         refetchOnMount: 'always',
-        refetchInterval: query => orderStatusRefreshInterval((query.state.data as Order | undefined)?.state),
+        refetchInterval: query => orderStatusRefreshInterval(query.state.data?.state),
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const routeOrder = orderQuery.data ?? null;
-    const routeOrderLoading = orderQuery.isPending && orderQuery.fetchStatus === 'fetching';
-    const routeOrderError = orderQuery.error instanceof Error ? orderQuery.error.message : '';
+    const routeOrderLoading = orderQuery.isLoading;
+    const routeOrderError =
+        orderQuery.isPaused && orderQuery.data === undefined
+            ? offlineLoadError(language)
+            : orderQuery.error instanceof Error
+              ? orderQuery.error.message
+              : '';
 
     const cacheProducts = useCallback(
         (items: Product[]) => {
@@ -496,7 +644,7 @@ export function App() {
                 queryClient.setQueryData(queryKey, product);
                 void queryClient.prefetchQuery({
                     queryKey,
-                    queryFn: async () => product,
+                    queryFn: () => product,
                     staleTime: PUBLIC_QUERY_STALE_TIME,
                     meta: publicQueryMeta(),
                 });
@@ -584,131 +732,63 @@ export function App() {
         };
     }, []);
 
-    const loadSession = useCallback(
-        async (loadId: number) => {
-            setSessionLoading(true);
-            setCartError(null);
-            const [cartResult, customerResult] = await Promise.allSettled([
-                queryClient.fetchQuery({
-                    queryKey: storefrontQueryKeys.cart(market.code, vendureLanguageCode),
-                    queryFn: ({ signal }) => api.cart(signal),
-                    staleTime: 0,
-                }),
-                queryClient.fetchQuery({
-                    queryKey: storefrontQueryKeys.customer(market.code, vendureLanguageCode),
-                    queryFn: ({ signal }) => api.activeCustomer(signal),
-                    staleTime: 0,
-                }),
-            ]);
-            if (storefrontLoadId.current !== loadId) return;
-
-            if (cartResult.status === 'fulfilled') {
-                setCart(cartResult.value);
-                setCheckoutOrder(cartResult.value.checkoutOrder);
-            } else {
-                setCartError(cartResult.reason instanceof Error ? cartResult.reason.message : text.loadError);
-            }
-            if (customerResult.status === 'fulfilled') setCustomer(customerResult.value);
-            setSessionLoading(false);
-        },
-        [api, market.code, queryClient, text.loadError, vendureLanguageCode],
-    );
-
-    const loadStorefront = useCallback(async () => {
-        const loadId = ++storefrontLoadId.current;
-        setLoading(true);
-        setError(null);
-        setContentError('');
-        const [productResult, collectionResult, configResult, contentResult] = await Promise.allSettled([
-            queryClient.fetchQuery({
-                queryKey: storefrontQueryKeys.products(market.code, vendureLanguageCode, 16),
-                queryFn: ({ signal }) => api.products(16, signal),
-                staleTime: PUBLIC_QUERY_STALE_TIME,
-                meta: publicQueryMeta(),
-            }),
-            queryClient.fetchQuery({
-                queryKey: storefrontQueryKeys.collections(market.code, vendureLanguageCode),
-                queryFn: ({ signal }) => api.collections(signal),
-                staleTime: PUBLIC_QUERY_STALE_TIME,
-                meta: publicQueryMeta(),
-            }),
-            queryClient.fetchQuery({
-                queryKey: storefrontQueryKeys.config(market.code, vendureLanguageCode),
-                queryFn: ({ signal }) => api.storefrontConfig(signal),
-                staleTime: PUBLIC_QUERY_STALE_TIME,
-                meta: publicQueryMeta(),
-            }),
-            queryClient.fetchQuery({
-                queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
-                queryFn: ({ signal }) => api.storefrontContent(signal),
-                staleTime: PUBLIC_QUERY_STALE_TIME,
-                meta: publicQueryMeta(),
-            }),
-        ]);
-        if (storefrontLoadId.current !== loadId) return;
-
-        if (configResult.status === 'fulfilled') {
-            const nextStorefrontCode = configResult.value.code;
-            const nextMarket = marketForStorefrontConfig(configResult.value, market);
-            setAvailableCountries(configResult.value.availableCountries);
-            if (
-                nextMarket.code !== market.code ||
-                nextMarket.defaultLanguageCode !== market.defaultLanguageCode ||
-                nextMarket.currencyCode !== market.currencyCode ||
-                nextMarket.countryCode !== market.countryCode
-            ) {
-                setStorefrontContext({
-                    market: nextMarket,
-                    language: readStoredLanguage(nextMarket),
-                });
-                return;
-            }
-            setStorefrontCode(nextStorefrontCode);
-            setFavoriteProductIds(
-                readStoredStrings(
-                    scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
-                    FAVORITE_PRODUCT_LIMIT,
-                ),
-            );
-            setRecentProductIds(
-                readStoredStrings(
-                    scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, nextStorefrontCode),
-                    RECENT_PRODUCT_LIMIT,
-                ),
-            );
-            setStorefrontNames({
-                zh: normalizeStorefrontName(
-                    configResult.value.customFields.storefrontNameZh,
-                    DEFAULT_STOREFRONT_NAMES.zh,
-                ),
-                en: normalizeStorefrontName(
-                    configResult.value.customFields.storefrontNameEn,
-                    DEFAULT_STOREFRONT_NAMES.en,
-                ),
+    useEffect(() => {
+        const config = configQuery.data;
+        if (!config) return;
+        const nextStorefrontCode = config.code;
+        const nextMarket = marketForStorefrontConfig(config, market);
+        setAvailableCountries(config.availableCountries);
+        if (
+            nextMarket.code !== market.code ||
+            nextMarket.defaultLanguageCode !== market.defaultLanguageCode ||
+            nextMarket.currencyCode !== market.currencyCode ||
+            nextMarket.countryCode !== market.countryCode
+        ) {
+            setStorefrontContext({
+                market: nextMarket,
+                language: readStoredLanguage(nextMarket),
             });
+            return;
         }
-        if (productResult.status === 'fulfilled') {
-            setProducts(productResult.value);
-            cacheProducts(productResult.value);
-        } else
-            setError(productResult.reason instanceof Error ? productResult.reason.message : text.loadError);
-        if (collectionResult.status === 'fulfilled') setCollections(collectionResult.value);
-        if (contentResult.status === 'fulfilled') setContentBlocks(contentResult.value);
-        else {
-            setContentBlocks([]);
-            setContentError(
-                contentResult.reason instanceof Error ? contentResult.reason.message : text.loadError,
-            );
-        }
-        setLoading(false);
-        void loadSession(loadId);
-    }, [api, cacheProducts, loadSession, market, queryClient, text.loadError, vendureLanguageCode]);
+        setStorefrontCode(nextStorefrontCode);
+        setFavoriteProductIds(
+            readStoredStrings(
+                scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
+                FAVORITE_PRODUCT_LIMIT,
+            ),
+        );
+        setRecentProductIds(
+            readStoredStrings(
+                scopedStorageKey(RECENT_PRODUCT_STORAGE_KEY, nextStorefrontCode),
+                RECENT_PRODUCT_LIMIT,
+            ),
+        );
+        setStorefrontNames({
+            zh: normalizeStorefrontName(config.customFields.storefrontNameZh, DEFAULT_STOREFRONT_NAMES.zh),
+            en: normalizeStorefrontName(config.customFields.storefrontNameEn, DEFAULT_STOREFRONT_NAMES.en),
+        });
+    }, [configQuery.data, market]);
 
     useEffect(() => {
-        localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, market.code), language);
+        if (productsQuery.data) cacheProducts(productsQuery.data);
+    }, [cacheProducts, productsQuery.data]);
+
+    useEffect(() => {
+        if (cartQuery.data !== undefined) setCheckoutOrder(cartQuery.data.checkoutOrder);
+    }, [cartQuery.data]);
+
+    const refetchStorefront = useCallback(async () => {
+        await Promise.all([productsQuery.refetch(), collectionsQuery.refetch(), configQuery.refetch()]);
+    }, [collectionsQuery, configQuery, productsQuery]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, market.code), language);
+        } catch {
+            // A disabled localStorage must not prevent language changes.
+        }
         document.documentElement.lang = locale;
-        void loadStorefront();
-    }, [language, loadStorefront, locale, market.code]);
+    }, [language, locale, market.code]);
 
     useEffect(() => {
         if (activeCollectionId === 'all' && collections.length) {
@@ -727,16 +807,6 @@ export function App() {
         setMinimumPrice(route.minPrice ?? '');
         setMaximumPrice(route.maxPrice ?? '');
     }, [collections, route]);
-
-    useEffect(() => {
-        if (cart) {
-            queryClient.setQueryData(storefrontQueryKeys.cart(market.code, vendureLanguageCode), cart);
-        }
-    }, [cart, market.code, queryClient, vendureLanguageCode]);
-
-    useEffect(() => {
-        queryClient.setQueryData(storefrontQueryKeys.customer(market.code, vendureLanguageCode), customer);
-    }, [customer, market.code, queryClient, vendureLanguageCode]);
 
     const refreshCart = useCallback(async () => {
         const latest = await api.cart();
@@ -1193,8 +1263,44 @@ export function App() {
         [navigate],
     );
 
-    const renderPage = (route: RouteState) => {
-        switch (route.name) {
+    const renderPage = (pageRoute: RouteState) => {
+        if (customerResolvedRoutes.includes(pageRoute.name) && customerLoadState !== 'ready') {
+            return (
+                <AsyncRouteStatePage
+                    routeName={pageRoute.name}
+                    state={customerLoadState}
+                    error={customerLoadError}
+                    language={language}
+                    onBack={goBack}
+                    onRetry={() => void customerQuery.refetch()}
+                />
+            );
+        }
+        if (cartResolvedRoutes.includes(pageRoute.name) && cartLoadState !== 'ready') {
+            return (
+                <AsyncRouteStatePage
+                    routeName={pageRoute.name}
+                    state={cartLoadState}
+                    error={cartQueryError ?? text.loadError}
+                    language={language}
+                    onBack={goBack}
+                    onRetry={() => void cartQuery.refetch()}
+                />
+            );
+        }
+        if (pageRoute.name === 'checkout' && publicLoadState !== 'ready') {
+            return (
+                <AsyncRouteStatePage
+                    routeName={pageRoute.name}
+                    state={publicLoadState}
+                    error={error ?? text.loadError}
+                    language={language}
+                    onBack={goBack}
+                    onRetry={() => void refetchStorefront()}
+                />
+            );
+        }
+        switch (pageRoute.name) {
             case 'home':
                 return (
                     <HomePage
@@ -1223,7 +1329,8 @@ export function App() {
                         onToggleLanguage={toggleLanguage}
                         onNotifications={() => navigate({ name: 'notifications' })}
                         onContentTarget={openContentTarget}
-                        onRetry={() => void loadStorefront()}
+                        onContentRetry={() => void contentQuery.refetch()}
+                        onRetry={() => void refetchStorefront()}
                     />
                 );
             case 'category':
@@ -1261,7 +1368,7 @@ export function App() {
                         onNavigate={navigate}
                         onAdd={variant => void addToCart(variant)}
                         onNotify={() => navigate({ name: 'notifications' })}
-                        onRetry={() => void loadStorefront()}
+                        onRetry={() => void refetchStorefront()}
                     />
                 );
             case 'cart':
@@ -1273,8 +1380,8 @@ export function App() {
                         market={market}
                         locale={locale}
                         language={language}
-                        loading={cartLoading || sessionLoading}
-                        error={cartError}
+                        loading={cartLoading}
+                        error={cartError ?? cartQueryError}
                         addingVariantId={addingVariantId}
                         onToggleAll={() =>
                             void mutateCart(revision =>
@@ -1326,9 +1433,9 @@ export function App() {
                     />
                 );
             case 'product':
-                return routeProductLoading || (route.id && !selectedProduct && !routeProductError) ? (
+                return !selectedProduct && (routeProductLoading || (pageRoute.id && !routeProductError)) ? (
                     <Subpage title={isZh ? '商品详情' : 'Product'} language={language} onBack={goBack}>
-                        <PageSkeleton />
+                        <PageSkeleton label={isZh ? '正在加载商品详情' : 'Loading product details'} />
                     </Subpage>
                 ) : selectedProduct ? (
                     <ProductDetailPage
@@ -1373,7 +1480,7 @@ export function App() {
                         locale={locale}
                         language={language}
                         storefrontCode={storefrontCode}
-                        initialQuery={route.term ?? ''}
+                        initialQuery={pageRoute.term ?? ''}
                         addingVariantId={addingVariantId}
                         onBack={goBack}
                         onNavigate={navigate}
@@ -1386,7 +1493,7 @@ export function App() {
                         <LazyCheckoutPage
                             api={api}
                             cart={cart}
-                            order={checkoutOrder}
+                            order={currentCheckoutOrder}
                             customer={customer}
                             market={market}
                             availableCountries={availableCountries}
@@ -1414,7 +1521,7 @@ export function App() {
                         <LazyPaymentPage
                             api={api}
                             cart={cart}
-                            order={checkoutOrder}
+                            order={currentCheckoutOrder}
                             market={market}
                             locale={locale}
                             language={language}
@@ -1455,8 +1562,8 @@ export function App() {
                     <AuthPageBoundary language={language} onBack={goBack}>
                         <LazyOrderConfirmationPage
                             api={api}
-                            code={route.id ?? ''}
-                            confirmationToken={route.token ?? ''}
+                            code={pageRoute.id ?? ''}
+                            confirmationToken={pageRoute.token ?? ''}
                             initialOrder={completedOrder}
                             customer={customer}
                             market={market}
@@ -1476,7 +1583,7 @@ export function App() {
                             locale={locale}
                             language={language}
                             storefrontName={storefrontName}
-                            initialTab={route.tab ?? 'all'}
+                            initialTab={pageRoute.tab ?? 'all'}
                             onBack={goBack}
                             onNavigate={navigate}
                             onBuyAgain={addOrderToCart}
@@ -1485,9 +1592,23 @@ export function App() {
                     </AuthPageBoundary>
                 );
             case 'order-detail':
-                return routeOrderLoading || (route.id && !selectedOrder && !routeOrderError) ? (
+                return !customer ? (
                     <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={goBack}>
-                        <PageSkeleton />
+                        <EmptyState
+                            icon={<UserRound />}
+                            title={isZh ? '登录后查看订单' : 'Sign in to view orders'}
+                            detail={
+                                isZh
+                                    ? '订单详情仅对当前账户可见'
+                                    : 'Order details are available to your account.'
+                            }
+                            action={isZh ? '去登录' : 'Sign in'}
+                            onAction={() => navigate({ name: 'login' })}
+                        />
+                    </Subpage>
+                ) : !selectedOrder && (routeOrderLoading || (pageRoute.id && !routeOrderError)) ? (
+                    <Subpage title={isZh ? '订单详情' : 'Order details'} language={language} onBack={goBack}>
+                        <PageSkeleton label={isZh ? '正在加载订单详情' : 'Loading order details'} />
                     </Subpage>
                 ) : selectedOrder ? (
                     <AuthPageBoundary language={language} onBack={goBack}>
@@ -1686,7 +1807,7 @@ export function App() {
                             api={api}
                             language={language}
                             storefrontName={storefrontName}
-                            token={route.token}
+                            token={pageRoute.token}
                             onBack={goBack}
                             onSuccess={completeAuthentication}
                             onNavigate={navigate}
@@ -1712,7 +1833,7 @@ export function App() {
                             api={api}
                             language={language}
                             storefrontName={storefrontName}
-                            token={route.token}
+                            token={pageRoute.token}
                             onBack={goBack}
                             onSuccess={completeAuthentication}
                             onNavigate={navigate}
@@ -1722,7 +1843,7 @@ export function App() {
             case 'legal':
                 return (
                     <ManagedLegalPage
-                        kind={route.id === 'terms' ? 'terms' : 'privacy'}
+                        kind={pageRoute.id === 'terms' ? 'terms' : 'privacy'}
                         language={language}
                         storefrontName={storefrontName}
                         contentBlocks={contentBlocks}
@@ -1744,7 +1865,7 @@ export function App() {
     const isRootRoute = rootPages.includes(route.name as MainPage);
 
     return (
-        <div className="storefront-app">
+        <div className={`storefront-app${online ? '' : ' is-offline'}`}>
             <a className="skip-link" href="#storefront-content">
                 {isZh ? '跳到主要内容' : 'Skip to content'}
             </a>
@@ -1754,7 +1875,7 @@ export function App() {
                     {isZh ? '当前网络不可用，部分操作可能失败' : 'You are offline. Some actions may fail.'}
                 </div>
             )}
-            {((isNavigationPending && !isRootRoute) || productQuery.isFetching) && (
+            {(isNavigationPending || activeQueryFetchCount > 0) && (
                 <div className="navigation-progress" role="progressbar" aria-label={text.loading} />
             )}
             <div id="storefront-content">
@@ -1800,6 +1921,7 @@ interface HomePageProps {
     onToggleLanguage: () => void;
     onNotifications: () => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+    onContentRetry: () => void;
     onRetry: () => void;
 }
 
@@ -1822,6 +1944,7 @@ function HomePage(props: HomePageProps) {
         onToggleLanguage,
         onNotifications,
         onContentTarget,
+        onContentRetry,
         onRetry,
     } = props;
     const isZh = language === 'zh';
@@ -1977,7 +2100,7 @@ function HomePage(props: HomePageProps) {
             {contentError && (
                 <div className="content-warning" role="status">
                     <span>{isZh ? '店铺内容暂时无法加载' : 'Store content is temporarily unavailable'}</span>
-                    <button type="button" onClick={onRetry}>
+                    <button type="button" onClick={onContentRetry}>
                         <RotateCcw aria-hidden="true" />
                         {isZh ? '重试' : 'Retry'}
                     </button>
@@ -1985,7 +2108,7 @@ function HomePage(props: HomePageProps) {
             )}
 
             {loading ? (
-                <PageSkeleton />
+                <PageSkeleton label={isZh ? '正在加载首页' : 'Loading home page'} />
             ) : error ? (
                 <EmptyState
                     icon={<WifiOff />}
@@ -2393,11 +2516,24 @@ function CategoryPage(props: CategoryPageProps) {
     const queryClient = useQueryClient();
     const isZh = language === 'zh';
     const [filterOpen, setFilterOpen] = useState(false);
+    const [allCategoriesOpen, setAllCategoriesOpen] = useState(false);
     const [draftType, setDraftType] = useState<'all' | FulfillmentType>(fulfillmentFilter);
     const [draftStock, setDraftStock] = useState(inStockOnly);
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
-    const primary = collections.find(item => item.id === activeCollectionId) ?? collections[0];
+    const primaryCollections = collections.length ? collections : fallbackCollections(isZh);
+    const primary = primaryCollections.find(item => item.id === activeCollectionId) ?? primaryCollections[0];
+    const primaryCollectionImage = (collection: CollectionSummary) =>
+        collectionImage(collection) ??
+        productImage(
+            products.find(product =>
+                product.collections.some(
+                    productCollection =>
+                        productCollection.id === collection.id ||
+                        productCollection.parentId === collection.id,
+                ),
+            ),
+        );
     const children = primary?.children ?? [];
     const hasChildCategories = children.length > 0;
     const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
@@ -2442,7 +2578,7 @@ function CategoryPage(props: CategoryPageProps) {
                 product.variants.some(variant => variant.customFields.fulfillmentType === type);
             const stockMatch =
                 !stockOnly || product.variants.some(variant => variant.stockLevel !== 'OUT_OF_STOCK');
-            const price = minimumPrice(product) / 100;
+            const price = minimumProductPrice(product) / 100;
             const minimumMatch = minimum === '' || price >= Number(minimum);
             const maximumMatch = maximum === '' || price <= Number(maximum);
             return typeMatch && stockMatch && minimumMatch && maximumMatch;
@@ -2465,12 +2601,14 @@ function CategoryPage(props: CategoryPageProps) {
         ? (catalogQuery.data?.pages[0]?.totalItems ?? 0)
         : fallbackProducts.length;
     const remainingItems = Math.max(totalItems - categoryProducts.length, 0);
-    const categoryLoading = collections.length ? catalogQuery.isPending : loading;
+    const categoryLoading = collections.length ? catalogQuery.isLoading : loading;
     const loadingMore = catalogQuery.isFetchingNextPage;
     const categoryError = collections.length
-        ? catalogQuery.error instanceof Error
-            ? catalogQuery.error.message
-            : ''
+        ? catalogQuery.isPaused && catalogQuery.data === undefined
+            ? offlineLoadError(language)
+            : catalogQuery.error instanceof Error
+              ? catalogQuery.error.message
+              : ''
         : (error ?? '');
 
     useEffect(() => {
@@ -2479,12 +2617,21 @@ function CategoryPage(props: CategoryPageProps) {
             queryClient.setQueryData(queryKey, product);
             void queryClient.prefetchQuery({
                 queryKey,
-                queryFn: async () => product,
+                queryFn: () => product,
                 staleTime: PUBLIC_QUERY_STALE_TIME,
                 meta: publicQueryMeta(),
             });
         }
     }, [categoryProducts, market.code, queryClient, vendureLanguageCode]);
+
+    useEffect(() => {
+        if (!allCategoriesOpen) return;
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setAllCategoriesOpen(false);
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [allCategoriesOpen]);
 
     const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
@@ -2519,41 +2666,131 @@ function CategoryPage(props: CategoryPageProps) {
                 <NoticeButton language={language} onClick={onNotify} />
             </header>
 
-            <nav className="primary-categories" aria-label={isZh ? '一级分类' : 'Main categories'}>
-                {(collections.length ? collections : fallbackCollections(isZh)).map(collection => {
-                    const image = collectionImage(collection);
-                    return (
+            <section
+                className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
+                aria-label={isZh ? '商品分类切换' : 'Category switcher'}
+            >
+                {!allCategoriesOpen ? (
+                    <div className="primary-category-strip">
+                        <nav
+                            className="primary-categories"
+                            aria-label={isZh ? '一级分类' : 'Main categories'}
+                        >
+                            {primaryCollections.map(collection => {
+                                const image = primaryCollectionImage(collection);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={collection.id}
+                                        className={
+                                            collection.id === activeCollectionId ? 'is-active' : undefined
+                                        }
+                                        aria-pressed={collection.id === activeCollectionId}
+                                        onClick={event => {
+                                            onCollectionChange(
+                                                collection.id,
+                                                collection.children?.[0]?.id ?? collection.id,
+                                            );
+                                            event.currentTarget.scrollIntoView({
+                                                behavior: 'smooth',
+                                                block: 'nearest',
+                                                inline: 'center',
+                                            });
+                                        }}
+                                    >
+                                        <span className="primary-category-image" aria-hidden="true">
+                                            {image ? (
+                                                <SafeImage
+                                                    src={image}
+                                                    alt=""
+                                                    imageKind="thumbnail"
+                                                    loading="lazy"
+                                                />
+                                            ) : (
+                                                <span className="primary-category-placeholder">
+                                                    <LayoutGrid aria-hidden="true" />
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span className="primary-category-label">{collection.name}</span>
+                                    </button>
+                                );
+                            })}
+                        </nav>
                         <button
                             type="button"
-                            key={collection.id}
-                            className={collection.id === activeCollectionId ? 'is-active' : undefined}
-                            aria-pressed={collection.id === activeCollectionId}
-                            onClick={event => {
-                                onCollectionChange(
-                                    collection.id,
-                                    collection.children?.[0]?.id ?? collection.id,
-                                );
-                                event.currentTarget.scrollIntoView({
-                                    behavior: 'smooth',
-                                    block: 'nearest',
-                                    inline: 'center',
-                                });
-                            }}
+                            className="primary-categories-all"
+                            aria-expanded="false"
+                            aria-label={isZh ? '展开全部分类' : 'Expand all categories'}
+                            onClick={() => setAllCategoriesOpen(true)}
                         >
-                            <span className="primary-category-image" aria-hidden="true">
-                                {image ? (
-                                    <SafeImage src={image} alt="" imageKind="thumbnail" loading="lazy" />
+                            <span aria-hidden="true">
+                                {isZh ? (
+                                    <>
+                                        全<br />部
+                                    </>
                                 ) : (
-                                    <span className="primary-category-placeholder">
-                                        <LayoutGrid aria-hidden="true" />
-                                    </span>
+                                    'All'
                                 )}
                             </span>
-                            <span className="primary-category-label">{collection.name}</span>
+                            <ChevronDown aria-hidden="true" />
                         </button>
-                    );
-                })}
-            </nav>
+                    </div>
+                ) : (
+                    <div className="all-primary-categories">
+                        <h2>{isZh ? '全部分类' : 'All categories'}</h2>
+                        <nav
+                            className="all-primary-category-grid"
+                            aria-label={isZh ? '全部分类' : 'All categories'}
+                        >
+                            {primaryCollections.map(collection => {
+                                const image = primaryCollectionImage(collection);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={collection.id}
+                                        className={
+                                            collection.id === activeCollectionId ? 'is-active' : undefined
+                                        }
+                                        aria-pressed={collection.id === activeCollectionId}
+                                        onClick={() => {
+                                            onCollectionChange(
+                                                collection.id,
+                                                collection.children?.[0]?.id ?? collection.id,
+                                            );
+                                            setAllCategoriesOpen(false);
+                                        }}
+                                    >
+                                        <span className="all-primary-category-image" aria-hidden="true">
+                                            {image ? (
+                                                <SafeImage
+                                                    src={image}
+                                                    alt=""
+                                                    imageKind="thumbnail"
+                                                    loading="lazy"
+                                                />
+                                            ) : (
+                                                <span className="primary-category-placeholder">
+                                                    <LayoutGrid aria-hidden="true" />
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span>{collection.name}</span>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                        <button
+                            type="button"
+                            className="all-primary-categories-collapse"
+                            onClick={() => setAllCategoriesOpen(false)}
+                        >
+                            <span>{isZh ? '点击收起' : 'Collapse'}</span>
+                            <ChevronUp aria-hidden="true" />
+                        </button>
+                    </div>
+                )}
+            </section>
 
             <div className={`category-layout ${hasChildCategories ? '' : 'is-single-level'}`}>
                 {hasChildCategories && (
@@ -2648,16 +2885,8 @@ function CategoryPage(props: CategoryPageProps) {
                         </button>
                     </nav>
 
-                    {catalogQuery.isFetching && !categoryLoading && (
-                        <div
-                            className="category-query-progress"
-                            role="progressbar"
-                            aria-label={isZh ? '正在更新商品' : 'Updating products'}
-                        />
-                    )}
-
                     {categoryLoading || (loading && !collections.length) ? (
-                        <ListSkeleton />
+                        <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
                     ) : categoryError && !categoryProducts.length ? (
                         <EmptyState
                             icon={<WifiOff />}
@@ -3023,7 +3252,7 @@ function CartPage(props: CartPageProps) {
                 </div>
             )}
             {loading && (!customer || !cart) ? (
-                <ListSkeleton />
+                <ListSkeleton label={isZh ? '正在加载购物车' : 'Loading cart'} />
             ) : !customer ? (
                 <section className="empty-state cart-auth-state" aria-labelledby="cart-auth-title">
                     <span>
@@ -3347,19 +3576,9 @@ function AccountPage(props: AccountPageProps) {
                             </span>
                         </button>
                         <div className="account-hero-manage">
-                            <button
-                                type="button"
-                                onClick={() => onNavigate({ name: 'account-security' })}
-                            >
-                                {isZh ? '管理账户' : 'Manage account'}
-                                <ChevronRight aria-hidden="true" />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => onNavigate({ name: 'account-security' })}
-                                aria-label={isZh ? '账户设置' : 'Account settings'}
-                            >
+                            <button type="button" onClick={() => onNavigate({ name: 'account-security' })}>
                                 <Settings aria-hidden="true" />
+                                {isZh ? '管理账户' : 'Manage account'}
                             </button>
                         </div>
                     </div>
@@ -3446,7 +3665,6 @@ function AccountPage(props: AccountPageProps) {
             )}
 
             <section className="account-section services-section">
-                <h2>{isZh ? '常用服务' : 'Services'}</h2>
                 <div>
                     <ServiceButton
                         icon={<Heart />}
@@ -3562,7 +3780,8 @@ function AccountPage(props: AccountPageProps) {
 
             <ProductSection
                 title={isZh ? '为你推荐' : 'Recommended for you'}
-                subtitle={isZh ? '继续发现合适的好物' : 'Keep discovering'}
+                centerLabel={isZh ? '专属推荐' : 'Just for you'}
+                className="account-recommendation-section"
                 products={products.slice(0, 4)}
                 market={market}
                 locale={locale}
@@ -3603,9 +3822,13 @@ export function FavoriteProductsPage({
     const isZh = language === 'zh';
     const favoritesQuery = useProductsByIdsQuery({ api, productIds, market, language });
     const favoriteProducts = productIds.length ? (favoritesQuery.data ?? []) : [];
-    const loading = productIds.length > 0 && favoritesQuery.isPending;
+    const loading = productIds.length > 0 && favoritesQuery.isLoading;
     const favoriteError =
-        !favoriteProducts.length && favoritesQuery.error instanceof Error ? favoritesQuery.error.message : '';
+        !favoriteProducts.length && favoritesQuery.isPaused
+            ? offlineLoadError(language)
+            : !favoriteProducts.length && favoritesQuery.error instanceof Error
+              ? favoritesQuery.error.message
+              : '';
     const availableProducts = favoriteProducts.filter(product => productIds.includes(product.id));
 
     return (
@@ -3627,7 +3850,7 @@ export function FavoriteProductsPage({
                 }
             />
             {loading && !favoriteProducts.length ? (
-                <PageSkeleton />
+                <PageSkeleton label={isZh ? '正在加载收藏商品' : 'Loading favorites'} />
             ) : favoriteError ? (
                 <EmptyState
                     icon={<WifiOff />}
@@ -3700,9 +3923,13 @@ export function BrowsingHistoryPage({
     const isZh = language === 'zh';
     const historyQuery = useProductsByIdsQuery({ api, productIds, market, language });
     const historyProducts = productIds.length ? (historyQuery.data ?? []) : [];
-    const loading = productIds.length > 0 && historyQuery.isPending;
+    const loading = productIds.length > 0 && historyQuery.isLoading;
     const historyError =
-        !historyProducts.length && historyQuery.error instanceof Error ? historyQuery.error.message : '';
+        !historyProducts.length && historyQuery.isPaused
+            ? offlineLoadError(language)
+            : !historyProducts.length && historyQuery.error instanceof Error
+              ? historyQuery.error.message
+              : '';
 
     return (
         <main className="page subpage history-page">
@@ -3723,7 +3950,7 @@ export function BrowsingHistoryPage({
                 }
             />
             {loading && !historyProducts.length ? (
-                <PageSkeleton />
+                <PageSkeleton label={isZh ? '正在加载浏览足迹' : 'Loading browsing history'} />
             ) : historyError ? (
                 <EmptyState
                     icon={<WifiOff />}
@@ -3969,6 +4196,24 @@ function NotificationsPage({
                     detail={isZh ? '订单状态更新会显示在这里' : 'Order status updates will appear here'}
                     action={isZh ? '去登录' : 'Sign in'}
                     onAction={() => onNavigate({ name: 'login' })}
+                />
+            ) : afterSalesQuery.isLoading && !orders.length ? (
+                <PageSkeleton label={isZh ? '正在加载通知' : 'Loading notifications'} />
+            ) : ((afterSalesQuery.isPaused && afterSalesQuery.data === undefined) ||
+                  afterSalesQuery.isError) &&
+              !orders.length ? (
+                <EmptyState
+                    icon={<WifiOff />}
+                    title={isZh ? '消息加载失败' : 'Could not load notifications'}
+                    detail={
+                        afterSalesQuery.isPaused
+                            ? offlineLoadError(language)
+                            : afterSalesQuery.error instanceof Error
+                              ? afterSalesQuery.error.message
+                              : ''
+                    }
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={() => void afterSalesQuery.refetch()}
                 />
             ) : orders.length || afterSalesRequests.length ? (
                 <section
@@ -4545,9 +4790,14 @@ function SearchPage({
     });
     const results = searchQuery.data?.pages.flatMap(page => page.items) ?? [];
     const totalItems = searchQuery.data?.pages[0]?.totalItems ?? 0;
-    const searching = searchQuery.isPending;
+    const searching = searchQuery.isLoading;
     const loadingMore = searchQuery.isFetchingNextPage;
-    const searchError = searchQuery.error instanceof Error ? searchQuery.error.message : '';
+    const searchError =
+        searchQuery.isPaused && searchQuery.data === undefined
+            ? offlineLoadError(language)
+            : searchQuery.error instanceof Error
+              ? searchQuery.error.message
+              : '';
     const relatedProducts = products
         .filter(product => !results.some(result => result.id === product.id))
         .slice(0, 2);
@@ -4579,7 +4829,7 @@ function SearchPage({
             queryClient.setQueryData(queryKey, product);
             void queryClient.prefetchQuery({
                 queryKey,
-                queryFn: async () => product,
+                queryFn: () => product,
                 staleTime: PUBLIC_QUERY_STALE_TIME,
                 meta: publicQueryMeta(),
             });
@@ -4753,7 +5003,7 @@ function SearchPage({
                         </button>
                     </nav>
                     {searching ? (
-                        <ListSkeleton />
+                        <ListSkeleton label={isZh ? '正在搜索商品' : 'Searching products'} />
                     ) : searchError && !results.length ? (
                         <EmptyState
                             icon={<CircleAlert />}
@@ -4830,6 +5080,72 @@ function SearchPage({
     );
 }
 
+function asyncRouteTitle(routeName: RouteName, language: StorefrontLanguage): string {
+    const isZh = language === 'zh';
+    const routeTitles: Partial<Record<RouteName, string>> = {
+        account: isZh ? '我的账户' : 'Account',
+        cart: isZh ? '购物车' : 'Cart',
+        checkout: isZh ? '确认订单' : 'Review order',
+        payment: isZh ? '选择支付方式' : 'Choose payment',
+        'order-confirmation': isZh ? '订单已提交' : 'Order confirmed',
+        orders: isZh ? '我的订单' : 'My orders',
+        'order-detail': isZh ? '订单详情' : 'Order details',
+        addresses: isZh ? '地址管理' : 'Addresses',
+        'account-security': isZh ? '账户与安全' : 'Account and security',
+        notifications: isZh ? '消息通知' : 'Notifications',
+        coupons: isZh ? '优惠券' : 'Coupons',
+        reviews: isZh ? '评价中心' : 'Reviews',
+        login: isZh ? '登录' : 'Sign in',
+        register: isZh ? '注册账户' : 'Create account',
+        'verify-account': isZh ? '验证邮箱' : 'Verify email',
+        'forgot-password': isZh ? '忘记密码' : 'Forgot password',
+        'reset-password': isZh ? '重置密码' : 'Reset password',
+    };
+    return routeTitles[routeName] ?? (isZh ? '正在加载' : 'Loading');
+}
+
+function AsyncRouteStatePage({
+    routeName,
+    state,
+    error,
+    language,
+    onBack,
+    onRetry,
+}: {
+    routeName: RouteName;
+    state: Exclude<QueryLoadState, 'ready'>;
+    error: string;
+    language: StorefrontLanguage;
+    onBack: () => void;
+    onRetry: () => void;
+}) {
+    const isZh = language === 'zh';
+    const title = asyncRouteTitle(routeName, language);
+    return (
+        <Subpage title={title} language={language} onBack={onBack}>
+            {state === 'loading' ? (
+                <PageSkeleton label={isZh ? '正在加载' : 'Loading'} />
+            ) : (
+                <EmptyState
+                    icon={state === 'paused' ? <WifiOff /> : <CircleAlert />}
+                    title={
+                        state === 'paused'
+                            ? isZh
+                                ? '网络连接已暂停'
+                                : 'Connection paused'
+                            : isZh
+                              ? '页面数据加载失败'
+                              : 'Could not load this page'
+                    }
+                    detail={error}
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={onRetry}
+                />
+            )}
+        </Subpage>
+    );
+}
+
 function AuthPageBoundary({
     language,
     onBack,
@@ -4839,11 +5155,12 @@ function AuthPageBoundary({
     onBack: () => void;
     children: ReactNode;
 }) {
+    const title = asyncRouteTitle(routeFromLocation().name, language);
     return (
         <Suspense
             fallback={
-                <Subpage title={language === 'zh' ? '账户' : 'Account'} language={language} onBack={onBack}>
-                    <PageSkeleton />
+                <Subpage title={title} language={language} onBack={onBack}>
+                    <PageSkeleton label={language === 'zh' ? '正在加载页面' : 'Loading page'} />
                 </Subpage>
             }
         >
@@ -4896,6 +5213,8 @@ function BottomNavigation({
 function ProductSection({
     title,
     subtitle,
+    centerLabel,
+    className,
     products,
     market,
     locale,
@@ -4906,7 +5225,9 @@ function ProductSection({
     onAdd,
 }: {
     title: string;
-    subtitle: string;
+    subtitle?: string;
+    centerLabel?: string;
+    className?: string;
     products: Product[];
     market: MarketConfig;
     locale: string;
@@ -4918,8 +5239,8 @@ function ProductSection({
 }) {
     if (!products.length) return null;
     return (
-        <section className="content-section product-section">
-            <SectionHeader title={title} subtitle={subtitle} />
+        <section className={`content-section product-section${className ? ` ${className}` : ''}`}>
+            <SectionHeader title={title} subtitle={subtitle} centerLabel={centerLabel} />
             <div className="product-grid">
                 {products.map(product => (
                     <ProductCard
@@ -5377,11 +5698,13 @@ function NoticeButton({ language, onClick }: { language: StorefrontLanguage; onC
 function SectionHeader({
     title,
     subtitle,
+    centerLabel,
     action,
     onAction,
 }: {
     title: string;
     subtitle?: string;
+    centerLabel?: string;
     action?: string;
     onAction?: () => void;
 }) {
@@ -5391,6 +5714,7 @@ function SectionHeader({
                 <h2>{title}</h2>
                 {subtitle && <p>{subtitle}</p>}
             </div>
+            {centerLabel && <span className="section-header-center-label">{centerLabel}</span>}
             {action && (
                 <button type="button" onClick={onAction}>
                     {action}
@@ -5557,8 +5881,8 @@ function SafeImage({
 
     useEffect(() => {
         if (sourceIdentityRef.current === sourceIdentity) {
-            const image = imageRef.current;
-            if (image?.complete && image.naturalWidth > 0) setLoaded(true);
+            const imageElement = imageRef.current;
+            if (imageElement?.complete && imageElement.naturalWidth > 0) setLoaded(true);
             return;
         }
         sourceIdentityRef.current = sourceIdentity;
@@ -5690,9 +6014,9 @@ function InlineError({
         </div>
     );
 }
-function ListSkeleton() {
+function ListSkeleton({ label = 'Loading' }: { label?: string }) {
     return (
-        <div className="list-skeleton" aria-label="Loading">
+        <div className="list-skeleton" role="status" aria-label={label}>
             {[0, 1, 2, 3].map(item => (
                 <span key={item}>
                     <i />
@@ -5960,7 +6284,7 @@ function collectionImage(collection: CollectionSummary): string | null {
         null
     );
 }
-function minimumPrice(product: Product): number {
+function minimumProductPrice(product: Product): number {
     return Math.min(...product.variants.map(variant => variant.priceWithTax), Number.MAX_SAFE_INTEGER);
 }
 function trimText(value: string | undefined, length: number): string {

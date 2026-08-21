@@ -3,7 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApiError } from './api';
-import { loginErrorMessage, LoginPage, RegisterPage, splitCustomerName } from './auth-pages';
+import {
+    loginErrorMessage,
+    LoginPage,
+    registerErrorMessage,
+    RegisterPage,
+    splitCustomerName,
+} from './auth-pages';
 
 const authPageProps = {
     api: {} as never,
@@ -43,6 +49,42 @@ describe('loginErrorMessage', () => {
         expect(loginErrorMessage(error, 'zh')).toBe('该电子邮箱尚未验证，请先查收验证邮件');
         expect(loginErrorMessage(error, 'en')).toContain('has not been verified');
     });
+
+    it('identifies connection failures and preserves unknown Shop API error codes', () => {
+        expect(loginErrorMessage(new TypeError('Failed to fetch'), 'zh')).toBe(
+            '网络连接失败，请检查网络后重试',
+        );
+        expect(loginErrorMessage(new ShopApiError('RATE_LIMIT_ERROR', 'Too many attempts'), 'zh')).toBe(
+            '登录失败（错误代码：RATE_LIMIT_ERROR）',
+        );
+    });
+});
+
+describe('registerErrorMessage', () => {
+    it('identifies an email address which is already registered', () => {
+        const error = new ShopApiError('EMAIL_ADDRESS_CONFLICT_ERROR', 'The email address is not available');
+
+        expect(registerErrorMessage(error, 'zh')).toBe('该电子邮箱已注册，请直接登录或使用其他邮箱');
+        expect(registerErrorMessage(error, 'en')).toContain('already registered');
+    });
+
+    it('identifies password validation and registration service failures', () => {
+        expect(
+            registerErrorMessage(new ShopApiError('PASSWORD_VALIDATION_ERROR', 'Password is invalid'), 'zh'),
+        ).toBe('密码不符合安全要求，请重新设置');
+        expect(
+            registerErrorMessage(new ShopApiError('NATIVE_AUTH_STRATEGY_ERROR', 'Auth unavailable'), 'zh'),
+        ).toBe('账户注册服务暂时不可用，请稍后重试');
+    });
+
+    it('identifies connection failures and preserves unknown Shop API error codes', () => {
+        expect(registerErrorMessage(new Error('Network request failed'), 'zh')).toBe(
+            '网络连接失败，请检查网络后重试',
+        );
+        expect(registerErrorMessage(new ShopApiError('RATE_LIMIT_ERROR', 'Too many attempts'), 'zh')).toBe(
+            '注册失败（错误代码：RATE_LIMIT_ERROR）',
+        );
+    });
 });
 
 describe('auth password visibility controls', () => {
@@ -61,6 +103,7 @@ describe('auth password visibility controls', () => {
     it('renders independent password visibility buttons for registration and confirmation', () => {
         const markup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
 
+        expect(markup).toContain('/storefront/auth-ai-bridge-hero.webp');
         expect(markup).toContain('/storefront/auth-ai-bridge-hero.jpg');
         expect(markup).toContain('智联云端 · 桥接未来');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);

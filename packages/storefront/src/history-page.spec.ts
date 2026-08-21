@@ -82,7 +82,7 @@ describe('BrowsingHistoryPage', () => {
     it('shows a stable loading state instead of flashing the empty state on first entry', () => {
         const markup = renderHistory();
 
-        expect(markup).toContain('aria-label="Loading"');
+        expect(markup).toContain('aria-label="正在加载浏览足迹"');
         expect(markup).not.toContain('暂无浏览足迹');
     });
 
@@ -98,7 +98,7 @@ describe('FavoriteProductsPage', () => {
     it('shows the shared loading state instead of flashing the empty state on first entry', () => {
         const markup = renderFavorites();
 
-        expect(markup).toContain('aria-label="Loading"');
+        expect(markup).toContain('aria-label="正在加载收藏商品"');
         expect(markup).not.toContain('暂无收藏商品');
     });
 

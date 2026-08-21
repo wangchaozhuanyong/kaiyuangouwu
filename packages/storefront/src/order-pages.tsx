@@ -19,6 +19,7 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
 import { languageCodeFor } from './i18n';
+import { offlineLoadError } from './loading-state';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { responsiveImageSources } from './responsive-image';
@@ -141,16 +142,18 @@ export function OrdersPage({
         }
     };
     const totalItems = ordersQuery.data?.pages[0]?.totalItems ?? 0;
-    const loading = ordersQuery.isPending;
+    const loading = ordersQuery.isLoading;
     const loadingMore = ordersQuery.isFetchingNextPage;
     const listError =
-        ordersQuery.error instanceof Error
-            ? ordersQuery.error.message
-            : ordersQuery.error
-              ? isZh
-                  ? '订单加载失败'
-                  : 'Could not load orders'
-              : '';
+        ordersQuery.isPaused && ordersQuery.data === undefined
+            ? offlineLoadError(language)
+            : ordersQuery.error instanceof Error
+              ? ordersQuery.error.message
+              : ordersQuery.error
+                ? isZh
+                    ? '订单加载失败'
+                    : 'Could not load orders'
+                : '';
     const tabs: Array<{ id: OrderTab; label: string }> = [
         { id: 'all', label: isZh ? '全部' : 'All' },
         { id: 'pending', label: isZh ? '待付款' : 'To pay' },
@@ -235,8 +238,14 @@ export function OrdersPage({
             ) : tab === 'service' ? (
                 <AfterSalesList
                     requests={afterSalesQuery.data ?? []}
-                    loading={afterSalesQuery.isPending}
-                    error={afterSalesQuery.error instanceof Error ? afterSalesQuery.error.message : ''}
+                    loading={afterSalesQuery.isLoading}
+                    error={
+                        afterSalesQuery.isPaused && afterSalesQuery.data === undefined
+                            ? offlineLoadError(language)
+                            : afterSalesQuery.error instanceof Error
+                              ? afterSalesQuery.error.message
+                              : ''
+                    }
                     cancellingId={cancellingAfterSalesId}
                     locale={locale}
                     language={language}
@@ -245,7 +254,7 @@ export function OrdersPage({
                     onCancel={id => void cancelAfterSales(id)}
                 />
             ) : loading && !orders.length ? (
-                <PageSkeleton />
+                <PageSkeleton label={isZh ? '正在加载订单' : 'Loading orders'} />
             ) : listError && !orders.length ? (
                 <EmptyState
                     icon={<WifiOff />}
@@ -324,7 +333,9 @@ function AfterSalesList({
     onCancel: (id: string) => void;
 }) {
     const isZh = language === 'zh';
-    if (loading && !requests.length) return <PageSkeleton />;
+    if (loading && !requests.length) {
+        return <PageSkeleton label={isZh ? '正在加载售后记录' : 'Loading after-sales requests'} />;
+    }
     if (error && !requests.length) {
         return (
             <EmptyState
@@ -1397,16 +1408,17 @@ function shippingEstimate(order: Order, language: StorefrontLanguage): string {
     if (!shipping) return language === 'zh' ? '无需配送' : 'No delivery required';
     const minimum = shipping.estimateMinDays;
     const maximum = shipping.estimateMaxDays;
+    const firstAvailableDay = minimum ?? maximum;
     const estimate =
-        minimum == null && maximum == null
+        firstAvailableDay == null
             ? ''
             : minimum === maximum || maximum == null
               ? language === 'zh'
-                  ? `预计 ${minimum ?? maximum} 天`
-                  : `Estimated ${minimum ?? maximum} days`
+                  ? `预计 ${firstAvailableDay} 天`
+                  : `Estimated ${firstAvailableDay} days`
               : language === 'zh'
-                ? `预计 ${minimum ?? maximum}–${maximum} 天`
-                : `Estimated ${minimum ?? maximum}–${maximum} days`;
+                ? `预计 ${firstAvailableDay}–${maximum} 天`
+                : `Estimated ${firstAvailableDay}–${maximum} days`;
     return [
         shipping.methodName,
         estimate,

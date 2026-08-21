@@ -97,7 +97,7 @@ describe('OrdersPage route query', () => {
     it('shows a stable loading state instead of flashing the empty state on first entry', () => {
         const markup = renderOrders();
 
-        expect(markup).toContain('aria-label="Loading"');
+        expect(markup).toContain('aria-label="正在加载订单"');
         expect(markup).not.toContain('暂无相关订单');
     });
 

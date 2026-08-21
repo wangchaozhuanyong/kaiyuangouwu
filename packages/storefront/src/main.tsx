@@ -3,8 +3,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
-import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { restorePublicQueryCache, storefrontQueryClient, watchPublicQueryCache } from './query-client';
+import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import './styles.css';
 
 const rootElement = document.getElementById('root');

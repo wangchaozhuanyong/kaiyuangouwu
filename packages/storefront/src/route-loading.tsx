@@ -1,6 +1,6 @@
-export function PageSkeleton() {
+export function PageSkeleton({ label = 'Loading' }: { label?: string }) {
     return (
-        <div className="page-skeleton" role="status" aria-label="Loading">
+        <div className="page-skeleton" role="status" aria-label={label}>
             <span className="skeleton-hero" />
             <span className="skeleton-line" />
             <div>
