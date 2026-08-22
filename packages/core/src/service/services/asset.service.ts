@@ -17,7 +17,6 @@ import { notNullOrUndefined } from '@vendure/common/lib/shared-utils';
 import { unique } from '@vendure/common/lib/unique';
 import { ReadStream } from 'fs';
 import { IncomingMessage } from 'http';
-import { imageSize } from 'image-size';
 import mime from 'mime-types';
 import path from 'path';
 import { Readable, Stream } from 'stream';
@@ -42,13 +41,16 @@ import { Asset } from '../../entity/asset/asset.entity';
 import { OrderableAsset } from '../../entity/asset/orderable-asset.entity';
 import { VendureEntity } from '../../entity/base/base.entity';
 import { Collection } from '../../entity/collection/collection.entity';
-import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { Product } from '../../entity/product/product.entity';
+// Keep ESLint's path order; prettier-plugin-organize-imports sorts the hyphenated path first.
+// eslint-disable-next-line import/order
+import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { AssetChannelEvent } from '../../event-bus/events/asset-channel-event';
 import { AssetEvent } from '../../event-bus/events/asset-event';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
+import { safeImageSize } from '../helpers/safe-image-size/safe-image-size';
 import { TranslatableSaver } from '../helpers/translatable-saver/translatable-saver';
 import { TranslatorService } from '../helpers/translator/translator.service';
 import { patchEntity } from '../helpers/utils/patch-entity';
@@ -565,8 +567,7 @@ export class AssetService {
         const { assetImportStrategy } = this.configService.importExportOptions;
         const filePathFromArgs =
             maybeFilePathOrCtx instanceof RequestContext ? undefined : maybeFilePathOrCtx;
-        const filePath =
-            stream instanceof ReadStream ? stream.path : filePathFromArgs;
+        const filePath = stream instanceof ReadStream ? stream.path : filePathFromArgs;
         if (typeof filePath === 'string') {
             const filename = path.basename(filePath).split('?')[0];
             const mimetype = this.getMimeType(stream, filename);
@@ -717,7 +718,7 @@ export class AssetService {
             preview,
         );
         const type = getAssetType(mimetype);
-        const { width, height } = this.getDimensions(type === AssetType.IMAGE ? sourceFile : preview);
+        const { width, height } = await this.getDimensions(type === AssetType.IMAGE ? sourceFile : preview);
 
         // Save asset first
         const asset = new Asset({
@@ -795,9 +796,9 @@ export class AssetService {
         return outputFileName;
     }
 
-    private getDimensions(imageFile: Buffer): { width: number; height: number } {
+    private async getDimensions(imageFile: Buffer): Promise<{ width: number; height: number }> {
         try {
-            const { width, height } = imageSize(imageFile);
+            const { width, height } = await safeImageSize(imageFile);
             return { width: width ?? 0, height: height ?? 0 };
         } catch (e: any) {
             Logger.error('Could not determine Asset dimensions: ' + JSON.stringify(e));

@@ -81,6 +81,7 @@ const zhCopy = {
     amountHint: '按当前币种填写；不能超过申请金额。这里只记录审核金额。',
     invalidResolution: '处理说明不能为空且不能超过 2000 个字符',
     invalidAmount: '通过金额必须是 0 到申请金额之间的有效金额',
+    refundUnavailable: '当前未接入真实支付退款。正金额申请必须完成并核验实际退款后才能标记完成。',
     updated: '售后状态已更新',
     activeChannel: '当前店铺',
 };
@@ -116,6 +117,8 @@ const enCopy: typeof zhCopy = {
         'Enter the active currency amount, not above the request total. This is an approval record only.',
     invalidResolution: 'The resolution note is required and cannot exceed 2000 characters',
     invalidAmount: 'The approved amount must be between zero and the requested amount',
+    refundUnavailable:
+        'Real payment refunds are not connected. A positive refund must be completed and verified before this request can be marked completed.',
     updated: 'After-sales status updated',
     activeChannel: 'Active store',
 };
@@ -146,9 +149,9 @@ function AfterSalesPage() {
     const query = useQuery({
         queryKey: ['operations-after-sales', activeChannel?.id, state],
         queryFn: () =>
-            api.query(afterSalesRequestsQuery, {
+            api.query<AfterSalesRequestsResult>(afterSalesRequestsQuery, {
                 options: { take: 100, ...(state === 'ALL' ? {} : { state }) },
-            }) as Promise<AfterSalesRequestsResult>,
+            }),
         enabled: Boolean(activeChannel?.id),
     });
     const requests = query.data?.afterSalesRequests.items ?? [];
@@ -218,10 +221,7 @@ function AfterSalesPage() {
                     <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
                         <div className="space-y-1.5">
                             <Label>{text.filter}</Label>
-                            <Select
-                                value={state}
-                                onValueChange={value => value && setState(value as AfterSalesState | 'ALL')}
-                            >
+                            <Select value={state} onValueChange={value => value && setState(value)}>
                                 <SelectTrigger className="w-52">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -301,6 +301,7 @@ function RequestCard({
     pending: boolean;
     onTransition: (state: TransitionTarget) => void;
 }) {
+    const requiresVerifiedRefund = request.state === 'APPROVED' && (request.approvedAmount ?? 0) > 0;
     return (
         <article className="rounded-lg border bg-card p-4 shadow-sm">
             <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
@@ -397,10 +398,21 @@ function RequestCard({
                         </>
                     )}
                     {request.state === 'APPROVED' && (
-                        <Button disabled={pending} onClick={() => onTransition('COMPLETED')}>
-                            <CheckCircle2 className="size-4" aria-hidden="true" />
-                            {text.complete}
-                        </Button>
+                        <>
+                            {requiresVerifiedRefund && (
+                                <Alert className="mr-auto w-full lg:w-auto lg:flex-1">
+                                    <AlertDescription>{text.refundUnavailable}</AlertDescription>
+                                </Alert>
+                            )}
+                            <Button
+                                disabled={pending || requiresVerifiedRefund}
+                                title={requiresVerifiedRefund ? text.refundUnavailable : undefined}
+                                onClick={() => onTransition('COMPLETED')}
+                            >
+                                <CheckCircle2 className="size-4" aria-hidden="true" />
+                                {text.complete}
+                            </Button>
+                        </>
                     )}
                 </footer>
             )}

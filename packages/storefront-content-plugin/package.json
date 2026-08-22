@@ -12,7 +12,7 @@
     "dependencies": {
         "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
-        "@nestjs/graphql": "~13.1.0",
+        "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",

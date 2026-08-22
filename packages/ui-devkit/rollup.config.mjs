@@ -1,7 +1,7 @@
 // rollup.config.js
-import typescript from 'rollup-plugin-typescript2';
-import terser from '@rollup/plugin-terser';
 import resolve from '@rollup/plugin-node-resolve';
+import terser from '@rollup/plugin-terser';
+import typescript from 'rollup-plugin-typescript2';
 
 export default commandLineArgs => {
     const isProd = commandLineArgs.configProduction === true;
@@ -12,10 +12,18 @@ export default commandLineArgs => {
             format: 'umd',
             name: 'VendureUiClient',
         },
-        plugins: [resolve(), typescript(), ...(isProd ? [terser({
-            output: {
-                comments: false,
-            }
-        })] : [])],
+        plugins: [
+            resolve({ extensions: ['.mjs', '.js', '.json', '.node', '.ts'] }),
+            typescript({ include: ['**/*.ts'] }),
+            ...(isProd
+                ? [
+                      terser({
+                          output: {
+                              comments: false,
+                          },
+                      }),
+                  ]
+                : []),
+        ],
     };
 };

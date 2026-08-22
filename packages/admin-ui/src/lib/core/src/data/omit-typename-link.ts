@@ -15,7 +15,7 @@ export class OmitTypenameLink extends ApolloLink {
                 operation.variables = omit(operation.variables, ['__typename'], true);
             }
 
-            return forward ? forward(operation) : null;
+            return forward(operation);
         });
     }
 }

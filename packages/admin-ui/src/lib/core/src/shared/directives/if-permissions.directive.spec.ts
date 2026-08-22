@@ -11,7 +11,6 @@ describe('vdrIfPermissions directive', () => {
         fixture = TestBed.configureTestingModule({
             declarations: [TestComponent, IfPermissionsDirective],
         }).createComponent(TestComponent);
-        fixture.detectChanges(); // initial binding
 
         TestBed.inject(PermissionsService).setCurrentUserPermissions(['ValidPermission']);
     });

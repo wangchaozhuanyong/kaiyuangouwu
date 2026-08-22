@@ -15,4 +15,14 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(config, /Strict-Transport-Security/u);
     assert.match(config, /Content-Security-Policy/u);
     assert.match(config, /Permissions-Policy/u);
+    assert.match(config, /root \/var\/www\/kaiyuangouwu-current\/packages\/storefront\/dist;/u);
+});
+
+void test('production PM2 config starts compiled runtime entries without the development CLI', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/ecosystem.production.cjs'), 'utf8');
+
+    assert.match(config, /VENDURE_RUNTIME_DIR/u);
+    assert.match(config, /packages\/dev-server\/dist\/index-worker\.js/u);
+    assert.match(config, /packages\/dev-server\/dist\/index\.js/u);
+    assert.doesNotMatch(config, /cli\.js/u);
 });

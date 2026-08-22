@@ -1,0 +1,128 @@
+import assert from 'node:assert/strict';
+import { access, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import {
+    assertSafeOutputPath,
+    pruneDeniedRuntimePackages,
+    repositoryRoot,
+    runtimeArtifactsRoot,
+} from './production-runtime-artifact.mjs';
+import {
+    collectArtifactEntries,
+    collectPackageInventory,
+    DENIED_RUNTIME_PACKAGES,
+    findDeniedPackages,
+    verifyRuntimeArtifact,
+    writeIntegrityFiles,
+} from './production-runtime-verify.mjs';
+
+void test('runtime artifact output is restricted to a new child of the artifact directory', async () => {
+    await assert.rejects(() => assertSafeOutputPath(repositoryRoot), /Output must be a child/u);
+    await assert.rejects(() => assertSafeOutputPath(runtimeArtifactsRoot), /Output must be a child/u);
+
+    const existingDirectory = path.join(runtimeArtifactsRoot, 'existing-test-output');
+    await mkdir(existingDirectory, { recursive: true });
+    try {
+        await assert.rejects(() => assertSafeOutputPath(existingDirectory), /will not be overwritten/u);
+    } finally {
+        await rm(existingDirectory, { recursive: true, force: true });
+    }
+});
+
+void test('runtime artifact pruning removes build-only and denied packages', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-prune-'));
+    try {
+        for (const [name, version] of [
+            ['vite', '7.3.6'],
+            ['less', '4.2.2'],
+            ['allowed-package', '1.0.0'],
+        ]) {
+            const packageRoot = path.join(fixtureRoot, 'node_modules', name);
+            await mkdir(packageRoot, { recursive: true });
+            await writeFile(path.join(packageRoot, 'package.json'), `${JSON.stringify({ name, version })}\n`);
+        }
+
+        const removed = await pruneDeniedRuntimePackages(fixtureRoot);
+
+        assert.deepEqual(removed.map(runtimePackage => runtimePackage.name).sort(), ['less', 'vite']);
+        await assert.rejects(() => access(path.join(fixtureRoot, 'node_modules', 'less')));
+        await assert.rejects(() => access(path.join(fixtureRoot, 'node_modules', 'vite')));
+        await access(path.join(fixtureRoot, 'node_modules', 'allowed-package'));
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('runtime package scan finds denied transitive packages without following symlinks', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-scan-'));
+    try {
+        const packageRoot = path.join(fixtureRoot, 'node_modules', 'tar');
+        await mkdir(packageRoot, { recursive: true });
+        await writeFile(path.join(packageRoot, 'package.json'), '{"name":"tar","version":"7.5.2"}\n');
+        await symlink(packageRoot, path.join(fixtureRoot, 'linked-tar'));
+
+        const entries = await collectArtifactEntries(fixtureRoot);
+        const packages = await collectPackageInventory(fixtureRoot, entries);
+
+        assert.deepEqual(findDeniedPackages(packages), [
+            { name: 'tar', path: 'node_modules/tar', version: '7.5.2' },
+        ]);
+        assert.deepEqual(
+            entries.filter(entry => entry.type === 'symlink'),
+            [{ path: 'linked-tar', target: packageRoot, type: 'symlink' }],
+        );
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('runtime verification rejects files added after the integrity manifest is written', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-integrity-'));
+    try {
+        await writeFile(
+            path.join(fixtureRoot, 'package.json'),
+            '{"name":"fixture-runtime","version":"1.0.0"}\n',
+        );
+        await writeFile(
+            path.join(fixtureRoot, 'RUNTIME-METADATA.json'),
+            `${JSON.stringify({
+                deniedPackages: DENIED_RUNTIME_PACKAGES,
+                gitSha: 'a'.repeat(40),
+                platform: `${process.platform}/${process.arch}`,
+                sourceDirty: false,
+            })}\n`,
+        );
+        const entries = await collectArtifactEntries(fixtureRoot);
+        const packages = await collectPackageInventory(fixtureRoot, entries);
+        await writeFile(
+            path.join(fixtureRoot, 'RUNTIME-PACKAGES.json'),
+            `${JSON.stringify(packages, null, 2)}\n`,
+        );
+        await writeFile(
+            path.join(fixtureRoot, 'RUNTIME-AUDIT.json'),
+            `${JSON.stringify({
+                findings: [],
+                generatedAt: new Date().toISOString(),
+                policy: { failOn: 'critical' },
+                summary: { critical: 0, high: 0, low: 0, moderate: 0, total: 0 },
+            })}\n`,
+        );
+        await writeIntegrityFiles(fixtureRoot);
+
+        await verifyRuntimeArtifact(fixtureRoot, { expectedSha: 'a'.repeat(40), verifyModules: false });
+        await writeFile(path.join(fixtureRoot, 'unexpected.txt'), 'unexpected\n');
+        await assert.rejects(
+            () =>
+                verifyRuntimeArtifact(fixtureRoot, {
+                    expectedSha: 'a'.repeat(40),
+                    verifyModules: false,
+                }),
+            /SHA256SUMS does not exactly match/u,
+        );
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});

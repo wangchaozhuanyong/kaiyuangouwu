@@ -6,6 +6,8 @@ export default defineConfig({
     plugins: [react()],
     base: '/graphiql/',
     build: {
+        // GraphiQL is an intentionally self-contained, production-disabled diagnostic UI.
+        chunkSizeWarningLimit: 1000,
         outDir: 'dist/graphiql',
         emptyOutDir: true,
         sourcemap: true,

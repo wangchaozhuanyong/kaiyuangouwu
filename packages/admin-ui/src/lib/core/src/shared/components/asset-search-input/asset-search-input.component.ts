@@ -5,6 +5,8 @@ import { notNullOrUndefined } from '@vendure/common/lib/shared-utils';
 import { SearchProductsQuery, TagFragment } from '../../../common/generated-types';
 import { SingleSearchSelectionModelFactory } from '../../../common/single-search-selection-model';
 
+type AssetSearchSelection = TagFragment | { label: string };
+
 @Component({
     selector: 'vdr-asset-search-input',
     templateUrl: './asset-search-input.component.html',
@@ -33,7 +35,7 @@ export class AssetSearchInputComponent {
     }
 
     setTags(tags: TagFragment[]) {
-        const items = this.selectComponent.items;
+        const items = this.selectComponent.items();
 
         this.selectComponent.selectedItems.forEach(item => {
             if (this.isTag(item.value) && !tags.map(t => t.id).includes(item.id)) {
@@ -67,7 +69,7 @@ export class AssetSearchInputComponent {
         return item.value.toLowerCase().startsWith(term.toLowerCase());
     };
 
-    onSelectChange(selectedItems: Array<TagFragment | { label: string }>) {
+    onSelectChange(selectedItems: AssetSearchSelection[]) {
         if (!Array.isArray(selectedItems)) {
             selectedItems = [selectedItems];
         }
@@ -99,7 +101,7 @@ export class AssetSearchInputComponent {
         return this.selectComponent.itemsList.markedIndex === -1;
     }
 
-    addTagFn(item: any) {
+    addTagFn(item: string) {
         return { label: item };
     }
 

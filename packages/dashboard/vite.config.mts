@@ -2,9 +2,10 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { vendureDashboardPlugin } from './vite/vite-plugin-vendure-dashboard.js';
 
 import { sharedTestConfig } from '../../vitest.shared.mjs';
+
+import { vendureDashboardPlugin } from './vite/vite-plugin-vendure-dashboard.js';
 
 /**
  * This config is used for local development
@@ -17,8 +18,9 @@ export default ({ mode }: { mode: string }) => {
 
     process.env.IS_LOCAL_DEV = adminApiHost.includes('localhost') ? 'true' : 'false';
 
-    const vendureConfigPath = process.env.VENDURE_CONFIG_PATH
-        ?? (process.env.VITEST
+    const vendureConfigPath =
+        process.env.VENDURE_CONFIG_PATH ??
+        (process.env.VITEST
             ? // This should always be used for running the tests
               './sample-vendure-config.ts'
             : // This one might be changed to '../dev-server/dev-config.ts' to test ui extensions
@@ -31,10 +33,24 @@ export default ({ mode }: { mode: string }) => {
         test: {
             ...sharedTestConfig,
             globals: true,
-            environment: 'jsdom',
             exclude: ['./e2e/**/*', './plugin/**/*', '**/node_modules/**/*'],
-            environmentMatchGlobs: [
-                ['vite/tests/**', 'node'],
+            projects: [
+                {
+                    extends: true,
+                    test: {
+                        name: 'dashboard-jsdom',
+                        environment: 'jsdom',
+                        exclude: ['./e2e/**/*', './plugin/**/*', './vite/tests/**/*', '**/node_modules/**/*'],
+                    },
+                },
+                {
+                    extends: true,
+                    test: {
+                        name: 'dashboard-vite',
+                        environment: 'node',
+                        include: ['./vite/tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+                    },
+                },
             ],
         },
         plugins: [

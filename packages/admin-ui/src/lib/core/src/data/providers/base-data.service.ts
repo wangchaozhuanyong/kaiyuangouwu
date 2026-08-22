@@ -1,5 +1,10 @@
 import { Injectable } from '@angular/core';
-import { MutationUpdaterFunction, SingleExecutionResult, WatchQueryFetchPolicy } from '@apollo/client/core';
+import {
+    ApolloCache,
+    MutationUpdaterFunction,
+    OperationVariables,
+    WatchQueryFetchPolicy,
+} from '@apollo/client/core';
 import { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { simpleDeepClone } from '@vendure/common/lib/simple-deep-clone';
 import { Apollo } from 'apollo-angular';
@@ -47,17 +52,18 @@ export class BaseDataService {
     /**
      * Performs a GraphQL watch query
      */
-    query<T, V extends Record<string, any> = Record<string, any>>(
+    query<T, V extends OperationVariables = OperationVariables>(
         query: DocumentNode | TypedDocumentNode<T, V>,
         variables?: V,
         fetchPolicy: WatchQueryFetchPolicy = 'cache-and-network',
         options: ExtendedQueryOptions = {},
     ): QueryResult<T, V> {
-        const queryRef = this.apollo.watchQuery<T, V>({
+        const queryOptions = {
             query: addCustomFields(query, this.customFields, options.includeCustomFields),
-            variables,
             fetchPolicy,
-        });
+            ...(variables === undefined ? {} : { variables }),
+        } as Apollo.WatchQueryOptions<T, V>;
+        const queryRef = this.apollo.watchQuery<T, V>(queryOptions);
 
         const queryResult = new QueryResult<T, V>(queryRef, this.apollo, this.customFields);
         return queryResult;
@@ -66,22 +72,22 @@ export class BaseDataService {
     /**
      * Performs a GraphQL mutation
      */
-    mutate<T, V extends Record<string, any> = Record<string, any>>(
+    mutate<T, V extends OperationVariables = OperationVariables>(
         mutation: DocumentNode | TypedDocumentNode<T, V>,
         variables?: V,
-        update?: MutationUpdaterFunction<T, V, any, any>,
+        update?: MutationUpdaterFunction<T, V, ApolloCache>,
         options: ExtendedQueryOptions = {},
     ): Observable<T> {
         const withCustomFields = addCustomFields(mutation, this.customFields, options.includeCustomFields);
         const withoutReadonlyFields = this.prepareCustomFields(mutation, variables);
 
-        return this.apollo
-            .mutate<T, V>({
-                mutation: withCustomFields,
-                variables: withoutReadonlyFields,
-                update,
-            })
-            .pipe(map(result => (result as SingleExecutionResult).data as T));
+        const mutationOptions = {
+            mutation: withCustomFields,
+            update,
+            ...(withoutReadonlyFields === undefined ? {} : { variables: withoutReadonlyFields }),
+        } as Apollo.MutateOptions<T, V>;
+
+        return this.apollo.mutate<T, V>(mutationOptions).pipe(map(result => result.data as T));
     }
 
     private prepareCustomFields<V>(mutation: DocumentNode, variables: V): V {
@@ -89,6 +95,8 @@ export class BaseDataService {
         if (entity) {
             const customFieldConfig = this.customFields.get(entity);
             if (variables && customFieldConfig) {
+                // These legacy custom-field helpers intentionally accept heterogeneous GraphQL inputs.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 let variablesClone = simpleDeepClone(variables as any);
                 variablesClone = removeReadonlyCustomFields(variablesClone, customFieldConfig);
                 variablesClone = transformRelationCustomFieldInputs(variablesClone, customFieldConfig);

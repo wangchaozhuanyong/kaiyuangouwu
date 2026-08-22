@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-21
+最后核对：2026-08-22
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -22,12 +22,13 @@
 - 安全组：`sg-013cf38df187011ca`（`yunqiao-vendure-web`）
 - SSH 用户：`ubuntu`
 - 本机访问：优先使用 AWS Systems Manager Session Manager；SSH 私钥仅保存在仓库外，发布时只允许当前管理员公网地址的 `/32`
-- 服务器仓库：`/var/www/kaiyuangouwu`
-- 候选/回滚目录：`/var/www/kaiyuangouwu-releases`
+- 服务器源码与加密环境文件目录：`/var/www/kaiyuangouwu`
+- 不可变运行产物/回滚目录：`/var/www/kaiyuangouwu-releases`
+- 当前运行产物指针：`/var/www/kaiyuangouwu-current`（只能指向上述发布目录中已验证的候选目录）
 - Vendure 上游：`127.0.0.1:3002`
 - PM2 进程：`vendure-api`、`vendure-worker`
-- Storefront 静态目录：`/var/www/kaiyuangouwu/packages/storefront/dist`
-- Dashboard 静态目录：`/var/www/kaiyuangouwu/packages/dev-server/dist/dashboard`
+- Storefront 静态目录：`/var/www/kaiyuangouwu-current/packages/storefront/dist`
+- Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/dev-server/dist/dashboard`（由 Vendure API 插件提供）
 - Nginx 配置基线：`deploy/nginx/damatong.conf`
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
 - 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问该前缀；存储桶已启用版本控制、SSE-S3 默认加密、阻止全部公网访问与 Bucket owner enforced。本地备份保留 14 天；S3 当前不自动删除，设置生命周期前必须单独确认保留期限。
@@ -45,7 +46,8 @@ Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源
 在发布提交的干净隔离工作树中，通过进程环境安全注入生产等价的构建配置（密钥不得写入仓库或发布记录），并依次通过。必须先完成 monorepo 依赖拓扑构建再运行全量测试，禁止依赖开发工作区残留的 `lib`、`dist` 或 `package` 目录：
 
 ```bash
-bun run lint
+bun install --frozen-lockfile --linker=hoisted
+bun run lint:check
 bun run build
 bun run test
 READINESS_PROCESS_ROLE=server bun run --cwd packages/dev-server audit:production-env
@@ -54,7 +56,12 @@ READINESS_PROCESS_ROLE=migration bun run --cwd packages/dev-server audit:product
 bun run --cwd packages/storefront test
 bun run --cwd packages/storefront build
 bun run --cwd packages/dev-server build
+bun run --cwd packages/dev-server build:production-runtime -- --require-platform linux/x64 --audit-level high
 ```
+
+最后一条命令只能在与 EC2 匹配的 `linux/x64` 干净构建机上执行。产物目录会包含平台、完整 Git SHA、`bun.lock` SHA-256、运行包清单、`RUNTIME-AUDIT.json` 和文件校验清单，并拒绝 `esbuild`、`less`、`tar`、`typescript`、`vite`、`webpack` 或达到指定审计阈值的包进入运行目录。使用 `--allow-dirty` 生成的产物只允许本地演练，不得部署。
+
+正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 手动工作流生成。输入必须是 `origin/main` 当前完整的 40 位小写 SHA；工作流固定使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64，并重复执行冻结安装、全仓审计、发布变更只读 lint、构建、测试、运行产物 High+ 门禁和自验证。分支未推送到 `main`、SHA 不一致、源码被修改、平台不符或任一门禁失败时都不会上传制品。
 
 若仓库根命令与当次改动范围不匹配，以 `package.json` 的现有脚本和本次实际测试清单为准，并在发布记录中写明。构建 Dashboard 前必须使用干净的 `packages/dev-server/dist`，避免旧 Vite 哈希文件混入。
 
@@ -65,10 +72,10 @@ bun run --cwd packages/dev-server build
 1. **单一版本标识**：发布开始时锁定一个完整的 40 位 `TARGET_SHA`。远端分支、隔离工作树、构建产物、服务器代码和发布记录必须全部等于该 SHA。
 2. **远端只能快进**：推送前记录 `origin/main` 的 `BASE_MAIN_SHA`，确认它是 `TARGET_SHA` 的祖先；使用普通 `git push`，禁止 `--force`。如果推送因远端已更新而失败，重新拉取、验证和构建，不能用旧本地分支覆盖远端。
 3. **只从干净提交构建**：从 `TARGET_SHA` 创建 detached 隔离工作树；要求 `git status --porcelain` 为空。构建前明确清空该隔离工作树内的 `packages/dev-server/dist` 和 `packages/storefront/dist`，不复用开发目录或上次发布目录。
-4. **产物不可变且可验证**：候选目录名必须包含 `TARGET_SHA` 与 UTC 时间且不得复用。发布包内必须包含 Git SHA、构建时间、Bun/Node 版本和所有产物的 SHA-256 清单；上传后先校验清单，再允许替换线上文件。
+4. **产物不可变且可验证**：候选目录名必须包含 `TARGET_SHA`、UTC 时间、`linux-x64` 且不得复用。产物必须由 `build:production-runtime` 生成，包含 Git SHA、构建时间、Bun/Node 版本、运行依赖清单和所有普通文件的 SHA-256 清单；上传后必须先运行自带验证器。
 5. **服务器串行发布**：服务器使用 `flock` 获取唯一发布锁。锁内再次确认 `origin/main == TARGET_SHA`、当前运行提交是 `TARGET_SHA` 的祖先、受版本控制文件无本地修改；不满足时拒绝部署。
 6. **代码只做快进更新**：服务器仓库只允许 `git merge --ff-only origin/main`，正常发布禁止 `reset --hard`、强制切分支或覆盖式同步。数据库、`.env`、上传资产和数字交付文件不参与代码同步。
-7. **先备份、后原子替换**：当前构建产物先移动到带旧 SHA 的回滚目录，再在同一文件系统中用 `mv` 原子替换候选产物。禁止直接向正在服务的 `dist` 增量复制，避免新旧哈希文件混用。
+7. **先记录、后原子切换**：先记录 `kaiyuangouwu-current` 指向的上一个已验证产物，再在同一文件系统中原子替换该符号链接。禁止直接向正在服务的 `dist` 或 `node_modules` 增量复制。
 8. **验证成功才登记版本**：PM2 重启及前台、后台、API、静态资源检查全部通过后，才原子更新 `/var/www/kaiyuangouwu-releases/current-sha`。最终必须同时满足服务器 `git rev-parse HEAD == TARGET_SHA`、版本标记等于 `TARGET_SHA`、线上健康检查成功。
 
 显式回滚不走正常发布通道。只有在记录回滚原因、指定完整 `ROLLBACK_SHA` 并人工确认后才允许回到旧版本；不得把 `origin/main` 强制回退。回滚完成后同样要验证 Git SHA、构建产物清单和线上健康状态。
@@ -109,16 +116,102 @@ test "$(git -C /var/www/kaiyuangouwu rev-parse HEAD^{commit})" = "${TARGET_SHA}"
 
 上述命令只是门禁骨架；发布锁必须保持到产物替换、PM2 重启、健康检查和版本标记更新全部结束。
 
+## 生产运行产物
+
+生产不再从完整 monorepo 的 `node_modules` 启动，也不在 EC2 上执行 `bun install`、Vendure CLI 或前端构建。构建机只安装 `dev-server` 的生产依赖，再收集 Server、Worker、Dashboard、Storefront、邮件模板和本地插件的已编译输出。
+
+在干净的 `linux/x64` 隔离工作树完成前述门禁后执行：
+
+```bash
+bun run --cwd packages/dev-server build:production-runtime -- --require-platform linux/x64 --audit-level high
+```
+
+命令成功后，将输出的绝对路径明确赋给 `ARTIFACT_DIR`，不要用“最新目录”之类模糊规则选择产物：
+
+```bash
+ARTIFACT_DIR=/absolute/path/from-the-build-output
+TARGET_SHA="$(git rev-parse HEAD^{commit})"
+node "${ARTIFACT_DIR}/verify-runtime.mjs" --expected-sha "${TARGET_SHA}"
+ARTIFACT_PARENT="$(dirname "${ARTIFACT_DIR}")"
+ARTIFACT_NAME="$(basename "${ARTIFACT_DIR}")"
+(
+    cd "${ARTIFACT_PARENT}"
+    sha256sum "${ARTIFACT_NAME}/SHA256SUMS" > "${ARTIFACT_NAME}.manifest.sha256"
+)
+```
+
+`RUNTIME-METADATA.json` 中的 `sourceDirty` 必须为 `false`、`platform` 必须为 `linux/x64`、`gitSha` 必须等于 `TARGET_SHA`。`RUNTIME-PACKAGES.json` 是实际安装包清单，`RUNTIME-AUDIT.json` 记录与该清单精确匹配的公告、路径、版本和门禁阈值；验证器会重新扫描目录，拒绝六类被禁构建工具、超过阈值的公告、平台不匹配、多余/缺失文件、校验和或符号链接变化。本地 macOS 构建的原生依赖不能在 EC2 上运行。
+
+手工构建机传输应保留目录和符号链接，可对“全新、唯一的候选目录”使用 `rsync -a`。同时传输产物目录和目录外的 `<artifact>.manifest.sha256`，服务器先校验外层清单哈希，再运行产物自验证。
+
+GitHub Actions 制品是 `<artifact>.tar.gz` 与同名 `.sha256`。该归档仅由固定的 Ubuntu 系统 GNU tar 在验证完成后生成，用于保留权限与符号链接；不调用仓库依赖中的 `tar` 包。下载后先在传输端和服务器分别校验归档 SHA-256，再只解压到一个不存在的唯一候选目录，最后运行产物自验证：
+
+```bash
+cd /var/www/kaiyuangouwu-releases
+sha256sum --check "${ARCHIVE_NAME}.sha256"
+ARTIFACT_NAME="${ARCHIVE_NAME%.tar.gz}"
+test "${ARTIFACT_NAME}" != "${ARCHIVE_NAME}"
+test ! -e "${ARTIFACT_NAME}"
+tar --extract --gzip --file "${ARCHIVE_NAME}"
+CANDIDATE="/var/www/kaiyuangouwu-releases/${ARTIFACT_NAME}"
+node "${CANDIDATE}/verify-runtime.mjs" --expected-sha "${TARGET_SHA}"
+```
+
+`ARCHIVE_NAME` 必须是下载得到的文件名，并以 `${TARGET_SHA}-` 开头、以 `-linux-x64.tar.gz` 结尾。服务器不得通过通配符或“最新文件”自动选择归档。
+
+手工 `rsync -a` 的候选目录上传后，在发布锁内执行下列外层清单检查；GitHub Actions 归档则使用上一段的归档 SHA-256 检查，不要求 `.manifest.sha256`：
+
+```bash
+CANDIDATE="/var/www/kaiyuangouwu-releases/${ARTIFACT_NAME}"
+test -d "${CANDIDATE}"
+test -f "/var/www/kaiyuangouwu-releases/${ARTIFACT_NAME}.manifest.sha256"
+(
+    cd /var/www/kaiyuangouwu-releases
+    sha256sum --check "${ARTIFACT_NAME}.manifest.sha256"
+)
+node "${CANDIDATE}/verify-runtime.mjs" --expected-sha "${TARGET_SHA}"
+```
+
+数据库迁移只在备份和 `READINESS_PROCESS_ROLE=migration` 预检通过后，使用产物内专用的一次性入口：
+
+```bash
+set -a
+source /var/www/kaiyuangouwu/packages/dev-server/.env
+set +a
+cd "${CANDIDATE}"
+NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 node packages/dev-server/dist/run-migrations.js
+```
+
+迁移成功后，API Server 和 Worker 必须都保持 `RUN_MIGRATIONS=false`。使用已加载生产环境变量的同一个 shell 会话更新 PM2：
+
+```bash
+VENDURE_RUNTIME_DIR="${CANDIDATE}" \
+    pm2 startOrReload /var/www/kaiyuangouwu/deploy/ecosystem.production.cjs --update-env
+curl -fsS http://127.0.0.1:3002/health
+```
+
+健康检查成功后再原子切换 Storefront 稳定指针：
+
+```bash
+PREVIOUS_RUNTIME="$(readlink -f /var/www/kaiyuangouwu-current 2>/dev/null || true)"
+ln -s "${CANDIDATE}" /var/www/.kaiyuangouwu-current.new
+mv -Tf /var/www/.kaiyuangouwu-current.new /var/www/kaiyuangouwu-current
+nginx -t
+systemctl reload nginx
+```
+
+`PREVIOUS_RUNTIME` 只能是上一个已通过验收的发布目录，并必须写入当次发布记录。切换失败时，用同样的 PM2 命令指回该目录，再原子恢复稳定指针；不重新安装依赖，不删除数据库、上传资产或 `.env`。
+
 ## 标准发布流程
 
 1. 确认本地只包含本次发布代码；设计验收截图、测试报告和其他未跟踪资料不进入发布提交。
 2. 从目标提交创建隔离的干净工作树，运行测试和生产构建。
 3. 将目标提交推送到 `origin/main`，记录完整 Git SHA。
-4. 在服务器的 `/var/www/kaiyuangouwu-releases/<sha>-<UTC 时间>` 创建候选目录，不直接在运行目录构建。
-5. 将本地已验证的 `packages/dev-server/dist`、`packages/storefront/dist` 和本地业务插件 `dist` 打包，校验 SHA-256 后传入候选目录。
-6. 备份运行目录中即将替换的构建产物；保留 `.env`、上传资产、数字交付文件、数据库数据和测试数据。
-7. 更新运行目录的受版本控制代码到目标 SHA，原子替换构建产物；数据库迁移只在生产环境审计明确通过且备份完成后执行。
-8. 依次重启 `vendure-worker`、`vendure-api`，等待 `127.0.0.1:3002/health` 成功；失败立即恢复上一构建产物并重启原版本。
+4. 对该 SHA 手动运行 `Production Runtime Artifact` 工作流；或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录。两种方式都必须完成自验证并记录外层校验和。
+5. 将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`；禁止在 EC2 安装依赖或构建。
+6. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
+7. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
+8. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功后原子切换 `kaiyuangouwu-current`。
 9. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 10. 撤销临时 SSH 规则，仅保留原有固定规则；候选和回滚包按需保留，不删除用户数据。
 
@@ -141,6 +234,6 @@ curl -I https://damatong.net/assets/
 
 ## 回滚原则
 
-- 回滚目标是上一个已通过健康检查的 Git SHA 和构建产物。
-- 先恢复 `dist` 目录，再恢复受版本控制代码，最后重启 PM2 并重复上线验收。
+- 回滚目标是上一个已通过健康检查、仍保留在 `kaiyuangouwu-releases` 中的不可变运行产物。
+- 先对回滚产物重新执行 `verify-runtime.mjs --expected-sha <ROLLBACK_SHA>`，再将 PM2 和 `kaiyuangouwu-current` 指回该目录，最后重复上线验收。不单独拷贝旧 `dist` 或 `node_modules`。
 - 不回滚或删除数据库、上传资产、订单、客户、店铺配置和测试数据，除非另有经过确认的数据恢复方案。

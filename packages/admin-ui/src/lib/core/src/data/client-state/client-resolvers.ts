@@ -1,26 +1,18 @@
-import { InMemoryCache } from '@apollo/client/core';
+import { ApolloCache } from '@apollo/client/core';
+import { LocalState } from '@apollo/client/local-state';
 
 import * as Codegen from '../../common/generated-types';
 import { GetUserStatusQuery, LanguageCode, UserStatus } from '../../common/generated-types';
 import { GET_NEWTORK_STATUS, GET_UI_STATE, GET_USER_STATUS } from '../definitions/client-definitions';
 
-export type ResolverContext = {
-    cache: InMemoryCache;
-    optimisticResponse: any;
-    getCacheKey: (storeObj: any) => string;
-};
-
-export type ResolverDefinition = {
-    Mutation: {
-        [name: string]: (rootValue: any, args: any, context: ResolverContext, info?: any) => any;
-    };
-};
+export type ResolverDefinition = LocalState.Resolvers;
 
 export const clientResolvers: ResolverDefinition = {
     Mutation: {
-        requestStarted: (_, args, { cache }): number => updateRequestsInFlight(cache, 1),
-        requestCompleted: (_, args, { cache }): number => updateRequestsInFlight(cache, -1),
-        setAsLoggedIn: (_, args: Codegen.SetAsLoggedInMutationVariables, { cache }): UserStatus => {
+        requestStarted: (_, args, { client }): number => updateRequestsInFlight(client.cache, 1),
+        requestCompleted: (_, args, { client }): number => updateRequestsInFlight(client.cache, -1),
+        setAsLoggedIn: (_, args: Codegen.SetAsLoggedInMutationVariables, { client }): UserStatus => {
+            const { cache } = client;
             const {
                 input: { username, loginTime, channels, activeChannelId, administratorId },
             } = args;
@@ -41,7 +33,8 @@ export const clientResolvers: ResolverDefinition = {
             cache.writeQuery({ query: GET_USER_STATUS, data });
             return data.userStatus;
         },
-        setAsLoggedOut: (_, args, { cache }): UserStatus => {
+        setAsLoggedOut: (_, args, { client }): UserStatus => {
+            const { cache } = client;
             const data: GetUserStatusQuery = {
                 userStatus: {
                     __typename: 'UserStatus',
@@ -57,14 +50,16 @@ export const clientResolvers: ResolverDefinition = {
             cache.writeQuery({ query: GET_USER_STATUS, data });
             return data.userStatus;
         },
-        setUiLanguage: (_, args: Codegen.SetUiLanguageMutationVariables, { cache }): LanguageCode => {
+        setUiLanguage: (_, args: Codegen.SetUiLanguageMutationVariables, { client }): LanguageCode => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<Codegen.GetUiStateQuery>({ query: GET_UI_STATE })!;
             const data = updateUiState(previous, 'language', args.languageCode);
             cache.writeQuery({ query: GET_UI_STATE, data });
             return args.languageCode;
         },
-        setUiLocale: (_, args: Codegen.SetUiLocaleMutationVariables, { cache }): string | undefined => {
+        setUiLocale: (_, args: Codegen.SetUiLocaleMutationVariables, { client }): string | undefined => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<Codegen.GetUiStateQuery>({ query: GET_UI_STATE })!;
             const data = updateUiState(previous, 'locale', args.locale);
@@ -74,15 +69,17 @@ export const clientResolvers: ResolverDefinition = {
         setContentLanguage: (
             _,
             args: Codegen.SetContentLanguageMutationVariables,
-            { cache },
+            { client },
         ): LanguageCode => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<Codegen.GetUiStateQuery>({ query: GET_UI_STATE })!;
             const data = updateUiState(previous, 'contentLanguage', args.languageCode);
             cache.writeQuery({ query: GET_UI_STATE, data });
             return args.languageCode;
         },
-        setUiTheme: (_, args: Codegen.SetUiThemeMutationVariables, { cache }): string => {
+        setUiTheme: (_, args: Codegen.SetUiThemeMutationVariables, { client }): string => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<Codegen.GetUiStateQuery>({ query: GET_UI_STATE })!;
             const data = updateUiState(previous, 'theme', args.theme);
@@ -92,22 +89,25 @@ export const clientResolvers: ResolverDefinition = {
         setDisplayUiExtensionPoints: (
             _,
             args: Codegen.SetDisplayUiExtensionPointsMutationVariables,
-            { cache },
+            { client },
         ): boolean => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<Codegen.GetUiStateQuery>({ query: GET_UI_STATE })!;
             const data = updateUiState(previous, 'displayUiExtensionPoints', args.display);
             cache.writeQuery({ query: GET_UI_STATE, data });
             return args.display;
         },
-        setMainNavExpanded: (_, args: Codegen.SetMainNavExpandedMutationVariables, { cache }): boolean => {
+        setMainNavExpanded: (_, args: Codegen.SetMainNavExpandedMutationVariables, { client }): boolean => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<Codegen.GetUiStateQuery>({ query: GET_UI_STATE })!;
             const data = updateUiState(previous, 'mainNavExpanded', args.expanded);
             cache.writeQuery({ query: GET_UI_STATE, data });
             return args.expanded;
         },
-        setActiveChannel: (_, args: Codegen.SetActiveChannelMutationVariables, { cache }): UserStatus => {
+        setActiveChannel: (_, args: Codegen.SetActiveChannelMutationVariables, { client }): UserStatus => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<GetUserStatusQuery>({ query: GET_USER_STATUS })!;
             const activeChannel = previous.userStatus.channels.find(c => c.id === args.channelId);
@@ -125,7 +125,12 @@ export const clientResolvers: ResolverDefinition = {
             cache.writeQuery({ query: GET_USER_STATUS, data });
             return data.userStatus;
         },
-        updateUserChannels: (_, args: Codegen.UpdateUserChannelsMutationVariables, { cache }): UserStatus => {
+        updateUserChannels: (
+            _,
+            args: Codegen.UpdateUserChannelsMutationVariables,
+            { client },
+        ): UserStatus => {
+            const { cache } = client;
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             const previous = cache.readQuery<GetUserStatusQuery>({ query: GET_USER_STATUS })!;
             const data = {
@@ -154,7 +159,7 @@ function updateUiState<K extends keyof Codegen.GetUiStateQuery['uiState']>(
     };
 }
 
-function updateRequestsInFlight(cache: InMemoryCache, increment: 1 | -1): number {
+function updateRequestsInFlight(cache: ApolloCache, increment: 1 | -1): number {
     const previous = cache.readQuery<Codegen.GetNetworkStatusQuery>({ query: GET_NEWTORK_STATUS });
     const inFlightRequests = previous ? previous.networkStatus.inFlightRequests + increment : increment;
     const data: Codegen.GetNetworkStatusQuery = {

@@ -1,4 +1,4 @@
-import { ApolloQueryResult, NetworkStatus } from '@apollo/client/core';
+import { ApolloQueryResult, NetworkStatus, OperationVariables } from '@apollo/client/core';
 import { notNullOrUndefined } from '@vendure/common/lib/shared-utils';
 import { Apollo, QueryRef } from 'apollo-angular';
 import { DocumentNode } from 'graphql';
@@ -28,7 +28,7 @@ import { addCustomFields } from './utils/add-custom-fields';
  * @docsCategory services
  * @docsPage DataService
  */
-export class QueryResult<T, V extends Record<string, any> = Record<string, any>> {
+export class QueryResult<T, V extends OperationVariables = OperationVariables> {
     constructor(
         private queryRef: QueryRef<T, V>,
         private apollo: Apollo,
@@ -75,14 +75,15 @@ export class QueryResult<T, V extends Record<string, any> = Record<string, any>>
             query: GET_USER_STATUS,
         }).valueChanges;
         const activeChannelId$ = userStatus$.pipe(
-            map(data => data.data.userStatus.activeChannelId),
+            map(data => data.data?.userStatus?.activeChannelId),
             filter(notNullOrUndefined),
             distinctUntilChanged(),
             skip(1),
             takeUntil(this.completed$),
         );
         const loggedOut$ = userStatus$.pipe(
-            map(data => data.data.userStatus.isLoggedIn),
+            map(data => data.data?.userStatus?.isLoggedIn),
+            filter(notNullOrUndefined),
             distinctUntilChanged(),
             skip(1),
             filter(isLoggedIn => !isLoggedIn),
@@ -136,7 +137,10 @@ export class QueryResult<T, V extends Record<string, any> = Record<string, any>>
      */
     get single$(): Observable<T> {
         return this.currentQueryRefValueChanges.pipe(
-            filter(result => result.networkStatus === NetworkStatus.ready),
+            filter(
+                (result): result is ApolloQueryResult<T, 'complete'> =>
+                    result.networkStatus === NetworkStatus.ready && result.dataState === 'complete',
+            ),
             take(1),
             map(result => result.data),
             finalize(() => {
@@ -152,7 +156,10 @@ export class QueryResult<T, V extends Record<string, any> = Record<string, any>>
      */
     get stream$(): Observable<T> {
         return this.currentQueryRefValueChanges.pipe(
-            filter(result => result.networkStatus === NetworkStatus.ready),
+            filter(
+                (result): result is ApolloQueryResult<T, 'complete'> =>
+                    result.networkStatus === NetworkStatus.ready && result.dataState === 'complete',
+            ),
             map(result => result.data),
             finalize(() => {
                 this.completed$.next();

@@ -13,7 +13,7 @@ export class DropdownItemDirective {
         @Inject(DropdownComponent) private dropdown: DropdownComponent | Promise<DropdownComponent>,
     ) {}
 
-    @HostListener('click', ['$event'])
+    @HostListener('click')
     async onDropdownItemClick() {
         (await this.dropdown).onClick();
     }

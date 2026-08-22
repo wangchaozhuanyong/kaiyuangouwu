@@ -26,7 +26,7 @@ export class CheckJobsLink extends ApolloLink {
             if (this.isMutation(operation)) {
                 this.jobQueueService.checkForJobs();
             }
-            return forward ? forward(operation) : null;
+            return forward(operation);
         });
     }
 

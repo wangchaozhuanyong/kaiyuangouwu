@@ -1,8 +1,9 @@
 import { ClarityIcons } from '@cds/core/icon';
-import { IconShapeTuple } from '@cds/core/icon/interfaces/icon.interfaces';
-import React, { DOMAttributes, useEffect } from 'react';
+import React, { DOMAttributes, ReactNode, useEffect } from 'react';
 
-type CustomElement<T> = Partial<T & DOMAttributes<T> & { children: any }>;
+export type IconShapeTuple = Parameters<typeof ClarityIcons.addIcons>[0];
+
+type CustomElement<T> = Partial<T & DOMAttributes<T> & { children: ReactNode }>;
 
 export interface CdsIconProps {
     shape: string;
@@ -16,6 +17,8 @@ export interface CdsIconProps {
 }
 
 declare module 'react' {
+    // Namespace syntax is required to augment React's JSX intrinsic element declarations.
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace JSX {
         interface IntrinsicElements {
             ['cds-icon']: CustomElement<CdsIconProps>;

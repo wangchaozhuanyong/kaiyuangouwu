@@ -34,7 +34,7 @@ const logExporter = new OTLPLogExporter({ url: logEndpoint });
 const config = getSdkConfiguration({
     config: {
         spanProcessors: [new BatchSpanProcessor(traceExporter)],
-        logRecordProcessors: [new BatchLogRecordProcessor(logExporter)],
+        logRecordProcessors: [new BatchLogRecordProcessor({ exporter: logExporter })],
     },
 });
 

@@ -1,4 +1,4 @@
-import { Component, DebugElement } from '@angular/core';
+import { Component } from '@angular/core';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, Routes } from '@angular/router';
@@ -55,7 +55,7 @@ describe('BeadcrumbsComponent', () => {
                         path: 'resolved-function-child',
                         component: TestParentComponent,
                         data: {
-                            breadcrumb: (data: any) => data.foo,
+                            breadcrumb: (data: { foo: string }) => data.foo,
                         },
                         resolve: { foo: FooResolver },
                         children: [leafRoute],
@@ -64,7 +64,7 @@ describe('BeadcrumbsComponent', () => {
                         path: 'params-child/:name',
                         component: TestParentComponent,
                         data: {
-                            breadcrumb: (data: any, params: any) => params['name'],
+                            breadcrumb: (_data: unknown, params: Record<string, string>) => params['name'],
                         },
                         children: [leafRoute],
                     },
@@ -232,7 +232,7 @@ describe('BeadcrumbsComponent', () => {
             providers: [FooResolver, { provide: DataService, useClass: class {} }],
         }).compileComponents();
 
-        router = TestBed.get(Router);
+        router = TestBed.inject(Router);
     });
 
     /**
@@ -375,7 +375,6 @@ describe('BeadcrumbsComponent', () => {
         'shows correct labels for observable of string',
         getFixtureForRoute(['', 'observable-string'], fixture => {
             const labels = getBreadcrumbLabels(fixture);
-            const links = getBreadcrumbLinks(fixture);
             expect(labels).toEqual(['Root', 'Observable String']);
         }),
     );
@@ -384,7 +383,6 @@ describe('BeadcrumbsComponent', () => {
         'shows correct labels for observable of BreadcrumbLabelLinkPair',
         getFixtureForRoute(['', 'observable-pair'], fixture => {
             const labels = getBreadcrumbLabels(fixture);
-            const links = getBreadcrumbLinks(fixture);
             expect(labels).toEqual(['Root', 'Observable Pair']);
         }),
     );
@@ -403,7 +401,6 @@ describe('BeadcrumbsComponent', () => {
         'shows correct labels for function returning observable string',
         getFixtureForRoute(['', 'function-observable'], fixture => {
             const labels = getBreadcrumbLabels(fixture);
-            const links = getBreadcrumbLinks(fixture);
             expect(labels).toEqual(['Root', 'Observable String From Function']);
         }),
     );
@@ -418,10 +415,6 @@ describe('BeadcrumbsComponent', () => {
         }),
     );
 });
-
-function getBreadcrumbsElement(fixture: ComponentFixture<TestComponent>): DebugElement {
-    return fixture.debugElement.query(By.directive(BreadcrumbComponent));
-}
 
 function getBreadcrumbListItems(fixture: ComponentFixture<TestComponent>): HTMLLIElement[] {
     return fixture.debugElement.queryAll(By.css('.breadcrumbs:not(.mobile) li')).map(de => de.nativeElement);

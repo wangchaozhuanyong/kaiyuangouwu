@@ -19,6 +19,8 @@
 
 服务端已增加失败关闭保护：生产环境没有“已注册且非测试”的支付处理器时，结账会明确拒绝；有退款金额的售后申请在尚未关联真实退款时也不能标记完成。这些保护不等于已接入支付服务商。
 
+生产运行边界已增加强制产物门禁：只从干净的 `linux/x64` 构建生成不可变运行目录，校验 Git SHA、平台、文件、符号链接、实际安装包与 `RUNTIME-AUDIT.json`，并拒绝任何 High 或 Critical 公告命中以及 `esbuild`、`less`、`tar`、`typescript`、`vite`、`webpack` 构建依赖进入 API/Worker 运行目录。2026-08-22 本机演练产物和完整 monorepo 的审计结果均为 0 漏洞。
+
 ## 本地预览验收状态
 
 - 游客可以完成联系信息、收货地址、配送方式、提交订单、选择测试支付和查看订单成功页。
@@ -209,7 +211,7 @@ READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true
 
 ## 进程与发布方式
 
-当前项目已提供以下命令：
+开发工作区保留以下构建和启动命令：
 
 ```bash
 cd packages/dev-server
@@ -223,17 +225,37 @@ bun run test
 bun run build
 ```
 
+生产不直接使用上述 CLI 启动命令。在干净的 `linux/x64` 构建机完成 Server、Worker、Dashboard 和 Storefront 构建后生成运行产物：
+
+```bash
+bun run --cwd packages/dev-server build:production-runtime -- --require-platform linux/x64 --audit-level high
+```
+
+正式版本优先对 `origin/main` 当前完整 SHA 手动运行 GitHub Actions 的 `Production Runtime Artifact` 工作流。它固定 Node `24.19.0`、Bun `1.3.14` 和 `linux/x64`，只有全量门禁与产物自验证通过才上传带 SHA-256 的归档；具体下载、传输和服务器复验命令见 `deploy/DEPLOYMENT_RUNBOOK.md`。
+
+产物内的稳定入口为：
+
+```bash
+node verify-runtime.mjs --expected-sha <40-character-target-sha>
+NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 node packages/dev-server/dist/run-migrations.js
+node packages/dev-server/dist/index-worker.js
+node packages/dev-server/dist/index.js
+```
+
+实际进程由 `deploy/ecosystem.production.cjs` 管理，必须传入已验证候选目录的绝对路径 `VENDURE_RUNTIME_DIR`。生产 EC2 不执行 `bun install`、Vendure CLI 或前端构建；`.env`、上传资产和数字交付文件不进入产物。完整命令、校验和回滚步骤见 `deploy/DEPLOYMENT_RUNBOOK.md`。
+
 生产发布建议使用以下顺序：
 
 1. 备份数据库并记录当前版本。
 2. 在隔离环境恢复备份并执行迁移验证。
-3. 构建 Vendure Server、Worker、Dashboard 和 Storefront。
+3. 构建 Vendure Server、Worker、Dashboard 和 Storefront，并在 `linux/x64` 构建机生成、验证不可变运行产物。
 4. 只运行一次数据库迁移。
-5. 先启动 Worker，再启动 API Server。
-6. 发布前台静态文件，并原子切换到新版本目录。
+5. PM2 从同一个候选产物目录启动 Worker 和 API Server。
+6. API 健康检查成功后，原子切换 `kaiyuangouwu-current` 到新版本目录。
 7. 检查 `/health`、`/shop-api`、商品资源和 Dashboard。
 8. 分别在中国站与马来西亚站完成一笔最小金额测试订单。
-9. 观察错误、队列和支付回调后再开放流量。
+9. 确认 `RUNTIME-AUDIT.json` 无 High 和 Critical，且完整 monorepo 的 `bun audit` 为 0 漏洞。
+10. 观察错误、队列和支付回调后再开放流量。
 
 失败回滚必须同时考虑应用版本与数据库迁移，不能只替换前台静态文件。
 
@@ -276,6 +298,7 @@ bun run build
 - [ ] 商品图片使用持久存储，进程重启后仍可访问。
 - [ ] 临时 `DEMO-` 商品与 `storefront-demo` 资源已被真实内容替换。
 - [ ] API Server 与 Worker 独立运行且没有重复消费任务。
+- [ ] `linux/x64` 生产运行产物与目标 Git SHA 一致，自验证通过、不包含六类被禁构建工具，且 `RUNTIME-AUDIT.json` 无 High 和 Critical。
 - [ ] 公共域名无法访问 Admin API，GraphiQL 已关闭。
 - [ ] 中国站与马来西亚站完整 E2E 验收通过。
 - [ ] 监控、日志和关键告警已生效。

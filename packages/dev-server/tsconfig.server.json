@@ -1,4 +1,4 @@
 {
     "extends": "./tsconfig.build.json",
-    "include": ["./index.ts", "./dev-config.ts", "./instrumentation.ts"]
+    "include": ["./index.ts", "./dev-config.ts", "./instrumentation.ts", "./run-migrations.ts"]
 }

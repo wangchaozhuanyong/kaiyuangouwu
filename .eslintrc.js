@@ -43,6 +43,15 @@ module.exports = {
     root: true,
     overrides: [
         {
+            files: ['**/*.mjs'],
+            extends: ['plugin:@typescript-eslint/disable-type-checked'],
+            parserOptions: {
+                ecmaVersion: 'latest',
+                project: null,
+                sourceType: 'module',
+            },
+        },
+        {
             files: ['./packages/ui-devkit/src/client/**/*'],
             parserOptions: {
                 project: './packages/ui-devkit/tsconfig.json',
@@ -67,7 +76,7 @@ module.exports = {
         ],
         '@typescript-eslint/await-thenable': 'error',
         '@typescript-eslint/ban-ts-comment': 'off',
-        '@typescript-eslint/ban-types': [
+        '@typescript-eslint/no-restricted-types': [
             'error',
             {
                 types: {
@@ -104,7 +113,6 @@ module.exports = {
             },
         ],
         '@typescript-eslint/explicit-module-boundary-types': 'off',
-        '@typescript-eslint/indent': 'off',
         '@typescript-eslint/member-ordering': 'off',
         '@typescript-eslint/naming-convention': [
             'off',
@@ -120,7 +128,6 @@ module.exports = {
         '@typescript-eslint/no-empty-interface': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-extra-non-null-assertion': 'error',
-        '@typescript-eslint/no-extra-semi': 'error',
         '@typescript-eslint/no-floating-promises': 'error',
         '@typescript-eslint/no-for-in-array': 'error',
         '@typescript-eslint/no-implied-eval': 'error',
@@ -136,7 +143,6 @@ module.exports = {
         '@typescript-eslint/no-namespace': 'error',
         '@typescript-eslint/no-non-null-asserted-optional-chain': 'error',
         '@typescript-eslint/no-non-null-assertion': 'error',
-        '@typescript-eslint/no-parameter-properties': 'off',
         '@typescript-eslint/no-shadow': [
             'error',
             {
@@ -159,7 +165,6 @@ module.exports = {
         '@typescript-eslint/prefer-for-of': 'error',
         '@typescript-eslint/prefer-function-type': 'error',
         '@typescript-eslint/prefer-namespace-keyword': 'error',
-        '@typescript-eslint/quotes': 'off',
         '@typescript-eslint/require-await': 'warn',
         '@typescript-eslint/restrict-plus-operands': 'error',
         '@typescript-eslint/restrict-template-expressions': 'error',
@@ -257,6 +262,7 @@ module.exports = {
         'no-debugger': 'error',
         'no-empty': 'error',
         'no-empty-function': 'off',
+        'no-extra-semi': 'error',
         'no-eval': 'error',
         'no-extra-semi': 'off',
         'no-fallthrough': 'error',

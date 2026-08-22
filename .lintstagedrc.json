@@ -1,9 +1,8 @@
 {
-    "admin-ui/**/*.ts": ["npm run lint", "npm run format", "git add"],
-    "admin-ui/**/*.html": ["npm run format", "git add"],
-    "packages/!(dev-server)/**/*.ts": ["npm run lint", "npm run format", "git add"],
-    "packages/dashboard/src/lib/**/*.{ts,tsx}": [
-        "node packages/dashboard/scripts/check-lib-imports.js",
-        "git add"
-    ]
+    "**/*.{ts,tsx,mjs,mts,cts}": [
+        "node scripts/lint-check.mjs",
+        "prettier --write --html-whitespace-sensitivity ignore"
+    ],
+    "admin-ui/**/*.html": ["prettier --write --html-whitespace-sensitivity ignore"],
+    "packages/dashboard/src/lib/**/*.{ts,tsx}": ["node packages/dashboard/scripts/check-lib-imports.js"]
 }

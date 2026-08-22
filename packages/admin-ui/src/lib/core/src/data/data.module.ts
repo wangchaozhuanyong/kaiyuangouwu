@@ -1,9 +1,9 @@
 import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { Injector, NgModule, inject, provideAppInitializer } from '@angular/core';
-import { ApolloClientOptions, InMemoryCache } from '@apollo/client/core';
+import { ApolloClient, ApolloLink, InMemoryCache } from '@apollo/client/core';
 import { setContext } from '@apollo/client/link/context';
-import { ApolloLink } from '@apollo/client/link/core';
-import { APOLLO_OPTIONS, Apollo, provideApollo } from 'apollo-angular';
+import { LocalState } from '@apollo/client/local-state';
+import { provideApollo } from 'apollo-angular';
 import createUploadLink from 'apollo-upload-client/createUploadLink.mjs';
 
 import { getAppConfig } from '../app.config';
@@ -19,10 +19,10 @@ import { BaseDataService } from './providers/base-data.service';
 import { DataService } from './providers/data.service';
 import { FetchAdapter } from './providers/fetch-adapter';
 import { DefaultInterceptor } from './providers/interceptor';
-import { initializeServerConfigService, ServerConfigService } from './server-config';
+import { ServerConfigService, initializeServerConfigService } from './server-config';
 import { getServerLocation } from './utils/get-server-location';
 
-export function createApollo(): ApolloClientOptions<any> {
+export function createApollo(): ApolloClient.Options {
     const localStorageService = inject(LocalStorageService);
     const fetchAdapter = inject(FetchAdapter);
     const injector = inject(Injector);
@@ -55,7 +55,7 @@ export function createApollo(): ApolloClientOptions<any> {
     if (!false) {
         // TODO: enable only for dev mode
         // make the Apollo Cache inspectable in the console for debug purposes
-        (window as any)['apolloCache'] = apolloCache;
+        (window as Window & { apolloCache?: InMemoryCache }).apolloCache = apolloCache;
     }
     return {
         link: ApolloLink.from([
@@ -82,7 +82,7 @@ export function createApollo(): ApolloClientOptions<any> {
             }),
         ]),
         cache: apolloCache,
-        resolvers: clientResolvers,
+        localState: new LocalState({ resolvers: clientResolvers }),
     };
 }
 

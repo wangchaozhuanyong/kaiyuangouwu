@@ -131,7 +131,6 @@ export class SharpAssetPreviewStrategy implements AssetPreviewStrategy {
                 } else {
                     switch (metadata.format) {
                         case 'jpeg':
-                        case 'jpg':
                             return image.jpeg(this.config.jpegOptions).toBuffer();
                         case 'png':
                             return image.png(this.config.pngOptions).toBuffer();
@@ -139,7 +138,7 @@ export class SharpAssetPreviewStrategy implements AssetPreviewStrategy {
                             return image.webp(this.config.webpOptions).toBuffer();
                         case 'gif':
                             return image.gif(this.config.jpegOptions).toBuffer();
-                        case 'avif':
+                        case 'heif':
                             return image.avif(this.config.avifOptions).toBuffer();
                         default:
                             return image.toBuffer();

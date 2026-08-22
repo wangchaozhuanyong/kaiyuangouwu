@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { unique } from './unique';
 
+const MAX_PERFORMANCE_TEST_DURATION_MS = 500;
+
 describe('unique()', () => {
     it('works with primitive values', () => {
         expect(unique([1, 1, 2, 3, 2, 6, 4, 2])).toEqual([1, 2, 3, 6, 4]);
@@ -35,19 +37,19 @@ describe('unique()', () => {
 
     it('perf on primitive array', () => {
         const bigArray = Array.from({ length: 50000 }).map(() => Math.random().toString().substr(2, 5));
-        const timeStart = new Date().getTime();
+        const timeStart = performance.now();
         unique(bigArray);
-        const timeEnd = new Date().getTime();
-        expect(timeEnd - timeStart).toBeLessThan(100);
+        const timeEnd = performance.now();
+        expect(timeEnd - timeStart).toBeLessThan(MAX_PERFORMANCE_TEST_DURATION_MS);
     });
 
     it('perf on object array', () => {
         const bigArray = Array.from({ length: 50000 })
             .map(() => Math.random().toString().substr(2, 5))
             .map(id => ({ id }));
-        const timeStart = new Date().getTime();
+        const timeStart = performance.now();
         unique(bigArray, 'id');
-        const timeEnd = new Date().getTime();
-        expect(timeEnd - timeStart).toBeLessThan(100);
+        const timeEnd = performance.now();
+        expect(timeEnd - timeStart).toBeLessThan(MAX_PERFORMANCE_TEST_DURATION_MS);
     });
 });

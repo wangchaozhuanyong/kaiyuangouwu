@@ -27,6 +27,11 @@ export interface ToastConfig {
     duration?: number;
 }
 
+interface OpenToastRef {
+    ref: ComponentRef<NotificationComponent>;
+    timerId: ReturnType<typeof setTimeout>;
+}
+
 // How many ms before the toast is dismissed.
 const TOAST_DURATION = 3000;
 
@@ -59,7 +64,7 @@ export class NotificationService {
         return this.overlayHostService.getHostView();
     }
 
-    private openToastRefs: Array<{ ref: ComponentRef<NotificationComponent>; timerId: any }> = [];
+    private openToastRefs: OpenToastRef[] = [];
 
     constructor(
         private i18nService: I18nService,
@@ -137,6 +142,7 @@ export class NotificationService {
         toast.message = config.message;
         toast.translationVars = this.translateTranslationVars(config.translationVars || {});
         toast.registerOnClickFn(dismissFn);
+        ref.changeDetectorRef.detectChanges();
 
         let timerId;
         if (!config.duration || 0 < config.duration) {
@@ -177,6 +183,7 @@ export class NotificationService {
         this.openToastRefs.forEach(obj => {
             const toast: NotificationComponent = obj.ref.instance;
             toast.offsetTop = cumulativeHeight;
+            obj.ref.changeDetectorRef.detectChanges();
             cumulativeHeight += toast.getHeight() + 6;
         });
     }

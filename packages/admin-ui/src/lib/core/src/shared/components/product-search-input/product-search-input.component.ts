@@ -6,6 +6,7 @@ import { SearchProductsQuery } from '../../../common/generated-types';
 import { SingleSearchSelectionModelFactory } from '../../../common/single-search-selection-model';
 
 type FacetValueResult = SearchProductsQuery['search']['facetValues'][number];
+type ProductSearchSelection = FacetValueResult | { label: string };
 
 @Component({
     selector: 'vdr-product-search-input',
@@ -35,7 +36,7 @@ export class ProductSearchInputComponent {
     }
 
     setFacetValues(ids: string[]) {
-        const items = this.selectComponent.items;
+        const items = this.selectComponent.items();
 
         this.selectComponent.selectedItems.forEach(item => {
             if (this.isFacetValueItem(item.value) && !ids.includes(item.value.facetValue.id)) {
@@ -81,13 +82,12 @@ export class ProductSearchInputComponent {
         );
     };
 
-    onSelectChange(selectedItems: Array<FacetValueResult | { label: string }>) {
+    onSelectChange(selectedItems: ProductSearchSelection[]) {
         if (!Array.isArray(selectedItems)) {
             selectedItems = [selectedItems];
         }
         const searchTermItem = selectedItems.find(item => !this.isFacetValueItem(item)) as
-            | { label: string }
-            | undefined;
+            { label: string } | undefined;
         const searchTerm = searchTermItem ? searchTermItem.label : '';
 
         const facetValueIds = selectedItems.filter(this.isFacetValueItem).map(i => i.facetValue.id);
@@ -102,7 +102,7 @@ export class ProductSearchInputComponent {
         }
     }
 
-    addTagFn(item: any) {
+    addTagFn(item: string) {
         return { label: item };
     }
 

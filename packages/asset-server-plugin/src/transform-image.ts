@@ -70,8 +70,9 @@ async function applyFormat(
                 // If a quality has been specified but no format, we need to determine the format from the image
                 // and apply the quality to that format.
                 const metadata = await image.metadata();
-                if (isImageTransformFormat(metadata.format)) {
-                    return applyFormat(image, metadata.format, quality);
+                const outputFormat = getImageTransformFormat(metadata.format);
+                if (outputFormat) {
+                    return applyFormat(image, outputFormat, quality);
                 }
             }
             return image;
@@ -79,8 +80,13 @@ async function applyFormat(
     }
 }
 
-function isImageTransformFormat(input: keyof FormatEnum | undefined): input is ImageTransformFormat {
-    return !!input && ['jpg', 'jpeg', 'webp', 'avif'].includes(input);
+function getImageTransformFormat(input: keyof FormatEnum | undefined): ImageTransformFormat | undefined {
+    if (input === 'heif') {
+        return 'avif';
+    }
+    if (input === 'jpeg' || input === 'png' || input === 'webp') {
+        return input;
+    }
 }
 
 /**

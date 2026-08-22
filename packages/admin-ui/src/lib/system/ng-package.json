@@ -1,7 +1,6 @@
 {
-  "lib": {
-    "styleIncludePaths": [
-      "../static/styles"
-    ]
-  }
+    "lib": {
+        "styleIncludePaths": ["../static/styles"],
+        "sass": { "silenceDeprecations": ["import"] }
+    }
 }
