@@ -72,6 +72,9 @@ jobs:
             - name: Audit monorepo dependencies
               run: bun audit
 
+            - name: Build lint prerequisites
+              run: bunx lerna run ci
+
             - name: Lint without modifying sources
               env:
                   TARGET_SHA: ${{ inputs.target_sha }}
