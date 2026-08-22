@@ -72,7 +72,7 @@ export interface DashboardThemeOptions extends ThemeVariables {
 const dashboardLightExtensions: ThemeColors = {
     input: neutral[500],
     ring: brand[700],
-    link: brand[800],
+    link: brand[900],
     'success-text': success[600],
     'warning-text': warning[700],
     'help-accent': warning[700],

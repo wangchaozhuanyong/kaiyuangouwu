@@ -9,6 +9,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { AnyRoute, useNavigate } from '@tanstack/react-router';
 import { ResultOf, VariablesOf } from 'gql.tada';
+import type { ComponentPropsWithoutRef } from 'react';
 import { ControllerRenderProps, FieldPath, FieldValues } from 'react-hook-form';
 import { useDynamicTranslations } from '../../hooks/use-dynamic-translations.js';
 import {
@@ -85,13 +86,26 @@ export interface DetailPageProps<
     setValuesForUpdate: (entity: ResultOf<T>[EntityField]) => VariablesOf<U>['input'];
 }
 
-export interface DetailPageFieldProps<
+type DetailPageControlProps = Pick<
+    ComponentPropsWithoutRef<'input'>,
+    | 'id'
+    | 'aria-label'
+    | 'aria-labelledby'
+    | 'aria-describedby'
+    | 'aria-errormessage'
+    | 'aria-invalid'
+    | 'aria-required'
+    | 'required'
+    | 'autoComplete'
+>;
+
+export type DetailPageFieldProps<
     TFieldValues extends FieldValues = FieldValues,
     TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
-> {
+> = DetailPageControlProps & {
     fieldInfo: FieldInfo;
     field: ControllerRenderProps<TFieldValues, TName>;
-}
+};
 
 /**
  * Maps GraphQL schema types (PascalCase) to form engine types (lowercase)
@@ -111,9 +125,11 @@ const graphqlTypeMap: Record<string, string> = {
 function FieldInputRenderer<
     TFieldValues extends FieldValues = FieldValues,
     TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
->({ fieldInfo, field }: DetailPageFieldProps<TFieldValues, TName>) {
+>({ fieldInfo, field, ...controlProps }: DetailPageFieldProps<TFieldValues, TName>) {
     const type = graphqlTypeMap[fieldInfo.type] ?? 'string';
-    return <DefaultInputForType {...field} fieldDef={{ type, name: fieldInfo.name } as any} />;
+    return (
+        <DefaultInputForType {...field} {...controlProps} fieldDef={{ type, name: fieldInfo.name } as any} />
+    );
 }
 
 /**

@@ -85,6 +85,34 @@ jobs:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
             - uses: ./.github/actions/setup
             - name: Build
+              env:
+                  NODE_ENV: production
+                  TZ: Asia/Shanghai
+                  VENDURE_SERVE_GRAPHIQL: 'false'
+                  VENDURE_DASHBOARD_URL: https://admin.build.test/dashboard
+                  VENDURE_STOREFRONT_URL: https://store.build.test
+                  VENDURE_EMAIL_FROM: Build Check <build@build.test>
+                  VENDURE_IMPORT_ASSETS_DIR: /tmp/vendure-build-import
+                  VENDURE_ASSET_UPLOAD_DIR: /tmp/vendure-build-assets
+                  DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
+                  DIGITAL_DELIVERY_SIGNING_SECRET: build-check-digital-secret-000000000000000000000000
+                  STORE_DOMAIN_CNAME_TARGET: stores.build.test
+                  STORE_DOMAIN_ROUTING_MODE: require-domain
+                  STORE_DOMAIN_BYPASS_HOSTS: ''
+                  SMTP_USER: build-check
+                  SMTP_PASSWORD: build-check-password
+                  SMTP_HOST: smtp.build.test
+                  SMTP_PORT: '587'
+                  SMTP_SECURE: 'false'
+                  SUPERADMIN_USERNAME: build-check-admin
+                  SUPERADMIN_PASSWORD: build-check-admin-password
+                  COOKIE_SECRET: build-check-cookie-secret-000000000000000000000000
+                  ORDER_CONFIRMATION_TOKEN_SECRET: build-check-order-token-secret-000000000000000000000000
+                  DB: postgres
+                  DB_USERNAME: build-check
+                  DB_PASSWORD: build-check-password
+                  DB_NAME: build-check
+                  DB_SYNCHRONIZE: 'false'
               run: bun run build
     unit-tests:
         name: unit tests
@@ -104,6 +132,8 @@ jobs:
                   node-version: ${{ matrix.node }}
             - name: Build
               run: bunx lerna run ci
+            - name: Build local application plugins
+              run: bun run --cwd packages/dev-server build:local-plugins
             - name: Unit tests
               run: bun run test
     dashboard-i18n:
@@ -383,6 +413,8 @@ jobs:
             - build
             - unit-tests
             - dashboard-i18n
+            - dashboard-storybook
+            - dashboard-storybook-windows
             - dashboard-e2e
             - sonarqube
             - e2e-sqljs

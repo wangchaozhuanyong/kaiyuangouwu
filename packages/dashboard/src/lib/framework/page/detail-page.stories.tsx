@@ -1,5 +1,6 @@
 import { graphql } from '@/vdb/graphql/graphql.js';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DemoRouterProvider } from '../../../../.storybook/providers.js';
 import { DetailPage, DetailPageProps } from './detail-page.js';
 
@@ -67,13 +68,48 @@ const updateProductDocument = graphql(`
     }
 `);
 
+const storyQueryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            retry: false,
+            staleTime: Infinity,
+        },
+    },
+});
+
+storyQueryClient.setQueryData(['DetailPage', 'product', { id: '1' }], {
+    product: {
+        id: '1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        name: 'Sample product',
+        slug: 'sample-product',
+        description: 'A deterministic product used by the DetailPage story.',
+        enabled: true,
+        featuredAsset: null,
+        assets: [],
+        facetValues: [],
+        translations: [
+            {
+                id: '1',
+                languageCode: 'en',
+                name: 'Sample product',
+                slug: 'sample-product',
+                description: 'A deterministic product used by the DetailPage story.',
+            },
+        ],
+    },
+});
+
 function DetailPageStoryWrapper(props: Omit<DetailPageProps<any, any, any>, 'route'>) {
     return (
-        <DemoRouterProvider
-            component={route => <DetailPage {...props} route={route} />}
-            path={'/products/$id'}
-            initialPath={'/products/1'}
-        />
+        <QueryClientProvider client={storyQueryClient}>
+            <DemoRouterProvider
+                component={route => <DetailPage {...props} route={route} />}
+                path={'/products/$id'}
+                initialPath={'/products/1'}
+            />
+        </QueryClientProvider>
     );
 }
 

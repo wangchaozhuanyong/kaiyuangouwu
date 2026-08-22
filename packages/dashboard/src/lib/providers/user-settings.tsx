@@ -2,6 +2,7 @@ import { LS_KEY_USER_SETTINGS } from '@/vdb/constants.js';
 import { QueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import React, { createContext, useEffect, useRef, useState } from 'react';
+import { uiConfig } from 'virtual:vendure-ui-config';
 import { api } from '../graphql/api.js';
 import {
     getSettingsStoreValueDocument,
@@ -31,9 +32,9 @@ export interface UserSettings {
 }
 
 const defaultSettings: UserSettings = {
-    displayLanguage: 'zh_Hans',
-    displayLocale: 'CN',
-    contentLanguage: 'zh_Hans',
+    displayLanguage: uiConfig.i18n.defaultLanguage,
+    displayLocale: uiConfig.i18n.defaultLocale,
+    contentLanguage: uiConfig.i18n.defaultLanguage,
     theme: 'system',
     displayUiExtensionPoints: false,
     mainNavExpanded: true,

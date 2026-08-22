@@ -122,7 +122,7 @@ describe('Slug generation', () => {
                     },
                 });
 
-                expect(result.slugForEntity).toBe('uber-groer-schon');
+                expect(result.slugForEntity).toBe('uber-großer-schon');
             });
 
             it('handles Spanish characters', async () => {
@@ -137,7 +137,7 @@ describe('Slug generation', () => {
                 expect(result.slugForEntity).toBe('nino-espanol-anejo');
             });
 
-            it('handles non-Latin scripts (removes them)', async () => {
+            it('handles non-Latin scripts (preserves Unicode letters)', async () => {
                 const result = await adminClient.query(slugForEntityDocument, {
                     input: {
                         entityName: 'Product',
@@ -146,7 +146,7 @@ describe('Slug generation', () => {
                     },
                 });
 
-                expect(result.slugForEntity).toBe('product');
+                expect(result.slugForEntity).toBe('product-商品-المنتج-उतपद');
             });
 
             it('handles emoji (removes them)', async () => {
@@ -590,7 +590,7 @@ describe('Slug generation', () => {
                 const testCases = [
                     { input: 'Café Français', expected: 'cafe-francais' },
                     { input: 'Niño Español', expected: 'nino-espanol' },
-                    { input: 'Größer Schön', expected: 'groer-schon' },
+                    { input: 'Größer Schön', expected: 'großer-schon' },
                     { input: 'Naïve Résumé', expected: 'naive-resume' },
                     { input: 'Crème Brûlée', expected: 'creme-brulee' },
                     { input: 'Piñata Jalapeño', expected: 'pinata-jalapeno' },

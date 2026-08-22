@@ -78,8 +78,9 @@ describe('ShippingMethod resolver', () => {
             {
                 args: [
                     {
-                        description: 'Order is eligible only if its total is greater or equal to this value',
-                        label: 'Minimum order value',
+                        description:
+                            'This shipping method is available when the tax-inclusive merchandise subtotal reaches this amount.',
+                        label: 'Minimum tax-inclusive merchandise subtotal',
                         name: 'orderMinimum',
                         type: 'int',
                         ui: {
@@ -88,7 +89,7 @@ describe('ShippingMethod resolver', () => {
                     },
                 ],
                 code: 'default-shipping-eligibility-checker',
-                description: 'Default Shipping Eligibility Checker',
+                description: 'Require a minimum order subtotal',
             },
         ]);
     });
@@ -103,30 +104,43 @@ describe('ShippingMethod resolver', () => {
                         ui: {
                             component: 'currency-form-input',
                         },
-                        description: null,
-                        label: 'Shipping price',
+                        description: 'Fixed shipping charge applied to eligible orders.',
+                        label: 'Shipping charge',
                         name: 'rate',
                         type: 'int',
                     },
                     {
-                        label: 'Price includes tax',
+                        label: 'Tax treatment',
                         name: 'includesTax',
                         type: 'string',
-                        description: null,
+                        description: 'Specify whether the shipping charge already includes tax.',
                         ui: {
                             component: 'select-form-input',
                             options: [
                                 {
-                                    label: [{ languageCode: LanguageCode.en, value: 'Includes tax' }],
+                                    label: [
+                                        { languageCode: LanguageCode.en, value: 'Tax included' },
+                                        { languageCode: LanguageCode.zh_Hans, value: '金额含税' },
+                                    ],
                                     value: 'include',
                                 },
                                 {
-                                    label: [{ languageCode: LanguageCode.en, value: 'Excludes tax' }],
+                                    label: [
+                                        { languageCode: LanguageCode.en, value: 'Tax excluded' },
+                                        { languageCode: LanguageCode.zh_Hans, value: '金额未税' },
+                                    ],
                                     value: 'exclude',
                                 },
                                 {
                                     label: [
-                                        { languageCode: LanguageCode.en, value: 'Auto (based on Channel)' },
+                                        {
+                                            languageCode: LanguageCode.en,
+                                            value: 'Follow sales channel setting',
+                                        },
+                                        {
+                                            languageCode: LanguageCode.zh_Hans,
+                                            value: '跟随销售渠道设置',
+                                        },
                                     ],
                                     value: 'auto',
                                 },
@@ -139,14 +153,14 @@ describe('ShippingMethod resolver', () => {
                             min: 0,
                             suffix: '%',
                         },
-                        description: null,
-                        label: 'Tax rate',
+                        description: 'Tax percentage applied to the shipping charge.',
+                        label: 'Shipping tax rate',
                         name: 'taxRate',
                         type: 'float',
                     },
                 ],
                 code: 'default-shipping-calculator',
-                description: 'Default Flat-Rate Shipping Calculator',
+                description: 'Charge a fixed shipping rate',
             },
             {
                 args: [],

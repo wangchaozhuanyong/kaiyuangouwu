@@ -301,15 +301,12 @@ export class ProductVariantService {
      * page, this method returns only the Product itself.
      */
     async getProductForVariant(ctx: RequestContext, variant: ProductVariant): Promise<Translated<Product>> {
-        let product;
-
-        if (!variant.product) {
-            product = await this.connection.getEntityOrThrow(ctx, Product, variant.productId, {
-                includeSoftDeleted: true,
-            });
-        } else {
-            product = variant.product;
-        }
+        // A Product joined by a ProductVariant list query can be only partially hydrated.
+        // In particular, translated custom fields can be absent even when `name` is present.
+        // Reload the Product so its eager translations are complete before translating it.
+        const product = await this.connection.getEntityOrThrow(ctx, Product, variant.productId, {
+            includeSoftDeleted: true,
+        });
 
         return this.translator.translate(product, ctx);
     }
@@ -502,13 +499,11 @@ export class ProductVariantService {
                 const optionIds = input.optionIds || [];
                 let optionGroupIds: ID[] = [];
                 if (optionIds.length) {
-                    const variantOptions = await this.connection
-                        .getRepository(ctx, ProductOption)
-                        .find({
-                            where: { id: In(optionIds) },
-                            relations: ['group'],
-                            loadEagerRelations: false,
-                        });
+                    const variantOptions = await this.connection.getRepository(ctx, ProductOption).find({
+                        where: { id: In(optionIds) },
+                        relations: ['group'],
+                        loadEagerRelations: false,
+                    });
                     optionGroupIds = unique(variantOptions.map(o => o.group.id));
                 }
 
@@ -523,20 +518,14 @@ export class ProductVariantService {
                     if (optionIds.length) {
                         await Promise.all([
                             ...optionGroupIds.map(id =>
-                                this.channelService.assignToChannels(
-                                    ctx,
-                                    ProductOptionGroup,
-                                    id,
-                                    [additionalChannelId],
-                                ),
+                                this.channelService.assignToChannels(ctx, ProductOptionGroup, id, [
+                                    additionalChannelId,
+                                ]),
                             ),
                             ...optionIds.map(id =>
-                                this.channelService.assignToChannels(
-                                    ctx,
-                                    ProductOption,
-                                    id,
-                                    [additionalChannelId],
-                                ),
+                                this.channelService.assignToChannels(ctx, ProductOption, id, [
+                                    additionalChannelId,
+                                ]),
                             ),
                         ]);
                     }
@@ -827,8 +816,8 @@ export class ProductVariantService {
                         variant.taxCategory = variantWithTaxCategory.taxCategory;
                     }
                     resolve(await this.applyChannelPriceAndTax(variant, ctx, undefined, true));
-                } catch (e: any) {
-                    reject(e);
+                } catch (e: unknown) {
+                    reject(e instanceof Error ? e : new Error(String(e)));
                 }
             });
             this.requestCache.set(ctx, cacheKey, populatePricesPromise);
