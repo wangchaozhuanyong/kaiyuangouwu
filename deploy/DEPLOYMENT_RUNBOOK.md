@@ -30,7 +30,7 @@
 - Dashboard 静态目录：`/var/www/kaiyuangouwu/packages/dev-server/dist/dashboard`
 - Nginx 配置基线：`deploy/nginx/damatong.conf`
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
-- 异地备份：`yunqiao-vendure-backups-079740175286-ap-northeast-1`，实例角色上传，S3 保留 30 天，本地保留 14 天。
+- 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问该前缀；存储桶已启用版本控制、SSE-S3 默认加密、阻止全部公网访问与 Bucket owner enforced。本地备份保留 14 天；S3 当前不自动删除，设置生命周期前必须单独确认保留期限。
 
 单机生产环境必须在 `.env` 中设置 `VENDURE_REQUIRE_OFFSITE_BACKUP=true` 和可写的 `VENDURE_BACKUP_S3_URI=s3://<bucket>/<prefix>`。备份脚本会上传压缩备份与 SHA-256 文件；未配置或上传失败时 systemd 任务失败。恢复演练完成后会自动删除临时数据库。
 
