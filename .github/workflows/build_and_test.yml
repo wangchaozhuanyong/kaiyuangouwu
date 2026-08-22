@@ -217,14 +217,18 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             contents: read
+        env:
+            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
               with:
                   fetch-depth: 0
             - name: SonarQube Scan
+              if: env.SONAR_TOKEN != ''
               uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
-              env:
-                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+            - name: Report unavailable SonarQube credentials
+              if: env.SONAR_TOKEN == ''
+              run: echo "::notice::SonarQube scan skipped because SONAR_TOKEN is not configured for this repository."
     e2e-sqljs:
         name: e2e (sqljs)
         needs: detect-changes
