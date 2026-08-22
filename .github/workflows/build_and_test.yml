@@ -133,6 +133,8 @@ jobs:
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
             - uses: ./.github/actions/setup
+            - name: Build core and common packages
+              run: bun run build:core-common
             - name: Dashboard lint
               working-directory: packages/dashboard
               run: bun run lint
@@ -168,6 +170,8 @@ jobs:
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
             - uses: ./.github/actions/setup
+            - name: Build core and common packages
+              run: bun run build:core-common
             - name: Storybook browser and accessibility tests in Chrome
               working-directory: packages/dashboard
               run: bun run test:storybook
