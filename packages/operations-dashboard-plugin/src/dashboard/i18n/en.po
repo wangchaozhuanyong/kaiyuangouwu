@@ -4,151 +4,530 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Language: en\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.workbench"
-msgstr "Workspace"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.activeStore"
+msgstr "Active store"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.productCenter"
-msgstr "Product center"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.all"
+msgstr "All statuses"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.orderCenter"
-msgstr "Order center"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approve"
+msgstr "Approve"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.customerCenter"
-msgstr "Customer center"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approved"
+msgstr "Approved"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.marketingCenter"
-msgstr "Marketing center"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approvedAmount"
+msgstr "Approved amount"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.inventoryAndFulfillment"
-msgstr "Inventory & fulfillment"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approvedAmountHint"
+msgstr "Enter the active currency amount, not above the request total. This is an approval record only."
 
 #. js-lingui-explicit-id
-msgid "operations.nav.storeSettings"
-msgstr "Store settings"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.cancel"
+msgstr "Cancel"
 
 #. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.complete"
+msgstr "Mark completed"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.confirm"
+msgstr "Confirm"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.customer"
+msgstr "Customer"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.customerDescription"
+msgstr "Customer description"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.description"
+msgstr "Review refund and return requests for the active store. This records workflow only and does not call a payment refund."
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.empty"
+msgstr "No after-sales requests match this filter"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.filter"
+msgstr "Status filter"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.invalidAmount"
+msgstr "The approved amount must be between zero and the requested amount"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.invalidResolution"
+msgstr "The resolution note is required and cannot exceed 2000 characters"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.items"
+msgstr "Items"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.loadError"
+msgstr "Could not load after-sales requests"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.order"
+msgstr "Order"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.processing"
+msgstr "Processing"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refundUnavailable"
+msgstr "Real payment refunds are not connected. A positive refund must be completed and verified before this request can be marked completed."
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.reject"
+msgstr "Reject"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.requested"
+msgstr "Requested"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.resolution"
+msgstr "Resolution note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.resolutionHint"
+msgstr "The customer can see this note in the request timeline."
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.approved"
+msgstr "Approved"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.cancelled"
+msgstr "Cancelled"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.completed"
+msgstr "Completed"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.pending"
+msgstr "Pending"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.rejected"
+msgstr "Rejected"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.submittedAt"
+msgstr "Submitted"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.timeline"
+msgstr "Timeline"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.title"
+msgstr "After-sales"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.transition.approve"
+msgstr "Approve request"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.transition.complete"
+msgstr "Complete request"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.transition.reject"
+msgstr "Reject request"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.type.refundOnly"
+msgstr "Refund only"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.type.returnAndRefund"
+msgstr "Return and refund"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.updated"
+msgstr "After-sales status updated"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.accountsAndAccess"
 msgstr "Accounts & access"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.systemManagement"
-msgstr "System management"
+#: src/dashboard/index.tsx
+msgid "operations.nav.customerCenter"
+msgstr "Customer center"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.skuAndInventory"
-msgstr "SKUs & inventory"
+#: src/dashboard/index.tsx
+msgid "operations.nav.inventoryAndFulfillment"
+msgstr "Inventory & fulfillment"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.productGroups"
-msgstr "Product groups"
+#: src/dashboard/index.tsx
+msgid "operations.nav.marketingCenter"
+msgstr "Marketing center"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.specificationTemplates"
-msgstr "Specification templates"
+#: src/dashboard/index.tsx
+msgid "operations.nav.orderCenter"
+msgstr "Order center"
 
 #. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.productAttributes"
 msgstr "Product attributes"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.warehouses"
-msgstr "Warehouses"
+#: src/dashboard/index.tsx
+msgid "operations.nav.productCenter"
+msgstr "Product center"
 
 #. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.productGroups"
+msgstr "Product groups"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.skuAndInventory"
+msgstr "SKUs & inventory"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.specificationTemplates"
+msgstr "Specification templates"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.stores"
 msgstr "Stores"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.title"
-msgstr "Order tasks"
+#: src/dashboard/index.tsx
+msgid "operations.nav.storeSettings"
+msgstr "Store settings"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.description"
-msgstr "Orders that need attention right now"
+#: src/dashboard/index.tsx
+msgid "operations.nav.systemManagement"
+msgstr "System management"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingPayment"
-msgstr "Awaiting payment"
+#: src/dashboard/index.tsx
+msgid "operations.nav.warehouses"
+msgstr "Warehouses"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingPaymentDescription"
-msgstr "Customers have not completed payment"
+#: src/dashboard/index.tsx
+msgid "operations.nav.workbench"
+msgstr "Workspace"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingShipment"
-msgstr "Awaiting shipment"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.activeStore"
+msgstr "Active store"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingShipmentDescription"
-msgstr "Paid orders ready for fulfillment"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.all"
+msgstr "All statuses"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.modifying"
-msgstr "Order changes in progress"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.approve"
+msgstr "Approve and publish"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.modifyingDescription"
-msgstr "Orders currently being adjusted"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.cancel"
+msgstr "Cancel"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.openOrders"
-msgstr "Open order center"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.confirm"
+msgstr "Confirm"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.loadError"
-msgstr "Could not load order tasks"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.description"
+msgstr "Moderate verified-purchase reviews for the active store. Only approved reviews appear publicly."
 
 #. js-lingui-explicit-id
-msgid "operations.todo.retry"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.empty"
+msgstr "No reviews match this filter"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.filter"
+msgstr "Status filter"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.loadError"
+msgstr "Could not load reviews"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.nextPage"
+msgstr "Next page"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.page"
+msgstr "Page"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.previousPage"
+msgstr "Previous page"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.processing"
+msgstr "Processing"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.reject"
+msgstr "Reject"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.rejectionRequired"
+msgstr "A rejection reason of at least 3 characters is required"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.response"
+msgstr "Store response / moderation note"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.responseHint"
+msgstr "An approval response is optional and public. A rejection reason is required."
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.responseTooLong"
+msgstr "The response cannot exceed 2000 characters"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.retry"
 msgstr "Retry"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.title"
-msgstr "All-store performance"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.state.approved"
+msgstr "Published"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.description"
-msgstr "Compare each store for the selected period"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.state.pending"
+msgstr "Pending"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.manage"
-msgstr "Manage stores"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.state.rejected"
+msgstr "Rejected"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.orders"
-msgstr "Orders"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.title"
+msgstr "Review moderation"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.sales"
-msgstr "Sales"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.updated"
+msgstr "Review status updated"
 
 #. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.verified"
+msgstr "Verified purchase"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
 msgid "operations.stores.current"
 msgstr "Current store"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.total"
-msgstr "Total"
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.description"
+msgstr "Compare each store for the selected period"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.storeCount"
-msgstr "stores"
-
-#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
 msgid "operations.stores.loadError"
 msgstr "Could not load store data"
 
 #. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.manage"
+msgstr "Manage stores"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.orders"
+msgstr "Orders"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.sales"
+msgstr "Sales"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.storeCount"
+msgstr "stores"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.title"
+msgstr "All-store performance"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.total"
+msgstr "Total"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
 msgid "operations.stores.unavailable"
 msgstr "Data unavailable"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.retry"
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.description"
+msgstr "Orders that need attention right now"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.loadError"
+msgstr "Could not load order tasks"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.modifying"
+msgstr "Order changes in progress"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.modifyingDescription"
+msgstr "Orders currently being adjusted"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.openOrders"
+msgstr "Open order center"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingPayment"
+msgstr "Awaiting payment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingPaymentDescription"
+msgstr "Customers have not completed payment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingShipment"
+msgstr "Awaiting shipment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingShipmentDescription"
+msgstr "Paid orders ready for fulfillment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.retry"
 msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.title"
+msgstr "Order tasks"

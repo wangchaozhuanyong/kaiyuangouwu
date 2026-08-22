@@ -1,10 +1,18 @@
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/vdb/components/ui/command.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/vdb/components/ui/popover.js';
 import { cn } from '@/vdb/lib/utils.js';
-import { ChevronDown, X } from 'lucide-react';
-import { useState } from 'react';
-import { Input } from '../ui/input.js';
+import { Trans } from '@lingui/react/macro';
+import { Check, ChevronDown } from 'lucide-react';
+import { FocusEventHandler, Ref, useId, useState } from 'react';
 
 export interface MultiSelectProps<T extends boolean> {
     value: T extends true ? string[] : string;
@@ -25,6 +33,18 @@ export interface MultiSelectProps<T extends boolean> {
     searchPlaceholder?: string;
     showSearch?: boolean;
     className?: string;
+    id?: string;
+    disabled?: boolean;
+    name?: string;
+    ref?: Ref<HTMLButtonElement>;
+    onBlur?: FocusEventHandler<HTMLButtonElement>;
+    required?: boolean;
+    'aria-label'?: string;
+    'aria-labelledby'?: string;
+    'aria-describedby'?: string;
+    'aria-errormessage'?: string;
+    'aria-invalid'?: React.AriaAttributes['aria-invalid'];
+    'aria-required'?: React.AriaAttributes['aria-required'];
 }
 
 export function MultiSelect<T extends boolean>(props: MultiSelectProps<T>) {
@@ -37,7 +57,22 @@ export function MultiSelect<T extends boolean>(props: MultiSelectProps<T>) {
         searchPlaceholder = 'Search...',
         showSearch,
         className,
+        id,
+        disabled,
+        name,
+        ref,
+        onBlur,
+        required,
+        'aria-label': ariaLabel,
+        'aria-labelledby': ariaLabelledBy,
+        'aria-describedby': ariaDescribedBy,
+        'aria-errormessage': ariaErrorMessage,
+        'aria-invalid': ariaInvalid,
+        'aria-required': ariaRequired,
     } = props;
+    const generatedId = useId();
+    const triggerId = id ?? generatedId;
+    const listId = `${triggerId}-listbox`;
     const [search, setSearch] = useState('');
     const [open, setOpen] = useState(false);
 
@@ -58,13 +93,6 @@ export function MultiSelect<T extends boolean>(props: MultiSelectProps<T>) {
         }
     };
 
-    const handleRemove = (valueToRemove: string) => {
-        if (multiple) {
-            const currentValue = value as string[];
-            onChange(currentValue.filter(v => v !== valueToRemove) as T extends true ? string[] : string);
-        }
-    };
-
     const renderTrigger = () => {
         if (multiple) {
             const selectedValues: string[] = typeof value === 'string' ? [value] : value;
@@ -72,6 +100,20 @@ export function MultiSelect<T extends boolean>(props: MultiSelectProps<T>) {
                 <Button
                     variant="outline"
                     role="combobox"
+                    id={triggerId}
+                    disabled={disabled}
+                    name={name}
+                    ref={ref}
+                    onBlur={onBlur}
+                    aria-expanded={open}
+                    aria-controls={listId}
+                    aria-haspopup="listbox"
+                    aria-label={ariaLabel}
+                    aria-labelledby={ariaLabelledBy}
+                    aria-describedby={ariaDescribedBy}
+                    aria-errormessage={ariaErrorMessage}
+                    aria-invalid={ariaInvalid}
+                    aria-required={ariaRequired ?? (required || undefined)}
                     className={cn(
                         'w-full justify-between bg-transparent',
                         'min-h-[2.5rem] h-auto',
@@ -87,27 +129,9 @@ export function MultiSelect<T extends boolean>(props: MultiSelectProps<T>) {
                                     <Badge
                                         key={selectedValue}
                                         variant="secondary"
-                                        className="flex items-center gap-1"
+                                        className="flex items-center"
                                     >
                                         {item?.display ?? item?.label ?? selectedValue}
-                                        <div
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                handleRemove(selectedValue);
-                                            }}
-                                            onKeyDown={e => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    handleRemove(selectedValue);
-                                                }
-                                            }}
-                                            role="button"
-                                            tabIndex={0}
-                                            className="ml-1 hover:text-destructive cursor-pointer"
-                                            aria-label={`Remove ${item?.label ?? selectedValue}`}
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </div>
                                     </Badge>
                                 );
                             })
@@ -124,6 +148,20 @@ export function MultiSelect<T extends boolean>(props: MultiSelectProps<T>) {
             <Button
                 variant="outline"
                 role="combobox"
+                id={triggerId}
+                disabled={disabled}
+                name={name}
+                ref={ref}
+                onBlur={onBlur}
+                aria-expanded={open}
+                aria-controls={listId}
+                aria-haspopup="listbox"
+                aria-label={ariaLabel}
+                aria-labelledby={ariaLabelledBy}
+                aria-describedby={ariaDescribedBy}
+                aria-errormessage={ariaErrorMessage}
+                aria-invalid={ariaInvalid}
+                aria-required={ariaRequired ?? (required || undefined)}
                 className={cn('w-full justify-between bg-transparent', className)}
             >
                 {selectedItem ? (selectedItem.display ?? selectedItem.label) : placeholder}
@@ -139,33 +177,48 @@ export function MultiSelect<T extends boolean>(props: MultiSelectProps<T>) {
                 className="w-[200px] p-0"
                 side="bottom"
                 align="start"
+                aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : placeholder)}
+                aria-labelledby={ariaLabelledBy}
                 onWheel={e => e.stopPropagation()}
             >
-                {(showSearch === true || items.length > 10) && (
-                    <div className="p-2">
-                        <Input
-                            type="text"
+                <Command shouldFilter={false}>
+                    {(showSearch === true || items.length > 10) && (
+                        <CommandInput
                             placeholder={searchPlaceholder}
                             value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="w-full px-2 py-1 text-sm border rounded"
+                            onValueChange={setSearch}
+                            aria-label={searchPlaceholder}
                         />
-                    </div>
-                )}
-                <div className="max-h-[300px] overflow-auto">
-                    {filteredItems.map(item => (
-                        <button
-                            key={item.value}
-                            onClick={() => handleSelect(item.value)}
-                            className={cn(
-                                'w-full px-2 py-1.5 text-sm text-left hover:bg-accent',
-                                multiple && (value as string[]).includes(item.value) && 'bg-accent',
-                            )}
-                        >
-                            {item.display ?? item.label}
-                        </button>
-                    ))}
-                </div>
+                    )}
+                    <CommandList id={listId} className="max-h-[300px] overflow-auto">
+                        <CommandEmpty>
+                            <Trans>No results found</Trans>
+                        </CommandEmpty>
+                        <CommandGroup>
+                            {filteredItems.map(item => {
+                                const selected = multiple
+                                    ? (value as string[]).includes(item.value)
+                                    : value === item.value;
+                                return (
+                                    <CommandItem
+                                        key={item.value}
+                                        value={`${item.label} ${item.value}`}
+                                        aria-selected={selected}
+                                        onSelect={() => handleSelect(item.value)}
+                                    >
+                                        <Check
+                                            className={cn(
+                                                'mr-2 h-4 w-4',
+                                                selected ? 'opacity-100' : 'opacity-0',
+                                            )}
+                                        />
+                                        {item.display ?? item.label}
+                                    </CommandItem>
+                                );
+                            })}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
             </PopoverContent>
         </Popover>
     );

@@ -1,4 +1,5 @@
-import { useLingui } from '@lingui/react';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import {
     Alert,
     AlertDescription,
@@ -52,76 +53,93 @@ interface TransitionDraft {
     approvedAmount: string;
 }
 
-const zhCopy = {
-    title: '售后处理',
-    description: '审核当前店铺的退款与退货申请。这里记录业务处理结果，不会调用真实支付退款。',
-    refresh: '刷新',
-    filter: '状态筛选',
-    all: '全部状态',
-    loadError: '售后申请加载失败',
-    retry: '重试',
-    empty: '当前筛选条件下没有售后申请',
-    order: '订单',
-    customer: '客户',
-    requested: '申请金额',
-    approved: '通过金额',
-    submittedAt: '申请时间',
-    items: '申请商品',
-    descriptionLabel: '客户说明',
-    timeline: '处理时间线',
-    approve: '通过申请',
-    reject: '驳回申请',
-    complete: '标记完成',
-    cancel: '取消',
-    save: '确认处理',
-    saving: '正在处理',
-    resolution: '处理说明',
-    resolutionHint: '客户可以在售后时间线中看到这段说明。',
-    amount: '通过金额',
-    amountHint: '按当前币种填写；不能超过申请金额。这里只记录审核金额。',
-    invalidResolution: '处理说明不能为空且不能超过 2000 个字符',
-    invalidAmount: '通过金额必须是 0 到申请金额之间的有效金额',
-    refundUnavailable: '当前未接入真实支付退款。正金额申请必须完成并核验实际退款后才能标记完成。',
-    updated: '售后状态已更新',
-    activeChannel: '当前店铺',
+const messages = {
+    title: msg({ id: 'operations.afterSales.title', message: 'After-sales' }),
+    description: msg({
+        id: 'operations.afterSales.description',
+        message:
+            'Review refund and return requests for the active store. This records workflow only and does not call a payment refund.',
+    }),
+    refresh: msg({ id: 'operations.afterSales.refresh', message: 'Refresh' }),
+    filter: msg({ id: 'operations.afterSales.filter', message: 'Status filter' }),
+    all: msg({ id: 'operations.afterSales.all', message: 'All statuses' }),
+    loadError: msg({
+        id: 'operations.afterSales.loadError',
+        message: 'Could not load after-sales requests',
+    }),
+    retry: msg({ id: 'operations.afterSales.retry', message: 'Retry' }),
+    empty: msg({
+        id: 'operations.afterSales.empty',
+        message: 'No after-sales requests match this filter',
+    }),
+    order: msg({ id: 'operations.afterSales.order', message: 'Order' }),
+    customer: msg({ id: 'operations.afterSales.customer', message: 'Customer' }),
+    requested: msg({ id: 'operations.afterSales.requested', message: 'Requested' }),
+    approved: msg({ id: 'operations.afterSales.approved', message: 'Approved' }),
+    submittedAt: msg({ id: 'operations.afterSales.submittedAt', message: 'Submitted' }),
+    items: msg({ id: 'operations.afterSales.items', message: 'Items' }),
+    descriptionLabel: msg({
+        id: 'operations.afterSales.customerDescription',
+        message: 'Customer description',
+    }),
+    timeline: msg({ id: 'operations.afterSales.timeline', message: 'Timeline' }),
+    approve: msg({ id: 'operations.afterSales.approve', message: 'Approve' }),
+    reject: msg({ id: 'operations.afterSales.reject', message: 'Reject' }),
+    complete: msg({ id: 'operations.afterSales.complete', message: 'Mark completed' }),
+    cancel: msg({ id: 'operations.afterSales.cancel', message: 'Cancel' }),
+    save: msg({ id: 'operations.afterSales.confirm', message: 'Confirm' }),
+    saving: msg({ id: 'operations.afterSales.processing', message: 'Processing' }),
+    resolution: msg({ id: 'operations.afterSales.resolution', message: 'Resolution note' }),
+    resolutionHint: msg({
+        id: 'operations.afterSales.resolutionHint',
+        message: 'The customer can see this note in the request timeline.',
+    }),
+    amount: msg({ id: 'operations.afterSales.approvedAmount', message: 'Approved amount' }),
+    amountHint: msg({
+        id: 'operations.afterSales.approvedAmountHint',
+        message:
+            'Enter the active currency amount, not above the request total. This is an approval record only.',
+    }),
+    invalidResolution: msg({
+        id: 'operations.afterSales.invalidResolution',
+        message: 'The resolution note is required and cannot exceed 2000 characters',
+    }),
+    invalidAmount: msg({
+        id: 'operations.afterSales.invalidAmount',
+        message: 'The approved amount must be between zero and the requested amount',
+    }),
+    refundUnavailable: msg({
+        id: 'operations.afterSales.refundUnavailable',
+        message:
+            'Real payment refunds are not connected. A positive refund must be completed and verified before this request can be marked completed.',
+    }),
+    updated: msg({ id: 'operations.afterSales.updated', message: 'After-sales status updated' }),
+    activeChannel: msg({ id: 'operations.afterSales.activeStore', message: 'Active store' }),
+    statePending: msg({ id: 'operations.afterSales.state.pending', message: 'Pending' }),
+    stateApproved: msg({ id: 'operations.afterSales.state.approved', message: 'Approved' }),
+    stateRejected: msg({ id: 'operations.afterSales.state.rejected', message: 'Rejected' }),
+    stateCancelled: msg({ id: 'operations.afterSales.state.cancelled', message: 'Cancelled' }),
+    stateCompleted: msg({ id: 'operations.afterSales.state.completed', message: 'Completed' }),
+    typeReturnAndRefund: msg({
+        id: 'operations.afterSales.type.returnAndRefund',
+        message: 'Return and refund',
+    }),
+    typeRefundOnly: msg({ id: 'operations.afterSales.type.refundOnly', message: 'Refund only' }),
+    transitionApprove: msg({
+        id: 'operations.afterSales.transition.approve',
+        message: 'Approve request',
+    }),
+    transitionReject: msg({
+        id: 'operations.afterSales.transition.reject',
+        message: 'Reject request',
+    }),
+    transitionComplete: msg({
+        id: 'operations.afterSales.transition.complete',
+        message: 'Complete request',
+    }),
 };
 
-const enCopy: typeof zhCopy = {
-    title: 'After-sales',
-    description:
-        'Review refund and return requests for the active store. This records workflow only and does not call a payment refund.',
-    refresh: 'Refresh',
-    filter: 'Status filter',
-    all: 'All statuses',
-    loadError: 'Could not load after-sales requests',
-    retry: 'Retry',
-    empty: 'No after-sales requests match this filter',
-    order: 'Order',
-    customer: 'Customer',
-    requested: 'Requested',
-    approved: 'Approved',
-    submittedAt: 'Submitted',
-    items: 'Items',
-    descriptionLabel: 'Customer description',
-    timeline: 'Timeline',
-    approve: 'Approve',
-    reject: 'Reject',
-    complete: 'Mark completed',
-    cancel: 'Cancel',
-    save: 'Confirm',
-    saving: 'Processing',
-    resolution: 'Resolution note',
-    resolutionHint: 'The customer can see this note in the request timeline.',
-    amount: 'Approved amount',
-    amountHint:
-        'Enter the active currency amount, not above the request total. This is an approval record only.',
-    invalidResolution: 'The resolution note is required and cannot exceed 2000 characters',
-    invalidAmount: 'The approved amount must be between zero and the requested amount',
-    refundUnavailable:
-        'Real payment refunds are not connected. A positive refund must be completed and verified before this request can be marked completed.',
-    updated: 'After-sales status updated',
-    activeChannel: 'Active store',
-};
+type AfterSalesText = Record<keyof typeof messages, string>;
 
 const states: AfterSalesState[] = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED'];
 
@@ -130,19 +148,18 @@ export const afterSalesRoute: DashboardRouteDefinition = {
         sectionId: 'sales',
         id: 'after-sales',
         url: '/after-sales',
-        title: '售后处理',
+        title: messages.title.id,
         icon: RotateCcw,
         requiresPermission: ['UpdateOrder'],
     },
     path: '/after-sales',
-    loader: () => ({ breadcrumb: () => '售后处理' }),
+    loader: () => ({ breadcrumb: () => messages.title.id }),
     component: () => <AfterSalesPage />,
 };
 
 function AfterSalesPage() {
-    const { i18n } = useLingui();
-    const isZh = i18n.locale.toLowerCase().startsWith('zh');
-    const text = isZh ? zhCopy : enCopy;
+    const { t } = useLingui();
+    const text = translateMessages(t);
     const { activeChannel } = useChannel();
     const [state, setState] = useState<AfterSalesState | 'ALL'>('ALL');
     const [draft, setDraft] = useState<TransitionDraft | null>(null);
@@ -229,7 +246,7 @@ function AfterSalesPage() {
                                     <SelectItem value="ALL">{text.all}</SelectItem>
                                     {states.map(item => (
                                         <SelectItem key={item} value={item}>
-                                            {stateLabel(item, isZh)}
+                                            {stateLabel(item, text)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -265,7 +282,6 @@ function AfterSalesPage() {
                                 <RequestCard
                                     key={request.id}
                                     request={request}
-                                    isZh={isZh}
                                     text={text}
                                     pending={transition.isPending}
                                     onTransition={target => openTransition(request, target)}
@@ -277,7 +293,6 @@ function AfterSalesPage() {
             </PageLayout>
             <TransitionDialog
                 draft={draft}
-                isZh={isZh}
                 text={text}
                 pending={transition.isPending}
                 onChange={setDraft}
@@ -290,14 +305,12 @@ function AfterSalesPage() {
 
 function RequestCard({
     request,
-    isZh,
     text,
     pending,
     onTransition,
 }: {
     request: AfterSalesRequestRecord;
-    isZh: boolean;
-    text: typeof zhCopy;
+    text: AfterSalesText;
     pending: boolean;
     onTransition: (state: TransitionTarget) => void;
 }) {
@@ -311,9 +324,9 @@ function RequestCard({
                         <div className="flex flex-wrap items-center gap-2">
                             <strong>{request.code}</strong>
                             <Badge variant={badgeVariant(request.state)}>
-                                {stateLabel(request.state, isZh)}
+                                {stateLabel(request.state, text)}
                             </Badge>
-                            <Badge variant="outline">{typeLabel(request.type, isZh)}</Badge>
+                            <Badge variant="outline">{typeLabel(request.type, text)}</Badge>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
                             {text.order} {request.order.code} · {text.customer} {request.customerName} (
@@ -365,7 +378,7 @@ function RequestCard({
                                 <span className="mt-1.5 size-2 rounded-full bg-primary" />
                                 <div>
                                     <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <strong>{stateLabel(event.state, isZh)}</strong>
+                                        <strong>{stateLabel(event.state, text)}</strong>
                                         <small className="text-muted-foreground">
                                             {formatDate(event.createdAt)}
                                         </small>
@@ -422,7 +435,6 @@ function RequestCard({
 
 function TransitionDialog({
     draft,
-    isZh,
     text,
     pending,
     onChange,
@@ -430,8 +442,7 @@ function TransitionDialog({
     onSubmit,
 }: {
     draft: TransitionDraft | null;
-    isZh: boolean;
-    text: typeof zhCopy;
+    text: AfterSalesText;
     pending: boolean;
     onChange: (draft: TransitionDraft | null) => void;
     onClose: () => void;
@@ -442,7 +453,7 @@ function TransitionDialog({
         <Dialog open onOpenChange={open => !open && onClose()}>
             <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>{transitionLabel(draft.state, isZh)}</DialogTitle>
+                    <DialogTitle>{transitionLabel(draft.state, text)}</DialogTitle>
                     <DialogDescription>
                         {draft.request.code} · {draft.request.order.code}
                     </DialogDescription>
@@ -492,31 +503,31 @@ function TransitionDialog({
     );
 }
 
-function stateLabel(state: AfterSalesState, isZh: boolean): string {
-    const labels: Record<AfterSalesState, [string, string]> = {
-        PENDING: ['待处理', 'Pending'],
-        APPROVED: ['已通过', 'Approved'],
-        REJECTED: ['已驳回', 'Rejected'],
-        CANCELLED: ['已撤销', 'Cancelled'],
-        COMPLETED: ['已完成', 'Completed'],
+function translateMessages(t: ReturnType<typeof useLingui>['t']): AfterSalesText {
+    return Object.fromEntries(
+        Object.entries(messages).map(([key, descriptor]) => [key, t(descriptor)]),
+    ) as AfterSalesText;
+}
+
+function stateLabel(state: AfterSalesState, text: AfterSalesText): string {
+    const labels: Record<AfterSalesState, string> = {
+        PENDING: text.statePending,
+        APPROVED: text.stateApproved,
+        REJECTED: text.stateRejected,
+        CANCELLED: text.stateCancelled,
+        COMPLETED: text.stateCompleted,
     };
-    return labels[state][isZh ? 0 : 1];
+    return labels[state];
 }
 
-function typeLabel(type: AfterSalesRequestRecord['type'], isZh: boolean): string {
-    return type === 'RETURN_AND_REFUND'
-        ? isZh
-            ? '退货退款'
-            : 'Return and refund'
-        : isZh
-          ? '仅退款'
-          : 'Refund only';
+function typeLabel(type: AfterSalesRequestRecord['type'], text: AfterSalesText): string {
+    return type === 'RETURN_AND_REFUND' ? text.typeReturnAndRefund : text.typeRefundOnly;
 }
 
-function transitionLabel(state: TransitionTarget, isZh: boolean): string {
-    if (state === 'APPROVED') return isZh ? '通过售后申请' : 'Approve request';
-    if (state === 'REJECTED') return isZh ? '驳回售后申请' : 'Reject request';
-    return isZh ? '完成售后处理' : 'Complete request';
+function transitionLabel(state: TransitionTarget, text: AfterSalesText): string {
+    if (state === 'APPROVED') return text.transitionApprove;
+    if (state === 'REJECTED') return text.transitionReject;
+    return text.transitionComplete;
 }
 
 function stateIcon(state: AfterSalesState): ReactNode {

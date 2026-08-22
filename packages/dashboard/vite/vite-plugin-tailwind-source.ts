@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { Plugin } from 'vite';
 
 import { CompileResult } from './utils/compiler.js';
@@ -15,10 +15,9 @@ import { ConfigLoaderApi, getConfigLoaderApi } from './vite-plugin-config-loader
  */
 function resolveVendureUiSourcePath(): string | undefined {
     try {
-        const resolved = import.meta.resolve('@vendure-io/ui/components/ui/button');
-        // fileURLToPath decodes percent-encoding (e.g. spaces) and handles Windows drive letters.
-        const filePath = resolved.startsWith('file:') ? fileURLToPath(resolved) : resolved;
-        return path.resolve(filePath, '../../../');
+        const moduleRequire = createRequire(import.meta.url);
+        const resolved = moduleRequire.resolve('@vendure-io/ui/components/ui/button');
+        return path.resolve(resolved, '../../../');
     } catch (error) {
         // eslint-disable-next-line no-console
         console.warn(

@@ -14,6 +14,10 @@
         "graphql-tag": "^2.12.6",
         "lucide-react": "^0.475.0"
     },
+    "devDependencies": {
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3"
+    },
     "peerDependencies": {
         "@vendure/core": "3.7.2",
         "@vendure/dashboard": "3.7.2",

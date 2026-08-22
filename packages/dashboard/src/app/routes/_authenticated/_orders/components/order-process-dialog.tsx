@@ -28,12 +28,12 @@ const stateColors: Record<StateType, { bg: string; border: string; text: string 
     success: {
         bg: 'bg-success/10',
         border: 'border-success/30',
-        text: 'text-success',
+        text: 'text-success-text',
     },
     warning: {
         bg: 'bg-warning/10',
         border: 'border-warning/30',
-        text: 'text-warning',
+        text: 'text-warning-text',
     },
     destructive: {
         bg: 'bg-destructive/10',

@@ -17,6 +17,19 @@ import { ResultOf } from 'gql.tada';
 import React from 'react';
 import { ControllerRenderProps, FieldPath, FieldValues } from 'react-hook-form';
 
+type DashboardFormControlAccessibilityProps = Pick<
+    React.ComponentPropsWithoutRef<'input'>,
+    | 'id'
+    | 'aria-label'
+    | 'aria-labelledby'
+    | 'aria-describedby'
+    | 'aria-errormessage'
+    | 'aria-invalid'
+    | 'aria-required'
+    | 'required'
+    | 'autoComplete'
+>;
+
 // Base custom field config
 export type CustomFieldConfig = ResultOf<typeof customFieldConfigFragment>;
 
@@ -92,7 +105,8 @@ export type DateTimeStructField = Extract<StructField, { type: 'datetime' }>;
 export type DashboardFormComponentProps<
     TFieldValues extends FieldValues = FieldValues,
     TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
-> = ControllerRenderProps<TFieldValues, TName> & {
+> = ControllerRenderProps<TFieldValues, TName> &
+    DashboardFormControlAccessibilityProps & {
     fieldDef?: ConfigurableFieldDef;
 };
 

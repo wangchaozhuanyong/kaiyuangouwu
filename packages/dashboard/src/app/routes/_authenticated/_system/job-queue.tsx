@@ -155,7 +155,7 @@ function JobQueuePage() {
                 },
                 state: {
                     header: () => <Trans>Job status</Trans>,
-                    cell: ({ row, table }) => {
+                    cell: function JobStateCell({ row, table }) {
                         const cancelJobMutation = useMutation({
                             mutationFn: (jobId: string) => api.mutate(cancelJobDocument, { jobId }),
                             onSuccess: () => {

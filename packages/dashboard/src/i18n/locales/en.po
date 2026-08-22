@@ -63,6 +63,10 @@ msgstr "API request header"
 msgid "Select all rows"
 msgstr "Select all rows"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+msgid "Text style"
+msgstr "Text style"
+
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 msgid "Product options"
 msgstr "Product options"
@@ -521,6 +525,10 @@ msgstr "Rename"
 msgid "Choose your preferred display language and locale settings"
 msgstr "Choose your preferred display language and locale settings"
 
+#: src/lib/components/data-input/datetime-input.tsx
+msgid "Clear date and time"
+msgstr "Clear date and time"
+
 #: src/app/routes/_authenticated/_option-groups/components/option-group-bulk-actions.tsx
 msgid "Successfully removed {successCount} option groups from channel"
 msgstr "Successfully removed {successCount} option groups from sales channel"
@@ -664,6 +672,7 @@ msgstr "View operation guide"
 msgid "Successfully updated order"
 msgstr "Successfully updated order"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Table"
 msgstr "Table"
@@ -810,6 +819,10 @@ msgstr "Select a customer to continue"
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Successfully assigned option group"
 msgstr "Successfully assigned option group"
+
+#: src/lib/components/data-input/datetime-input.tsx
+msgid "Set hour to {hour}"
+msgstr "Set hour to {hour}"
 
 #: src/app/routes/_authenticated/_shipping-methods/components/shipping-method-test-result-wrapper.tsx
 msgid "Run Test"
@@ -1259,6 +1272,7 @@ msgid "This month"
 msgstr "This month"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Undo"
 msgstr "Undo"
 
@@ -1447,6 +1461,7 @@ msgstr "Inherit from global settings"
 #: src/lib/components/data-table/data-table-facet-value-faceted-filter.tsx
 #: src/lib/components/data-table/data-table-faceted-filter.tsx
 #: src/lib/components/shared/facet-value-selector.tsx
+#: src/lib/components/shared/multi-select.tsx
 msgid "No results found"
 msgstr "No results found"
 
@@ -1457,6 +1472,10 @@ msgstr "No results found"
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Off"
 msgstr "Off"
+
+#: src/lib/components/data-input/datetime-input.tsx
+msgid "Set minute to {minute}"
+msgstr "Set minute to {minute}"
 
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 #: src/app/routes/_authenticated/_system/settings-store.tsx
@@ -2271,6 +2290,7 @@ msgstr "Duplicate"
 msgid "No results"
 msgstr "No results"
 
+#: src/lib/components/data-table/data-table-view-options.tsx
 #: src/lib/components/data-table/data-table-view-options.tsx
 msgid "Column settings"
 msgstr "Column settings"
@@ -3163,6 +3183,7 @@ msgid "Postal code (optional)"
 msgstr "Postal code (optional)"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Redo"
 msgstr "Redo"
 
@@ -3245,6 +3266,7 @@ msgstr "New customer"
 
 #: src/app/routes/_authenticated/_orders/components/order-table.tsx
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Image"
 msgstr "Image"
@@ -3845,6 +3867,11 @@ msgstr "Failed to rotate API key"
 msgid "in"
 msgstr "in"
 
+#. placeholder {0}: filter.id
+#: src/lib/components/data-table/data-table-filter-badge.tsx
+msgid "Remove filter {0}"
+msgstr "Remove filter {0}"
+
 #: src/app/routes/_authenticated/_api-keys/api-keys_.$id.tsx
 #: src/lib/components/shared/role-selector.tsx
 msgid "Search roles..."
@@ -3971,6 +3998,7 @@ msgstr "Note"
 msgid "Select default language"
 msgstr "Select default language"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Bold"
 msgstr "Bold"
@@ -4152,6 +4180,7 @@ msgstr "Sales channels"
 msgid "Shipping refunded"
 msgstr "Shipping refunded"
 
+#: src/lib/components/shared/asset/asset-gallery.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Asset type"
 msgstr "Asset type"
@@ -4988,6 +5017,7 @@ msgid "Failed to move collections"
 msgstr "Failed to move product groups"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Blockquote"
 msgstr "Blockquote"
 
@@ -5537,6 +5567,7 @@ msgid "Failed to update profile"
 msgstr "Failed to update profile"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Italic"
 msgstr "Italic"
 
@@ -5973,6 +6004,7 @@ msgid "List and bulk actions"
 msgstr "List and bulk actions"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
+#: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Items per page"
 msgstr "Items per page"
 
@@ -5996,6 +6028,7 @@ msgstr "Filter by {columnId}"
 msgid "Recent orders"
 msgstr "Recent orders"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Bullet List"
 msgstr "Bullet List"
@@ -6565,6 +6598,10 @@ msgstr "Okay"
 msgid "No options found"
 msgstr "No options found"
 
+#: src/lib/components/shared/asset/asset-gallery.tsx
+msgid "Upload assets"
+msgstr "Upload assets"
+
 #: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
 msgid "Failed to delete {selectionLength} assets"
 msgstr "Failed to delete {selectionLength} assets"
@@ -6573,6 +6610,7 @@ msgstr "Failed to delete {selectionLength} assets"
 msgid "Pending"
 msgstr "Pending"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Ordered List"
 msgstr "Ordered List"
@@ -6951,6 +6989,7 @@ msgid "Successfully updated facet"
 msgstr "Successfully updated filter attribute"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Strikethrough"
 msgstr "Strikethrough"
 
@@ -7200,6 +7239,7 @@ msgid "View result"
 msgstr "View result"
 
 #: src/lib/components/data-table/data-table-pagination.tsx
+#: src/lib/components/data-table/data-table-pagination.tsx
 msgid "Rows per page"
 msgstr "Rows per page"
 
@@ -7263,6 +7303,10 @@ msgstr "Failed to unset shipping address for order: {0}"
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "SKU"
 msgstr "SKU"
+
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+msgid "More formatting options"
+msgstr "More formatting options"
 
 #. placeholder {0}: error.message
 #: src/app/main.tsx
@@ -7393,6 +7437,7 @@ msgstr "is greater than"
 msgid "Close"
 msgstr "Close"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Link"
 msgstr "Link"

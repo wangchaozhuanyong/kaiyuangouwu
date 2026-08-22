@@ -32,7 +32,7 @@ export const Playground: Story = {
                     <CommandItem>Search Emoji</CommandItem>
                     <CommandItem>Calculator</CommandItem>
                 </CommandGroup>
-                <CommandSeparator />
+                <CommandSeparator aria-hidden="true" />
                 <CommandGroup heading="Settings">
                     <CommandItem>Profile</CommandItem>
                     <CommandItem>Billing</CommandItem>

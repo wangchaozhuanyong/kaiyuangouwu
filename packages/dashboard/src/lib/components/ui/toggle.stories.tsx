@@ -30,6 +30,7 @@ export const Playground: Story = {
     args: {
         variant: 'default',
         size: 'default',
+        'aria-label': 'Toggle bold',
     },
     render: args => (
         <Toggle {...args}>

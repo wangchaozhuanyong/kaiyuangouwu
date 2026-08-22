@@ -54,7 +54,7 @@ export function DraftOrderStatus({
     return (
         <Alert variant={isCompleteDraftDisabled ? 'destructive' : 'default'}>
             <Icon className={isCompleteDraftDisabled ? '' : 'stroke-success'} />
-            <AlertTitle className={isCompleteDraftDisabled ? '' : 'text-success'}>{title}</AlertTitle>
+            <AlertTitle className={isCompleteDraftDisabled ? '' : 'text-success-text'}>{title}</AlertTitle>
             {completeDraftDisabledReason ? (
                 <AlertDescription>{completeDraftDisabledReason}</AlertDescription>
             ) : null}

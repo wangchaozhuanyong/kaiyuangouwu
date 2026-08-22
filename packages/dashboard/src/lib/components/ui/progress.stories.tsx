@@ -22,6 +22,7 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {
     args: {
         value: 60,
+        'aria-label': 'Upload progress',
     },
     render: args => <Progress {...args} className="w-[300px]" />,
 };

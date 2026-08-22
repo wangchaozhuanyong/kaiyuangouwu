@@ -36,7 +36,7 @@ export const Playground: Story = {
         const field = register('playground');
         return (
             <div className="w-[500px]">
-                <TextareaInput {...field} {...args} />
+                <TextareaInput {...field} {...args} aria-label="Description" />
             </div>
         );
     },
@@ -48,7 +48,7 @@ export const LongText: Story = {
         const field = register('longText');
         return (
             <div className="w-[500px]">
-                <TextareaInput {...field} />
+                <TextareaInput {...field} aria-label="Long description" />
             </div>
         );
     },

@@ -1,6 +1,8 @@
-@import '@fontsource-variable/inter';
-@import '@fontsource-variable/public-sans';
-@import '@fontsource-variable/geist-mono';
+/* Load the normal variable axes only. The library build extracts these unicode
+   subsets into separate WOFF2 assets so browsers download only the glyphs used. */
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/public-sans/wght.css';
+@import '@fontsource-variable/geist-mono/wght.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
@@ -22,7 +24,7 @@ html[dir='rtl'] * {
 
 /*
  * Tailwind @theme inline block generated at build time by the themeVariablesPlugin.
- * It produces --color-*, --radius-*, --shadow-*, and --font-* mappings
+ * It produces color, radius, shadow, typography, duration, and easing mappings
  * directly from @vendure-io/design-tokens JS exports, plus dashboard-specific
  * extensions (dev-mode, brand). This keeps the dashboard in sync with the
  * design system without duplicating token values.
@@ -90,7 +92,25 @@ html[dir='rtl'] * {
     }
 
     .animate-rotate {
-        animation: rotate 0.5s linear infinite;
+        animation: rotate var(--duration-slower) linear infinite;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (forced-colors: active) {
+    :focus-visible {
+        outline: 2px solid CanvasText;
+        outline-offset: 2px;
     }
 }
 

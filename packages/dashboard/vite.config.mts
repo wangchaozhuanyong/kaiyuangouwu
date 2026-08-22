@@ -26,6 +26,15 @@ export default ({ mode }: { mode: string }) => {
             : // This one might be changed to '../dev-server/dev-config.ts' to test ui extensions
               './sample-vendure-config.ts');
 
+    const generatedTestExcludes = [
+        './e2e/**/*',
+        './plugin/**/*',
+        './dist/**/*',
+        './storybook-static/**/*',
+        './.temp/**/*',
+        '**/node_modules/**/*',
+    ];
+
     return defineConfig({
         optimizeDeps: {
             include: ['lodash/get', 'lodash/isString', 'lodash/isNaN'],
@@ -33,14 +42,14 @@ export default ({ mode }: { mode: string }) => {
         test: {
             ...sharedTestConfig,
             globals: true,
-            exclude: ['./e2e/**/*', './plugin/**/*', '**/node_modules/**/*'],
+            exclude: generatedTestExcludes,
             projects: [
                 {
                     extends: true,
                     test: {
                         name: 'dashboard-jsdom',
                         environment: 'jsdom',
-                        exclude: ['./e2e/**/*', './plugin/**/*', './vite/tests/**/*', '**/node_modules/**/*'],
+                        exclude: [...generatedTestExcludes, './vite/tests/**/*'],
                     },
                 },
                 {

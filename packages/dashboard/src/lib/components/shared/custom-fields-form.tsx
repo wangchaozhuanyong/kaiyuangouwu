@@ -397,15 +397,23 @@ function CustomFieldFormItem({
     const fieldId = `field-${fieldName}`;
     const label = getTranslation(fieldDef.label) ?? fieldName;
     const description = getTranslation(fieldDef.description);
+    const descriptionId = description ? `${fieldId}-description` : undefined;
+    const errorId = fieldState?.invalid ? `${fieldId}-error` : undefined;
+    const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
     return (
         <Field data-invalid={fieldState?.invalid || undefined}>
             <div className="flex items-center gap-1">
                 <FieldLabel htmlFor={fieldId}>{label}</FieldLabel>
                 <FieldHelpButton fieldName={fieldName} title={label} description={description} />
             </div>
-            {children}
-            {description && <FieldDescription>{description}</FieldDescription>}
-            {fieldState?.invalid && <FieldError errors={[fieldState.error]} />}
+            {applyControlProps(children, {
+                id: fieldId,
+                'aria-invalid': fieldState?.invalid || undefined,
+                'aria-describedby': describedBy,
+                'aria-errormessage': errorId,
+            })}
+            {description && <FieldDescription id={descriptionId}>{description}</FieldDescription>}
+            {fieldState?.invalid && <FieldError id={errorId} errors={[fieldState.error]} />}
         </Field>
     );
 }

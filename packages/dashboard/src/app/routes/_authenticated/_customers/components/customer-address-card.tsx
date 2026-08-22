@@ -91,12 +91,12 @@ export function CustomerAddressCard({
             {(address.defaultShippingAddress || address.defaultBillingAddress) && (
                 <div className="flex flex-wrap gap-1 mb-2">
                     {address.defaultShippingAddress && (
-                        <Badge className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md">
+                        <Badge className="text-xs px-2 py-1 bg-primary/10 text-link rounded-md">
                             <Trans>Default shipping address</Trans>
                         </Badge>
                     )}
                     {address.defaultBillingAddress && (
-                        <Badge className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md">
+                        <Badge className="text-xs px-2 py-1 bg-primary/10 text-link rounded-md">
                             <Trans>Default billing address</Trans>
                         </Badge>
                     )}

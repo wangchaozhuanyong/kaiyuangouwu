@@ -372,7 +372,7 @@ export function AssetGallery({
                             value={assetType}
                             onValueChange={value => value != null && setAssetType(value)}
                         >
-                            <SelectTrigger className="w-full md:w-[180px]">
+                            <SelectTrigger className="w-full md:w-[180px]" aria-label={t`Asset type`}>
                                 <SelectValue placeholder={t`Asset type`} />
                             </SelectTrigger>
                             <SelectContent>
@@ -454,7 +454,7 @@ export function AssetGallery({
                     relative rounded-md transition-all
                 `}
             >
-                <input {...getInputProps()} />
+                <input {...getInputProps({ 'aria-label': t`Upload assets` })} />
 
                 {isDragActive && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-md">
@@ -517,7 +517,7 @@ export function AssetGallery({
                                 setPage(1); // Reset to first page when changing page size
                             }}
                         >
-                            <SelectTrigger className="h-8 w-[70px]">
+                            <SelectTrigger className="h-8 w-[70px]" aria-label={t`Items per page`}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent side="top">

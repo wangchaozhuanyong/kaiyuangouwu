@@ -56,7 +56,7 @@ export function FieldHelpButton({ fieldName, title, description }: Readonly<Fiel
                     </PopoverDescription>
                 </PopoverHeader>
                 {topic?.note ? (
-                    <p className="mt-3 border-s-2 border-amber-500/70 ps-3 text-sm leading-6 text-muted-foreground">
+                    <p className="mt-3 border-s-2 border-help-accent-border ps-3 text-sm leading-6 text-muted-foreground">
                         {localizeHelpText(topic.note, displayLanguage)}
                     </p>
                 ) : null}

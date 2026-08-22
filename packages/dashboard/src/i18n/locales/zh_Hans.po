@@ -63,6 +63,10 @@ msgstr "API 请求头"
 msgid "Select all rows"
 msgstr "选择全部行"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+msgid "Text style"
+msgstr "文本样式"
+
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 msgid "Product options"
 msgstr "商品选项"
@@ -521,6 +525,10 @@ msgstr "重命名"
 msgid "Choose your preferred display language and locale settings"
 msgstr "选择您偏好的显示语言和区域设置"
 
+#: src/lib/components/data-input/datetime-input.tsx
+msgid "Clear date and time"
+msgstr "清除日期和时间"
+
 #: src/app/routes/_authenticated/_option-groups/components/option-group-bulk-actions.tsx
 msgid "Successfully removed {successCount} option groups from channel"
 msgstr "已成功从店铺中移除 {successCount} 个规格组"
@@ -664,6 +672,7 @@ msgstr "查看操作说明"
 msgid "Successfully updated order"
 msgstr "已成功更新订单"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Table"
 msgstr "表格"
@@ -810,6 +819,10 @@ msgstr "选择客户以继续"
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Successfully assigned option group"
 msgstr "规格组分配成功"
+
+#: src/lib/components/data-input/datetime-input.tsx
+msgid "Set hour to {hour}"
+msgstr "将小时设置为 {hour}"
 
 #: src/app/routes/_authenticated/_shipping-methods/components/shipping-method-test-result-wrapper.tsx
 msgid "Run Test"
@@ -1259,6 +1272,7 @@ msgid "This month"
 msgstr "本月"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Undo"
 msgstr "撤销"
 
@@ -1447,6 +1461,7 @@ msgstr "从全局设置继承"
 #: src/lib/components/data-table/data-table-facet-value-faceted-filter.tsx
 #: src/lib/components/data-table/data-table-faceted-filter.tsx
 #: src/lib/components/shared/facet-value-selector.tsx
+#: src/lib/components/shared/multi-select.tsx
 msgid "No results found"
 msgstr "未找到结果"
 
@@ -1457,6 +1472,10 @@ msgstr "未找到结果"
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Off"
 msgstr "关"
+
+#: src/lib/components/data-input/datetime-input.tsx
+msgid "Set minute to {minute}"
+msgstr "将分钟设置为 {minute}"
 
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 #: src/app/routes/_authenticated/_system/settings-store.tsx
@@ -2271,6 +2290,7 @@ msgstr "复制"
 msgid "No results"
 msgstr "无结果"
 
+#: src/lib/components/data-table/data-table-view-options.tsx
 #: src/lib/components/data-table/data-table-view-options.tsx
 msgid "Column settings"
 msgstr "列设置"
@@ -3163,6 +3183,7 @@ msgid "Postal code (optional)"
 msgstr "邮政编码（选填）"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Redo"
 msgstr "重做"
 
@@ -3245,6 +3266,7 @@ msgstr "新客户"
 
 #: src/app/routes/_authenticated/_orders/components/order-table.tsx
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Image"
 msgstr "图片"
@@ -3845,6 +3867,11 @@ msgstr "轮换 API 密钥 失败"
 msgid "in"
 msgstr "在"
 
+#. placeholder {0}: filter.id
+#: src/lib/components/data-table/data-table-filter-badge.tsx
+msgid "Remove filter {0}"
+msgstr "移除筛选条件 {0}"
+
 #: src/app/routes/_authenticated/_api-keys/api-keys_.$id.tsx
 #: src/lib/components/shared/role-selector.tsx
 msgid "Search roles..."
@@ -3971,6 +3998,7 @@ msgstr "备注"
 msgid "Select default language"
 msgstr "选择默认内容语言"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Bold"
 msgstr "粗体"
@@ -4152,6 +4180,7 @@ msgstr "店铺"
 msgid "Shipping refunded"
 msgstr "运费已退款"
 
+#: src/lib/components/shared/asset/asset-gallery.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Asset type"
 msgstr "素材类型"
@@ -4988,6 +5017,7 @@ msgid "Failed to move collections"
 msgstr "移动商品分组失败"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Blockquote"
 msgstr "引用块"
 
@@ -5537,6 +5567,7 @@ msgid "Failed to update profile"
 msgstr "更新个人资料失败"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Italic"
 msgstr "斜体"
 
@@ -5973,6 +6004,7 @@ msgid "List and bulk actions"
 msgstr "列表与批量操作"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
+#: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Items per page"
 msgstr "每页条数"
 
@@ -5996,6 +6028,7 @@ msgstr "按 {columnId} 筛选"
 msgid "Recent orders"
 msgstr "最近订单"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Bullet List"
 msgstr "无序列表"
@@ -6565,6 +6598,10 @@ msgstr "确定"
 msgid "No options found"
 msgstr "未找到选项"
 
+#: src/lib/components/shared/asset/asset-gallery.tsx
+msgid "Upload assets"
+msgstr "上传素材"
+
 #: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
 msgid "Failed to delete {selectionLength} assets"
 msgstr "删除 {selectionLength} 个素材失败"
@@ -6573,6 +6610,7 @@ msgstr "删除 {selectionLength} 个素材失败"
 msgid "Pending"
 msgstr "等待执行"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Ordered List"
 msgstr "有序列表"
@@ -6951,6 +6989,7 @@ msgid "Successfully updated facet"
 msgstr "已成功更新筛选属性"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Strikethrough"
 msgstr "删除线"
 
@@ -7200,6 +7239,7 @@ msgid "View result"
 msgstr "查看结果"
 
 #: src/lib/components/data-table/data-table-pagination.tsx
+#: src/lib/components/data-table/data-table-pagination.tsx
 msgid "Rows per page"
 msgstr "每页行数"
 
@@ -7263,6 +7303,10 @@ msgstr "清除订单收货地址失败：{0}"
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "SKU"
 msgstr "SKU"
+
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
+msgid "More formatting options"
+msgstr "更多格式选项"
 
 #. placeholder {0}: error.message
 #: src/app/main.tsx
@@ -7393,6 +7437,7 @@ msgstr "大于"
 msgid "Close"
 msgstr "关闭"
 
+#: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Link"
 msgstr "链接"

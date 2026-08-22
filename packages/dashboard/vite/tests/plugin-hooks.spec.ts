@@ -52,6 +52,40 @@ function callHandleHotUpdate(plugin: Plugin, ctx: Record<string, any>) {
     return (plugin.handleHotUpdate as (ctx: Record<string, any>) => any)(ctx);
 }
 
+function getCssVariable(css: string, selector: ':root' | '.dark', variable: string) {
+    const selectorBlock = css.match(new RegExp(`\\${selector}\\s*\\{([\\s\\S]*?)\\}`))?.[1];
+    const value = selectorBlock?.match(new RegExp(`--${variable}:\\s*([^;]+);`))?.[1]?.trim();
+    if (!value) {
+        throw new Error(`Could not find --${variable} in ${selector}`);
+    }
+    return value;
+}
+
+function relativeLuminance(oklch: string) {
+    const match = oklch.match(/oklch\(([-.\d]+)\s+([-.\d]+)\s+([-.\d]+)\)/);
+    if (!match) {
+        throw new Error(`Expected an oklch() color, received ${oklch}`);
+    }
+    const [, lightness, chroma, hue] = match.map(Number);
+    const a = chroma * Math.cos((hue * Math.PI) / 180);
+    const b = chroma * Math.sin((hue * Math.PI) / 180);
+    const l = Math.pow(lightness + 0.3963377774 * a + 0.2158037573 * b, 3);
+    const m = Math.pow(lightness - 0.1055613458 * a - 0.0638541728 * b, 3);
+    const s = Math.pow(lightness - 0.0894841775 * a - 1.291485548 * b, 3);
+    const clamp = (channel: number) => Math.max(0, Math.min(1, channel));
+    const red = clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
+    const green = clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
+    const blue = clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(first: string, second: string) {
+    const firstLuminance = relativeLuminance(first);
+    const secondLuminance = relativeLuminance(second);
+    return (Math.max(firstLuminance, secondLuminance) + 0.05) /
+        (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
+
 // ─── Shared test factories ──────────────────────────────────────────────────
 
 /**
@@ -163,9 +197,53 @@ describe('themeVariablesPlugin', () => {
         expect(result).toContain('--radius-sm:');
         expect(result).toContain('--shadow-sm:');
         expect(result).toContain('--font-sans: var(--font-sans);');
+        expect(result).toContain('--text-sm: 0.875rem;');
+        expect(result).toContain('--font-weight-semibold: 600;');
+        expect(result).toContain('--tracking-tight: -0.025em;');
+        expect(result).toContain('--duration-normal: 200ms;');
+        expect(result).toContain('--ease-out: cubic-bezier(0, 0, 0.2, 1);');
+        expect(result).toContain('--color-link: var(--link);');
+        expect(result).toContain('--color-help-accent: var(--help-accent);');
+        expect(result).toContain('--color-help-accent-border: var(--help-accent-border);');
+        expect(result).toContain('--color-help-accent-background: var(--help-accent-background);');
         expect(result).toContain('--color-dev-mode: var(--dev-mode);');
         expect(result).toContain('--color-vendure-brand: #17c1ff;');
     });
+
+    it.each([
+        [':root', 'link', 4.5],
+        [':root', 'success-text', 4.5],
+        [':root', 'warning-text', 4.5],
+        [':root', 'input', 3],
+        [':root', 'ring', 3],
+        ['.dark', 'link', 4.5],
+        ['.dark', 'destructive', 7],
+        ['.dark', 'success-text', 4.5],
+        ['.dark', 'warning-text', 4.5],
+        ['.dark', 'input', 3],
+        ['.dark', 'ring', 3],
+    ] as const)('%s --%s meets its contrast threshold against the background', (selector, variable, threshold) => {
+        const plugin = themeVariablesPlugin({});
+        const result = callTransform(plugin, `@import 'virtual:admin-theme';`, '/app/styles.css') as string;
+        const foreground = getCssVariable(result, selector, variable);
+        const background = getCssVariable(result, selector, 'background');
+        expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(threshold);
+    });
+
+    it.each([':root', '.dark'] as const)(
+        '%s help accent meets normal-text contrast against its semantic background',
+        selector => {
+            const plugin = themeVariablesPlugin({});
+            const result = callTransform(
+                plugin,
+                `@import 'virtual:admin-theme';`,
+                '/app/styles.css',
+            ) as string;
+            const foreground = getCssVariable(result, selector, 'help-accent');
+            const background = getCssVariable(result, selector, 'help-accent-background');
+            expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+        },
+    );
 
     it('generates radius values directly from design tokens (not calc-based)', () => {
         const plugin = themeVariablesPlugin({});
@@ -392,6 +470,22 @@ describe('viteConfigPlugin', () => {
         expect(result.optimizeDeps.exclude).toContain('@vendure/dashboard');
         expect(result.optimizeDeps.exclude).toContain('virtual:vendure-ui-config');
         expect(result.optimizeDeps.exclude).toContain('virtual:dashboard-extensions');
+    });
+
+    it('preserves existing module resolution options while adding dashboard aliases', () => {
+        const plugin = viteConfigPlugin({ packageRoot: '/dashboard' });
+        const config = {
+            resolve: {
+                dedupe: ['react', 'react-dom'],
+                conditions: ['browser'],
+            },
+        };
+
+        const result = callConfig(plugin, config, { command: 'serve' });
+
+        expect(result.resolve.dedupe).toEqual(['react', 'react-dom']);
+        expect(result.resolve.conditions).toEqual(['browser']);
+        expect(result.resolve.alias['@/vdb']).toBe('/dashboard/src/lib');
     });
 
     it('sets optimizeDeps.include with recharts etc', () => {
@@ -673,7 +767,7 @@ describe('dashboardTailwindSourcePlugin', () => {
         expect(result.code.endsWith("';")).toBe(true);
     });
 
-    it('handles zero extensions (no @source directives)', async () => {
+    it('includes the shared UI source even when there are no dashboard extensions', async () => {
         const plugin = setupPlugin([]);
         const css = `@tailwind base;\n${markerComment}\n@tailwind components;`;
         const result = await callTransformWithContext(plugin, {}, css, '/some/app/styles.css');
@@ -681,7 +775,7 @@ describe('dashboardTailwindSourcePlugin', () => {
         const hasSourceDirective = result.code
             .split('\n')
             .some((l: string) => l.trimStart().startsWith("@source '"));
-        expect(hasSourceDirective).toBe(false);
+        expect(hasSourceDirective).toBe(true);
     });
 
     // #4706 — Tailwind @source directives should only be emitted for plugins

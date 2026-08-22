@@ -1,6 +1,21 @@
 import path from 'node:path';
 
-import { brand, darkTheme, fontFamily, lightTheme, radii, shadows } from '@vendure-io/design-tokens';
+import {
+    brand,
+    darkTheme,
+    duration,
+    easing,
+    fontFamily,
+    fontSize,
+    fontWeight,
+    letterSpacing,
+    lightTheme,
+    neutral,
+    radii,
+    shadows,
+    success,
+    warning,
+} from '@vendure-io/design-tokens';
 import { Plugin } from 'vite';
 
 type ThemeColors = Record<string, string | undefined>;
@@ -55,6 +70,14 @@ export interface DashboardThemeOptions extends ThemeVariables {
  * These are layered on top of `@vendure-io/design-tokens` `lightTheme`/`darkTheme`.
  */
 const dashboardLightExtensions: ThemeColors = {
+    input: neutral[500],
+    ring: brand[700],
+    link: brand[800],
+    'success-text': success[600],
+    'warning-text': warning[700],
+    'help-accent': warning[700],
+    'help-accent-border': warning[500],
+    'help-accent-background': warning[50],
     'dev-mode': brand[400],
     'dev-mode-foreground': brand[950],
     brand: brand[500],
@@ -67,6 +90,14 @@ const dashboardLightExtensions: ThemeColors = {
 };
 
 const dashboardDarkExtensions: ThemeColors = {
+    input: neutral[500],
+    link: brand[400],
+    destructive: 'oklch(0.76 0.18 25)',
+    'success-text': success[300],
+    'warning-text': warning[300],
+    'help-accent': warning[300],
+    'help-accent-border': warning[400],
+    'help-accent-background': warning[950],
     'dev-mode': brand[400],
     'dev-mode-foreground': brand[950],
     brand: brand[500],
@@ -111,7 +142,7 @@ function generateThemeInlineBlock(): string {
     const colorKeys = Object.keys(lightTheme).filter(k => k !== 'radius');
     const colorLines = colorKeys.map(key => `    --color-${key}: var(--${key});`);
 
-    // Radius — direct values from token definitions (not calc-based)
+    // Radius — retain the complete semantic scale even when upstream intentionally aliases values.
     const radiusLines = Object.entries(radii).map(([key, value]) => `    --radius-${key}: ${value};`);
 
     // Shadows — direct values from token definitions
@@ -121,6 +152,16 @@ function generateThemeInlineBlock(): string {
     // options are picked up (the :root block sets --font-* from dashboardExtensions)
     const fontLines = Object.entries(fontFamily).map(([key]) => `    --font-${key}: var(--font-${key});`);
 
+    const fontSizeLines = Object.entries(fontSize).map(([key, value]) => `    --text-${key}: ${value};`);
+    const fontWeightLines = Object.entries(fontWeight).map(
+        ([key, value]) => `    --font-weight-${key}: ${value};`,
+    );
+    const trackingLines = Object.entries(letterSpacing).map(
+        ([key, value]) => `    --tracking-${key}: ${value};`,
+    );
+    const durationLines = Object.entries(duration).map(([key, value]) => `    --duration-${key}: ${value};`);
+    const easingLines = Object.entries(easing).map(([key, value]) => `    --ease-${key}: ${value};`);
+
     // Dashboard-specific tokens not present in the base design-tokens
     const dashboardLines = [
         '    --color-dev-mode: var(--dev-mode);',
@@ -128,10 +169,27 @@ function generateThemeInlineBlock(): string {
         '    --color-brand: var(--brand);',
         '    --color-brand-lighter: var(--brand-lighter);',
         '    --color-brand-darker: var(--brand-darker);',
+        '    --color-link: var(--link);',
+        '    --color-success-text: var(--success-text);',
+        '    --color-warning-text: var(--warning-text);',
+        '    --color-help-accent: var(--help-accent);',
+        '    --color-help-accent-border: var(--help-accent-border);',
+        '    --color-help-accent-background: var(--help-accent-background);',
         '    --color-vendure-brand: #17c1ff;',
     ];
 
-    const allLines = [...colorLines, ...radiusLines, ...shadowLines, ...fontLines, ...dashboardLines];
+    const allLines = [
+        ...colorLines,
+        ...radiusLines,
+        ...shadowLines,
+        ...fontLines,
+        ...fontSizeLines,
+        ...fontWeightLines,
+        ...trackingLines,
+        ...durationLines,
+        ...easingLines,
+        ...dashboardLines,
+    ];
     return `@theme inline {\n${allLines.join('\n')}\n}`;
 }
 

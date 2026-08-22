@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { Input } from './input.js';
 
 const meta = {
@@ -33,6 +34,19 @@ export const Playground: Story = {
         type: 'text',
         placeholder: 'Enter text...',
         disabled: false,
+        id: 'playground-input',
     },
-    render: args => <Input {...args} className="w-[300px]" />,
+    render: args => (
+        <div className="w-[300px] space-y-2">
+            <label htmlFor="playground-input" className="text-sm font-medium">
+                Example value
+            </label>
+            <Input {...args} />
+        </div>
+    ),
+    play: async ({ canvasElement }) => {
+        const input = within(canvasElement).getByRole('textbox', { name: 'Example value' });
+        await userEvent.type(input, 'Vendure');
+        await expect(input).toHaveValue('Vendure');
+    },
 };

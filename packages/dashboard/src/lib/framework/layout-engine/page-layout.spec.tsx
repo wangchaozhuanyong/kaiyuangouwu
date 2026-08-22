@@ -7,7 +7,7 @@ import type { ActionBarItemPosition } from '../extension-api/types/layout.js';
 import { globalRegistry } from '../registry/global-registry.js';
 import { ActionBarItem } from './action-bar-item-wrapper.js';
 import { registerDashboardActionBarItem, registerDashboardPageBlock } from './layout-extensions.js';
-import { PageActionBar, PageBlock, PageLayout } from './page-layout.js';
+import { PageActionBar, PageActionBarRight, PageBlock, PageLayout } from './page-layout.js';
 import { PageContext } from './page-provider.js';
 
 const useIsMobileMock = vi.hoisted(() => vi.fn(() => false));
@@ -376,5 +376,21 @@ describe('PageLayout', () => {
 
         expect(renderedIds).toHaveLength(3);
         expect(renderedIds).toEqual(expect.arrayContaining(['a', 'b', 'save-button']));
+    });
+
+    it('keeps the legacy primary action visible on mobile', () => {
+        const markup = renderActionBar(
+            <PageActionBarRight>
+                <button type="button" data-testid="action-bar-cancel">
+                    Cancel
+                </button>
+                <button type="submit" data-testid="action-bar-save">
+                    Save
+                </button>
+            </PageActionBarRight>,
+            { isDesktop: false },
+        );
+
+        expect(getRenderedActionBarIds(markup)).toEqual(['save']);
     });
 });

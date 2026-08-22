@@ -53,7 +53,7 @@ export function TestSingleMethodResult({
                                 <div className="p-3 border rounded-lg bg-muted/50">
                                     <div className="flex justify-between items-center">
                                         <div className="flex items-center gap-2">
-                                            <Check className="h-5 w-5 text-success" />
+                                            <Check className="h-5 w-5 text-success-text" />
                                             <span className="text-sm">
                                                 <Trans>Shipping method is eligible for this order</Trans>
                                             </span>

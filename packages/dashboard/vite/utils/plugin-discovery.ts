@@ -2,9 +2,9 @@ import { parse } from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
 import glob from 'fast-glob';
 import fs from 'fs-extra';
+import { createRequire } from 'node:module';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as ts from 'typescript';
 
 import { Logger, PluginInfo, TransformTsConfigPathMappingsFn } from '../types.js';
@@ -512,9 +512,8 @@ function guessNodeModulesRoot(vendureConfigPath: string, logger: Logger): string
     // specified, we will try to guess it by resolving the
     // `@vendure/core` package.
     try {
-        const coreUrl = import.meta.resolve('@vendure/core');
-        logger.debug(`Found core URL: ${coreUrl}`);
-        const corePath = fileURLToPath(coreUrl);
+        const moduleRequire = createRequire(import.meta.url);
+        const corePath = moduleRequire.resolve('@vendure/core');
         logger.debug(`Found core path: ${corePath}`);
         nodeModulesRoot = path.join(path.dirname(corePath), '..', '..', '..');
     } catch (e) {

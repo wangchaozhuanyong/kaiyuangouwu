@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,13 +47,21 @@ for (const sourceFile of sourceFiles) {
 
 let checkedFiles = 0;
 for (const [name, files] of groups) {
-    for (let offset = 0; offset < files.length; offset += maxFilesPerProcess) {
-        const shard = files.slice(offset, offset + maxFilesPerProcess);
+    const packageDirectory = path.join(repositoryRoot, name);
+    const usesPackageFlatConfig = existsSync(path.join(packageDirectory, 'eslint.config.js'));
+    const lintWorkingDirectory = usesPackageFlatConfig ? packageDirectory : repositoryRoot;
+    const lintFiles = usesPackageFlatConfig
+        ? files.map(file => path.relative(packageDirectory, path.join(repositoryRoot, file)))
+        : files;
+
+    for (let offset = 0; offset < lintFiles.length; offset += maxFilesPerProcess) {
+        const shard = lintFiles.slice(offset, offset + maxFilesPerProcess);
         process.stdout.write(
-            `Linting ${name}: files ${offset + 1}-${offset + shard.length}/${files.length}\n`,
+            `Linting ${name}: files ${offset + 1}-${offset + shard.length}/${lintFiles.length}` +
+                `${usesPackageFlatConfig ? ' (package config)' : ''}\n`,
         );
         const result = spawnSync(process.execPath, [eslintBin, ...shard], {
-            cwd: repositoryRoot,
+            cwd: lintWorkingDirectory,
             stdio: 'inherit',
         });
         if (result.error) {

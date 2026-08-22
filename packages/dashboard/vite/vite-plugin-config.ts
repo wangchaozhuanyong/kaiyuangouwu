@@ -52,6 +52,7 @@ export function viteConfigPlugin({ packageRoot, useExperimentalBundle }: ViteCon
             }
 
             config.resolve = {
+                ...config.resolve,
                 alias: {
                     ...(config.resolve?.alias ?? {}),
                     // See the readme for an explanation of this alias.

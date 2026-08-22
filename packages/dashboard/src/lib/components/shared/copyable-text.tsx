@@ -67,7 +67,7 @@ export function CopyableText({ value, children, className }: Readonly<CopyableTe
                 className="p-0.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
             >
                 {copied ? (
-                    <CheckIcon className="h-3.5 w-3.5 text-success" />
+                    <CheckIcon className="h-3.5 w-3.5 text-success-text" />
                 ) : (
                     <CopyIcon className="h-3.5 w-3.5" />
                 )}

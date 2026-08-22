@@ -120,6 +120,55 @@ jobs:
             - name: Check bilingual source and catalog quality
               working-directory: packages/dashboard
               run: bun run i18n:check-all
+    dashboard-storybook:
+        name: dashboard Storybook quality gate
+        needs: detect-changes
+        if: needs.detect-changes.outputs.dashboard == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 25
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+            - uses: ./.github/actions/setup
+            - name: Dashboard lint
+              working-directory: packages/dashboard
+              run: bun run lint
+            - name: Cache Playwright browsers
+              id: playwright-cache
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: playwright-v2-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+            - name: Install Playwright browsers
+              if: steps.playwright-cache.outputs.cache-hit != 'true'
+              working-directory: packages/dashboard
+              run: bunx playwright install chromium chromium-headless-shell
+            - name: Install Playwright system deps
+              working-directory: packages/dashboard
+              run: bunx playwright install-deps chromium
+            - name: Storybook browser and accessibility tests
+              working-directory: packages/dashboard
+              run: bun run test:storybook
+            - name: Build Storybook and check bundle budgets
+              working-directory: packages/dashboard
+              run: bun run storybook:build
+    dashboard-storybook-windows:
+        name: dashboard Storybook Windows Chrome gate
+        needs: detect-changes
+        if: needs.detect-changes.outputs.dashboard == 'true'
+        runs-on: windows-latest
+        timeout-minutes: 25
+        permissions:
+            contents: read
+        env:
+            STORYBOOK_BROWSER_CHANNEL: chrome
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+            - uses: ./.github/actions/setup
+            - name: Storybook browser and accessibility tests in Chrome
+              working-directory: packages/dashboard
+              run: bun run test:storybook
     dashboard-e2e:
         name: dashboard e2e (${{ matrix.shard }})
         needs: detect-changes

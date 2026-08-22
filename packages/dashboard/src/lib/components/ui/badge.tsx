@@ -13,8 +13,8 @@ export type BadgeProps = Omit<BaseBadgeProps, 'variant'> & {
 };
 
 const customVariantStyles: Record<string, string> = {
-    success: 'bg-success/10 text-success dark:bg-success/20 [a]:hover:bg-success/20',
-    warning: 'bg-warning/10 text-warning dark:bg-warning/20 [a]:hover:bg-warning/20',
+    success: 'bg-success/10 text-success-text dark:bg-success/20 [a]:hover:bg-success/20',
+    warning: 'bg-warning/10 text-warning-text dark:bg-warning/20 [a]:hover:bg-warning/20',
 };
 
 /**

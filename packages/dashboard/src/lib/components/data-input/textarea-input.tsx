@@ -10,13 +10,13 @@ import { isReadonlyField } from '@/vdb/framework/form-engine/utils.js';
  * @docsPage TextareaInput
  */
 export function TextareaInput(props: Readonly<DashboardFormComponentProps>) {
-    const readOnly = props.disabled || isReadonlyField(props.fieldDef);
+    const { value, onChange, fieldDef, disabled, ...controlProps } = props;
+    const readOnly = disabled || isReadonlyField(fieldDef);
     return (
         <Textarea
-            ref={props.ref}
-            onBlur={props.onBlur}
-            value={props.value}
-            onChange={e => props.onChange(e.target.value)}
+            {...controlProps}
+            value={value}
+            onChange={e => onChange(e.target.value)}
             disabled={readOnly}
         />
     );

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useForm } from 'react-hook-form';
+import { expect, within } from 'storybook/test';
 import { withDescription } from '../../../.storybook/with-description.js';
 import { CheckboxInput } from './checkbox-input.js';
 
@@ -31,10 +32,20 @@ export const Playground: Story = {
         const field = register('playground');
         return (
             <div className="flex items-center gap-2">
-                <CheckboxInput {...field} {...args} />
-                <label className="text-sm font-medium">Accept terms and conditions</label>
+                <CheckboxInput {...field} {...args} id="accept-terms" />
+                <label htmlFor="accept-terms" className="text-sm font-medium">
+                    Accept terms and conditions
+                </label>
             </div>
         );
+    },
+    play: async ({ canvasElement }) => {
+        const checkbox = within(canvasElement).getByRole('checkbox', {
+            name: 'Accept terms and conditions',
+        });
+        await expect(checkbox).toBeVisible();
+        const nativeInput = canvasElement.querySelector('input[name="playground"]');
+        await expect(nativeInput).toHaveAttribute('id', 'accept-terms');
     },
 };
 
@@ -44,16 +55,22 @@ export const MultipleCheckboxes: Story = {
         return (
             <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                    <CheckboxInput {...register('notifications')} />
-                    <label className="text-sm font-medium">Email notifications</label>
+                    <CheckboxInput {...register('notifications')} id="notifications" />
+                    <label htmlFor="notifications" className="text-sm font-medium">
+                        Email notifications
+                    </label>
                 </div>
                 <div className="flex items-center gap-2">
-                    <CheckboxInput {...register('marketing')} />
-                    <label className="text-sm font-medium">Marketing emails</label>
+                    <CheckboxInput {...register('marketing')} id="marketing" />
+                    <label htmlFor="marketing" className="text-sm font-medium">
+                        Marketing emails
+                    </label>
                 </div>
                 <div className="flex items-center gap-2">
-                    <CheckboxInput {...register('updates')} />
-                    <label className="text-sm font-medium">Product updates</label>
+                    <CheckboxInput {...register('updates')} id="updates" />
+                    <label htmlFor="updates" className="text-sm font-medium">
+                        Product updates
+                    </label>
                 </div>
             </div>
         );

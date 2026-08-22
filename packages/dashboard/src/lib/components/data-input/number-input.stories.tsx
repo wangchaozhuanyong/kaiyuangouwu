@@ -50,8 +50,11 @@ export const Playground: Story = {
         const { register } = useForm();
         const field = register('playground');
         return (
-            <div className="w-[300px]">
-                <NumberInput {...field} {...args} />
+            <div className="w-[300px] space-y-2">
+                <label htmlFor="playground-number" className="text-sm font-medium">
+                    Quantity
+                </label>
+                <NumberInput {...field} {...args} id="playground-number" />
             </div>
         );
     },
@@ -63,7 +66,10 @@ export const Float: Story = {
         const field = register('float');
         return (
             <div className="w-[300px] space-y-2">
-                <NumberInput {...field} step={0.01} fieldDef={{ type: 'float' }} />
+                <label htmlFor="float-number" className="text-sm font-medium">
+                    Floating-point value
+                </label>
+                <NumberInput {...field} id="float-number" step={0.01} fieldDef={{ type: 'float' }} />
                 <div className="text-sm text-muted-foreground">
                     <div>Floating point with step 0.01</div>
                 </div>
@@ -78,7 +84,15 @@ export const WithPrefixAndSuffix: Story = {
         const field = register('withAffix');
         return (
             <div className="w-[300px] space-y-2">
-                <NumberInput {...field} fieldDef={{ ui: { prefix: '$', suffix: 'USD' } }} step={10} />
+                <label htmlFor="price-number" className="text-sm font-medium">
+                    Price
+                </label>
+                <NumberInput
+                    {...field}
+                    id="price-number"
+                    fieldDef={{ ui: { prefix: '$', suffix: 'USD' } }}
+                    step={10}
+                />
                 <div className="text-sm text-muted-foreground">
                     Demonstrates fieldDef.ui.prefix and fieldDef.ui.suffix
                 </div>
@@ -93,7 +107,10 @@ export const NullValue: Story = {
         const field = register('nullValue');
         return (
             <div className="w-[300px] space-y-2">
-                <NumberInput {...field} />
+                <label htmlFor="nullable-number" className="text-sm font-medium">
+                    Optional quantity
+                </label>
+                <NumberInput {...field} id="nullable-number" />
                 <div className="text-sm text-muted-foreground">
                     <div className="mt-1 text-xs">When input is cleared, value becomes null</div>
                 </div>

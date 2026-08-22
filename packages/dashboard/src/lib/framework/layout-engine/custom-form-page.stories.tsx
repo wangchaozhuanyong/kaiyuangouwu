@@ -147,6 +147,7 @@ export const ProductCustomForm: Story = {
                                             checked={field.value}
                                             onChange={field.onChange}
                                             className="mr-2"
+                                            aria-label="Enabled"
                                         />
                                         <span className="text-sm">
                                             {field.value ? (
@@ -307,6 +308,7 @@ export const ComplexCustomForm: Story = {
                                                 checked={field.value}
                                                 onChange={field.onChange}
                                                 className="mr-2"
+                                                aria-label="Track inventory"
                                             />
                                         </div>
                                     )}

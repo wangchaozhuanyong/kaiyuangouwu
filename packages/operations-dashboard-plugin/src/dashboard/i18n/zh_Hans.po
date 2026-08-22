@@ -4,151 +4,530 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Language: zh_Hans\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.workbench"
-msgstr "工作台"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.activeStore"
+msgstr "当前店铺"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.productCenter"
-msgstr "商品中心"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.all"
+msgstr "全部状态"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.orderCenter"
-msgstr "订单中心"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approve"
+msgstr "通过申请"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.customerCenter"
-msgstr "客户中心"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approved"
+msgstr "通过金额"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.marketingCenter"
-msgstr "营销中心"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approvedAmount"
+msgstr "通过金额"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.inventoryAndFulfillment"
-msgstr "库存与履约"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.approvedAmountHint"
+msgstr "按当前币种填写，不能超过申请金额；这里只记录审核金额。"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.storeSettings"
-msgstr "店铺设置"
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.cancel"
+msgstr "取消"
 
 #. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.complete"
+msgstr "标记完成"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.confirm"
+msgstr "确认处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.customer"
+msgstr "客户"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.customerDescription"
+msgstr "客户说明"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.description"
+msgstr "审核当前店铺的退款与退货申请。这里记录业务处理结果，不会调用真实支付退款。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.empty"
+msgstr "当前筛选条件下没有售后申请"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.filter"
+msgstr "状态筛选"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.invalidAmount"
+msgstr "通过金额必须是 0 到申请金额之间的有效金额"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.invalidResolution"
+msgstr "处理说明不能为空且不能超过 2000 个字符"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.items"
+msgstr "申请商品"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.loadError"
+msgstr "售后申请加载失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.order"
+msgstr "订单"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.processing"
+msgstr "正在处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refresh"
+msgstr "刷新"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refundUnavailable"
+msgstr "当前未接入真实支付退款。正金额申请必须完成并核验实际退款后才能标记完成。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.reject"
+msgstr "驳回申请"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.requested"
+msgstr "申请金额"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.resolution"
+msgstr "处理说明"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.resolutionHint"
+msgstr "客户可以在售后时间线中看到这段说明。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.retry"
+msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.approved"
+msgstr "已通过"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.cancelled"
+msgstr "已撤销"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.completed"
+msgstr "已完成"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.pending"
+msgstr "待处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.state.rejected"
+msgstr "已驳回"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.submittedAt"
+msgstr "申请时间"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.timeline"
+msgstr "处理时间线"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.title"
+msgstr "售后处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.transition.approve"
+msgstr "通过售后申请"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.transition.complete"
+msgstr "完成售后处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.transition.reject"
+msgstr "驳回售后申请"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.type.refundOnly"
+msgstr "仅退款"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.type.returnAndRefund"
+msgstr "退货退款"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.updated"
+msgstr "售后状态已更新"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.accountsAndAccess"
 msgstr "账号与权限"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.systemManagement"
-msgstr "系统管理"
+#: src/dashboard/index.tsx
+msgid "operations.nav.customerCenter"
+msgstr "客户中心"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.skuAndInventory"
-msgstr "SKU 与库存"
+#: src/dashboard/index.tsx
+msgid "operations.nav.inventoryAndFulfillment"
+msgstr "库存与履约"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.productGroups"
-msgstr "商品分组"
+#: src/dashboard/index.tsx
+msgid "operations.nav.marketingCenter"
+msgstr "营销中心"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.specificationTemplates"
-msgstr "规格模板"
+#: src/dashboard/index.tsx
+msgid "operations.nav.orderCenter"
+msgstr "订单中心"
 
 #. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.productAttributes"
 msgstr "商品属性"
 
 #. js-lingui-explicit-id
-msgid "operations.nav.warehouses"
-msgstr "仓库"
+#: src/dashboard/index.tsx
+msgid "operations.nav.productCenter"
+msgstr "商品中心"
 
 #. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.productGroups"
+msgstr "商品分组"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.skuAndInventory"
+msgstr "SKU 与库存"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.specificationTemplates"
+msgstr "规格模板"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.stores"
 msgstr "店铺"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.title"
-msgstr "订单待办"
+#: src/dashboard/index.tsx
+msgid "operations.nav.storeSettings"
+msgstr "店铺设置"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.description"
-msgstr "当前需要优先处理的订单"
+#: src/dashboard/index.tsx
+msgid "operations.nav.systemManagement"
+msgstr "系统管理"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingPayment"
-msgstr "待付款"
+#: src/dashboard/index.tsx
+msgid "operations.nav.warehouses"
+msgstr "仓库"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingPaymentDescription"
-msgstr "客户尚未完成付款"
+#: src/dashboard/index.tsx
+msgid "operations.nav.workbench"
+msgstr "工作台"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingShipment"
-msgstr "待发货"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.activeStore"
+msgstr "当前店铺"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.pendingShipmentDescription"
-msgstr "已付款并等待履约"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.all"
+msgstr "全部状态"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.modifying"
-msgstr "改单处理中"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.approve"
+msgstr "通过并发布"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.modifyingDescription"
-msgstr "正在人工调整的订单"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.cancel"
+msgstr "取消"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.openOrders"
-msgstr "进入订单中心"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.confirm"
+msgstr "确认处理"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.loadError"
-msgstr "订单待办加载失败"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.description"
+msgstr "审核当前店铺的已购商品评价。只有通过后才会在商品页公开展示。"
 
 #. js-lingui-explicit-id
-msgid "operations.todo.retry"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.empty"
+msgstr "当前筛选条件下没有评价"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.filter"
+msgstr "状态筛选"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.loadError"
+msgstr "评价加载失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.nextPage"
+msgstr "下一页"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.page"
+msgstr "页"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.previousPage"
+msgstr "上一页"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.processing"
+msgstr "正在处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.refresh"
+msgstr "刷新"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.reject"
+msgstr "驳回"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.rejectionRequired"
+msgstr "驳回原因至少需要 3 个字符"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.response"
+msgstr "商家回复 / 处理说明"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.responseHint"
+msgstr "通过时可选填写公开回复；驳回时必须填写原因。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.responseTooLong"
+msgstr "回复不能超过 2000 个字符"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.retry"
 msgstr "重试"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.title"
-msgstr "全部店铺经营概览"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.state.approved"
+msgstr "已发布"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.description"
-msgstr "对比所选时间范围内各店铺的经营数据"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.state.pending"
+msgstr "待审核"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.manage"
-msgstr "管理店铺"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.state.rejected"
+msgstr "已驳回"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.orders"
-msgstr "订单量"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.title"
+msgstr "评价审核"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.sales"
-msgstr "销售额"
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.updated"
+msgstr "评价状态已更新"
 
 #. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.verified"
+msgstr "已验证购买"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
 msgid "operations.stores.current"
 msgstr "当前店铺"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.total"
-msgstr "合计"
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.description"
+msgstr "对比所选时间范围内各店铺的经营数据"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.storeCount"
-msgstr "家店铺"
-
-#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
 msgid "operations.stores.loadError"
 msgstr "店铺经营数据加载失败"
 
 #. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.manage"
+msgstr "管理店铺"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.orders"
+msgstr "订单量"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.retry"
+msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.sales"
+msgstr "销售额"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.storeCount"
+msgstr "家店铺"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.title"
+msgstr "全部店铺经营概览"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
+msgid "operations.stores.total"
+msgstr "合计"
+
+#. js-lingui-explicit-id
+#: src/dashboard/store-overview-widget.tsx
 msgid "operations.stores.unavailable"
 msgstr "数据暂不可用"
 
 #. js-lingui-explicit-id
-msgid "operations.stores.retry"
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.description"
+msgstr "当前需要优先处理的订单"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.loadError"
+msgstr "订单待办加载失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.modifying"
+msgstr "改单处理中"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.modifyingDescription"
+msgstr "正在人工调整的订单"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.openOrders"
+msgstr "进入订单中心"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingPayment"
+msgstr "待付款"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingPaymentDescription"
+msgstr "客户尚未完成付款"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingShipment"
+msgstr "待发货"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingShipmentDescription"
+msgstr "已付款并等待履约"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.retry"
 msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.title"
+msgstr "订单待办"

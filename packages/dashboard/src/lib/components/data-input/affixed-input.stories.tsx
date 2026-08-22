@@ -56,7 +56,7 @@ export const Playground: Story = {
     render: args => {
         const { register } = useForm();
         const field = register('amount');
-        return <AffixedInput {...field} {...args} />;
+        return <AffixedInput {...field} {...args} aria-label="Amount" />;
     },
 };
 
@@ -64,7 +64,14 @@ export const WithIconPrefix: Story = {
     render: () => {
         const { register } = useForm();
         const field = register('email');
-        return <AffixedInput {...field} prefix={<Mail className="w-4 h-4" />} placeholder="Enter email" />;
+        return (
+            <AffixedInput
+                {...field}
+                prefix={<Mail className="w-4 h-4" />}
+                placeholder="Enter email"
+                aria-label="Email address"
+            />
+        );
     },
 };
 
@@ -72,7 +79,15 @@ export const WithSuffix: Story = {
     render: () => {
         const { register } = useForm();
         const field = register('percentage');
-        return <AffixedInput {...field} type="number" suffix="%" placeholder="Enter percentage" />;
+        return (
+            <AffixedInput
+                {...field}
+                type="number"
+                suffix="%"
+                placeholder="Enter percentage"
+                aria-label="Percentage"
+            />
+        );
     },
 };
 
@@ -80,7 +95,7 @@ export const Disabled: Story = {
     render: () => {
         const { register } = useForm();
         const field = register('website');
-        return <AffixedInput {...field} prefix="https://" suffix=".com" disabled />;
+        return <AffixedInput {...field} prefix="https://" suffix=".com" disabled aria-label="Website" />;
     },
 };
 
@@ -88,6 +103,16 @@ export const NumberWithSteps: Story = {
     render: () => {
         const { register } = useForm();
         const field = register('weight');
-        return <AffixedInput {...field} type="number" suffix="kg" step="0.1" min="0" max="100" />;
+        return (
+            <AffixedInput
+                {...field}
+                type="number"
+                suffix="kg"
+                step="0.1"
+                min="0"
+                max="100"
+                aria-label="Weight"
+            />
+        );
     },
 };

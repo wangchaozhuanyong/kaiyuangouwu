@@ -72,7 +72,7 @@ export function TestShippingMethodsResult({
                         >
                             <div className="flex-1">
                                 <div className="flex gap-1">
-                                    <Check className="h-5 w-5 text-success" />
+                                    <Check className="h-5 w-5 text-success-text" />
                                     <div className="">{method.name}</div>
                                 </div>
                                 <Badge variant="secondary">{method.code}</Badge>

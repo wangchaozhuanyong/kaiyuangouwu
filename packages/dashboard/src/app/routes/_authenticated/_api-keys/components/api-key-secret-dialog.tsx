@@ -72,7 +72,7 @@ export function ApiKeySecretDialog({ open, apiKey, lookupId, onClose }: ApiKeySe
                         role="alert"
                         aria-live="assertive"
                     >
-                        <TriangleAlertIcon className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                        <TriangleAlertIcon className="h-5 w-5 text-warning-text shrink-0 mt-0.5" />
                         <p className="text-sm">
                             <Trans>
                                 This is the only time the full API key will be displayed.

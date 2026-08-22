@@ -1,5 +1,5 @@
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Filter, XIcon } from 'lucide-react';
 import { HumanReadableOperator, Operator } from './human-readable-operator.js';
 import { ColumnDataType } from './types.js';
@@ -17,10 +17,12 @@ export function DataTableFilterBadge({
     dataType: ColumnDataType;
     currencyCode: string;
 }) {
+    const { t } = useLingui();
     const [operator, value] = Object.entries(filter.value as Record<string, unknown>)[0];
     return (
         <div className="inline-flex items-center h-8 rounded-md border border-dashed border-input bg-background text-sm">
             <button
+                type="button"
                 className="flex gap-1 items-center cursor-pointer px-2 py-1 hover:bg-accent/50 rounded-l-md transition-colors"
                 onClick={() => onClick?.(filter)}
             >
@@ -36,7 +38,9 @@ export function DataTableFilterBadge({
                 </span>
             </button>
             <button
+                type="button"
                 className="flex items-center justify-center h-full px-1.5 border-l border-input hover:bg-accent/50 rounded-r-md transition-colors"
+                aria-label={t`Remove filter ${filter.id}`}
                 onClick={() => onRemove(filter)}
             >
                 <XIcon className="h-3.5 w-3.5 text-muted-foreground" />

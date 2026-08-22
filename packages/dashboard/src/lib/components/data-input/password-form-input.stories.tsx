@@ -35,8 +35,11 @@ export const Playground: Story = {
         const { register } = useForm();
         const field = register('password');
         return (
-            <div className="w-[300px]">
-                <PasswordFormInput {...field} {...args} />
+            <div className="w-[300px] space-y-2">
+                <label htmlFor="password" className="text-sm font-medium">
+                    Password
+                </label>
+                <PasswordFormInput {...field} {...args} id="password" />
             </div>
         );
     },
@@ -48,16 +51,22 @@ export const ChangePassword: Story = {
         return (
             <div className="w-[300px] space-y-4">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Current Password</label>
-                    <PasswordFormInput {...register('currentPassword')} />
+                    <label htmlFor="current-password" className="text-sm font-medium">
+                        Current Password
+                    </label>
+                    <PasswordFormInput {...register('currentPassword')} id="current-password" />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">New Password</label>
-                    <PasswordFormInput {...register('newPassword')} />
+                    <label htmlFor="new-password" className="text-sm font-medium">
+                        New Password
+                    </label>
+                    <PasswordFormInput {...register('newPassword')} id="new-password" />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Confirm New Password</label>
-                    <PasswordFormInput {...register('confirmPassword')} />
+                    <label htmlFor="confirm-password" className="text-sm font-medium">
+                        Confirm New Password
+                    </label>
+                    <PasswordFormInput {...register('confirmPassword')} id="confirm-password" />
                 </div>
             </div>
         );

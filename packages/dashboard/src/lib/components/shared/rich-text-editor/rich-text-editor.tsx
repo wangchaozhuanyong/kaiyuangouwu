@@ -25,7 +25,7 @@ const extensions = [
         link: {
             openOnClick: false,
             HTMLAttributes: {
-                class: 'text-primary underline underline-offset-2 cursor-pointer hover:text-primary/80',
+                class: 'text-link underline underline-offset-2 cursor-pointer hover:text-link/80',
             },
             validate: href => /^https?:\/\//.test(href),
         },
@@ -88,7 +88,7 @@ export function RichTextEditor({ value, onChange, disabled = false, placeholder 
         },
         editorProps: {
             attributes: {
-                class: `rich-text-editor placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/10 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive field-sizing-content min-h-16 w-full bg-transparent px-3 py-2 text-base transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm max-h-[500px] overflow-y-auto ${disabled ? 'cursor-not-allowed opacity-50' : ''}`,
+                class: `rich-text-editor placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/10 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive field-sizing-content min-h-16 w-full bg-transparent px-3 py-2 text-base transition-[color,box-shadow] outline-none md:text-sm max-h-[500px] overflow-y-auto ${disabled ? 'cursor-not-allowed' : ''}`,
             },
         },
     }, [editorExtensions]);
