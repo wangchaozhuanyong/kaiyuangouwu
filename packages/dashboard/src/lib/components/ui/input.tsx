@@ -5,7 +5,7 @@ import { cn } from '@/vdb/lib/utils.js';
 /**
  * Plain `<input>` instead of @vendure-io/ui's Input, which wraps Base UI's
  * Field.Control and conflicts with react-hook-form's isDirty detection.
- * Classes synced from @vendure-io/ui v1.0.5.
+ * Keep these classes aligned with the shared UI input contract when it changes.
  */
 function Input({ className, type, value, ...props }: React.ComponentProps<'input'>) {
     return (

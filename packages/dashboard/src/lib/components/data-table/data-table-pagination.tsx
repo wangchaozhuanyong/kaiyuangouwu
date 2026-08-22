@@ -1,7 +1,6 @@
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Table } from '@tanstack/react-table';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-
 
 import { Button } from '@/vdb/components/ui/button.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/vdb/components/ui/select.js';
@@ -11,6 +10,8 @@ interface DataTablePaginationProps<TData> {
 }
 
 export function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
+    const { t } = useLingui();
+
     return (
         <div className="flex items-center justify-between px-2">
             <div className="flex-1" />
@@ -26,7 +27,7 @@ export function DataTablePagination<TData>({ table }: DataTablePaginationProps<T
                             table.setPageSize(Number(value));
                         }}
                     >
-                        <SelectTrigger className="h-8 w-[70px]">
+                        <SelectTrigger className="h-8 w-[70px]" aria-label={t`Rows per page`}>
                             <SelectValue placeholder={table.getState().pagination.pageSize} />
                         </SelectTrigger>
                         <SelectContent side="top">

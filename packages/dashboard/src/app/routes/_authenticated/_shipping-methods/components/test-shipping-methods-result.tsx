@@ -26,13 +26,13 @@ interface ShippingEligibilityTestResultProps {
 }
 
 export function TestShippingMethodsResult({
-                                              testResult,
-                                              okToRun,
-                                              testDataUpdated,
-                                              hasTestedOnce,
-                                              onRunTest,
-                                              loading = false,
-                                          }: Readonly<ShippingEligibilityTestResultProps>) {
+    testResult,
+    okToRun,
+    testDataUpdated,
+    hasTestedOnce,
+    onRunTest,
+    loading = false,
+}: Readonly<ShippingEligibilityTestResultProps>) {
     const { activeChannel } = useChannel();
     const currencyCode = activeChannel?.defaultCurrencyCode ?? 'USD';
     const hasResults = testResult && testResult.length > 0;
@@ -72,7 +72,7 @@ export function TestShippingMethodsResult({
                         >
                             <div className="flex-1">
                                 <div className="flex gap-1">
-                                    <Check className="h-5 w-5 text-success" />
+                                    <Check className="h-5 w-5 text-success-text" />
                                     <div className="">{method.name}</div>
                                 </div>
                                 <Badge variant="secondary">{method.code}</Badge>

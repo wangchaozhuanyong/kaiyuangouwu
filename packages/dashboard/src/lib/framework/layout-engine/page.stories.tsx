@@ -65,16 +65,22 @@ export const WithActionBar: Story = {
                         <PageBlock column="main" blockId="product-info" title="Product Information">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-sm font-medium">Name</label>
+                                    <label htmlFor="product-name" className="text-sm font-medium">
+                                        Name
+                                    </label>
                                     <input
+                                        id="product-name"
                                         type="text"
                                         className="w-full border rounded px-3 py-2 mt-1"
                                         defaultValue="Wireless Headphones"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium">Description</label>
+                                    <label htmlFor="product-description" className="text-sm font-medium">
+                                        Description
+                                    </label>
                                     <textarea
+                                        id="product-description"
                                         className="w-full border rounded px-3 py-2 mt-1"
                                         rows={4}
                                         defaultValue="High-quality wireless headphones with active noise cancellation."
@@ -236,12 +242,16 @@ export const WithBlockDescriptions: Story = {
                         >
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium">Enable notifications</label>
-                                    <input type="checkbox" defaultChecked />
+                                    <label htmlFor="enable-notifications" className="text-sm font-medium">
+                                        Enable notifications
+                                    </label>
+                                    <input id="enable-notifications" type="checkbox" defaultChecked />
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium">Dark mode</label>
-                                    <input type="checkbox" />
+                                    <label htmlFor="dark-mode" className="text-sm font-medium">
+                                        Dark mode
+                                    </label>
+                                    <input id="dark-mode" type="checkbox" />
                                 </div>
                             </div>
                         </PageBlock>
@@ -253,8 +263,11 @@ export const WithBlockDescriptions: Story = {
                         >
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-sm font-medium">API Key</label>
+                                    <label htmlFor="api-key" className="text-sm font-medium">
+                                        API Key
+                                    </label>
                                     <input
+                                        id="api-key"
                                         type="text"
                                         className="w-full border rounded px-3 py-2 mt-1"
                                         defaultValue="sk_test_..."

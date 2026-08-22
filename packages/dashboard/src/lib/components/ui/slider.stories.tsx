@@ -32,6 +32,12 @@ export const Playground: Story = {
         defaultValue: [50],
         max: 100,
         step: 1,
+        'aria-label': 'Volume',
     },
-    render: args => <Slider {...args} className="w-[300px]" />,
+    render: args => (
+        <label className="grid w-[300px] gap-2 text-sm font-medium">
+            Volume
+            <Slider {...args} />
+        </label>
+    ),
 };

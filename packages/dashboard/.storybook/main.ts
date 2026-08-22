@@ -1,18 +1,53 @@
 import type { StorybookConfig } from '@storybook/react-vite';
 
-import { dirname, resolve } from 'path';
-
-import { vendureDashboardPlugin } from '@vendure/dashboard/vite';
-import { fileURLToPath, pathToFileURL } from 'url';
 import { extractJSDocPlugin } from './extract-jsdoc-plugin.js';
 import { transformJSDocPlugin } from './transform-jsdoc-plugin.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+function storybookManualChunks(id: string) {
+    const normalizedId = id.replace(/\\/g, '/');
+    if (normalizedId.includes('/node_modules/@vendure-io/ui/src/components/ui/chart.')) {
+        return 'vendor-charts';
+    }
+    if (
+        normalizedId.includes('/node_modules/@tiptap/') ||
+        normalizedId.includes('/node_modules/prosemirror-')
+    ) {
+        return 'vendor-rich-text';
+    }
+    if (normalizedId.includes('/node_modules/recharts/') || normalizedId.includes('/node_modules/d3-')) {
+        return 'vendor-charts';
+    }
+    if (
+        normalizedId.includes('/node_modules/@base-ui/') ||
+        normalizedId.includes('/node_modules/@vendure-io/ui/')
+    ) {
+        return 'vendor-ui';
+    }
+    if (normalizedId.includes('/node_modules/@tanstack/')) {
+        return 'vendor-tanstack';
+    }
+    if (
+        normalizedId.includes('/node_modules/graphql/') ||
+        normalizedId.includes('/node_modules/gql.tada/') ||
+        normalizedId.includes('/node_modules/awesome-graphql-client/')
+    ) {
+        return 'vendor-graphql';
+    }
+    if (normalizedId.includes('/node_modules/@lingui/')) {
+        return 'vendor-i18n';
+    }
+    if (
+        normalizedId.includes('/node_modules/motion/') ||
+        normalizedId.includes('/node_modules/framer-motion/')
+    ) {
+        return 'vendor-motion';
+    }
+}
 
 const config: StorybookConfig = {
     stories: ['./stories/Intro.mdx', './stories/*.mdx', '../src/**/*.stories.@(js|jsx|mjs|ts|tsx)'],
     staticDirs: ['./assets'],
-    addons: ['@storybook/addon-docs', '@storybook/addon-a11y'],
+    addons: ['@storybook/addon-docs', '@storybook/addon-a11y', '@storybook/addon-vitest'],
     framework: {
         name: '@storybook/react-vite',
         options: {},
@@ -21,25 +56,29 @@ const config: StorybookConfig = {
         builder: '@storybook/builder-vite',
     },
     typescript: {
-        reactDocgen: 'react-docgen-typescript',
-        reactDocgenTypescriptOptions: {
-            shouldExtractLiteralValuesFromEnum: true,
-            shouldRemoveUndefinedFromOptional: true,
-            propFilter: prop => {
-                // Filter out props from node_modules
-                if (prop.parent) {
-                    return !prop.parent.fileName.includes('node_modules');
-                }
-                return true;
-            },
-            savePropValueAsString: true,
-        },
+        // The TypeScript-based extractor cannot analyze the external @vendure-io/ui
+        // source files because they are intentionally outside this package's TS project.
+        reactDocgen: 'react-docgen',
     },
     async viteFinal(config) {
-        const vendureConfigPath = pathToFileURL(resolve(__dirname, '../sample-vendure-config.ts'));
-
         return {
             ...config,
+            build: {
+                ...config.build,
+                // Split the largest optional frameworks instead of hiding their size
+                // behind a multi-megabyte warning threshold. A post-build script owns
+                // the hard raw/gzip budgets used by CI.
+                chunkSizeWarningLimit: 1_850,
+                rollupOptions: {
+                    ...config.build?.rollupOptions,
+                    output: {
+                        ...(Array.isArray(config.build?.rollupOptions?.output)
+                            ? {}
+                            : config.build?.rollupOptions?.output),
+                        manualChunks: storybookManualChunks,
+                    },
+                },
+            },
             plugins: [
                 // Extract JSDoc descriptions from component files and inline into story metadata
                 // Must run before other plugins to process withDescription() calls
@@ -47,17 +86,9 @@ const config: StorybookConfig = {
                 // Transform JSDoc in component files to remove custom tags (@description, @docsCategory, etc.)
                 // for cleaner display in Storybook's auto-generated prop tables
                 transformJSDocPlugin(),
+                // Storybook already loads this package's Vite config, including the Vendure
+                // plugin chain. Reuse it so config loading and translation assets run once.
                 ...(config.plugins ?? []),
-                vendureDashboardPlugin({
-                    vendureConfigPath,
-                    api: {
-                        host: 'https://demo.vendure.io',
-                        port: 443,
-                    },
-                    gqlOutputPath: resolve(__dirname, '../src/lib/graphql/'),
-                    tempCompilationDir: resolve(__dirname, '../.temp'),
-                    disablePlugins: { tanstackRouter: true, react: true },
-                }),
             ],
         };
     },

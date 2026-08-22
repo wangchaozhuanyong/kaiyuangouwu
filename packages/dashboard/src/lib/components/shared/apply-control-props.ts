@@ -7,5 +7,14 @@ import React from 'react';
  */
 export function applyControlProps(element: React.ReactNode, props: Record<string, unknown>) {
     if (!React.isValidElement(element)) return element;
-    return React.cloneElement(element as React.ReactElement<Record<string, unknown>>, props);
+    const control = element as React.ReactElement<Record<string, unknown>>;
+    const mergedProps = { ...props };
+    for (const attribute of ['aria-describedby', 'aria-labelledby'] as const) {
+        const existingValue = control.props[attribute];
+        const injectedValue = props[attribute];
+        if (existingValue && injectedValue) {
+            mergedProps[attribute] = `${existingValue} ${injectedValue}`;
+        }
+    }
+    return React.cloneElement(control, mergedProps);
 }

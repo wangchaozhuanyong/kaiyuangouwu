@@ -10,10 +10,10 @@ import {
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { useServerConfig } from '@/vdb/hooks/use-server-config.js';
 import { cn } from '@/vdb/lib/utils.js';
+import { getTypeForState, type StateType } from '@/vdb/utils/state-type.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { ArrowRight, Workflow } from 'lucide-react';
 import { useMemo } from 'react';
-import { getTypeForState, type StateType } from '@/vdb/utils/state-type.js';
 
 interface OrderProcessDialogProps {
     currentState: string;
@@ -28,12 +28,12 @@ const stateColors: Record<StateType, { bg: string; border: string; text: string 
     success: {
         bg: 'bg-success/10',
         border: 'border-success/30',
-        text: 'text-success',
+        text: 'text-success-text',
     },
     warning: {
         bg: 'bg-warning/10',
         border: 'border-warning/30',
-        text: 'text-warning',
+        text: 'text-warning-text',
     },
     destructive: {
         bg: 'bg-destructive/10',
@@ -83,8 +83,7 @@ export function OrderProcessDialog({ currentState }: Readonly<OrderProcessDialog
                     </DialogTitle>
                     <DialogDescription>
                         <Trans>
-                            All possible order states and their transitions. The current state is
-                            highlighted.
+                            All possible order states and their transitions. The current state is highlighted.
                         </Trans>
                     </DialogDescription>
                 </DialogHeader>

@@ -30,6 +30,30 @@ function cleanJSDocDescription(description: string): string {
 }
 
 const preview: Preview = {
+    globalTypes: {
+        theme: {
+            description: 'Dashboard color theme',
+            defaultValue: 'light',
+            toolbar: {
+                icon: 'mirror',
+                items: [
+                    { value: 'light', title: 'Light' },
+                    { value: 'dark', title: 'Dark' },
+                ],
+            },
+        },
+        direction: {
+            description: 'Document text direction',
+            defaultValue: 'ltr',
+            toolbar: {
+                icon: 'transfer',
+                items: [
+                    { value: 'ltr', title: 'LTR' },
+                    { value: 'rtl', title: 'RTL' },
+                ],
+            },
+        },
+    },
     parameters: {
         controls: {
             matchers: {
@@ -43,10 +67,7 @@ const preview: Preview = {
             },
         },
         a11y: {
-            // 'todo' - show a11y violations in the test UI only
-            // 'error' - fail CI on a11y violations
-            // 'off' - skip a11y checks entirely
-            test: 'todo',
+            test: 'error',
         },
         docs: {
             source: {
@@ -86,17 +107,29 @@ const preview: Preview = {
         },
     },
     decorators: [
-        Story => {
+        (Story, context) => {
+            const direction = context.globals.direction === 'rtl' ? 'rtl' : 'ltr';
+            const theme = context.globals.theme === 'dark' ? 'dark' : 'light';
+
             useEffect(() => {
                 // With this method we dynamically load the catalogs
                 void dynamicActivate(defaultLocale);
                 registerDefaults();
             }, []);
 
+            useEffect(() => {
+                document.documentElement.dir = direction;
+                return () => {
+                    document.documentElement.removeAttribute('dir');
+                };
+            }, [direction]);
+
             return (
-                <CommonProviders>
-                    <Story />
-                </CommonProviders>
+                <div dir={direction}>
+                    <CommonProviders defaultTheme={theme}>
+                        <Story />
+                    </CommonProviders>
+                </div>
             );
         },
     ],

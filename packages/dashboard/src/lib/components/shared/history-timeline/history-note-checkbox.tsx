@@ -20,7 +20,7 @@ export function HistoryNoteCheckbox({ value, onChange }: Readonly<HistoryNoteChe
             >
                 <Trans>Note is private</Trans>
             </label>
-            <span className={value ? 'text-muted-foreground text-xs' : 'text-success text-xs'}>
+            <span className={value ? 'text-muted-foreground text-xs' : 'text-success-text text-xs'}>
                 {value ? <Trans>Visible to admins only</Trans> : <Trans>Visible to customer</Trans>}
             </span>
         </div>

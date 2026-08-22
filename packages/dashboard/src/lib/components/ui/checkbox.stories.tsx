@@ -27,5 +27,6 @@ export const Playground: Story = {
     args: {
         checked: false,
         disabled: false,
+        'aria-label': 'Select item',
     },
 };

@@ -1,5 +1,7 @@
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
+import { DropdownMenuItem } from '@/vdb/components/ui/dropdown-menu.js';
+import type { BulkActionComponent } from '@/vdb/framework/extension-api/types/index.js';
 import { FullWidthPageBlock, Page, PageLayout } from '@/vdb/framework/layout-engine/page-layout.js';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
@@ -17,6 +19,18 @@ interface Product {
     status: 'active' | 'inactive' | 'discontinued';
     createdAt: string;
 }
+
+const DeleteSelectedBulkAction: BulkActionComponent<Product> = ({ selection }) => (
+    <DropdownMenuItem onClick={() => console.log('Delete selected:', selection)}>
+        Delete selected
+    </DropdownMenuItem>
+);
+
+const ExportSelectedBulkAction: BulkActionComponent<Product> = ({ selection }) => (
+    <DropdownMenuItem onClick={() => console.log('Export selected:', selection)}>
+        Export selected
+    </DropdownMenuItem>
+);
 
 // Sample data
 const sampleData: Product[] = Array.from({ length: 100 }, (_, i) => ({
@@ -222,18 +236,10 @@ export const Playground: Story = {
                                 }}
                                 bulkActions={[
                                     {
-                                        label: 'Delete selected',
-                                        icon: 'trash',
-                                        onClick: (selectedItems: Product[]) => {
-                                            console.log('Delete selected:', selectedItems);
-                                        },
+                                        component: DeleteSelectedBulkAction,
                                     },
                                     {
-                                        label: 'Export selected',
-                                        icon: 'download',
-                                        onClick: (selectedItems: Product[]) => {
-                                            console.log('Export selected:', selectedItems);
-                                        },
+                                        component: ExportSelectedBulkAction,
                                     },
                                 ]}
                                 onRefresh={() => {

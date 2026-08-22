@@ -52,8 +52,8 @@ export function StateTransitionControl({
     const currentStateType = getTypeForState(currentState);
     const iconForType = {
         destructive: <CircleX className="h-4 w-4 text-destructive" />,
-        success: <CircleCheck className="h-4 w-4 text-success" />,
-        warning: <CircleAlert className="h-4 w-4 text-warning" />,
+        success: <CircleCheck className="h-4 w-4 text-success-text" />,
+        warning: <CircleAlert className="h-4 w-4 text-warning-text" />,
         default: <CircleDashed className="h-4 w-4 text-muted-foreground" />,
     };
 

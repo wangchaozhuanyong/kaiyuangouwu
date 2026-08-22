@@ -39,6 +39,7 @@ export function SelectWithOptions({
     placeholder,
     isListField = false,
     disabled,
+    ...controlProps
 }: Readonly<SelectWithOptionsProps>) {
     const { t } = useLingui();
     // Note: struct fields don't have 'readonly', so isReadonlyField will return false for them
@@ -80,6 +81,8 @@ export function SelectWithOptions({
                 items={multiSelectItems}
                 placeholder={placeholder ? String(placeholder) : t`Select options`}
                 className={readOnly ? 'opacity-50 pointer-events-none' : ''}
+                disabled={readOnly}
+                {...controlProps}
             />
         );
     }
@@ -104,7 +107,7 @@ export function SelectWithOptions({
 
     return (
         <Select value={selectValue} onValueChange={handleValueChange} disabled={readOnly} items={selectItems}>
-            <SelectTrigger className="mb-0">
+            <SelectTrigger {...controlProps} className="mb-0">
                 <SelectValue placeholder={placeholder || <Trans>Select an option</Trans>} />
             </SelectTrigger>
             <SelectContent>

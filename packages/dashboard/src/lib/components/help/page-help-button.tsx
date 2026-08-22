@@ -94,8 +94,8 @@ export function PageHelpButton({ pageId }: Readonly<{ pageId?: string }>) {
                             </ul>
                         </section>
                         {topic.warning ? (
-                            <section className="border-s-2 border-amber-500 bg-amber-500/5 px-4 py-3">
-                                <div className="mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                            <section className="border-s-2 border-help-accent-border bg-help-accent-background px-4 py-3">
+                                <div className="mb-2 flex items-center gap-2 text-help-accent">
                                     <AlertTriangle className="size-4" />
                                     <h3 className="text-sm font-semibold">
                                         <Trans>Confirm before continuing</Trans>

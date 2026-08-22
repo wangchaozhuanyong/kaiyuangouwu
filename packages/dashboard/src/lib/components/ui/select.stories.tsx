@@ -1,11 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from './select.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select.js';
 
 const meta = {
     title: 'UI/Select',
@@ -22,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {
     render: () => (
         <Select defaultValue="option1">
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px]" aria-label="Option">
                 <SelectValue placeholder="Select an option" />
             </SelectTrigger>
             <SelectContent>

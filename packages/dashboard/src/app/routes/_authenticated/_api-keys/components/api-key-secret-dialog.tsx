@@ -1,7 +1,13 @@
 import { CopyableText } from '@/vdb/components/shared/copyable-text.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Checkbox } from '@/vdb/components/ui/checkbox.js';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/vdb/components/ui/dialog.js';
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/vdb/components/ui/dialog.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { DownloadIcon, TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -64,7 +70,9 @@ export function ApiKeySecretDialog({ open, apiKey, lookupId, onClose }: ApiKeySe
         <Dialog open={open} onOpenChange={handleDismissAttempt}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle><Trans>Your API Key</Trans></DialogTitle>
+                    <DialogTitle>
+                        <Trans>Your API Key</Trans>
+                    </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div
@@ -72,17 +80,19 @@ export function ApiKeySecretDialog({ open, apiKey, lookupId, onClose }: ApiKeySe
                         role="alert"
                         aria-live="assertive"
                     >
-                        <TriangleAlertIcon className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                        <TriangleAlertIcon className="h-5 w-5 text-warning-text shrink-0 mt-0.5" />
                         <p className="text-sm">
                             <Trans>
-                                This is the only time the full API key will be displayed.
-                                Copy or download it now — it cannot be retrieved later.
+                                This is the only time the full API key will be displayed. Copy or download it
+                                now — it cannot be retrieved later.
                             </Trans>
                         </p>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium"><Trans>API Key</Trans></label>
+                        <label className="text-sm font-medium">
+                            <Trans>API Key</Trans>
+                        </label>
                         <div className="rounded-md border bg-muted/50 p-3">
                             <CopyableText value={apiKey}>
                                 <code className="font-mono text-xs break-all select-all">{apiKey}</code>
@@ -92,7 +102,9 @@ export function ApiKeySecretDialog({ open, apiKey, lookupId, onClose }: ApiKeySe
 
                     {lookupId && (
                         <div className="space-y-2">
-                            <label className="text-sm font-medium"><Trans>Lookup ID</Trans></label>
+                            <label className="text-sm font-medium">
+                                <Trans>Lookup ID</Trans>
+                            </label>
                             <CopyableText value={lookupId}>
                                 <code className="font-mono text-xs">{lookupId}</code>
                             </CopyableText>

@@ -18,7 +18,7 @@ import { closestCenter, DndContext } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Table } from '@tanstack/react-table';
 import { GripVertical, Settings2 } from 'lucide-react';
 
@@ -59,6 +59,7 @@ function SortableItem({
 }
 
 export function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps<TData>) {
+    const { t } = useLingui();
     const { setTableSettings } = useUserSettings();
     const { getTranslatedFieldName } = useDynamicTranslations();
     const page = usePage();
@@ -104,6 +105,7 @@ export function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps
                                         size="icon-sm"
                                         className="ml-auto hidden lg:flex"
                                         data-testid="dt-column-settings-trigger"
+                                        aria-label={t`Column settings`}
                                     />
                                 }
                             />

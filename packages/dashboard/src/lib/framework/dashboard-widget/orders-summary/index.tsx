@@ -18,7 +18,11 @@ interface PercentageChangeProps {
 function PercentageChange({ value }: PercentageChangeProps) {
     const isZero = value === 0;
     const isPositive = value > 0;
-    const colorClass = isZero ? 'text-muted-foreground' : isPositive ? 'text-success' : 'text-destructive';
+    const colorClass = isZero
+        ? 'text-muted-foreground'
+        : isPositive
+          ? 'text-success-text'
+          : 'text-destructive';
     const arrow = isZero ? null : isPositive ? '↑' : '↓';
 
     return (

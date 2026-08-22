@@ -59,6 +59,6 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 - Current public IPv4 snapshot: `52.196.65.143`; SSH user: `ubuntu`. No current-instance private key is configured locally; use the access procedure in the deployment runbook.
 - Server repository: `/var/www/kaiyuangouwu`; branch: `main`; Vendure upstream: `127.0.0.1:3002`.
 - PM2 processes: `vendure-api` and `vendure-worker`.
-- Nginx storefront root: `/var/www/kaiyuangouwu/packages/storefront/dist`; the dashboard is served from `/var/www/kaiyuangouwu/packages/dev-server/dist/dashboard` by Vendure.
+- Nginx storefront root: `/var/www/kaiyuangouwu-current/packages/storefront/dist`; the dashboard is served from `/var/www/kaiyuangouwu-current/packages/dev-server/dist/dashboard` by Vendure. The stable pointer must reference a verified immutable release under `/var/www/kaiyuangouwu-releases`.
 - Never commit the SSH private key or credentials. If port 22 is closed, temporarily allow only the current public CIDR in the production security group, deploy, verify, and remove that temporary rule immediately.
 - Deploy only an isolated committed release. Build from a clean checkout of that commit, upload to a versioned candidate directory, verify checksums/health, atomically switch directories with a rollback directory, then confirm the public health endpoint and deployed Git SHA.

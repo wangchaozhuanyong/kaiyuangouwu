@@ -2,8 +2,8 @@ import { formatFileSize } from '@/vdb/lib/utils.js';
 
 import { Label } from '@/vdb/components/ui/label.js';
 import { AssetFragment } from '@/vdb/graphql/fragments.js';
-import { ExternalLink } from 'lucide-react';
 import { Trans } from '@lingui/react/macro';
+import { ExternalLink } from 'lucide-react';
 
 export interface AssetPropertiesProps {
     asset: AssetFragment;
@@ -20,7 +20,7 @@ export function AssetProperties({ asset }: Readonly<AssetPropertiesProps>) {
                     href={asset.source}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline"
+                    className="text-sm text-link hover:underline"
                 >
                     {asset.source.split('/').pop()}
                     <ExternalLink className="ml-1 h-3 w-3 inline" />

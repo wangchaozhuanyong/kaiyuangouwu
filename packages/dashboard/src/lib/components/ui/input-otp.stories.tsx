@@ -16,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
     render: () => (
-        <InputOTP maxLength={6} pattern={REGEXP_ONLY_DIGITS_AND_CHARS}>
+        <InputOTP maxLength={6} pattern={REGEXP_ONLY_DIGITS_AND_CHARS} aria-label="Verification code">
             <InputOTPGroup>
                 <InputOTPSlot index={0} />
                 <InputOTPSlot index={1} />

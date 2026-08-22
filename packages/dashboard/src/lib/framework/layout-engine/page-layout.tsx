@@ -495,11 +495,16 @@ export function PageActionBar({
             break;
         }
     }
-    let visibleMergedItems = mergedItems;
-    if (isMobile && mergedItems.length >= 2) {
-        visibleMergedItems =
-            primaryItemIndex >= 0 ? [mergedItems[primaryItemIndex]] : [mergedItems[mergedItems.length - 1]];
-    }
+    const visibleMergedItems = isMobile
+        ? primaryItemIndex >= 0
+            ? [mergedItems[primaryItemIndex]]
+            : []
+        : mergedItems;
+    const visiblePlainChildren = isMobile
+        ? primaryItemIndex < 0 && plainChildren.length > 0
+            ? [plainChildren[plainChildren.length - 1]]
+            : []
+        : plainChildren;
 
     const renderMergedItem = (mergedItem: MergedActionBarItem, index: number) => {
         if (mergedItem.type === 'inline') {
@@ -522,11 +527,9 @@ export function PageActionBar({
             {leftContent.length > 0 && <div className="flex justify-start gap-2">{leftContent}</div>}
             {hasRightContent && (
                 <div className="flex justify-end gap-2">
-                    {/* Plain children only on desktop */}
-                    {!isMobile &&
-                        plainChildren.map((child, index) => (
-                            <React.Fragment key={`plain-${index}`}>{child}</React.Fragment>
-                        ))}
+                    {visiblePlainChildren.map((child, index) => (
+                        <React.Fragment key={`plain-${index}`}>{child}</React.Fragment>
+                    ))}
                     {/* Merged ActionBarItem children (filtered on mobile) */}
                     {visibleMergedItems.map((mergedItem, index) => renderMergedItem(mergedItem, index))}
                     {actionBarDropdownItems.length > 0 && (
@@ -723,7 +726,7 @@ function EntityInfoDropdown({ entity }: Readonly<{ entity: any }>) {
                                 className="p-1 hover:bg-muted rounded-sm transition-colors"
                             >
                                 {copiedField === 'id' ? (
-                                    <CheckIcon className="h-3 w-3 text-success" />
+                                    <CheckIcon className="h-3 w-3 text-success-text" />
                                 ) : (
                                     <CopyIcon className="h-3 w-3" />
                                 )}

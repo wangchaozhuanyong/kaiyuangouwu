@@ -175,7 +175,7 @@ export function StructFormInput({ fieldDef, disabled, ...field }: Readonly<Dashb
             case 'boolean':
                 return (
                     <span
-                        className={`inline-flex items-center ${value ? 'text-success' : 'text-destructive'}`}
+                        className={`inline-flex items-center ${value ? 'text-success-text' : 'text-destructive'}`}
                     >
                         {value ? <CheckIcon className="h-4 w-4" /> : <X className="h-4 w-4" />}
                     </span>

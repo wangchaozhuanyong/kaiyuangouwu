@@ -427,7 +427,7 @@ function ChannelDetailPage() {
                             <div key={step.label} className="flex items-center gap-2.5 text-sm">
                                 {step.complete ? (
                                     <CheckCircle2
-                                        className="size-4 shrink-0 text-success"
+                                        className="size-4 shrink-0 text-success-text"
                                         aria-hidden="true"
                                     />
                                 ) : (

@@ -1,4 +1,5 @@
-import { useLingui } from '@lingui/react';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import {
     Alert,
     AlertDescription,
@@ -59,54 +60,52 @@ interface ModerationDraft {
     response: string;
 }
 
-const zhCopy = {
-    title: '评价审核',
-    description: '审核当前店铺的已购商品评价。只有通过后才会在商品页公开展示。',
-    refresh: '刷新',
-    filter: '状态筛选',
-    all: '全部状态',
-    activeChannel: '当前店铺',
-    empty: '当前筛选条件下没有评价',
-    loadError: '评价加载失败',
-    retry: '重试',
-    verified: '已验证购买',
-    approve: '通过并发布',
-    reject: '驳回',
-    response: '商家回复 / 处理说明',
-    responseHint: '通过时可选填写公开回复；驳回时必须填写原因。',
-    cancel: '取消',
-    confirm: '确认处理',
-    processing: '正在处理',
-    rejectionRequired: '驳回原因至少需要 3 个字符',
-    responseTooLong: '回复不能超过 2000 个字符',
-    updated: '评价状态已更新',
-    page: '页',
+const messages = {
+    title: msg({ id: 'operations.reviews.title', message: 'Review moderation' }),
+    description: msg({
+        id: 'operations.reviews.description',
+        message:
+            'Moderate verified-purchase reviews for the active store. Only approved reviews appear publicly.',
+    }),
+    refresh: msg({ id: 'operations.reviews.refresh', message: 'Refresh' }),
+    filter: msg({ id: 'operations.reviews.filter', message: 'Status filter' }),
+    all: msg({ id: 'operations.reviews.all', message: 'All statuses' }),
+    activeChannel: msg({ id: 'operations.reviews.activeStore', message: 'Active store' }),
+    empty: msg({ id: 'operations.reviews.empty', message: 'No reviews match this filter' }),
+    loadError: msg({ id: 'operations.reviews.loadError', message: 'Could not load reviews' }),
+    retry: msg({ id: 'operations.reviews.retry', message: 'Retry' }),
+    verified: msg({ id: 'operations.reviews.verified', message: 'Verified purchase' }),
+    approve: msg({ id: 'operations.reviews.approve', message: 'Approve and publish' }),
+    reject: msg({ id: 'operations.reviews.reject', message: 'Reject' }),
+    response: msg({
+        id: 'operations.reviews.response',
+        message: 'Store response / moderation note',
+    }),
+    responseHint: msg({
+        id: 'operations.reviews.responseHint',
+        message: 'An approval response is optional and public. A rejection reason is required.',
+    }),
+    cancel: msg({ id: 'operations.reviews.cancel', message: 'Cancel' }),
+    confirm: msg({ id: 'operations.reviews.confirm', message: 'Confirm' }),
+    processing: msg({ id: 'operations.reviews.processing', message: 'Processing' }),
+    rejectionRequired: msg({
+        id: 'operations.reviews.rejectionRequired',
+        message: 'A rejection reason of at least 3 characters is required',
+    }),
+    responseTooLong: msg({
+        id: 'operations.reviews.responseTooLong',
+        message: 'The response cannot exceed 2000 characters',
+    }),
+    updated: msg({ id: 'operations.reviews.updated', message: 'Review status updated' }),
+    page: msg({ id: 'operations.reviews.page', message: 'Page' }),
+    previousPage: msg({ id: 'operations.reviews.previousPage', message: 'Previous page' }),
+    nextPage: msg({ id: 'operations.reviews.nextPage', message: 'Next page' }),
+    statePending: msg({ id: 'operations.reviews.state.pending', message: 'Pending' }),
+    stateApproved: msg({ id: 'operations.reviews.state.approved', message: 'Published' }),
+    stateRejected: msg({ id: 'operations.reviews.state.rejected', message: 'Rejected' }),
 };
 
-const enCopy: typeof zhCopy = {
-    title: 'Review moderation',
-    description:
-        'Moderate verified-purchase reviews for the active store. Only approved reviews appear publicly.',
-    refresh: 'Refresh',
-    filter: 'Status filter',
-    all: 'All statuses',
-    activeChannel: 'Active store',
-    empty: 'No reviews match this filter',
-    loadError: 'Could not load reviews',
-    retry: 'Retry',
-    verified: 'Verified purchase',
-    approve: 'Approve and publish',
-    reject: 'Reject',
-    response: 'Store response / moderation note',
-    responseHint: 'An approval response is optional and public. A rejection reason is required.',
-    cancel: 'Cancel',
-    confirm: 'Confirm',
-    processing: 'Processing',
-    rejectionRequired: 'A rejection reason of at least 3 characters is required',
-    responseTooLong: 'The response cannot exceed 2000 characters',
-    updated: 'Review status updated',
-    page: 'Page',
-};
+type ReviewText = Record<keyof typeof messages, string>;
 
 const states: ReviewState[] = ['PENDING', 'APPROVED', 'REJECTED'];
 const PAGE_SIZE = 30;
@@ -116,19 +115,18 @@ export const reviewModerationRoute: DashboardRouteDefinition = {
         sectionId: 'sales',
         id: 'review-moderation',
         url: '/review-moderation',
-        title: '评价审核',
+        title: messages.title.id,
         icon: MessageSquareText,
         requiresPermission: ['UpdateCatalog'],
     },
     path: '/review-moderation',
-    loader: () => ({ breadcrumb: () => '评价审核' }),
+    loader: () => ({ breadcrumb: () => messages.title.id }),
     component: () => <ReviewModerationPage />,
 };
 
 function ReviewModerationPage() {
-    const { i18n } = useLingui();
-    const isZh = i18n.locale.toLowerCase().startsWith('zh');
-    const text = isZh ? zhCopy : enCopy;
+    const { t } = useLingui();
+    const text = translateMessages(t);
     const { activeChannel } = useChannel();
     const [state, setState] = useState<ReviewState | 'ALL'>('PENDING');
     const [skip, setSkip] = useState(0);
@@ -136,9 +134,9 @@ function ReviewModerationPage() {
     const query = useQuery({
         queryKey: ['operations-review-moderation', activeChannel?.id, state, skip],
         queryFn: () =>
-            api.query(reviewsQuery, {
+            api.query<ReviewsResult>(reviewsQuery, {
                 options: { skip, take: PAGE_SIZE, ...(state === 'ALL' ? {} : { state }) },
-            }) as Promise<ReviewsResult>,
+            }),
         enabled: Boolean(activeChannel?.id),
     });
     const reviews = query.data?.storefrontReviews.items ?? [];
@@ -200,7 +198,7 @@ function ReviewModerationPage() {
                                 value={state}
                                 onValueChange={value => {
                                     if (!value) return;
-                                    setState(value as ReviewState | 'ALL');
+                                    setState(value);
                                     setSkip(0);
                                 }}
                             >
@@ -211,7 +209,7 @@ function ReviewModerationPage() {
                                     <SelectItem value="ALL">{text.all}</SelectItem>
                                     {states.map(item => (
                                         <SelectItem key={item} value={item}>
-                                            {stateLabel(item, isZh)}
+                                            {stateLabel(item, text)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -246,7 +244,6 @@ function ReviewModerationPage() {
                                     <ReviewCard
                                         key={review.id}
                                         review={review}
-                                        isZh={isZh}
                                         text={text}
                                         pending={moderation.isPending}
                                         onModerate={target =>
@@ -263,7 +260,7 @@ function ReviewModerationPage() {
                                 <Button
                                     variant="outline"
                                     size="icon"
-                                    aria-label={isZh ? '上一页' : 'Previous page'}
+                                    aria-label={text.previousPage}
                                     disabled={skip === 0 || query.isFetching}
                                     onClick={() => setSkip(value => Math.max(0, value - PAGE_SIZE))}
                                 >
@@ -275,7 +272,7 @@ function ReviewModerationPage() {
                                 <Button
                                     variant="outline"
                                     size="icon"
-                                    aria-label={isZh ? '下一页' : 'Next page'}
+                                    aria-label={text.nextPage}
                                     disabled={skip + PAGE_SIZE >= totalItems || query.isFetching}
                                     onClick={() => setSkip(value => value + PAGE_SIZE)}
                                 >
@@ -288,7 +285,6 @@ function ReviewModerationPage() {
             </PageLayout>
             <ModerationDialog
                 draft={draft}
-                isZh={isZh}
                 text={text}
                 pending={moderation.isPending}
                 onChange={setDraft}
@@ -301,14 +297,12 @@ function ReviewModerationPage() {
 
 function ReviewCard({
     review,
-    isZh,
     text,
     pending,
     onModerate,
 }: {
     review: ReviewRecord;
-    isZh: boolean;
-    text: typeof zhCopy;
+    text: ReviewText;
     pending: boolean;
     onModerate: (target: ModerationTarget) => void;
 }) {
@@ -318,7 +312,7 @@ function ReviewCard({
                 <div>
                     <div className="flex flex-wrap items-center gap-2">
                         <strong>{review.productName}</strong>
-                        <Badge variant={badgeVariant(review.state)}>{stateLabel(review.state, isZh)}</Badge>
+                        <Badge variant={badgeVariant(review.state)}>{stateLabel(review.state, text)}</Badge>
                         <Badge variant="outline">{review.sku}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -366,7 +360,6 @@ function ReviewCard({
 
 function ModerationDialog({
     draft,
-    isZh,
     text,
     pending,
     onChange,
@@ -374,8 +367,7 @@ function ModerationDialog({
     onSubmit,
 }: {
     draft: ModerationDraft | null;
-    isZh: boolean;
-    text: typeof zhCopy;
+    text: ReviewText;
     pending: boolean;
     onChange: (draft: ModerationDraft | null) => void;
     onClose: () => void;
@@ -419,13 +411,19 @@ function ModerationDialog({
     );
 }
 
-function stateLabel(state: ReviewState, isZh: boolean): string {
-    const labels: Record<ReviewState, [string, string]> = {
-        PENDING: ['待审核', 'Pending'],
-        APPROVED: ['已发布', 'Published'],
-        REJECTED: ['已驳回', 'Rejected'],
+function translateMessages(t: ReturnType<typeof useLingui>['t']): ReviewText {
+    return Object.fromEntries(
+        Object.entries(messages).map(([key, descriptor]) => [key, t(descriptor)]),
+    ) as ReviewText;
+}
+
+function stateLabel(state: ReviewState, text: ReviewText): string {
+    const labels: Record<ReviewState, string> = {
+        PENDING: text.statePending,
+        APPROVED: text.stateApproved,
+        REJECTED: text.stateRejected,
     };
-    return labels[state][isZh ? 0 : 1];
+    return labels[state];
 }
 
 function badgeVariant(state: ReviewState): 'default' | 'secondary' | 'destructive' {

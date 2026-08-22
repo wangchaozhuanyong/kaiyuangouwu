@@ -30,6 +30,7 @@ export type AffixedInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>
  */
 export function AffixedInput({ prefix, suffix, className = '', ...props }: Readonly<AffixedInputProps>) {
     const readOnly = props.disabled || isReadonlyField(props.fieldDef);
+    const { fieldDef: _fieldDef, disabled: _disabled, style: inputStyle, ...controlProps } = props;
     const prefixRef = useRef<HTMLSpanElement>(null);
     const suffixRef = useRef<HTMLSpanElement>(null);
     const [prefixWidth, setPrefixWidth] = useState(0);
@@ -45,6 +46,7 @@ export function AffixedInput({ prefix, suffix, className = '', ...props }: Reado
     }, [prefix, suffix]);
 
     const style = {
+        ...inputStyle,
         paddingLeft: prefix ? `calc(1rem + ${prefixWidth}px)` : undefined,
         paddingRight: suffix ? `calc(1rem + ${suffixWidth}px)` : undefined,
     };
@@ -56,21 +58,7 @@ export function AffixedInput({ prefix, suffix, className = '', ...props }: Reado
                     {prefix}
                 </span>
             )}
-            <Input
-                value={props.value}
-                onChange={props.onChange}
-                onBlur={props.onBlur}
-                onFocus={props.onFocus}
-                onKeyDown={props.onKeyDown}
-                type={props.type}
-                ref={props.ref}
-                className={className}
-                style={style}
-                disabled={readOnly}
-                min={props.min}
-                max={props.max}
-                step={props.step}
-            />
+            <Input {...controlProps} className={className} style={style} disabled={readOnly} />
             {suffix && (
                 <span ref={suffixRef} className="absolute right-3 text-muted-foreground whitespace-nowrap">
                     {suffix}

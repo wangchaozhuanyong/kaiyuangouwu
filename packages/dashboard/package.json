@@ -19,9 +19,10 @@
         "build:vite": "tsc --project tsconfig.vite.json",
         "build:plugin": "tsc --project tsconfig.plugin.json && node scripts/build-plugin.js",
         "build:lib": "vite build --config vite.lib.config.mts",
-        "build": "npm run check-types && npm run build:vite && npm run build:plugin && npm run build:lib",
+        "build": "npm run check-types && npm run build:vite && npm run build:plugin && npm run build:lib && node scripts/check-production-bundle.mjs",
         "watch": "tsc --project tsconfig.vite.json --watch",
         "test": "vitest run",
+        "test:storybook": "vitest run --config vitest.storybook.config.mts",
         "audit:bundle": "cross-env RUN_BUNDLE_AUDIT=true vitest run vite/tests/bundle-singleton.spec.ts vite/tests/bundle-singleton-dev-serving.spec.ts",
         "lint": "eslint .",
         "preview": "vite preview",
@@ -39,7 +40,7 @@
         "storybook": "storybook dev -p 6006",
         "e2e:pw": "playwright test --config e2e/playwright.config.ts",
         "e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",
-        "storybook:build": "storybook build",
+        "storybook:build": "storybook build && node scripts/check-storybook-bundle.mjs",
         "storybook:deploy": "npm run build --prefix ../common && npm run build --prefix ../core && npm run build:vite && storybook build"
     },
     "module": "./src/lib/index.ts",
@@ -70,6 +71,7 @@
         "index.html"
     ],
     "dependencies": {
+        "@base-ui/react": "^1.2.0",
         "@babel/core": "^7.29.0",
         "@babel/preset-react": "^7.28.5",
         "@babel/preset-typescript": "^7.28.5",

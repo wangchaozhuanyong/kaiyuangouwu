@@ -91,6 +91,9 @@ export function FormFieldWrapper<
                 render={renderArgs => {
                     const { fieldState } = renderArgs;
                     const fieldId = `field-${name}`;
+                    const descriptionId = description ? `${fieldId}-description` : undefined;
+                    const errorId = fieldState.invalid ? `${fieldId}-error` : undefined;
+                    const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
                     return (
                         <Field data-invalid={fieldState.invalid || undefined}>
                             {label && (
@@ -104,11 +107,15 @@ export function FormFieldWrapper<
                                     ? applyControlProps(render(renderArgs), {
                                           id: fieldId,
                                           'aria-invalid': fieldState.invalid || undefined,
+                                          'aria-describedby': describedBy,
+                                          'aria-errormessage': errorId,
                                       })
                                     : render(renderArgs)}
                             </OverriddenFormComponent>
-                            {description && <FieldDescription>{description}</FieldDescription>}
-                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            {description && (
+                                <FieldDescription id={descriptionId}>{description}</FieldDescription>
+                            )}
+                            {fieldState.invalid && <FieldError id={errorId} errors={[fieldState.error]} />}
                         </Field>
                     );
                 }}

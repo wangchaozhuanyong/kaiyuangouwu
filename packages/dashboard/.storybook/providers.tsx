@@ -1,14 +1,16 @@
-import { api } from '@/vdb/graphql/api.js';
+import { AuthContext, type AuthContext as AuthContextValue } from '@/vdb/providers/auth.js';
 import {
-    getSettingsStoreValueDocument,
-    setSettingsStoreValueDocument,
-} from '@/vdb/graphql/settings-store-operations.js';
-import { useAuth } from '@/vdb/hooks/use-auth.js';
-import { AuthProvider } from '@/vdb/providers/auth.js';
-import { ChannelProvider } from '@/vdb/providers/channel-provider.js';
+    ChannelContext,
+    type Channel,
+    type ChannelContext as ChannelContextValue,
+} from '@/vdb/providers/channel-provider.js';
 import { I18nProvider } from '@/vdb/providers/i18n-provider.js';
-import { ThemeProvider } from '@/vdb/providers/theme-provider.js';
-import { UserSettingsProvider } from '@/vdb/providers/user-settings.js';
+import { Theme, ThemeProvider } from '@/vdb/providers/theme-provider.js';
+import {
+    UserSettingsContext,
+    type UserSettings,
+    type UserSettingsContextType,
+} from '@/vdb/providers/user-settings.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
     AnyRoute,
@@ -18,46 +20,138 @@ import {
     createRouter,
     RouterProvider,
 } from '@tanstack/react-router';
-import { PropsWithChildren, useEffect } from 'react';
-
-// Initialize API mocks for Storybook
-mockUserSettingsApi();
+import { PropsWithChildren, useMemo, useState } from 'react';
 
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
-            staleTime: 1000 * 60 * 5,
+            retry: false,
+            staleTime: Infinity,
             networkMode: 'offlineFirst',
         },
     },
 });
 
+const storybookChannel = {
+    id: '1',
+    code: 'default-channel',
+    token: 'storybook-channel',
+    defaultLanguageCode: 'en',
+    defaultCurrencyCode: 'USD',
+    pricesIncludeTax: false,
+    availableLanguageCodes: ['en'],
+    availableCurrencyCodes: ['USD'],
+} as Channel;
+
+const storybookAuth: AuthContextValue = {
+    status: 'authenticated',
+    isAuthenticated: true,
+    user: undefined,
+    channels: [
+        {
+            id: storybookChannel.id,
+            code: storybookChannel.code,
+            token: storybookChannel.token,
+            permissions: ['SuperAdmin'],
+        },
+    ] as NonNullable<AuthContextValue['channels']>,
+    login: (_username, _password, onSuccess) => onSuccess?.(),
+    logout: async onSuccess => onSuccess?.(),
+    refreshCurrentUser: () => undefined,
+};
+
+const storybookChannelContext: ChannelContextValue = {
+    isLoading: false,
+    channels: [storybookChannel],
+    activeChannel: {
+        ...storybookChannel,
+        defaultTaxZone: { id: '1' },
+    } as NonNullable<ChannelContextValue['activeChannel']>,
+    setActiveChannel: () => undefined,
+    refreshChannels: () => undefined,
+};
+
+const initialSettings: UserSettings = {
+    displayLanguage: 'en',
+    displayLocale: 'US',
+    contentLanguage: 'en',
+    theme: 'system',
+    displayUiExtensionPoints: false,
+    mainNavExpanded: true,
+    activeChannelId: storybookChannel.id,
+    devMode: false,
+    hasSeenOnboarding: true,
+    tableSettings: {},
+    widgetLayout: {},
+};
+
+function StorybookUserSettingsProvider({ children }: PropsWithChildren) {
+    const [settings, setSettings] = useState<UserSettings>(initialSettings);
+
+    const value = useMemo<UserSettingsContextType>(
+        () => ({
+            settingsStoreIsAvailable: false,
+            settings,
+            setDisplayLanguage: displayLanguage => setSettings(current => ({ ...current, displayLanguage })),
+            setDisplayLocale: displayLocale => setSettings(current => ({ ...current, displayLocale })),
+            setContentLanguage: contentLanguage => setSettings(current => ({ ...current, contentLanguage })),
+            setTheme: theme => setSettings(current => ({ ...current, theme })),
+            setDisplayUiExtensionPoints: displayUiExtensionPoints =>
+                setSettings(current => ({ ...current, displayUiExtensionPoints })),
+            setMainNavExpanded: mainNavExpanded => setSettings(current => ({ ...current, mainNavExpanded })),
+            setActiveChannelId: activeChannelId => setSettings(current => ({ ...current, activeChannelId })),
+            setDevMode: devMode => setSettings(current => ({ ...current, devMode })),
+            setHasSeenOnboarding: hasSeenOnboarding =>
+                setSettings(current => ({ ...current, hasSeenOnboarding })),
+            setTableSettings: (tableId, key, tableValue) =>
+                setSettings(current => ({
+                    ...current,
+                    tableSettings: {
+                        ...current.tableSettings,
+                        [tableId]: {
+                            ...current.tableSettings?.[tableId],
+                            [key]: tableValue,
+                        },
+                    },
+                })),
+            setWidgetLayout: widgetLayout => setSettings(current => ({ ...current, widgetLayout })),
+        }),
+        [settings],
+    );
+
+    return <UserSettingsContext.Provider value={value}>{children}</UserSettingsContext.Provider>;
+}
+
 /**
- * These providers are required for all stories and are set in the preview.tsx file
- * @param children
- * @constructor
+ * Deterministic Storybook providers. They deliberately avoid the real AuthProvider,
+ * ChannelProvider and UserSettingsProvider so rendering a story never logs into or
+ * fetches from a Vendure server as a side effect.
  */
-export function CommonProviders({ children }: { children: React.ReactNode }) {
+export function CommonProviders({
+    children,
+    defaultTheme = 'light',
+}: {
+    children: React.ReactNode;
+    defaultTheme?: Theme;
+}) {
     return (
         <QueryClientProvider client={queryClient}>
-            <UserSettingsProvider queryClient={queryClient}>
-                <AuthProvider>
-                    <DemoAuthProvider>
-                        <I18nProvider>
-                            <ThemeProvider defaultTheme="light">
-                                <ChannelProvider>{children}</ChannelProvider>
-                            </ThemeProvider>
-                        </I18nProvider>
-                    </DemoAuthProvider>
-                </AuthProvider>
-            </UserSettingsProvider>
+            <StorybookUserSettingsProvider>
+                <AuthContext.Provider value={storybookAuth}>
+                    <I18nProvider>
+                        <ThemeProvider defaultTheme={defaultTheme}>
+                            <ChannelContext.Provider value={storybookChannelContext}>
+                                {children}
+                            </ChannelContext.Provider>
+                        </ThemeProvider>
+                    </I18nProvider>
+                </AuthContext.Provider>
+            </StorybookUserSettingsProvider>
         </QueryClientProvider>
     );
 }
 
-/**
- * Required by some stories that need a Tanstack Router Route object
- */
+/** Required by stories that need a Tanstack Router Route object. */
 export function createDemoRoute(path?: string, initialPath?: string) {
     const rootRoute = createRootRoute();
     const route = createRoute({
@@ -75,9 +169,7 @@ export function createDemoRoute(path?: string, initialPath?: string) {
     return { route, router };
 }
 
-/**
- * A wrapper around components that need a Tanstack Router context
- */
+/** A wrapper around components that need a Tanstack Router context. */
 export function DemoRouterProvider(props: {
     path?: string;
     initialPath?: string;
@@ -99,87 +191,4 @@ export function DemoRouterProvider(props: {
     });
 
     return <RouterProvider router={router} />;
-}
-
-/**
- * Provides a logged in superadmin user
- */
-export function DemoAuthProvider({ children }: PropsWithChildren) {
-    const { login, isAuthenticated } = useAuth();
-
-    const username = import.meta.env.VITE_ADMIN_USERNAME ?? 'admin';
-    const password = import.meta.env.VITE_ADMIN_PASSWORD ?? 'admin';
-
-    useEffect(() => {
-        if (!isAuthenticated) {
-            login(username, password);
-        }
-    }, [isAuthenticated]);
-    return children;
-}
-
-/**
- * Mocks the user settings API calls to prevent unnecessary network requests in Storybook.
- *
- * This function intercepts GraphQL queries and mutations for user settings by monkey-patching
- * the `api.query` and `api.mutate` functions. It provides instant mock responses for:
- *
- * 1. **GetSettingsStoreValue query**: Returns mock user settings data
- * 2. **SetSettingsStoreValue mutation**: Returns a mock success response
- *
- * All other GraphQL operations are passed through to the original implementation unchanged.
- *
- * @remarks
- * This is necessary because the UserSettingsProvider uses `staleTime: 0` in its useQuery,
- * which would cause the query to refetch on every story render. By mocking at the API level,
- * we avoid these unnecessary network calls while still allowing the provider to function
- * normally for demonstration purposes.
- */
-function mockUserSettingsApi() {
-    // Mock user settings data
-    const mockUserSettings = {
-        displayLanguage: 'en',
-        contentLanguage: 'en',
-        theme: 'system',
-        displayUiExtensionPoints: false,
-        mainNavExpanded: true,
-        activeChannelId: '1',
-        devMode: false,
-        hasSeenOnboarding: false,
-        tableSettings: {},
-    };
-
-    // Mock the query function to intercept GetSettingsStoreValue
-    const originalQuery = api.query.bind(api);
-    api.query = ((document: any, variables?: any) => {
-        // Intercept the user settings query and return mock data immediately
-        if (
-            document === getSettingsStoreValueDocument &&
-            variables?.key === 'vendure.dashboard.userSettings'
-        ) {
-            return Promise.resolve({ getSettingsStoreValue: mockUserSettings });
-        }
-        // Pass through all other queries to the original implementation
-        return originalQuery(document, variables);
-    }) as typeof api.query;
-
-    // Mock the mutate function to intercept SetSettingsStoreValue
-    const originalMutate = api.mutate.bind(api);
-    api.mutate = ((document: any, variables?: any) => {
-        // Intercept the user settings mutation and return mock success response
-        if (
-            document === setSettingsStoreValueDocument &&
-            variables?.input?.key === 'vendure.dashboard.userSettings'
-        ) {
-            return Promise.resolve({
-                setSettingsStoreValue: {
-                    key: 'vendure.dashboard.userSettings',
-                    result: true,
-                    error: null,
-                },
-            });
-        }
-        // Pass through all other mutations to the original implementation
-        return originalMutate(document, variables);
-    }) as typeof api.mutate;
 }

@@ -10,17 +10,24 @@ import { getInputComponent } from '@/vdb/framework/extension-api/input-component
 import {
     ConfigurableFieldDef,
     DashboardFormComponent,
+    DashboardFormComponentProps,
 } from '@/vdb/framework/form-engine/form-engine-types.js';
 import { isCustomFieldConfig } from '@/vdb/framework/form-engine/utils.js';
 import { DefaultInputForType } from './default-input-for-type.js';
 import { selectListInputComponent } from './list-input-selection.js';
 import { transformValue, ValueMode } from './value-transformers.js';
 
-export interface FormControlAdapterProps {
+type FormControlAdapterControlProps = Omit<
+    DashboardFormComponentProps,
+    keyof ControllerRenderProps<any, any> | 'fieldDef'
+>;
+
+export type FormControlAdapterProps = FormControlAdapterControlProps & {
     fieldDef: ConfigurableFieldDef;
     field: ControllerRenderProps<any, any>;
     valueMode: ValueMode;
-}
+    placeholder?: string;
+};
 
 /**
  * Gets the default value for list inputs based on field type
@@ -148,7 +155,12 @@ function renderListField(
  * - Custom field forms
  * - Configurable operation forms
  */
-export function FormControlAdapter({ fieldDef, field, valueMode, ...rest }: Readonly<FormControlAdapterProps> & { placeholder?: string }) {
+export function FormControlAdapter({
+    fieldDef,
+    field,
+    valueMode,
+    ...controlProps
+}: Readonly<FormControlAdapterProps>) {
     const isList = fieldDef.list ?? false;
     const isReadonly = isCustomFieldConfig(fieldDef) ? fieldDef.readonly === true : false;
     const componentId = fieldDef.ui?.component as string | undefined;
@@ -170,7 +182,7 @@ export function FormControlAdapter({ fieldDef, field, valueMode, ...rest }: Read
 
     // Try to use custom component if available and compatible
     if (canUseCustomComponent(CustomComponent, isList)) {
-        return <CustomComponent {...fieldWithTransform} fieldDef={fieldDef} />;
+        return <CustomComponent {...fieldWithTransform} fieldDef={fieldDef} {...controlProps} />;
     }
 
     // Validate custom component configuration for debugging
@@ -189,5 +201,5 @@ export function FormControlAdapter({ fieldDef, field, valueMode, ...rest }: Read
     }
 
     // Default case: non-list, non-struct fields
-    return <DefaultInputForType {...fieldWithTransform} fieldDef={fieldDef} {...rest} />;
+    return <DefaultInputForType {...fieldWithTransform} fieldDef={fieldDef} {...controlProps} />;
 }

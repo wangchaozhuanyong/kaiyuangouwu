@@ -155,8 +155,8 @@ export const Fallbacks: Story = {
                         asset={null}
                         preset="thumb"
                         fallback={
-                            <div className="w-[150px] h-[150px] bg-gray-200 flex items-center justify-center rounded-sm">
-                                <span className="text-gray-500">Custom Fallback</span>
+                            <div className="flex h-[150px] w-[150px] items-center justify-center rounded-sm bg-muted">
+                                <span className="text-foreground">Custom Fallback</span>
                             </div>
                         }
                     />

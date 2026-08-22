@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 
-import { formatBusinessDate } from '../utils/business-time.js';
+import { formatBusinessDate } from '@/vdb/utils/business-time.js';
 import { useDisplayLocale } from './use-display-locale.js';
 import { useServerConfig } from './use-server-config.js';
 

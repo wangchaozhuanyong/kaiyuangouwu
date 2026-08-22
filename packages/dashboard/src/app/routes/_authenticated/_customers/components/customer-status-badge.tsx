@@ -14,7 +14,7 @@ export function CustomerStatusBadge({ user }: Readonly<CustomerStatusBadgeProps>
         <Badge variant="outline">
             {status === 'verified' ? (
                 <div className="flex items-center gap-2">
-                    <BadgeCheck className="w-4 h-4 text-success" />
+                    <BadgeCheck className="w-4 h-4 text-success-text" />
                     <Trans>Verified</Trans>
                 </div>
             ) : status === 'registered' ? (

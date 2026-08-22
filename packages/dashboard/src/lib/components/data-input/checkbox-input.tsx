@@ -1,6 +1,6 @@
-import { Checkbox } from '../ui/checkbox.js';
 import { DashboardFormComponentProps } from '@/vdb/framework/form-engine/form-engine-types.js';
 import { isFieldDisabled } from '@/vdb/framework/form-engine/utils.js';
+import { Checkbox } from '../ui/checkbox.js';
 
 /**
  * @description
@@ -9,7 +9,13 @@ import { isFieldDisabled } from '@/vdb/framework/form-engine/utils.js';
  * @docsCategory form-components
  * @docsPage CheckboxInput
  */
-export function CheckboxInput({ value, onChange, fieldDef, disabled }: Readonly<DashboardFormComponentProps>) {
+export function CheckboxInput({
+    value,
+    onChange,
+    fieldDef,
+    disabled,
+    ...controlProps
+}: Readonly<DashboardFormComponentProps>) {
     const readOnly = isFieldDisabled(disabled, fieldDef);
-    return <Checkbox checked={value} onCheckedChange={onChange} disabled={readOnly} />;
+    return <Checkbox {...controlProps} checked={value} onCheckedChange={onChange} disabled={readOnly} />;
 }

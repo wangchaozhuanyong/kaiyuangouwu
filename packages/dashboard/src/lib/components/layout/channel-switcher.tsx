@@ -109,7 +109,7 @@ export function ChannelSwitcher() {
                         </div>
                     </div>
                     {isActive && (
-                        <span className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-primary">
+                        <span className="ms-auto inline-flex items-center gap-1 text-xs font-medium text-link">
                             <Check className="size-3.5" />
                             <Trans context="current channel">Current store</Trans>
                         </span>

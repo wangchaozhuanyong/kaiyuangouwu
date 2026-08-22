@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { Button } from './button.js';
 
 const meta = {
@@ -16,7 +17,7 @@ const meta = {
         },
         size: {
             control: 'select',
-            options: ['default', 'sm', 'lg', 'icon'],
+            options: ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm', 'icon-lg'],
             description: 'Button size',
         },
         disabled: {
@@ -34,5 +35,11 @@ export const Playground: Story = {
         variant: 'default',
         size: 'default',
         children: 'Button',
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        const button = canvas.getByRole('button', { name: 'Button' });
+        await userEvent.tab();
+        await expect(button).toHaveFocus();
     },
 };

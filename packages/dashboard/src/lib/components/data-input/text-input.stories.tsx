@@ -39,7 +39,7 @@ export const Playground: Story = {
     render: args => {
         const { register } = useForm();
         const field = register('text');
-        return <TextInput {...field} {...args} />;
+        return <TextInput {...field} {...args} aria-label="Text value" />;
     },
 };
 
@@ -47,6 +47,6 @@ export const LongText: Story = {
     render: () => {
         const { register } = useForm();
         const field = register('longText');
-        return <TextInput {...field} />;
+        return <TextInput {...field} aria-label="Long text" />;
     },
 };

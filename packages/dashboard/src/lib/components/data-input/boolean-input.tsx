@@ -9,8 +9,14 @@ import { isFieldDisabled } from '@/vdb/framework/form-engine/utils.js';
  * @docsCategory form-components
  * @docsPage BooleanInput
  */
-export function BooleanInput({ value, onChange, fieldDef, disabled }: Readonly<DashboardFormComponentProps>) {
+export function BooleanInput({
+    value,
+    onChange,
+    fieldDef,
+    disabled,
+    ...controlProps
+}: Readonly<DashboardFormComponentProps>) {
     const checked = typeof value === 'string' ? value === 'true' : value;
     const readOnly = isFieldDisabled(disabled, fieldDef);
-    return <Switch checked={checked} onCheckedChange={onChange} disabled={readOnly} />;
+    return <Switch {...controlProps} checked={checked} onCheckedChange={onChange} disabled={readOnly} />;
 }

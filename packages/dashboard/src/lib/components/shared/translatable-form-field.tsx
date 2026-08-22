@@ -179,9 +179,14 @@ export const TranslatableFormFieldWrapper = <
                 render={renderArgs => {
                     const { fieldState } = renderArgs;
                     const fieldId = `field-${String(name)}`;
+                    const descriptionId = description ? `${fieldId}-description` : undefined;
+                    const errorId = fieldState.invalid ? `${fieldId}-error` : undefined;
+                    const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
                     const controlProps: Record<string, unknown> = {
                         id: fieldId,
                         'aria-invalid': fieldState.invalid || undefined,
+                        'aria-describedby': describedBy,
+                        'aria-errormessage': errorId,
                     };
                     if (fallbackPlaceholder) {
                         controlProps.placeholder = fallbackPlaceholder;
@@ -199,8 +204,10 @@ export const TranslatableFormFieldWrapper = <
                                     ? applyControlProps(render(renderArgs), controlProps)
                                     : render(renderArgs)}
                             </OverriddenFormComponent>
-                            {description && <FieldDescription>{description}</FieldDescription>}
-                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            {description && (
+                                <FieldDescription id={descriptionId}>{description}</FieldDescription>
+                            )}
+                            {fieldState.invalid && <FieldError id={errorId} errors={[fieldState.error]} />}
                         </Field>
                     );
                 }}

@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'path';
 import { PluginOption } from 'vite';
@@ -403,10 +404,8 @@ export function vendureDashboardPlugin(options: VitePluginVendureDashboardOption
  * Returns the path to the root of the `@vendure/dashboard` package.
  */
 function getDashboardPackageRoot(): string {
-    // fileURLToPath (rather than URL.pathname) decodes percent-encoding, so paths
-    // containing e.g. spaces resolve correctly, and handles Windows drive letters.
-    const fileUrl = import.meta.resolve('@vendure/dashboard');
-    const packagePath = fileUrl.startsWith('file:') ? fileURLToPath(fileUrl) : fileUrl;
+    const moduleRequire = createRequire(import.meta.url);
+    const packagePath = moduleRequire.resolve('@vendure/dashboard');
     return path.join(packagePath, '../../../');
 }
 

@@ -42,6 +42,12 @@ export function DateTimeInput({
     onChange,
     fieldDef,
     disabled,
+    id,
+    name,
+    ref,
+    onBlur,
+    required,
+    ...accessibilityProps
 }: Readonly<DashboardFormComponentProps>) {
     const readOnly = isFieldDisabled(disabled, fieldDef);
     const locale = useDayPickerLocale();
@@ -76,14 +82,24 @@ export function DateTimeInput({
 
     return (
         <Popover open={isOpen} onOpenChange={readOnly ? undefined : setIsOpen}>
-            <PopoverTrigger nativeButton={false} render={<div className="flex items-center" />}>
-                <Button
-                    variant="outline"
-                    disabled={readOnly}
-                    className={cn(
-                        'flex-1 min-w-0 justify-start text-left font-normal',
-                        date ? 'rounded-r-none' : 'text-muted-foreground',
-                    )}
+            <div className="flex items-center">
+                <PopoverTrigger
+                    render={
+                        <Button
+                            {...accessibilityProps}
+                            id={id}
+                            name={name}
+                            ref={ref}
+                            onBlur={onBlur}
+                            aria-required={accessibilityProps['aria-required'] ?? (required || undefined)}
+                            variant="outline"
+                            disabled={readOnly}
+                            className={cn(
+                                'flex-1 min-w-0 justify-start text-left font-normal',
+                                date ? 'rounded-r-none' : 'text-muted-foreground',
+                            )}
+                        />
+                    }
                 >
                     <CalendarClock className="mr-2 h-4 w-4 shrink-0" />
                     <span className="truncate">
@@ -98,21 +114,22 @@ export function DateTimeInput({
                               })
                             : t`DD/MM/YYYY HH:mm`}
                     </span>
-                </Button>
+                </PopoverTrigger>
                 {date ? (
                     <Button
+                        type="button"
                         variant="outline"
                         disabled={readOnly}
                         className="shrink-0 rounded-l-none border-l-0"
-                        onClick={e => {
-                            e.stopPropagation();
+                        aria-label={t`Clear date and time`}
+                        onClick={() => {
                             onChange(null);
                         }}
                     >
                         <X />
                     </Button>
                 ) : null}
-            </PopoverTrigger>
+            </div>
             <PopoverContent className="w-auto p-0">
                 <div className="sm:flex">
                     <Calendar
@@ -133,6 +150,7 @@ export function DateTimeInput({
                                             date && new Date(date).getHours() === hour ? 'default' : 'ghost'
                                         }
                                         className="sm:w-full shrink-0 aspect-square"
+                                        aria-label={t`Set hour to ${hour}`}
                                         onClick={() => handleTimeChange('hour', hour.toString())}
                                     >
                                         {hour}
@@ -153,6 +171,7 @@ export function DateTimeInput({
                                                 : 'ghost'
                                         }
                                         className="sm:w-full shrink-0 aspect-square"
+                                        aria-label={t`Set minute to ${minute}`}
                                         onClick={() => handleTimeChange('minute', minute.toString())}
                                     >
                                         {minute}

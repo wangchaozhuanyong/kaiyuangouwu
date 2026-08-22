@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from './button.js';
 import {
     Dialog,
@@ -46,5 +47,15 @@ export const Playground: Story = {
                 </DialogContent>
             </Dialog>
         );
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole('button', { name: 'Open Dialog' }));
+
+        const page = within(canvasElement.ownerDocument.body);
+        const dialog = await page.findByRole('dialog', { name: 'Dialog Title' });
+        await expect(dialog).toHaveAttribute('data-open');
+        await userEvent.keyboard('{Escape}');
+        await waitFor(() => expect(dialog).toHaveAttribute('data-closed'));
     },
 };
