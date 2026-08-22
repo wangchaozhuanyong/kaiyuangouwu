@@ -31,7 +31,7 @@ const zhCopy = {
     description: '当前账号使用的是一次性临时密码。完成修改后才能进入店铺后台。',
     password: '新密码',
     confirm: '确认新密码',
-    requirement: '至少 12 位，并同时包含字母、数字和符号。',
+    requirement: '至少 8 位，并同时包含字母、数字和符号。',
     mismatch: '两次输入的密码不一致',
     invalid: '密码不符合安全要求',
     submit: '确认并进入后台',
@@ -47,7 +47,7 @@ const enCopy: typeof zhCopy = {
     description: 'This account is using a one-time temporary password. Change it before continuing.',
     password: 'New password',
     confirm: 'Confirm new password',
-    requirement: 'Use at least 12 characters with letters, numbers, and symbols.',
+    requirement: 'Use at least 8 characters with letters, numbers, and symbols.',
     mismatch: 'The passwords do not match',
     invalid: 'The password does not meet the security requirements',
     submit: 'Update and continue',
@@ -65,10 +65,11 @@ export function MerchantPasswordGate({ children }: Readonly<{ children: ReactNod
     const queryClient = useQueryClient();
     const [password, setPassword] = useState('');
     const [confirmation, setConfirmation] = useState('');
+    const [validationAttempted, setValidationAttempted] = useState(false);
+    const [submissionError, setSubmissionError] = useState<string | null>(null);
     const statusQuery = useQuery({
         queryKey: statusQueryKey,
-        queryFn: () =>
-            api.query(merchantInitialPasswordStatusQuery) as Promise<MerchantInitialPasswordStatusResult>,
+        queryFn: () => api.query<MerchantInitialPasswordStatusResult>(merchantInitialPasswordStatusQuery),
         enabled: isAuthenticated,
         retry: false,
     });
@@ -80,6 +81,8 @@ export function MerchantPasswordGate({ children }: Readonly<{ children: ReactNod
         onSuccess: async result => {
             setPassword('');
             setConfirmation('');
+            setValidationAttempted(false);
+            setSubmissionError(null);
             queryClient.setQueryData(statusQueryKey, {
                 merchantInitialPasswordStatus: result.completeInitialPasswordChange,
             });
@@ -88,7 +91,11 @@ export function MerchantPasswordGate({ children }: Readonly<{ children: ReactNod
                 predicate: query => query.queryKey[0] !== statusQueryKey[0],
             });
         },
-        onError: error => toast.error(errorMessage(error)),
+        onError: error => {
+            const message = errorMessage(error);
+            setSubmissionError(message);
+            toast.error(message);
+        },
     });
 
     if (!isAuthenticated) {
@@ -133,12 +140,16 @@ export function MerchantPasswordGate({ children }: Readonly<{ children: ReactNod
     }
 
     const validPassword =
-        password.length >= 12 &&
+        password.length >= 8 &&
         /\p{L}/u.test(password) &&
         /\p{N}/u.test(password) &&
         /[\p{P}\p{S}]/u.test(password);
+    const passwordInvalid = validationAttempted && !validPassword;
+    const confirmationInvalid = validationAttempted && validPassword && password !== confirmation;
     const submit = (event: FormEvent) => {
         event.preventDefault();
+        setValidationAttempted(true);
+        setSubmissionError(null);
         if (!validPassword) {
             toast.error(text.invalid);
             return;
@@ -166,9 +177,25 @@ export function MerchantPasswordGate({ children }: Readonly<{ children: ReactNod
                         id="merchant-new-password"
                         autoComplete="new-password"
                         value={password}
-                        onChange={event => setPassword(event.target.value)}
+                        aria-invalid={passwordInvalid}
+                        aria-describedby={
+                            passwordInvalid
+                                ? 'merchant-password-requirement merchant-password-error'
+                                : 'merchant-password-requirement'
+                        }
+                        onChange={event => {
+                            setPassword(event.target.value);
+                            setSubmissionError(null);
+                        }}
                     />
-                    <p className="text-xs text-muted-foreground">{text.requirement}</p>
+                    <p id="merchant-password-requirement" className="text-xs text-muted-foreground">
+                        {text.requirement}
+                    </p>
+                    {passwordInvalid && (
+                        <p id="merchant-password-error" className="text-xs text-destructive" role="alert">
+                            {text.invalid}
+                        </p>
+                    )}
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="merchant-confirm-password">{text.confirm}</Label>
@@ -176,9 +203,28 @@ export function MerchantPasswordGate({ children }: Readonly<{ children: ReactNod
                         id="merchant-confirm-password"
                         autoComplete="new-password"
                         value={confirmation}
-                        onChange={event => setConfirmation(event.target.value)}
+                        aria-invalid={confirmationInvalid}
+                        aria-describedby={confirmationInvalid ? 'merchant-confirm-password-error' : undefined}
+                        onChange={event => {
+                            setConfirmation(event.target.value);
+                            setSubmissionError(null);
+                        }}
                     />
+                    {confirmationInvalid && (
+                        <p
+                            id="merchant-confirm-password-error"
+                            className="text-xs text-destructive"
+                            role="alert"
+                        >
+                            {text.mismatch}
+                        </p>
+                    )}
                 </div>
+                {submissionError && (
+                    <Alert variant="destructive" role="alert">
+                        <AlertDescription>{submissionError}</AlertDescription>
+                    </Alert>
+                )}
                 <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
                     <Button type="button" variant="ghost" onClick={() => void logout()}>
                         <LogOut className="size-4" aria-hidden="true" />

@@ -74,12 +74,12 @@ describe('MerchantInitialPasswordService', () => {
         const { accessRepository, administratorService, service } = createService(access);
         const ctx = { apiType: 'admin', activeUserId: 'user-1' } as any;
 
-        await expect(service.complete(ctx, 'SecurePassword9!')).resolves.toEqual({
+        await expect(service.complete(ctx, 'Safe123!')).resolves.toEqual({
             mustChangePassword: false,
         });
         expect(administratorService.update).toHaveBeenCalledWith(ctx, {
             id: 'administrator-1',
-            password: 'SecurePassword9!',
+            password: 'Safe123!',
         });
         expect(access.mustChangePassword).toBe(false);
         expect(accessRepository.save).toHaveBeenCalledWith(access);
@@ -88,7 +88,7 @@ describe('MerchantInitialPasswordService', () => {
     it('rejects a weak or unchanged password', async () => {
         const weak = createService(pendingAccess());
         await expect(weak.service.complete({ activeUserId: 'user-1' } as any, 'short1!')).rejects.toThrow(
-            '至少 12 位',
+            '至少 8 位',
         );
 
         const unchanged = createService(pendingAccess(), true);

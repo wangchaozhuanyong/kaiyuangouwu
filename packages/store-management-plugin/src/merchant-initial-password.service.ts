@@ -107,13 +107,13 @@ export class MerchantInitialPasswordService {
             password,
         );
         const hasRequiredComposition =
-            password.length >= 12 &&
+            password.length >= 8 &&
             /\p{L}/u.test(password) &&
             /\p{N}/u.test(password) &&
             /[\p{P}\p{S}]/u.test(password) &&
             !/[\r\n]/.test(password);
         if (strategyResult !== true || !hasRequiredComposition) {
-            throw new UserInputError('密码至少 12 位，并同时包含字母、数字和符号');
+            throw new UserInputError('密码至少 8 位，并同时包含字母、数字和符号');
         }
     }
 
