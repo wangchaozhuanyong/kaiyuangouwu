@@ -6,11 +6,17 @@ function createService(
     status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | null,
     sellerId = 'merchant-seller',
     channelId = 'channel-1',
+    hasActivePrimaryDomain = false,
 ) {
-    const repository = {
+    const profileRepository = {
         findOne: vi.fn().mockResolvedValue(status ? { id: 'profile-1', status } : null),
     };
-    const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+    const domainRepository = {
+        exists: vi.fn().mockResolvedValue(hasActivePrimaryDomain),
+    };
+    const connection = {
+        getRepository: vi.fn().mockReturnValueOnce(profileRepository).mockReturnValue(domainRepository),
+    };
     const channelService = {
         findOne: vi.fn().mockResolvedValue({ id: channelId, sellerId }),
         getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform-seller' }),
@@ -45,7 +51,34 @@ describe('StorefrontActivationService', () => {
 
     it('blocks platform-owned regional Channels without a managed profile', async () => {
         await expect(
-            createService(null, 'platform-seller').assertActive({
+            createService(null, 'platform-seller', 'channel-1', true).assertActive({
+                apiType: 'shop',
+                channelId: 'channel-1',
+            } as any),
+        ).rejects.toThrow();
+    });
+
+    it('allows verified platform-owned regional drafts for backwards compatibility', async () => {
+        await expect(
+            createService('DRAFT', 'platform-seller', 'channel-1', true).assertActive({
+                apiType: 'shop',
+                channelId: 'channel-1',
+            } as any),
+        ).resolves.toBeUndefined();
+    });
+
+    it('blocks platform-owned regional drafts without an active primary domain', async () => {
+        await expect(
+            createService('DRAFT', 'platform-seller').assertActive({
+                apiType: 'shop',
+                channelId: 'channel-1',
+            } as any),
+        ).rejects.toThrow();
+    });
+
+    it('blocks suspended platform-owned regional stores even with a verified domain', async () => {
+        await expect(
+            createService('SUSPENDED', 'platform-seller', 'channel-1', true).assertActive({
                 apiType: 'shop',
                 channelId: 'channel-1',
             } as any),

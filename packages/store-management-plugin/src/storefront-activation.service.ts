@@ -6,6 +6,7 @@ import {
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
+import { StoreDomain } from '@vendure/store-domain-plugin';
 
 import { StoreProfile } from './entities/store-profile.entity';
 
@@ -29,10 +30,26 @@ export class StorefrontActivationService {
             where: { channelId: ctx.channelId },
             select: { id: true, status: true },
         });
-        // Every non-default Channel must fail closed. A missing profile can be
-        // caused by partial provisioning and must never publish a storefront.
-        if (profile?.status !== 'ACTIVE') {
-            throw new ForbiddenError();
+        if (profile?.status === 'ACTIVE') {
+            return;
         }
+
+        const isVerifiedPlatformDraft =
+            profile?.status === 'DRAFT' &&
+            Boolean(channel?.sellerId) &&
+            idsAreEqual(channel?.sellerId, defaultChannel.sellerId) &&
+            (await this.connection.getRepository(ctx, StoreDomain).exists({
+                where: {
+                    channelId: ctx.channelId,
+                    isPrimary: true,
+                    status: 'ACTIVE',
+                },
+            }));
+        if (isVerifiedPlatformDraft) return;
+
+        // Merchant, suspended, unverified, and partially provisioned Channels
+        // remain fail-closed. The narrow draft exception only preserves public
+        // regional storefronts that are platform-owned and domain-verified.
+        throw new ForbiddenError();
     }
 }
