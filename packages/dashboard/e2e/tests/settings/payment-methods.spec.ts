@@ -49,7 +49,9 @@ test.describe('Payment Methods CRUD', () => {
         // Payment Handler — ConfigurableOperationSelector (DropdownMenu)
         // Only the dummy handler is available in dev/test
         await page.getByRole('button', { name: 'Select Payment Handler' }).click();
-        await page.getByRole('menuitem', { name: /dummy payment/i }).click();
+        await page
+            .getByRole('menuitem', { name: /Test payment provider for development environments only/i })
+            .click();
 
         await dp.clickCreate();
         await dp.expectSuccessToast(/Successfully created payment method/);

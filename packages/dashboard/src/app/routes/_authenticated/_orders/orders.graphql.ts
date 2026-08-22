@@ -158,9 +158,6 @@ export const orderLineFragment = graphql(
                 fulfillmentId
                 quantity
             }
-            customFields {
-                fulfillmentTypeSnapshot
-            }
             unitPrice
             unitPriceWithTax
             proratedUnitPrice

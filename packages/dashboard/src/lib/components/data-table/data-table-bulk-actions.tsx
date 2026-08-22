@@ -78,9 +78,16 @@ export function DataTableBulkActions<TData>({
                 <span className="text-sm font-medium">
                     <Trans>{selection.length} selected</Trans>
                 </span>
-                <DropdownMenu>
+                <DropdownMenu modal={false}>
                     <DropdownMenuTrigger
-                        render={<Button variant="outline" size="sm" className="h-8 shadow-none" />}
+                        render={
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 shadow-none"
+                                data-testid="dt-bulk-actions-trigger"
+                            />
+                        }
                     >
                         <Trans>Actions</Trans>
                         <ChevronDown className="ml-1 h-4 w-4" />

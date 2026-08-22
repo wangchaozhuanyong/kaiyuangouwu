@@ -46,9 +46,9 @@ test.describe('Roles', () => {
         await dp.fillInput('Description', 'E2E Test Role');
         await dp.fillInput('Code', 'e2e-test-role');
 
-        // Select the default channel via the Channels multi-select
-        const channelsCombobox = dp.formItem('Channels').getByRole('combobox');
-        await dp.selectPopoverOption(channelsCombobox, 'Default channel');
+        // Select the default channel via the managed-stores multi-select
+        const channelsCombobox = dp.formItem('Managed stores').getByRole('combobox');
+        await dp.selectPopoverOption(channelsCombobox, 'Default sales channel');
 
         // Toggle at least one permission group — find the first "Toggle all" button
         // in the permissions grid and click it to enable that group
@@ -103,7 +103,7 @@ test.describe('Roles', () => {
 
         const testRoleRow = lp.getRows().filter({ hasText: 'E2E Updated Role' });
         await testRoleRow.getByRole('checkbox').click();
-        await page.getByRole('button', { name: /Actions/i }).click();
+        await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
         await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
         await lp.expectSuccessToast();

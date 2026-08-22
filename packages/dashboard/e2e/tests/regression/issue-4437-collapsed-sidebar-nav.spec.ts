@@ -21,7 +21,7 @@ test.describe('Issue #4437: Collapsed sidebar nav items with sub-items', () => {
         await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
 
         // Hover over the Catalog nav item (a section with sub-items like Products, Facets, Collections)
-        const catalogButton = sidebar.getByRole('button', { name: 'Catalog' });
+        const catalogButton = sidebar.getByRole('button', { name: 'Product management' });
         await catalogButton.hover();
 
         // The hover card popover should appear with the section title and sub-item links
@@ -29,12 +29,12 @@ test.describe('Issue #4437: Collapsed sidebar nav items with sub-items', () => {
         await expect(hoverCardContent).toBeVisible({ timeout: 5_000 });
 
         // Verify the hover card contains the section title
-        await expect(hoverCardContent.getByTestId('sidebar-hover-title')).toHaveText('Catalog');
+        await expect(hoverCardContent.getByTestId('sidebar-hover-title')).toHaveText('Product management');
 
         // Verify sub-item links are present
         await expect(hoverCardContent.getByRole('link', { name: 'Products' })).toBeVisible();
-        await expect(hoverCardContent.getByRole('link', { name: 'Facets' })).toBeVisible();
-        await expect(hoverCardContent.getByRole('link', { name: 'Collections' })).toBeVisible();
+        await expect(hoverCardContent.getByRole('link', { name: 'Filter attributes' })).toBeVisible();
+        await expect(hoverCardContent.getByRole('link', { name: 'Product groups' })).toBeVisible();
     });
 
     test('should navigate to sub-item when clicking link in collapsed sidebar hover card', async ({
@@ -47,7 +47,7 @@ test.describe('Issue #4437: Collapsed sidebar nav items with sub-items', () => {
         await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
 
         // Hover over Catalog to open hover card
-        const catalogButton = sidebar.getByRole('button', { name: 'Catalog' });
+        const catalogButton = sidebar.getByRole('button', { name: 'Product management' });
         await catalogButton.hover();
 
         const hoverCardContent = page.locator('[data-slot="hover-card-content"]');

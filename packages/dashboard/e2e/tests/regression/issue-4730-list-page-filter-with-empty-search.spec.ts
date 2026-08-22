@@ -16,7 +16,7 @@ test.describe('Issue 4730 — list-page column filter with empty search', () => 
         const lp = new BaseListPage(page, {
             path: '/customers',
             title: 'Customers',
-            newButtonLabel: 'New Customer',
+            newButtonLabel: 'Create customer',
         });
         await lp.goto();
         await lp.expectLoaded();
@@ -47,6 +47,6 @@ test.describe('Issue 4730 — list-page column filter with empty search', () => 
         // fix the only row left is the "No results" empty-state row.
         const filteredCount = await lp.getRows().count();
         expect(filteredCount).toBeLessThan(initialCount);
-        await expect(page.getByText('No results', { exact: true })).toBeVisible();
+        await expect(page.getByText('No matching results', { exact: true })).toBeVisible();
     });
 });

@@ -87,14 +87,14 @@ export class BaseDetailPage {
     /**
      * Select an option from a MultiSelect/Popover-based picker.
      * Unlike `selectOption` (which targets `role="option"` in a Select),
-     * this targets buttons inside a Popover — used by RoleSelector, etc.
+     * this targets options inside a Popover — used by RoleSelector, etc.
      *
      * @param triggerLocator Locator for the combobox trigger button
      * @param optionText The visible text of the option to click
      */
     async selectPopoverOption(triggerLocator: Locator, optionText: string) {
         await triggerLocator.click();
-        await this.page.getByRole('button', { name: optionText, exact: true }).click();
+        await this.page.getByRole('option', { name: optionText, exact: true }).click();
     }
 
     /** Toggle a switch field identified by its label. */

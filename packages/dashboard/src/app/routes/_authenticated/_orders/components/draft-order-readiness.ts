@@ -8,11 +8,7 @@ export interface DraftOrderReadinessInput {
 }
 
 export type DraftOrderIncompleteReason =
-    | 'customer'
-    | 'lines'
-    | 'shippingAddress'
-    | 'shippingMethod'
-    | 'state';
+    'customer' | 'lines' | 'shippingAddress' | 'shippingMethod' | 'state';
 
 export function getDraftOrderIncompleteReason({
     hasCustomer,
@@ -40,10 +36,16 @@ export function getDraftOrderIncompleteReason({
     return null;
 }
 
-export function orderLinesRequireShipping(
-    lines: ReadonlyArray<{ customFields?: { fulfillmentTypeSnapshot?: string | null } | null }>,
-): boolean {
-    return lines.some(line => line.customFields?.fulfillmentTypeSnapshot !== 'digital');
+export function orderLinesRequireShipping<T extends object>(lines: ReadonlyArray<T>): boolean {
+    return lines.some(line => {
+        const customFields = 'customFields' in line ? line.customFields : undefined;
+        return (
+            !customFields ||
+            typeof customFields !== 'object' ||
+            !('fulfillmentTypeSnapshot' in customFields) ||
+            customFields.fulfillmentTypeSnapshot !== 'digital'
+        );
+    });
 }
 
 export function hasCompletePhysicalShippingAddress(

@@ -8,7 +8,7 @@ createCrudTestSuite({
     entityNamePlural: 'customers',
     listPath: '/customers',
     listTitle: 'Customers',
-    newButtonLabel: 'New Customer',
+    newButtonLabel: 'Create customer',
     newPageTitle: 'New customer',
     createFields: [
         { label: 'First name', value: 'E2E' },

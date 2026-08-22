@@ -7,7 +7,7 @@ createCrudTestSuite({
     entityNamePlural: 'products',
     listPath: '/products',
     listTitle: 'Products',
-    newButtonLabel: 'New Product',
+    newButtonLabel: 'Create product',
     newPageTitle: 'New product',
     createFields: [{ label: 'Product name', value: 'E2E Test Product' }],
     afterFillCreate: async (_page, detail) => {
@@ -20,7 +20,7 @@ test.describe('Product detail features', () => {
         // Navigate to the seeded "Laptop" product via search to avoid race conditions
         await page.goto('/products');
         await expect(page.locator('table')).toBeVisible();
-        await page.getByPlaceholder('Filter...').fill('Laptop');
+        await page.getByTestId('dt-search-input').fill('Laptop');
         await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
         await page.locator('table tbody tr').first().getByRole('button').first().click();
         await expect(page).toHaveURL(/\/products\/.+/);
@@ -47,12 +47,12 @@ test.describe('Product detail features', () => {
 
         // Facet Values block
         await expect(
-            page.locator('[data-slot="card-title"]').getByText('Facet Values', { exact: true }),
+            page.locator('[data-slot="card-title"]').getByText('Filter attribute values', { exact: true }),
         ).toBeVisible();
 
         // Assets block
         await expect(
-            page.locator('[data-slot="card-title"]').getByText('Assets', { exact: true }),
+            page.locator('[data-slot="card-title"]').getByText('Asset library', { exact: true }),
         ).toBeVisible();
     });
 
@@ -60,13 +60,13 @@ test.describe('Product detail features', () => {
         // Navigate to the seeded "Laptop" product which has variants
         await page.goto('/products');
         await expect(page.locator('table')).toBeVisible();
-        await page.getByPlaceholder('Filter...').fill('Laptop');
+        await page.getByTestId('dt-search-input').fill('Laptop');
         await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
         await page.locator('table tbody tr').first().getByRole('button').first().click();
         await expect(page).toHaveURL(/\/products\/.+/);
 
         // The "Manage variants" button should be visible for the Laptop product
-        await expect(page.getByRole('button', { name: /Manage variants/i })).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByRole('button', { name: /Manage SKUs/i })).toBeVisible({ timeout: 10_000 });
     });
 
     test('should navigate to manage variants page', async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe('Product detail features', () => {
         await page.locator('table tbody tr').first().getByRole('button').first().click();
         await expect(page).toHaveURL(/\/products\/.+/);
 
-        const manageButton = page.getByRole('button', { name: /Manage variants/i });
+        const manageButton = page.getByRole('button', { name: /Manage SKUs/i });
         // Only proceed if the product has variants
         if (await manageButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
             await manageButton.click();

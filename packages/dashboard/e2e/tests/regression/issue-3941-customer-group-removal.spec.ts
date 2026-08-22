@@ -68,7 +68,7 @@ test.describe('Issue #3941: Customer group member removal', () => {
 
         await memberRow.getByRole('checkbox').click();
 
-        await page.getByRole('button', { name: /Actions/i }).click();
+        await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Remove from group', { exact: true }).click();
         await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
 
@@ -86,7 +86,7 @@ test.describe('Issue #3941: Customer group member removal', () => {
 
         const row = lp.getRows().filter({ hasText: 'E2E Removal Test Group' });
         await row.getByRole('checkbox').click();
-        await page.getByRole('button', { name: /Actions/i }).click();
+        await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
         await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
         await lp.expectSuccessToast();

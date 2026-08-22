@@ -12,7 +12,7 @@ test.describe('Breadcrumb should update after entity mutation', () => {
     const listConfig = {
         path: '/products',
         title: 'Products',
-        newButtonLabel: 'New Product',
+        newButtonLabel: 'Create product',
     };
 
     const detailConfig = {

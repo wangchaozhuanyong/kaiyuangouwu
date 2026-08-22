@@ -13,7 +13,7 @@ test.describe('Assets', () => {
     test('should show upload button and search', async ({ page }) => {
         await page.goto('/assets');
         await expect(page.getByTestId('page-heading')).toBeVisible();
-        await expect(page.getByRole('button', { name: /Upload/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Upload', exact: true })).toBeVisible();
         await expect(page.getByPlaceholder(/Search assets/i)).toBeVisible();
     });
 });

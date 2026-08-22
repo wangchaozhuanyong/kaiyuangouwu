@@ -70,7 +70,7 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
 
     test('should add the expanded collection ID to the URL search params', async ({ page }) => {
         await page.goto('/collections');
-        await expect(page.getByRole('heading', { name: 'Collections' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Product groups' })).toBeVisible();
 
         // The expand button is inside the Name cell (not the drag-handle cell)
         const parentRow = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
@@ -95,7 +95,7 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
         page,
     }) => {
         await page.goto('/collections');
-        await expect(page.getByRole('heading', { name: 'Collections' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Product groups' })).toBeVisible();
 
         // Navigate directly to the collection detail — no expansion beforehand,
         // so no ?expanded= param will be in the URL when we return
@@ -121,7 +121,7 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
         page,
     }) => {
         await page.goto('/collections');
-        await expect(page.getByRole('heading', { name: 'Collections' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Product groups' })).toBeVisible();
 
         // Expand the parent collection
         const parentRow = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
@@ -147,9 +147,9 @@ createCrudTestSuite({
     entityName: 'collection',
     entityNamePlural: 'collections',
     listPath: '/collections',
-    listTitle: 'Collections',
-    newButtonLabel: 'New Collection',
-    newPageTitle: 'New collection',
+    listTitle: 'Product groups',
+    newButtonLabel: 'New product group',
+    newPageTitle: 'New product group',
     createFields: [{ label: 'Name', value: 'E2E Test Collection' }],
     afterFillCreate: async (_page, detail) => {
         await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
@@ -170,7 +170,7 @@ test.describe('Issue #4389: Collection form dirty state with filters', () => {
         new BaseDetailPage(page, {
             newPath: '/collections/new',
             pathPrefix: '/collections/',
-            newTitle: 'New collection',
+            newTitle: 'New product group',
         });
 
     // Create a collection with a facet-value-filter that deliberately omits the
@@ -238,7 +238,9 @@ test.describe('Issue #4389: Collection form dirty state with filters', () => {
     async function goToCollection(page: Page) {
         await page.goto(`/collections/${collectionId}`);
         // Wait for the filter card to render — confirms the detail page loaded
-        await expect(page.getByText('facet-value-filter')).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText('Filter product SKUs by attribute values')).toBeVisible({
+            timeout: 10_000,
+        });
     }
 
     test('should enable Update button when editing the Name field', async ({ page }) => {
@@ -289,7 +291,9 @@ test.describe('Issue #4389: Collection form dirty state with filters', () => {
 
         // Reload and verify the change persisted
         await page.reload();
-        await expect(page.getByText('facet-value-filter')).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText('Filter product SKUs by attribute values')).toBeVisible({
+            timeout: 10_000,
+        });
         await expect(dp.formItem('Name').getByRole('textbox')).toHaveValue('E2E Filter Test Saved');
     });
 });
@@ -302,7 +306,7 @@ test.describe('Issue #3548: Collection facet filter boolean args', () => {
         new BaseDetailPage(page, {
             newPath: '/collections/new',
             pathPrefix: '/collections/',
-            newTitle: 'New collection',
+            newTitle: 'New product group',
         });
 
     test.afterEach(async ({ page }) => {
@@ -335,14 +339,17 @@ test.describe('Issue #3548: Collection facet filter boolean args', () => {
         await dp.fillInput('Name', 'E2E Boolean Arg Filter');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
 
-        await page.getByRole('button', { name: /Add collection filter/i }).click();
-        await page.getByRole('menuitem', { name: /Filter by facet values/i }).click();
-        await page.getByRole('button', { name: /Add facet values/i }).click();
-        await page.getByPlaceholder('Search facet values...').fill(facetValueName);
+        await page.getByRole('button', { name: /Add product group filter/i }).click();
+        await page.getByRole('menuitem', { name: /Filter product SKUs by attribute values/i }).click();
+        await page.getByRole('button', { name: /Add filter attribute values/i }).click();
+        await page.getByPlaceholder('Search filter attribute values...').fill(facetValueName);
         await page.getByRole('option', { name: facetValueName, exact: true }).click();
 
         await expect(
-            page.locator('[data-slot="field"]').filter({ hasText: 'Contains any' }).getByRole('switch'),
+            page
+                .locator('[data-slot="field"]')
+                .filter({ hasText: 'Match any selected value' })
+                .getByRole('switch'),
         ).not.toBeChecked();
         await expect(dp.createButton).toBeEnabled({ timeout: 5_000 });
         await dp.clickCreate();
@@ -380,7 +387,7 @@ test.describe('Issue #4987: String list filter args preserve numeric values', ()
         new BaseDetailPage(page, {
             newPath: '/collections/new',
             pathPrefix: '/collections/',
-            newTitle: 'New collection',
+            newTitle: 'New product group',
         });
 
     test.afterEach(async ({ page }) => {
@@ -404,7 +411,7 @@ test.describe('Issue #4987: String list filter args preserve numeric values', ()
         await dp.fillInput('Name', 'E2E String List Filter');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
 
-        await page.getByRole('button', { name: /Add collection filter/i }).click();
+        await page.getByRole('button', { name: /Add product group filter/i }).click();
         await page.getByRole('menuitem', { name: /Filter by external IDs/i }).click();
 
         const listInput = page.getByPlaceholder('Type and press Enter or comma to add...');

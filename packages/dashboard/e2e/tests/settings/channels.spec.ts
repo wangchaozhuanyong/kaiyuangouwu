@@ -12,15 +12,15 @@ test.describe('Channels CRUD', () => {
     const listPage = (page: Page) =>
         new BaseListPage(page, {
             path: '/channels',
-            title: 'Channels',
-            newButtonLabel: 'New Channel',
+            title: 'Stores',
+            newButtonLabel: 'Create store',
         });
 
     const detailPage = (page: Page) =>
         new BaseDetailPage(page, {
             newPath: '/channels/new',
             pathPrefix: '/channels/',
-            newTitle: 'New channel',
+            newTitle: 'Create store',
         });
 
     test('should display the channels list page', async ({ page }) => {
@@ -34,14 +34,14 @@ test.describe('Channels CRUD', () => {
         await lp.goto();
         await lp.expectLoaded();
         // ChannelCodeLabel renders the default channel code as "Default channel"
-        await expect(lp.getRows().filter({ hasText: 'Default channel' }).first()).toBeVisible();
+        await expect(lp.getRows().filter({ hasText: 'Default sales channel' }).first()).toBeVisible();
     });
 
     test('should navigate to channel detail', async ({ page }) => {
         const lp = listPage(page);
         await lp.goto();
         await lp.expectLoaded();
-        await lp.clickEntity('Default channel');
+        await lp.clickEntity('Default sales channel');
         await expect(page).toHaveURL(/\/channels\/[^/]+$/);
     });
 
@@ -50,56 +50,56 @@ test.describe('Channels CRUD', () => {
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        await dp.fillInput('Code', 'e2e-test-channel');
-        await dp.fillInput('Token', 'e2e-test-token');
+        await dp.fillInput('Store code', 'e2e-test-channel');
+        await dp.fillInput('Store API token', 'e2e-test-token');
 
         // Available languages — MultiSelect popover (few items, no search input)
-        await dp.formItem('Available languages').getByRole('combobox').click();
-        // Popover renders options as plain <button> inside [data-slot="popover-content"]
+        await dp.formItem('Supported content languages').getByRole('combobox').click();
+        // Popover renders options in a listbox inside [data-slot="popover-content"]
         await page
             .locator('[data-slot="popover-content"]')
-            .getByRole('button', { name: /English/ })
+            .getByRole('option', { name: /English/ })
             .click();
         // Click outside to close the popover and let form state propagate
         await page.locator('body').click({ position: { x: 0, y: 0 } });
         await expect(page.locator('[data-slot="popover-content"]')).not.toBeVisible();
 
         // Default language — single-select filtered by available languages
-        await dp.formItem('Default language').getByRole('combobox').click();
+        await dp.formItem('Default content language').getByRole('combobox').click();
         await page
             .locator('[data-slot="popover-content"]')
-            .getByRole('button', { name: /English/ })
+            .getByRole('option', { name: /English/ })
             .click();
 
         // Available currencies — MultiSelect popover (100+ items, search shows)
-        await dp.formItem('Available currencies').getByRole('combobox').click();
+        await dp.formItem('Supported currencies').getByRole('combobox').click();
         await page
             .locator('[data-slot="popover-content"]')
             .getByPlaceholder('Search currencies...')
             .fill('Dollar');
         await page
             .locator('[data-slot="popover-content"]')
-            .getByRole('button', { name: /Dollar/ })
+            .getByRole('option', { name: /Dollar/ })
             .first()
             .click();
         await page.locator('body').click({ position: { x: 0, y: 0 } });
         await expect(page.locator('[data-slot="popover-content"]')).not.toBeVisible();
 
         // Default currency — single-select filtered by available currencies
-        await dp.formItem('Default currency').getByRole('combobox').click();
+        await dp.formItem('Settlement currency').getByRole('combobox').click();
         await page
             .locator('[data-slot="popover-content"]')
-            .getByRole('button', { name: /Dollar/ })
+            .getByRole('option', { name: /Dollar/ })
             .click();
 
         // Default tax zone — Base UI Select
-        await dp.selectOption('Default tax zone', 'Europe');
+        await dp.selectOption('Default tax region', 'Europe');
 
         // Default shipping zone — Base UI Select
-        await dp.selectOption('Default shipping zone', 'Europe');
+        await dp.selectOption('Default delivery region', 'Europe');
 
         await dp.clickCreate();
-        await dp.expectSuccessToast(/Successfully created channel/);
+        await dp.expectSuccessToast(/Store created/);
         await dp.expectNavigatedToExisting();
     });
 
@@ -126,9 +126,9 @@ test.describe('Channels CRUD', () => {
         await expect(page).toHaveURL(/\/channels\/[^/]+$/);
 
         const dp = detailPage(page);
-        await dp.fillInput('Token', 'e2e-updated-token');
+        await dp.fillInput('Store API token', 'e2e-updated-token');
         await dp.clickUpdate();
-        await dp.expectSuccessToast(/Successfully updated channel/);
+        await dp.expectSuccessToast(/Store settings updated/);
     });
 
     test('should show updated channel in the list', async ({ page }) => {
@@ -145,7 +145,7 @@ test.describe('Channels CRUD', () => {
 
         const testChannelRow = lp.getRows().filter({ hasText: 'e2e-test-channel' });
         await testChannelRow.getByRole('checkbox').click();
-        await page.getByRole('button', { name: /Actions/i }).click();
+        await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
         await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
         await lp.expectSuccessToast();
@@ -165,7 +165,7 @@ test.describe('Channel required-field validation', () => {
         new BaseDetailPage(page, {
             newPath: '/channels/new',
             pathPrefix: '/channels/',
-            newTitle: 'New channel',
+            newTitle: 'Create store',
         });
 
     test('should show inline errors instead of a raw GraphQL toast when required fields are missing', async ({
@@ -177,11 +177,11 @@ test.describe('Channel required-field validation', () => {
 
         // Fill only `code`, exactly as the issue describes ("fill in some of the required
         // fields"). This also makes the form dirty, so the Create button is enabled.
-        await dp.fillInput('Code', 'e2e-incomplete-channel');
+        await dp.fillInput('Store code', 'e2e-incomplete-channel');
         await dp.clickCreate();
 
         // Each missing required field is called out in place...
-        for (const label of ['Token', 'Default tax zone', 'Default shipping zone']) {
+        for (const label of ['Store API token', 'Default tax region', 'Default delivery region']) {
             await expect(dp.formItem(label).getByText('This field is required')).toBeVisible();
         }
 
@@ -190,11 +190,11 @@ test.describe('Channel required-field validation', () => {
         // available list is flagged in its own right rather than left for the user to infer.
         await expect(
             dp
-                .formItem('Default currency')
+                .formItem('Settlement currency')
                 .getByText('You must first select an available currency to set a default currency'),
         ).toBeVisible();
         await expect(
-            dp.formItem('Available currencies').getByText('You must select at least one available currency'),
+            dp.formItem('Supported currencies').getByText('You must select at least one available currency'),
         ).toBeVisible();
 
         // ...and the mutation never leaves the client, so there is no raw GraphQL error toast.
@@ -210,48 +210,48 @@ test.describe('Channel required-field validation', () => {
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        await dp.fillInput('Code', 'e2e-default-source-channel');
-        await dp.fillInput('Token', 'e2e-default-source-token');
+        await dp.fillInput('Store code', 'e2e-default-source-channel');
+        await dp.fillInput('Store API token', 'e2e-default-source-token');
 
         // Nothing is available, so there is nothing to make the default. The popover has no search
         // input either — MultiSelect only shows it above 10 items.
-        await dp.formItem('Default currency').getByRole('combobox').click();
-        await expect(page.locator('[data-slot="popover-content"]').getByRole('button')).toHaveCount(0);
+        await dp.formItem('Settlement currency').getByRole('combobox').click();
+        await expect(page.locator('[data-slot="popover-content"]').getByRole('option')).toHaveCount(0);
         await page.locator('body').click({ position: { x: 0, y: 0 } });
         await expect(page.locator('[data-slot="popover-content"]')).not.toBeVisible();
 
         // Marking one currency available makes it — and only it — a candidate default.
-        await dp.formItem('Available currencies').getByRole('combobox').click();
+        await dp.formItem('Supported currencies').getByRole('combobox').click();
         await page
             .locator('[data-slot="popover-content"]')
             .getByPlaceholder('Search currencies...')
             .fill('Euro');
         await page
             .locator('[data-slot="popover-content"]')
-            .getByRole('button', { name: /Euro/ })
+            .getByRole('option', { name: /Euro/ })
             .first()
             .click();
         await page.locator('body').click({ position: { x: 0, y: 0 } });
         await expect(page.locator('[data-slot="popover-content"]')).not.toBeVisible();
 
-        await dp.formItem('Default currency').getByRole('combobox').click();
-        await expect(page.locator('[data-slot="popover-content"]').getByRole('button')).toHaveCount(1);
-        await page.locator('[data-slot="popover-content"]').getByRole('button', { name: /Euro/ }).click();
+        await dp.formItem('Settlement currency').getByRole('combobox').click();
+        await expect(page.locator('[data-slot="popover-content"]').getByRole('option')).toHaveCount(1);
+        await page.locator('[data-slot="popover-content"]').getByRole('option', { name: /Euro/ }).click();
         // A single-select closes itself once a value is picked.
         await expect(page.locator('[data-slot="popover-content"]')).not.toBeVisible();
-        await expect(dp.formItem('Default currency').getByRole('combobox')).toContainText('Euro');
+        await expect(dp.formItem('Settlement currency').getByRole('combobox')).toContainText('Euro');
 
-        await dp.selectOption('Default tax zone', 'Europe');
-        await dp.selectOption('Default shipping zone', 'Europe');
+        await dp.selectOption('Default tax region', 'Europe');
+        await dp.selectOption('Default delivery region', 'Europe');
 
         await dp.clickCreate();
-        await dp.expectSuccessToast(/Successfully created channel/);
+        await dp.expectSuccessToast(/Store created/);
         await dp.expectNavigatedToExisting();
 
         // The default is among the saved channel's available currencies, because it came from them.
         await page.reload();
-        await expect(dp.formItem('Available currencies').getByRole('combobox')).toContainText('Euro');
-        await expect(dp.formItem('Default currency').getByRole('combobox')).toContainText('Euro');
+        await expect(dp.formItem('Supported currencies').getByRole('combobox')).toContainText('Euro');
+        await expect(dp.formItem('Settlement currency').getByRole('combobox')).toContainText('Euro');
     });
 
     // #4173 — picking the default from the available list is not enough on its own: the list can
@@ -262,13 +262,13 @@ test.describe('Channel required-field validation', () => {
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        await dp.fillInput('Code', 'e2e-default-dropped-channel');
-        await dp.fillInput('Token', 'e2e-default-dropped-token');
-        await dp.selectOption('Default tax zone', 'Europe');
-        await dp.selectOption('Default shipping zone', 'Europe');
+        await dp.fillInput('Store code', 'e2e-default-dropped-channel');
+        await dp.fillInput('Store API token', 'e2e-default-dropped-token');
+        await dp.selectOption('Default tax region', 'Europe');
+        await dp.selectOption('Default delivery region', 'Europe');
 
         // Two available currencies...
-        await dp.formItem('Available currencies').getByRole('combobox').click();
+        await dp.formItem('Supported currencies').getByRole('combobox').click();
         for (const currency of ['US Dollar', 'Euro']) {
             await page
                 .locator('[data-slot="popover-content"]')
@@ -276,7 +276,7 @@ test.describe('Channel required-field validation', () => {
                 .fill(currency);
             await page
                 .locator('[data-slot="popover-content"]')
-                .getByRole('button', { name: new RegExp(currency) })
+                .getByRole('option', { name: new RegExp(currency) })
                 .first()
                 .click();
         }
@@ -284,23 +284,31 @@ test.describe('Channel required-field validation', () => {
         await expect(page.locator('[data-slot="popover-content"]')).not.toBeVisible();
 
         // ...one of which becomes the default...
-        await dp.formItem('Default currency').getByRole('combobox').click();
+        await dp.formItem('Settlement currency').getByRole('combobox').click();
         await page
             .locator('[data-slot="popover-content"]')
-            .getByRole('button', { name: /US Dollar/ })
+            .getByRole('option', { name: /US Dollar/ })
+            .last()
             .click();
-        await expect(dp.formItem('Default currency').getByRole('combobox')).toContainText('US Dollar');
+        await expect(dp.formItem('Settlement currency').getByRole('combobox')).toContainText('US Dollar');
 
-        // ...and is then taken back off the available list via its badge.
-        await dp
-            .formItem('Available currencies')
-            .getByRole('button', { name: /Remove US Dollar/ })
+        // ...and is then taken back off the available list by toggling its selected option.
+        await dp.formItem('Supported currencies').getByRole('combobox').click();
+        await page
+            .locator('[data-slot="popover-content"]:visible')
+            .getByPlaceholder('Search currencies...')
+            .fill('US Dollar');
+        await page
+            .locator('[data-slot="popover-content"]:visible')
+            .getByRole('option', { name: /US Dollar/ })
+            .last()
             .click();
+        await page.locator('body').click({ position: { x: 0, y: 0 } });
 
         await dp.clickCreate();
         await expect(
             dp
-                .formItem('Default currency')
+                .formItem('Settlement currency')
                 .getByText('You must select a default currency from the list of available currencies'),
         ).toBeVisible();
         await expect(page).toHaveURL(/\/channels\/new$/);
@@ -311,11 +319,11 @@ test.describe('Channel required-field validation', () => {
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        await dp.fillInput('Code', 'e2e-incomplete-channel');
+        await dp.fillInput('Store code', 'e2e-incomplete-channel');
         await dp.clickCreate();
-        await expect(dp.formItem('Token').getByText('This field is required')).toBeVisible();
+        await expect(dp.formItem('Store API token').getByText('This field is required')).toBeVisible();
 
-        await dp.fillInput('Token', 'e2e-some-token');
-        await expect(dp.formItem('Token').getByText('This field is required')).not.toBeVisible();
+        await dp.fillInput('Store API token', 'e2e-some-token');
+        await expect(dp.formItem('Store API token').getByText('This field is required')).not.toBeVisible();
     });
 });

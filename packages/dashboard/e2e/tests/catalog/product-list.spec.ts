@@ -7,7 +7,7 @@ test.describe('Product List', () => {
         new BaseListPage(page, {
             path: '/products',
             title: 'Products',
-            newButtonLabel: 'New Product',
+            newButtonLabel: 'Create product',
         });
 
     test('should display the product list page', async ({ page }) => {
@@ -65,14 +65,14 @@ test.describe('Product List', () => {
             await lp.expectLoaded();
 
             // Click the "Facet values" filter button in the toolbar
-            const facetFilterButton = page.getByRole('button', { name: 'Facet values' });
+            const facetFilterButton = page.getByRole('button', { name: 'Filter attribute values' });
             await expect(facetFilterButton).toBeVisible();
             await facetFilterButton.click();
 
             // The popover should open showing facets in browse mode
             const popover = page.locator('[data-slot="popover-content"]');
             await expect(popover).toBeVisible({ timeout: 5_000 });
-            await expect(popover.getByText('Facets')).toBeVisible();
+            await expect(popover.getByText('Filter attributes')).toBeVisible();
 
             // Should show the "category" facet
             const categoryItem = popover.getByRole('option', { name: 'category' });
@@ -112,7 +112,7 @@ test.describe('Product List', () => {
             await lp.expectLoaded();
 
             // Open facet filter and select a value
-            const facetFilterButton = page.getByRole('button', { name: 'Facet values' });
+            const facetFilterButton = page.getByRole('button', { name: 'Filter attribute values' });
             await facetFilterButton.click();
 
             const popover = page.locator('[data-slot="popover-content"]');
@@ -135,7 +135,7 @@ test.describe('Product List', () => {
             await lp.expectLoaded();
 
             // After reload, the filter button should still show the facet value name
-            const reloadedButton = page.getByRole('button', { name: /Facet values/ });
+            const reloadedButton = page.getByRole('button', { name: /Filter attribute values/ });
             await expect(reloadedButton).toContainText('electronics');
             // Ensure it does NOT show a numeric ID instead of the name
             await expect(reloadedButton).not.toContainText(/^\d+$/);
@@ -149,7 +149,7 @@ test.describe('Product List', () => {
             const initialRowCount = await lp.getRows().count();
 
             // Open facet filter and select a value
-            const facetFilterButton = page.getByRole('button', { name: 'Facet values' });
+            const facetFilterButton = page.getByRole('button', { name: 'Filter attribute values' });
             await facetFilterButton.click();
 
             const popover = page.locator('[data-slot="popover-content"]');
@@ -179,14 +179,14 @@ test.describe('Product List', () => {
             await lp.expectLoaded();
 
             // Open the facet filter
-            const facetFilterButton = page.getByRole('button', { name: 'Facet values' });
+            const facetFilterButton = page.getByRole('button', { name: 'Filter attribute values' });
             await facetFilterButton.click();
 
             const popover = page.locator('[data-slot="popover-content"]');
             await expect(popover).toBeVisible({ timeout: 5_000 });
 
             // Type in the search box
-            const searchInput = popover.getByPlaceholder('Search facet values...');
+            const searchInput = popover.getByPlaceholder('Search filter attribute values...');
             await searchInput.fill('electr');
 
             // Wait for search results
@@ -290,21 +290,23 @@ test.describe('Product List', () => {
             await lp.expectLoaded();
 
             // Verify the "Slug" column header is visible
-            await expect(lp.dataTable.locator('thead th').filter({ hasText: 'Slug' })).toBeVisible();
+            await expect(
+                lp.dataTable.locator('thead th').filter({ hasText: 'URL identifier' }),
+            ).toBeVisible();
 
             // Open column settings and uncheck the "slug" column
             await lp.openColumnSettings();
             const dropdownContent = page.locator('[data-slot="dropdown-menu-content"]');
             await expect(dropdownContent).toBeVisible();
 
-            const slugCheckbox = page.getByRole('menuitemcheckbox', { name: /slug/i });
+            const slugCheckbox = page.getByRole('menuitemcheckbox', { name: /URL identifier/i });
             await slugCheckbox.click();
 
             // Close the dropdown
             await page.keyboard.press('Escape');
 
             // The "Slug" column should no longer be visible
-            await expect(lp.dataTable.locator('thead th').filter({ hasText: 'Slug' })).toBeHidden();
+            await expect(lp.dataTable.locator('thead th').filter({ hasText: 'URL identifier' })).toBeHidden();
 
             // Reset column settings to restore
             await lp.openColumnSettings();

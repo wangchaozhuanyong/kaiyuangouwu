@@ -29,7 +29,7 @@ export class BaseListPage {
         protected config: ListPageConfig,
     ) {
         this.heading = page.getByTestId('page-heading');
-        this.searchInput = page.getByPlaceholder('Filter...');
+        this.searchInput = page.getByTestId('dt-search-input');
         this.dataTable = page.locator('table');
         // Base UI's Button with render={<Link />} adds role="button" to the element
         this.newButton = page.getByRole(config.newButtonRole ?? 'button', { name: config.newButtonLabel });
@@ -50,6 +50,11 @@ export class BaseListPage {
 
     /** Click the first button in the data table matching `name` to navigate to its detail page. */
     async clickEntity(name: string) {
+        const exactMatch = this.dataTable.getByRole('button', { name, exact: true }).first();
+        if (await exactMatch.isVisible().catch(() => false)) {
+            await exactMatch.click();
+            return;
+        }
         await this.dataTable.getByRole('button', { name }).first().click();
     }
 
@@ -86,7 +91,7 @@ export class BaseListPage {
     async bulkDelete(indices: number[] | 'all') {
         await this.selectRows(indices);
         // Open "Actions" dropdown
-        await this.page.getByRole('button', { name: /Actions/i }).click();
+        await this.page.getByTestId('dt-bulk-actions-trigger').click();
         // Click "Delete" in the dropdown. AlertDialogTrigger renders role="button"
         // instead of role="menuitem", so match by text within the menu.
         await this.page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();

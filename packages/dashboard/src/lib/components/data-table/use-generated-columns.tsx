@@ -256,7 +256,7 @@ function getRowActions(
         enableHiding: false,
         cell: ({ row, table }) => {
             return (
-                <DropdownMenu>
+                <DropdownMenu modal={false}>
                     <DropdownMenuTrigger
                         render={<Button variant="ghost" size="icon" data-testid="dt-row-actions-trigger" />}
                     >

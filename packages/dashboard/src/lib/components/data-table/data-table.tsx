@@ -378,6 +378,7 @@ export function DataTable<TData>({
                         <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                             {onSearchTermChange && (
                                 <Input
+                                    data-testid="dt-search-input"
                                     placeholder={searchPlaceholder ?? t`Search or filter...`}
                                     value={searchTerm}
                                     onChange={event => handleSearchChange(event.target.value)}

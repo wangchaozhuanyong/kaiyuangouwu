@@ -13,7 +13,7 @@ test.describe('Issue #4173: Channel form validation', () => {
         new BaseDetailPage(page, {
             newPath: '/channels/new',
             pathPrefix: '/channels/',
-            newTitle: 'New channel',
+            newTitle: 'Create store',
         });
 
     test.fixme('should not show raw GraphQL errors when required fields are missing', async ({ page }) => {
@@ -22,7 +22,7 @@ test.describe('Issue #4173: Channel form validation', () => {
         await dp.expectNewPageLoaded();
 
         // Only fill the code — leave other required fields (token, zones, etc.) empty
-        await dp.fillInput('Code', 'validation-test-channel');
+        await dp.fillInput('Store code', 'validation-test-channel');
 
         // The Create button should be disabled when required fields are missing,
         // preventing submission and raw GQL errors entirely
@@ -36,8 +36,8 @@ test.describe('Issue #4173: Channel form validation', () => {
         await dp.expectNewPageLoaded();
 
         // Partially fill the form
-        await dp.fillInput('Code', 'validation-test-channel');
-        await dp.fillInput('Token', 'validation-test-token');
+        await dp.fillInput('Store code', 'validation-test-channel');
+        await dp.fillInput('Store API token', 'validation-test-token');
 
         // Try to create without setting zones — expect inline error messages
         // (not raw GraphQL error toasts)

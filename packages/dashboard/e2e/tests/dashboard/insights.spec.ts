@@ -23,17 +23,17 @@ test.describe('Dashboard Insights', () => {
         await expect(page.getByTestId('page-heading')).toBeVisible();
 
         // Click "Edit Layout" button
-        const editButton = page.getByRole('button', { name: 'Edit Layout' });
+        const editButton = page.getByRole('button', { name: 'Customize workspace' });
         await expect(editButton).toBeVisible();
         await editButton.click();
 
         // Button should change to "Save Layout"
-        await expect(page.getByRole('button', { name: 'Save Layout' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Save workspace layout' })).toBeVisible();
 
         // Click "Save Layout" to exit edit mode
-        await page.getByRole('button', { name: 'Save Layout' }).click();
+        await page.getByRole('button', { name: 'Save workspace layout' }).click();
 
         // Button should return to "Edit Layout"
-        await expect(page.getByRole('button', { name: 'Edit Layout' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Customize workspace' })).toBeVisible();
     });
 });

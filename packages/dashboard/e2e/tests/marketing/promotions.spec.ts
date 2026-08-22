@@ -49,11 +49,11 @@ test.describe('Promotions CRUD', () => {
 
         // Add a condition — ConfigurableOperationMultiSelector (DropdownMenu)
         await page.getByRole('button', { name: 'Add condition' }).click();
-        await page.getByRole('menuitem', { name: /order total is greater than/ }).click();
+        await page.getByRole('menuitem', { name: /Order merchandise subtotal reaches/ }).click();
 
         // Add an action — ConfigurableOperationMultiSelector (DropdownMenu)
         await page.getByRole('button', { name: 'Add action' }).click();
-        await page.getByRole('menuitem', { name: /Free shipping/ }).click();
+        await page.getByRole('menuitem', { name: /Waive the shipping charge/ }).click();
 
         await dp.clickCreate();
         await dp.expectSuccessToast(/Successfully created promotion/);

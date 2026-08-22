@@ -15,7 +15,7 @@ const listPage = (page: Page) =>
     new BaseListPage(page, {
         path: '/products',
         title: 'Products',
-        newButtonLabel: 'New Product',
+        newButtonLabel: 'Create product',
     });
 
 const detailPage = (page: Page) =>
@@ -505,7 +505,8 @@ test.describe('Custom Fields', () => {
 
         const releaseDateItem = dp.formItem('Release Date');
         const triggerButton = releaseDateItem.getByRole('button').first();
-        await expect(triggerButton).toContainText('MM/DD/YYYY');
+        const emptyDatePlaceholder = /(DD\/MM\/YYYY|MM\/DD\/YYYY)/;
+        await expect(triggerButton).toContainText(emptyDatePlaceholder);
 
         await triggerButton.click();
         const popover = page.locator('[data-slot="popover-content"]');
@@ -513,6 +514,6 @@ test.describe('Custom Fields', () => {
         await popover.getByRole('button', { name: 'Now' }).click();
 
         await expect(popover).not.toBeVisible();
-        await expect(triggerButton).not.toContainText('MM/DD/YYYY');
+        await expect(triggerButton).not.toContainText(emptyDatePlaceholder);
     });
 });

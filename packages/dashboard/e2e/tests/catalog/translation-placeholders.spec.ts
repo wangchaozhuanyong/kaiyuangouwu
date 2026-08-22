@@ -16,7 +16,7 @@ const listPage = (page: Page) =>
     new BaseListPage(page, {
         path: '/products',
         title: 'Products',
-        newButtonLabel: 'New Product',
+        newButtonLabel: 'Create product',
     });
 
 const detailPage = (page: Page) =>

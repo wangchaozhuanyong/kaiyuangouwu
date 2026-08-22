@@ -51,10 +51,10 @@ test.describe('product variant generation', () => {
         await page.getByRole('tab', { name: 'Create new' }).click();
 
         // Fill in the option group name
-        await page.getByPlaceholder('e.g. Size').fill('Size');
+        await page.getByPlaceholder('For example: Size').fill('Size');
 
         // Add option values by typing and pressing Enter
-        const optionInput = page.getByPlaceholder('Enter value and press Enter');
+        const optionInput = page.getByPlaceholder('Enter a value and press Enter');
         await optionInput.fill('Small');
         await optionInput.press('Enter');
         await optionInput.fill('Medium');
@@ -93,7 +93,9 @@ test.describe('product variant generation', () => {
 
         // The "Product variants" block should now show the GenerateVariantsPanel
         // with rows for each option value (Small, Medium, Large)
-        await expect(page.getByText('Product variants', { exact: true })).toBeVisible();
+        await expect(
+            page.locator('[data-slot="card-title"]').getByText('Product SKUs', { exact: true }),
+        ).toBeVisible();
         await expect(page.locator('table')).toBeVisible();
 
         // Each variant row should have a SKU input
@@ -123,10 +125,10 @@ test.describe('product variant generation', () => {
         await stockInputs.nth(1).fill('10');
 
         // Button should say "Create 2 variants"
-        await expect(page.getByRole('button', { name: /Create 2 variants/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Create 2 SKUs/i })).toBeVisible();
 
         // Click Create — should NOT show validation errors on the unchecked Large row
-        await page.getByRole('button', { name: /Create 2 variants/i }).click();
+        await page.getByRole('button', { name: /Create 2 SKUs/i }).click();
 
         // Wait for success toast — proves form submitted without validation blocking it
         await expect(
@@ -156,7 +158,7 @@ test.describe('product variant generation', () => {
         await expect(page.getByRole('button', { name: /E2E Variant Test Product Large/i })).toHaveCount(0);
 
         // The "Manage variants" link should be visible
-        const manageLink = page.getByRole('button', { name: /Manage variants/i });
+        const manageLink = page.getByRole('button', { name: /Manage SKUs/i });
         await manageLink.scrollIntoViewIfNeeded();
         await expect(manageLink).toBeVisible();
     });
@@ -225,7 +227,7 @@ test.describe('manage product variants', () => {
         await page.goto(`/products/${laptopId}/variants`);
 
         // Wait for the page to load
-        await expect(page.getByRole('heading', { name: /Manage variants/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Manage SKUs/i })).toBeVisible();
 
         // The option groups section should show the existing groups (scoped to main to avoid breadcrumb match)
         await expect(page.getByRole('main').getByText('Option Groups')).toBeVisible();
@@ -239,7 +241,7 @@ test.describe('manage product variants', () => {
 
     test('should delete a variant using the confirmation dialog', async ({ page }) => {
         await page.goto(`/products/${laptopId}/variants`);
-        await expect(page.getByRole('heading', { name: /Manage variants/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Manage SKUs/i })).toBeVisible();
 
         // Count initial variants
         const table = page.locator('table');
@@ -253,8 +255,8 @@ test.describe('manage product variants', () => {
         // The confirmation dialog should appear (AlertDialog, not native window.confirm)
         const alertDialog = page.locator('[role="alertdialog"]');
         await expect(alertDialog).toBeVisible();
-        await expect(alertDialog.getByText('Delete variant')).toBeVisible();
-        await expect(alertDialog.getByText('Are you sure you want to delete this variant?')).toBeVisible();
+        await expect(alertDialog.getByText('Delete SKU')).toBeVisible();
+        await expect(alertDialog.getByText('Are you sure you want to delete this SKU?')).toBeVisible();
 
         // Confirm the deletion
         await alertDialog.getByRole('button', { name: 'Continue' }).click();
@@ -273,12 +275,12 @@ test.describe('manage product variants', () => {
 
     test('should add a new variant via the Add variant dialog', async ({ page }) => {
         await page.goto(`/products/${laptopId}/variants`);
-        await expect(page.getByRole('heading', { name: /Manage variants/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Manage SKUs/i })).toBeVisible();
 
         const initialRowCount = await page.locator('table tbody tr').count();
 
         // Click "Add variant" button
-        await page.getByRole('button', { name: 'Add variant' }).click();
+        await page.getByRole('button', { name: 'Add SKU' }).click();
 
         // The dialog should open
         const dialog = page.getByRole('dialog');
@@ -310,7 +312,7 @@ test.describe('manage product variants', () => {
         await skuInput.fill('E2E-LAPTOP-UNIQUE');
 
         // Submit the form
-        await dialog.getByRole('button', { name: 'Create variant' }).click();
+        await dialog.getByRole('button', { name: 'Create SKU' }).click();
 
         // Wait for success toast
         await expect(
@@ -361,8 +363,8 @@ test.describe('remove option group from product detail (#4703)', () => {
         await page.getByRole('button', { name: /Product with options/i }).click();
         await expect(page.getByRole('dialog')).toBeVisible();
         await page.getByRole('tab', { name: 'Create new' }).click();
-        await page.getByPlaceholder('e.g. Size').fill('Size');
-        const optionInput = page.getByPlaceholder('Enter value and press Enter');
+        await page.getByPlaceholder('For example: Size').fill('Size');
+        const optionInput = page.getByPlaceholder('Enter a value and press Enter');
         await optionInput.fill('Small');
         await optionInput.press('Enter');
         await page.getByRole('button', { name: 'Save option group' }).click();
@@ -542,7 +544,7 @@ test.describe('variant option group edit link', () => {
     }) => {
         // Navigate to product variants list and click a Laptop variant (seed data, has options)
         await page.goto('/product-variants');
-        await expect(page.getByRole('heading', { name: 'Product Variants' })).toBeVisible({
+        await expect(page.getByRole('heading', { name: 'Product SKUs' })).toBeVisible({
             timeout: 10_000,
         });
 

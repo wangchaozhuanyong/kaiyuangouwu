@@ -12,16 +12,16 @@ test.describe('Facets', () => {
         entityName: 'facet',
         entityNamePlural: 'facets',
         listPath: '/facets',
-        listTitle: 'Facets',
-        newButtonLabel: 'New Facet',
-        newPageTitle: 'New facet',
+        listTitle: 'Filter attributes',
+        newButtonLabel: 'New filter attribute',
+        newPageTitle: 'New filter attribute',
         createFields: [{ label: 'Name', value: 'E2E Test Facet' }],
         updateFields: [{ label: 'Name', value: 'E2E Test Facet Updated' }],
         hasBulkDelete: true,
     });
 });
 
-test.describe('Facet values', () => {
+test.describe('Filter attribute values', () => {
     test.describe.configure({ mode: 'serial' });
 
     let seededFacetId: string;
@@ -30,8 +30,8 @@ test.describe('Facet values', () => {
         // Navigate to the facet list and click the first seeded facet
         const lp = new BaseListPage(page, {
             path: '/facets',
-            title: 'Facets',
-            newButtonLabel: 'New Facet',
+            title: 'Filter attributes',
+            newButtonLabel: 'New filter attribute',
         });
         await lp.goto();
         await lp.expectLoaded();
@@ -45,7 +45,7 @@ test.describe('Facet values', () => {
         expect(seededFacetId).toBeTruthy();
 
         // The "Facet values" section should be visible with a data table
-        await expect(page.getByText('Facet values', { exact: true })).toBeVisible();
+        await expect(page.getByText('Filter attribute values', { exact: true })).toBeVisible();
         const valuesTable = page.locator('table');
         await expect(valuesTable).toBeVisible();
     });
@@ -66,7 +66,7 @@ test.describe('Facet values', () => {
         const codeField = page.locator('[data-slot="field"]').filter({
             has: page.locator('[data-slot="field-label"]').getByText('Code', { exact: true }),
         });
-        const editSlugButton = codeField.getByRole('button');
+        const editSlugButton = codeField.getByRole('button', { name: 'Edit slug manually' });
         if (await editSlugButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
             await editSlugButton.click();
         }
@@ -90,7 +90,9 @@ test.describe('Facet values', () => {
     test('should navigate to facet value detail', async ({ page }) => {
         // Reload the facet detail page and wait for the values API response
         await page.goto(`/facets/${seededFacetId}`);
-        await expect(page.getByText('Facet values', { exact: true })).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText('Filter attribute values', { exact: true })).toBeVisible({
+            timeout: 10_000,
+        });
         // Wait for the facet values query to complete
         await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
         // Wait for the table row to render
@@ -111,7 +113,9 @@ test.describe('Facet values', () => {
 
     test('should update a facet value', async ({ page }) => {
         await page.goto(`/facets/${seededFacetId}`);
-        await expect(page.getByText('Facet values', { exact: true })).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText('Filter attribute values', { exact: true })).toBeVisible({
+            timeout: 10_000,
+        });
         await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
 
         const testValueButton = page.locator('table').getByRole('button', { name: 'E2E Test Value' }).first();
@@ -143,7 +147,9 @@ test.describe('Facet values', () => {
 
     test('should delete the facet value', async ({ page }) => {
         await page.goto(`/facets/${seededFacetId}`);
-        await expect(page.getByText('Facet values', { exact: true })).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText('Filter attribute values', { exact: true })).toBeVisible({
+            timeout: 10_000,
+        });
         await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
 
         // Find the row with our test value
@@ -155,7 +161,7 @@ test.describe('Facet values', () => {
         await testValueRow.getByRole('checkbox').click();
 
         // The PaginatedListDataTable uses "Actions" dropdown (not "With selected...")
-        await page.getByRole('button', { name: 'Actions' }).click();
+        await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
 
         // Confirm deletion

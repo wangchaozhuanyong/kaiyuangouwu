@@ -53,7 +53,7 @@ async function bulkDelete(page: Page, listPage: BaseListPage, searchTerm: string
         await rows.nth(i).getByRole('checkbox').click();
     }
 
-    await page.getByRole('button', { name: /Actions/i }).click();
+    await page.getByTestId('dt-bulk-actions-trigger').click();
     await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
 
     const dialog = page.getByRole('dialog');

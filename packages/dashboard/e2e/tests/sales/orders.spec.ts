@@ -15,7 +15,7 @@ test.describe('Orders', () => {
         new BaseListPage(page, {
             path: '/orders',
             title: 'Orders',
-            newButtonLabel: 'Draft order',
+            newButtonLabel: 'Create manual order',
             newButtonRole: 'button',
         });
 
@@ -84,7 +84,7 @@ test.describe('Orders', () => {
         await page.getByRole('option', { name: 'Aggregate', exact: true }).click();
         await editDialog.getByRole('button', { name: /Apply filter/i }).click();
         await expect(editDialog).toBeHidden();
-        await expect(lp.dataTable.getByText('No results')).toBeVisible();
+        await expect(lp.dataTable.getByText('No matching results')).toBeVisible();
         await expect(page.getByText(/An error occurred:/i)).toHaveCount(0);
     });
 
@@ -119,22 +119,34 @@ test.describe('Orders', () => {
         const addItemButton = page.locator('[role="combobox"]').filter({ hasText: 'Add item to order' });
         await addItemButton.scrollIntoViewIfNeeded();
         await addItemButton.click();
-        await page.getByPlaceholder('Add item to order...').fill('laptop');
+        await page.getByPlaceholder('Search products or SKUs...').fill('laptop');
         await expect(page.getByRole('option').first()).toBeVisible({ timeout: 5_000 });
         await page.getByRole('option').first().click();
         // Wait for add-line mutation — the combobox should close
         await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
 
-        // Step 4: Set shipping address — CustomerAddressSelector uses Popover with Card elements
-        // There are two "Select address" buttons (shipping + billing); target the first one
+        // Step 4: Set a complete shipping address. Seeded customer addresses intentionally omit
+        // optional-looking fields that this storefront requires before a physical order can ship.
         await page
             .getByRole('button', { name: /Select address/i })
             .first()
             .click();
-        // Address cards are plain divs in the popover — click the first one
-        await page.locator('[data-slot="popover-content"]').locator('[data-slot="card"]').first().click();
-        // Wait for set-address mutation
-        await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        const addressPopover = page
+            .locator('[data-slot="popover-content"]:visible')
+            .filter({ has: page.getByRole('tab', { name: /New address/i }) });
+        await addressPopover.getByRole('tab', { name: /New address/i }).click();
+        await addressPopover.getByLabel('Full Name').fill('E2E Draft Customer');
+        await addressPopover.getByLabel('Street Address').fill('123 Release Street');
+        await addressPopover.getByLabel('City').fill('London');
+        await addressPopover.getByLabel('State/Province').fill('Greater London');
+        await addressPopover.getByLabel('Postal Code').fill('SW1A 1AA');
+        await addressPopover.getByLabel('Phone Number').fill('+44 20 7946 0958');
+        await addressPopover.getByRole('combobox').click();
+        await page.getByRole('option').first().click();
+        await Promise.all([
+            page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200),
+            addressPopover.getByRole('button', { name: /Okay/i }).click(),
+        ]);
 
         // Step 5: Select a shipping method — inline cards (not a popover)
         // Shipping methods appear after address is set; wait for them
@@ -163,8 +175,8 @@ test.describe('Orders', () => {
         await lp.expectRowCountGreaterThan(0);
     });
 
-    // #4830 — toggling the State column must not crash the order list.
-    // The list query only fetches visible columns; re-enabling State refetches,
+    // #4830 — toggling the Order status column must not crash the order list.
+    // The list query only fetches visible columns; re-enabling Order status refetches,
     // but `placeholderData: keepPreviousData` first renders the previous rows
     // (which no longer carry `state`) into the State column. Pre-fix this threw
     // `Cannot read properties of undefined (reading 'toLowerCase')` in
@@ -179,17 +191,17 @@ test.describe('Orders', () => {
         await lp.expectLoaded();
         await lp.expectRowCountGreaterThan(0);
 
-        const stateHeader = lp.dataTable.locator('thead th').filter({ hasText: 'State' });
-        const stateToggle = page.getByRole('menuitemcheckbox', { name: /^state$/i });
+        const stateHeader = lp.dataTable.locator('thead th').filter({ hasText: 'Order status' });
+        const stateToggle = page.getByRole('menuitemcheckbox', { name: /^status$/i });
         await expect(stateHeader).toBeVisible();
 
-        // Hide State → the list refetches without the `state` field.
+        // Hide Order status → the list refetches without the `state` field.
         await lp.openColumnSettings();
         await stateToggle.click();
         await page.keyboard.press('Escape');
         await expect(stateHeader).toBeHidden();
 
-        // Re-enable State → triggers the stale-placeholder render that used to crash.
+        // Re-enable Order status → triggers the stale-placeholder render that used to crash.
         await lp.openColumnSettings();
         await stateToggle.click();
         await page.keyboard.press('Escape');

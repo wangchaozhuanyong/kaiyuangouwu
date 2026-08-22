@@ -46,15 +46,15 @@ test.describe('Shipping Methods CRUD', () => {
         await dp.fillInput('Code', 'e2e-test-shipping');
 
         // Fulfillment handler — standard Select
-        await dp.selectOption('Fulfillment handler', 'Manually enter fulfillment details');
+        await dp.selectOption('Fulfillment handler', 'Enter shipping and tracking details manually');
 
         // Shipping Eligibility Checker — ConfigurableOperationSelector (DropdownMenu)
         await page.getByRole('button', { name: 'Select Shipping Eligibility Checker' }).click();
-        await page.getByRole('menuitem', { name: 'Default Shipping Eligibility Checker' }).click();
+        await page.getByRole('menuitem', { name: 'Require a minimum order subtotal' }).click();
 
         // Shipping Calculator — ConfigurableOperationSelector (DropdownMenu)
         await page.getByRole('button', { name: 'Select Shipping Calculator' }).click();
-        await page.getByRole('menuitem', { name: /Flat-Rate Shipping Calculator/ }).click();
+        await page.getByRole('menuitem', { name: /Charge a fixed shipping rate/ }).click();
 
         await dp.clickCreate();
         await dp.expectSuccessToast(/Successfully created shipping method/);

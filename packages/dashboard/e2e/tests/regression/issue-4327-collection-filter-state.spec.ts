@@ -13,7 +13,7 @@ test.describe('Issue #4327: Collection filters with same type share state', () =
         new BaseDetailPage(page, {
             newPath: '/collections/new',
             pathPrefix: '/collections/',
-            newTitle: 'New collection',
+            newTitle: 'New product group',
         });
 
     test('should maintain independent state for two filters of the same type', async ({ page }) => {
@@ -25,8 +25,8 @@ test.describe('Issue #4327: Collection filters with same type share state', () =
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
 
         // Add first "Filter by product variant name" filter
-        await page.getByRole('button', { name: /Add collection filter/i }).click();
-        await page.getByRole('menuitem', { name: /Filter by product variant name/i }).click();
+        await page.getByRole('button', { name: /Add product group filter/i }).click();
+        await page.getByRole('menuitem', { name: /Filter by product SKU name/i }).click();
 
         // Fill the first filter's term input (identified by input name attribute,
         // which comes from the configurable operation arg name and is stable)
@@ -34,8 +34,8 @@ test.describe('Issue #4327: Collection filters with same type share state', () =
         await termInputs.first().fill('shirt');
 
         // Add second "Filter by product variant name" filter
-        await page.getByRole('button', { name: /Add collection filter/i }).click();
-        await page.getByRole('menuitem', { name: /Filter by product variant name/i }).click();
+        await page.getByRole('button', { name: /Add product group filter/i }).click();
+        await page.getByRole('menuitem', { name: /Filter by product SKU name/i }).click();
 
         // Fill the second filter's term with a DIFFERENT value
         await page.locator('input[name="term"]').last().fill('pants');
