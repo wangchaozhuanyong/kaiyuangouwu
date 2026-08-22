@@ -185,6 +185,7 @@
         }
     },
     "patchedDependencies": {
-        "husky@4.3.8": "patches/husky@4.3.8.patch"
+        "husky@4.3.8": "patches/husky@4.3.8.patch",
+        "brace-expansion@5.0.9": "patches/brace-expansion@5.0.9.patch"
     }
 }
