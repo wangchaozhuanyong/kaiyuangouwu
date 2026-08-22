@@ -3,6 +3,7 @@ on:
     workflow_dispatch:
     push:
         branches:
+            - main
             - master
             - minor
             - major
@@ -13,6 +14,7 @@ on:
             - 'bunfig.toml'
     pull_request:
         branches:
+            - main
             - master
             - major
             - minor

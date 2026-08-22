@@ -22,4 +22,4 @@ runs:
               bun-version: ${{ inputs.bun-version }}
         - name: Install dependencies
           shell: bash
-          run: bun install --frozen-lockfile
+          run: bun install --frozen-lockfile --linker=hoisted

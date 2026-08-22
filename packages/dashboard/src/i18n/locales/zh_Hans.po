@@ -284,6 +284,7 @@ msgid "Sellers"
 msgstr "商家"
 
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+#: src/lib/components/ui/combobox.tsx
 msgid "Options"
 msgstr "选项"
 
