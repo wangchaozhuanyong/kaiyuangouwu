@@ -23,6 +23,7 @@
         "watch": "tsc --project tsconfig.vite.json --watch",
         "test": "vitest run",
         "test:storybook": "vitest run --config vitest.storybook.config.mts",
+        "test:storybook:ci": "vitest run --config vitest.storybook.config.mts --shard=1/4 && vitest run --config vitest.storybook.config.mts --shard=2/4 && vitest run --config vitest.storybook.config.mts --shard=3/4 && vitest run --config vitest.storybook.config.mts --shard=4/4",
         "audit:bundle": "cross-env RUN_BUNDLE_AUDIT=true vitest run vite/tests/bundle-singleton.spec.ts vite/tests/bundle-singleton-dev-serving.spec.ts",
         "lint": "eslint .",
         "preview": "vite preview",

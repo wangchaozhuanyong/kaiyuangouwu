@@ -183,7 +183,7 @@ jobs:
               run: bunx playwright install-deps chromium
             - name: Storybook browser and accessibility tests
               working-directory: packages/dashboard
-              run: bun run test:storybook
+              run: bun run test:storybook:ci
             - name: Build Storybook and check bundle budgets
               working-directory: packages/dashboard
               run: bun run storybook:build
@@ -204,7 +204,7 @@ jobs:
               run: bun run build:core-common
             - name: Storybook browser and accessibility tests in Chrome
               working-directory: packages/dashboard
-              run: bun run test:storybook
+              run: bun run test:storybook:ci
     dashboard-e2e:
         name: dashboard e2e (${{ matrix.shard }})
         needs: detect-changes

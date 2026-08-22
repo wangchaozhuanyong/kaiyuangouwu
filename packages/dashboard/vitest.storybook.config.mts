@@ -99,6 +99,9 @@ export default defineConfig({
     },
     test: {
         name: 'storybook',
+        // GitHub-hosted runners can terminate Chromium when the full Storybook suite opens too
+        // many browser workers at once. Keep enough parallelism for speed without exhausting it.
+        maxWorkers: process.env.CI ? 2 : undefined,
         exclude: ['**/dist/**', '**/.temp/**', '**/storybook-static/**', '**/node_modules/**'],
         browser: {
             enabled: true,

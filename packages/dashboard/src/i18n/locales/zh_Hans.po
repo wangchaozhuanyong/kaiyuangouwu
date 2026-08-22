@@ -7270,8 +7270,8 @@ msgid "Customer added to group"
 msgstr "客户已添加到组"
 
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-utils.tsx
-msgid "Unknown order activity"
-msgstr "未知订单动态"
+#~ msgid "Unknown order activity"
+#~ msgstr "未知订单动态"
 
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
 msgid "Run this scheduled task now? It may update or remove system data."
