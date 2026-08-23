@@ -359,7 +359,7 @@ function useAutoMattedLogo(url: string | null): string | null {
 
 /** Renders the store logo image if available, otherwise falls back to the newly crafted high-def vector logo. */
 function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
-    const effectiveUrl = url || '/logo.svg';
+    const effectiveUrl = url || '/storefront/logo.svg';
     return <img className={className} src={effectiveUrl} alt={name} />;
 }
 
