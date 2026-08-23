@@ -2419,22 +2419,23 @@ img.fatal-error-mark {
 }
 
 .primary-categories-all {
-    width: 68px;
-    min-width: 68px;
+    width: 66px;
+    min-width: 66px;
     height: 100%;
-    padding: 2px 2px;
+    padding: 0 4px;
     position: relative;
     z-index: 1;
     border: 0;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.98) 30%, #ffffff 100%);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.94) 24%, #ffffff 100%);
     color: var(--muted);
-    display: grid;
-    justify-items: center;
-    align-content: start;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
     gap: 4px;
     cursor: pointer;
-    box-shadow: -8px 0 16px -8px rgba(15, 23, 42, 0.08);
-    transition: color 140ms ease, transform 120ms ease;
+    box-shadow: -10px 0 16px -8px rgba(15, 23, 42, 0.06);
+    transition: all 140ms ease;
 }
 
 .primary-categories-all:active {
@@ -2442,24 +2443,19 @@ img.fatal-error-mark {
 }
 
 .primary-categories-all::before {
-    content: '';
-    width: 1px;
-    position: absolute;
-    top: 14px;
-    bottom: 14px;
-    left: 0;
-    background: rgba(0, 0, 0, 0.06);
+    display: none;
 }
 
 .primary-categories-all-icon {
     width: 46px;
     height: 42px;
     border-radius: var(--radius-sm);
-    border: 1px dashed rgba(0, 0, 0, 0.14);
-    background: #f8faf9;
-    color: var(--text);
-    display: grid;
-    place-items: center;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: #f4f6f5;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 160ms ease;
 }
 
@@ -2480,18 +2476,18 @@ img.fatal-error-mark {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    font-size: 11.5px;
-    font-weight: var(--font-weight-medium);
+    gap: 1px;
+    font-size: 11px;
+    font-weight: 600;
     line-height: 18px;
-    color: var(--text);
+    color: #475569;
     white-space: nowrap;
 }
 
 .primary-categories-all-label svg {
-    width: 12px;
-    height: 12px;
-    color: var(--muted);
+    width: 11px;
+    height: 11px;
+    color: #64748b;
     transition: transform 160ms ease;
 }
 
