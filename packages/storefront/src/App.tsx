@@ -4177,56 +4177,113 @@ export function CartPage(props: CartPageProps) {
                 </>
             )}
 
-            {!!lines.length && (
-                <div className="cart-checkout-bar">
-                    <div>
-                        <span>
-                            {isZh ? '合计' : 'Total'}{' '}
-                            <strong>
-                                {formatMoney(amount, order?.currencyCode ?? market.currencyCode, locale)}
-                            </strong>
-                        </span>
-                        <small>
-                            {locked && order
-                                ? digitalOnly
+            {!!lines.length &&
+                (typeof document !== 'undefined' && document.body ? (
+                    createPortal(
+                        <div className="cart-checkout-bar">
+                            <div>
+                                <span>
+                                    {isZh ? '合计' : 'Total'}{' '}
+                                    <strong>
+                                        {formatMoney(
+                                            amount,
+                                            order?.currencyCode ?? market.currencyCode,
+                                            locale,
+                                        )}
+                                    </strong>
+                                </span>
+                                <small>
+                                    {locked && order
+                                        ? digitalOnly
+                                            ? isZh
+                                                ? '无需配送'
+                                                : 'No shipping required'
+                                            : order.shippingWithTax > 0
+                                              ? isZh
+                                                  ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
+                                                  : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
+                                              : isZh
+                                                ? '配送费已确认'
+                                                : 'Delivery confirmed'
+                                        : discount
+                                          ? isZh
+                                              ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
+                                              : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
+                                          : digitalOnly
+                                            ? isZh
+                                                ? '无需配送'
+                                                : 'No shipping required'
+                                            : isZh
+                                              ? '不含待计算运费'
+                                              : 'Shipping not included'}
+                                </small>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onCheckout}
+                                disabled={loading || locked || !cart?.selectedQuantity}
+                            >
+                                {locked
                                     ? isZh
-                                        ? '无需配送'
-                                        : 'No shipping required'
-                                    : order.shippingWithTax > 0
-                                      ? isZh
-                                          ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
-                                          : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
-                                      : isZh
-                                        ? '配送费已确认'
-                                        : 'Delivery confirmed'
-                                : discount
-                                  ? isZh
-                                      ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
-                                      : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
-                                  : digitalOnly
-                                    ? isZh
-                                        ? '无需配送'
-                                        : 'No shipping required'
+                                        ? '订单待支付'
+                                        : 'Payment pending'
                                     : isZh
-                                      ? '不含待计算运费'
-                                      : 'Shipping not included'}
-                        </small>
+                                      ? `结算（${cart?.selectedQuantity ?? 0}）`
+                                      : `Checkout (${cart?.selectedQuantity ?? 0})`}
+                            </button>
+                        </div>,
+                        document.body,
+                    )
+                ) : (
+                    <div className="cart-checkout-bar">
+                        <div>
+                            <span>
+                                {isZh ? '合计' : 'Total'}{' '}
+                                <strong>
+                                    {formatMoney(amount, order?.currencyCode ?? market.currencyCode, locale)}
+                                </strong>
+                            </span>
+                            <small>
+                                {locked && order
+                                    ? digitalOnly
+                                        ? isZh
+                                            ? '无需配送'
+                                            : 'No shipping required'
+                                        : order.shippingWithTax > 0
+                                          ? isZh
+                                              ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
+                                              : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
+                                          : isZh
+                                            ? '配送费已确认'
+                                            : 'Delivery confirmed'
+                                    : discount
+                                      ? isZh
+                                          ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
+                                          : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
+                                      : digitalOnly
+                                        ? isZh
+                                            ? '无需配送'
+                                            : 'No shipping required'
+                                        : isZh
+                                          ? '不含待计算运费'
+                                          : 'Shipping not included'}
+                            </small>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onCheckout}
+                            disabled={loading || locked || !cart?.selectedQuantity}
+                        >
+                            {locked
+                                ? isZh
+                                    ? '订单待支付'
+                                    : 'Payment pending'
+                                : isZh
+                                  ? `结算（${cart?.selectedQuantity ?? 0}）`
+                                  : `Checkout (${cart?.selectedQuantity ?? 0})`}
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onCheckout}
-                        disabled={loading || locked || !cart?.selectedQuantity}
-                    >
-                        {locked
-                            ? isZh
-                                ? '订单待支付'
-                                : 'Payment pending'
-                            : isZh
-                              ? `结算（${cart?.selectedQuantity ?? 0}）`
-                              : `Checkout (${cart?.selectedQuantity ?? 0})`}
-                    </button>
-                </div>
-            )}
+                ))}
             {couponOpen && order && (
                 <CouponSheet
                     couponCodes={order.couponCodes}
