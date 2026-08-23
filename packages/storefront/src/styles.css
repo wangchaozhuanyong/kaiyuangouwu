@@ -1,6 +1,6 @@
 :root {
-    color: #171918;
-    background: #f5f7f6;
+    color: #1e293b;
+    background: #f1f5f9;
     --font-ui:
         system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
         'Microsoft YaHei', 'Noto Sans CJK SC', Arial, sans-serif;
@@ -16,9 +16,9 @@
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     --app-width: 430px;
-    --bg: #f5f7f6;
+    --bg: #f1f5f9;
     --paper: #ffffff;
-    --soft: #eef2f1;
+    --soft: #f8fafc;
     --product-media-bg: #f0f3f2;
     --product-media-ratio: 1 / 1;
     --text: #171918;
@@ -1064,13 +1064,14 @@ img.fatal-error-mark {
 }
 
 .quick-grid {
-    padding: 0;
-    margin: 0 12px 14px;
+    margin: 0 10px 10px;
+    padding: 14px 8px 12px;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
-    background: transparent;
-    border-radius: 0;
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
 .quick-grid-1 {
@@ -1091,30 +1092,29 @@ img.fatal-error-mark {
 
 .quick-grid button {
     min-width: 0;
-    min-height: 72px;
-    padding: 4px 0;
+    min-height: 68px;
+    padding: 2px 0;
     border: 0;
     background: transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    gap: 6px;
+    gap: 5px;
     cursor: pointer;
 }
 
 .quick-grid button > span {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.04);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px solid rgba(0, 0, 0, 0.05);
     color: var(--accent);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px;
+    padding: 5px;
     transition:
         transform 180ms ease,
         box-shadow 180ms ease;
@@ -1128,8 +1128,8 @@ img.fatal-error-mark {
 }
 
 .quick-grid button > span svg {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
 }
 
 .quick-grid button:disabled {
@@ -1139,7 +1139,7 @@ img.fatal-error-mark {
 
 .quick-grid button:hover > span {
     transform: translateY(-2px);
-    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
 }
 
 .quick-grid b {
@@ -1147,9 +1147,9 @@ img.fatal-error-mark {
     max-width: 100%;
     overflow: hidden;
     display: block;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
-    color: #1e293b;
+    color: #334155;
     line-height: 1.2;
     text-align: center;
     white-space: nowrap;
@@ -1159,12 +1159,11 @@ img.fatal-error-mark {
 
 /* Coupon Hub Promotion Section */
 .coupon-hub-section {
-    margin: 0 12px 14px;
+    margin: 0 10px 10px;
     padding: 14px 12px;
     background: #ffffff;
-    border-radius: 16px;
-    border: 1px solid rgba(0, 0, 0, 0.04);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    border-radius: 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
 .coupon-hub-header {
@@ -1181,11 +1180,11 @@ img.fatal-error-mark {
 }
 
 .coupon-hub-icon-pill {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    background: #fee2e2;
-    color: #dc2626;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    background: #fed7aa;
+    color: #ea580c;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1212,7 +1211,7 @@ img.fatal-error-mark {
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    padding: 2px 4px;
+    padding: 2px 0;
     border: 0;
     background: transparent;
     font-size: 12px;
@@ -1241,15 +1240,15 @@ img.fatal-error-mark {
 
 /* Coupon Ticket Card */
 .coupon-ticket-card {
-    flex: 0 0 190px;
-    min-width: 185px;
-    max-width: 210px;
-    height: 76px;
-    border-radius: 10px;
+    flex: 0 0 180px;
+    min-width: 175px;
+    max-width: 200px;
+    height: 72px;
+    border-radius: 8px;
     display: flex;
     align-items: stretch;
     position: relative;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
     scroll-snap-align: start;
     transition: transform 180ms ease, box-shadow 180ms ease, opacity 200ms ease;
 }
@@ -1271,8 +1270,8 @@ img.fatal-error-mark {
 }
 
 .coupon-ticket-rose {
-    background: linear-gradient(135deg, #fff3f5 0%, #ffe6eb 100%);
-    border: 1px solid #f8cad4;
+    background: #fff5f5;
+    border: 1px solid #fecdd3;
     color: #9d2b48;
 }
 
@@ -1304,12 +1303,12 @@ img.fatal-error-mark {
 }
 
 .coupon-ticket-tag {
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: var(--font-weight-semibold);
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.06);
-    line-height: 1.3;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.05);
+    line-height: 1.2;
 }
 
 .coupon-ticket-value {
@@ -1321,14 +1320,14 @@ img.fatal-error-mark {
 }
 
 .coupon-ticket-value .coupon-num {
-    font-size: 20px;
-    font-weight: 800;
+    font-size: 18px;
+    font-weight: 900;
     letter-spacing: -0.03em;
     font-family: var(--font-number, system-ui, -apple-system, sans-serif);
 }
 
 .coupon-ticket-value .coupon-unit {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 700;
 }
 
@@ -1360,8 +1359,8 @@ img.fatal-error-mark {
 
 .coupon-notch {
     position: absolute;
-    width: 10px;
-    height: 5px;
+    width: 8px;
+    height: 4px;
     background: #ffffff;
     border: 1px solid inherit;
     z-index: 1;
@@ -1369,21 +1368,21 @@ img.fatal-error-mark {
 
 .coupon-notch-top {
     top: -1px;
-    border-bottom-left-radius: 5px;
-    border-bottom-right-radius: 5px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
     border-top: 0;
 }
 
 .coupon-notch-bottom {
     bottom: -1px;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
     border-bottom: 0;
 }
 
 /* Action Button */
 .coupon-ticket-action {
-    width: 52px;
+    width: 48px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -1395,7 +1394,7 @@ img.fatal-error-mark {
     width: 100%;
     height: 100%;
     border: 0;
-    border-radius: 8px;
+    border-radius: 6px;
     background: currentColor;
     color: white !important;
     display: flex;
@@ -1403,7 +1402,7 @@ img.fatal-error-mark {
     justify-content: center;
     cursor: pointer;
     transition: transform 150ms ease, opacity 180ms ease;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
     padding: 4px 2px;
 }
 
@@ -1413,7 +1412,7 @@ img.fatal-error-mark {
     align-items: center;
     justify-content: center;
     gap: 1px;
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: var(--font-weight-bold);
     line-height: 1.2;
     letter-spacing: 0.5px;
@@ -1428,7 +1427,7 @@ img.fatal-error-mark {
 }
 
 .coupon-ticket-rose .coupon-claim-btn {
-    background: #b53254;
+    background: #d33c30;
 }
 
 .coupon-ticket-blue .coupon-claim-btn {
@@ -1771,9 +1770,11 @@ img.fatal-error-mark {
 
 .content-section,
 .account-section {
-    margin-top: 9px;
-    padding: 13px 10px 17px;
+    margin: 0 10px 10px;
+    padding: 14px 12px 16px;
     background: var(--paper);
+    border-radius: 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
 .section-header {

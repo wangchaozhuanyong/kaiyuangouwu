@@ -2169,10 +2169,9 @@ function HomepageCouponHub({ language, onNavigate, onToast }: HomepageCouponHubP
             <div className="coupon-hub-header">
                 <div className="coupon-hub-title-lockup">
                     <span className="coupon-hub-icon-pill" aria-hidden="true">
-                        <TicketPercent size={15} />
+                        <Tag size={13} />
                     </span>
                     <h2 className="coupon-hub-title">{isZh ? '专享特惠专区' : 'Exclusive Coupons'}</h2>
-                    <span className="coupon-hub-badge">{isZh ? '限量发放 · 下单立减' : 'Limited Time'}</span>
                 </div>
                 <button
                     type="button"
