@@ -2943,7 +2943,7 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
     const isZh = language === 'zh';
     return (
         <section className="home-trust-strip" aria-label={isZh ? '服务保障' : 'Service Guarantees'}>
-            <div className="trust-item">
+            <div className="trust-item item-genuine">
                 <div className="trust-icon-box">
                     <CircleCheck aria-hidden="true" />
                 </div>
@@ -2952,7 +2952,7 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
                     <small>{isZh ? '严选硬件品质保证' : '100% genuine products'}</small>
                 </div>
             </div>
-            <div className="trust-item">
+            <div className="trust-item item-delivery">
                 <div className="trust-icon-box">
                     <Download aria-hidden="true" />
                 </div>
@@ -2961,7 +2961,7 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
                     <small>{isZh ? '数字内容付款即享' : 'Direct digital download'}</small>
                 </div>
             </div>
-            <div className="trust-item">
+            <div className="trust-item item-shipping">
                 <div className="trust-icon-box">
                     <Truck aria-hidden="true" />
                 </div>
@@ -2970,7 +2970,7 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
                     <small>{isZh ? '实物全程轨迹追踪' : 'Tracked express delivery'}</small>
                 </div>
             </div>
-            <div className="trust-item">
+            <div className="trust-item item-support">
                 <div className="trust-icon-box">
                     <RotateCcw aria-hidden="true" />
                 </div>
