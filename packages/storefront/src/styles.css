@@ -4750,36 +4750,42 @@ img.fatal-error-mark {
     pointer-events: none;
 }
 
-.account-hero-top-bar {
+.account-hero-glass-card {
     position: relative;
     z-index: 1;
+    padding: 24px 16px 18px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    box-shadow:
+        0 14px 34px -10px rgba(15, 23, 42, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    padding: 2px 4px 10px;
-}
-
-.account-hero-brand-tag {
-    font-size: 14px;
-    font-weight: 800;
-    color: #334155;
-    letter-spacing: -0.01em;
+    text-align: center;
 }
 
 .account-hero-settings-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 2;
     width: 36px;
     height: 36px;
     flex-shrink: 0;
     border: 1px solid rgba(226, 232, 240, 0.9);
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     color: #334155;
     display: grid;
     place-items: center;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
     transition: all 180ms ease;
 }
 
@@ -4793,24 +4799,6 @@ img.fatal-error-mark {
 .account-hero-settings-btn svg {
     width: 17px;
     height: 17px;
-}
-
-.account-hero-glass-card {
-    position: relative;
-    z-index: 1;
-    padding: 22px 16px 18px;
-    border-radius: 22px;
-    background: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.95);
-    box-shadow:
-        0 14px 34px -10px rgba(15, 23, 42, 0.07),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
 }
 
 .account-hero-avatar-halo {

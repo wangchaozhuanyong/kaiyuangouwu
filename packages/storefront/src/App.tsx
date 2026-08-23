@@ -4336,21 +4336,18 @@ function AccountPage(props: AccountPageProps) {
                 className={`account-identity-hero${customer ? ' is-authenticated' : ' is-guest'}`}
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
-                <div className="account-hero-top-bar">
-                    <span className="account-hero-brand-tag">{storefrontName}</span>
-                    <button
-                        className="account-hero-settings-btn"
-                        type="button"
-                        title={isZh ? '账户与安全' : 'Account and security'}
-                        aria-label={isZh ? '账户与安全' : 'Account and security'}
-                        onClick={() => onNavigate({ name: 'account-security' })}
-                    >
-                        <Settings aria-hidden="true" />
-                    </button>
-                </div>
-
                 {customer ? (
                     <div className="account-hero-glass-card">
+                        <button
+                            className="account-hero-settings-btn"
+                            type="button"
+                            title={isZh ? '账户与安全' : 'Account and security'}
+                            aria-label={isZh ? '账户与安全' : 'Account and security'}
+                            onClick={() => onNavigate({ name: 'account-security' })}
+                        >
+                            <Settings aria-hidden="true" />
+                        </button>
+
                         <div className="account-hero-avatar-halo">
                             <button
                                 className="account-hero-avatar-btn"
