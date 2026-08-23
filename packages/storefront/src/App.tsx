@@ -357,13 +357,10 @@ function useAutoMattedLogo(url: string | null): string | null {
     return transparentUrl;
 }
 
-/** Renders the store logo image if available, otherwise falls back to the “桥” text mark. */
+/** Renders the store logo image if available, otherwise falls back to the newly crafted high-def vector logo. */
 function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
-    const mattedUrl = useAutoMattedLogo(url);
-    if (mattedUrl) {
-        return <img className={className} src={mattedUrl} alt={name} />;
-    }
-    return <span className={className}>桥</span>;
+    const effectiveUrl = url || '/logo.svg';
+    return <img className={className} src={effectiveUrl} alt={name} />;
 }
 
 const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
