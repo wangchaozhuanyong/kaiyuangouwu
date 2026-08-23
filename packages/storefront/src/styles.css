@@ -3351,18 +3351,18 @@ img.fatal-error-mark {
     height: 48px;
     border: 0;
     border-radius: 9999px;
-    background: #0f172a;
+    background: var(--accent);
     color: #ffffff;
     font-size: 14px;
     font-weight: 700;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 4px 14px rgba(209, 60, 48, 0.28);
     transition: all 150ms ease;
 }
 
 .filter-actions .filter-confirm-button:hover {
-    background: #1e293b;
+    background: #b82f24;
     transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.24);
+    box-shadow: 0 6px 18px rgba(209, 60, 48, 0.38);
 }
 
 .shipping-note {
@@ -4528,6 +4528,12 @@ img.fatal-error-mark {
     gap: 12px;
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+    transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: transform;
+}
+
+.cart-checkout-bar.is-scrolled-hidden {
+    transform: translate(-50%, calc(100% + var(--bottom-navigation-height) + var(--safe-bottom) + 30px));
 }
 
 .cart-checkout-bar > div span {
@@ -4557,14 +4563,14 @@ img.fatal-error-mark {
 
 .cart-checkout-bar > button {
     height: 44px;
-    padding: 0 20px;
+    padding: 0 24px;
     border: 0;
     border-radius: 9999px;
-    background: #0f172a;
+    background: var(--accent);
     color: white;
     font-weight: 700;
     font-size: 14px;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 4px 14px rgba(209, 60, 48, 0.28);
     transition:
         transform 140ms ease,
         background 160ms ease,
@@ -4575,8 +4581,8 @@ img.fatal-error-mark {
 .cart-checkout-bar > button:hover:not(:disabled),
 .primary-action:hover:not(:disabled),
 .submit-order-bar > button:hover:not(:disabled) {
-    background: var(--accent);
-    box-shadow: 0 4px 12px rgba(209, 60, 48, 0.3);
+    background: #b82f24;
+    box-shadow: 0 6px 18px rgba(209, 60, 48, 0.38);
 }
 
 .cart-checkout-bar > button:disabled,

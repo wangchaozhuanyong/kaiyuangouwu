@@ -3867,6 +3867,23 @@ export function CartPage(props: CartPageProps) {
     const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
     const amount = locked && order ? order.totalWithTax : (order?.subTotalWithTax ?? 0);
 
+    const [isCheckoutBarHidden, setIsCheckoutBarHidden] = useState(false);
+    const lastScrollY = useRef(0);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+            if (currentScrollY > 60 && currentScrollY > lastScrollY.current + 5) {
+                setIsCheckoutBarHidden(true);
+            } else if (currentScrollY < lastScrollY.current - 5 || currentScrollY <= 20) {
+                setIsCheckoutBarHidden(false);
+            }
+            lastScrollY.current = currentScrollY;
+        };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
     useEffect(() => {
         const currentLineIds = new Set(lines.map(line => line.id));
         setPinnedLineIds(current => {
@@ -4169,7 +4186,7 @@ export function CartPage(props: CartPageProps) {
             )}
 
             {isActive && !!lines.length && (
-                <div className="cart-checkout-bar">
+                <div className={`cart-checkout-bar${isCheckoutBarHidden ? ' is-scrolled-hidden' : ''}`}>
                     <div>
                         <span>
                             {isZh ? '合计' : 'Total'}{' '}
