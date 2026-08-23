@@ -5324,82 +5324,241 @@ img.fatal-error-mark {
     border-color: var(--danger);
 }
 
-.account-security-profile {
-    min-height: 96px;
-    padding: 16px 14px;
-    background: white;
-    display: grid;
-    grid-template-columns: 58px minmax(0, 1fr);
-    align-items: center;
-    gap: 11px;
+/* Account and Security / Settings Modern Redesign */
+.account-security-page {
+    background: #f8fafc;
+    min-height: 100dvh;
 }
 
-.account-security-profile strong,
-.account-security-profile small {
-    display: block;
+.security-page-body {
+    padding: 12px 14px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* User Card */
+.security-user-card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.security-user-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.security-user-meta {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.security-user-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.security-user-name {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.01em;
     overflow: hidden;
-    white-space: nowrap;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.account-security-profile strong {
-    font-size: 17px;
-    font-weight: var(--font-weight-semibold);
-}
-
-.account-security-profile small {
-    margin-top: 5px;
-    color: var(--muted);
-}
-
-.account-security-list {
-    margin-top: 9px;
-    padding: 0 14px;
-    background: white;
-}
-
-.account-security-list > button {
-    width: 100%;
-    min-height: 62px;
-    padding: 8px 0;
-    border: 0;
-    border-bottom: 1px solid var(--line);
-    background: transparent;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto 18px;
+.security-status-badge {
+    display: inline-flex;
     align-items: center;
-    gap: 9px;
-    text-align: left;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    background: #ecfdf5;
+    color: #059669;
+    font-size: 11px;
+    font-weight: 700;
 }
 
-.account-security-list > button:last-child {
+.security-user-email {
+    margin: 0;
+    font-size: 13px;
+    color: #64748b;
+    font-family: var(--font-numeric);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Security Groups */
+.security-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.security-group-header {
+    padding: 0 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.security-card-list {
+    background: #ffffff;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
+    overflow: hidden;
+}
+
+.security-item-btn,
+.security-item-static {
+    width: 100%;
+    min-height: 56px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+    transition: background 150ms ease;
+}
+
+.security-item-btn {
+    cursor: pointer;
+}
+
+.security-item-btn:active {
+    background: #f8fafc;
+}
+
+.security-item-btn:last-child,
+.security-item-static:last-child {
     border-bottom: 0;
 }
 
-.account-security-list > button > span {
+.security-item-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.security-item-icon.icon-password {
+    background: #fff1f2;
+    color: #e11d48;
+}
+
+.security-item-icon.icon-address {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.security-item-icon.icon-shield {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.security-item-info {
     min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.security-item-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.security-item-subtitle {
+    font-size: 12px;
+    color: #64748b;
+}
+
+.security-item-tail {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 4px;
+    color: #94a3b8;
+    flex-shrink: 0;
 }
 
-.account-security-list > button > span svg {
-    width: 20px;
-    color: var(--accent);
-}
-
-.account-security-list b {
+.security-tail-text {
+    font-size: 12px;
+    color: #64748b;
     font-weight: 600;
 }
 
-.account-security-list small {
-    color: var(--muted);
-    text-align: right;
+.security-safe-badge {
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #ecfdf5;
+    color: #059669;
+    font-size: 12px;
+    font-weight: 800;
+    flex-shrink: 0;
 }
 
-.account-security-list > button > svg {
-    width: 17px;
-    color: var(--muted);
+/* Logout Button */
+.security-action-group {
+    margin-top: 10px;
+}
+
+.security-logout-button {
+    width: 100%;
+    height: 48px;
+    border-radius: 12px;
+    border: 1px solid #fecdd3;
+    background: #fff1f2;
+    color: #e11d48;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(225, 29, 72, 0.06);
+    transition: all 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.security-logout-button:hover {
+    background: #ffe4e6;
+    border-color: #fda4af;
+}
+
+.security-logout-button:active {
+    transform: scale(0.98);
 }
 
 .recent-purchases {

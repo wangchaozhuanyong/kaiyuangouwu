@@ -1578,6 +1578,7 @@ export function App() {
             case 'cart':
                 return (
                     <CartPage
+                        isActive={route.name === 'cart'}
                         cart={cart}
                         customer={customer}
                         products={products}
@@ -3761,6 +3762,7 @@ function CategoryPage(props: CategoryPageProps) {
 }
 
 interface CartPageProps {
+    isActive?: boolean;
     cart: StorefrontCart | null;
     customer: ActiveCustomer | null;
     products: Product[];
@@ -3789,6 +3791,7 @@ interface CartPageProps {
 
 export function CartPage(props: CartPageProps) {
     const {
+        isActive = true,
         cart,
         customer,
         products,
@@ -4171,7 +4174,7 @@ export function CartPage(props: CartPageProps) {
                 </>
             )}
 
-            {!!lines.length && (
+            {isActive && !!lines.length && (
                 <div className="cart-checkout-bar">
                     <div>
                         <span>
