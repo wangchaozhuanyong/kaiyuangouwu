@@ -2694,159 +2694,127 @@ function HomePage(props: HomePageProps) {
                             onPointerUp={event => finishHeroSwipe(event)}
                             onPointerCancel={event => finishHeroSwipe(event, true)}
                             onDragStart={event => event.preventDefault()}
-                            style={{
-                                backgroundColor: managedHero?.backgroundColor ?? undefined,
-                                color: managedHero?.textColor ?? undefined,
-                            }}
                         >
-                            {/* Dynamic 3D Cyber Card Rendering */}
+                            {/* Full-bleed Rich 3D High-End Visual Background */}
+                            <img
+                                src={
+                                    heroIndex === 0
+                                        ? '/storefront/hero-01-gateway.jpg'
+                                        : '/storefront/hero-02-vip.jpg'
+                                }
+                                alt={
+                                    isZh
+                                        ? heroIndex === 0
+                                            ? '云桥 AI 聚合网关'
+                                            : 'AI 专属会员特权'
+                                        : 'Hero Banner'
+                                }
+                                className="hero-rich-backdrop"
+                                loading="eager"
+                            />
+                            <div className="hero-rich-overlay-shade" />
+
                             {heroIndex === 0 ? (
-                                <div className="hero-ai-card-theme theme-gateway">
-                                    <div className="hero-cyber-bg-glow" />
-                                    <div className="hero-copy">
-                                        <div className="hero-ai-chip-pill">
-                                            <Zap aria-hidden="true" />
-                                            <span>
-                                                {isZh
-                                                    ? '极速全线满血 · 0.05x 官方费率起'
-                                                    : 'Full Speed AI · From 0.05x Rate'}
-                                            </span>
-                                        </div>
-                                        <h1>{isZh ? '云桥 AI 聚合网关' : 'CloudBridge AI Gateway'}</h1>
-                                        <p>
+                                <div className="hero-rich-content">
+                                    <div className="hero-rich-pill">
+                                        <Zap aria-hidden="true" />
+                                        <span>
                                             {isZh
-                                                ? '多模型统一接入，全球主流大模型极速调用'
-                                                : 'Unified multi-model API access with ultra-low latency'}
-                                        </p>
-
-                                        <div className="hero-ai-tag-group">
-                                            <span className="hero-ai-micro-tag">
-                                                {isZh ? 'API 直连' : 'Direct API'}
-                                            </span>
-                                            <span className="hero-ai-micro-tag">
-                                                {isZh ? '高并发无延迟' : 'High Concurrency'}
-                                            </span>
-                                            <span className="hero-ai-micro-tag">
-                                                {isZh ? '支持全模型' : 'All Models'}
-                                            </span>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            className="hero-ai-cta-btn"
-                                            onClick={() =>
-                                                managedHero?.targetValue
-                                                    ? onContentTarget(
-                                                          managedHero.targetType,
-                                                          managedHero.targetValue,
-                                                      )
-                                                    : onNavigate({ name: 'category' })
-                                            }
-                                        >
-                                            {isZh ? '一键接入 API' : 'Connect API'}
-                                            <ChevronRight aria-hidden="true" />
-                                        </button>
+                                                ? '全模型极速直连 · 0.05x 费率起'
+                                                : 'Ultra Fast AI API · From 0.05x'}
+                                        </span>
                                     </div>
+                                    <h1 className="hero-rich-title">
+                                        {isZh ? '云桥 AI 聚合网关' : 'CloudBridge AI Gateway'}
+                                    </h1>
+                                    <p className="hero-rich-desc">
+                                        {isZh
+                                            ? '支持 GPT-4o / Claude / Gemini / Apple 全生态满血调用'
+                                            : 'Enterprise grade OpenAI, Claude, Gemini & Apple model APIs'}
+                                    </p>
 
-                                    {/* 3D Stereoscopic Holographic Matrix on Right */}
-                                    <div className="hero-3d-matrix" aria-hidden="true">
-                                        <div className="hero-3d-cube-wrapper">
-                                            <div className="hero-model-pill model-apple">
-                                                <span className="model-icon">🍏</span>
-                                                <div className="model-info">
-                                                    <strong>Apple</strong>
-                                                    <small>Ecosystem</small>
-                                                </div>
-                                            </div>
-                                            <div className="hero-model-pill model-openai">
-                                                <span className="model-icon">🤖</span>
-                                                <div className="model-info">
-                                                    <strong>GPT-4o</strong>
-                                                    <small className="model-ping">🟢 28ms</small>
-                                                </div>
-                                            </div>
-                                            <div className="hero-model-pill model-gemini">
-                                                <span className="model-icon">✨</span>
-                                                <div className="model-info">
-                                                    <strong>Gemini 2.0</strong>
-                                                    <small>Pro Max</small>
-                                                </div>
-                                            </div>
-                                            <div className="hero-model-pill model-claude">
-                                                <span className="model-icon">🧠</span>
-                                                <div className="model-info">
-                                                    <strong>Claude 3.5</strong>
-                                                    <small>Sonnet</small>
-                                                </div>
-                                            </div>
+                                    <div className="hero-rich-stats-row">
+                                        <div className="hero-stat-badge">
+                                            <span className="stat-num">99.99%</span>
+                                            <span className="stat-lbl">{isZh ? '高可用' : 'Uptime'}</span>
+                                        </div>
+                                        <div className="hero-stat-badge">
+                                            <span className="stat-num">28ms</span>
+                                            <span className="stat-lbl">{isZh ? '极速响应' : 'Latency'}</span>
+                                        </div>
+                                        <div className="hero-stat-badge">
+                                            <span className="stat-num">0.05x</span>
+                                            <span className="stat-lbl">{isZh ? '特惠费率' : 'Discount'}</span>
                                         </div>
                                     </div>
+
+                                    <button
+                                        type="button"
+                                        className="hero-rich-cta-btn"
+                                        onClick={() =>
+                                            managedHero?.targetValue
+                                                ? onContentTarget(
+                                                      managedHero.targetType,
+                                                      managedHero.targetValue,
+                                                  )
+                                                : onNavigate({ name: 'category' })
+                                        }
+                                    >
+                                        {isZh ? '立即接入' : 'Get API Key'}
+                                        <ChevronRight aria-hidden="true" />
+                                    </button>
                                 </div>
                             ) : (
-                                <div className="hero-ai-card-theme theme-vip">
-                                    <div className="hero-cyber-bg-glow is-vip" />
-                                    <div className="hero-copy">
-                                        <div className="hero-ai-chip-pill is-vip-pill">
-                                            <ShieldCheck aria-hidden="true" />
-                                            <span>
-                                                {isZh
-                                                    ? '1人1号独享 · 拒绝共享封号'
-                                                    : '100% Dedicated · No Account Sharing'}
-                                            </span>
-                                        </div>
-                                        <h1>{isZh ? '黑金 AI 独享特权卡' : 'Black Gold VIP AI Card'}</h1>
-                                        <p>
+                                <div className="hero-rich-content is-vip">
+                                    <div className="hero-rich-pill is-vip-pill">
+                                        <ShieldCheck aria-hidden="true" />
+                                        <span>
                                             {isZh
-                                                ? '本人邮箱独立直绑，尊享独占高算力加速通道'
-                                                : 'Bound directly to your email with VIP dedicated high-speed lanes'}
-                                        </p>
+                                                ? '本人账号独立开通 · 拒绝封号'
+                                                : '100% Dedicated Account · Zero Ban'}
+                                        </span>
+                                    </div>
+                                    <h1 className="hero-rich-title">
+                                        {isZh ? 'AI 专属独立会员' : 'Exclusive VIP AI Pass'}
+                                    </h1>
+                                    <p className="hero-rich-desc">
+                                        {isZh
+                                            ? '官方正品本人邮箱直绑，独享满血算力与全额售后质保'
+                                            : 'Direct bound to personal email with dedicated computing power'}
+                                    </p>
 
-                                        <div className="hero-ai-perks-row">
-                                            <span className="hero-ai-perk-item">
-                                                🔒 {isZh ? '个人直绑' : 'Direct Bind'}
-                                            </span>
-                                            <span className="hero-ai-perk-item">
-                                                ⚡ {isZh ? '独占算力' : 'Fast Pass'}
-                                            </span>
-                                            <span className="hero-ai-perk-item">
-                                                🛡️ {isZh ? '封号包赔' : 'Guaranteed'}
+                                    <div className="hero-rich-stats-row">
+                                        <div className="hero-stat-badge is-vip">
+                                            <span className="stat-num">100%</span>
+                                            <span className="stat-lbl">{isZh ? '本人独享' : 'Private'}</span>
+                                        </div>
+                                        <div className="hero-stat-badge is-vip">
+                                            <span className="stat-num">⚡ 满血</span>
+                                            <span className="stat-lbl">{isZh ? '高算力' : 'Unlimited'}</span>
+                                        </div>
+                                        <div className="hero-stat-badge is-vip">
+                                            <span className="stat-num">🛡️ 包赔</span>
+                                            <span className="stat-lbl">
+                                                {isZh ? '售后无忧' : 'Guaranteed'}
                                             </span>
                                         </div>
-
-                                        <button
-                                            type="button"
-                                            className="hero-ai-cta-btn is-vip-btn"
-                                            onClick={() =>
-                                                managedHero?.targetValue
-                                                    ? onContentTarget(
-                                                          managedHero.targetType,
-                                                          managedHero.targetValue,
-                                                      )
-                                                    : onNavigate({ name: 'category' })
-                                            }
-                                        >
-                                            {isZh ? '开通专属会员' : 'Join VIP Club'}
-                                            <ChevronRight aria-hidden="true" />
-                                        </button>
                                     </div>
 
-                                    {/* 3D Floating Hologram VIP Card */}
-                                    <div className="hero-3d-matrix" aria-hidden="true">
-                                        <div className="hero-vip-hologram-card">
-                                            <div className="vip-card-header">
-                                                <span className="vip-chip-gold" />
-                                                <span className="vip-brand-text">CLOUD BRIDGE</span>
-                                            </div>
-                                            <div className="vip-card-body">
-                                                <span className="vip-level-badge">BLACK TITANIUM</span>
-                                                <div className="vip-holo-symbol">AI ★ VIP</div>
-                                            </div>
-                                            <div className="vip-card-footer">
-                                                <span className="vip-card-num">•••• 8899</span>
-                                                <span className="vip-card-exp">PRO ACCESS</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        className="hero-rich-cta-btn is-vip-btn"
+                                        onClick={() =>
+                                            managedHero?.targetValue
+                                                ? onContentTarget(
+                                                      managedHero.targetType,
+                                                      managedHero.targetValue,
+                                                  )
+                                                : onNavigate({ name: 'category' })
+                                        }
+                                    >
+                                        {isZh ? '查看 AI 会员' : 'Explore VIP Pass'}
+                                        <ChevronRight aria-hidden="true" />
+                                    </button>
                                 </div>
                             )}
                             {heroCount > 1 && (
