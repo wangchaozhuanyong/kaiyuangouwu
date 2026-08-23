@@ -3065,6 +3065,7 @@ img.fatal-error-mark {
 .category-product-list .product-row-image {
     width: 96px;
     height: 96px;
+    aspect-ratio: 1 / 1;
     border-radius: 10px;
     overflow: hidden;
     background: #f8fafc;
@@ -3074,7 +3075,7 @@ img.fatal-error-mark {
     justify-content: center;
     position: relative;
     flex-shrink: 0;
-    padding: 4px;
+    padding: 0;
 }
 
 .category-product-list .product-row-image img,
@@ -3083,134 +3084,189 @@ img.fatal-error-mark {
 .category-product-list .product-row-image .image-placeholder {
     width: 100%;
     height: 100%;
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
     object-position: center;
     display: block;
-    border-radius: 6px;
+    border-radius: 9px;
 }
 
-/* AI Product Branded Dynamic Covers */
+/* AI Product Branded Dynamic Covers: Rich Tech Layering */
 .ai-product-cover {
     width: 100%;
     height: 100%;
-    border-radius: 8px;
+    aspect-ratio: 1 / 1;
+    border-radius: 9px;
     position: relative;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 5px 5px;
+    padding: 4px 4px 3.5px;
     color: white;
     text-align: center;
     user-select: none;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.ai-cover-grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 8px 8px;
+    pointer-events: none;
+    opacity: 0.6;
 }
 
 .ai-cover-glow {
     position: absolute;
-    inset: -30%;
-    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.42) 0%, transparent 65%);
+    inset: -20%;
+    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.45) 0%, transparent 60%);
     pointer-events: none;
 }
 
 /* Brand Background Gradients */
 .ai-product-cover.is-chatgpt {
-    background: radial-gradient(circle at 50% 35%, #10a37f 0%, #065f46 65%, #022c22 100%);
+    background: radial-gradient(circle at 50% 30%, #10a37f 0%, #065f46 60%, #022c22 100%);
 }
 
 .ai-product-cover.is-claude {
-    background: radial-gradient(circle at 50% 35%, #ea580c 0%, #9a3412 65%, #431407 100%);
+    background: radial-gradient(circle at 50% 30%, #ea580c 0%, #9a3412 60%, #431407 100%);
 }
 
 .ai-product-cover.is-midjourney {
-    background: radial-gradient(circle at 50% 35%, #6366f1 0%, #3730a3 65%, #1e1b4b 100%);
+    background: radial-gradient(circle at 50% 30%, #6366f1 0%, #3730a3 60%, #1e1b4b 100%);
 }
 
 .ai-product-cover.is-cursor {
-    background: radial-gradient(circle at 50% 35%, #0284c7 0%, #1e293b 65%, #09090b 100%);
+    background: radial-gradient(circle at 50% 30%, #0284c7 0%, #1e293b 60%, #09090b 100%);
 }
 
 .ai-product-cover.is-deepseek {
-    background: radial-gradient(circle at 50% 35%, #0284c7 0%, #075985 65%, #082f49 100%);
+    background: radial-gradient(circle at 50% 30%, #0284c7 0%, #075985 60%, #082f49 100%);
 }
 
 .ai-product-cover.is-gemini {
-    background: radial-gradient(circle at 50% 35%, #3b82f6 0%, #6d28d9 65%, #1e1b4b 100%);
+    background: radial-gradient(circle at 50% 30%, #3b82f6 0%, #6d28d9 60%, #1e1b4b 100%);
 }
 
 .ai-product-cover.is-generic {
-    background: radial-gradient(circle at 50% 35%, #475569 0%, #1e293b 65%, #0f172a 100%);
+    background: radial-gradient(circle at 50% 30%, #475569 0%, #1e293b 60%, #0f172a 100%);
 }
 
-/* Big Hero Logo in Center */
-.ai-cover-logo-hero {
-    position: relative;
-    z-index: 2;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    padding: 2px 0 0;
-}
-
-.ai-hero-brand-svg {
-    width: 44px;
-    height: 44px;
-    color: #ffffff;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45));
-    transition: transform 180ms ease;
-}
-
-.ai-product-cover:hover .ai-hero-brand-svg {
-    transform: scale(1.08);
-}
-
-/* Subordinate Footer Meta */
-.ai-cover-footer-meta {
+/* Top Header Meta */
+.ai-cover-header-meta {
     position: relative;
     z-index: 2;
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 3px;
     padding: 0 1px;
 }
 
-.ai-cover-brand-name {
-    font-size: 9px;
+.ai-cover-company {
+    font-size: 7.5px;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     color: rgba(255, 255, 255, 0.95);
     text-transform: uppercase;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
     line-height: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.ai-cover-status {
+    font-size: 7px;
+    font-weight: 800;
+    color: #bbf7d0;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(187, 247, 208, 0.45);
+    border-radius: 3px;
+    padding: 0.5px 3px;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+}
+
+/* Center Logo Prism Container */
+.ai-cover-logo-hero {
+    position: relative;
+    z-index: 2;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    gap: 2px;
+    padding: 1px 0;
+}
+
+.ai-cover-logo-prism {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+    transition: transform 180ms ease;
+}
+
+.ai-product-cover:hover .ai-cover-logo-prism {
+    transform: scale(1.06);
+}
+
+.ai-hero-brand-svg {
+    width: 23px;
+    height: 23px;
+    color: #ffffff;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+}
+
+.ai-cover-brand-title {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+    line-height: 1;
+}
+
+/* Bottom Tier / Feature Badge */
+.ai-cover-footer-meta {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .ai-cover-tier-badge {
-    padding: 1.5px 5px;
+    width: 100%;
+    padding: 1.5px 3px;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.6);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.9) 100%);
     border: 1px solid rgba(255, 255, 255, 0.4);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
-    font-size: 8.5px;
+    font-size: 8px;
     font-weight: 800;
     color: #fef08a;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
+    text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-    line-height: 1.1;
-    max-width: 60%;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    line-height: 1.15;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .category-product-list .product-row-content {

@@ -2699,59 +2699,156 @@ function HomePage(props: HomePageProps) {
                                 color: managedHero?.textColor ?? undefined,
                             }}
                         >
-                            {heroImage ? (
-                                <SafeImage
-                                    src={heroImage}
-                                    fallbackSrc={heroFallbackImage}
-                                    alt={managedHero?.title ?? hero?.name ?? ''}
-                                    imageKind="hero"
-                                    loading="eager"
-                                    fetchPriority="high"
-                                />
+                            {/* Dynamic 3D Cyber Card Rendering */}
+                            {heroIndex === 0 ? (
+                                <div className="hero-ai-card-theme theme-gateway">
+                                    <div className="hero-cyber-bg-glow" />
+                                    <div className="hero-copy">
+                                        <div className="hero-ai-chip-pill">
+                                            <Zap aria-hidden="true" />
+                                            <span>
+                                                {isZh
+                                                    ? '极速全线满血 · 0.05x 官方费率起'
+                                                    : 'Full Speed AI · From 0.05x Rate'}
+                                            </span>
+                                        </div>
+                                        <h1>{isZh ? '云桥 AI 聚合网关' : 'CloudBridge AI Gateway'}</h1>
+                                        <p>
+                                            {isZh
+                                                ? '多模型统一接入，全球主流大模型极速调用'
+                                                : 'Unified multi-model API access with ultra-low latency'}
+                                        </p>
+
+                                        <div className="hero-ai-tag-group">
+                                            <span className="hero-ai-micro-tag">
+                                                {isZh ? 'API 直连' : 'Direct API'}
+                                            </span>
+                                            <span className="hero-ai-micro-tag">
+                                                {isZh ? '高并发无延迟' : 'High Concurrency'}
+                                            </span>
+                                            <span className="hero-ai-micro-tag">
+                                                {isZh ? '支持全模型' : 'All Models'}
+                                            </span>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="hero-ai-cta-btn"
+                                            onClick={() =>
+                                                managedHero?.targetValue
+                                                    ? onContentTarget(
+                                                          managedHero.targetType,
+                                                          managedHero.targetValue,
+                                                      )
+                                                    : onNavigate({ name: 'category' })
+                                            }
+                                        >
+                                            {isZh ? '一键接入 API' : 'Connect API'}
+                                            <ChevronRight aria-hidden="true" />
+                                        </button>
+                                    </div>
+
+                                    {/* 3D Stereoscopic Holographic Matrix on Right */}
+                                    <div className="hero-3d-matrix" aria-hidden="true">
+                                        <div className="hero-3d-cube-wrapper">
+                                            <div className="hero-model-pill model-apple">
+                                                <span className="model-icon">🍏</span>
+                                                <div className="model-info">
+                                                    <strong>Apple</strong>
+                                                    <small>Ecosystem</small>
+                                                </div>
+                                            </div>
+                                            <div className="hero-model-pill model-openai">
+                                                <span className="model-icon">🤖</span>
+                                                <div className="model-info">
+                                                    <strong>GPT-4o</strong>
+                                                    <small className="model-ping">🟢 28ms</small>
+                                                </div>
+                                            </div>
+                                            <div className="hero-model-pill model-gemini">
+                                                <span className="model-icon">✨</span>
+                                                <div className="model-info">
+                                                    <strong>Gemini 2.0</strong>
+                                                    <small>Pro Max</small>
+                                                </div>
+                                            </div>
+                                            <div className="hero-model-pill model-claude">
+                                                <span className="model-icon">🧠</span>
+                                                <div className="model-info">
+                                                    <strong>Claude 3.5</strong>
+                                                    <small>Sonnet</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             ) : (
-                                <div className="image-placeholder">
-                                    <Sparkles aria-hidden="true" />
+                                <div className="hero-ai-card-theme theme-vip">
+                                    <div className="hero-cyber-bg-glow is-vip" />
+                                    <div className="hero-copy">
+                                        <div className="hero-ai-chip-pill is-vip-pill">
+                                            <ShieldCheck aria-hidden="true" />
+                                            <span>
+                                                {isZh
+                                                    ? '1人1号独享 · 拒绝共享封号'
+                                                    : '100% Dedicated · No Account Sharing'}
+                                            </span>
+                                        </div>
+                                        <h1>{isZh ? '黑金 AI 独享特权卡' : 'Black Gold VIP AI Card'}</h1>
+                                        <p>
+                                            {isZh
+                                                ? '本人邮箱独立直绑，尊享独占高算力加速通道'
+                                                : 'Bound directly to your email with VIP dedicated high-speed lanes'}
+                                        </p>
+
+                                        <div className="hero-ai-perks-row">
+                                            <span className="hero-ai-perk-item">
+                                                🔒 {isZh ? '个人直绑' : 'Direct Bind'}
+                                            </span>
+                                            <span className="hero-ai-perk-item">
+                                                ⚡ {isZh ? '独占算力' : 'Fast Pass'}
+                                            </span>
+                                            <span className="hero-ai-perk-item">
+                                                🛡️ {isZh ? '封号包赔' : 'Guaranteed'}
+                                            </span>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="hero-ai-cta-btn is-vip-btn"
+                                            onClick={() =>
+                                                managedHero?.targetValue
+                                                    ? onContentTarget(
+                                                          managedHero.targetType,
+                                                          managedHero.targetValue,
+                                                      )
+                                                    : onNavigate({ name: 'category' })
+                                            }
+                                        >
+                                            {isZh ? '开通专属会员' : 'Join VIP Club'}
+                                            <ChevronRight aria-hidden="true" />
+                                        </button>
+                                    </div>
+
+                                    {/* 3D Floating Hologram VIP Card */}
+                                    <div className="hero-3d-matrix" aria-hidden="true">
+                                        <div className="hero-vip-hologram-card">
+                                            <div className="vip-card-header">
+                                                <span className="vip-chip-gold" />
+                                                <span className="vip-brand-text">CLOUD BRIDGE</span>
+                                            </div>
+                                            <div className="vip-card-body">
+                                                <span className="vip-level-badge">BLACK TITANIUM</span>
+                                                <div className="vip-holo-symbol">AI ★ VIP</div>
+                                            </div>
+                                            <div className="vip-card-footer">
+                                                <span className="vip-card-num">•••• 8899</span>
+                                                <span className="vip-card-exp">PRO ACCESS</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
-                            <div className="hero-shade" />
-                            <div className="hero-copy">
-                                {managedHero?.subtitle && <small>{managedHero.subtitle}</small>}
-                                <h1>
-                                    {(() => {
-                                        const raw = managedHero?.title ?? hero?.name;
-                                        if (!raw)
-                                            return isZh ? '认真挑选每一件好物' : 'Goods chosen with care';
-                                        if (/^首页(图片)?轮播/i.test(raw)) {
-                                            return isZh ? 'AI 专属会员特权' : 'Exclusive AI Membership';
-                                        }
-                                        return raw;
-                                    })()}
-                                </h1>
-                                <p>
-                                    {managedHero?.body ||
-                                        trimText(hero?.description, 38) ||
-                                        (isZh
-                                            ? '从当前店铺在售商品中，为你整理值得关注的选择'
-                                            : 'A considered edit of what is available now')}
-                                </p>
-                                {(managedHero ? managedHero.targetType !== 'NONE' : Boolean(hero)) && (
-                                    <button
-                                        type="button"
-                                        disabled={managedHero ? !managedHero.targetValue : !hero}
-                                        onClick={() =>
-                                            managedHero
-                                                ? onContentTarget(
-                                                      managedHero.targetType,
-                                                      managedHero.targetValue,
-                                                  )
-                                                : hero && onNavigate({ name: 'product', id: hero.id })
-                                        }
-                                    >
-                                        {managedHero?.ctaLabel || (isZh ? '查看精选' : 'View selection')}
-                                        <ChevronRight aria-hidden="true" />
-                                    </button>
-                                )}
-                            </div>
                             {heroCount > 1 && (
                                 <div
                                     className="hero-pagination"
@@ -7122,7 +7219,8 @@ function parseAiProductInfo(name: string, description?: string) {
     const raw = `${name} ${description ?? ''}`.toLowerCase();
 
     let brand: 'chatgpt' | 'claude' | 'midjourney' | 'cursor' | 'deepseek' | 'gemini' | 'generic' = 'generic';
-    let brandName = 'AI';
+    let brandName = 'AI 助手';
+    let companyName = 'OFFICIAL';
     let brandTheme = 'is-chatgpt';
 
     if (
@@ -7136,6 +7234,7 @@ function parseAiProductInfo(name: string, description?: string) {
     ) {
         brand = 'chatgpt';
         brandName = 'ChatGPT';
+        companyName = 'OPENAI';
         brandTheme = 'is-chatgpt';
     } else if (
         raw.includes('claude') ||
@@ -7145,22 +7244,27 @@ function parseAiProductInfo(name: string, description?: string) {
     ) {
         brand = 'claude';
         brandName = 'Claude';
+        companyName = 'ANTHROPIC';
         brandTheme = 'is-claude';
     } else if (raw.includes('midjourney') || raw.includes('mj')) {
         brand = 'midjourney';
         brandName = 'Midjourney';
+        companyName = 'MIDJOURNEY';
         brandTheme = 'is-midjourney';
     } else if (raw.includes('cursor') || raw.includes('copilot')) {
         brand = 'cursor';
         brandName = 'Cursor';
+        companyName = 'CURSOR AI';
         brandTheme = 'is-cursor';
     } else if (raw.includes('deepseek') || raw.includes('深度求索')) {
         brand = 'deepseek';
         brandName = 'DeepSeek';
+        companyName = 'DEEPSEEK';
         brandTheme = 'is-deepseek';
     } else if (raw.includes('gemini') || raw.includes('google ai') || raw.includes('bard')) {
         brand = 'gemini';
         brandName = 'Gemini';
+        companyName = 'GOOGLE AI';
         brandTheme = 'is-gemini';
     }
 
@@ -7177,26 +7281,26 @@ function parseAiProductInfo(name: string, description?: string) {
     const hasR1 = /r1/i.test(name);
     const hasV3 = /v3/i.test(name);
 
-    if (hasPro && has20x) tier = 'PRO 20x';
+    if (hasPro && has20x) tier = 'PRO 20x 极速';
     else if (hasPlus && has20x) tier = 'PLUS 20x';
-    else if (hasPro && has10x) tier = 'PRO 10x';
+    else if (hasPro && has10x) tier = 'PRO 10x 满血';
     else if (hasPlus && has10x) tier = 'PLUS 10x';
-    else if (has20x) tier = '20x';
-    else if (has10x) tier = '10x';
-    else if (has5x) tier = '5x';
-    else if (hasPlus) tier = 'PLUS';
-    else if (hasPro) tier = 'PRO';
-    else if (hasTeam) tier = 'TEAM';
-    else if (has4o) tier = 'GPT-4o';
-    else if (hasO1) tier = 'o1-MINI';
+    else if (has20x) tier = '20x 专属独享';
+    else if (has10x) tier = '10x 专属独享';
+    else if (has5x) tier = '5x 共享专线';
+    else if (hasPlus) tier = 'PLUS 官方版';
+    else if (hasPro) tier = 'PRO 尊享版';
+    else if (hasTeam) tier = 'TEAM 团队版';
+    else if (has4o) tier = 'GPT-4o 旗舰';
+    else if (hasO1) tier = 'o1 推理模型';
     else if (hasSonnet) tier = 'SONNET 3.5';
-    else if (hasR1) tier = 'R1 满血';
-    else if (hasV3) tier = 'V3 PRO';
-    else if (/api/i.test(name)) tier = 'API KEY';
-    else if (/独享/i.test(name)) tier = '独享账号';
-    else tier = 'OFFICIAL';
+    else if (hasR1) tier = 'R1 满血版';
+    else if (hasV3) tier = 'V3 专业版';
+    else if (/api/i.test(name)) tier = '官方 API 接口';
+    else if (/独享/i.test(name)) tier = '独立专享号';
+    else tier = 'OFFICIAL 正版';
 
-    return { brand, brandName, brandTheme, tier };
+    return { brand, brandName, companyName, brandTheme, tier };
 }
 
 function AiProductCover({
@@ -7208,23 +7312,30 @@ function AiProductCover({
     description?: string;
     compact?: boolean;
 }) {
-    const { brand, brandName, brandTheme, tier } = parseAiProductInfo(name, description);
+    const { brand, brandName, companyName, brandTheme, tier } = parseAiProductInfo(name, description);
 
     return (
         <div className={`ai-product-cover ${brandTheme} ${compact ? 'is-compact' : ''}`} aria-hidden="true">
+            <div className="ai-cover-grid-bg" />
             <div className="ai-cover-glow" />
+            <div className="ai-cover-header-meta">
+                <span className="ai-cover-company">⚡ {companyName}</span>
+                <span className="ai-cover-status">正品</span>
+            </div>
             <div className="ai-cover-logo-hero">
-                {brand === 'chatgpt' && <OpenAiIcon className="ai-hero-brand-svg" />}
-                {brand === 'claude' && <ClaudeIcon className="ai-hero-brand-svg" />}
-                {brand === 'midjourney' && <MidjourneyIcon className="ai-hero-brand-svg" />}
-                {brand === 'cursor' && <CursorIcon className="ai-hero-brand-svg" />}
-                {brand === 'deepseek' && <DeepSeekIcon className="ai-hero-brand-svg" />}
-                {brand === 'gemini' && <GeminiIcon className="ai-hero-brand-svg" />}
-                {brand === 'generic' && <Sparkles className="ai-hero-brand-svg" />}
+                <div className="ai-cover-logo-prism">
+                    {brand === 'chatgpt' && <OpenAiIcon className="ai-hero-brand-svg" />}
+                    {brand === 'claude' && <ClaudeIcon className="ai-hero-brand-svg" />}
+                    {brand === 'midjourney' && <MidjourneyIcon className="ai-hero-brand-svg" />}
+                    {brand === 'cursor' && <CursorIcon className="ai-hero-brand-svg" />}
+                    {brand === 'deepseek' && <DeepSeekIcon className="ai-hero-brand-svg" />}
+                    {brand === 'gemini' && <GeminiIcon className="ai-hero-brand-svg" />}
+                    {brand === 'generic' && <Sparkles className="ai-hero-brand-svg" />}
+                </div>
+                <span className="ai-cover-brand-title">{brandName}</span>
             </div>
             <div className="ai-cover-footer-meta">
-                <span className="ai-cover-brand-name">{brandName}</span>
-                {tier && <span className="ai-cover-tier-badge">{tier}</span>}
+                <span className="ai-cover-tier-badge">{tier}</span>
             </div>
         </div>
     );
