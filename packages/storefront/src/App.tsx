@@ -10,6 +10,7 @@ import {
     ArrowUpDown,
     Bell,
     Check,
+    CheckCircle2,
     ChevronLeft,
     ChevronRight,
     ChevronUp,
@@ -17,10 +18,10 @@ import {
     CircleCheck,
     ClipboardList,
     Clock3,
-    Cloud,
     Cpu,
     Download,
     Flame,
+    Footprints,
     Globe,
     Headphones,
     Heart,
@@ -4335,100 +4336,126 @@ function AccountPage(props: AccountPageProps) {
                 className={`account-identity-hero${customer ? ' is-authenticated' : ' is-guest'}`}
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
+                <div className="account-hero-top-bar">
+                    <span className="account-hero-brand-tag">{storefrontName}</span>
+                    <button
+                        className="account-hero-settings-btn"
+                        type="button"
+                        title={isZh ? '账户与安全' : 'Account and security'}
+                        aria-label={isZh ? '账户与安全' : 'Account and security'}
+                        onClick={() => onNavigate({ name: 'account-security' })}
+                    >
+                        <Settings aria-hidden="true" />
+                    </button>
+                </div>
+
                 {customer ? (
-                    <div className="account-hero-customer-card">
-                        <div className="account-hero-profile-row">
+                    <div className="account-hero-glass-card">
+                        <div className="account-hero-avatar-halo">
                             <button
-                                className="account-hero-customer-summary"
+                                className="account-hero-avatar-btn"
                                 type="button"
                                 onClick={() => onNavigate({ name: 'account-security' })}
+                                aria-label={isZh ? '个人信息与安全' : 'Profile and security'}
                             >
                                 <span className="account-hero-avatar">
                                     {customerName.slice(0, 1).toUpperCase()}
                                 </span>
-                                <span className="account-hero-info">
-                                    <strong className="account-hero-name">
-                                        {isZh ? `${customerName}，你好` : `Hello, ${customerName}`}
-                                    </strong>
-                                    <span className="account-hero-email">{customer.emailAddress}</span>
-                                </span>
-                            </button>
-                            <button
-                                className="account-hero-settings-btn"
-                                type="button"
-                                title={isZh ? '账户与安全' : 'Account and security'}
-                                aria-label={isZh ? '账户与安全' : 'Account and security'}
-                                onClick={() => onNavigate({ name: 'account-security' })}
-                            >
-                                <Settings aria-hidden="true" />
                             </button>
                         </div>
+
+                        <div className="account-hero-center-info">
+                            <h1 className="account-hero-center-name">
+                                <span>{customerName}</span>
+                                <CheckCircle2 className="verified-badge-icon" aria-hidden="true" />
+                            </h1>
+                            <div className="account-hero-center-subtitle">
+                                <MapPin aria-hidden="true" />
+                                <span>
+                                    {isZh ? '尊贵会员' : 'Premium Member'} · {customer.emailAddress}
+                                </span>
+                            </div>
+                        </div>
+
                         <div
-                            className="account-metrics-bar"
+                            className="account-glass-metrics-grid"
                             role="group"
                             aria-label={isZh ? '账户资产' : 'Account assets'}
                         >
                             <button
                                 type="button"
-                                className="account-metric-item"
+                                className="account-glass-metric-card"
                                 onClick={() => onNavigate({ name: 'favorites' })}
                             >
-                                <b>{favoriteProductCount}</b>
-                                <span>{isZh ? '我的收藏' : 'Favorites'}</span>
+                                <span className="metric-icon-box">
+                                    <Heart aria-hidden="true" />
+                                </span>
+                                <b className="metric-number">{favoriteProductCount}</b>
+                                <span className="metric-label">{isZh ? '我的收藏' : 'Favorites'}</span>
                             </button>
-                            <span className="account-metric-divider" aria-hidden="true" />
+
                             <button
                                 type="button"
-                                className="account-metric-item"
+                                className="account-glass-metric-card"
                                 onClick={() => onNavigate({ name: 'coupons' })}
                             >
-                                <b>
-                                    {couponCount}
-                                    {couponCount > 0 && <span className="account-metric-dot" />}
-                                </b>
-                                <span>{isZh ? '优惠券' : 'Coupons'}</span>
+                                <span className="metric-icon-box">
+                                    <TicketPercent aria-hidden="true" />
+                                    {couponCount > 0 && <span className="metric-dot" />}
+                                </span>
+                                <b className="metric-number">{couponCount}</b>
+                                <span className="metric-label">{isZh ? '优惠券' : 'Coupons'}</span>
                             </button>
-                            <span className="account-metric-divider" aria-hidden="true" />
+
                             <button
                                 type="button"
-                                className="account-metric-item"
+                                className="account-glass-metric-card"
                                 onClick={() => onNavigate({ name: 'history' })}
                             >
-                                <b>{recentProductCount}</b>
-                                <span>{isZh ? '浏览足迹' : 'History'}</span>
+                                <span className="metric-icon-box">
+                                    <Footprints aria-hidden="true" />
+                                </span>
+                                <b className="metric-number">{recentProductCount}</b>
+                                <span className="metric-label">{isZh ? '浏览足迹' : 'Footprint'}</span>
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="account-hero-guest-card">
-                        <div className="account-hero-brand" aria-label={storefrontName}>
-                            {logoUrl ? (
-                                <img className="account-hero-brand-mark" src={logoUrl} alt={storefrontName} />
-                            ) : (
-                                <span className="account-hero-brand-mark">
-                                    <Cloud aria-hidden="true" />
-                                </span>
-                            )}
-                            <strong>{storefrontName.replace(/ai$/i, '')}</strong>
-                            {/ai$/i.test(storefrontName) && <b>{storefrontName.slice(-2)}</b>}
+                    <div className="account-hero-glass-card account-guest-glass-card">
+                        <div className="account-hero-avatar-halo">
+                            <span className="account-hero-avatar is-guest-avatar">
+                                <UserRound aria-hidden="true" />
+                            </span>
                         </div>
-                        <div className="account-hero-guest-body">
-                            <h1 id="guest-account-title">
-                                {isZh ? `欢迎来到 ${storefrontName}` : `Welcome to ${storefrontName}`}
+                        <div className="account-hero-center-info">
+                            <h1 id="guest-account-title" className="account-hero-center-name">
+                                <span>
+                                    {isZh ? `欢迎来到 ${storefrontName}` : `Welcome to ${storefrontName}`}
+                                </span>
                             </h1>
-                            <p>
-                                {isZh
-                                    ? '登录后可查看订单物流、管理收货地址与专享优惠'
-                                    : 'Sign in to manage orders, addresses and benefits'}
-                            </p>
-                            <div className="account-hero-actions">
-                                <button type="button" onClick={() => onNavigate({ name: 'login' })}>
-                                    {isZh ? '立即登录' : 'Sign in'}
-                                </button>
-                                <button type="button" onClick={() => onNavigate({ name: 'register' })}>
-                                    {isZh ? '注册账户' : 'Create account'}
-                                </button>
+                            <div className="account-hero-center-subtitle">
+                                <span>
+                                    {isZh
+                                        ? '登录后享受会员特权、订单追踪与专属优惠'
+                                        : 'Sign in to enjoy member perks, order tracking & coupons'}
+                                </span>
                             </div>
+                        </div>
+                        <div className="account-hero-glass-actions">
+                            <button
+                                type="button"
+                                className="primary-login-btn"
+                                onClick={() => onNavigate({ name: 'login' })}
+                            >
+                                {isZh ? '立即登录' : 'Sign in'}
+                            </button>
+                            <button
+                                type="button"
+                                className="secondary-register-btn"
+                                onClick={() => onNavigate({ name: 'register' })}
+                            >
+                                {isZh ? '免费注册' : 'Register'}
+                            </button>
                         </div>
                     </div>
                 )}
