@@ -1,5 +1,32 @@
 import type { CurrencyCode, ID } from '@vendure/core';
 
+export type StorefrontPromotionContentType = 'HTML' | 'MARKDOWN';
+
+export interface StorefrontPromotionPageView {
+    id: ID | null;
+    contentType: StorefrontPromotionContentType;
+    draftSource: string;
+    publishedSource: string | null;
+    isCustomized: boolean;
+    defaultTemplateVersion: number;
+    publishedVersion: number;
+    publishedAt: Date | null;
+    publicUrl: string | null;
+}
+
+export interface UpdateStorefrontPromotionDraftInput {
+    contentType: StorefrontPromotionContentType;
+    source: string;
+}
+
+export interface StorefrontPromotionPluginOptions {
+    enabled?: boolean;
+    signingSecret?: string;
+    secureCookie?: boolean;
+    trustProxyHeaders?: boolean;
+    bypassHosts?: string[];
+}
+
 export interface ProvisionStoreAdministratorInput {
     firstName: string;
     lastName: string;

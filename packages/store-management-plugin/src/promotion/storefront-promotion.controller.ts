@@ -1,0 +1,102 @@
+import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
+
+import { StorefrontPromotionAccessService } from './storefront-promotion-access.service';
+import { StorefrontPromotionService } from './storefront-promotion.service';
+
+const ACCOUNT_ROUTES = new Set(['verify-account', 'reset-password']);
+
+@Controller('promo')
+export class StorefrontPromotionController {
+    constructor(
+        private readonly accessService: StorefrontPromotionAccessService,
+        private readonly promotionService: StorefrontPromotionService,
+    ) {}
+
+    @Get()
+    async promotion(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const request = await this.accessService.resolveRequest(req);
+        if (!request) {
+            res.status(404).type('text/plain').send('未找到该店铺推广页');
+            return;
+        }
+        const ticket = this.accessService.createEntryTicket(request);
+        const html = await this.promotionService.renderPublished(request.ctx, ticket);
+        this.setPromotionHeaders(res);
+        res.status(200).type('html').send(html);
+    }
+
+    @Post('enter')
+    async enter(@Req() req: Request, @Res() res: Response, @Body('ticket') ticket?: string): Promise<void> {
+        const request = await this.accessService.resolveRequest(req);
+        if (!request || !ticket || !this.accessService.validateEntryTicket(ticket, request)) {
+            res.status(403).type('text/plain').send('入口已失效，请返回推广页重试');
+            return;
+        }
+        res.setHeader('Set-Cookie', this.accessService.createEntryCookie(request));
+        res.setHeader('Cache-Control', 'no-store');
+        res.redirect(303, '/');
+    }
+
+    @Get('access')
+    async access(@Req() req: Request, @Res() res: Response): Promise<void> {
+        if (!this.accessService.enabled) {
+            res.status(204).send();
+            return;
+        }
+        const request = await this.accessService.resolveRequest(req);
+        if (request && this.accessService.hasValidEntryCookie(req, request)) {
+            res.status(204).send();
+            return;
+        }
+        res.setHeader('Cache-Control', 'no-store');
+        res.status(401).send();
+    }
+
+    @Get('account-entry')
+    async accountEntry(
+        @Req() req: Request,
+        @Res() res: Response,
+        @Query('route') route?: string,
+        @Query('token') token?: string,
+    ): Promise<void> {
+        const request = await this.accessService.resolveRequest(req);
+        if (!request || !route || !ACCOUNT_ROUTES.has(route) || !token || token.length < 16) {
+            res.status(400).type('text/plain').send('账号操作链接无效');
+            return;
+        }
+        res.setHeader('Set-Cookie', this.accessService.createEntryCookie(request));
+        res.setHeader('Cache-Control', 'no-store');
+        const params = new URLSearchParams({ token });
+        res.redirect(303, `/#/${route}?${params.toString()}`);
+    }
+
+    @Get('robots')
+    robots(@Res() res: Response): void {
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.type('text/plain').send('User-agent: *\nAllow: /promo$\nDisallow: /promo/\nDisallow: /\n');
+    }
+
+    private setPromotionHeaders(res: Response): void {
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader(
+            'Content-Security-Policy',
+            [
+                "default-src 'self'",
+                "base-uri 'self'",
+                "object-src 'none'",
+                "frame-ancestors 'none'",
+                "form-action 'self'",
+                "img-src 'self' data: https: http:",
+                "media-src 'self' https: http:",
+                "font-src 'self' data: https:",
+                "style-src 'self' 'unsafe-inline' https:",
+                "script-src 'none'",
+                "connect-src 'none'",
+            ].join('; '),
+        );
+    }
+}

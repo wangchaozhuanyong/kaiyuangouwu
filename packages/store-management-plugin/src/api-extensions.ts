@@ -6,6 +6,11 @@ const commonTypes = gql`
         ACTIVE
         SUSPENDED
     }
+
+    enum StorefrontPromotionContentType {
+        HTML
+        MARKDOWN
+    }
 `;
 
 export const adminApiExtensions = gql`
@@ -130,11 +135,29 @@ export const adminApiExtensions = gql`
         blockedPostalPrefixes: String!
     }
 
+    type StorefrontPromotionPage {
+        id: ID
+        contentType: StorefrontPromotionContentType!
+        draftSource: String!
+        publishedSource: String
+        isCustomized: Boolean!
+        defaultTemplateVersion: Int!
+        publishedVersion: Int!
+        publishedAt: DateTime
+        publicUrl: String
+    }
+
+    input UpdateStorefrontPromotionDraftInput {
+        contentType: StorefrontPromotionContentType!
+        source: String!
+    }
+
     extend type Query {
         storeProfiles: [StoreProfile!]!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
+        storefrontPromotionPage: StorefrontPromotionPage!
     }
 
     extend type Mutation {
@@ -145,5 +168,9 @@ export const adminApiExtensions = gql`
             input: UpdateMyStoreCommerceConfigurationInput!
         ): StoreCommerceConfiguration!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
+        saveStorefrontPromotionDraft(input: UpdateStorefrontPromotionDraftInput!): StorefrontPromotionPage!
+        publishStorefrontPromotionPage: StorefrontPromotionPage!
+        resetStorefrontPromotionPage: StorefrontPromotionPage!
+        previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
     }
 `;

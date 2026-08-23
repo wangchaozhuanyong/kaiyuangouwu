@@ -6,9 +6,16 @@ import { myStoreProfileRoute } from './my-store-profile-page';
 import { storeCommerceSettingsRoute } from './store-commerce-settings-page';
 import { storeManagementRoute } from './store-management-page';
 import { storeProvisioningRoute } from './store-provisioning-page';
+import { storefrontPromotionRoute } from './storefront-promotion-page';
 
 defineDashboardExtension({
-    routes: [myStoreProfileRoute, storeCommerceSettingsRoute, storeManagementRoute, storeProvisioningRoute],
+    routes: [
+        myStoreProfileRoute,
+        storeCommerceSettingsRoute,
+        storeManagementRoute,
+        storeProvisioningRoute,
+        storefrontPromotionRoute,
+    ],
     navSections: restrictPlatformNavigation,
     customProviders: [
         {

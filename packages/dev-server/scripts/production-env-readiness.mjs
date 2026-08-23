@@ -355,6 +355,18 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
                 : 'CNAME, routing mode, or bypass hosts are unsafe',
     });
     pushCheck(checks, {
+        id: 'storefront-promotion-gate',
+        title: '推广页与主站入口隔离',
+        passed:
+            normalized(env.STOREFRONT_PROMOTION_GATE_ENABLED) === 'true' &&
+            isConfiguredSecret(env.STOREFRONT_ENTRY_SECRET, 32),
+        detail:
+            normalized(env.STOREFRONT_PROMOTION_GATE_ENABLED) === 'true' &&
+            isConfiguredSecret(env.STOREFRONT_ENTRY_SECRET, 32)
+                ? 'enabled'
+                : 'gate is disabled or signing secret is missing, short, or a placeholder',
+    });
+    pushCheck(checks, {
         id: 'bootstrap-disabled',
         title: '基础 Schema 引导已关闭',
         passed: normalized(env.VENDURE_BOOTSTRAP_BASE_SCHEMA) === 'false',

@@ -1,6 +1,7 @@
 export { storeProfilePermission } from './constants.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
+export { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity.js';
 export { MerchantCatalogAccessService } from './merchant-catalog-access.service.js';
 export { StoreActivationReadinessService } from './store-activation-readiness.service.js';
 export { StoreCommerceSettingsService } from './store-commerce-settings.service.js';
@@ -16,7 +17,11 @@ export type {
     StoreActivationReadiness,
     StoreCommerceConfiguration,
     StoreProfileStatus,
+    StorefrontPromotionContentType,
+    StorefrontPromotionPageView,
+    StorefrontPromotionPluginOptions,
     UpdateMyStoreCommerceConfigurationInput,
     UpdateMyStoreProfileInput,
     UpdateStoreProfileInput,
+    UpdateStorefrontPromotionDraftInput,
 } from './types.js';
