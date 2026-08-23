@@ -5913,25 +5913,36 @@ img.fatal-error-mark {
 
 .detail-gallery {
     width: 100%;
-    aspect-ratio: var(--product-media-ratio);
+    aspect-ratio: 1 / 1;
     position: relative;
     overflow: hidden;
-    background: #ecefed;
+    background: #f8fafc;
+    margin: 0;
+    padding: 0;
 }
 
 .detail-gallery > img,
+.detail-gallery > .responsive-picture,
 .detail-gallery > .responsive-picture > img {
     width: 100%;
     height: 100%;
-    padding: clamp(10px, 3vw, 16px);
-    background: var(--product-media-bg);
-    object-fit: contain;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #f8fafc;
+    object-fit: cover;
+    display: block;
 }
 
 .detail-gallery > .image-placeholder {
     width: 100%;
     height: 100%;
-    background: var(--product-media-bg);
+    margin: 0;
+    padding: 0;
+    background: #f8fafc;
+    display: grid;
+    place-items: center;
 }
 
 .gallery-dots {
