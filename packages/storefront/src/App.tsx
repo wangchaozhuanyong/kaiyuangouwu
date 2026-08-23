@@ -68,6 +68,7 @@ import {
     useState,
     useTransition,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ShopApi, ShopApiError } from './api';
 import { formatBusinessDate } from './business-time';
@@ -7306,7 +7307,7 @@ function Sheet({
         };
     }, []);
 
-    return (
+    const content = (
         <div className="sheet-layer" role="presentation">
             <button
                 className="sheet-mask"
@@ -7332,6 +7333,9 @@ function Sheet({
             </section>
         </div>
     );
+
+    if (typeof document === 'undefined') return content;
+    return createPortal(content, document.body);
 }
 function Field({
     name,
