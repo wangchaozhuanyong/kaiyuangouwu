@@ -3090,103 +3090,106 @@ img.fatal-error-mark {
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 4px 5px;
+    padding: 6px 5px 5px;
     color: white;
     text-align: center;
     user-select: none;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .ai-cover-glow {
     position: absolute;
-    inset: -20%;
-    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.35) 0%, transparent 60%);
+    inset: -30%;
+    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.42) 0%, transparent 65%);
     pointer-events: none;
 }
 
-/* Brand Themes */
+/* Brand Background Gradients */
 .ai-product-cover.is-chatgpt {
-    background: linear-gradient(140deg, #052e16 0%, #064e3b 35%, #10a37f 80%, #34d399 100%);
+    background: radial-gradient(circle at 50% 35%, #10a37f 0%, #065f46 65%, #022c22 100%);
 }
 
 .ai-product-cover.is-claude {
-    background: linear-gradient(140deg, #431407 0%, #7c2d12 35%, #c2410c 80%, #f97316 100%);
+    background: radial-gradient(circle at 50% 35%, #ea580c 0%, #9a3412 65%, #431407 100%);
 }
 
 .ai-product-cover.is-midjourney {
-    background: linear-gradient(140deg, #1e1b4b 0%, #312e81 35%, #4f46e5 80%, #818cf8 100%);
+    background: radial-gradient(circle at 50% 35%, #6366f1 0%, #3730a3 65%, #1e1b4b 100%);
 }
 
 .ai-product-cover.is-cursor {
-    background: linear-gradient(140deg, #09090b 0%, #18181b 35%, #0284c7 80%, #38bdf8 100%);
+    background: radial-gradient(circle at 50% 35%, #0284c7 0%, #1e293b 65%, #09090b 100%);
 }
 
 .ai-product-cover.is-deepseek {
-    background: linear-gradient(140deg, #082f49 0%, #0c4a6e 35%, #0284c7 80%, #38bdf8 100%);
+    background: radial-gradient(circle at 50% 35%, #0284c7 0%, #075985 65%, #082f49 100%);
 }
 
 .ai-product-cover.is-gemini {
-    background: linear-gradient(140deg, #1e1b4b 0%, #1d4ed8 35%, #2563eb 75%, #9333ea 100%);
+    background: radial-gradient(circle at 50% 35%, #3b82f6 0%, #6d28d9 65%, #1e1b4b 100%);
 }
 
 .ai-product-cover.is-generic {
-    background: linear-gradient(140deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    background: radial-gradient(circle at 50% 35%, #475569 0%, #1e293b 65%, #0f172a 100%);
 }
 
-.ai-cover-icon-box {
+/* Big Hero Logo in Center */
+.ai-cover-logo-hero {
     position: relative;
-    z-index: 1;
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.22);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-    margin-top: 1px;
-}
-
-.ai-brand-svg {
-    width: 17px;
-    height: 17px;
-    color: #ffffff;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
-}
-
-.ai-cover-brand {
-    position: relative;
-    z-index: 1;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-    color: #ffffff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-    line-height: 1;
-    margin-top: 1px;
-}
-
-.ai-cover-tier-badge {
-    position: relative;
-    z-index: 1;
-    padding: 1.5px 6px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    z-index: 2;
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    max-width: 92%;
-    margin-top: 2px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    padding: 2px 0 0;
 }
 
-.ai-cover-tier-badge span {
+.ai-hero-brand-svg {
+    width: 44px;
+    height: 44px;
+    color: #ffffff;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45));
+    transition: transform 180ms ease;
+}
+
+.ai-product-cover:hover .ai-hero-brand-svg {
+    transform: scale(1.08);
+}
+
+/* Subordinate Footer Meta */
+.ai-cover-footer-meta {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3px;
+    padding: 0 1px;
+}
+
+.ai-cover-brand-name {
     font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.95);
+    text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ai-cover-tier-badge {
+    padding: 1.5px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    font-size: 8.5px;
     font-weight: 800;
     color: #fef08a;
     letter-spacing: 0.03em;
@@ -3195,6 +3198,7 @@ img.fatal-error-mark {
     text-overflow: ellipsis;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
     line-height: 1.1;
+    max-width: 60%;
 }
 
 .category-product-list .product-row-content {

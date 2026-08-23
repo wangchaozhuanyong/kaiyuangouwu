@@ -7033,23 +7033,22 @@ function LegalFooter({
 
 function OpenAiIcon({ className }: { className?: string }) {
     const pathD = [
-        'M88.5 43.8c-.8-6.1-5.1-11.2-11.2-13.1-1.3-.4-2.7-.6-4.1-.7-.8-4.4-3.3-8.3-7.1-10.7-5.9-3.7-13.5-3.8-19.4-.3',
-        'l-3.3 1.9c-.6.3-1.1.8-1.5 1.4-1.2-1.9-2.9-3.4-5-4.5-5.9-3.1-13.2-2.3-18.4 2.1-5.2 4.4-7.3 11.3-5.3 17.7',
-        '-4.1 1.7-7.2 5.1-8.5 9.4-2 6.5-.2 13.6 4.6 18.2l3.3 3.1c.5.5 1.1.8 1.8 1-.1 1.2-.1 2.4.1 3.6 1.1 6.8 6.1',
-        '12.3 12.8 14 2.3.6 4.7.7 7.1.3 1.4 4.3 4.5 7.8 8.6 9.8 6.2 3.1 13.7 2.3 19.1-2l3.4-2.7c.6-.5 1-1.1 1.3-1.8',
-        '1.9 1.1 4.1 1.7 6.3 1.7 5.7 0 11-3.2 13.6-8.3 3.4-6.6 2-14.7-3.4-19.9 3.5-2.2 5.9-5.9 6.6-10.1.7-4.3-.4-8.7',
-        '-3.1-12.1zm-32.9 44.5c-3.1 2.5-7.4 3-11 .1-1.2-1-2.2-2.3-2.9-3.8l.8-.5 15.3-8.8c.8-.5 1.3-1.4 1.3-2.3v-17.7',
-        'l5.4 3.1v17.4c0 4.6-3.7 9.8-8.9 12.5zm-28.7-9.5c-2.3-3.3-2.8-7.6-1.3-11.3.5-1.3 1.3-2.5 2.3-3.5l.8.5 15.3',
-        '8.8c.8.5 1.7.5 2.5 0l15.3-8.8v6.3l-15 8.7c-4 2.3-15.9 3.9-20.9-.7zm-11.8-24.8c-.8-3.9.4-8 3.2-10.9 1-1 2.2-1.8',
-        '3.5-2.4v1l.1 17.7c0 .9.5 1.8 1.3 2.3l15.3 8.8-5.4 3.1-15-8.7c-4-2.3-4.8-10.9-3-10.9zm41.6-4.5l-15.3-8.8 15.3',
-        '-8.8 15.3 8.8-15.3 8.8zm-1.8-21.3l-5.4-3.1v-17.4c0-4.6 3.7-9.8 8.9-12.5 3.1-2.5 7.4-3 11-.1 1.2 1 2.2 2.3',
-        '2.9 3.8l-.8.5-15.3 8.8c-.8.5-1.3 1.4-1.3 2.3v17.7zm13.1 5.3l15-8.7c4-2.3 15.9-3.9 20.9.7 2.3 3.3 2.8 7.6 1.3',
-        '11.3-.5 1.3-1.3 2.5-2.3 3.5l-.8-.5-15.3-8.8c-.8-.5-1.7-.5-2.5 0l-15.3 8.8v-6.3zm7.2 13.9l5.4-3.1 15 8.7c4 2.3',
-        '4.8 10.9 3 10.9.8 3.9-.4 8-3.2 10.9-1 1-2.2 1.8-3.5 2.4v-1l-.1-17.7c0-.9-.5-1.8-1.3-2.3l-15.3-8.8z',
+        'M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.5-2.9 6.07 6.07 0 0 0-10.28 2.17',
+        ' 5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0',
+        ' 6.51 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zm',
+        '-9.02 12.61a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.79.79 0 0 0 .39-.68v-6.74l2.02',
+        ' 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.5zm-9.66-4.13a4.47 4.47 0 0 1-.54-3.01l.14.08',
+        ' 4.79 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34',
+        ' 7.9a4.48 4.48 0 0 1 2.37-1.98V11.6a.77.77 0 0 0 .38.68l5.82 3.35-2.02 1.17a.08.08 0 0 1-.07',
+        ' 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.87zm16.6 3.85L13.1 8.36l2.02-1.16a.08.08 0 0 1 .07',
+        ' 0l4.83 2.79a4.5 4.5 0 0 1-.68 8.1v-5.67a.79.79 0 0 0-.4-.67zm2.01-3.02l-.14-.09-4.77-2.78a.78.78 0 0 0-.79',
+        ' 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0',
+        ' 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08-4.79 2.76a.79.79 0 0 0-.39.68zm1.1-2.36l2.6-1.5',
+        ' 2.6 1.5v3l-2.6 1.5-2.6-1.5z',
     ].join('');
 
     return (
-        <svg viewBox="0 0 100 100" fill="currentColor" className={className} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
             <path d={pathD} />
         </svg>
     );
@@ -7214,21 +7213,19 @@ function AiProductCover({
     return (
         <div className={`ai-product-cover ${brandTheme} ${compact ? 'is-compact' : ''}`} aria-hidden="true">
             <div className="ai-cover-glow" />
-            <div className="ai-cover-icon-box">
-                {brand === 'chatgpt' && <OpenAiIcon className="ai-brand-svg" />}
-                {brand === 'claude' && <ClaudeIcon className="ai-brand-svg" />}
-                {brand === 'midjourney' && <MidjourneyIcon className="ai-brand-svg" />}
-                {brand === 'cursor' && <CursorIcon className="ai-brand-svg" />}
-                {brand === 'deepseek' && <DeepSeekIcon className="ai-brand-svg" />}
-                {brand === 'gemini' && <GeminiIcon className="ai-brand-svg" />}
-                {brand === 'generic' && <Sparkles className="ai-brand-svg" />}
+            <div className="ai-cover-logo-hero">
+                {brand === 'chatgpt' && <OpenAiIcon className="ai-hero-brand-svg" />}
+                {brand === 'claude' && <ClaudeIcon className="ai-hero-brand-svg" />}
+                {brand === 'midjourney' && <MidjourneyIcon className="ai-hero-brand-svg" />}
+                {brand === 'cursor' && <CursorIcon className="ai-hero-brand-svg" />}
+                {brand === 'deepseek' && <DeepSeekIcon className="ai-hero-brand-svg" />}
+                {brand === 'gemini' && <GeminiIcon className="ai-hero-brand-svg" />}
+                {brand === 'generic' && <Sparkles className="ai-hero-brand-svg" />}
             </div>
-            <span className="ai-cover-brand">{brandName}</span>
-            {tier && (
-                <div className="ai-cover-tier-badge">
-                    <span>{tier}</span>
-                </div>
-            )}
+            <div className="ai-cover-footer-meta">
+                <span className="ai-cover-brand-name">{brandName}</span>
+                {tier && <span className="ai-cover-tier-badge">{tier}</span>}
+            </div>
         </div>
     );
 }
