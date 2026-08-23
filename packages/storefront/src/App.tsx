@@ -27,6 +27,7 @@ import {
     Heart,
     House,
     LayoutGrid,
+    Lock,
     MapPin,
     Minus,
     Navigation,
@@ -2849,6 +2850,25 @@ function HomePage(props: HomePageProps) {
                                     : ''}
                             </span>
                         </section>
+
+                        <div className="home-trust-bar" aria-label={isZh ? '服务保障' : 'Service Guarantees'}>
+                            <div className="home-trust-item">
+                                <ShieldCheck className="trust-icon" aria-hidden="true" />
+                                <span>{isZh ? '官方正品保证' : 'Authentic'}</span>
+                            </div>
+                            <div className="home-trust-item">
+                                <Zap className="trust-icon" aria-hidden="true" />
+                                <span>{isZh ? '全自动秒交付' : 'Instant Delivery'}</span>
+                            </div>
+                            <div className="home-trust-item">
+                                <Lock className="trust-icon" aria-hidden="true" />
+                                <span>{isZh ? '独立账号直绑' : 'Dedicated Account'}</span>
+                            </div>
+                            <div className="home-trust-item">
+                                <Headphones className="trust-icon" aria-hidden="true" />
+                                <span>{isZh ? '24H 质保售后' : '24/7 Support'}</span>
+                            </div>
+                        </div>
 
                         <nav
                             className={`quick-grid quick-grid-${quickLinks.length}`}
@@ -6312,11 +6332,11 @@ function ProductCard({
             <span className="product-card-desc">{trimText(product.description, 26) || variant?.sku}</span>
             <footer>
                 <div className="product-card-price-block">
-                    <b>
-                        {variant
-                            ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                            : formatMoney(0, market.currencyCode, locale)}
-                    </b>
+                    <PriceDisplay
+                        value={variant ? variant.priceWithTax : 0}
+                        currency={variant ? variant.currencyCode : market.currencyCode}
+                        locale={locale}
+                    />
                     <small className="product-card-tax-label">{isZh ? '含税' : 'incl. tax'}</small>
                 </div>
                 <button
@@ -6390,9 +6410,11 @@ function ProductRow({
                 </div>
                 <div className="product-row-bottom">
                     <p className="product-row-price">
-                        {variant
-                            ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                            : formatMoney(0, market.currencyCode, locale)}
+                        <PriceDisplay
+                            value={variant ? variant.priceWithTax : 0}
+                            currency={variant ? variant.currencyCode : market.currencyCode}
+                            locale={locale}
+                        />
                     </p>
                     <button
                         className="row-add"
@@ -7824,6 +7846,32 @@ function formatMoney(value: number, currency: string, locale: string): string {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
     }).format(value / 100);
+}
+
+function PriceDisplay({
+    value,
+    currency,
+    locale,
+    className,
+}: {
+    value: number;
+    currency: string;
+    locale: string;
+    className?: string;
+}) {
+    const formatted = formatMoney(value, currency, locale);
+    const match = formatted.match(/^([^\d\s]*)\s*(\d[\d,]*)(?:\.(\d+))?$/);
+    if (!match) {
+        return <span className={`price-lockup ${className ?? ''}`}>{formatted}</span>;
+    }
+    const [, symbol, integerPart, decimalPart] = match;
+    return (
+        <span className={`price-lockup ${className ?? ''}`}>
+            <span className="price-symbol">{symbol}</span>
+            <span className="price-integer">{integerPart}</span>
+            {decimalPart && <span className="price-decimal">.{decimalPart}</span>}
+        </span>
+    );
 }
 function formatOrderDate(value: string | null | undefined, locale: string): string {
     if (!value) return '--';
