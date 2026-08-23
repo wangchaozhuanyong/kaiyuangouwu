@@ -3344,50 +3344,54 @@ function CategoryPage(props: CategoryPageProps) {
                 </section>
             </div>
 
-            <div className={`category-layout ${hasChildCategories ? '' : 'is-single-level'}`}>
-                {hasChildCategories && (
-                    <nav className="secondary-categories" aria-label={isZh ? '二级分类' : 'Subcategories'}>
-                        {children.map(child => (
-                            <button
-                                type="button"
-                                key={child.id}
-                                className={child.id === activeChildId ? 'is-active' : undefined}
-                                onClick={() => onChildChange(child.id)}
-                            >
-                                {child.name}
-                            </button>
-                        ))}
-                    </nav>
-                )}
+            {hasChildCategories && (
+                <div className="subcat-strip" aria-label={isZh ? '二级分类' : 'Subcategories'}>
+                    <button
+                        type="button"
+                        className={`subcat-chip ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
+                        onClick={() => onChildChange('all')}
+                    >
+                        {isZh ? `全部 (${totalItems})` : `All (${totalItems})`}
+                    </button>
+                    {children.map(child => (
+                        <button
+                            type="button"
+                            key={child.id}
+                            className={`subcat-chip ${child.id === activeChildId ? 'is-active' : ''}`}
+                            onClick={() => onChildChange(child.id)}
+                        >
+                            {child.name}
+                        </button>
+                    ))}
+                </div>
+            )}
 
+            <div className="category-layout is-full-width">
                 <section className="category-results">
                     <button
-                        className="category-banner"
+                        className="cat-promo-banner"
                         type="button"
                         disabled={!categoryProducts[0]}
                         onClick={() =>
                             categoryProducts[0] && onNavigate({ name: 'product', id: categoryProducts[0].id })
                         }
                     >
-                        {bannerImage ? (
-                            <SafeImage
-                                src={bannerImage}
-                                fallbackSrc="/storefront/default-hero.jpg"
-                                alt={primary?.name ?? ''}
-                                imageKind="hero"
-                                loading="eager"
-                                fetchPriority="high"
-                            />
-                        ) : (
-                            <div className="image-placeholder">
-                                <ShoppingBag />
+                        <div>
+                            <span className="cat-promo-tag">
+                                {isZh ? '🔥 极简严选 · 品质专场' : '🔥 Focus Selection'}
+                            </span>
+                            <div className="cat-promo-title">
+                                {primary?.name ?? (isZh ? '全品类甄选' : 'All collections')}
                             </div>
-                        )}
-                        <span>
-                            <small>{isZh ? '分类精选' : 'Collection focus'}</small>
-                            <strong>{primary?.name ?? (isZh ? '全部商品' : 'All products')}</strong>
-                        </span>
+                            <div className="cat-promo-sub">
+                                {isZh
+                                    ? '官方正品保障 · 即时开通交付'
+                                    : 'Official Warranty & Instant Delivery'}
+                            </div>
+                        </div>
+                        <span className="cat-promo-cta">{isZh ? '立即逛 ➔' : 'Explore ➔'}</span>
                     </button>
+
                     <nav
                         className="sort-bar sort-bar-five"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
@@ -3449,19 +3453,22 @@ function CategoryPage(props: CategoryPageProps) {
                             compact
                         />
                     ) : categoryProducts.length ? (
-                        <div className="product-list">
-                            {visibleProducts.map(product => (
-                                <ProductRow
-                                    key={product.id}
-                                    product={product}
-                                    market={market}
-                                    locale={locale}
-                                    language={language}
-                                    adding={product.variants.some(variant => variant.id === addingVariantId)}
-                                    onOpen={() => onNavigate({ name: 'product', id: product.id })}
-                                    onAdd={() => product.variants[0] && onAdd(product.variants[0])}
-                                />
-                            ))}
+                        <>
+                            <div className="product-grid category-product-grid">
+                                {visibleProducts.map(product => (
+                                    <ProductCard
+                                        key={product.id}
+                                        product={product}
+                                        market={market}
+                                        locale={locale}
+                                        adding={product.variants.some(
+                                            variant => variant.id === addingVariantId,
+                                        )}
+                                        onOpen={() => onNavigate({ name: 'product', id: product.id })}
+                                        onAdd={() => product.variants[0] && onAdd(product.variants[0])}
+                                    />
+                                ))}
+                            </div>
                             {categoryError && (
                                 <div className="search-load-error" role="alert">
                                     <span>{categoryError}</span>
@@ -3486,7 +3493,7 @@ function CategoryPage(props: CategoryPageProps) {
                                           : `Load more (${remainingItems} remaining)`}
                                 </button>
                             )}
-                        </div>
+                        </>
                     ) : (
                         <EmptyState
                             icon={<Search />}
