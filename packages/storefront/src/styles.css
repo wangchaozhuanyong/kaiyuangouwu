@@ -2310,19 +2310,21 @@ img.fatal-error-mark {
 }
 
 .primary-category-strip {
-    height: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 68px;
+    height: 80px;
+    display: flex;
+    align-items: stretch;
+    position: relative;
 }
 
 .primary-categories {
+    flex: 1;
     min-width: 0;
     height: 100%;
-    padding: 7px 4px 7px 10px;
+    padding: 6px 4px 6px 10px;
     overflow-x: auto;
     display: flex;
-    align-items: flex-start;
-    gap: 2px;
+    align-items: center;
+    gap: 4px;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
     scroll-padding-inline: 10px;
@@ -2336,17 +2338,18 @@ img.fatal-error-mark {
 }
 
 .primary-categories button {
-    width: 74px;
-    min-width: 74px;
-    height: 76px;
-    padding: 2px 0;
+    width: 72px;
+    min-width: 72px;
+    height: 68px;
+    padding: 0;
     flex: none;
     border: 0;
     background: transparent;
     color: var(--muted);
-    display: grid;
-    justify-items: center;
-    align-content: start;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 4px;
     scroll-snap-align: start;
     transition:
@@ -2359,15 +2362,16 @@ img.fatal-error-mark {
 }
 
 .primary-category-image {
-    width: 46px;
-    height: 42px;
+    width: 44px;
+    height: 40px;
     overflow: hidden;
-    border-radius: var(--radius-sm);
+    border-radius: 8px;
     border: 1px solid rgba(0, 0, 0, 0.06);
     background: #f4f6f5;
-    padding: 2px;
-    display: grid;
-    place-items: center;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 180ms ease;
 }
 
@@ -2382,7 +2386,7 @@ img.fatal-error-mark {
 .primary-category-image > img,
 .primary-category-image > .responsive-picture > img {
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: 7px;
     filter: saturate(0.95);
     transition:
         filter 180ms ease,
@@ -2401,13 +2405,13 @@ img.fatal-error-mark {
 }
 
 .primary-category-label {
-    max-width: 74px;
-    min-height: 20px;
+    max-width: 68px;
+    height: 20px;
     padding: 1px 6px;
     overflow: hidden;
     border-radius: 9999px;
-    font-size: 11.5px;
-    font-weight: var(--font-weight-medium);
+    font-size: 11px;
+    font-weight: 600;
     line-height: 18px;
     text-align: center;
     text-overflow: ellipsis;
@@ -2440,19 +2444,19 @@ img.fatal-error-mark {
 }
 
 .primary-categories-all {
-    width: 66px;
-    min-width: 66px;
+    width: 72px;
+    min-width: 72px;
     height: 100%;
-    padding: 0 4px;
+    padding: 6px 4px 6px 0;
     position: relative;
     z-index: 1;
     border: 0;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.94) 24%, #ffffff 100%);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.94) 22%, #ffffff 100%);
     color: var(--muted);
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 4px;
     cursor: pointer;
     box-shadow: -10px 0 16px -8px rgba(15, 23, 42, 0.06);
@@ -2468,9 +2472,9 @@ img.fatal-error-mark {
 }
 
 .primary-categories-all-icon {
-    width: 46px;
-    height: 42px;
-    border-radius: var(--radius-sm);
+    width: 44px;
+    height: 40px;
+    border-radius: 8px;
     border: 1px solid rgba(0, 0, 0, 0.06);
     background: #f4f6f5;
     color: #334155;
@@ -2492,8 +2496,8 @@ img.fatal-error-mark {
 }
 
 .primary-categories-all-label {
-    max-width: 64px;
-    min-height: 20px;
+    max-width: 68px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
