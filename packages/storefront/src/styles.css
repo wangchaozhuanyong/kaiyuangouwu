@@ -1118,23 +1118,44 @@ img.fatal-error-mark {
     width: 44px;
     height: 44px;
     border-radius: 12px;
-    background: #f8fafc;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    color: var(--accent);
+    background: transparent;
+    border: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 5px;
+    padding: 0;
     transition:
         transform 180ms ease,
         box-shadow 180ms ease;
 }
 
-.quick-grid button > span img {
+.colorful-icon-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    transition: transform 180ms ease;
+}
+
+.colorful-icon-img-wrap {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+
+.colorful-icon-img-wrap img {
     width: 100%;
     height: 100%;
     border-radius: 8px;
     object-fit: contain;
+    mix-blend-mode: multiply;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.08));
 }
 
 .quick-grid button > span svg {
@@ -4982,6 +5003,26 @@ img.fatal-error-mark {
     background: var(--soft);
 }
 
+.order-shortcuts nav button:nth-child(1) > span svg {
+    color: #f59e0b;
+}
+
+.order-shortcuts nav button:nth-child(2) > span svg {
+    color: #0284c7;
+}
+
+.order-shortcuts nav button:nth-child(3) > span svg {
+    color: #4f46e5;
+}
+
+.order-shortcuts nav button:nth-child(4) > span svg {
+    color: #e11d48;
+}
+
+.order-shortcuts nav button:nth-child(5) > span svg {
+    color: #0d9488;
+}
+
 .account-services-grid button > span {
     width: 40px;
     height: 40px;
@@ -4994,9 +5035,49 @@ img.fatal-error-mark {
     transition: all 180ms ease;
 }
 
+.account-services-grid button:nth-child(1) > span {
+    background: #fff1f2;
+    color: #f43f5e;
+}
+
+.account-services-grid button:nth-child(2) > span {
+    background: #fef2f2;
+    color: #ef4444;
+}
+
+.account-services-grid button:nth-child(3) > span {
+    background: #fffbeb;
+    color: #f59e0b;
+}
+
+.account-services-grid button:nth-child(4) > span {
+    background: #ecfdf5;
+    color: #10b981;
+}
+
+.account-services-grid button:nth-child(5) > span {
+    background: #f0f9ff;
+    color: #0ea5e9;
+}
+
+.account-services-grid button:nth-child(6) > span {
+    background: #eef2ff;
+    color: #6366f1;
+}
+
+.account-services-grid button:nth-child(7) > span {
+    background: #f5f3ff;
+    color: #8b5cf6;
+}
+
+.account-services-grid button:nth-child(8) > span {
+    background: #f1f5f9;
+    color: #475569;
+}
+
 .account-services-grid button:hover > span {
-    background: rgba(37, 99, 235, 0.1);
-    color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .account-services-grid button > span svg {

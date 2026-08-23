@@ -19,10 +19,11 @@ import {
     ClipboardList,
     Clock3,
     Cloud,
-    Coffee,
+    Cpu,
     Download,
     Fingerprint,
     Flame,
+    Globe,
     Headphones,
     Heart,
     House,
@@ -41,6 +42,7 @@ import {
     ShoppingBag,
     ShoppingCart,
     SlidersHorizontal,
+    Smartphone,
     Sparkles,
     Store,
     Tag,
@@ -51,6 +53,7 @@ import {
     WalletCards,
     WifiOff,
     X,
+    Zap,
 } from 'lucide-react';
 import {
     Activity,
@@ -2470,11 +2473,7 @@ function HomePage(props: HomePageProps) {
         ? quickBlock.items.slice(0, 5).map((item, index) => ({
               id: item.id,
               label: item.label,
-              icon: item.imageUrl ? (
-                  <SafeImage src={item.imageUrl} alt="" imageKind="thumbnail" />
-              ) : (
-                  quickIcon(index)
-              ),
+              icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
               disabled: item.targetType === 'NONE' || !item.targetValue,
               onClick: () => onContentTarget(item.targetType, item.targetValue),
           }))
@@ -2484,14 +2483,14 @@ function HomePage(props: HomePageProps) {
                   return {
                       id: collection.id,
                       label: collection.name,
-                      icon: image ? <SafeImage src={image} alt="" imageKind="thumbnail" /> : quickIcon(index),
+                      icon: renderColorfulQuickIcon(collection.name, index, image),
                       onClick: () => onCategorySelect(collection),
                   };
               }),
               {
                   id: 'all-products',
                   label: isZh ? '全部商品' : 'All products',
-                  icon: <LayoutGrid />,
+                  icon: renderColorfulQuickIcon(isZh ? '全部商品' : 'All products', 0),
                   onClick: () => onNavigate({ name: 'category' }),
               },
               ...(hero
@@ -2499,7 +2498,7 @@ function HomePage(props: HomePageProps) {
                         {
                             id: 'weekly-edit',
                             label: isZh ? '本周精选' : 'Weekly edit',
-                            icon: <Sparkles />,
+                            icon: renderColorfulQuickIcon(isZh ? '本周精选' : 'Weekly edit', 1),
                             onClick: () => onNavigate({ name: 'product', id: hero.id }),
                         },
                     ]
@@ -2507,13 +2506,13 @@ function HomePage(props: HomePageProps) {
               {
                   id: 'cart-shortcut',
                   label: isZh ? '购物车' : 'Cart',
-                  icon: <ShoppingCart />,
+                  icon: renderColorfulQuickIcon(isZh ? '购物车' : 'Cart', 2),
                   onClick: () => onNavigate({ name: 'cart' }),
               },
               {
                   id: 'my-orders',
                   label: isZh ? '我的订单' : 'My orders',
-                  icon: <Package />,
+                  icon: renderColorfulQuickIcon(isZh ? '我的订单' : 'My orders', 3),
                   onClick: () => onNavigate({ name: 'orders', tab: 'all' }),
               },
           ].slice(0, 5);
@@ -5969,31 +5968,94 @@ function BottomNavigation({
     onNavigate: (page: MainPage) => void;
 }) {
     const isZh = language === 'zh';
-    const items: Array<{ id: MainPage; label: string; icon: ReactNode }> = [
-        { id: 'home', label: isZh ? '首页' : 'Home', icon: <House /> },
-        { id: 'category', label: isZh ? '商品' : 'Shop', icon: <LayoutGrid /> },
-        { id: 'cart', label: isZh ? '购物车' : 'Cart', icon: <ShoppingCart /> },
-        { id: 'account', label: isZh ? '我的' : 'Account', icon: <UserRound /> },
+    const items: Array<{
+        id: MainPage;
+        label: string;
+        activeColor: string;
+        icon: (isActive: boolean) => ReactNode;
+    }> = [
+        {
+            id: 'home',
+            label: isZh ? '首页' : 'Home',
+            activeColor: '#EF4444',
+            icon: isActive => (
+                <House
+                    style={{
+                        color: isActive ? '#EF4444' : '#64748B',
+                        filter: isActive ? 'drop-shadow(0 2px 6px rgba(239, 68, 68, 0.35))' : undefined,
+                    }}
+                />
+            ),
+        },
+        {
+            id: 'category',
+            label: isZh ? '商品' : 'Shop',
+            activeColor: '#3B82F6',
+            icon: isActive => (
+                <LayoutGrid
+                    style={{
+                        color: isActive ? '#3B82F6' : '#64748B',
+                        filter: isActive ? 'drop-shadow(0 2px 6px rgba(59, 130, 246, 0.35))' : undefined,
+                    }}
+                />
+            ),
+        },
+        {
+            id: 'cart',
+            label: isZh ? '购物车' : 'Cart',
+            activeColor: '#F59E0B',
+            icon: isActive => (
+                <ShoppingCart
+                    style={{
+                        color: isActive ? '#F59E0B' : '#64748B',
+                        filter: isActive ? 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.35))' : undefined,
+                    }}
+                />
+            ),
+        },
+        {
+            id: 'account',
+            label: isZh ? '我的' : 'Account',
+            activeColor: '#10B981',
+            icon: isActive => (
+                <UserRound
+                    style={{
+                        color: isActive ? '#10B981' : '#64748B',
+                        filter: isActive ? 'drop-shadow(0 2px 6px rgba(16, 185, 129, 0.35))' : undefined,
+                    }}
+                />
+            ),
+        },
     ];
     return (
         <nav className="bottom-navigation" aria-label={isZh ? '主导航' : 'Main navigation'}>
-            {items.map(item => (
-                <button
-                    type="button"
-                    key={item.id}
-                    className={active === item.id ? 'is-active' : undefined}
-                    aria-current={active === item.id ? 'page' : undefined}
-                    onClick={() => onNavigate(item.id)}
-                >
-                    <span className="nav-icon">
-                        {item.icon}
-                        {item.id === 'cart' && cartQuantity > 0 && (
-                            <b>{cartQuantity > 99 ? '99+' : cartQuantity}</b>
-                        )}
-                    </span>
-                    <span>{item.label}</span>
-                </button>
-            ))}
+            {items.map(item => {
+                const isActive = active === item.id;
+                return (
+                    <button
+                        type="button"
+                        key={item.id}
+                        className={`nav-btn-${item.id} ${isActive ? 'is-active' : ''}`}
+                        aria-current={isActive ? 'page' : undefined}
+                        onClick={() => onNavigate(item.id)}
+                    >
+                        <span className="nav-icon">
+                            {item.icon(isActive)}
+                            {item.id === 'cart' && cartQuantity > 0 && (
+                                <b>{cartQuantity > 99 ? '99+' : cartQuantity}</b>
+                            )}
+                        </span>
+                        <span
+                            style={{
+                                color: isActive ? item.activeColor : '#64748B',
+                                fontWeight: isActive ? 700 : 500,
+                            }}
+                        >
+                            {item.label}
+                        </span>
+                    </button>
+                );
+            })}
         </nav>
     );
 }
@@ -7824,14 +7886,137 @@ function fallbackCollections(isZh: boolean): CollectionSummary[] {
         },
     ];
 }
-function quickIcon(index: number): ReactNode {
-    return [
-        <LayoutGrid key="all" />,
-        <ShoppingBag key="goods" />,
-        <Coffee key="life" />,
-        <Sparkles key="selected" />,
-        <Download key="digital" />,
-    ][index % 5];
+function renderColorfulQuickIcon(label: string, index: number, imageUrl?: string | null): ReactNode {
+    const cleanLabel = (label || '').toLowerCase();
+
+    if (cleanLabel.includes('代充') || cleanLabel.includes('充值') || cleanLabel.includes('topup')) {
+        return (
+            <span
+                className="colorful-icon-badge"
+                style={{ background: 'linear-gradient(135deg, #FF5E62 0%, #FF9966 100%)', color: '#fff' }}
+            >
+                <Zap style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }} />
+            </span>
+        );
+    }
+    if (
+        cleanLabel.includes('中转') ||
+        cleanLabel.includes('api') ||
+        cleanLabel.includes('hub') ||
+        cleanLabel.includes('ai')
+    ) {
+        return (
+            <span
+                className="colorful-icon-badge"
+                style={{ background: 'linear-gradient(135deg, #2563EB 0%, #06B6D4 100%)', color: '#fff' }}
+            >
+                <Cpu style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }} />
+            </span>
+        );
+    }
+    if (cleanLabel.includes('apple') || cleanLabel.includes('苹果') || cleanLabel.includes('服务')) {
+        return (
+            <span
+                className="colorful-icon-badge"
+                style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)', color: '#fff' }}
+            >
+                <Smartphone
+                    style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}
+                />
+            </span>
+        );
+    }
+    if (
+        cleanLabel.includes('海外') ||
+        cleanLabel.includes('账号') ||
+        cleanLabel.includes('global') ||
+        cleanLabel.includes('account')
+    ) {
+        return (
+            <span
+                className="colorful-icon-badge"
+                style={{ background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)', color: '#fff' }}
+            >
+                <Globe style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }} />
+            </span>
+        );
+    }
+    if (
+        cleanLabel.includes('保障') ||
+        cleanLabel.includes('售后') ||
+        cleanLabel.includes('质保') ||
+        cleanLabel.includes('support')
+    ) {
+        return (
+            <span
+                className="colorful-icon-badge"
+                style={{ background: 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', color: '#fff' }}
+            >
+                <ShieldCheck
+                    style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}
+                />
+            </span>
+        );
+    }
+    if (cleanLabel.includes('券') || cleanLabel.includes('coupon')) {
+        return (
+            <span
+                className="colorful-icon-badge"
+                style={{ background: 'linear-gradient(135deg, #DC2626 0%, #F87171 100%)', color: '#fff' }}
+            >
+                <TicketPercent
+                    style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}
+                />
+            </span>
+        );
+    }
+
+    if (imageUrl) {
+        return (
+            <span className="colorful-icon-img-wrap">
+                <SafeImage src={imageUrl} alt="" imageKind="thumbnail" />
+            </span>
+        );
+    }
+
+    const fallbacks = [
+        <span
+            key="1"
+            className="colorful-icon-badge"
+            style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)', color: '#fff' }}
+        >
+            <LayoutGrid style={{ width: 22, height: 22 }} />
+        </span>,
+        <span
+            key="2"
+            className="colorful-icon-badge"
+            style={{ background: 'linear-gradient(135deg, #EC4899 0%, #F43F5E 100%)', color: '#fff' }}
+        >
+            <ShoppingBag style={{ width: 22, height: 22 }} />
+        </span>,
+        <span
+            key="3"
+            className="colorful-icon-badge"
+            style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #FB923C 100%)', color: '#fff' }}
+        >
+            <Sparkles style={{ width: 22, height: 22 }} />
+        </span>,
+        <span
+            key="4"
+            className="colorful-icon-badge"
+            style={{ background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)', color: '#fff' }}
+        >
+            <Download style={{ width: 22, height: 22 }} />
+        </span>,
+        <span
+            key="5"
+            className="colorful-icon-badge"
+            style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)', color: '#fff' }}
+        >
+            <ShieldCheck style={{ width: 22, height: 22 }} />
+        </span>,
+    ];
+    return fallbacks[index % fallbacks.length];
 }
 
 function fallbackDemoProducts(language: StorefrontLanguage, currencyCode: string): Product[] {
