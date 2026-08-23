@@ -181,10 +181,10 @@ img {
 }
 
 .purchase-page {
-    --purchase-surface: #fff;
-    --purchase-soft: #f7f8f7;
-    --purchase-shadow: rgba(46, 57, 52, 0.08);
-    background: #eef1ef;
+    --purchase-surface: var(--paper);
+    --purchase-soft: var(--soft);
+    --purchase-shadow: var(--shadow-md);
+    background: var(--bg);
 }
 
 .purchase-page > .subpage-header {
