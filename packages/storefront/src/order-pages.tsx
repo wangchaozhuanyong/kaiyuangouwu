@@ -1369,37 +1369,34 @@ function OrderCard({
             <footer className="order-card-footer">
                 <div className="order-total-summary">
                     <span className="order-total-count">
-                        {isZh ? `共 ${order.totalQuantity} 件商品` : `${order.totalQuantity} items`}
+                        {isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}
                     </span>
                     <span className="order-total-label">
-                        {isPendingPayment ? (isZh ? '应付款' : 'To pay') : isZh ? '实付款' : 'Total'}
+                        {isPendingPayment ? (isZh ? '应付' : 'To pay') : isZh ? '实付' : 'Total'}
                     </span>
                     <strong className="order-total-amount">
                         {formatMoney(order.totalWithTax, order.currencyCode, locale)}
                     </strong>
                 </div>
-                <div className="order-card-actions">
-                    <div className="order-card-time">{formattedTime}</div>
-                    <div className="order-card-buttons">
-                        <button type="button" className="order-btn secondary-btn" onClick={onOpen}>
-                            {isZh ? '查看详情' : 'Details'}
+                <div className="order-card-buttons">
+                    <button type="button" className="order-btn secondary-btn" onClick={onOpen}>
+                        {isZh ? '查看详情' : 'Details'}
+                    </button>
+                    {isPendingPayment && (
+                        <button type="button" className="order-btn primary-btn" onClick={onOpen}>
+                            {isZh ? '立即付款' : 'Pay now'}
                         </button>
-                        {isPendingPayment && (
-                            <button type="button" className="order-btn primary-btn" onClick={onOpen}>
-                                {isZh ? '立即付款' : 'Pay now'}
-                            </button>
-                        )}
-                        {isShipped && (
-                            <button type="button" className="order-btn primary-btn" onClick={onOpen}>
-                                {isZh ? '查看物流' : 'Track'}
-                            </button>
-                        )}
-                        {(isDelivered || isCancelled) && (
-                            <button type="button" className="order-btn primary-btn" onClick={onBuyAgain}>
-                                {isZh ? '再次购买' : 'Buy again'}
-                            </button>
-                        )}
-                    </div>
+                    )}
+                    {isShipped && (
+                        <button type="button" className="order-btn primary-btn" onClick={onOpen}>
+                            {isZh ? '查看物流' : 'Track'}
+                        </button>
+                    )}
+                    {(isDelivered || isCancelled) && (
+                        <button type="button" className="order-btn primary-btn" onClick={onBuyAgain}>
+                            {isZh ? '再次购买' : 'Buy again'}
+                        </button>
+                    )}
                 </div>
             </footer>
         </article>
