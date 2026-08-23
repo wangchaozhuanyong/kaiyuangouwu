@@ -3513,6 +3513,50 @@ function CategoryPage(props: CategoryPageProps) {
                         ))}
                     </div>
                 )}
+
+                <nav className="sort-bar sort-bar-five" aria-label={isZh ? '排序和筛选' : 'Sort and filter'}>
+                    <button
+                        type="button"
+                        className={sortMode === 'recommended' ? 'is-active' : undefined}
+                        onClick={() => onSortChange('recommended')}
+                    >
+                        {isZh ? '综合' : 'Default'}
+                    </button>
+                    <button
+                        type="button"
+                        className={sortMode === 'sales' ? 'is-active' : undefined}
+                        onClick={() => onSortChange('sales')}
+                    >
+                        {isZh ? '销量' : 'Sales'}
+                    </button>
+                    <button
+                        type="button"
+                        className={sortMode === 'newest' ? 'is-active' : undefined}
+                        onClick={() => onSortChange('newest')}
+                    >
+                        {isZh ? '最新' : 'Newest'}
+                    </button>
+                    <button
+                        type="button"
+                        className={sortMode.startsWith('price') ? 'is-active' : undefined}
+                        onClick={() => onSortChange(sortMode === 'price-asc' ? 'price-desc' : 'price-asc')}
+                    >
+                        {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        className={hasFilters ? 'is-active' : undefined}
+                        onClick={() => {
+                            setDraftType(fulfillmentFilter);
+                            setDraftStock(inStockOnly);
+                            setDraftMinimumPrice(minimumPriceInput);
+                            setDraftMaximumPrice(maximumPriceInput);
+                            setFilterOpen(true);
+                        }}
+                    >
+                        {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
+                    </button>
+                </nav>
             </div>
 
             <div className="category-layout is-full-width">
@@ -3540,55 +3584,6 @@ function CategoryPage(props: CategoryPageProps) {
                         </div>
                         <span className="cat-promo-cta">{isZh ? '立即逛 ➔' : 'Explore ➔'}</span>
                     </button>
-
-                    <nav
-                        className="sort-bar sort-bar-five"
-                        aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
-                    >
-                        <button
-                            type="button"
-                            className={sortMode === 'recommended' ? 'is-active' : undefined}
-                            onClick={() => onSortChange('recommended')}
-                        >
-                            {isZh ? '综合' : 'Default'}
-                        </button>
-                        <button
-                            type="button"
-                            className={sortMode === 'sales' ? 'is-active' : undefined}
-                            onClick={() => onSortChange('sales')}
-                        >
-                            {isZh ? '销量' : 'Sales'}
-                        </button>
-                        <button
-                            type="button"
-                            className={sortMode === 'newest' ? 'is-active' : undefined}
-                            onClick={() => onSortChange('newest')}
-                        >
-                            {isZh ? '最新' : 'Newest'}
-                        </button>
-                        <button
-                            type="button"
-                            className={sortMode.startsWith('price') ? 'is-active' : undefined}
-                            onClick={() =>
-                                onSortChange(sortMode === 'price-asc' ? 'price-desc' : 'price-asc')
-                            }
-                        >
-                            {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
-                        </button>
-                        <button
-                            type="button"
-                            className={hasFilters ? 'is-active' : undefined}
-                            onClick={() => {
-                                setDraftType(fulfillmentFilter);
-                                setDraftStock(inStockOnly);
-                                setDraftMinimumPrice(minimumPriceInput);
-                                setDraftMaximumPrice(maximumPriceInput);
-                                setFilterOpen(true);
-                            }}
-                        >
-                            {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
-                        </button>
-                    </nav>
 
                     {categoryLoading || (loading && !collections.length) ? (
                         <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />

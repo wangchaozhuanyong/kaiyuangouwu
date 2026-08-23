@@ -2947,17 +2947,20 @@ img.fatal-error-mark {
 }
 
 .sort-bar {
-    height: 40px;
-    margin: 0 10px 10px;
-    position: sticky;
-    z-index: 8;
-    top: var(--category-content-sticky-top);
-    border: 1px solid rgba(0, 0, 0, 0.04);
-    border-radius: 10px;
+    height: 38px;
+    margin: 0;
+    position: relative;
+    z-index: 1;
+    top: auto;
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
+    border-bottom: 0;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
     background: #ffffff;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    box-shadow: none;
 }
 
 .sort-bar-five {
