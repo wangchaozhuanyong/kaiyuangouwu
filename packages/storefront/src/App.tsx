@@ -10,7 +10,6 @@ import {
     ArrowUpDown,
     Bell,
     Check,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     ChevronUp,
@@ -3370,7 +3369,7 @@ function CategoryPage(props: CategoryPageProps) {
                                 type="button"
                                 className="primary-categories-all"
                                 aria-expanded="false"
-                                aria-label={isZh ? '展开全部分类' : 'Expand all categories'}
+                                aria-label={isZh ? '全部分类' : 'All categories'}
                                 onClick={() => setAllCategoriesOpen(true)}
                             >
                                 <span className="primary-categories-all-icon" aria-hidden="true">
@@ -3378,7 +3377,6 @@ function CategoryPage(props: CategoryPageProps) {
                                 </span>
                                 <span className="primary-categories-all-label">
                                     {isZh ? '全部分类' : 'All'}
-                                    <ChevronDown aria-hidden="true" />
                                 </span>
                             </button>
                         </div>
