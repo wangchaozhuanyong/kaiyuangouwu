@@ -94,6 +94,7 @@ import {
 } from './query-client';
 import { responsiveImageSources, StorefrontImageKind } from './responsive-image';
 import { ProductReviewsSection, ReviewCenterPage } from './review-pages';
+import { productDescriptionText, sanitizeProductDescription } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
 import {
@@ -1235,7 +1236,7 @@ export function App() {
               : `${storefrontName} · Online store`;
         const description =
             route.name === 'product' && selectedProduct?.description.trim()
-                ? trimText(selectedProduct.description.trim(), 150)
+                ? trimText(productDescriptionText(selectedProduct.description), 150)
                 : storefrontDescription;
         const imagePath =
             route.name === 'product' && selectedProduct
@@ -4761,10 +4762,12 @@ function ProductDetailPage({
         (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK');
     const isDigital = variant?.customFields.fulfillmentType === 'digital';
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
+    const descriptionText = productDescriptionText(product.description);
+    const descriptionHtml = sanitizeProductDescription(product.description);
     const shareProduct = async () => {
         try {
             if (navigator.share) {
-                await navigator.share({ title: product.name, text: product.description, url: location.href });
+                await navigator.share({ title: product.name, text: descriptionText, url: location.href });
             } else {
                 await navigator.clipboard.writeText(location.href);
                 onNotify(isZh ? '商品链接已复制' : 'Product link copied');
@@ -4880,7 +4883,7 @@ function ProductDetailPage({
                     </span>
                 </div>
                 <h1>{product.name}</h1>
-                <p>{product.description || (isZh ? '暂无更多商品说明' : 'No additional description')}</p>
+                <p>{descriptionText || (isZh ? '暂无更多商品说明' : 'No additional description')}</p>
             </section>
             <section className="detail-promotions">
                 <div>
@@ -5001,12 +5004,15 @@ function ProductDetailPage({
             </section>
             <section className="detail-block detail-description">
                 <h2>{isZh ? '商品详情' : 'Description'}</h2>
-                <p>
-                    {product.description ||
-                        (isZh
+                {descriptionHtml ? (
+                    <div className="detail-rich-text" dangerouslySetInnerHTML={{ __html: descriptionHtml }} />
+                ) : (
+                    <p>
+                        {isZh
                             ? '商品详细信息由商家后台维护。'
-                            : 'Product information is managed by the merchant.')}
-                </p>
+                            : 'Product information is managed by the merchant.'}
+                    </p>
+                )}
                 {assets[0] && (
                     <SafeImage
                         src={assets[0].preview}

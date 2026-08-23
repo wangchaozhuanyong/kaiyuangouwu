@@ -5097,11 +5097,48 @@ img {
     margin-bottom: 0;
 }
 
-.detail-description p {
+.detail-description > p,
+.detail-rich-text {
     margin: 10px 0 0;
     color: var(--muted);
     line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+.detail-description > p {
     white-space: pre-wrap;
+}
+
+.detail-rich-text > :first-child {
+    margin-top: 0;
+}
+
+.detail-rich-text > :last-child {
+    margin-bottom: 0;
+}
+
+.detail-rich-text a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.detail-rich-text img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 7px;
+}
+
+.detail-rich-text table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.detail-rich-text th,
+.detail-rich-text td {
+    padding: 8px;
+    border: 1px solid var(--line);
+    text-align: left;
 }
 
 .detail-description > img,
