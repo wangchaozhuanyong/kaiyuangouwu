@@ -3271,42 +3271,6 @@ function CategoryPage(props: CategoryPageProps) {
         return () => document.removeEventListener('keydown', closeOnEscape);
     }, [allCategoriesOpen]);
 
-    useEffect(() => {
-        if (subcatScrollerRef.current) {
-            subcatScrollerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-        }
-    }, [activeCollectionId]);
-
-    const [isNavHidden, setIsNavHidden] = useState(false);
-    const lastScrollYRef = useRef(0);
-
-    useEffect(() => {
-        const handleScroll = () => {
-            const currentY = window.scrollY;
-            const delta = currentY - lastScrollYRef.current;
-
-            if (currentY < 40) {
-                setIsNavHidden(false);
-                lastScrollYRef.current = currentY;
-                return;
-            }
-
-            // 往上滑动（查看下方更多商品）时隐藏
-            if (delta > 6 && currentY > 70) {
-                setIsNavHidden(true);
-            }
-            // 往下滑动时即刻唤醒呈现，无需滑到顶部
-            else if (delta < -6) {
-                setIsNavHidden(false);
-            }
-
-            lastScrollYRef.current = currentY;
-        };
-
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-
     const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
         const collectionMatch =
@@ -3320,14 +3284,9 @@ function CategoryPage(props: CategoryPageProps) {
         );
     }).length;
 
-    const bannerImage =
-        primary?.featuredAsset?.preview ??
-        productImage(categoryProducts[0]) ??
-        '/storefront/default-hero.jpg';
-
     return (
         <main className="page category-page">
-            <div className={`category-navigation-shell${isNavHidden ? ' is-scrolled-hidden' : ''}`}>
+            <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
                     <div className="category-title-lockup">
                         <span className="category-title-icon-pill" aria-hidden="true">
@@ -3343,7 +3302,6 @@ function CategoryPage(props: CategoryPageProps) {
                         <Search aria-hidden="true" />
                         <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
                     </button>
-                    <NoticeButton language={language} onClick={onNotify} />
                 </header>
 
                 <section
@@ -3469,50 +3427,6 @@ function CategoryPage(props: CategoryPageProps) {
                         </div>
                     )}
                 </section>
-
-                <nav className="sort-bar sort-bar-five" aria-label={isZh ? '排序和筛选' : 'Sort and filter'}>
-                    <button
-                        type="button"
-                        className={sortMode === 'recommended' ? 'is-active' : undefined}
-                        onClick={() => onSortChange('recommended')}
-                    >
-                        {isZh ? '综合' : 'Default'}
-                    </button>
-                    <button
-                        type="button"
-                        className={sortMode === 'sales' ? 'is-active' : undefined}
-                        onClick={() => onSortChange('sales')}
-                    >
-                        {isZh ? '销量' : 'Sales'}
-                    </button>
-                    <button
-                        type="button"
-                        className={sortMode === 'newest' ? 'is-active' : undefined}
-                        onClick={() => onSortChange('newest')}
-                    >
-                        {isZh ? '最新' : 'Newest'}
-                    </button>
-                    <button
-                        type="button"
-                        className={sortMode.startsWith('price') ? 'is-active' : undefined}
-                        onClick={() => onSortChange(sortMode === 'price-asc' ? 'price-desc' : 'price-asc')}
-                    >
-                        {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        className={hasFilters ? 'is-active' : undefined}
-                        onClick={() => {
-                            setDraftType(fulfillmentFilter);
-                            setDraftStock(inStockOnly);
-                            setDraftMinimumPrice(minimumPriceInput);
-                            setDraftMaximumPrice(maximumPriceInput);
-                            setFilterOpen(true);
-                        }}
-                    >
-                        {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
-                    </button>
-                </nav>
             </div>
 
             <div className={`category-layout${hasChildCategories ? ' has-sidebar' : ' is-full-width'}`}>
@@ -3544,6 +3458,55 @@ function CategoryPage(props: CategoryPageProps) {
                 )}
 
                 <section className="category-results">
+                    <nav
+                        className="sort-bar sort-bar-five"
+                        aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
+                    >
+                        <button
+                            type="button"
+                            className={sortMode === 'recommended' ? 'is-active' : undefined}
+                            onClick={() => onSortChange('recommended')}
+                        >
+                            {isZh ? '综合' : 'Default'}
+                        </button>
+                        <button
+                            type="button"
+                            className={sortMode === 'sales' ? 'is-active' : undefined}
+                            onClick={() => onSortChange('sales')}
+                        >
+                            {isZh ? '销量' : 'Sales'}
+                        </button>
+                        <button
+                            type="button"
+                            className={sortMode === 'newest' ? 'is-active' : undefined}
+                            onClick={() => onSortChange('newest')}
+                        >
+                            {isZh ? '最新' : 'Newest'}
+                        </button>
+                        <button
+                            type="button"
+                            className={sortMode.startsWith('price') ? 'is-active' : undefined}
+                            onClick={() =>
+                                onSortChange(sortMode === 'price-asc' ? 'price-desc' : 'price-asc')
+                            }
+                        >
+                            {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
+                        </button>
+                        <button
+                            type="button"
+                            className={hasFilters ? 'is-active' : undefined}
+                            onClick={() => {
+                                setDraftType(fulfillmentFilter);
+                                setDraftStock(inStockOnly);
+                                setDraftMinimumPrice(minimumPriceInput);
+                                setDraftMaximumPrice(maximumPriceInput);
+                                setFilterOpen(true);
+                            }}
+                        >
+                            {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
+                        </button>
+                    </nav>
+
                     {categoryLoading || (loading && !collections.length) ? (
                         <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
                     ) : categoryError && !categoryProducts.length ? (
@@ -3557,13 +3520,14 @@ function CategoryPage(props: CategoryPageProps) {
                         />
                     ) : categoryProducts.length ? (
                         <>
-                            <div className="product-grid category-product-grid">
+                            <div className="category-product-list">
                                 {visibleProducts.map(product => (
-                                    <ProductCard
+                                    <ProductRow
                                         key={product.id}
                                         product={product}
                                         market={market}
                                         locale={locale}
+                                        language={language}
                                         adding={product.variants.some(
                                             variant => variant.id === addingVariantId,
                                         )}
