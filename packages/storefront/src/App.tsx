@@ -4285,8 +4285,7 @@ function AccountPage(props: AccountPageProps) {
                 </section>
             )}
 
-            <section className="account-section services-section">
-                <SectionHeader title={isZh ? '常用服务' : 'Services'} />
+            <section className="account-section services-section" aria-label={isZh ? '常用服务' : 'Services'}>
                 <div className="account-services-grid">
                     <ServiceButton
                         icon={<Heart />}
