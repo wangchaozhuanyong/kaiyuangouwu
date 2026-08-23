@@ -1225,6 +1225,23 @@ img.fatal-error-mark {
     height: 12px;
 }
 
+@media (max-width: 380px) {
+    .hero-rich-content {
+        width: 65%;
+        padding: 12px 14px;
+    }
+    .hero-rich-title {
+        font-size: 16px;
+    }
+    .hero-stat-badge {
+        min-width: 38px;
+        padding: 2px 4px;
+    }
+    .hero-stat-badge .stat-num {
+        font-size: 9px;
+    }
+}
+
 .hero-pagination {
     position: absolute;
     z-index: 3;

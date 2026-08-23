@@ -2696,128 +2696,146 @@ function HomePage(props: HomePageProps) {
                             onPointerCancel={event => finishHeroSwipe(event, true)}
                             onDragStart={event => event.preventDefault()}
                         >
-                            {/* Full-bleed Rich 3D High-End Visual Background */}
+                            {/* Full-bleed Rich 3D High-End Visual Background with Fallback */}
                             <img
                                 src={
-                                    heroIndex === 0
+                                    managedHero?.imageUrl ||
+                                    (heroIndex % 2 === 0
                                         ? '/storefront/hero-01-gateway.jpg'
-                                        : '/storefront/hero-02-vip.jpg'
+                                        : '/storefront/hero-02-vip.jpg')
                                 }
-                                alt={
-                                    isZh
-                                        ? heroIndex === 0
-                                            ? '云桥 AI 聚合网关'
-                                            : 'AI 专属会员特权'
-                                        : 'Hero Banner'
-                                }
+                                alt={managedHero?.title || (isZh ? '云桥 AI 精选' : 'CloudBridge Featured')}
                                 className="hero-rich-backdrop"
                                 loading="eager"
                             />
                             <div className="hero-rich-overlay-shade" />
 
-                            {heroIndex === 0 ? (
-                                <div className="hero-rich-content">
-                                    <div className="hero-rich-pill">
-                                        <Zap aria-hidden="true" />
-                                        <span>
-                                            {isZh
-                                                ? '全模型极速直连 · 0.05x 费率起'
-                                                : 'Ultra Fast AI API · From 0.05x'}
-                                        </span>
-                                    </div>
-                                    <h1 className="hero-rich-title">
-                                        {isZh ? '云桥 AI 聚合网关' : 'CloudBridge AI Gateway'}
-                                    </h1>
-                                    <p className="hero-rich-desc">
-                                        {isZh
-                                            ? '支持 GPT-4o / Claude / Gemini / Apple 全生态满血调用'
-                                            : 'Enterprise grade OpenAI, Claude, Gemini & Apple model APIs'}
-                                    </p>
+                            {/* Dynamic Content Overlay with 3D Cyber Layout */}
+                            {(() => {
+                                const isVipTheme = heroIndex % 2 !== 0;
+                                const defaultTitle = isZh
+                                    ? isVipTheme
+                                        ? 'AI 专属独立会员'
+                                        : '云桥 AI 聚合网关'
+                                    : isVipTheme
+                                      ? 'Exclusive VIP AI Pass'
+                                      : 'CloudBridge AI Gateway';
+                                const title =
+                                    managedHero?.title && !/^首页(图片)?轮播/i.test(managedHero.title)
+                                        ? managedHero.title
+                                        : defaultTitle;
 
-                                    <div className="hero-rich-stats-row">
-                                        <div className="hero-stat-badge">
-                                            <span className="stat-num">99.99%</span>
-                                            <span className="stat-lbl">{isZh ? '高可用' : 'Uptime'}</span>
-                                        </div>
-                                        <div className="hero-stat-badge">
-                                            <span className="stat-num">28ms</span>
-                                            <span className="stat-lbl">{isZh ? '极速响应' : 'Latency'}</span>
-                                        </div>
-                                        <div className="hero-stat-badge">
-                                            <span className="stat-num">0.05x</span>
-                                            <span className="stat-lbl">{isZh ? '特惠费率' : 'Discount'}</span>
-                                        </div>
-                                    </div>
+                                const defaultSubtitle = isZh
+                                    ? isVipTheme
+                                        ? '本人账号独立开通 · 拒绝封号'
+                                        : '全模型极速直连 · 0.05x 费率起'
+                                    : isVipTheme
+                                      ? '100% Dedicated Account · Zero Ban'
+                                      : 'Ultra Fast AI API · From 0.05x';
+                                const subtitle = managedHero?.subtitle || defaultSubtitle;
 
-                                    <button
-                                        type="button"
-                                        className="hero-rich-cta-btn"
-                                        onClick={() =>
-                                            managedHero?.targetValue
-                                                ? onContentTarget(
-                                                      managedHero.targetType,
-                                                      managedHero.targetValue,
-                                                  )
-                                                : onNavigate({ name: 'category' })
-                                        }
-                                    >
-                                        {isZh ? '立即接入' : 'Get API Key'}
-                                        <ChevronRight aria-hidden="true" />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="hero-rich-content is-vip">
-                                    <div className="hero-rich-pill is-vip-pill">
-                                        <ShieldCheck aria-hidden="true" />
-                                        <span>
-                                            {isZh
-                                                ? '本人账号独立开通 · 拒绝封号'
-                                                : '100% Dedicated Account · Zero Ban'}
-                                        </span>
-                                    </div>
-                                    <h1 className="hero-rich-title">
-                                        {isZh ? 'AI 专属独立会员' : 'Exclusive VIP AI Pass'}
-                                    </h1>
-                                    <p className="hero-rich-desc">
-                                        {isZh
-                                            ? '官方正品本人邮箱直绑，独享满血算力与全额售后质保'
-                                            : 'Direct bound to personal email with dedicated computing power'}
-                                    </p>
+                                const defaultDesc = isZh
+                                    ? isVipTheme
+                                        ? '官方正品本人邮箱直绑，独享满血算力与全额售后质保'
+                                        : '支持 GPT-4o / Claude / Gemini / Apple 全生态满血调用'
+                                    : isVipTheme
+                                      ? 'Direct bound to personal email with dedicated computing power'
+                                      : 'Enterprise grade OpenAI, Claude, Gemini & Apple model APIs';
+                                const body =
+                                    managedHero?.body || trimText(hero?.description, 45) || defaultDesc;
 
-                                    <div className="hero-rich-stats-row">
-                                        <div className="hero-stat-badge is-vip">
-                                            <span className="stat-num">100%</span>
-                                            <span className="stat-lbl">{isZh ? '本人独享' : 'Private'}</span>
-                                        </div>
-                                        <div className="hero-stat-badge is-vip">
-                                            <span className="stat-num">⚡ 满血</span>
-                                            <span className="stat-lbl">{isZh ? '高算力' : 'Unlimited'}</span>
-                                        </div>
-                                        <div className="hero-stat-badge is-vip">
-                                            <span className="stat-num">🛡️ 包赔</span>
-                                            <span className="stat-lbl">
-                                                {isZh ? '售后无忧' : 'Guaranteed'}
-                                            </span>
-                                        </div>
-                                    </div>
+                                const defaultCta = isZh
+                                    ? isVipTheme
+                                        ? '查看 AI 会员'
+                                        : '立即接入'
+                                    : isVipTheme
+                                      ? 'Explore VIP Pass'
+                                      : 'Get API Key';
+                                const ctaLabel = managedHero?.ctaLabel || defaultCta;
 
-                                    <button
-                                        type="button"
-                                        className="hero-rich-cta-btn is-vip-btn"
-                                        onClick={() =>
-                                            managedHero?.targetValue
-                                                ? onContentTarget(
-                                                      managedHero.targetType,
-                                                      managedHero.targetValue,
-                                                  )
-                                                : onNavigate({ name: 'category' })
-                                        }
-                                    >
-                                        {isZh ? '查看 AI 会员' : 'Explore VIP Pass'}
-                                        <ChevronRight aria-hidden="true" />
-                                    </button>
-                                </div>
-                            )}
+                                return (
+                                    <div className={`hero-rich-content ${isVipTheme ? 'is-vip' : ''}`}>
+                                        <div className={`hero-rich-pill ${isVipTheme ? 'is-vip-pill' : ''}`}>
+                                            {isVipTheme ? (
+                                                <ShieldCheck aria-hidden="true" />
+                                            ) : (
+                                                <Zap aria-hidden="true" />
+                                            )}
+                                            <span>{subtitle}</span>
+                                        </div>
+                                        <h1 className="hero-rich-title">{title}</h1>
+                                        <p className="hero-rich-desc">{body}</p>
+
+                                        {isVipTheme ? (
+                                            <div className="hero-rich-stats-row">
+                                                <div className="hero-stat-badge is-vip">
+                                                    <span className="stat-num">100%</span>
+                                                    <span className="stat-lbl">
+                                                        {isZh ? '本人独享' : 'Private'}
+                                                    </span>
+                                                </div>
+                                                <div className="hero-stat-badge is-vip">
+                                                    <span className="stat-num">⚡ 满血</span>
+                                                    <span className="stat-lbl">
+                                                        {isZh ? '高算力' : 'Unlimited'}
+                                                    </span>
+                                                </div>
+                                                <div className="hero-stat-badge is-vip">
+                                                    <span className="stat-num">🛡️ 包赔</span>
+                                                    <span className="stat-lbl">
+                                                        {isZh ? '售后无忧' : 'Guaranteed'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="hero-rich-stats-row">
+                                                <div className="hero-stat-badge">
+                                                    <span className="stat-num">99.99%</span>
+                                                    <span className="stat-lbl">
+                                                        {isZh ? '高可用' : 'Uptime'}
+                                                    </span>
+                                                </div>
+                                                <div className="hero-stat-badge">
+                                                    <span className="stat-num">28ms</span>
+                                                    <span className="stat-lbl">
+                                                        {isZh ? '极速响应' : 'Latency'}
+                                                    </span>
+                                                </div>
+                                                <div className="hero-stat-badge">
+                                                    <span className="stat-num">0.05x</span>
+                                                    <span className="stat-lbl">
+                                                        {isZh ? '特惠费率' : 'Discount'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            className={`hero-rich-cta-btn ${isVipTheme ? 'is-vip-btn' : ''}`}
+                                            onClick={() => {
+                                                if (
+                                                    managedHero?.targetType &&
+                                                    managedHero.targetType !== 'NONE' &&
+                                                    managedHero.targetValue
+                                                ) {
+                                                    onContentTarget(
+                                                        managedHero.targetType,
+                                                        managedHero.targetValue,
+                                                    );
+                                                } else if (hero) {
+                                                    onNavigate({ name: 'product', id: hero.id });
+                                                } else {
+                                                    onNavigate({ name: 'category' });
+                                                }
+                                            }}
+                                        >
+                                            {ctaLabel}
+                                            <ChevronRight aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                );
+                            })()}
                             {heroCount > 1 && (
                                 <div
                                     className="hero-pagination"
