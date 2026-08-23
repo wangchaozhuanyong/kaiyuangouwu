@@ -6281,41 +6281,47 @@ function ProductRow({
             <div className="product-row-image">
                 <ProductImage product={product} />
             </div>
-            <div>
-                <strong className="product-row-name">{product.name}</strong>
-                <span>{trimText(product.description, 34) || variant?.sku}</span>
-                <small>
-                    {variant?.customFields.fulfillmentType === 'digital'
-                        ? isZh
-                            ? '数字商品 · 支付后交付'
-                            : 'Digital · delivered after payment'
-                        : variant?.stockLevel === 'OUT_OF_STOCK'
-                          ? isZh
-                              ? '暂时缺货'
-                              : 'Out of stock'
-                          : isZh
-                            ? '现货商品'
-                            : 'In stock'}
-                </small>
-                <p>
-                    {variant
-                        ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                        : formatMoney(0, market.currencyCode, locale)}
-                </p>
-                <button
-                    className="row-add"
-                    type="button"
-                    onClick={onAdd}
-                    disabled={
-                        !variant ||
-                        adding ||
-                        (variant.customFields.fulfillmentType === 'physical' &&
-                            variant.stockLevel === 'OUT_OF_STOCK')
-                    }
-                    aria-label={`${isZh ? '加入购物车' : 'Add to cart'} ${product.name}`}
-                >
-                    <Plus />
-                </button>
+            <div className="product-row-content">
+                <div className="product-row-top">
+                    <strong className="product-row-name">{product.name}</strong>
+                    <span className="product-row-desc">
+                        {trimText(product.description, 32) || variant?.sku}
+                    </span>
+                    <span className="product-row-badge">
+                        {variant?.customFields.fulfillmentType === 'digital'
+                            ? isZh
+                                ? '⚡ 自动发货 · 极速交付'
+                                : 'Instant Delivery'
+                            : variant?.stockLevel === 'OUT_OF_STOCK'
+                              ? isZh
+                                  ? '暂时缺货'
+                                  : 'Out of stock'
+                              : isZh
+                                ? '现货正品'
+                                : 'In stock'}
+                    </span>
+                </div>
+                <div className="product-row-bottom">
+                    <p className="product-row-price">
+                        {variant
+                            ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                            : formatMoney(0, market.currencyCode, locale)}
+                    </p>
+                    <button
+                        className="row-add"
+                        type="button"
+                        onClick={onAdd}
+                        disabled={
+                            !variant ||
+                            adding ||
+                            (variant.customFields.fulfillmentType === 'physical' &&
+                                variant.stockLevel === 'OUT_OF_STOCK')
+                        }
+                        aria-label={`${isZh ? '加入购物车' : 'Add to cart'} ${product.name}`}
+                    >
+                        <Plus />
+                    </button>
+                </div>
             </div>
         </article>
     );
