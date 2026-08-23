@@ -1611,33 +1611,43 @@ img.fatal-error-mark {
 }
 
 .showcase-card {
-    min-height: 140px;
-    padding: 14px 12px;
-    border: 1px solid rgba(0, 0, 0, 0.04);
-    border-radius: var(--radius-md);
+    min-height: 142px;
+    padding: 14px 12px 12px;
+    border-radius: 14px;
     position: relative;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     text-align: left;
-    transition: transform 180ms ease, box-shadow 180ms ease;
-    box-shadow: var(--shadow-sm);
+    transition: all 180ms ease;
+    cursor: pointer;
 }
 
 .showcase-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
 }
 
 .showcase-card.is-hardware {
-    background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
-    color: white;
+    background: linear-gradient(145deg, #ffffff 0%, #fefce8 55%, #fef9c3 100%);
+    border: 1px solid rgba(253, 224, 71, 0.6);
+    box-shadow: 0 4px 14px -3px rgba(202, 138, 4, 0.08);
+}
+
+.showcase-card.is-hardware:hover {
+    border-color: #facc15;
+    box-shadow: 0 6px 18px -2px rgba(202, 138, 4, 0.14);
 }
 
 .showcase-card.is-digital {
-    background: linear-gradient(145deg, #0369a1 0%, #0c4a6e 100%);
-    color: white;
+    background: linear-gradient(145deg, #ffffff 0%, #fff1f2 55%, #ffe4e6 100%);
+    border: 1px solid rgba(254, 205, 211, 0.8);
+    box-shadow: 0 4px 14px -3px rgba(225, 29, 72, 0.08);
+}
+
+.showcase-card.is-digital:hover {
+    border-color: #fda4af;
+    box-shadow: 0 6px 18px -2px rgba(225, 29, 72, 0.14);
 }
 
 .showcase-content {
@@ -1649,32 +1659,36 @@ img.fatal-error-mark {
 
 .showcase-badge {
     align-self: flex-start;
-    padding: 2px 7px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.2);
-    font-size: 10.5px;
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: 0.03em;
-    backdrop-filter: blur(4px);
+    padding: 2.5px 8px;
+    border-radius: 6px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
 }
 
 .showcase-badge.is-digital-badge {
-    background: rgba(56, 189, 248, 0.25);
-    color: #e0f2fe;
+    background: #ffe4e6;
+    color: #be123c;
+    border: 1px solid #fecdd3;
 }
 
 .showcase-card h3 {
     margin: 6px 0 2px;
     font-size: 15px;
-    font-weight: var(--font-weight-bold);
-    line-height: 1.25;
+    font-weight: 800;
+    line-height: 1.3;
+    color: #0f172a;
 }
 
 .showcase-card p {
     margin: 0;
     font-size: 11.5px;
-    line-height: 1.35;
-    opacity: 0.85;
+    line-height: 1.4;
+    color: #475569;
+    font-weight: 500;
 }
 
 .showcase-link {
@@ -1682,9 +1696,16 @@ img.fatal-error-mark {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 11.5px;
-    font-weight: var(--font-weight-semibold);
-    opacity: 0.95;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.showcase-card.is-hardware .showcase-link {
+    color: #b45309;
+}
+
+.showcase-card.is-digital .showcase-link {
+    color: var(--accent, #d33c30);
 }
 
 .showcase-link svg {
