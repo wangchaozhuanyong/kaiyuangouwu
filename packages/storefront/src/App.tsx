@@ -2084,7 +2084,7 @@ const HOMEPAGE_MOCK_COUPONS: HomepageCouponItem[] = [
         type: 'DISCOUNT',
         value: '8.5',
         unit: '折',
-        titleZh: '全场通用折扣券',
+        titleZh: '新人全场通用券',
         titleEn: 'Storewide 15% OFF',
         descZh: '全场无门槛 · 结算立享85折',
         descEn: 'No minimum · 15% off at checkout',
@@ -2093,43 +2093,43 @@ const HOMEPAGE_MOCK_COUPONS: HomepageCouponItem[] = [
         tagEn: 'Storewide',
     },
     {
-        id: 'coupon-cash-30',
+        id: 'coupon-cash-100',
         type: 'CASH',
-        value: '30',
+        value: '100',
         unit: '¥',
-        titleZh: '大额满减抵扣券',
-        titleEn: 'Cash Voucher',
-        descZh: '满 ¥200 即可立减 ¥30',
-        descEn: '¥30 OFF on orders over ¥200',
+        titleZh: '桌面工作站立减券',
+        titleEn: 'Desk Setup Voucher',
+        descZh: '满 ¥1000 即可立减 ¥100',
+        descEn: '¥100 OFF on orders over ¥1000',
         theme: 'rose',
-        tagZh: '满减优惠',
-        tagEn: 'Voucher',
+        tagZh: '硬件满减',
+        tagEn: 'Hardware',
     },
     {
-        id: 'coupon-cat-apple',
+        id: 'coupon-cat-input',
         type: 'CATEGORY',
         value: '9',
         unit: '折',
-        titleZh: 'Apple服务专享券',
-        titleEn: 'Apple Service Exclusive',
-        descZh: '仅限 Apple 认证生态服务',
-        descEn: 'Valid for Apple service items',
+        titleZh: '输入外设专享券',
+        titleEn: 'Input Gear Exclusive',
+        descZh: '适用于机械键盘与静音鼠标',
+        descEn: 'Valid for keyboards and mice',
         theme: 'blue',
-        tagZh: '分类专享',
+        tagZh: '外设专享',
         tagEn: 'Category',
     },
     {
-        id: 'coupon-prod-ai',
+        id: 'coupon-prod-digital',
         type: 'PRODUCT',
-        value: '50',
+        value: '30',
         unit: '¥',
-        titleZh: 'AI中转专享津贴',
-        titleEn: 'AI Bridge Allowance',
-        descZh: 'AI大模型中转服务专项立减',
-        descEn: 'Exclusive savings on AI services',
+        titleZh: 'AI数字资产立减津贴',
+        titleEn: 'AI & Digital Allowance',
+        descZh: '适用于 AI 效率课与提示词库',
+        descEn: 'Exclusive for AI courses & toolkits',
         theme: 'emerald',
-        tagZh: '指定商品',
-        tagEn: 'Featured',
+        tagZh: '数字专享',
+        tagEn: 'Digital',
     },
 ];
 
@@ -2705,6 +2705,13 @@ function HomePage(props: HomePageProps) {
 
                     <HomepageCouponHub language={language} onNavigate={onNavigate} onToast={onToast} />
 
+                    <HomeDualCategoryShowcase
+                        language={language}
+                        collections={collections}
+                        onNavigate={onNavigate}
+                        onCategorySelect={onCategorySelect}
+                    />
+
                     {managedSections.map(block => (
                         <ManagedContentSection
                             key={block.id}
@@ -2773,6 +2780,9 @@ function HomePage(props: HomePageProps) {
                         onProduct={product => onNavigate({ name: 'product', id: product.id })}
                         onAdd={onAdd}
                     />
+
+                    <HomeTrustGuaranteeStrip language={language} />
+
                     <LegalFooter
                         storefrontName={storefrontName}
                         content={legalBlock}
@@ -2781,6 +2791,118 @@ function HomePage(props: HomePageProps) {
                 </>
             )}
         </main>
+    );
+}
+
+function HomeDualCategoryShowcase({
+    language,
+    collections,
+    onNavigate,
+    onCategorySelect,
+}: {
+    language: StorefrontLanguage;
+    collections: CollectionSummary[];
+    onNavigate: (route: RouteState) => void;
+    onCategorySelect: (collection: CollectionSummary) => void;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <section className="home-dual-showcase" aria-label={isZh ? '核心品类精选' : 'Core Categories'}>
+            <button
+                type="button"
+                className="showcase-card is-hardware"
+                onClick={() => {
+                    const hardwareCol = collections.find(
+                        c =>
+                            c.slug.includes('workstation') ||
+                            c.slug.includes('computing') ||
+                            c.slug.includes('setup') ||
+                            c.slug.includes('input'),
+                    );
+                    if (hardwareCol) {
+                        onCategorySelect(hardwareCol);
+                    } else {
+                        onNavigate({ name: 'category' });
+                    }
+                }}
+            >
+                <div className="showcase-content">
+                    <span className="showcase-badge">{isZh ? '桌面数码' : 'Desk Gear'}</span>
+                    <h3>{isZh ? '极简办公工作站' : 'Minimal Workstation'}</h3>
+                    <p>{isZh ? '精选平板、4K显示器与机械键盘' : 'Tablets, 4K displays & keyboards'}</p>
+                    <span className="showcase-link">
+                        {isZh ? '探索硬件' : 'Explore gear'} <ChevronRight aria-hidden="true" />
+                    </span>
+                </div>
+            </button>
+            <button
+                type="button"
+                className="showcase-card is-digital"
+                onClick={() => {
+                    const digitalCol = collections.find(c => c.slug.includes('digital'));
+                    if (digitalCol) {
+                        onCategorySelect(digitalCol);
+                    } else {
+                        onNavigate({ name: 'category' });
+                    }
+                }}
+            >
+                <div className="showcase-content">
+                    <span className="showcase-badge is-digital-badge">
+                        {isZh ? '数字生产力' : 'AI & Digital'}
+                    </span>
+                    <h3>{isZh ? 'AI 效率与知识资产' : 'AI & Knowledge Tools'}</h3>
+                    <p>{isZh ? '提示词库、实战课与文案工具' : 'Prompts, toolkits & templates'}</p>
+                    <span className="showcase-link">
+                        {isZh ? '即刻获取' : 'Instant access'} <ChevronRight aria-hidden="true" />
+                    </span>
+                </div>
+            </button>
+        </section>
+    );
+}
+
+function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage }) {
+    const isZh = language === 'zh';
+    return (
+        <section className="home-trust-strip" aria-label={isZh ? '服务保障' : 'Service Guarantees'}>
+            <div className="trust-item">
+                <div className="trust-icon-box">
+                    <CircleCheck aria-hidden="true" />
+                </div>
+                <div className="trust-text">
+                    <strong>{isZh ? '官方正品' : 'Authentic'}</strong>
+                    <small>{isZh ? '严选硬件品质保证' : '100% genuine products'}</small>
+                </div>
+            </div>
+            <div className="trust-item">
+                <div className="trust-icon-box">
+                    <Download aria-hidden="true" />
+                </div>
+                <div className="trust-text">
+                    <strong>{isZh ? '即时交付' : 'Instant Access'}</strong>
+                    <small>{isZh ? '数字内容付款即享' : 'Direct digital download'}</small>
+                </div>
+            </div>
+            <div className="trust-item">
+                <div className="trust-icon-box">
+                    <Truck aria-hidden="true" />
+                </div>
+                <div className="trust-text">
+                    <strong>{isZh ? '极速配送' : 'Fast Shipping'}</strong>
+                    <small>{isZh ? '实物全程轨迹追踪' : 'Tracked express delivery'}</small>
+                </div>
+            </div>
+            <div className="trust-item">
+                <div className="trust-icon-box">
+                    <RotateCcw aria-hidden="true" />
+                </div>
+                <div className="trust-text">
+                    <strong>{isZh ? '安心售后' : 'Support'}</strong>
+                    <small>{isZh ? '专业团队答疑解惑' : 'Dedicated assistance'}</small>
+                </div>
+            </div>
+        </section>
     );
 }
 
@@ -5920,10 +6042,15 @@ function ProductCard({
     onFavorite?: () => void;
     onAdd: () => void;
 }) {
+    const isZh = locale.startsWith('zh');
     const variant = product.variants[0];
+    const isDigital = variant?.customFields?.fulfillmentType === 'digital';
+    const isOutOfStock =
+        variant?.customFields?.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK';
+
     return (
         <article
-            className="product-card"
+            className={`product-card${isDigital ? ' is-digital-card' : ''}`}
             onPointerEnter={() => prefetchProductAsset(product)}
             onPointerDown={() => prefetchProductAsset(product)}
             onFocus={() => prefetchProductAsset(product)}
@@ -5932,8 +6059,24 @@ function ProductCard({
                 className="product-card-detail-link"
                 type="button"
                 onClick={onOpen}
-                aria-label={`${locale.startsWith('zh') ? '查看' : 'View'} ${product.name}`}
+                aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
             />
+            <div className="product-card-badge-wrap">
+                {isDigital ? (
+                    <span className="product-card-badge is-digital-badge">
+                        <Download aria-hidden="true" />
+                        {isZh ? '数字即时交付' : 'Digital'}
+                    </span>
+                ) : isOutOfStock ? (
+                    <span className="product-card-badge is-out-badge">
+                        {isZh ? '暂时缺货' : 'Out of stock'}
+                    </span>
+                ) : (
+                    <span className="product-card-badge is-physical-badge">
+                        {isZh ? '现货速发' : 'In Stock'}
+                    </span>
+                )}
+            </div>
             {onFavorite && (
                 <button
                     className={`product-card-favorite${favorite ? ' is-active' : ''}`}
@@ -5942,10 +6085,10 @@ function ProductCard({
                     aria-pressed={favorite}
                     aria-label={
                         favorite
-                            ? locale.startsWith('zh')
+                            ? isZh
                                 ? `取消收藏 ${product.name}`
                                 : `Remove ${product.name} from favorites`
-                            : locale.startsWith('zh')
+                            : isZh
                               ? `收藏 ${product.name}`
                               : `Add ${product.name} to favorites`
                     }
@@ -5957,25 +6100,24 @@ function ProductCard({
                 <ProductImage product={product} />
             </div>
             <strong className="product-card-name">{product.name}</strong>
-            <span>{trimText(product.description, 26) || variant?.sku}</span>
+            <span className="product-card-desc">{trimText(product.description, 26) || variant?.sku}</span>
             <footer>
-                <b>
-                    {variant
-                        ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                        : formatMoney(0, market.currencyCode, locale)}
-                </b>
+                <div className="product-card-price-block">
+                    <b>
+                        {variant
+                            ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                            : formatMoney(0, market.currencyCode, locale)}
+                    </b>
+                    <small className="product-card-tax-label">{isZh ? '含税' : 'incl. tax'}</small>
+                </div>
                 <button
                     type="button"
+                    className={`product-card-add-btn${adding ? ' is-adding' : ''}`}
                     onClick={onAdd}
-                    disabled={
-                        !variant ||
-                        adding ||
-                        (variant.customFields.fulfillmentType === 'physical' &&
-                            variant.stockLevel === 'OUT_OF_STOCK')
-                    }
-                    aria-label={`${locale.startsWith('zh') ? '加入购物车' : 'Add to cart'} ${product.name}`}
+                    disabled={!variant || adding || isOutOfStock}
+                    aria-label={`${isZh ? '加入购物车' : 'Add to cart'} ${product.name}`}
                 >
-                    <Plus />
+                    {adding ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
                 </button>
             </footer>
         </article>

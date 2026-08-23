@@ -11,6 +11,7 @@ import {
     PackageCheck,
     RotateCcw,
     Search,
+    Store,
     Truck,
     UserRound,
     WifiOff,
@@ -1299,60 +1300,106 @@ function OrderCard({
     onBuyAgain: () => void;
 }) {
     const isZh = language === 'zh';
-    const completed = ['Delivered', 'Cancelled'].includes(order.state);
-    const primaryLabel = completed
-        ? isZh
-            ? '再买一单'
-            : 'Buy again'
-        : ['Shipped', 'PartiallyShipped'].includes(order.state)
-          ? isZh
-              ? '查看物流'
-              : 'Track'
-          : isZh
-            ? '查看详情'
-            : 'View details';
+    const isPendingPayment = ['AddingItems', 'ArrangingPayment'].includes(order.state);
+    const isPaidOrShipping = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
+    const isShipped = ['Shipped', 'PartiallyShipped'].includes(order.state);
+    const isDelivered = order.state === 'Delivered';
+    const isCancelled = order.state === 'Cancelled';
+
+    const stateModifier = isPendingPayment
+        ? 'is-pending'
+        : isShipped
+          ? 'is-shipped'
+          : isPaidOrShipping
+            ? 'is-shipping'
+            : isDelivered
+              ? 'is-delivered'
+              : 'is-cancelled';
+
+    const line = order.lines[0];
+    const firstLineName = line?.productVariant.name ?? (isZh ? '订单商品' : 'Order item');
+    const hasMultipleLines = order.lines.length > 1;
+    const variantSku = line?.productVariant.sku;
+
+    const formattedTime = order.orderPlacedAt ? formatBusinessDate(locale, order.orderPlacedAt) : '';
+
     return (
-        <article className="order-card">
-            <header>
-                <button type="button" onClick={onOpen}>
+        <article className={`order-card ${stateModifier}`}>
+            <header className="order-card-header">
+                <button type="button" className="order-card-store-btn" onClick={onOpen}>
+                    <Store className="order-card-store-icon" aria-hidden="true" />
                     <strong>{storefrontName}</strong>
-                    <ChevronRight />
+                    <ChevronRight aria-hidden="true" />
                 </button>
-                <span>{orderStateLabel(order.state, language)}</span>
+                <span className={`order-state-badge ${stateModifier}`}>
+                    {orderStateLabel(order.state, language)}
+                </span>
             </header>
             <button className="order-card-product" type="button" onClick={onOpen}>
                 <OrderImage order={order} />
-                <span>
-                    <strong>
-                        {order.lines[0]?.productVariant.name ?? (isZh ? '订单商品' : 'Order item')}
-                    </strong>
-                    <small>
-                        {order.lines.length > 1
-                            ? isZh
+                <div className="order-product-info">
+                    <strong className="order-product-title">{firstLineName}</strong>
+                    {hasMultipleLines ? (
+                        <small className="order-product-spec">
+                            {isZh
                                 ? `另有 ${order.lines.length - 1} 种商品`
-                                : `${order.lines.length - 1} more products`
-                            : order.lines[0]?.productVariant.name}
-                    </small>
-                    <em>{isZh ? '售后支持 · 正品保障' : 'After-sales support'}</em>
-                </span>
-                <span>
-                    <b>{formatMoney(order.lines[0]?.linePriceWithTax ?? 0, order.currencyCode, locale)}</b>
-                    <small>×{order.totalQuantity}</small>
-                </span>
-            </button>
-            <footer>
-                <div className="order-total">
-                    {isZh ? `共 ${order.totalQuantity} 件，实付款` : `${order.totalQuantity} items · Paid`}{' '}
-                    <b>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</b>
+                                : `${order.lines.length - 1} more items`}
+                        </small>
+                    ) : variantSku ? (
+                        <small className="order-product-spec">
+                            {isZh ? `规格编码: ${variantSku}` : `SKU: ${variantSku}`}
+                        </small>
+                    ) : null}
+                    <div className="order-product-tags">
+                        <span className="order-product-tag">{isZh ? '正品保障' : 'Authentic'}</span>
+                        <span className="order-product-tag">{isZh ? '售后无忧' : 'Worry-free'}</span>
+                    </div>
                 </div>
-                <div className="order-operations">
-                    <button
-                        type="button"
-                        className="primary-action"
-                        onClick={completed ? onBuyAgain : onOpen}
-                    >
-                        {primaryLabel}
-                    </button>
+                <div className="order-product-meta">
+                    <b className="order-product-price">
+                        {formatMoney(
+                            line?.linePriceWithTax ?? order.totalWithTax,
+                            order.currencyCode,
+                            locale,
+                        )}
+                    </b>
+                    <small className="order-product-qty">×{order.totalQuantity}</small>
+                </div>
+            </button>
+            <footer className="order-card-footer">
+                <div className="order-total-summary">
+                    <span className="order-total-count">
+                        {isZh ? `共 ${order.totalQuantity} 件商品` : `${order.totalQuantity} items`}
+                    </span>
+                    <span className="order-total-label">
+                        {isPendingPayment ? (isZh ? '应付款' : 'To pay') : isZh ? '实付款' : 'Total'}
+                    </span>
+                    <strong className="order-total-amount">
+                        {formatMoney(order.totalWithTax, order.currencyCode, locale)}
+                    </strong>
+                </div>
+                <div className="order-card-actions">
+                    <div className="order-card-time">{formattedTime}</div>
+                    <div className="order-card-buttons">
+                        <button type="button" className="order-btn secondary-btn" onClick={onOpen}>
+                            {isZh ? '查看详情' : 'Details'}
+                        </button>
+                        {isPendingPayment && (
+                            <button type="button" className="order-btn primary-btn" onClick={onOpen}>
+                                {isZh ? '立即付款' : 'Pay now'}
+                            </button>
+                        )}
+                        {isShipped && (
+                            <button type="button" className="order-btn primary-btn" onClick={onOpen}>
+                                {isZh ? '查看物流' : 'Track'}
+                            </button>
+                        )}
+                        {(isDelivered || isCancelled) && (
+                            <button type="button" className="order-btn primary-btn" onClick={onBuyAgain}>
+                                {isZh ? '再次购买' : 'Buy again'}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </footer>
         </article>
