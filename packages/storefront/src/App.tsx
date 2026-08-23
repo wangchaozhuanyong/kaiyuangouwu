@@ -105,6 +105,7 @@ import {
     FulfillmentType,
     MarketConfig,
     Order,
+    OrderSummary,
     Product,
     ProductSearchSort,
     ProductVariant,
@@ -587,9 +588,7 @@ export function App() {
     const setCustomer = useCallback(
         (
             nextCustomer:
-                | ActiveCustomer
-                | null
-                | ((currentCustomer: ActiveCustomer | null) => ActiveCustomer | null),
+                ActiveCustomer | null | ((currentCustomer: ActiveCustomer | null) => ActiveCustomer | null),
         ) => {
             queryClient.setQueryData<ActiveCustomer | null>(customerQueryKey, currentCustomer =>
                 typeof nextCustomer === 'function' ? nextCustomer(currentCustomer ?? null) : nextCustomer,
@@ -945,7 +944,7 @@ export function App() {
     );
 
     const addOrderToCart = useCallback(
-        async (order: Order) => {
+        async (order: OrderSummary) => {
             setCartLoading(true);
             setCartError(null);
             try {
@@ -1184,10 +1183,7 @@ export function App() {
           products.find(product => product.id === route.id) ??
           null)
         : null;
-    const selectedOrder = route.id
-        ? (customer?.orders.items.find(order => order.id === route.id) ??
-          (routeOrder?.id === route.id ? routeOrder : null))
-        : null;
+    const selectedOrder = route.id && routeOrder?.id === route.id ? routeOrder : null;
     const legalContent = contentBlocks.find(block => block.type === 'LEGAL');
     const supportContent = contentBlocks.find(block => block.type === 'SUPPORT');
 
@@ -2364,7 +2360,7 @@ function HomePage(props: HomePageProps) {
                             onMouseLeave={() => setHeroInteractionPaused(false)}
                             onFocus={() => setHeroInteractionPaused(true)}
                             onBlur={event => {
-                                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                                if (!event.currentTarget.contains(event.relatedTarget)) {
                                     setHeroInteractionPaused(false);
                                 }
                             }}
@@ -4670,7 +4666,7 @@ function afterSalesNotification(
 }
 
 function orderNotification(
-    order: Order,
+    order: OrderSummary,
     language: StorefrontLanguage,
 ): { title: string; detail: string; tone: 'pending' | 'progress' | 'complete' | 'muted' } {
     const isZh = language === 'zh';
@@ -6598,7 +6594,7 @@ function SafeImage({
         image
     );
 }
-function OrderImage({ order }: { order: Order }) {
+function OrderImage({ order }: { order: OrderSummary }) {
     const variant = order.lines[0]?.productVariant;
     return variant ? (
         <ProductVariantImage variant={variant} alt={variant.name} />

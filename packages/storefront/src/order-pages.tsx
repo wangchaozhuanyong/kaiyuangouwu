@@ -36,6 +36,7 @@ import {
     CreateAfterSalesRequestInput,
     MarketConfig,
     Order,
+    OrderSummary,
     ProductVariant,
     StorefrontLanguage,
 } from './types';
@@ -67,7 +68,7 @@ export function OrdersPage({
     initialTab: OrderTab;
     onBack: () => void;
     onNavigate: (route: OrderRoute) => void;
-    onBuyAgain: (order: Order) => Promise<void>;
+    onBuyAgain: (order: OrderSummary) => Promise<void>;
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
@@ -494,7 +495,7 @@ function LogisticsCard({
     language,
     onOpen,
 }: {
-    order: Order;
+    order: OrderSummary;
     locale: string;
     language: StorefrontLanguage;
     onOpen: () => void;
@@ -1290,7 +1291,7 @@ function OrderCard({
     onOpen,
     onBuyAgain,
 }: {
-    order: Order;
+    order: OrderSummary;
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
@@ -1474,7 +1475,7 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
     );
 }
 
-function OrderImage({ order }: { order: Order }) {
+function OrderImage({ order }: { order: OrderSummary }) {
     const variant = order.lines[0]?.productVariant;
     return variant ? (
         <ProductVariantImage variant={variant} alt={variant.name} />
@@ -1818,7 +1819,9 @@ function fulfillmentStateLabel(state: string, language: StorefrontLanguage): str
     return (language === 'zh' ? zh : en)[state] ?? state;
 }
 
-function latestOrderFulfillment(order: Order): NonNullable<Order['fulfillments']>[number] | null {
+function latestOrderFulfillment(
+    order: OrderSummary,
+): NonNullable<OrderSummary['fulfillments']>[number] | null {
     return (
         [...(order.fulfillments ?? [])].sort(
             (first, second) => Date.parse(second.updatedAt) - Date.parse(first.updatedAt),
@@ -1826,7 +1829,7 @@ function latestOrderFulfillment(order: Order): NonNullable<Order['fulfillments']
     );
 }
 
-function logisticsStatusForOrder(order: Order): LogisticsStatus {
+function logisticsStatusForOrder(order: OrderSummary): LogisticsStatus {
     const fulfillmentState = latestOrderFulfillment(order)?.state;
     if (fulfillmentState === 'Delivered' || order.state === 'Delivered') return 'delivered';
     if (fulfillmentState === 'Shipped' || order.state === 'Shipped' || order.state === 'PartiallyShipped') {

@@ -252,8 +252,30 @@ export interface Order {
     checkoutShipping?: CheckoutShipping | null;
 }
 
+export interface OrderSummaryLine {
+    id: string;
+    quantity: number;
+    linePriceWithTax: number;
+    productVariant: ProductVariant;
+    customFields: { fulfillmentTypeSnapshot: FulfillmentType };
+}
+
+export interface OrderSummary {
+    id: string;
+    code: string;
+    state: string;
+    orderPlacedAt?: string | null;
+    totalQuantity: number;
+    totalWithTax: number;
+    currencyCode: string;
+    lines: OrderSummaryLine[];
+    fulfillments?: Array<Pick<OrderFulfillment, 'state' | 'method' | 'trackingCode' | 'updatedAt'>> | null;
+    checkoutFulfillment?: Pick<CheckoutFulfillment, 'containsDigitalProducts'>;
+    checkoutShipping?: Pick<CheckoutShipping, 'methodName'> | null;
+}
+
 export interface OrderPage {
-    items: Order[];
+    items: OrderSummary[];
     totalItems: number;
 }
 
@@ -308,7 +330,7 @@ export interface ActiveCustomer {
     emailAddress: string;
     phoneNumber: string | null;
     addresses: CustomerAddress[] | null;
-    orders: { items: Order[]; totalItems: number };
+    orders: { items: OrderSummary[]; totalItems: number };
 }
 
 export type StorefrontCartState = 'OPEN' | 'PAYMENT_PENDING';
@@ -397,24 +419,10 @@ export interface StorefrontConfig {
 }
 
 export type StorefrontContentBlockType =
-    | 'HERO'
-    | 'NOTICE'
-    | 'QUICK_LINKS'
-    | 'CATEGORY_AD'
-    | 'FEATURED_COLLECTION'
-    | 'STORY'
-    | 'LEGAL'
-    | 'SUPPORT';
+    'HERO' | 'NOTICE' | 'QUICK_LINKS' | 'CATEGORY_AD' | 'FEATURED_COLLECTION' | 'STORY' | 'LEGAL' | 'SUPPORT';
 
 export type StorefrontContentTargetType =
-    | 'NONE'
-    | 'URL'
-    | 'PRODUCT'
-    | 'COLLECTION'
-    | 'CATEGORY'
-    | 'SEARCH'
-    | 'PAGE'
-    | 'SUPPORT';
+    'NONE' | 'URL' | 'PRODUCT' | 'COLLECTION' | 'CATEGORY' | 'SEARCH' | 'PAGE' | 'SUPPORT';
 
 export interface StorefrontContentItem {
     id: string;

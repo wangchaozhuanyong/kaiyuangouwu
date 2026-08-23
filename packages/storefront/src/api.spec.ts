@@ -23,6 +23,11 @@ function mockGraphQlResponse(data: Record<string, unknown>) {
     return fetchMock;
 }
 
+function jsonRequestBody(init?: RequestInit): string {
+    if (typeof init?.body !== 'string') throw new TypeError('Expected a JSON request body');
+    return init.body;
+}
+
 afterEach(() => {
     vi.unstubAllGlobals();
 });
@@ -557,7 +562,7 @@ describe('ShopApi storefront mutations', () => {
             },
         ];
         const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
-            const request = JSON.parse(String(init?.body)) as { query: string };
+            const request = JSON.parse(jsonRequestBody(init)) as { query: string };
             if (request.query.includes('query StorefrontCatalog(')) {
                 return new Response(
                     JSON.stringify({
@@ -611,7 +616,10 @@ describe('ShopApi storefront mutations', () => {
         expect(secondPage.items.map(product => product.id)).toEqual(['product-4', 'product-1']);
         const requests = fetchMock.mock.calls.map(
             call =>
-                JSON.parse(String(call[1]?.body)) as { query: string; variables: Record<string, unknown> },
+                JSON.parse(jsonRequestBody(call[1])) as {
+                    query: string;
+                    variables: Record<string, unknown>;
+                },
         );
         expect(requests.filter(request => request.query.includes('query StorefrontCatalog('))).toHaveLength(
             1,
@@ -648,7 +656,9 @@ describe('ShopApi storefront mutations', () => {
     it('loads product sales in bounded batches and removes duplicate ids', async () => {
         const productIds = Array.from({ length: 101 }, (_, index) => `product-${index + 1}`);
         const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
-            const request = JSON.parse(String(init?.body)) as { variables: { productIds: string[] } };
+            const request = JSON.parse(jsonRequestBody(init)) as {
+                variables: { productIds: string[] };
+            };
             return new Response(
                 JSON.stringify({
                     data: {
@@ -695,6 +705,18 @@ describe('ShopApi storefront mutations', () => {
         expect(products.map(product => product.id)).toEqual(['product-2', 'product-1']);
     });
 
+    it('uses order summaries for the active customer query', async () => {
+        const fetchMock = mockGraphQlResponse({ activeCustomer: null });
+
+        await expect(new ShopApi(market).activeCustomer()).resolves.toBeNull();
+
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('query StorefrontCustomer');
+        expect(request.query).toContain('checkoutShipping { methodName }');
+        expect(request.query).not.toContain('digitalDeliveries');
+        expect(request.query).not.toContain('taxSummary');
+    });
+
     it('paginates and filters customer orders on the server', async () => {
         const fetchMock = mockGraphQlResponse({
             activeCustomer: { orders: { totalItems: 14, items: [] } },
@@ -710,6 +732,9 @@ describe('ShopApi storefront mutations', () => {
             variables: Record<string, unknown>;
         };
         expect(request.query).toContain('orders(options: $options)');
+        expect(request.query).toContain('checkoutFulfillment { containsDigitalProducts }');
+        expect(request.query).not.toContain('digitalDeliveries');
+        expect(request.query).not.toContain('taxSummary');
         expect(request.variables).toEqual({
             options: {
                 skip: 10,

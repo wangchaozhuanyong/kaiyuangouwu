@@ -128,6 +128,43 @@ const orderFields = `
     }
 `;
 
+// Keep paginated order queries below the production complexity limit. Full order
+// details are fetched separately by id when a customer opens an order.
+const orderSummaryFields = `
+    id
+    code
+    state
+    orderPlacedAt
+    totalQuantity
+    totalWithTax
+    currencyCode
+    fulfillments {
+        state
+        method
+        trackingCode
+        updatedAt
+    }
+    lines {
+        id
+        quantity
+        linePriceWithTax
+        productVariant {
+            id
+            name
+            sku
+            priceWithTax
+            currencyCode
+            stockLevel
+            featuredAsset { id preview }
+            product { id name featuredAsset { id preview } }
+            customFields { fulfillmentType }
+        }
+        customFields { fulfillmentTypeSnapshot }
+    }
+    checkoutFulfillment { containsDigitalProducts }
+    checkoutShipping { methodName }
+`;
+
 const afterSalesFields = `
     id
     createdAt
@@ -674,7 +711,7 @@ export class ShopApi {
                     }
                     orders(options: { take: 5, sort: { orderPlacedAt: DESC } }) {
                         totalItems
-                        items { ${orderFields} }
+                        items { ${orderSummaryFields} }
                     }
                 }
             }
@@ -704,7 +741,7 @@ export class ShopApi {
                     activeCustomer {
                         orders(options: $options) {
                             totalItems
-                            items { ${orderFields} }
+                            items { ${orderSummaryFields} }
                         }
                     }
                 }
