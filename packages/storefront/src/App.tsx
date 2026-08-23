@@ -3072,6 +3072,7 @@ function CategoryPage(props: CategoryPageProps) {
     const [draftStock, setDraftStock] = useState(inStockOnly);
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
+    const subcatScrollerRef = useRef<HTMLDivElement>(null);
     const primaryCollections = collections.length ? collections : fallbackCollections(isZh);
     const primary = primaryCollections.find(item => item.id === activeCollectionId) ?? primaryCollections[0];
     const primaryCollectionImage = (collection: CollectionSummary) =>
@@ -3183,6 +3184,12 @@ function CategoryPage(props: CategoryPageProps) {
         document.addEventListener('keydown', closeOnEscape);
         return () => document.removeEventListener('keydown', closeOnEscape);
     }, [allCategoriesOpen]);
+
+    useEffect(() => {
+        if (subcatScrollerRef.current) {
+            subcatScrollerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        }
+    }, [activeCollectionId]);
 
     const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
@@ -3345,11 +3352,24 @@ function CategoryPage(props: CategoryPageProps) {
             </div>
 
             {hasChildCategories && (
-                <div className="subcat-strip" aria-label={isZh ? '二级分类' : 'Subcategories'}>
+                <div
+                    ref={subcatScrollerRef}
+                    className="subcat-strip"
+                    aria-label={isZh ? '二级分类' : 'Subcategories'}
+                >
                     <button
                         type="button"
                         className={`subcat-chip ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
-                        onClick={() => onChildChange('all')}
+                        onClick={event => {
+                            onChildChange('all');
+                            const item = event.currentTarget;
+                            const scroller = item.parentElement;
+                            if (!scroller) return;
+                            scroller.scrollTo({
+                                left: centeredHorizontalScrollLeft(scroller, item),
+                                behavior: 'smooth',
+                            });
+                        }}
                     >
                         {isZh ? `全部 (${totalItems})` : `All (${totalItems})`}
                     </button>
@@ -3358,7 +3378,16 @@ function CategoryPage(props: CategoryPageProps) {
                             type="button"
                             key={child.id}
                             className={`subcat-chip ${child.id === activeChildId ? 'is-active' : ''}`}
-                            onClick={() => onChildChange(child.id)}
+                            onClick={event => {
+                                onChildChange(child.id);
+                                const item = event.currentTarget;
+                                const scroller = item.parentElement;
+                                if (!scroller) return;
+                                scroller.scrollTo({
+                                    left: centeredHorizontalScrollLeft(scroller, item),
+                                    behavior: 'smooth',
+                                });
+                            }}
                         >
                             {child.name}
                         </button>
