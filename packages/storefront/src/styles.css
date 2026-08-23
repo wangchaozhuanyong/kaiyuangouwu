@@ -4874,24 +4874,46 @@ img.fatal-error-mark {
     height: 26px;
 }
 
-.account-hero-center-info {
+.account-hero-user-row {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 14px;
     width: 100%;
+    text-align: left;
+    padding: 2px 4px 4px;
 }
 
-.account-hero-center-name {
+.account-hero-user-row .account-hero-avatar-halo {
+    flex-shrink: 0;
+    margin-bottom: 0;
+}
+
+.account-hero-profile-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.account-hero-profile-name {
     margin: 0;
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 800;
     color: #0f172a;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 5px;
     letter-spacing: -0.01em;
+    max-width: 100%;
+}
+
+.account-hero-profile-name span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .verified-badge-icon {
@@ -4902,21 +4924,20 @@ img.fatal-error-mark {
     flex-shrink: 0;
 }
 
-.account-hero-center-subtitle {
+.account-hero-profile-subtitle {
     font-size: 11.5px;
     color: #64748b;
     font-weight: 500;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 4px;
-    max-width: 90%;
+    max-width: 100%;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
-.account-hero-center-subtitle svg {
+.account-hero-profile-subtitle svg {
     width: 12px;
     height: 12px;
     color: #94a3b8;

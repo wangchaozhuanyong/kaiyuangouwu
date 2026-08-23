@@ -4271,29 +4271,31 @@ function AccountPage(props: AccountPageProps) {
                             <Settings aria-hidden="true" />
                         </button>
 
-                        <div className="account-hero-avatar-halo">
-                            <button
-                                className="account-hero-avatar-btn"
-                                type="button"
-                                onClick={() => onNavigate({ name: 'account-security' })}
-                                aria-label={isZh ? '个人信息与安全' : 'Profile and security'}
-                            >
-                                <span className="account-hero-avatar">
-                                    {customerName.slice(0, 1).toUpperCase()}
-                                </span>
-                            </button>
-                        </div>
+                        <div className="account-hero-user-row">
+                            <div className="account-hero-avatar-halo">
+                                <button
+                                    className="account-hero-avatar-btn"
+                                    type="button"
+                                    onClick={() => onNavigate({ name: 'account-security' })}
+                                    aria-label={isZh ? '个人信息与安全' : 'Profile and security'}
+                                >
+                                    <span className="account-hero-avatar">
+                                        {customerName.slice(0, 1).toUpperCase()}
+                                    </span>
+                                </button>
+                            </div>
 
-                        <div className="account-hero-center-info">
-                            <h1 className="account-hero-center-name">
-                                <span>{customerName}</span>
-                                <CheckCircle2 className="verified-badge-icon" aria-hidden="true" />
-                            </h1>
-                            <div className="account-hero-center-subtitle">
-                                <MapPin aria-hidden="true" />
-                                <span>
-                                    {isZh ? '尊贵会员' : 'Premium Member'} · {customer.emailAddress}
-                                </span>
+                            <div className="account-hero-profile-info">
+                                <h1 className="account-hero-profile-name">
+                                    <span>{customerName}</span>
+                                    <CheckCircle2 className="verified-badge-icon" aria-hidden="true" />
+                                </h1>
+                                <div className="account-hero-profile-subtitle">
+                                    <MapPin aria-hidden="true" />
+                                    <span>
+                                        {isZh ? '尊贵会员' : 'Premium Member'} · {customer.emailAddress}
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -4342,23 +4344,25 @@ function AccountPage(props: AccountPageProps) {
                     </div>
                 ) : (
                     <div className="account-hero-glass-card account-guest-glass-card">
-                        <div className="account-hero-avatar-halo">
-                            <span className="account-hero-avatar is-guest-avatar">
-                                <UserRound aria-hidden="true" />
-                            </span>
-                        </div>
-                        <div className="account-hero-center-info">
-                            <h1 id="guest-account-title" className="account-hero-center-name">
-                                <span>
-                                    {isZh ? `欢迎来到 ${storefrontName}` : `Welcome to ${storefrontName}`}
+                        <div className="account-hero-user-row">
+                            <div className="account-hero-avatar-halo">
+                                <span className="account-hero-avatar is-guest-avatar">
+                                    <UserRound aria-hidden="true" />
                                 </span>
-                            </h1>
-                            <div className="account-hero-center-subtitle">
-                                <span>
-                                    {isZh
-                                        ? '登录后享受会员特权、订单追踪与专属优惠'
-                                        : 'Sign in to enjoy member perks, order tracking & coupons'}
-                                </span>
+                            </div>
+                            <div className="account-hero-profile-info">
+                                <h1 id="guest-account-title" className="account-hero-profile-name">
+                                    <span>
+                                        {isZh ? `欢迎来到 ${storefrontName}` : `Welcome to ${storefrontName}`}
+                                    </span>
+                                </h1>
+                                <div className="account-hero-profile-subtitle">
+                                    <span>
+                                        {isZh
+                                            ? '登录后享受会员特权与专属优惠'
+                                            : 'Sign in to enjoy member perks & discounts'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div className="account-hero-glass-actions">
