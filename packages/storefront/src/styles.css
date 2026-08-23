@@ -1620,34 +1620,101 @@ img.fatal-error-mark {
     flex-direction: column;
     justify-content: space-between;
     text-align: left;
-    transition: all 180ms ease;
+    transition: all 280ms cubic-bezier(.4, 0, .2, 1);
     cursor: pointer;
+}
+
+.showcase-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.showcase-card::after {
+    content: '';
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    filter: blur(35px);
+    opacity: 0.25;
+    pointer-events: none;
+    z-index: 0;
+    transition: opacity 280ms ease;
 }
 
 .showcase-card:hover {
     transform: translateY(-2px);
 }
 
+.showcase-card:hover::after {
+    opacity: 0.4;
+}
+
+/* Hardware card — deep navy with cyan circuit glow */
 .showcase-card.is-hardware {
-    background: linear-gradient(145deg, #ffffff 0%, #fefce8 55%, #fef9c3 100%);
-    border: 1px solid rgba(253, 224, 71, 0.6);
-    box-shadow: 0 4px 14px -3px rgba(202, 138, 4, 0.08);
+    background: linear-gradient(145deg, #0c1929 0%, #111d2e 50%, #0e2a3d 100%);
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    box-shadow:
+        0 4px 14px -3px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(34, 211, 238, 0.08);
+}
+
+.showcase-card.is-hardware::before {
+    background:
+        linear-gradient(90deg, transparent 48%, rgba(34, 211, 238, 0.07) 49%, rgba(34, 211, 238, 0.07) 51%, transparent 52%),
+        linear-gradient(0deg, transparent 48%, rgba(34, 211, 238, 0.07) 49%, rgba(34, 211, 238, 0.07) 51%, transparent 52%);
+    background-size: 22px 22px;
+}
+
+.showcase-card.is-hardware::after {
+    background: #22d3ee;
+    right: -20px;
+    top: -20px;
 }
 
 .showcase-card.is-hardware:hover {
-    border-color: #facc15;
-    box-shadow: 0 6px 18px -2px rgba(202, 138, 4, 0.14);
+    border-color: rgba(34, 211, 238, 0.45);
+    box-shadow:
+        0 6px 24px -2px rgba(34, 211, 238, 0.15),
+        0 0 0 1px rgba(34, 211, 238, 0.08),
+        inset 0 1px 0 rgba(34, 211, 238, 0.12);
 }
 
+/* Digital card — deep purple with violet neural glow */
 .showcase-card.is-digital {
-    background: linear-gradient(145deg, #ffffff 0%, #fff1f2 55%, #ffe4e6 100%);
-    border: 1px solid rgba(254, 205, 211, 0.8);
-    box-shadow: 0 4px 14px -3px rgba(225, 29, 72, 0.08);
+    background: linear-gradient(145deg, #1a1035 0%, #150d2e 50%, #0f172a 100%);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    box-shadow:
+        0 4px 14px -3px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(167, 139, 250, 0.08);
+}
+
+.showcase-card.is-digital::before {
+    background:
+        radial-gradient(circle 1.5px at 50% 50%, rgba(167, 139, 250, 0.18) 0%, transparent 100%),
+        radial-gradient(circle 1px at 25% 75%, rgba(167, 139, 250, 0.1) 0%, transparent 100%),
+        radial-gradient(circle 1px at 80% 30%, rgba(167, 139, 250, 0.1) 0%, transparent 100%);
+    background-size: 28px 28px, 35px 35px, 42px 42px;
+    opacity: 0.6;
+}
+
+.showcase-card.is-digital::after {
+    background: #a78bfa;
+    right: -20px;
+    top: -20px;
 }
 
 .showcase-card.is-digital:hover {
-    border-color: #fda4af;
-    box-shadow: 0 6px 18px -2px rgba(225, 29, 72, 0.14);
+    border-color: rgba(167, 139, 250, 0.45);
+    box-shadow:
+        0 6px 24px -2px rgba(139, 92, 246, 0.15),
+        0 0 0 1px rgba(167, 139, 250, 0.08),
+        inset 0 1px 0 rgba(167, 139, 250, 0.12);
 }
 
 .showcase-content {
@@ -1661,18 +1728,20 @@ img.fatal-error-mark {
     align-self: flex-start;
     padding: 2.5px 8px;
     border-radius: 6px;
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
+    background: rgba(34, 211, 238, 0.12);
+    color: #67e8f9;
+    border: 1px solid rgba(34, 211, 238, 0.3);
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 8px rgba(34, 211, 238, 0.3);
 }
 
 .showcase-badge.is-digital-badge {
-    background: #ffe4e6;
-    color: #be123c;
-    border: 1px solid #fecdd3;
+    background: rgba(167, 139, 250, 0.12);
+    color: #c4b5fd;
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    text-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
 }
 
 .showcase-card h3 {
@@ -1680,14 +1749,14 @@ img.fatal-error-mark {
     font-size: 15px;
     font-weight: 800;
     line-height: 1.3;
-    color: #0f172a;
+    color: #f1f5f9;
 }
 
 .showcase-card p {
     margin: 0;
     font-size: 11.5px;
     line-height: 1.4;
-    color: #475569;
+    color: #94a3b8;
     font-weight: 500;
 }
 
@@ -1701,11 +1770,13 @@ img.fatal-error-mark {
 }
 
 .showcase-card.is-hardware .showcase-link {
-    color: #b45309;
+    color: #22d3ee;
+    text-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
 }
 
 .showcase-card.is-digital .showcase-link {
-    color: var(--accent, #d33c30);
+    color: #a78bfa;
+    text-shadow: 0 0 10px rgba(167, 139, 250, 0.3);
 }
 
 .showcase-link svg {
@@ -2995,6 +3066,124 @@ img.fatal-error-mark {
     object-position: center;
     display: block;
     border-radius: 6px;
+}
+
+/* AI Product Branded Dynamic Covers */
+.ai-product-cover {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 4px 5px;
+    color: white;
+    text-align: center;
+    user-select: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.ai-cover-glow {
+    position: absolute;
+    inset: -20%;
+    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.35) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+/* Brand Themes */
+.ai-product-cover.is-chatgpt {
+    background: linear-gradient(140deg, #052e16 0%, #064e3b 35%, #10a37f 80%, #34d399 100%);
+}
+
+.ai-product-cover.is-claude {
+    background: linear-gradient(140deg, #431407 0%, #7c2d12 35%, #c2410c 80%, #f97316 100%);
+}
+
+.ai-product-cover.is-midjourney {
+    background: linear-gradient(140deg, #1e1b4b 0%, #312e81 35%, #4f46e5 80%, #818cf8 100%);
+}
+
+.ai-product-cover.is-cursor {
+    background: linear-gradient(140deg, #09090b 0%, #18181b 35%, #0284c7 80%, #38bdf8 100%);
+}
+
+.ai-product-cover.is-deepseek {
+    background: linear-gradient(140deg, #082f49 0%, #0c4a6e 35%, #0284c7 80%, #38bdf8 100%);
+}
+
+.ai-product-cover.is-gemini {
+    background: linear-gradient(140deg, #1e1b4b 0%, #1d4ed8 35%, #2563eb 75%, #9333ea 100%);
+}
+
+.ai-product-cover.is-generic {
+    background: linear-gradient(140deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+}
+
+.ai-cover-icon-box {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    margin-top: 1px;
+}
+
+.ai-brand-svg {
+    width: 17px;
+    height: 17px;
+    color: #ffffff;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.ai-cover-brand {
+    position: relative;
+    z-index: 1;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    line-height: 1;
+    margin-top: 1px;
+}
+
+.ai-cover-tier-badge {
+    position: relative;
+    z-index: 1;
+    padding: 1.5px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 92%;
+    margin-top: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.ai-cover-tier-badge span {
+    font-size: 9px;
+    font-weight: 800;
+    color: #fef08a;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    line-height: 1.1;
 }
 
 .category-product-list .product-row-content {
