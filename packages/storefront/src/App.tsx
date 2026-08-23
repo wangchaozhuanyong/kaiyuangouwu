@@ -7009,15 +7009,217 @@ function LegalFooter({
     );
 }
 
-function ProductImage({ product }: { product: Product }) {
-    const image = productImage(product);
-    return image ? (
-        <SafeImage src={image} alt={product.name} imageKind="card" loading="lazy" />
-    ) : (
-        <div className="image-placeholder" aria-hidden="true">
-            <Package />
+function OpenAiIcon({ className }: { className?: string }) {
+    const pathD = [
+        'M88.5 43.8c-.8-6.1-5.1-11.2-11.2-13.1-1.3-.4-2.7-.6-4.1-.7-.8-4.4-3.3-8.3-7.1-10.7-5.9-3.7-13.5-3.8-19.4-.3',
+        'l-3.3 1.9c-.6.3-1.1.8-1.5 1.4-1.2-1.9-2.9-3.4-5-4.5-5.9-3.1-13.2-2.3-18.4 2.1-5.2 4.4-7.3 11.3-5.3 17.7',
+        '-4.1 1.7-7.2 5.1-8.5 9.4-2 6.5-.2 13.6 4.6 18.2l3.3 3.1c.5.5 1.1.8 1.8 1-.1 1.2-.1 2.4.1 3.6 1.1 6.8 6.1',
+        '12.3 12.8 14 2.3.6 4.7.7 7.1.3 1.4 4.3 4.5 7.8 8.6 9.8 6.2 3.1 13.7 2.3 19.1-2l3.4-2.7c.6-.5 1-1.1 1.3-1.8',
+        '1.9 1.1 4.1 1.7 6.3 1.7 5.7 0 11-3.2 13.6-8.3 3.4-6.6 2-14.7-3.4-19.9 3.5-2.2 5.9-5.9 6.6-10.1.7-4.3-.4-8.7',
+        '-3.1-12.1zm-32.9 44.5c-3.1 2.5-7.4 3-11 .1-1.2-1-2.2-2.3-2.9-3.8l.8-.5 15.3-8.8c.8-.5 1.3-1.4 1.3-2.3v-17.7',
+        'l5.4 3.1v17.4c0 4.6-3.7 9.8-8.9 12.5zm-28.7-9.5c-2.3-3.3-2.8-7.6-1.3-11.3.5-1.3 1.3-2.5 2.3-3.5l.8.5 15.3',
+        '8.8c.8.5 1.7.5 2.5 0l15.3-8.8v6.3l-15 8.7c-4 2.3-15.9 3.9-20.9-.7zm-11.8-24.8c-.8-3.9.4-8 3.2-10.9 1-1 2.2-1.8',
+        '3.5-2.4v1l.1 17.7c0 .9.5 1.8 1.3 2.3l15.3 8.8-5.4 3.1-15-8.7c-4-2.3-4.8-10.9-3-10.9zm41.6-4.5l-15.3-8.8 15.3',
+        '-8.8 15.3 8.8-15.3 8.8zm-1.8-21.3l-5.4-3.1v-17.4c0-4.6 3.7-9.8 8.9-12.5 3.1-2.5 7.4-3 11-.1 1.2 1 2.2 2.3',
+        '2.9 3.8l-.8.5-15.3 8.8c-.8.5-1.3 1.4-1.3 2.3v17.7zm13.1 5.3l15-8.7c4-2.3 15.9-3.9 20.9.7 2.3 3.3 2.8 7.6 1.3',
+        '11.3-.5 1.3-1.3 2.5-2.3 3.5l-.8-.5-15.3-8.8c-.8-.5-1.7-.5-2.5 0l-15.3 8.8v-6.3zm7.2 13.9l5.4-3.1 15 8.7c4 2.3',
+        '4.8 10.9 3 10.9.8 3.9-.4 8-3.2 10.9-1 1-2.2 1.8-3.5 2.4v-1l-.1-17.7c0-.9-.5-1.8-1.3-2.3l-15.3-8.8z',
+    ].join('');
+
+    return (
+        <svg viewBox="0 0 100 100" fill="currentColor" className={className} aria-hidden="true">
+            <path d={pathD} />
+        </svg>
+    );
+}
+
+function ClaudeIcon({ className }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 100 100" fill="currentColor" className={className} aria-hidden="true">
+            <polygon points="43.5,14 56.5,14 62.5,41.5 89,33.5 93,46 68.5,58 87.5,79 77.5,88 56.5,69 49,95 36.5,92 43.5,65 17,76 12,64 35,49.5 14,31 22.5,21 44.5,38" />
+        </svg>
+    );
+}
+
+function MidjourneyIcon({ className }: { className?: string }) {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={className}
+            aria-hidden="true"
+        >
+            <path d="M3 19c3-1 6-1 9 0 3-1 6-1 9 0" />
+            <path d="M4 15c2.5-.8 5-.8 7.5 0 2.5-.8 5-.8 7.5 0" />
+            <path d="M12 3v13" />
+            <path d="M12 3c-3 3-5 7-5 10" />
+            <path d="M12 3c3 3 5 7 5 10" />
+        </svg>
+    );
+}
+
+function CursorIcon({ className }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+            <path d="M4 3l15 9-7 2-4 7-4-18z" />
+        </svg>
+    );
+}
+
+function DeepSeekIcon({ className }: { className?: string }) {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={className}
+            aria-hidden="true"
+        >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7a5 5 0 0 1 5 5c0 2.5-1.8 4.2-5 5" />
+            <path d="M8.5 12a3.5 3.5 0 0 1 3.5-3.5" />
+        </svg>
+    );
+}
+
+function GeminiIcon({ className }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+            <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" />
+        </svg>
+    );
+}
+
+function parseAiProductInfo(name: string, description?: string) {
+    const raw = `${name} ${description ?? ''}`.toLowerCase();
+
+    let brand: 'chatgpt' | 'claude' | 'midjourney' | 'cursor' | 'deepseek' | 'gemini' | 'generic' = 'generic';
+    let brandName = 'AI';
+    let brandTheme = 'is-chatgpt';
+
+    if (
+        raw.includes('chatgpt') ||
+        raw.includes('openai') ||
+        raw.includes('gpt-4') ||
+        raw.includes('gpt4') ||
+        raw.includes('gpt-o') ||
+        raw.includes('gpt') ||
+        raw.includes('sora')
+    ) {
+        brand = 'chatgpt';
+        brandName = 'ChatGPT';
+        brandTheme = 'is-chatgpt';
+    } else if (
+        raw.includes('claude') ||
+        raw.includes('anthropic') ||
+        raw.includes('sonnet') ||
+        raw.includes('opus')
+    ) {
+        brand = 'claude';
+        brandName = 'Claude';
+        brandTheme = 'is-claude';
+    } else if (raw.includes('midjourney') || raw.includes('mj')) {
+        brand = 'midjourney';
+        brandName = 'Midjourney';
+        brandTheme = 'is-midjourney';
+    } else if (raw.includes('cursor') || raw.includes('copilot')) {
+        brand = 'cursor';
+        brandName = 'Cursor';
+        brandTheme = 'is-cursor';
+    } else if (raw.includes('deepseek') || raw.includes('深度求索')) {
+        brand = 'deepseek';
+        brandName = 'DeepSeek';
+        brandTheme = 'is-deepseek';
+    } else if (raw.includes('gemini') || raw.includes('google ai') || raw.includes('bard')) {
+        brand = 'gemini';
+        brandName = 'Gemini';
+        brandTheme = 'is-gemini';
+    }
+
+    let tier = '';
+    const has20x = /20x|20倍|20\s*x/i.test(name);
+    const has10x = /10x|10倍|10\s*x/i.test(name);
+    const has5x = /5x|5倍|5\s*x/i.test(name);
+    const hasPlus = /plus|普拉斯/i.test(name);
+    const hasPro = /pro|专业版/i.test(name);
+    const hasTeam = /team|团队/i.test(name);
+    const has4o = /4o|gpt-4o/i.test(name);
+    const hasO1 = /o1|o3/i.test(name);
+    const hasSonnet = /sonnet|3\.5/i.test(name);
+    const hasR1 = /r1/i.test(name);
+    const hasV3 = /v3/i.test(name);
+
+    if (hasPro && has20x) tier = 'PRO 20x';
+    else if (hasPlus && has20x) tier = 'PLUS 20x';
+    else if (hasPro && has10x) tier = 'PRO 10x';
+    else if (hasPlus && has10x) tier = 'PLUS 10x';
+    else if (has20x) tier = '20x';
+    else if (has10x) tier = '10x';
+    else if (has5x) tier = '5x';
+    else if (hasPlus) tier = 'PLUS';
+    else if (hasPro) tier = 'PRO';
+    else if (hasTeam) tier = 'TEAM';
+    else if (has4o) tier = 'GPT-4o';
+    else if (hasO1) tier = 'o1-MINI';
+    else if (hasSonnet) tier = 'SONNET 3.5';
+    else if (hasR1) tier = 'R1 满血';
+    else if (hasV3) tier = 'V3 PRO';
+    else if (/api/i.test(name)) tier = 'API KEY';
+    else if (/独享/i.test(name)) tier = '独享账号';
+    else tier = 'OFFICIAL';
+
+    return { brand, brandName, brandTheme, tier };
+}
+
+function AiProductCover({
+    name,
+    description,
+    compact = false,
+}: {
+    name: string;
+    description?: string;
+    compact?: boolean;
+}) {
+    const { brand, brandName, brandTheme, tier } = parseAiProductInfo(name, description);
+
+    return (
+        <div className={`ai-product-cover ${brandTheme} ${compact ? 'is-compact' : ''}`} aria-hidden="true">
+            <div className="ai-cover-glow" />
+            <div className="ai-cover-icon-box">
+                {brand === 'chatgpt' && <OpenAiIcon className="ai-brand-svg" />}
+                {brand === 'claude' && <ClaudeIcon className="ai-brand-svg" />}
+                {brand === 'midjourney' && <MidjourneyIcon className="ai-brand-svg" />}
+                {brand === 'cursor' && <CursorIcon className="ai-brand-svg" />}
+                {brand === 'deepseek' && <DeepSeekIcon className="ai-brand-svg" />}
+                {brand === 'gemini' && <GeminiIcon className="ai-brand-svg" />}
+                {brand === 'generic' && <Sparkles className="ai-brand-svg" />}
+            </div>
+            <span className="ai-cover-brand">{brandName}</span>
+            {tier && (
+                <div className="ai-cover-tier-badge">
+                    <span>{tier}</span>
+                </div>
+            )}
         </div>
     );
+}
+
+function ProductImage({ product }: { product: Product }) {
+    const image = productImage(product);
+    const { brand } = parseAiProductInfo(product.name, product.description);
+
+    if (brand !== 'generic' || !image || image.includes('placeholder') || image.includes('default-hero')) {
+        return <AiProductCover name={product.name} description={product.description} />;
+    }
+
+    return <SafeImage src={image} alt={product.name} imageKind="card" loading="lazy" />;
 }
 
 function shouldPrefetchMedia(): boolean {
@@ -7055,10 +7257,18 @@ function prefetchProductAsset(product: Product): void {
     const image = productImage(product);
     if (image) prefetchStorefrontImage(image, 'detail');
 }
+
 function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) {
     const image = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
+    const displayName = variant.name ? `${variant.product.name} ${variant.name}` : variant.product.name;
+    const { brand } = parseAiProductInfo(displayName);
+
+    if (brand !== 'generic' || !image || image.includes('placeholder') || image.includes('default-hero')) {
+        return <AiProductCover name={displayName} />;
+    }
+
     return image ? (
-        <SafeImage src={image} alt={alt} imageKind="thumbnail" loading="lazy" />
+        <SafeImage src={image} alt={alt} imageKind="detail" loading="lazy" />
     ) : (
         <div className="image-placeholder" aria-hidden="true">
             <Package />
