@@ -4657,22 +4657,23 @@ img.fatal-error-mark {
     padding-bottom: 32px;
 }
 
+
 /* ==========================================================================
-   Account Hero: Style 1 - Apple Minimalist Translucent Aurora Glass
+   Account Hero: Rich Vibrant Brand Red & Frosted Glass Layering
    ========================================================================== */
 .account-identity-hero {
     margin: 0;
-    padding: 12px 14px 16px;
+    padding: 16px 12px 20px;
     border-radius: 0;
-    background-color: #f1f5f9;
+    background-color: #b91c1c;
     background-image:
-        radial-gradient(ellipse 90% 70% at 85% -10%, rgba(191, 219, 254, 0.5) 0%, transparent 60%),
-        radial-gradient(ellipse 80% 60% at 15% 100%, rgba(224, 231, 255, 0.55) 0%, transparent 60%),
-        linear-gradient(180deg, #e8edf5 0%, #f1f5f9 100%);
-    color: #0f172a;
+        radial-gradient(ellipse 90% 70% at 85% -10%, rgba(254, 202, 202, 0.45) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 60% at 15% 100%, rgba(253, 164, 175, 0.35) 0%, transparent 60%),
+        linear-gradient(145deg, #991b1b 0%, #c5221f 50%, #e11d48 100%);
+    color: white;
     overflow: hidden;
     position: relative;
-    border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 
 .account-identity-hero::before {
@@ -4680,23 +4681,23 @@ img.fatal-error-mark {
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(circle at 75% 20%, rgba(255, 255, 255, 0.75) 0%, transparent 50%),
-        radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.6) 0%, transparent 40%);
+        radial-gradient(circle at 75% 20%, rgba(255, 255, 255, 0.25) 0%, transparent 50%),
+        radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.15) 0%, transparent 40%);
     pointer-events: none;
 }
 
 .account-hero-glass-card {
     position: relative;
     z-index: 1;
-    padding: 24px 16px 18px;
-    border-radius: 22px;
-    background: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.95);
+    padding: 16px 14px 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 1);
     box-shadow:
-        0 14px 34px -10px rgba(15, 23, 42, 0.07),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        0 12px 28px -6px rgba(153, 27, 27, 0.22),
+        0 4px 12px -2px rgba(15, 23, 42, 0.04);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -4705,18 +4706,16 @@ img.fatal-error-mark {
 
 .account-hero-settings-btn {
     position: absolute;
-    top: 14px;
-    right: 14px;
+    top: 12px;
+    right: 12px;
     z-index: 2;
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     flex-shrink: 0;
     border: 1px solid rgba(226, 232, 240, 0.9);
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    color: #334155;
+    background: #ffffff;
+    color: #475569;
     display: grid;
     place-items: center;
     cursor: pointer;
@@ -4725,23 +4724,23 @@ img.fatal-error-mark {
 }
 
 .account-hero-settings-btn:hover {
-    background: #ffffff;
+    background: #f8fafc;
     color: #0f172a;
     border-color: #cbd5e1;
     transform: rotate(30deg);
 }
 
 .account-hero-settings-btn svg {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
 }
 
 .account-hero-avatar-halo {
-    padding: 3px;
+    padding: 2.5px;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 158, 11, 0.45), rgba(255, 255, 255, 0.95));
-    box-shadow: 0 0 16px rgba(245, 158, 11, 0.22), 0 4px 14px rgba(15, 23, 42, 0.08);
-    margin-bottom: 12px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 158, 11, 0.5), rgba(255, 255, 255, 0.95));
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.25), 0 3px 10px rgba(15, 23, 42, 0.08);
+    margin-bottom: 8px;
 }
 
 .account-hero-avatar-btn {
@@ -4754,17 +4753,17 @@ img.fatal-error-mark {
 }
 
 .account-hero-avatar {
-    width: 62px;
-    height: 62px;
+    width: 54px;
+    height: 54px;
     flex-shrink: 0;
     border-radius: 50%;
     background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
     color: #ffffff;
     display: grid;
     place-items: center;
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 800;
-    border: 3px solid #ffffff;
+    border: 2.5px solid #ffffff;
 }
 
 .account-hero-avatar.is-guest-avatar {
@@ -4772,40 +4771,40 @@ img.fatal-error-mark {
 }
 
 .account-hero-avatar.is-guest-avatar svg {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
 }
 
 .account-hero-center-info {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     width: 100%;
 }
 
 .account-hero-center-name {
     margin: 0;
-    font-size: 19px;
+    font-size: 18px;
     font-weight: 800;
     color: #0f172a;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
     letter-spacing: -0.01em;
 }
 
 .verified-badge-icon {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
     color: #2563eb;
     fill: #eff6ff;
     flex-shrink: 0;
 }
 
 .account-hero-center-subtitle {
-    font-size: 12px;
+    font-size: 11.5px;
     color: #64748b;
     font-weight: 500;
     display: flex;
@@ -4819,8 +4818,8 @@ img.fatal-error-mark {
 }
 
 .account-hero-center-subtitle svg {
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
     color: #94a3b8;
     flex-shrink: 0;
 }
@@ -4828,23 +4827,23 @@ img.fatal-error-mark {
 .account-glass-metrics-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    margin-top: 18px;
+    margin-top: 12px;
 }
 
 .account-glass-metric-card {
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    border-radius: 16px;
-    padding: 12px 6px 10px;
+    background: #f8fafc;
+    border: 1px solid #eef2f6;
+    border-radius: 12px;
+    padding: 8px 4px 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 2px;
     cursor: pointer;
-    transition: all 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+    transition: all 140ms ease;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
 }
 
 .account-glass-metric-card:active {
@@ -4852,17 +4851,18 @@ img.fatal-error-mark {
 }
 
 .account-glass-metric-card:hover {
-    background: rgba(255, 255, 255, 0.95);
+    background: #ffffff;
     border-color: #cbd5e1;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
 .metric-icon-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     background: #ffffff;
     border: 1px solid rgba(226, 232, 240, 0.9);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
     display: grid;
     place-items: center;
     color: #3b82f6;
@@ -4870,8 +4870,8 @@ img.fatal-error-mark {
 }
 
 .metric-icon-box svg {
-    width: 19px;
-    height: 19px;
+    width: 16px;
+    height: 16px;
 }
 
 .metric-dot {
@@ -4886,11 +4886,11 @@ img.fatal-error-mark {
 }
 
 .metric-number {
-    font-size: 19px;
+    font-size: 17px;
     font-weight: 800;
     color: #0f172a;
     line-height: 1.1;
-    margin-top: 5px;
+    margin-top: 3px;
     font-variant-numeric: tabular-nums;
 }
 
@@ -4902,21 +4902,21 @@ img.fatal-error-mark {
 }
 
 .account-guest-glass-card {
-    gap: 12px;
+    gap: 10px;
 }
 
 .account-hero-glass-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    margin-top: 10px;
+    margin-top: 8px;
 }
 
 .account-hero-glass-actions button {
-    height: 42px;
+    height: 40px;
     border-radius: 9999px;
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 700;
     cursor: pointer;
     transition: all 180ms ease;
@@ -4946,38 +4946,32 @@ img.fatal-error-mark {
 }
 
 .account-page .account-section {
-    margin: 12px 12px 0;
-    border-radius: 16px;
-    border: 1px solid rgba(226, 232, 240, 0.85);
+    margin: 8px 12px 0;
+    border-radius: 14px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
     background: white;
-    box-shadow: 0 2px 10px -2px rgba(15, 23, 42, 0.03);
-    padding: 14px 16px;
+    box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.03);
+    padding: 10px 14px;
 }
 
 .account-page > .order-shortcuts {
-    margin-top: 14px;
+    margin-top: 8px;
 }
 
 .account-page .order-shortcuts .section-header,
 .account-page .recent-purchases .section-header {
     min-height: auto;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
-.account-page .order-shortcuts .section-header > div,
-.account-page .recent-purchases .section-header > div {
-    display: flex;
-    align-items: center;
-}
-
 .account-page .order-shortcuts .section-header h2,
 .account-page .recent-purchases .section-header h2 {
     margin: 0;
-    font-size: 16px;
-    font-weight: var(--font-weight-bold);
+    font-size: 15px;
+    font-weight: 800;
     line-height: 1.2;
 }
 
@@ -4988,9 +4982,9 @@ img.fatal-error-mark {
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    font-size: 13px;
+    font-size: 12.5px;
     line-height: 1.2;
-    color: var(--muted);
+    color: #64748b;
     cursor: pointer;
     transition: color 160ms ease;
 }
@@ -5002,28 +4996,28 @@ img.fatal-error-mark {
 
 .account-page .order-shortcuts .section-header > button svg,
 .account-page .recent-purchases .section-header > button svg {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
 }
 
 .account-page > .order-shortcuts nav {
-    margin-top: 6px;
+    margin-top: 4px;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
+    gap: 2px;
 }
 
 .order-shortcuts nav button {
     min-width: 0;
-    min-height: 64px;
-    padding: 6px 2px;
+    min-height: 52px;
+    padding: 4px 2px;
     border: 0;
     background: transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     cursor: pointer;
     border-radius: 8px;
     transition: background-color 150ms ease;
@@ -5034,17 +5028,17 @@ img.fatal-error-mark {
 }
 
 .order-shortcuts nav button > span {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     position: relative;
     display: grid;
     place-items: center;
-    color: var(--text);
+    color: #1e293b;
 }
 
 .order-shortcuts nav button > span svg {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     stroke-width: 1.8;
 }
 
@@ -5077,22 +5071,22 @@ img.fatal-error-mark {
 }
 
 .tracking-card {
-    padding-bottom: 12px;
+    padding: 10px 14px;
 }
 
 .tracking-card > header {
-    min-height: 32px;
+    min-height: 26px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .tracking-card > header > span {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 14px;
+    gap: 5px;
+    font-size: 13.5px;
 }
 
 .tracking-card > header strong {
@@ -5101,12 +5095,12 @@ img.fatal-error-mark {
 }
 
 .tracking-more {
-    min-height: 32px;
+    min-height: 26px;
     padding: 0 0 0 8px;
     border: 0;
     background: transparent;
     color: var(--muted);
-    font-size: 13px;
+    font-size: 12.5px;
     display: inline-flex;
     align-items: center;
     gap: 2px;
@@ -5120,15 +5114,15 @@ img.fatal-error-mark {
 
 .tracking-card > button {
     width: 100%;
-    min-height: 64px;
-    padding: 8px 10px;
+    min-height: 52px;
+    padding: 6px 10px;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--soft);
     display: grid;
-    grid-template-columns: 48px minmax(0, 1fr) 16px;
+    grid-template-columns: 40px minmax(0, 1fr) 14px;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     text-align: left;
     cursor: pointer;
     transition: border-color 160ms ease;
@@ -5141,41 +5135,41 @@ img.fatal-error-mark {
 .tracking-card > button > img,
 .tracking-card > button > .responsive-picture > img,
 .tracking-card > button > .image-placeholder {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
     background: white;
     object-fit: cover;
 }
 
 .tracking-card > button > span strong {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
     color: #10b981;
 }
 
 .tracking-card > button > span small {
     display: block;
-    margin-top: 3px;
-    font-size: 12px;
+    margin-top: 2px;
+    font-size: 11.5px;
     color: var(--muted);
 }
 
 .tracking-empty {
-    min-height: 52px;
-    padding: 8px 0;
+    min-height: 44px;
+    padding: 4px 0;
     color: var(--muted);
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 13px;
+    gap: 8px;
+    font-size: 12.5px;
 }
 
 .tracking-empty > svg {
-    width: 28px;
-    height: 28px;
-    padding: 6px;
-    border-radius: 8px;
+    width: 24px;
+    height: 24px;
+    padding: 4px;
+    border-radius: 6px;
     background: var(--soft);
     color: var(--muted);
 }
@@ -5184,20 +5178,20 @@ img.fatal-error-mark {
     margin-top: 0;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px 6px;
+    gap: 6px 4px;
 }
 
 .account-services-grid button {
     min-width: 0;
-    min-height: 66px;
-    padding: 6px 2px;
+    min-height: 56px;
+    padding: 4px 2px;
     border: 0;
     background: transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     cursor: pointer;
     border-radius: 8px;
     transition: background-color 150ms ease;
@@ -5228,15 +5222,20 @@ img.fatal-error-mark {
 }
 
 .account-services-grid button > span {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     position: relative;
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--soft);
     color: var(--text);
     display: grid;
     place-items: center;
     transition: all 180ms ease;
+}
+
+.account-services-grid button > span svg {
+    width: 18px;
+    height: 18px;
 }
 
 .account-services-grid button:nth-child(1) > span {
