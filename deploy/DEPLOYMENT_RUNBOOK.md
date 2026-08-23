@@ -194,10 +194,10 @@ curl -fsS http://127.0.0.1:3002/health
 
 ```bash
 PREVIOUS_RUNTIME="$(readlink -f /var/www/kaiyuangouwu-current 2>/dev/null || true)"
-ln -s "${CANDIDATE}" /var/www/.kaiyuangouwu-current.new
-mv -Tf /var/www/.kaiyuangouwu-current.new /var/www/kaiyuangouwu-current
-nginx -t
-systemctl reload nginx
+sudo -n ln -s "${CANDIDATE}" /var/www/.kaiyuangouwu-current.new
+sudo -n mv -Tf /var/www/.kaiyuangouwu-current.new /var/www/kaiyuangouwu-current
+sudo -n nginx -t
+sudo -n systemctl reload nginx
 ```
 
 `PREVIOUS_RUNTIME` 只能是上一个已通过验收的发布目录，并必须写入当次发布记录。切换失败时，用同样的 PM2 命令指回该目录，再原子恢复稳定指针；不重新安装依赖，不删除数据库、上传资产或 `.env`。

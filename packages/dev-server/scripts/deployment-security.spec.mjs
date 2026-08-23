@@ -29,3 +29,12 @@ void test('production PM2 config starts compiled runtime entries without the dev
     assert.match(config, /packages\/dev-server\/dist\/index\.js/u);
     assert.doesNotMatch(config, /cli\.js/u);
 });
+
+void test('production runbook elevates only the root-owned atomic runtime switch', async () => {
+    const runbook = await readFile(path.join(repositoryRoot, 'deploy/DEPLOYMENT_RUNBOOK.md'), 'utf8');
+
+    assert.match(runbook, /sudo -n ln -s "\$\{CANDIDATE\}"/u);
+    assert.match(runbook, /sudo -n mv -Tf/u);
+    assert.match(runbook, /sudo -n nginx -t/u);
+    assert.match(runbook, /sudo -n systemctl reload nginx/u);
+});
