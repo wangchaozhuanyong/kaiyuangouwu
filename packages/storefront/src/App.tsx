@@ -3470,50 +3470,6 @@ function CategoryPage(props: CategoryPageProps) {
                     )}
                 </section>
 
-                {hasChildCategories && (
-                    <div
-                        ref={subcatScrollerRef}
-                        className="subcat-strip"
-                        aria-label={isZh ? '二级分类' : 'Subcategories'}
-                    >
-                        <button
-                            type="button"
-                            className={`subcat-chip ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
-                            onClick={event => {
-                                onChildChange('all');
-                                const item = event.currentTarget;
-                                const scroller = item.parentElement;
-                                if (!scroller) return;
-                                scroller.scrollTo({
-                                    left: centeredHorizontalScrollLeft(scroller, item),
-                                    behavior: 'smooth',
-                                });
-                            }}
-                        >
-                            {isZh ? `全部 (${totalItems})` : `All (${totalItems})`}
-                        </button>
-                        {children.map(child => (
-                            <button
-                                type="button"
-                                key={child.id}
-                                className={`subcat-chip ${child.id === activeChildId ? 'is-active' : ''}`}
-                                onClick={event => {
-                                    onChildChange(child.id);
-                                    const item = event.currentTarget;
-                                    const scroller = item.parentElement;
-                                    if (!scroller) return;
-                                    scroller.scrollTo({
-                                        left: centeredHorizontalScrollLeft(scroller, item),
-                                        behavior: 'smooth',
-                                    });
-                                }}
-                            >
-                                {child.name}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
                 <nav className="sort-bar sort-bar-five" aria-label={isZh ? '排序和筛选' : 'Sort and filter'}>
                     <button
                         type="button"
@@ -3559,32 +3515,35 @@ function CategoryPage(props: CategoryPageProps) {
                 </nav>
             </div>
 
-            <div className="category-layout is-full-width">
-                <section className="category-results">
-                    <button
-                        className="cat-promo-banner"
-                        type="button"
-                        disabled={!categoryProducts[0]}
-                        onClick={() =>
-                            categoryProducts[0] && onNavigate({ name: 'product', id: categoryProducts[0].id })
-                        }
+            <div className={`category-layout${hasChildCategories ? ' has-sidebar' : ' is-full-width'}`}>
+                {hasChildCategories && (
+                    <aside
+                        ref={subcatScrollerRef}
+                        className="category-subcat-sidebar"
+                        aria-label={isZh ? '二级分类' : 'Subcategories'}
                     >
-                        <div>
-                            <span className="cat-promo-tag">
-                                {isZh ? '🔥 极简严选 · 品质专场' : '🔥 Focus Selection'}
-                            </span>
-                            <div className="cat-promo-title">
-                                {primary?.name ?? (isZh ? '全品类甄选' : 'All collections')}
-                            </div>
-                            <div className="cat-promo-sub">
-                                {isZh
-                                    ? '官方正品保障 · 即时开通交付'
-                                    : 'Official Warranty & Instant Delivery'}
-                            </div>
-                        </div>
-                        <span className="cat-promo-cta">{isZh ? '立即逛 ➔' : 'Explore ➔'}</span>
-                    </button>
+                        <button
+                            type="button"
+                            className={`subcat-side-item ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
+                            onClick={() => onChildChange('all')}
+                        >
+                            <span className="subcat-side-name">{isZh ? '全部' : 'All'}</span>
+                            <span className="subcat-side-count">{totalItems}</span>
+                        </button>
+                        {children.map(child => (
+                            <button
+                                type="button"
+                                key={child.id}
+                                className={`subcat-side-item ${child.id === activeChildId ? 'is-active' : ''}`}
+                                onClick={() => onChildChange(child.id)}
+                            >
+                                <span className="subcat-side-name">{child.name}</span>
+                            </button>
+                        ))}
+                    </aside>
+                )}
 
+                <section className="category-results">
                     {categoryLoading || (loading && !collections.length) ? (
                         <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
                     ) : categoryError && !categoryProducts.length ? (
