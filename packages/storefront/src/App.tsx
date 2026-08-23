@@ -4618,12 +4618,6 @@ function AccountPage(props: AccountPageProps) {
                 </section>
             )}
 
-            {customer && (
-                <button className="logout-button" type="button" onClick={onLogout}>
-                    {isZh ? '退出登录' : 'Sign out'}
-                </button>
-            )}
-
             <ProductSection
                 centerLabel={isZh ? '专属推荐' : 'Just for you'}
                 className="account-recommendation-section"
