@@ -708,7 +708,7 @@ function BlockEditor({
                                     <Select
                                         value={draft.type}
                                         onValueChange={value =>
-                                            value && update('type', value as ContentBlockType)
+                                            value && update('type', value)
                                         }
                                     >
                                         <SelectTrigger className="w-full min-w-0">
@@ -1157,7 +1157,7 @@ function TargetSelect({
     onChange,
 }: Readonly<{ value: ContentTargetType; isZh: boolean; onChange: (value: ContentTargetType) => void }>) {
     return (
-        <Select value={value} onValueChange={next => next && onChange(next as ContentTargetType)}>
+        <Select value={value} onValueChange={next => next && onChange(next)}>
             <SelectTrigger className="w-full min-w-0">
                 <SelectValue />
             </SelectTrigger>
