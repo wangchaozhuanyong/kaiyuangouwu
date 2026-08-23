@@ -3276,6 +3276,36 @@ function CategoryPage(props: CategoryPageProps) {
         }
     }, [activeCollectionId]);
 
+    const [isNavHidden, setIsNavHidden] = useState(false);
+    const lastScrollYRef = useRef(0);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            const currentY = window.scrollY;
+            const delta = currentY - lastScrollYRef.current;
+
+            if (currentY < 40) {
+                setIsNavHidden(false);
+                lastScrollYRef.current = currentY;
+                return;
+            }
+
+            // 往上滑动（查看下方更多商品）时隐藏
+            if (delta > 6 && currentY > 70) {
+                setIsNavHidden(true);
+            }
+            // 往下滑动时即刻唤醒呈现，无需滑到顶部
+            else if (delta < -6) {
+                setIsNavHidden(false);
+            }
+
+            lastScrollYRef.current = currentY;
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
     const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
         const collectionMatch =
@@ -3296,7 +3326,7 @@ function CategoryPage(props: CategoryPageProps) {
 
     return (
         <main className="page category-page">
-            <div className="category-navigation-shell">
+            <div className={`category-navigation-shell${isNavHidden ? ' is-scrolled-hidden' : ''}`}>
                 <header className="topbar category-topbar">
                     <div className="category-title-lockup">
                         <span className="category-title-icon-pill" aria-hidden="true">
@@ -3438,37 +3468,18 @@ function CategoryPage(props: CategoryPageProps) {
                         </div>
                     )}
                 </section>
-            </div>
 
-            {hasChildCategories && (
-                <div
-                    ref={subcatScrollerRef}
-                    className="subcat-strip"
-                    aria-label={isZh ? '二级分类' : 'Subcategories'}
-                >
-                    <button
-                        type="button"
-                        className={`subcat-chip ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
-                        onClick={event => {
-                            onChildChange('all');
-                            const item = event.currentTarget;
-                            const scroller = item.parentElement;
-                            if (!scroller) return;
-                            scroller.scrollTo({
-                                left: centeredHorizontalScrollLeft(scroller, item),
-                                behavior: 'smooth',
-                            });
-                        }}
+                {hasChildCategories && (
+                    <div
+                        ref={subcatScrollerRef}
+                        className="subcat-strip"
+                        aria-label={isZh ? '二级分类' : 'Subcategories'}
                     >
-                        {isZh ? `全部 (${totalItems})` : `All (${totalItems})`}
-                    </button>
-                    {children.map(child => (
                         <button
                             type="button"
-                            key={child.id}
-                            className={`subcat-chip ${child.id === activeChildId ? 'is-active' : ''}`}
+                            className={`subcat-chip ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
                             onClick={event => {
-                                onChildChange(child.id);
+                                onChildChange('all');
                                 const item = event.currentTarget;
                                 const scroller = item.parentElement;
                                 if (!scroller) return;
@@ -3478,11 +3489,30 @@ function CategoryPage(props: CategoryPageProps) {
                                 });
                             }}
                         >
-                            {child.name}
+                            {isZh ? `全部 (${totalItems})` : `All (${totalItems})`}
                         </button>
-                    ))}
-                </div>
-            )}
+                        {children.map(child => (
+                            <button
+                                type="button"
+                                key={child.id}
+                                className={`subcat-chip ${child.id === activeChildId ? 'is-active' : ''}`}
+                                onClick={event => {
+                                    onChildChange(child.id);
+                                    const item = event.currentTarget;
+                                    const scroller = item.parentElement;
+                                    if (!scroller) return;
+                                    scroller.scrollTo({
+                                        left: centeredHorizontalScrollLeft(scroller, item),
+                                        behavior: 'smooth',
+                                    });
+                                }}
+                            >
+                                {child.name}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             <div className="category-layout is-full-width">
                 <section className="category-results">
