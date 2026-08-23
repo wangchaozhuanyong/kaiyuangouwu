@@ -20,7 +20,6 @@ import {
     Cloud,
     Cpu,
     Download,
-    Fingerprint,
     Flame,
     Globe,
     Headphones,
@@ -4569,22 +4568,6 @@ function AccountPage(props: AccountPageProps) {
                     />
                 </div>
             </section>
-
-            <button
-                className="security-row"
-                type="button"
-                onClick={() =>
-                    customer ? onNavigate({ name: 'account-security' }) : onNavigate({ name: 'login' })
-                }
-            >
-                <span>
-                    <Fingerprint />
-                    <strong>{isZh ? '账户与安全' : 'Account and security'}</strong>
-                </span>
-                <span>
-                    {isZh ? '手机号、密码与隐私' : 'Phone, password and privacy'} <ChevronRight />
-                </span>
-            </button>
 
             {!!recentVariants.length && (
                 <section className="account-section recent-purchases">
