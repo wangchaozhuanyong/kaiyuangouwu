@@ -182,12 +182,12 @@ cd "${CANDIDATE}"
 NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 node packages/dev-server/dist/run-migrations.js
 ```
 
-迁移成功后，API Server 和 Worker 必须都保持 `RUN_MIGRATIONS=false`。使用已加载生产环境变量的同一个 shell 会话更新 PM2：
+迁移成功后，API Server 和 Worker 必须都保持 `RUN_MIGRATIONS=false`。PM2 的 reload 会保留旧进程定义中的 `pm_cwd` 和 `pm_exec_path`，不能用于切换不可变运行目录；使用已加载生产环境变量的同一个 shell 会话重建进程定义：
 
 ```bash
-VENDURE_RUNTIME_DIR="${CANDIDATE}" \
-    pm2 startOrReload /var/www/kaiyuangouwu/deploy/ecosystem.production.config.cjs --update-env
+/var/www/kaiyuangouwu/deploy/switch-production-runtime.sh "${CANDIDATE}"
 curl -fsS http://127.0.0.1:3002/health
+pm2 save
 ```
 
 健康检查成功后再原子切换 Storefront 稳定指针：
@@ -200,7 +200,7 @@ nginx -t
 systemctl reload nginx
 ```
 
-`PREVIOUS_RUNTIME` 只能是上一个已通过验收的发布目录，并必须写入当次发布记录。切换失败时，用同样的 PM2 命令指回该目录，再原子恢复稳定指针；不重新安装依赖，不删除数据库、上传资产或 `.env`。
+`PREVIOUS_RUNTIME` 只能是上一个已通过验收的发布目录，并必须写入当次发布记录。切换失败时，调用 `switch-production-runtime.sh "${PREVIOUS_RUNTIME}"` 重建上一版本的进程定义，执行 `pm2 save`，再原子恢复稳定指针；不重新安装依赖，不删除数据库、上传资产或 `.env`。
 
 ## 标准发布流程
 

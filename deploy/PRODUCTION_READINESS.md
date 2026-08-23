@@ -242,7 +242,7 @@ node packages/dev-server/dist/index-worker.js
 node packages/dev-server/dist/index.js
 ```
 
-实际进程由 `deploy/ecosystem.production.config.cjs` 管理，必须传入已验证候选目录的绝对路径 `VENDURE_RUNTIME_DIR`。生产 EC2 不执行 `bun install`、Vendure CLI 或前端构建；`.env`、上传资产和数字交付文件不进入产物。完整命令、校验和回滚步骤见 `deploy/DEPLOYMENT_RUNBOOK.md`。
+实际进程由 `deploy/switch-production-runtime.sh` 使用 `deploy/ecosystem.production.config.cjs` 重建 PM2 进程定义，必须传入已验证候选目录的绝对路径。不能用 PM2 reload 切换不可变运行目录，因为它会保留旧的 `pm_cwd` 和 `pm_exec_path`。生产 EC2 不执行 `bun install`、Vendure CLI 或前端构建；`.env`、上传资产和数字交付文件不进入产物。完整命令、校验和回滚步骤见 `deploy/DEPLOYMENT_RUNBOOK.md`。
 
 生产发布建议使用以下顺序：
 

@@ -29,3 +29,13 @@ void test('production PM2 config starts compiled runtime entries without the dev
     assert.match(config, /packages\/dev-server\/dist\/index\.js/u);
     assert.doesNotMatch(config, /cli\.js/u);
 });
+
+void test('production runtime switch rebuilds PM2 definitions for an immutable release', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/switch-production-runtime.sh'), 'utf8');
+
+    assert.match(script, /pm2 delete/u);
+    assert.match(script, /pm2 start/u);
+    assert.match(script, /pm_cwd/u);
+    assert.match(script, /pm_exec_path/u);
+    assert.doesNotMatch(script, /startOrReload/u);
+});
