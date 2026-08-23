@@ -3298,7 +3298,12 @@ function CategoryPage(props: CategoryPageProps) {
         <main className="page category-page">
             <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
-                    <h1 className="topbar-title">{isZh ? '商品' : 'Shop'}</h1>
+                    <div className="category-title-lockup">
+                        <span className="category-title-icon-pill" aria-hidden="true">
+                            <LayoutGrid size={15} />
+                        </span>
+                        <h1 className="category-title-text">{isZh ? '选购商品' : 'Shop'}</h1>
+                    </div>
                     <button
                         className="search-trigger"
                         type="button"
