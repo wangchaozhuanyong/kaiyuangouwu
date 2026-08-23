@@ -2,18 +2,21 @@ import {
     ArrowLeft,
     ChevronRight,
     CircleCheck,
+    ClipboardCheck,
     MapPin,
     Minus,
     Package,
     Plus,
     RotateCcw,
     ShoppingBag,
+    Sparkles,
     TicketPercent,
     Truck,
     X,
 } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
+import { smartParseAddressText } from './address-parser';
 import { ShopApi } from './api';
 import { responsiveImageSources } from './responsive-image';
 import { TaxSummaryRows } from './tax-summary';
@@ -86,8 +89,27 @@ export function CheckoutPage({
     const [noteError, setNoteError] = useState<string | null>(null);
     const [quantityUpdatingVariantId, setQuantityUpdatingVariantId] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
-    const defaultAddress =
-        customer?.addresses?.find(address => address.defaultShippingAddress) ?? customer?.addresses?.[0];
+    const [selectedAddressId, setSelectedAddressId] = useState<string>(
+        customer?.addresses?.find(address => address.defaultShippingAddress)?.id ??
+            customer?.addresses?.[0]?.id ??
+            '',
+    );
+    const activeAddress =
+        customer?.addresses?.find(address => address.id === selectedAddressId) ??
+        customer?.addresses?.find(address => address.defaultShippingAddress) ??
+        customer?.addresses?.[0] ??
+        null;
+    const [smartPasteOpen, setSmartPasteOpen] = useState(false);
+    const [smartPasteText, setSmartPasteText] = useState('');
+    const [manualAddressDraft, setManualAddressDraft] = useState({
+        fullName: '',
+        phoneNumber: '',
+        province: '',
+        city: '',
+        streetLine1: '',
+        postalCode: '',
+    });
+    const defaultAddress = activeAddress;
     const isDigitalOnly = order?.checkoutFulfillment?.fulfillmentType === 'DIGITAL';
     const requiresShipping =
         !isDigitalOnly &&
@@ -182,12 +204,15 @@ export function CheckoutPage({
         setSubmitting(true);
         setFormError(null);
         try {
+            const getString = (key: string, fallback = '') => {
+                const val = data.get(key);
+                return typeof val === 'string' ? val : fallback;
+            };
+
             if (isDigitalOnly) {
-                const deliveryEmail = normalizeDeliveryEmail(String(data.get('deliveryEmail') ?? ''));
+                const deliveryEmail = normalizeDeliveryEmail(getString('deliveryEmail'));
                 if (!deliveryEmail) {
-                    throw new Error(
-                        isZh ? '请填写有效的交付邮箱' : 'Enter a valid delivery email address',
-                    );
+                    throw new Error(isZh ? '请填写有效的交付邮箱' : 'Enter a valid delivery email address');
                 }
                 await api.setDeliveryEmail(deliveryEmail);
                 if (!customerPrepared) {
@@ -201,21 +226,21 @@ export function CheckoutPage({
             }
             if (!isDigitalOnly && !customerPrepared) {
                 await api.setCustomer({
-                    firstName: String(data.get('firstName') ?? ''),
-                    lastName: String(data.get('lastName') ?? ''),
-                    emailAddress: String(data.get('emailAddress') ?? ''),
+                    firstName: getString('firstName'),
+                    lastName: getString('lastName'),
+                    emailAddress: getString('emailAddress'),
                 });
                 setCustomerPrepared(true);
             }
             if (requiresShipping) {
                 const shippingAddress: CustomerAddressInput = {
-                    fullName: String(data.get('fullName') ?? ''),
-                    phoneNumber: String(data.get('phoneNumber') ?? ''),
-                    streetLine1: String(data.get('streetLine1') ?? ''),
-                    city: String(data.get('city') ?? ''),
-                    province: String(data.get('province') ?? ''),
-                    postalCode: String(data.get('postalCode') ?? ''),
-                    countryCode: String(data.get('countryCode') ?? market.countryCode),
+                    fullName: getString('fullName'),
+                    phoneNumber: getString('phoneNumber'),
+                    streetLine1: getString('streetLine1'),
+                    city: getString('city'),
+                    province: getString('province'),
+                    postalCode: getString('postalCode'),
+                    countryCode: getString('countryCode', market.countryCode),
                 };
                 const addressKey = JSON.stringify(shippingAddress);
                 if (addressKey !== preparedAddressKey || !shippingMethods.length) {
@@ -330,7 +355,7 @@ export function CheckoutPage({
                     language={language}
                     directPurchase={directPurchase}
                     quantityUpdatingVariantId={quantityUpdatingVariantId}
-                    onQuantity={updateDirectQuantity}
+                    onQuantity={(id, q) => void updateDirectQuantity(id, q)}
                 />
             )}
             {!!digitalLines.length && (
@@ -358,7 +383,7 @@ export function CheckoutPage({
                     language={language}
                     directPurchase={directPurchase}
                     quantityUpdatingVariantId={quantityUpdatingVariantId}
-                    onQuantity={updateDirectQuantity}
+                    onQuantity={(id, q) => void updateDirectQuantity(id, q)}
                 />
             )}
         </>
@@ -428,7 +453,86 @@ export function CheckoutPage({
                 ) : null}
                 {requiresShipping && (
                     <section className="checkout-section checkout-address-section">
-                        <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
+                        <div className="checkout-section-header-row">
+                            <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
+                            <button
+                                type="button"
+                                className="smart-paste-toggle-btn"
+                                onClick={() => setSmartPasteOpen(!smartPasteOpen)}
+                            >
+                                <ClipboardCheck size={14} />
+                                <span>{isZh ? '一键智能粘贴' : 'Smart Paste'}</span>
+                            </button>
+                        </div>
+
+                        {smartPasteOpen && (
+                            <div className="smart-paste-card">
+                                <textarea
+                                    className="smart-paste-input"
+                                    rows={3}
+                                    placeholder={
+                                        isZh
+                                            ? '粘贴例如：张三，13800138000，广东省深圳市南山区科技园 518000'
+                                            : 'Paste text with recipient, phone and address to auto fill'
+                                    }
+                                    value={smartPasteText}
+                                    onChange={e => setSmartPasteText(e.target.value)}
+                                />
+                                <div className="smart-paste-actions">
+                                    <button
+                                        type="button"
+                                        className="smart-paste-submit-btn"
+                                        onClick={() => {
+                                            if (!smartPasteText.trim()) return;
+                                            const parsed = smartParseAddressText(smartPasteText);
+                                            setManualAddressDraft({
+                                                fullName: parsed.fullName,
+                                                phoneNumber: parsed.phoneNumber,
+                                                province: parsed.province,
+                                                city: parsed.city,
+                                                streetLine1: parsed.streetLine1,
+                                                postalCode: parsed.postalCode,
+                                            });
+                                            setSmartPasteOpen(false);
+                                            onNotify(
+                                                isZh
+                                                    ? '✨ 已智能识别并填充收货地址'
+                                                    : 'Address parsed and filled',
+                                            );
+                                        }}
+                                    >
+                                        <Sparkles size={14} />
+                                        <span>{isZh ? '智能识别并填充' : 'Parse & Auto-Fill'}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {customer?.addresses && customer.addresses.length > 1 && (
+                            <div
+                                className="checkout-address-quick-switcher"
+                                aria-label={isZh ? '快捷选择收货地址' : 'Quick select address'}
+                            >
+                                {customer.addresses.map(addr => (
+                                    <button
+                                        type="button"
+                                        key={addr.id}
+                                        className={`checkout-address-chip-card${addr.id === (activeAddress?.id ?? '') ? ' is-active' : ''}`}
+                                        onClick={() => setSelectedAddressId(addr.id)}
+                                    >
+                                        <div className="chip-card-top">
+                                            <strong>{addr.fullName}</strong>
+                                            <span>{addr.phoneNumber}</span>
+                                            {addr.defaultShippingAddress && (
+                                                <em className="default-tag">{isZh ? '默认' : 'Default'}</em>
+                                            )}
+                                        </div>
+                                        <small className="chip-card-address">{addressText(addr)}</small>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
                         {defaultAddress ? (
                             <>
                                 <button
@@ -468,12 +572,44 @@ export function CheckoutPage({
                                     defaultCountryCode={market.countryCode}
                                     language={language}
                                 />
-                                <Field name="fullName" label={isZh ? '收货人' : 'Full name'} />
-                                <Field name="phoneNumber" label={isZh ? '手机号' : 'Phone'} />
-                                <Field name="province" label={isZh ? '省/州' : 'Province'} />
-                                <Field name="city" label={isZh ? '城市' : 'City'} />
-                                <Field name="streetLine1" label={isZh ? '详细地址' : 'Street address'} wide />
-                                <Field name="postalCode" label={isZh ? '邮政编码' : 'Postal code'} wide />
+                                <Field
+                                    name="fullName"
+                                    label={isZh ? '收货人' : 'Full name'}
+                                    defaultValue={manualAddressDraft.fullName || undefined}
+                                    key={`name-${manualAddressDraft.fullName}`}
+                                />
+                                <Field
+                                    name="phoneNumber"
+                                    label={isZh ? '手机号' : 'Phone'}
+                                    defaultValue={manualAddressDraft.phoneNumber || undefined}
+                                    key={`phone-${manualAddressDraft.phoneNumber}`}
+                                />
+                                <Field
+                                    name="province"
+                                    label={isZh ? '省/州' : 'Province'}
+                                    defaultValue={manualAddressDraft.province || undefined}
+                                    key={`prov-${manualAddressDraft.province}`}
+                                />
+                                <Field
+                                    name="city"
+                                    label={isZh ? '城市' : 'City'}
+                                    defaultValue={manualAddressDraft.city || undefined}
+                                    key={`city-${manualAddressDraft.city}`}
+                                />
+                                <Field
+                                    name="streetLine1"
+                                    label={isZh ? '详细地址' : 'Street address'}
+                                    defaultValue={manualAddressDraft.streetLine1 || undefined}
+                                    key={`street-${manualAddressDraft.streetLine1}`}
+                                    wide
+                                />
+                                <Field
+                                    name="postalCode"
+                                    label={isZh ? '邮政编码' : 'Postal code'}
+                                    defaultValue={manualAddressDraft.postalCode || undefined}
+                                    key={`postal-${manualAddressDraft.postalCode}`}
+                                    wide
+                                />
                             </div>
                         )}
                     </section>
@@ -481,7 +617,10 @@ export function CheckoutPage({
                 {!directPurchase && renderCheckoutItems()}
                 <section className="checkout-section checkout-options">
                     {isDigitalOnly && (
-                        <div className="digital-delivery-method" aria-label={isZh ? '交付方式' : 'Delivery method'}>
+                        <div
+                            className="digital-delivery-method"
+                            aria-label={isZh ? '交付方式' : 'Delivery method'}
+                        >
                             <span>{isZh ? '交付方式' : 'Delivery method'}</span>
                             <small>
                                 <strong>{isZh ? '邮箱自动交付' : 'Automatic email delivery'}</strong>
@@ -513,7 +652,12 @@ export function CheckoutPage({
                                     <span>
                                         <strong>{method.name}</strong>
                                         {method.description && <small>{method.description}</small>}
-                                        {shippingMethodDetails(method, order.currencyCode, locale, language) && (
+                                        {shippingMethodDetails(
+                                            method,
+                                            order.currencyCode,
+                                            locale,
+                                            language,
+                                        ) && (
                                             <small className="shipping-method-meta">
                                                 {shippingMethodDetails(
                                                     method,
@@ -605,7 +749,7 @@ export function CheckoutPage({
                             ? isZh
                                 ? '配送可追踪'
                                 : 'Tracked delivery'
-                                : isZh
+                            : isZh
                               ? '邮箱交付'
                               : 'Email delivery'}
                     </span>
@@ -631,7 +775,9 @@ export function CheckoutPage({
                                 </small>
                                 <span>
                                     {isZh ? '合计' : 'Total'}{' '}
-                                    <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
+                                    <strong>
+                                        {formatMoney(order.totalWithTax, order.currencyCode, locale)}
+                                    </strong>
                                 </span>
                             </>
                         )}
@@ -761,14 +907,19 @@ function CheckoutItemsGroup({
                                 {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
                             </b>
                             {directPurchase ? (
-                                <span className="purchase-quantity-control" aria-label={isZh ? '购买数量' : 'Quantity'}>
+                                <span
+                                    className="purchase-quantity-control"
+                                    aria-label={isZh ? '购买数量' : 'Quantity'}
+                                >
                                     <button
                                         type="button"
                                         disabled={
                                             line.quantity <= 1 ||
                                             quantityUpdatingVariantId === line.productVariant.id
                                         }
-                                        onClick={() => onQuantity?.(line.productVariant.id, line.quantity - 1)}
+                                        onClick={() =>
+                                            onQuantity?.(line.productVariant.id, line.quantity - 1)
+                                        }
                                         aria-label={isZh ? '减少数量' : 'Decrease quantity'}
                                     >
                                         <Minus aria-hidden="true" />
@@ -777,7 +928,9 @@ function CheckoutItemsGroup({
                                     <button
                                         type="button"
                                         disabled={quantityUpdatingVariantId === line.productVariant.id}
-                                        onClick={() => onQuantity?.(line.productVariant.id, line.quantity + 1)}
+                                        onClick={() =>
+                                            onQuantity?.(line.productVariant.id, line.quantity + 1)
+                                        }
                                         aria-label={isZh ? '增加数量' : 'Increase quantity'}
                                     >
                                         <Plus aria-hidden="true" />
@@ -857,7 +1010,9 @@ function shippingMethodDetails(
         details.push(language === 'zh' ? '已享免邮' : 'Free shipping applied');
     } else if ((metadata.freeShippingThreshold ?? 0) > 0) {
         const threshold = formatMoney(metadata.freeShippingThreshold ?? 0, currencyCode, locale);
-        details.push(language === 'zh' ? `实物商品满 ${threshold} 免邮` : `Free over ${threshold} physical subtotal`);
+        details.push(
+            language === 'zh' ? `实物商品满 ${threshold} 免邮` : `Free over ${threshold} physical subtotal`,
+        );
     }
     return details.join(' · ');
 }
@@ -1100,18 +1255,20 @@ function InlineError({ message }: { message: string }) {
 function Field({
     name,
     label,
+    defaultValue,
     type = 'text',
     wide = false,
 }: {
     name: string;
     label: string;
+    defaultValue?: string;
     type?: string;
     wide?: boolean;
 }) {
     return (
         <label className={wide ? 'field-wide' : undefined}>
             <span>{label}</span>
-            <input name={name} type={type} required />
+            <input name={name} type={type} defaultValue={defaultValue} required />
         </label>
     );
 }

@@ -103,6 +103,7 @@ import { ProductReviewsSection, ReviewCenterPage } from './review-pages';
 import { productDescriptionText, sanitizeProductDescription } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
+import { SharePosterModal } from './share-poster-modal';
 import { cacheLogoUrl } from './StorefrontErrorBoundary';
 import {
     ActiveCustomer,
@@ -5257,18 +5258,9 @@ function ProductDetailPage({
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
     const descriptionText = productDescriptionText(product.description);
     const descriptionHtml = sanitizeProductDescription(product.description);
-    const shareProduct = async () => {
-        try {
-            if (navigator.share) {
-                await navigator.share({ title: product.name, text: descriptionText, url: location.href });
-            } else {
-                await navigator.clipboard.writeText(location.href);
-                onNotify(isZh ? '商品链接已复制' : 'Product link copied');
-            }
-        } catch (shareError) {
-            if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
-            onNotify(isZh ? '暂时无法分享商品' : 'Could not share this product');
-        }
+    const [posterOpen, setPosterOpen] = useState(false);
+    const shareProduct = () => {
+        setPosterOpen(true);
     };
 
     useEffect(() => {
@@ -5591,6 +5583,20 @@ function ProductDetailPage({
                             : 'Buy now'}
                 </button>
             </div>
+
+            {posterOpen && (
+                <SharePosterModal
+                    product={product}
+                    storefrontName={storefrontName}
+                    logoUrl={logoUrl}
+                    language={language}
+                    formattedPrice={
+                        variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : '--'
+                    }
+                    onClose={() => setPosterOpen(false)}
+                    onNotify={onNotify}
+                />
+            )}
         </main>
     );
 }

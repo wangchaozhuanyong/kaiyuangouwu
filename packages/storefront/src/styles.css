@@ -11330,13 +11330,376 @@ img.fatal-error-mark {
     }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        scroll-behavior: auto !important;
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
+/* ==========================================================================
+   1. 结算页智能地址粘贴与快捷切换卡片 (Smart Address Fast Fill)
+   ========================================================================== */
+.checkout-section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.checkout-section-header-row h2 {
+    margin: 0;
+}
+
+.smart-paste-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    color: #2563eb;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.smart-paste-toggle-btn:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+}
+
+.smart-paste-card {
+    margin-bottom: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.smart-paste-input {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #dbeafe;
+    background: #ffffff;
+    padding: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    resize: none;
+    color: #0f172a;
+}
+
+.smart-paste-input:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: -1px;
+}
+
+.smart-paste-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.smart-paste-submit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #ffffff;
+    border: 0;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    transition: background 150ms ease;
+}
+
+.smart-paste-submit-btn:hover {
+    background: #1d4ed8;
+}
+
+.checkout-address-quick-switcher {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0 10px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.checkout-address-quick-switcher::-webkit-scrollbar {
+    display: none;
+}
+
+.checkout-address-chip-card {
+    flex: 0 0 200px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 160ms ease;
+}
+
+.checkout-address-chip-card.is-active {
+    border-color: #2563eb;
+    background: #f0f7ff;
+    box-shadow: 0 0 0 1px #2563eb;
+}
+
+.chip-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+}
+
+.chip-card-top strong {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.chip-card-top span {
+    color: #64748b;
+    font-size: 11px;
+}
+
+.chip-card-top .default-tag {
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #fef2f2;
+    color: #ef4444;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: normal;
+}
+
+.chip-card-address {
+    font-size: 11px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   2. 高颜值商品分享海报弹窗 (High-Aesthetic Share Poster Modal)
+   ========================================================================== */
+.poster-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: poster-fade-in 200ms ease-out;
+}
+
+@keyframes poster-fade-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.poster-modal-card {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
+}
+
+.poster-close-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 0;
+    background: #f1f5f9;
+    color: #64748b;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: background 150ms ease;
+    z-index: 2;
+}
+
+.poster-close-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.poster-preview-wrapper {
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.poster-brand-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.poster-brand-logo {
+    height: 24px;
+    width: auto;
+    object-fit: contain;
+}
+
+.poster-brand-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.poster-brand-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.poster-brand-trust {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #10b981;
+}
+
+.poster-image-box {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f8fafc;
+}
+
+.poster-image-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.poster-image-fallback {
+    width: 100%;
+    height: 100%;
+    background: #f1f5f9;
+}
+
+.poster-info-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.poster-price-badge {
+    font-size: 20px;
+    font-weight: 900;
+    color: #d33c30;
+    font-family: var(--font-numeric);
+}
+
+.poster-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.poster-footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.poster-scan-prompt {
+    display: flex;
+    flex-direction: column;
+}
+
+.poster-scan-prompt strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.poster-scan-prompt small {
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+.poster-qrcode {
+    width: 58px;
+    height: 58px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    padding: 2px;
+    background: #ffffff;
+}
+
+.poster-actions-row {
+    display: flex;
+    gap: 10px;
+}
+
+.poster-action-btn {
+    flex: 1;
+    min-height: 42px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 160ms ease;
+}
+
+.poster-action-btn.primary {
+    background: #d33c30;
+    color: #ffffff;
+    border: 0;
+    box-shadow: 0 2px 8px rgba(211, 60, 48, 0.25);
+}
+
+.poster-action-btn.primary:hover {
+    background: #b82f24;
+}
+
+.poster-action-btn.secondary {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+.poster-action-btn.secondary:hover {
+    background: #f1f5f9;
 }
