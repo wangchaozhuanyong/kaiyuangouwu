@@ -2627,11 +2627,17 @@ function HomePage(props: HomePageProps) {
                             )}
                             <div className="hero-shade" />
                             <div className="hero-copy">
-                                <small>{managedHero?.subtitle || (isZh ? '本周精选' : 'This week')}</small>
+                                {managedHero?.subtitle && <small>{managedHero.subtitle}</small>}
                                 <h1>
-                                    {managedHero?.title ??
-                                        hero?.name ??
-                                        (isZh ? '认真挑选每一件好物' : 'Goods chosen with care')}
+                                    {(() => {
+                                        const raw = managedHero?.title ?? hero?.name;
+                                        if (!raw)
+                                            return isZh ? '认真挑选每一件好物' : 'Goods chosen with care';
+                                        if (/^首页(图片)?轮播/i.test(raw)) {
+                                            return isZh ? 'AI 专属会员特权' : 'Exclusive AI Membership';
+                                        }
+                                        return raw;
+                                    })()}
                                 </h1>
                                 <p>
                                     {managedHero?.body ||
