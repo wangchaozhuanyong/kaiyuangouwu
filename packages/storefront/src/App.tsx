@@ -3948,7 +3948,7 @@ export function CartPage(props: CartPageProps) {
     return (
         <main className="page cart-page">
             <header className="topbar cart-topbar">
-                <h1 className="topbar-title">{isZh ? '购物车' : 'Cart'}</h1>
+                <h1 className="topbar-title">{isZh ? '我的购物车' : 'My Cart'}</h1>
                 {!!lines.length && (
                     <button
                         className={`select-all ${(cart?.selectionState ?? 'NONE').toLowerCase()}`}
@@ -3979,42 +3979,6 @@ export function CartPage(props: CartPageProps) {
                     </button>
                 )}
             </header>
-
-            {!!lines.length && (
-                <div className="shipping-note">
-                    <span>
-                        {digitalOnly ? <Download aria-hidden="true" /> : <Truck aria-hidden="true" />}
-                    </span>
-                    <div>
-                        <strong>
-                            {digitalOnly
-                                ? isZh
-                                    ? '数字商品交付'
-                                    : 'Digital delivery'
-                                : isZh
-                                  ? '配送与运费'
-                                  : 'Delivery and shipping'}
-                        </strong>
-                        <small>
-                            {digitalOnly
-                                ? locked
-                                    ? isZh
-                                        ? '交付方式已在待支付订单中确认'
-                                        : 'Delivery is confirmed on the pending order'
-                                    : isZh
-                                      ? '支付完成后自动添加到订单'
-                                      : 'Added to your order after payment'
-                                : locked
-                                  ? isZh
-                                      ? '配送方式与运费已在待支付订单中确认'
-                                      : 'Delivery method and fee are confirmed on the pending order'
-                                  : isZh
-                                    ? '选择地址后在结算页准确计算'
-                                    : 'Calculated after you choose an address'}
-                        </small>
-                    </div>
-                </div>
-            )}
 
             {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
             {locked && (

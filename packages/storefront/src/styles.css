@@ -806,6 +806,14 @@ img {
 .cart-topbar {
     grid-template-columns: 1fr auto;
     padding-left: 14px;
+    padding-right: 14px;
+}
+
+.cart-topbar .topbar-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
 }
 
 .account-topbar {
