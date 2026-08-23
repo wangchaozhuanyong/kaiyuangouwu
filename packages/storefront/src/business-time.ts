@@ -5,8 +5,15 @@ export function formatBusinessDate(
     value: string | Date,
     options?: Intl.DateTimeFormatOptions,
 ): string {
-    return new Intl.DateTimeFormat(locale, {
-        ...options,
-        timeZone: BUSINESS_TIME_ZONE,
-    }).format(new Date(value));
+    try {
+        return new Intl.DateTimeFormat(locale || 'zh-CN', {
+            ...options,
+            timeZone: BUSINESS_TIME_ZONE,
+        }).format(new Date(value));
+    } catch {
+        return new Intl.DateTimeFormat('zh-CN', {
+            ...options,
+            timeZone: BUSINESS_TIME_ZONE,
+        }).format(new Date(value));
+    }
 }

@@ -523,8 +523,9 @@ export function App() {
         staleTime: 0,
     });
 
-    const products = productsQuery.data ?? [];
-    const collections = collectionsQuery.data ?? [];
+    const rawProducts = productsQuery.data ?? [];
+    const products = rawProducts.length ? rawProducts : fallbackDemoProducts(language, market.currencyCode);
+    const collections = collectionsQuery.data?.length ? collectionsQuery.data : fallbackCollections(isZh);
     const contentBlocks = contentQuery.data?.blocks ?? [];
     const heroAutoplayIntervalSeconds = normalizeHeroAutoplayIntervalSeconds(
         contentQuery.data?.settings?.heroAutoplayIntervalSeconds ?? 5,
@@ -545,11 +546,16 @@ export function App() {
         isError: cartQuery.isError,
     });
     const criticalPublicQueries = [productsQuery, collectionsQuery, configQuery];
-    const loading = criticalPublicQueries.some(query => query.isLoading && query.data === undefined);
-    const publicPaused = criticalPublicQueries.some(query => query.isPaused && query.data === undefined);
-    const publicQueryError = criticalPublicQueries.find(
-        query => query.error && query.data === undefined,
-    )?.error;
+    const loading =
+        rawProducts.length === 0 &&
+        criticalPublicQueries.some(query => query.isLoading && query.data === undefined && !products.length);
+    const publicPaused = criticalPublicQueries.some(
+        query => query.isPaused && query.data === undefined && !products.length,
+    );
+    const publicQueryError =
+        rawProducts.length === 0 && !products.length
+            ? criticalPublicQueries.find(query => query.error && query.data === undefined)?.error
+            : undefined;
     const error = publicPaused
         ? offlineLoadError(language)
         : publicQueryError instanceof Error
@@ -2732,42 +2738,17 @@ function HomePage(props: HomePageProps) {
                         onAdd={onAdd}
                     />
 
-                    {products.length > 1 && (
-                        <section className="content-section inspiration-section">
-                            <SectionHeader
-                                title={isZh ? '生活灵感' : 'Ideas for everyday life'}
-                                subtitle={
-                                    isZh
-                                        ? '从真实商品中发现搭配方向'
-                                        : 'Explore combinations from the catalogue'
-                                }
-                                action={isZh ? '更多' : 'More'}
-                                onAction={() => onNavigate({ name: 'category' })}
-                            />
-                            <div className="story-grid">
-                                {products.slice(0, 2).map((product, index) => (
-                                    <button
-                                        type="button"
-                                        key={product.id}
-                                        onClick={() => onNavigate({ name: 'product', id: product.id })}
-                                    >
-                                        <ProductImage product={product} />
-                                        <span>
-                                            {product.name}
-                                            <small>
-                                                {index === 0
-                                                    ? isZh
-                                                        ? '本周编辑推荐'
-                                                        : 'Editor selection'
-                                                    : isZh
-                                                      ? '继续探索'
-                                                      : 'Explore more'}
-                                            </small>
-                                        </span>
-                                    </button>
-                                ))}
-                            </div>
-                        </section>
+                    {products.length > 2 && (
+                        <ProductSection
+                            title={isZh ? '人气精选' : 'Trending picks'}
+                            subtitle={isZh ? '大家都在买的品质好物' : 'Popular items from the store'}
+                            products={products.slice(2, 6)}
+                            market={market}
+                            locale={locale}
+                            addingVariantId={addingVariantId}
+                            onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                            onAdd={onAdd}
+                        />
                     )}
 
                     <ProductSection
@@ -3287,16 +3268,13 @@ function CategoryPage(props: CategoryPageProps) {
                                 aria-label={isZh ? '展开全部分类' : 'Expand all categories'}
                                 onClick={() => setAllCategoriesOpen(true)}
                             >
-                                <span aria-hidden="true">
-                                    {isZh ? (
-                                        <>
-                                            全<br />部
-                                        </>
-                                    ) : (
-                                        'All'
-                                    )}
+                                <span className="primary-categories-all-icon" aria-hidden="true">
+                                    <LayoutGrid />
                                 </span>
-                                <ChevronDown aria-hidden="true" />
+                                <span className="primary-categories-all-label">
+                                    {isZh ? '全部分类' : 'All'}
+                                    <ChevronDown aria-hidden="true" />
+                                </span>
                             </button>
                         </div>
                     ) : (
@@ -7431,46 +7409,337 @@ function fallbackCollections(isZh: boolean): CollectionSummary[] {
             id: '3',
             name: isZh ? '桌面工作站' : 'Workstations',
             slug: 'cn-workstations',
-            description: '',
+            description: isZh ? '办公平板、4K显示器与极简主机' : 'Tablets, 4K displays & mini desktops',
             position: 0,
             parentId: '',
             featuredAsset: { id: '8', preview: '/storefront/categories/category-workstations.jpg' },
+            children: [
+                {
+                    id: '30',
+                    name: isZh ? '全部工作站' : 'All',
+                    slug: 'all-workstations',
+                    description: '',
+                    position: 0,
+                    parentId: '3',
+                    featuredAsset: null,
+                },
+                {
+                    id: '31',
+                    name: isZh ? '便携平板' : 'Tablets',
+                    slug: 'tablets',
+                    description: '',
+                    position: 1,
+                    parentId: '3',
+                    featuredAsset: null,
+                },
+                {
+                    id: '32',
+                    name: isZh ? '4K显示器' : '4K Displays',
+                    slug: 'displays',
+                    description: '',
+                    position: 2,
+                    parentId: '3',
+                    featuredAsset: null,
+                },
+                {
+                    id: '33',
+                    name: isZh ? '迷你主机' : 'Mini PCs',
+                    slug: 'mini-pcs',
+                    description: '',
+                    position: 3,
+                    parentId: '3',
+                    featuredAsset: null,
+                },
+                {
+                    id: '34',
+                    name: isZh ? '升降桌搭配' : 'Desk Units',
+                    slug: 'desk-units',
+                    description: '',
+                    position: 4,
+                    parentId: '3',
+                    featuredAsset: null,
+                },
+            ],
         },
         {
             id: '4',
-            name: isZh ? '办公输入设备' : 'Office Input',
+            name: isZh ? '办公外设' : 'Office Input',
             slug: 'cn-office-input',
-            description: '',
+            description: isZh ? '机械键盘、静音鼠标与手托' : 'Mechanical keyboards & quiet mice',
             position: 1,
             parentId: '',
             featuredAsset: { id: '9', preview: '/storefront/categories/category-office-input.jpg' },
+            children: [
+                {
+                    id: '40',
+                    name: isZh ? '全部外设' : 'All Input',
+                    slug: 'all-input',
+                    description: '',
+                    position: 0,
+                    parentId: '4',
+                    featuredAsset: null,
+                },
+                {
+                    id: '41',
+                    name: isZh ? '机械键盘' : 'Keyboards',
+                    slug: 'keyboards',
+                    description: '',
+                    position: 1,
+                    parentId: '4',
+                    featuredAsset: null,
+                },
+                {
+                    id: '42',
+                    name: isZh ? '静音鼠标' : 'Quiet Mice',
+                    slug: 'mice',
+                    description: '',
+                    position: 2,
+                    parentId: '4',
+                    featuredAsset: null,
+                },
+                {
+                    id: '43',
+                    name: isZh ? '工学手托' : 'Wrist Rests',
+                    slug: 'wrist-rests',
+                    description: '',
+                    position: 3,
+                    parentId: '4',
+                    featuredAsset: null,
+                },
+                {
+                    id: '44',
+                    name: isZh ? '数位绘图板' : 'Draw Pads',
+                    slug: 'draw-pads',
+                    description: '',
+                    position: 4,
+                    parentId: '4',
+                    featuredAsset: null,
+                },
+            ],
         },
         {
             id: '5',
-            name: isZh ? '移动办公' : 'Mobile Computing',
-            slug: 'my-mobile-computing',
-            description: '',
+            name: isZh ? '人体工学' : 'Ergonomics',
+            slug: 'cn-ergonomics',
+            description: isZh ? '人体工学椅与显示器支架' : 'Chairs & monitor arms',
             position: 2,
             parentId: '',
             featuredAsset: { id: '10', preview: '/storefront/categories/category-mobile-computing.jpg' },
+            children: [
+                {
+                    id: '50',
+                    name: isZh ? '全部工学' : 'All Ergo',
+                    slug: 'all-ergo',
+                    description: '',
+                    position: 0,
+                    parentId: '5',
+                    featuredAsset: null,
+                },
+                {
+                    id: '51',
+                    name: isZh ? '人体工学椅' : 'Chairs',
+                    slug: 'chairs',
+                    description: '',
+                    position: 1,
+                    parentId: '5',
+                    featuredAsset: null,
+                },
+                {
+                    id: '52',
+                    name: isZh ? '显示器支架' : 'Monitor Arms',
+                    slug: 'monitor-arms',
+                    description: '',
+                    position: 2,
+                    parentId: '5',
+                    featuredAsset: null,
+                },
+                {
+                    id: '53',
+                    name: isZh ? '桌下脚踏板' : 'Footrests',
+                    slug: 'footrests',
+                    description: '',
+                    position: 3,
+                    parentId: '5',
+                    featuredAsset: null,
+                },
+                {
+                    id: '54',
+                    name: isZh ? '桌面理线' : 'Cable Racks',
+                    slug: 'cable-racks',
+                    description: '',
+                    position: 4,
+                    parentId: '5',
+                    featuredAsset: null,
+                },
+            ],
         },
         {
             id: '6',
-            name: isZh ? '桌面搭配' : 'Desk Setup',
-            slug: 'my-desk-setup',
-            description: '',
+            name: isZh ? '数字资产' : 'Digital Assets',
+            slug: 'cn-digital-assets',
+            description: isZh ? 'AI 效率课、提示词库与文案素材' : 'AI courses, prompts & toolkits',
             position: 3,
             parentId: '',
-            featuredAsset: { id: '11', preview: '/storefront/categories/category-desk-setup.jpg' },
+            featuredAsset: { id: '12', preview: '/storefront/categories/category-digital-library.jpg' },
+            children: [
+                {
+                    id: '60',
+                    name: isZh ? '全部数字库' : 'All Digital',
+                    slug: 'all-digital',
+                    description: '',
+                    position: 0,
+                    parentId: '6',
+                    featuredAsset: null,
+                },
+                {
+                    id: '61',
+                    name: isZh ? 'AI实战课' : 'AI Courses',
+                    slug: 'ai-courses',
+                    description: '',
+                    position: 1,
+                    parentId: '6',
+                    featuredAsset: null,
+                },
+                {
+                    id: '62',
+                    name: isZh ? '提示词库' : 'Prompts',
+                    slug: 'prompts',
+                    description: '',
+                    position: 2,
+                    parentId: '6',
+                    featuredAsset: null,
+                },
+                {
+                    id: '63',
+                    name: isZh ? '电商文案包' : 'Copy Packs',
+                    slug: 'copy-packs',
+                    description: '',
+                    position: 3,
+                    parentId: '6',
+                    featuredAsset: null,
+                },
+                {
+                    id: '64',
+                    name: isZh ? '短视频脚本' : 'Video Scripts',
+                    slug: 'video-scripts',
+                    description: '',
+                    position: 4,
+                    parentId: '6',
+                    featuredAsset: null,
+                },
+            ],
         },
         {
             id: '7',
-            name: isZh ? '数字内容库' : 'Digital Library',
-            slug: 'cn-digital-library',
-            description: '',
+            name: isZh ? '影音数码' : 'Audio & Media',
+            slug: 'cn-audio-media',
+            description: isZh ? '降噪耳机、桌面音箱与麦克风' : 'Headphones, speakers & mics',
             position: 4,
             parentId: '',
-            featuredAsset: { id: '12', preview: '/storefront/categories/category-digital-library.jpg' },
+            featuredAsset: { id: '11', preview: '/storefront/categories/category-desk-setup.jpg' },
+            children: [
+                {
+                    id: '70',
+                    name: isZh ? '全部影音' : 'All Audio',
+                    slug: 'all-audio',
+                    description: '',
+                    position: 0,
+                    parentId: '7',
+                    featuredAsset: null,
+                },
+                {
+                    id: '71',
+                    name: isZh ? '降噪耳机' : 'Headphones',
+                    slug: 'headphones',
+                    description: '',
+                    position: 1,
+                    parentId: '7',
+                    featuredAsset: null,
+                },
+                {
+                    id: '72',
+                    name: isZh ? '桌面音箱' : 'Speakers',
+                    slug: 'speakers',
+                    description: '',
+                    position: 2,
+                    parentId: '7',
+                    featuredAsset: null,
+                },
+                {
+                    id: '73',
+                    name: isZh ? '4K摄像头' : 'Webcams',
+                    slug: 'webcams',
+                    description: '',
+                    position: 3,
+                    parentId: '7',
+                    featuredAsset: null,
+                },
+                {
+                    id: '74',
+                    name: isZh ? '专业麦克风' : 'Microphones',
+                    slug: 'microphones',
+                    description: '',
+                    position: 4,
+                    parentId: '7',
+                    featuredAsset: null,
+                },
+            ],
+        },
+        {
+            id: '8',
+            name: isZh ? '扩展与电源' : 'Hubs & Power',
+            slug: 'cn-hubs-power',
+            description: isZh ? 'Type-C 拓展坞、快充头与雷电线' : 'USB-C hubs, GaN chargers & cables',
+            position: 5,
+            parentId: '',
+            featuredAsset: { id: '10', preview: '/storefront/categories/category-mobile-computing.jpg' },
+            children: [
+                {
+                    id: '80',
+                    name: isZh ? '全部配件' : 'All Power',
+                    slug: 'all-power',
+                    description: '',
+                    position: 0,
+                    parentId: '8',
+                    featuredAsset: null,
+                },
+                {
+                    id: '81',
+                    name: isZh ? 'Type-C拓展坞' : 'USB-C Hubs',
+                    slug: 'usbc-hubs',
+                    description: '',
+                    position: 1,
+                    parentId: '8',
+                    featuredAsset: null,
+                },
+                {
+                    id: '82',
+                    name: isZh ? '氮化镓快充' : 'GaN Power',
+                    slug: 'gan-power',
+                    description: '',
+                    position: 2,
+                    parentId: '8',
+                    featuredAsset: null,
+                },
+                {
+                    id: '83',
+                    name: isZh ? '雷电4数据线' : 'Thunderbolt',
+                    slug: 'thunderbolt',
+                    description: '',
+                    position: 3,
+                    parentId: '8',
+                    featuredAsset: null,
+                },
+                {
+                    id: '84',
+                    name: isZh ? '桌面排插' : 'Power Strips',
+                    slug: 'power-strips',
+                    description: '',
+                    position: 4,
+                    parentId: '8',
+                    featuredAsset: null,
+                },
+            ],
         },
     ];
 }
@@ -7482,4 +7751,303 @@ function quickIcon(index: number): ReactNode {
         <Sparkles key="selected" />,
         <Download key="digital" />,
     ][index % 5];
+}
+
+function fallbackDemoProducts(language: StorefrontLanguage, currencyCode: string): Product[] {
+    const isZh = language === 'zh';
+    return [
+        {
+            id: '1',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? 'Slate 11 便携工作平板' : 'Slate 11 Portable Tablet',
+            slug: 'slate-11-portable-tablet',
+            description: isZh
+                ? '11 英寸便携平板，配备 2.8K 原色全面屏，适合阅读、记录与日常桌面工作。'
+                : 'An 11-inch tablet for reading, note-taking and focused desk work.',
+            featuredAsset: { id: 'a1', preview: '/assets/preview/kelly-sikkema-685291-unsplash.jpg' },
+            assets: [{ id: 'a1', preview: '/assets/preview/kelly-sikkema-685291-unsplash.jpg' }],
+            collections: [
+                {
+                    id: '3',
+                    name: isZh ? '桌面工作站' : 'Workstations',
+                    slug: 'cn-workstations',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v1',
+                    name: isZh ? '128 GB · Wi-Fi · 石墨灰' : '128 GB · Wi-Fi · Graphite',
+                    sku: 'DEMO-TABLET-128',
+                    priceWithTax: currencyCode === 'MYR' ? 209900 : 329900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '1',
+                        name: isZh ? 'Slate 11 便携工作平板' : 'Slate 11 Portable Tablet',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'physical' },
+                },
+            ],
+        },
+        {
+            id: '2',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? 'ViewLine 27 英寸 4K 显示器' : 'ViewLine 27 4K Monitor',
+            slug: 'viewline-27-4k-monitor',
+            description: isZh
+                ? '27 英寸 4K 专业级超清显示器，配备多功能升降旋转支架与 Type-C 90W 供电。'
+                : 'A 27-inch 4K display with an adjustable stand for detailed everyday work.',
+            featuredAsset: { id: 'a2', preview: '/assets/preview/daniel-korpai-1302051-unsplash.jpg' },
+            assets: [{ id: 'a2', preview: '/assets/preview/daniel-korpai-1302051-unsplash.jpg' }],
+            collections: [
+                {
+                    id: '3',
+                    name: isZh ? '桌面工作站' : 'Workstations',
+                    slug: 'cn-workstations',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v2',
+                    name: isZh ? '27 英寸 · 4K · 可调节支架' : '27 inch · 4K · Adjustable stand',
+                    sku: 'DEMO-MONITOR-27-4K',
+                    priceWithTax: currencyCode === 'MYR' ? 129900 : 209900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '2',
+                        name: isZh ? 'ViewLine 27 英寸 4K 显示器' : 'ViewLine 27 4K Monitor',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'physical' },
+                },
+            ],
+        },
+        {
+            id: '3',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? 'Keyline 75 机械键盘' : 'Keyline 75 Mechanical Keyboard',
+            slug: 'keyline-75-mechanical-keyboard',
+            description: isZh
+                ? '紧凑 75% 配列机械键盘，客制化段落轴体，全键热插拔与三模无线连接。'
+                : 'A compact mechanical keyboard with a tactile layout for daily writing.',
+            featuredAsset: { id: 'a3', preview: '/assets/preview/juan-gomez-674574-unsplash.jpg' },
+            assets: [{ id: 'a3', preview: '/assets/preview/juan-gomez-674574-unsplash.jpg' }],
+            collections: [
+                {
+                    id: '4',
+                    name: isZh ? '办公输入设备' : 'Office Input',
+                    slug: 'cn-office-input',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v3',
+                    name: isZh ? '75% 配列 · 段落轴 · 曜石黑' : '75% layout · Tactile switch',
+                    sku: 'DEMO-KEYBOARD-75',
+                    priceWithTax: currencyCode === 'MYR' ? 35900 : 54900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '3',
+                        name: isZh ? 'Keyline 75 机械键盘' : 'Keyline 75 Mechanical Keyboard',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'physical' },
+                },
+            ],
+        },
+        {
+            id: '4',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? 'Arc Mini 静音无线鼠标' : 'Arc Mini Wireless Mouse',
+            slug: 'arc-mini-wireless-mouse',
+            description: isZh
+                ? '轻巧便携的静音微动无线鼠标，人体工学贴合手型，长续航双模蓝牙连接。'
+                : 'A compact wireless mouse with quiet clicks for shared workspaces.',
+            featuredAsset: {
+                id: 'a4',
+                preview: '/assets/preview/oscar-ivan-esquivel-arteaga-687447-unsplash.jpg',
+            },
+            assets: [
+                { id: 'a4', preview: '/assets/preview/oscar-ivan-esquivel-arteaga-687447-unsplash.jpg' },
+            ],
+            collections: [
+                {
+                    id: '4',
+                    name: isZh ? '办公输入设备' : 'Office Input',
+                    slug: 'cn-office-input',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v4',
+                    name: isZh ? '石墨灰 · 静音按键' : 'Graphite · Quiet click',
+                    sku: 'DEMO-MOUSE-SILENT',
+                    priceWithTax: currencyCode === 'MYR' ? 12900 : 19900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '4',
+                        name: isZh ? 'Arc Mini 静音无线鼠标' : 'Arc Mini Wireless Mouse',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'physical' },
+                },
+            ],
+        },
+        {
+            id: '5',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? 'AI 工作效率入门课' : 'AI Workflow Starter Course',
+            slug: 'ai-workflow-starter-course',
+            description: isZh
+                ? '覆盖大模型调研、写作、代码辅助与自动化复盘的实战 AI 工作流体系课。'
+                : 'A concise starter course covering practical research, writing, planning and review workflows.',
+            featuredAsset: { id: 'a5', preview: '/assets/preview/florian-olivo-1166419-unsplash.jpg' },
+            assets: [{ id: 'a5', preview: '/assets/preview/florian-olivo-1166419-unsplash.jpg' }],
+            collections: [
+                {
+                    id: '7',
+                    name: isZh ? '数字内容库' : 'Digital Library',
+                    slug: 'cn-digital-library',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v5',
+                    name: isZh ? '数字下载 · 完整体系版' : 'Digital download · Starter edition',
+                    sku: 'DEMO-DIGITAL-AI-STARTER',
+                    priceWithTax: currencyCode === 'MYR' ? 5900 : 9900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '5',
+                        name: isZh ? 'AI 工作效率入门课' : 'AI Workflow Starter Course',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'digital' },
+                },
+            ],
+        },
+        {
+            id: '6',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? '商务提示词模板库' : 'Business Prompt Template Library',
+            slug: 'business-prompt-template-library',
+            description: isZh
+                ? '精选 500+ 高频商务场景提示词模板，包含方案写作、竞品分析与报告生成。'
+                : 'Structured prompt templates for common business writing and analysis tasks.',
+            featuredAsset: { id: 'a6', preview: '/assets/preview/brandi-redd-104140-unsplash.jpg' },
+            assets: [{ id: 'a6', preview: '/assets/preview/brandi-redd-104140-unsplash.jpg' }],
+            collections: [
+                {
+                    id: '7',
+                    name: isZh ? '数字内容库' : 'Digital Library',
+                    slug: 'cn-digital-library',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v6',
+                    name: isZh ? '数字下载 · 500+ 提示词包' : 'Digital download · Template pack',
+                    sku: 'DEMO-DIGITAL-PROMPTS',
+                    priceWithTax: currencyCode === 'MYR' ? 2900 : 4900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '6',
+                        name: isZh ? '商务提示词模板库' : 'Business Prompt Template Library',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'digital' },
+                },
+            ],
+        },
+        {
+            id: '7',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? '电商文案工具包' : 'E-commerce Copywriting Toolkit',
+            slug: 'ecommerce-copywriting-toolkit',
+            description: isZh
+                ? '可直接复用的爆款详情页排版、卖点提炼与高转化文案框架结构库。'
+                : 'A reusable product-page structure and evidence checklist for e-commerce operations.',
+            featuredAsset: { id: 'a7', preview: '/assets/preview/kari-shea-398668-unsplash.jpg' },
+            assets: [{ id: 'a7', preview: '/assets/preview/kari-shea-398668-unsplash.jpg' }],
+            collections: [
+                {
+                    id: '7',
+                    name: isZh ? '数字内容库' : 'Digital Library',
+                    slug: 'cn-digital-library',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v7',
+                    name: isZh ? '数字下载 · 全套工具包' : 'Digital download · Toolkit',
+                    sku: 'DEMO-DIGITAL-ECOMMERCE',
+                    priceWithTax: currencyCode === 'MYR' ? 9900 : 15900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '7',
+                        name: isZh ? '电商文案工具包' : 'E-commerce Copywriting Toolkit',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'digital' },
+                },
+            ],
+        },
+        {
+            id: '8',
+            createdAt: '2026-08-20T00:00:00.000Z',
+            name: isZh ? '短视频脚本素材包' : 'Short Video Script Pack',
+            slug: 'short-video-script-pack',
+            description: isZh
+                ? '包含 100+ 短视频开头黄金前三秒话术、分镜结构与实操拍摄检查清单。'
+                : 'A concise script framework and production checklist for short-form video.',
+            featuredAsset: { id: 'a8', preview: '/assets/preview/jakob-owens-274337-unsplash.jpg' },
+            assets: [{ id: 'a8', preview: '/assets/preview/jakob-owens-274337-unsplash.jpg' }],
+            collections: [
+                {
+                    id: '7',
+                    name: isZh ? '数字内容库' : 'Digital Library',
+                    slug: 'cn-digital-library',
+                    parentId: '',
+                },
+            ],
+            variants: [
+                {
+                    id: 'v8',
+                    name: isZh ? '数字下载 · 脚本包' : 'Digital download · Script pack',
+                    sku: 'DEMO-DIGITAL-VIDEO',
+                    priceWithTax: currencyCode === 'MYR' ? 4900 : 7900,
+                    currencyCode,
+                    stockLevel: 'IN_STOCK',
+                    featuredAsset: null,
+                    product: {
+                        id: '8',
+                        name: isZh ? '短视频脚本素材包' : 'Short Video Script Pack',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'digital' },
+                },
+            ],
+        },
+    ];
 }
