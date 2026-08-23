@@ -22,6 +22,7 @@ import {
     Coffee,
     Download,
     Fingerprint,
+    Flame,
     Headphones,
     Heart,
     House,
@@ -36,11 +37,13 @@ import {
     Search,
     Settings,
     Share2,
+    ShieldCheck,
     ShoppingBag,
     ShoppingCart,
     SlidersHorizontal,
     Sparkles,
     Store,
+    Tag,
     TicketPercent,
     Trash2,
     Truck,
@@ -2735,7 +2738,8 @@ function HomePage(props: HomePageProps) {
 
                     <ProductSection
                         title={isZh ? '限时精选' : 'Selected now'}
-                        subtitle={isZh ? '当前店铺值得关注的商品' : 'Worth a closer look'}
+                        action={isZh ? '更多' : 'More'}
+                        onAction={() => onNavigate({ name: 'category' })}
                         products={products.slice(0, 4)}
                         market={market}
                         locale={locale}
@@ -2746,8 +2750,9 @@ function HomePage(props: HomePageProps) {
 
                     {products.length > 2 && (
                         <ProductSection
-                            title={isZh ? '人气精选' : 'Trending picks'}
-                            subtitle={isZh ? '大家都在买的品质好物' : 'Popular items from the store'}
+                            title={isZh ? '热门商品' : 'Trending picks'}
+                            action={isZh ? '更多' : 'More'}
+                            onAction={() => onNavigate({ name: 'category' })}
                             products={products.slice(2, 6)}
                             market={market}
                             locale={locale}
@@ -5961,6 +5966,8 @@ function ProductSection({
     title,
     subtitle,
     centerLabel,
+    action,
+    onAction,
     className,
     products,
     market,
@@ -5974,6 +5981,8 @@ function ProductSection({
     title?: string;
     subtitle?: string;
     centerLabel?: string;
+    action?: string;
+    onAction?: () => void;
     className?: string;
     products: Product[];
     market: MarketConfig;
@@ -5987,7 +5996,13 @@ function ProductSection({
     if (!products.length) return null;
     return (
         <section className={`content-section product-section${className ? ` ${className}` : ''}`}>
-            <SectionHeader title={title} subtitle={subtitle} centerLabel={centerLabel} />
+            <SectionHeader
+                title={title}
+                subtitle={subtitle}
+                centerLabel={centerLabel}
+                action={action}
+                onAction={onAction}
+            />
             <div className="product-grid">
                 {products.map(product => (
                     <ProductCard
@@ -6734,24 +6749,45 @@ function NoticeButton({ language, onClick }: { language: StorefrontLanguage; onC
         </button>
     );
 }
+function getSectionIcon(title?: string): ReactNode {
+    if (!title) return null;
+    if (/特惠|优惠|折扣|券|省钱/i.test(title)) return <Tag size={13} />;
+    if (/热门|爆款|热销|推荐|人气/i.test(title)) return <Flame size={13} />;
+    if (/精选|本周|新品|首发|挑选/i.test(title)) return <Sparkles size={13} />;
+    if (/分类|全部|品类|探索/i.test(title)) return <LayoutGrid size={13} />;
+    if (/服务|保障|售后|安全/i.test(title)) return <ShieldCheck size={13} />;
+    if (/订单|历史|购买/i.test(title)) return <Package size={13} />;
+    return <ShoppingBag size={13} />;
+}
+
 function SectionHeader({
     title,
     subtitle,
     centerLabel,
     action,
     onAction,
+    icon,
 }: {
     title?: string;
     subtitle?: string;
     centerLabel?: string;
     action?: string;
     onAction?: () => void;
+    icon?: ReactNode;
 }) {
+    const resolvedIcon = icon ?? getSectionIcon(title);
     return (
         <header className="section-header">
             {(title || subtitle) && (
-                <div>
-                    {title && <h2>{title}</h2>}
+                <div className="section-header-title-lockup">
+                    <div className="section-header-title-row">
+                        {resolvedIcon && (
+                            <span className="section-header-icon-pill" aria-hidden="true">
+                                {resolvedIcon}
+                            </span>
+                        )}
+                        {title && <h2>{title}</h2>}
+                    </div>
                     {subtitle && <p>{subtitle}</p>}
                 </div>
             )}
@@ -6762,9 +6798,9 @@ function SectionHeader({
                     <h2 className="section-header-center-label">{centerLabel}</h2>
                 ))}
             {action && (
-                <button type="button" onClick={onAction}>
-                    {action}
-                    <ChevronRight />
+                <button type="button" className="section-header-action-btn" onClick={onAction}>
+                    <span>{action}</span>
+                    <ChevronRight size={13} aria-hidden="true" />
                 </button>
             )}
         </header>
