@@ -186,7 +186,7 @@ NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 node packages/dev-server
 
 ```bash
 VENDURE_RUNTIME_DIR="${CANDIDATE}" \
-    pm2 startOrReload /var/www/kaiyuangouwu/deploy/ecosystem.production.cjs --update-env
+    pm2 startOrReload /var/www/kaiyuangouwu/deploy/ecosystem.production.config.cjs --update-env
 curl -fsS http://127.0.0.1:3002/health
 ```
 

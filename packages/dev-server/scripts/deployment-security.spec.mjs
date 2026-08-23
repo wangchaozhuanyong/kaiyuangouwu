@@ -19,7 +19,10 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
 });
 
 void test('production PM2 config starts compiled runtime entries without the development CLI', async () => {
-    const config = await readFile(path.join(repositoryRoot, 'deploy/ecosystem.production.cjs'), 'utf8');
+    const config = await readFile(
+        path.join(repositoryRoot, 'deploy/ecosystem.production.config.cjs'),
+        'utf8',
+    );
 
     assert.match(config, /VENDURE_RUNTIME_DIR/u);
     assert.match(config, /packages\/dev-server\/dist\/index-worker\.js/u);
