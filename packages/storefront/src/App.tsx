@@ -3262,13 +3262,26 @@ function CategoryPage(props: CategoryPageProps) {
         }
     }, [categoryProducts, market.code, queryClient, vendureLanguageCode]);
 
+    const allCategoriesRef = useRef<HTMLDivElement | null>(null);
+
     useEffect(() => {
         if (!allCategoriesOpen) return;
+        const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+            if (allCategoriesRef.current && !allCategoriesRef.current.contains(event.target as Node)) {
+                setAllCategoriesOpen(false);
+            }
+        };
         const closeOnEscape = (event: KeyboardEvent) => {
             if (event.key === 'Escape') setAllCategoriesOpen(false);
         };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside, { passive: true });
         document.addEventListener('keydown', closeOnEscape);
-        return () => document.removeEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
     }, [allCategoriesOpen]);
 
     const loadMore = () => catalogQuery.fetchNextPage();
@@ -3305,6 +3318,7 @@ function CategoryPage(props: CategoryPageProps) {
                 </header>
 
                 <section
+                    ref={allCategoriesRef}
                     className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
                     aria-label={isZh ? '商品分类切换' : 'Category switcher'}
                 >
@@ -3579,6 +3593,14 @@ function CategoryPage(props: CategoryPageProps) {
                     )}
                 </section>
             </div>
+
+            {allCategoriesOpen && (
+                <div
+                    className="all-categories-backdrop"
+                    aria-hidden="true"
+                    onClick={() => setAllCategoriesOpen(false)}
+                />
+            )}
 
             {filterOpen && (
                 <Sheet

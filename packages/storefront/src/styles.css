@@ -2745,6 +2745,16 @@ img.fatal-error-mark {
     white-space: nowrap;
 }
 
+.all-categories-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    animation: fadeIn 160ms ease;
+}
+
 .all-primary-categories {
     width: 100%;
     min-height: 156px;
@@ -2754,6 +2764,7 @@ img.fatal-error-mark {
     top: 0;
     right: 0;
     left: 0;
+    z-index: 10;
     overflow-x: hidden;
     overflow-y: auto;
     border-radius: 0 0 14px 14px;
