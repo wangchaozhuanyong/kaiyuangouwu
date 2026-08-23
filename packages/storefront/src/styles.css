@@ -766,28 +766,29 @@ img {
 
 .brand {
     width: max-content;
-    max-width: calc(34px + 7px + 8em);
+    max-width: calc(28px + 6px + 8em);
     height: 42px;
     padding: 0;
     border: 0;
     background: transparent;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     text-align: left;
+    cursor: pointer;
 }
 
 .brand-mark {
-    width: 34px;
-    height: 34px;
+    width: 24px;
+    height: 24px;
     flex: none;
-    border-radius: 7px;
+    border-radius: 6px;
     background: var(--accent);
     color: white;
     display: grid;
     place-items: center;
+    font-size: 13px;
     font-weight: 700;
-    box-shadow: 0 5px 13px rgba(207, 67, 57, 0.2);
 }
 
 img.brand-mark,
@@ -795,15 +796,25 @@ img.auth-brand-mark,
 img.account-hero-brand-mark,
 img.shop-mark,
 img.fatal-error-mark {
+    width: auto;
+    max-width: 28px;
+    height: 24px;
+    flex: none;
     object-fit: contain;
-    background: #ffffff;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06));
 }
 
 .brand strong {
     flex: none;
-    font-size: 15px;
-    font-weight: var(--font-weight-bold);
+    font-size: 16px;
+    font-weight: 800;
     line-height: 1.2;
+    color: #0f172a;
+    letter-spacing: -0.01em;
     white-space: nowrap;
 }
 
