@@ -87,6 +87,13 @@ const loadPackage = createRequire(__filename);
 const serverRoot = path.basename(__dirname) === 'dist' ? path.dirname(__dirname) : __dirname;
 const dashboardUrl = configuredUrl('VENDURE_DASHBOARD_URL', 'http://localhost:3000/dashboard');
 const storefrontFallbackUrl = configuredUrl('VENDURE_STOREFRONT_URL', 'http://127.0.0.1:5175');
+const storefrontPromotionGateEnabled =
+    process.env.STOREFRONT_PROMOTION_GATE_ENABLED != null
+        ? process.env.STOREFRONT_PROMOTION_GATE_ENABLED === 'true'
+        : IS_PRODUCTION;
+if (IS_PRODUCTION && !storefrontPromotionGateEnabled) {
+    throw new Error('STOREFRONT_PROMOTION_GATE_ENABLED must be true in production');
+}
 const dashboardAppDir =
     path.basename(__dirname) === 'dist'
         ? path.join(__dirname, './dashboard')
@@ -293,8 +300,8 @@ async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAd
         ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields as StorefrontNameFields),
         fromAddress,
         accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
-        verifyEmailAddressUrl: `${storefrontUrl}/#/verify-account`,
-        passwordResetUrl: `${storefrontUrl}/#/reset-password`,
+        verifyEmailAddressUrl: `${storefrontUrl}/promo/account-entry?route=verify-account`,
+        passwordResetUrl: `${storefrontUrl}/promo/account-entry?route=reset-password`,
         changeEmailAddressUrl: `${dashboardUrl}/change-email-address`,
     };
 }
@@ -616,7 +623,16 @@ export const devConfig: VendureConfig = {
         ...(!BOOTSTRAP_BASE_SCHEMA
             ? [
                   CommerceFulfillmentPlugin,
-                  StoreManagementPlugin,
+                  StoreManagementPlugin.init({
+                      enabled: storefrontPromotionGateEnabled,
+                      signingSecret: configuredValue(
+                          'STOREFRONT_ENTRY_SECRET',
+                          'development-storefront-entry-secret',
+                      ),
+                      secureCookie: IS_PRODUCTION,
+                      trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
+                      bypassHosts: storeDomainBypassHosts(),
+                  }),
                   StorefrontCatalogPlugin,
                   StorefrontCartPlugin,
                   StorefrontContentPlugin,

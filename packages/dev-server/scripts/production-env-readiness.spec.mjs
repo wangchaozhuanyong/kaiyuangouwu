@@ -24,6 +24,8 @@ function readyEnvironment(overrides = {}) {
         ORDER_CONFIRMATION_TOKEN_SECRET:
             'order-confirmation-secret-that-is-longer-than-thirty-two-characters',
         ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS: '604800',
+        STOREFRONT_PROMOTION_GATE_ENABLED: 'true',
+        STOREFRONT_ENTRY_SECRET: 'promotion-entry-secret-that-is-longer-than-thirty-two-characters',
         DB: 'postgres',
         DB_HOST: 'database.internal',
         DB_PORT: '5432',
@@ -77,7 +79,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 28, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 29, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -110,6 +112,8 @@ void test('blocks local services, placeholders, unsafe routing and default crede
             STORE_DOMAIN_CNAME_TARGET: 'stores.example.com',
             STORE_DOMAIN_ROUTING_MODE: 'prefer-domain',
             STORE_DOMAIN_BYPASS_HOSTS: 'localhost',
+            STOREFRONT_PROMOTION_GATE_ENABLED: 'false',
+            STOREFRONT_ENTRY_SECRET: 'replace-with-a-secret',
             IS_INSTRUMENTED: 'false',
         }),
         'server',
@@ -131,6 +135,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('digital-delivery'));
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
+    assert.ok(blockers.has('storefront-promotion-gate'));
     assert.ok(blockers.has('observability-export'));
 });
 
@@ -190,7 +195,7 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 29, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 30, manual: 0, blocker: 0 });
 });
 
 void test('blocks a single-host release without a required offsite backup destination', () => {

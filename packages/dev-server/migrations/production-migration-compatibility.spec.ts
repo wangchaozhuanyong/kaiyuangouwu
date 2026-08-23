@@ -14,6 +14,7 @@ import { AddOrderDeliveryEmail1787206600000 } from './1787206600000-add-order-de
 import { AlignSearchStockDefaults1787328000000 } from './1787328000000-align-search-stock-defaults';
 import { NormalizeSearchStockMysqlColumns1787331600000 } from './1787331600000-normalize-search-stock-mysql-columns';
 import { AddStorefrontContentSettings1787335200000 } from './1787335200000-add-storefront-content-settings';
+import { AddStorefrontPromotionPages1787338800000 } from './1787338800000-add-storefront-promotion-pages';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -31,6 +32,35 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'creates portable per-Channel promotion pages on %s',
+        async databaseType => {
+            const createdTables: Table[] = [];
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                hasTable: vi.fn(async () => false),
+                createTable: vi.fn(async (table: Table) => createdTables.push(table)),
+            } as unknown as QueryRunner;
+
+            await new AddStorefrontPromotionPages1787338800000().up(queryRunner);
+
+            expect(createdTables).toHaveLength(1);
+            expect(createdTables[0].name).toBe('storefront_promotion_page');
+            expect(createdTables[0].findColumnByName('draftSource')).toMatchObject({
+                type: 'text',
+                isNullable: true,
+            });
+            expect(createdTables[0].indices).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'IDX_storefront_promotion_page_channel',
+                        isUnique: true,
+                    }),
+                ]),
+            );
+        },
+    );
+
     it.each(['mysql', 'postgres', 'sqlite'] as const)(
         'creates portable per-Channel storefront content settings on %s',
         async databaseType => {
