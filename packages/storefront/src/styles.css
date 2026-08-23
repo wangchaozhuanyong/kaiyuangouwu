@@ -4722,19 +4722,22 @@ img.fatal-error-mark {
     padding-bottom: 32px;
 }
 
+/* ==========================================================================
+   Account Hero: Style 1 - Apple Minimalist Translucent Aurora Glass
+   ========================================================================== */
 .account-identity-hero {
     margin: 0;
     border-radius: 0;
-    background-color: #0c101c;
+    background-color: #f1f5f9;
     background-image:
-        radial-gradient(ellipse 90% 80% at 85% -20%, rgba(217, 119, 6, 0.18) 0%, transparent 60%),
-        radial-gradient(ellipse 80% 80% at 15% 120%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
-        radial-gradient(circle at 50% 30%, rgba(30, 41, 59, 0.4) 0%, transparent 100%),
-        linear-gradient(165deg, #090d16 0%, #111827 45%, #182234 100%);
-    box-shadow: none;
-    color: white;
+        radial-gradient(ellipse 90% 70% at 85% -10%, rgba(191, 219, 254, 0.45) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 60% at 15% 100%, rgba(224, 231, 255, 0.5) 0%, transparent 60%),
+        linear-gradient(180deg, #e8edf5 0%, #f1f5f9 100%);
+    box-shadow: 0 4px 20px -8px rgba(15, 23, 42, 0.05);
+    color: #0f172a;
     overflow: hidden;
     position: relative;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 .account-identity-hero::before {
@@ -4742,8 +4745,8 @@ img.fatal-error-mark {
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(circle at 80% 20%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.06) 0%, transparent 45%);
+        radial-gradient(circle at 75% 20%, rgba(255, 255, 255, 0.7) 0%, transparent 50%),
+        radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.6) 0%, transparent 40%);
     pointer-events: none;
 }
 
@@ -4782,14 +4785,16 @@ img.fatal-error-mark {
     height: 52px;
     flex-shrink: 0;
     border-radius: 50%;
-    background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%);
-    color: #f8fafc;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+    color: #ffffff;
     display: grid;
     place-items: center;
     font-size: 22px;
     font-weight: 800;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4), 0 8px 20px rgba(0, 0, 0, 0.4);
+    border: 3px solid #ffffff;
+    box-shadow:
+        0 4px 14px rgba(37, 99, 235, 0.25),
+        0 0 0 1.5px rgba(191, 219, 254, 0.8);
 }
 
 .account-hero-info {
@@ -4802,17 +4807,17 @@ img.fatal-error-mark {
 .account-hero-name {
     font-size: 18px;
     font-weight: 800;
-    color: #ffffff;
+    color: #0f172a;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     letter-spacing: -0.01em;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 .account-hero-email {
     font-size: 12px;
-    color: rgba(241, 245, 249, 0.72);
+    color: #64748b;
+    font-weight: 500;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -4822,22 +4827,23 @@ img.fatal-error-mark {
     width: 38px;
     height: 38px;
     flex-shrink: 0;
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(226, 232, 240, 0.9);
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    color: #ffffff;
+    color: #334155;
     display: grid;
     place-items: center;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9);
     transition: all 180ms ease;
 }
 
 .account-hero-settings-btn:hover {
-    background: rgba(255, 255, 255, 0.18);
-    border-color: rgba(255, 255, 255, 0.35);
+    background: #ffffff;
+    color: #0f172a;
+    border-color: #cbd5e1;
     transform: rotate(30deg);
 }
 
@@ -4852,11 +4858,11 @@ img.fatal-error-mark {
     align-items: center;
     padding: 12px 6px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 6px 20px 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .account-metric-item {
@@ -4879,10 +4885,9 @@ img.fatal-error-mark {
 .account-metric-item b {
     font-size: 19px;
     font-weight: 800;
-    color: #ffffff;
+    color: #0f172a;
     position: relative;
     line-height: 1.2;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .account-metric-dot {
@@ -4893,12 +4898,12 @@ img.fatal-error-mark {
     right: -8px;
     border-radius: 50%;
     background: #ef4444;
-    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
 }
 
 .account-metric-item span {
     font-size: 11.5px;
-    color: rgba(241, 245, 249, 0.75);
+    color: #64748b;
     font-weight: 600;
     letter-spacing: 0.01em;
 }
@@ -4906,7 +4911,7 @@ img.fatal-error-mark {
 .account-metric-divider {
     width: 1px;
     height: 20px;
-    background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.18) 50%, transparent 100%);
+    background: #e2e8f0;
 }
 
 .account-hero-guest-card {
@@ -4916,6 +4921,7 @@ img.fatal-error-mark {
     display: flex;
     flex-direction: column;
     gap: 14px;
+    color: #0f172a;
 }
 
 .account-hero-brand {
@@ -4932,6 +4938,7 @@ img.fatal-error-mark {
     color: white;
     display: grid;
     place-items: center;
+    box-shadow: 0 2px 8px rgba(211, 60, 48, 0.25);
 }
 
 .account-hero-brand-mark svg {
@@ -4941,24 +4948,24 @@ img.fatal-error-mark {
 
 .account-hero-brand strong {
     font-size: 18px;
-    font-weight: var(--font-weight-bold);
-    color: #ffffff;
+    font-weight: 800;
+    color: #0f172a;
 }
 
 .account-hero-brand b {
     margin-left: -4px;
-    color: #60A5FA;
+    color: #2563eb;
     font-size: 18px;
     font-style: italic;
-    font-weight: var(--font-weight-bold);
+    font-weight: 800;
 }
 
 .guest-title,
 .account-hero-guest-body h1 {
     margin: 4px 0 0;
     font-size: 20px;
-    font-weight: var(--font-weight-bold);
-    color: #ffffff;
+    font-weight: 800;
+    color: #0f172a;
     line-height: 1.3;
 }
 
@@ -4966,7 +4973,7 @@ img.fatal-error-mark {
 .account-hero-guest-body p {
     margin: 2px 0 14px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.78);
+    color: #64748b;
     line-height: 1.4;
 }
 
@@ -4980,7 +4987,7 @@ img.fatal-error-mark {
     min-height: 42px;
     border-radius: 10px;
     font-size: 14px;
-    font-weight: var(--font-weight-semibold);
+    font-weight: 700;
     cursor: pointer;
     transition: all 180ms ease;
 }
@@ -4989,22 +4996,23 @@ img.fatal-error-mark {
     border: 0;
     background: var(--accent);
     color: white;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 4px 14px rgba(211, 60, 48, 0.28);
 }
 
 .account-hero-actions button:first-child:hover {
-    background: var(--accent-hover);
+    background: #b82f24;
 }
 
 .account-hero-actions button:last-child {
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(8px);
-    color: white;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
 }
 
 .account-hero-actions button:last-child:hover {
-    background: rgba(255, 255, 255, 0.22);
+    background: #f8fafc;
+    border-color: #94a3b8;
 }
 
 .account-page .account-section {
