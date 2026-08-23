@@ -2,7 +2,7 @@ import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigService, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
-import { adminApiExtensions } from './api-extensions';
+import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constants';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreProfile } from './entities/store-profile.entity';
@@ -27,6 +27,7 @@ import { StoreProvisioningResolver } from './store-provisioning.resolver';
 import { StoreProvisioningService } from './store-provisioning.service';
 import { StorefrontActivationInterceptor } from './storefront-activation.interceptor';
 import { StorefrontActivationService } from './storefront-activation.service';
+import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
 import { StorefrontPromotionPluginOptions } from './types';
 
 @VendurePlugin({
@@ -75,6 +76,10 @@ import { StorefrontPromotionPluginOptions } from './types';
             StoreCommerceSettingsResolver,
             StorefrontPromotionAdminResolver,
         ],
+    },
+    shopApiExtensions: {
+        schema: shopApiExtensions,
+        resolvers: [StorefrontBrandingShopResolver],
     },
     dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',

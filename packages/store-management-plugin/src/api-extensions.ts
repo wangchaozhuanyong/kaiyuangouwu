@@ -174,3 +174,14 @@ export const adminApiExtensions = gql`
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
     }
 `;
+
+export const shopApiExtensions = gql`
+    type StorefrontBranding {
+        logoUrl: String
+        name: String!
+    }
+
+    extend type Query {
+        storefrontBranding: StorefrontBranding!
+    }
+`;

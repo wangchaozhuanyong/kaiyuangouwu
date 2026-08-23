@@ -1,5 +1,20 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 
+const LOGO_URL_CACHE_KEY = '__storefront_logo_url__';
+
+/** Cache the logo URL so the error boundary can display it even after a render crash. */
+export function cacheLogoUrl(url: string | null): void {
+    try {
+        if (url) {
+            sessionStorage.setItem(LOGO_URL_CACHE_KEY, url);
+        } else {
+            sessionStorage.removeItem(LOGO_URL_CACHE_KEY);
+        }
+    } catch {
+        // Silently ignore storage errors.
+    }
+}
+
 interface StorefrontErrorBoundaryProps {
     children: ReactNode;
 }
@@ -28,11 +43,21 @@ export class StorefrontErrorBoundary extends Component<
         if (!this.state.failed) return this.props.children;
 
         const isZh = document.documentElement.lang.toLowerCase().startsWith('zh');
+        let cachedLogoUrl: string | null = null;
+        try {
+            cachedLogoUrl = sessionStorage.getItem(LOGO_URL_CACHE_KEY);
+        } catch {
+            // Ignore storage errors.
+        }
         return (
             <main className="fatal-error-page" role="alert">
-                <span className="fatal-error-mark" aria-hidden="true">
-                    桥
-                </span>
+                {cachedLogoUrl ? (
+                    <img className="fatal-error-mark" src={cachedLogoUrl} alt="" />
+                ) : (
+                    <span className="fatal-error-mark" aria-hidden="true">
+                        桥
+                    </span>
+                )}
                 <h1>{isZh ? '页面暂时无法显示' : 'This page could not be displayed'}</h1>
                 <p>
                     {isZh

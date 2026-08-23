@@ -412,6 +412,7 @@ export interface StorefrontConfig {
         code: string;
         name: string;
     }>;
+    logoUrl?: string | null;
     customFields: {
         storefrontNameZh?: string | null;
         storefrontNameEn?: string | null;

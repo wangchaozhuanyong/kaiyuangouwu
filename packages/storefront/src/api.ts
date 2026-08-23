@@ -370,8 +370,9 @@ export class ShopApi {
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
         const result = await this.request<{
-            activeChannel: Omit<StorefrontConfig, 'availableCountries'>;
+            activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl'>;
             availableCountries: StorefrontConfig['availableCountries'];
+            storefrontBranding: { logoUrl: string | null };
         }>(
             `
             query StorefrontConfig {
@@ -388,6 +389,9 @@ export class ShopApi {
                     code
                     name
                 }
+                storefrontBranding {
+                    logoUrl
+                }
             }
         `,
             undefined,
@@ -396,6 +400,7 @@ export class ShopApi {
         return {
             ...result.activeChannel,
             availableCountries: result.availableCountries,
+            logoUrl: result.storefrontBranding?.logoUrl ?? null,
         };
     }
 

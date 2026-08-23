@@ -97,6 +97,7 @@ import { ProductReviewsSection, ReviewCenterPage } from './review-pages';
 import { productDescriptionText, sanitizeProductDescription } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
+import { cacheLogoUrl } from './StorefrontErrorBoundary';
 import {
     ActiveCustomer,
     AfterSalesRequest,
@@ -263,6 +264,14 @@ function setMetaContent(selector: string, content: string): void {
     document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', content);
 }
 
+/** Renders the store logo image if available, otherwise falls back to the “桥” text mark. */
+function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
+    if (url) {
+        return <img className={className} src={url} alt={name} />;
+    }
+    return <span className={className}>桥</span>;
+}
+
 const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
     zh: '云桥Ai',
     en: 'Yunqiao Ai',
@@ -426,6 +435,7 @@ export function App() {
     const [storefrontNames, setStorefrontNames] =
         useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
     const [storefrontCode, setStorefrontCode] = useState('');
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
@@ -786,6 +796,7 @@ export function App() {
             zh: normalizeStorefrontName(config.customFields.storefrontNameZh, DEFAULT_STOREFRONT_NAMES.zh),
             en: normalizeStorefrontName(config.customFields.storefrontNameEn, DEFAULT_STOREFRONT_NAMES.en),
         });
+        setLogoUrl(config.logoUrl ?? null);
     }, [configQuery.data, market]);
 
     useEffect(() => {
@@ -1267,6 +1278,16 @@ export function App() {
     }, [isZh, route, selectedProduct, storefrontName]);
 
     useEffect(() => {
+        cacheLogoUrl(logoUrl);
+        if (!logoUrl) return;
+        const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+        if (link) {
+            link.href = logoUrl;
+            link.type = '';
+        }
+    }, [logoUrl]);
+
+    useEffect(() => {
         if (route.name !== 'product' || !selectedProduct || !storefrontCode) return;
         setRecentProductIds(current => {
             const next = [
@@ -1398,6 +1419,7 @@ export function App() {
                         locale={locale}
                         language={language}
                         storefrontName={storefrontName}
+                        logoUrl={logoUrl}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
                         onCategorySelect={collection => {
@@ -1412,6 +1434,7 @@ export function App() {
                         onAdd={variant => void addToCart(variant)}
                         onToggleLanguage={toggleLanguage}
                         onNotifications={() => navigate({ name: 'notifications' })}
+                        onToast={notify}
                         onContentTarget={openContentTarget}
                         onContentRetry={() => void contentQuery.refetch()}
                         onRetry={() => void refetchStorefront()}
@@ -1504,6 +1527,7 @@ export function App() {
                         locale={locale}
                         language={language}
                         storefrontName={storefrontName}
+                        logoUrl={logoUrl}
                         favoriteProductCount={favoriteProductIds.length}
                         recentProductCount={recentProductIds.length}
                         couponCount={cart?.checkoutOrder?.couponCodes.length ?? 0}
@@ -1535,6 +1559,7 @@ export function App() {
                         locale={locale}
                         language={language}
                         storefrontName={storefrontName}
+                        logoUrl={logoUrl}
                         addingVariantId={addingVariantId}
                         favorite={favoriteProductIds.includes(selectedProduct.id)}
                         onBack={goBack}
@@ -1908,6 +1933,7 @@ export function App() {
                         <LazyLoginPage
                             api={api}
                             language={language}
+                            logoUrl={logoUrl}
                             storefrontName={storefrontName}
                             legalContent={legalContent}
                             onBack={goBack}
@@ -1923,6 +1949,7 @@ export function App() {
                         <LazyRegisterPage
                             api={api}
                             language={language}
+                            logoUrl={logoUrl}
                             storefrontName={storefrontName}
                             legalContent={legalContent}
                             onBack={goBack}
@@ -1937,6 +1964,7 @@ export function App() {
                         <LazyVerifyAccountPage
                             api={api}
                             language={language}
+                            logoUrl={logoUrl}
                             storefrontName={storefrontName}
                             token={pageRoute.token}
                             onBack={goBack}
@@ -1951,6 +1979,7 @@ export function App() {
                         <LazyForgotPasswordPage
                             api={api}
                             language={language}
+                            logoUrl={logoUrl}
                             storefrontName={storefrontName}
                             onBack={goBack}
                             onNavigate={navigate}
@@ -1963,6 +1992,7 @@ export function App() {
                         <LazyResetPasswordPage
                             api={api}
                             language={language}
+                            logoUrl={logoUrl}
                             storefrontName={storefrontName}
                             token={pageRoute.token}
                             onBack={goBack}
@@ -2034,6 +2064,199 @@ export function App() {
     );
 }
 
+interface HomepageCouponItem {
+    id: string;
+    type: 'DISCOUNT' | 'CASH' | 'CATEGORY' | 'PRODUCT';
+    value: string;
+    unit: string;
+    titleZh: string;
+    titleEn: string;
+    descZh: string;
+    descEn: string;
+    theme: 'gold' | 'rose' | 'blue' | 'emerald';
+    tagZh: string;
+    tagEn: string;
+}
+
+const HOMEPAGE_MOCK_COUPONS: HomepageCouponItem[] = [
+    {
+        id: 'coupon-disc-85',
+        type: 'DISCOUNT',
+        value: '8.5',
+        unit: '折',
+        titleZh: '全场通用折扣券',
+        titleEn: 'Storewide 15% OFF',
+        descZh: '全场无门槛 · 结算立享85折',
+        descEn: 'No minimum · 15% off at checkout',
+        theme: 'gold',
+        tagZh: '全场通用',
+        tagEn: 'Storewide',
+    },
+    {
+        id: 'coupon-cash-30',
+        type: 'CASH',
+        value: '30',
+        unit: '¥',
+        titleZh: '大额满减抵扣券',
+        titleEn: 'Cash Voucher',
+        descZh: '满 ¥200 即可立减 ¥30',
+        descEn: '¥30 OFF on orders over ¥200',
+        theme: 'rose',
+        tagZh: '满减优惠',
+        tagEn: 'Voucher',
+    },
+    {
+        id: 'coupon-cat-apple',
+        type: 'CATEGORY',
+        value: '9',
+        unit: '折',
+        titleZh: 'Apple服务专享券',
+        titleEn: 'Apple Service Exclusive',
+        descZh: '仅限 Apple 认证生态服务',
+        descEn: 'Valid for Apple service items',
+        theme: 'blue',
+        tagZh: '分类专享',
+        tagEn: 'Category',
+    },
+    {
+        id: 'coupon-prod-ai',
+        type: 'PRODUCT',
+        value: '50',
+        unit: '¥',
+        titleZh: 'AI中转专享津贴',
+        titleEn: 'AI Bridge Allowance',
+        descZh: 'AI大模型中转服务专项立减',
+        descEn: 'Exclusive savings on AI services',
+        theme: 'emerald',
+        tagZh: '指定商品',
+        tagEn: 'Featured',
+    },
+];
+
+interface HomepageCouponHubProps {
+    language: StorefrontLanguage;
+    onNavigate: (route: RouteState) => void;
+    onToast?: (message: string) => void;
+}
+
+function HomepageCouponHub({ language, onNavigate, onToast }: HomepageCouponHubProps) {
+    const isZh = language === 'zh';
+    const [claimedIds, setClaimedIds] = useState<string[]>([]);
+
+    const handleClaim = (coupon: HomepageCouponItem) => {
+        if (claimedIds.includes(coupon.id)) return;
+        setClaimedIds(prev => [...prev, coupon.id]);
+        const title = isZh ? coupon.titleZh : coupon.titleEn;
+        const msg = isZh
+            ? `🎉 已成功领取「${title}」！结算时将自动为您抵扣`
+            : `🎉 Successfully claimed "${title}"! Applied at checkout.`;
+        if (onToast) {
+            onToast(msg);
+        }
+    };
+
+    return (
+        <section className="coupon-hub-section" aria-label={isZh ? '专享特惠与优惠券' : 'Exclusive Coupons'}>
+            <div className="coupon-hub-header">
+                <div className="coupon-hub-title-lockup">
+                    <span className="coupon-hub-icon-pill" aria-hidden="true">
+                        <TicketPercent size={15} />
+                    </span>
+                    <h2 className="coupon-hub-title">{isZh ? '专享特惠专区' : 'Exclusive Coupons'}</h2>
+                    <span className="coupon-hub-badge">{isZh ? '限量发放 · 下单立减' : 'Limited Time'}</span>
+                </div>
+                <button
+                    type="button"
+                    className="coupon-hub-more-btn"
+                    onClick={() => onNavigate({ name: 'coupons' })}
+                >
+                    <span>{isZh ? '全部优惠' : 'All Offers'}</span>
+                    <ChevronRight size={13} aria-hidden="true" />
+                </button>
+            </div>
+
+            <div className="coupon-hub-scroll" role="list">
+                {HOMEPAGE_MOCK_COUPONS.map(coupon => {
+                    const isClaimed = claimedIds.includes(coupon.id);
+                    const tag = isZh ? coupon.tagZh : coupon.tagEn;
+                    const desc = isZh ? coupon.descZh : coupon.descEn;
+                    const isDiscount = coupon.type === 'DISCOUNT' || coupon.type === 'CATEGORY';
+
+                    return (
+                        <div
+                            key={coupon.id}
+                            className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${isClaimed ? 'is-claimed' : ''}`}
+                            role="listitem"
+                        >
+                            <div className="coupon-ticket-main">
+                                <div className="coupon-ticket-top">
+                                    <span className="coupon-ticket-tag">{tag}</span>
+                                </div>
+                                <div className="coupon-ticket-value">
+                                    {isDiscount ? (
+                                        <>
+                                            <strong className="coupon-num">{coupon.value}</strong>
+                                            <small className="coupon-unit">{coupon.unit}</small>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <small className="coupon-unit">{coupon.unit}</small>
+                                            <strong className="coupon-num">{coupon.value}</strong>
+                                        </>
+                                    )}
+                                </div>
+                                <p className="coupon-ticket-desc">{desc}</p>
+                            </div>
+
+                            <div className="coupon-ticket-divider" aria-hidden="true">
+                                <span className="coupon-notch coupon-notch-top" />
+                                <span className="coupon-notch-line" />
+                                <span className="coupon-notch-bottom" />
+                            </div>
+
+                            <div className="coupon-ticket-action">
+                                <button
+                                    type="button"
+                                    className={`coupon-claim-btn ${isClaimed ? 'is-claimed' : ''}`}
+                                    onClick={() => handleClaim(coupon)}
+                                    disabled={isClaimed}
+                                    aria-label={
+                                        isClaimed
+                                            ? isZh
+                                                ? `已领取 ${coupon.titleZh}`
+                                                : `Claimed ${coupon.titleEn}`
+                                            : isZh
+                                              ? `领取 ${coupon.titleZh}`
+                                              : `Claim ${coupon.titleEn}`
+                                    }
+                                >
+                                    {isClaimed ? (
+                                        <span className="coupon-btn-text-wrap">
+                                            <Check size={12} strokeWidth={2.8} aria-hidden="true" />
+                                            <span>{isZh ? '已领' : 'Got'}</span>
+                                        </span>
+                                    ) : (
+                                        <span className="coupon-btn-text-wrap">
+                                            {isZh ? (
+                                                <>
+                                                    <span>立即</span>
+                                                    <span>领取</span>
+                                                </>
+                                            ) : (
+                                                <span>Claim</span>
+                                            )}
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </section>
+    );
+}
+
 interface HomePageProps {
     products: Product[];
     collections: CollectionSummary[];
@@ -2046,12 +2269,14 @@ interface HomePageProps {
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    logoUrl: string | null;
     addingVariantId: string | null;
     onNavigate: (route: RouteState) => void;
     onCategorySelect: (collection: CollectionSummary) => void;
     onAdd: (variant: ProductVariant) => void;
     onToggleLanguage: () => void;
     onNotifications: () => void;
+    onToast?: (message: string) => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onContentRetry: () => void;
     onRetry: () => void;
@@ -2070,12 +2295,14 @@ function HomePage(props: HomePageProps) {
         locale,
         language,
         storefrontName,
+        logoUrl,
         addingVariantId,
         onNavigate,
         onCategorySelect,
         onAdd,
         onToggleLanguage,
         onNotifications,
+        onToast,
         onContentTarget,
         onContentRetry,
         onRetry,
@@ -2248,11 +2475,7 @@ function HomePage(props: HomePageProps) {
                   return {
                       id: collection.id,
                       label: collection.name,
-                      icon: image ? (
-                          <SafeImage src={image} alt="" imageKind="thumbnail" />
-                      ) : (
-                          quickIcon(index)
-                      ),
+                      icon: image ? <SafeImage src={image} alt="" imageKind="thumbnail" /> : quickIcon(index),
                       onClick: () => onCategorySelect(collection),
                   };
               }),
@@ -2294,7 +2517,7 @@ function HomePage(props: HomePageProps) {
                     type="button"
                     onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 >
-                    <span className="brand-mark">桥</span>
+                    <BrandLogo url={logoUrl} name={storefrontName} className="brand-mark" />
                     <strong>{storefrontName}</strong>
                 </button>
                 <button
@@ -2478,19 +2701,9 @@ function HomePage(props: HomePageProps) {
                                 </button>
                             ))}
                         </nav>
-
-                        <div className="benefit-row">
-                            <TicketPercent aria-hidden="true" />
-                            <span>
-                                <small>{isZh ? '优惠自动计算' : 'Automatic savings'}</small>
-                                <strong>
-                                    {isZh
-                                        ? '可用优惠将在结算时自动抵扣'
-                                        : 'Eligible offers apply automatically at checkout'}
-                                </strong>
-                            </span>
-                        </div>
                     </div>
+
+                    <HomepageCouponHub language={language} onNavigate={onNavigate} onToast={onToast} />
 
                     {managedSections.map(block => (
                         <ManagedContentSection
@@ -3807,6 +4020,7 @@ interface AccountPageProps {
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    logoUrl: string | null;
     favoriteProductCount: number;
     recentProductCount: number;
     couponCount: number;
@@ -3825,6 +4039,7 @@ function AccountPage(props: AccountPageProps) {
         locale,
         language,
         storefrontName,
+        logoUrl,
         favoriteProductCount,
         recentProductCount,
         couponCount,
@@ -3911,7 +4126,11 @@ function AccountPage(props: AccountPageProps) {
                                 <Settings aria-hidden="true" />
                             </button>
                         </div>
-                        <div className="account-metrics-bar" role="group" aria-label={isZh ? '账户资产' : 'Account assets'}>
+                        <div
+                            className="account-metrics-bar"
+                            role="group"
+                            aria-label={isZh ? '账户资产' : 'Account assets'}
+                        >
                             <button
                                 type="button"
                                 className="account-metric-item"
@@ -3946,9 +4165,13 @@ function AccountPage(props: AccountPageProps) {
                 ) : (
                     <div className="account-hero-guest-card">
                         <div className="account-hero-brand" aria-label={storefrontName}>
-                            <span className="account-hero-brand-mark">
-                                <Cloud aria-hidden="true" />
-                            </span>
+                            {logoUrl ? (
+                                <img className="account-hero-brand-mark" src={logoUrl} alt={storefrontName} />
+                            ) : (
+                                <span className="account-hero-brand-mark">
+                                    <Cloud aria-hidden="true" />
+                                </span>
+                            )}
                             <strong>{storefrontName.replace(/ai$/i, '')}</strong>
                             {/ai$/i.test(storefrontName) && <b>{storefrontName.slice(-2)}</b>}
                         </div>
@@ -4066,6 +4289,38 @@ function AccountPage(props: AccountPageProps) {
                 <SectionHeader title={isZh ? '常用服务' : 'Services'} />
                 <div className="account-services-grid">
                     <ServiceButton
+                        icon={<Heart />}
+                        label={
+                            favoriteProductCount
+                                ? isZh
+                                    ? `收藏 ${favoriteProductCount}`
+                                    : `Favorites ${favoriteProductCount}`
+                                : isZh
+                                  ? '我的收藏'
+                                  : 'Favorites'
+                        }
+                        onClick={() => onNavigate({ name: 'favorites' })}
+                    />
+                    <ServiceButton
+                        icon={<TicketPercent />}
+                        label={isZh ? '优惠券' : 'Coupons'}
+                        badge={couponCount > 0 ? String(couponCount) : undefined}
+                        onClick={() => onNavigate({ name: 'coupons' })}
+                    />
+                    <ServiceButton
+                        icon={<Clock3 />}
+                        label={
+                            recentProductCount
+                                ? isZh
+                                    ? `足迹 ${recentProductCount}`
+                                    : `History ${recentProductCount}`
+                                : isZh
+                                  ? '浏览足迹'
+                                  : 'History'
+                        }
+                        onClick={() => onNavigate({ name: 'history' })}
+                    />
+                    <ServiceButton
                         icon={<MapPin />}
                         label={isZh ? '地址管理' : 'Addresses'}
                         onClick={() =>
@@ -4086,6 +4341,11 @@ function AccountPage(props: AccountPageProps) {
                         icon={<Headphones />}
                         label={isZh ? '客服中心' : 'Support'}
                         onClick={() => onNavigate({ name: 'support' })}
+                    />
+                    <ServiceButton
+                        icon={<Store />}
+                        label={isZh ? '店铺首页' : 'Store home'}
+                        onClick={() => onNavigate({ name: 'home' })}
                     />
                 </div>
             </section>
@@ -4734,6 +4994,7 @@ function ProductDetailPage({
     locale,
     language,
     storefrontName,
+    logoUrl,
     addingVariantId,
     favorite,
     onBack,
@@ -4751,6 +5012,7 @@ function ProductDetailPage({
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    logoUrl: string | null;
     addingVariantId: string | null;
     favorite: boolean;
     onBack: () => void;
@@ -4969,7 +5231,7 @@ function ProductDetailPage({
                     <strong>{isZh ? '店铺信息' : 'Store'}</strong>
                 </header>
                 <div>
-                    <span className="shop-mark">桥</span>
+                    <BrandLogo url={logoUrl} name={storefrontName} className="shop-mark" />
                     <span>
                         <strong>{storefrontName}</strong>
                         <small>{isZh ? '品质商品 · 安心售后' : 'Quality products · Reliable support'}</small>

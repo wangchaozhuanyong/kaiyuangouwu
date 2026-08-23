@@ -158,6 +158,7 @@ interface AuthPageBaseProps {
     api: ShopApi;
     language: StorefrontLanguage;
     storefrontName: string;
+    logoUrl?: string | null;
     onBack: () => void;
     onNavigate: (route: AuthRoute) => void;
 }
@@ -171,10 +172,16 @@ interface AuthCompletionProps {
     onSuccess: () => Promise<void>;
 }
 
+function formString(data: FormData, name: string): string {
+    const value = data.get(name);
+    return typeof value === 'string' ? value : '';
+}
+
 export function LoginPage({
     api,
     language,
     storefrontName,
+    logoUrl,
     legalContent,
     onBack,
     onSuccess,
@@ -190,7 +197,7 @@ export function LoginPage({
         setSubmitting(true);
         setError('');
         try {
-            await api.login(String(data.get('emailAddress')), String(data.get('password')));
+            await api.login(formString(data, 'emailAddress'), formString(data, 'password'));
             await onSuccess();
         } catch (requestError) {
             setError(loginErrorMessage(requestError, language));
@@ -200,7 +207,7 @@ export function LoginPage({
     };
 
     return (
-        <AuthLayout title={isZh ? '登录' : 'Sign in'} {...{ language, storefrontName, onBack }}>
+        <AuthLayout title={isZh ? '登录' : 'Sign in'} {...{ language, storefrontName, logoUrl, onBack }}>
             <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
             <p>{isZh ? '登录后查看订单、地址与售后进度' : 'Sign in to view orders, addresses and support'}</p>
             <form onSubmit={event => void submit(event)}>
@@ -252,6 +259,7 @@ export function RegisterPage({
     api,
     language,
     storefrontName,
+    logoUrl,
     legalContent,
     onBack,
     onNavigate,
@@ -273,16 +281,16 @@ export function RegisterPage({
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
-        const fullName = String(data.get('fullName')).trim();
+        const fullName = formString(data, 'fullName').trim();
         const { firstName, lastName } = splitCustomerName(fullName, language);
         if (!firstName || !lastName) {
             setError(isZh ? '请输入完整姓名' : 'Enter your full name');
             return;
         }
-        const password = String(data.get('password'));
+        const password = formString(data, 'password');
         const passwordError = validateAccountPassword(
             password,
-            String(data.get('confirmPassword')),
+            formString(data, 'confirmPassword'),
             language,
         );
         if (passwordError) {
@@ -292,7 +300,7 @@ export function RegisterPage({
         setSubmitting(true);
         setError('');
         try {
-            const emailAddress = String(data.get('emailAddress')).trim();
+            const emailAddress = formString(data, 'emailAddress').trim();
             await api.registerCustomerAccount({
                 emailAddress,
                 firstName,
@@ -331,7 +339,10 @@ export function RegisterPage({
     };
 
     return (
-        <AuthLayout title={isZh ? '注册' : 'Create account'} {...{ language, storefrontName, onBack }}>
+        <AuthLayout
+            title={isZh ? '注册' : 'Create account'}
+            {...{ language, storefrontName, logoUrl, onBack }}
+        >
             {registeredEmail ? (
                 <AuthResult
                     icon={<CircleCheck />}
@@ -464,6 +475,7 @@ export function VerifyAccountPage({
     api,
     language,
     storefrontName,
+    logoUrl,
     token,
     onBack,
     onSuccess,
@@ -483,7 +495,7 @@ export function VerifyAccountPage({
         setResendError('');
         setResendMessage('');
         try {
-            await api.refreshCustomerVerification(String(data.get('emailAddress')).trim());
+            await api.refreshCustomerVerification(formString(data, 'emailAddress').trim());
             setResendMessage(
                 isZh
                     ? '如果该邮箱仍待验证，新的验证邮件将很快送达'
@@ -522,7 +534,10 @@ export function VerifyAccountPage({
     }, [api, isZh, onSuccess, token]);
 
     return (
-        <AuthLayout title={isZh ? '验证邮箱' : 'Verify email'} {...{ language, storefrontName, onBack }}>
+        <AuthLayout
+            title={isZh ? '验证邮箱' : 'Verify email'}
+            {...{ language, storefrontName, logoUrl, onBack }}
+        >
             <AuthResult
                 icon={error ? <CircleAlert /> : <Fingerprint />}
                 title={
@@ -579,7 +594,14 @@ export function VerifyAccountPage({
     );
 }
 
-export function ForgotPasswordPage({ api, language, storefrontName, onBack, onNavigate }: AuthPageBaseProps) {
+export function ForgotPasswordPage({
+    api,
+    language,
+    storefrontName,
+    logoUrl,
+    onBack,
+    onNavigate,
+}: AuthPageBaseProps) {
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [requested, setRequested] = useState(false);
@@ -590,7 +612,7 @@ export function ForgotPasswordPage({ api, language, storefrontName, onBack, onNa
         setSubmitting(true);
         setError('');
         try {
-            await api.requestPasswordReset(String(data.get('emailAddress')).trim());
+            await api.requestPasswordReset(formString(data, 'emailAddress').trim());
             setRequested(true);
         } catch (requestError) {
             setError(
@@ -606,7 +628,10 @@ export function ForgotPasswordPage({ api, language, storefrontName, onBack, onNa
     };
 
     return (
-        <AuthLayout title={isZh ? '忘记密码' : 'Forgot password'} {...{ language, storefrontName, onBack }}>
+        <AuthLayout
+            title={isZh ? '忘记密码' : 'Forgot password'}
+            {...{ language, storefrontName, logoUrl, onBack }}
+        >
             {requested ? (
                 <AuthResult
                     icon={<CircleCheck />}
@@ -662,6 +687,7 @@ export function ResetPasswordPage({
     api,
     language,
     storefrontName,
+    logoUrl,
     token,
     onBack,
     onSuccess,
@@ -676,10 +702,10 @@ export function ResetPasswordPage({
         event.preventDefault();
         if (!token) return;
         const data = new FormData(event.currentTarget);
-        const password = String(data.get('password'));
+        const password = formString(data, 'password');
         const passwordError = validateAccountPassword(
             password,
-            String(data.get('confirmPassword')),
+            formString(data, 'confirmPassword'),
             language,
         );
         if (passwordError) {
@@ -705,7 +731,10 @@ export function ResetPasswordPage({
     };
 
     return (
-        <AuthLayout title={isZh ? '重置密码' : 'Reset password'} {...{ language, storefrontName, onBack }}>
+        <AuthLayout
+            title={isZh ? '重置密码' : 'Reset password'}
+            {...{ language, storefrontName, logoUrl, onBack }}
+        >
             <h1>{isZh ? '设置新密码' : 'Choose a new password'}</h1>
             <p>{isZh ? '新密码将立即用于登录' : 'Your new password will be active immediately'}</p>
             {token ? (
@@ -766,12 +795,14 @@ function AuthLayout({
     title,
     language,
     storefrontName,
+    logoUrl,
     onBack,
     children,
 }: {
     title: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    logoUrl?: string | null;
     onBack: () => void;
     children: ReactNode;
 }) {
@@ -799,9 +830,13 @@ function AuthLayout({
                 </button>
                 <div className="auth-brand-lockup">
                     <div className="auth-brand-main">
-                        <span className="auth-brand-mark" aria-hidden="true">
-                            桥
-                        </span>
+                        {logoUrl ? (
+                            <img className="auth-brand-mark" src={logoUrl} alt={storefrontName} />
+                        ) : (
+                            <span className="auth-brand-mark" aria-hidden="true">
+                                桥
+                            </span>
+                        )}
                         <strong>{storefrontName}</strong>
                     </div>
                     <small>

@@ -780,6 +780,15 @@ img {
     box-shadow: 0 5px 13px rgba(207, 67, 57, 0.2);
 }
 
+img.brand-mark,
+img.auth-brand-mark,
+img.account-hero-brand-mark,
+img.shop-mark,
+img.fatal-error-mark {
+    object-fit: contain;
+    background: #ffffff;
+}
+
 .brand strong {
     flex: none;
     font-size: 15px;
@@ -1105,25 +1114,297 @@ img {
     -webkit-line-clamp: 2;
 }
 
-.benefit-row {
-    width: calc(100% - 20px);
-    min-height: 60px;
-    margin: 9px 10px 0;
-    padding: 8px 11px;
-    border: 1px solid #f0d5d1;
-    border-radius: 8px;
-    background: var(--accent-soft);
-    color: #8c3a33;
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr);
-    align-items: center;
-    gap: 9px;
-    text-align: left;
+/* Coupon Hub Promotion Section */
+.coupon-hub-section {
+    margin: 10px 0 4px;
+    padding: 14px 12px 14px;
+    background: var(--paper);
+    border-radius: 12px;
 }
 
-.benefit-row span small,
-.benefit-row span strong {
-    display: block;
+.coupon-hub-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px 10px;
+}
+
+.coupon-hub-title-lockup {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.coupon-hub-icon-pill {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #ffefe6 0%, #ffe4d6 100%);
+    color: #e0522d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.coupon-hub-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--ink);
+    letter-spacing: -0.01em;
+}
+
+.coupon-hub-badge {
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: var(--font-weight-medium);
+    border-radius: 999px;
+    background: #fff3ea;
+    color: #cc4e22;
+    border: 1px solid rgba(224, 82, 45, 0.18);
+}
+
+.coupon-hub-more-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    border: 0;
+    background: transparent;
+    font-size: 12px;
+    color: var(--muted);
+    transition: color 150ms ease;
+    cursor: pointer;
+}
+
+.coupon-hub-more-btn:hover {
+    color: var(--ink);
+}
+
+.coupon-hub-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    padding: 2px 4px 6px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.coupon-hub-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* Coupon Ticket Card */
+.coupon-ticket-card {
+    flex: 0 0 calc(70% - 10px);
+    min-width: 220px;
+    max-width: 260px;
+    height: 84px;
+    border-radius: 10px;
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    scroll-snap-align: start;
+    transition: transform 180ms ease, box-shadow 180ms ease, opacity 200ms ease;
+}
+
+.coupon-ticket-card:active {
+    transform: scale(0.985);
+}
+
+.coupon-ticket-card.is-claimed {
+    opacity: 0.82;
+    box-shadow: none;
+}
+
+/* Theme variations */
+.coupon-ticket-gold {
+    background: linear-gradient(135deg, #fff9f0 0%, #fff2e0 100%);
+    border: 1px solid #f9e2bf;
+    color: #8c5311;
+}
+
+.coupon-ticket-rose {
+    background: linear-gradient(135deg, #fff3f5 0%, #ffe6eb 100%);
+    border: 1px solid #f8cad4;
+    color: #9d2b48;
+}
+
+.coupon-ticket-blue {
+    background: linear-gradient(135deg, #f0f7ff 0%, #e1effe 100%);
+    border: 1px solid #c8e1fd;
+    color: #1a5ea6;
+}
+
+.coupon-ticket-emerald {
+    background: linear-gradient(135deg, #f0faf5 0%, #ddf4e8 100%);
+    border: 1px solid #bce6d1;
+    color: #176e48;
+}
+
+/* Main content */
+.coupon-ticket-main {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.coupon-ticket-top {
+    display: flex;
+    align-items: center;
+}
+
+.coupon-ticket-tag {
+    font-size: 10.5px;
+    font-weight: var(--font-weight-semibold);
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.06);
+    line-height: 1.3;
+}
+
+.coupon-ticket-value {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    line-height: 1;
+    margin: 2px 0 1px;
+}
+
+.coupon-ticket-value .coupon-num {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-family: var(--font-number, system-ui, -apple-system, sans-serif);
+}
+
+.coupon-ticket-value .coupon-unit {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.coupon-ticket-desc {
+    margin: 0;
+    font-size: 10.5px;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+/* Perforated Divider & Notches */
+.coupon-ticket-divider {
+    width: 1px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.coupon-notch-line {
+    width: 0;
+    height: 60%;
+    border-left: 1.5px dashed currentColor;
+    opacity: 0.35;
+}
+
+.coupon-notch {
+    position: absolute;
+    width: 12px;
+    height: 6px;
+    background: var(--paper);
+    border: 1px solid inherit;
+    z-index: 1;
+}
+
+.coupon-notch-top {
+    top: -1px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    border-top: 0;
+}
+
+.coupon-notch-bottom {
+    bottom: -1px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom: 0;
+}
+
+/* Action Button */
+.coupon-ticket-action {
+    width: 60px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 8px 8px 4px;
+}
+
+.coupon-claim-btn {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 8px;
+    background: currentColor;
+    color: white !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 150ms ease, opacity 180ms ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    padding: 4px 2px;
+}
+
+.coupon-btn-text-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    font-size: 11.5px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+    letter-spacing: 0.5px;
+}
+
+.coupon-btn-text-wrap span {
+    color: white !important;
+}
+
+.coupon-ticket-gold .coupon-claim-btn {
+    background: #a36116;
+}
+
+.coupon-ticket-rose .coupon-claim-btn {
+    background: #b53254;
+}
+
+.coupon-ticket-blue .coupon-claim-btn {
+    background: #206ec1;
+}
+
+.coupon-ticket-emerald .coupon-claim-btn {
+    background: #1b7a51;
+}
+
+.coupon-claim-btn:active {
+    transform: scale(0.92);
+}
+
+.coupon-claim-btn.is-claimed {
+    background: #71807b !important;
+    cursor: default;
+    box-shadow: none;
+    opacity: 0.85;
 }
 
 .content-warning {
@@ -3743,17 +4024,17 @@ img {
 }
 
 .account-identity-hero {
-    margin: 12px 12px 0;
-    border-radius: 16px;
-    background: linear-gradient(145deg, #ffffff 0%, #f0f4f9 100%);
-    border: 1px solid rgba(226, 232, 240, 0.85);
-    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
-    color: var(--text);
+    margin: 0;
+    border-radius: 0 0 24px 24px;
+    background: linear-gradient(135deg, #09122C 0%, #152238 50%, #1E3E62 100%);
+    box-shadow: 0 10px 28px -4px rgba(9, 18, 44, 0.25);
+    color: white;
     overflow: hidden;
+    position: relative;
 }
 
 .account-hero-customer-card {
-    padding: 18px 16px 14px;
+    padding: 24px 16px 16px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -3785,13 +4066,13 @@ img {
     height: 52px;
     flex-shrink: 0;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent) 0%, #1e40af 100%);
-    color: white;
+    background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+    color: #ffffff;
     display: grid;
     place-items: center;
     font-size: 22px;
     font-weight: var(--font-weight-bold);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .account-hero-info {
@@ -3802,17 +4083,18 @@ img {
 }
 
 .account-hero-name {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: var(--font-weight-bold);
-    color: var(--text);
+    color: #ffffff;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .account-hero-email {
     font-size: 12px;
-    color: var(--muted);
+    color: rgba(255, 255, 255, 0.72);
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -3822,10 +4104,11 @@ img {
     width: 38px;
     height: 38px;
     flex-shrink: 0;
-    border: 1px solid var(--line);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 50%;
-    background: white;
-    color: var(--muted);
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    color: #ffffff;
     display: grid;
     place-items: center;
     cursor: pointer;
@@ -3833,8 +4116,8 @@ img {
 }
 
 .account-hero-settings-btn:hover {
-    color: var(--text);
-    border-color: var(--text);
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.4);
     transform: rotate(30deg);
 }
 
@@ -3847,8 +4130,11 @@ img {
     display: grid;
     grid-template-columns: 1fr auto 1fr auto 1fr;
     align-items: center;
-    padding: 12px 6px 4px;
-    border-top: 1px solid rgba(226, 232, 240, 0.7);
+    padding: 12px 6px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
 }
 
 .account-metric-item {
@@ -3869,9 +4155,9 @@ img {
 }
 
 .account-metric-item b {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: var(--font-weight-bold);
-    color: var(--text);
+    color: #ffffff;
     position: relative;
     line-height: 1.2;
 }
@@ -3883,26 +4169,27 @@ img {
     top: -2px;
     right: -8px;
     border-radius: 50%;
-    background: var(--danger);
+    background: #EF4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
 }
 
 .account-metric-item span {
     font-size: 12px;
-    color: var(--muted);
+    color: rgba(255, 255, 255, 0.8);
     font-weight: var(--font-weight-medium);
 }
 
 .account-metric-divider {
     width: 1px;
     height: 22px;
-    background: rgba(203, 213, 225, 0.7);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .account-hero-guest-card {
-    padding: 22px 18px;
+    padding: 26px 18px 20px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .account-hero-brand {
@@ -3912,8 +4199,8 @@ img {
 }
 
 .account-hero-brand-mark {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
     background: var(--accent);
     color: white;
@@ -3922,20 +4209,20 @@ img {
 }
 
 .account-hero-brand-mark svg {
-    width: 18px;
-    height: 18px;
+    width: 19px;
+    height: 19px;
 }
 
 .account-hero-brand strong {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: var(--font-weight-bold);
-    color: var(--text);
+    color: #ffffff;
 }
 
 .account-hero-brand b {
     margin-left: -4px;
-    color: var(--accent);
-    font-size: 17px;
+    color: #60A5FA;
+    font-size: 18px;
     font-style: italic;
     font-weight: var(--font-weight-bold);
 }
@@ -3943,17 +4230,17 @@ img {
 .guest-title,
 .account-hero-guest-body h1 {
     margin: 4px 0 0;
-    font-size: 19px;
+    font-size: 20px;
     font-weight: var(--font-weight-bold);
-    color: var(--text);
+    color: #ffffff;
     line-height: 1.3;
 }
 
 .guest-subtitle,
 .account-hero-guest-body p {
-    margin: 2px 0 12px;
+    margin: 2px 0 14px;
     font-size: 13px;
-    color: var(--muted);
+    color: rgba(255, 255, 255, 0.78);
     line-height: 1.4;
 }
 
@@ -3976,7 +4263,7 @@ img {
     border: 0;
     background: var(--accent);
     color: white;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
 }
 
 .account-hero-actions button:first-child:hover {
@@ -3984,13 +4271,14 @@ img {
 }
 
 .account-hero-actions button:last-child {
-    border: 1px solid var(--line);
-    background: white;
-    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    color: white;
 }
 
 .account-hero-actions button:last-child:hover {
-    background: var(--soft);
+    background: rgba(255, 255, 255, 0.22);
 }
 
 .account-page .account-section {
@@ -4003,11 +4291,59 @@ img {
 }
 
 .account-page > .order-shortcuts {
-    margin-top: 12px;
+    margin-top: 14px;
+}
+
+.account-page .order-shortcuts .section-header,
+.account-page .recent-purchases .section-header {
+    min-height: auto;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.account-page .order-shortcuts .section-header > div,
+.account-page .recent-purchases .section-header > div {
+    display: flex;
+    align-items: center;
+}
+
+.account-page .order-shortcuts .section-header h2,
+.account-page .recent-purchases .section-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+}
+
+.account-page .order-shortcuts .section-header > button,
+.account-page .recent-purchases .section-header > button {
+    min-height: auto;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 13px;
+    line-height: 1.2;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 160ms ease;
+}
+
+.account-page .order-shortcuts .section-header > button:hover,
+.account-page .recent-purchases .section-header > button:hover {
+    color: var(--accent);
+}
+
+.account-page .order-shortcuts .section-header > button svg,
+.account-page .recent-purchases .section-header > button svg {
+    width: 15px;
+    height: 15px;
 }
 
 .account-page > .order-shortcuts nav {
-    margin-top: 8px;
+    margin-top: 6px;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
@@ -4184,12 +4520,12 @@ img {
     margin-top: 10px;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 12px 6px;
 }
 
 .account-services-grid button {
     min-width: 0;
-    min-height: 64px;
+    min-height: 66px;
     padding: 6px 2px;
     border: 0;
     background: transparent;
@@ -4208,10 +4544,10 @@ img {
 }
 
 .account-services-grid button > span {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     position: relative;
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--soft);
     color: var(--text);
     display: grid;
@@ -4227,6 +4563,25 @@ img {
 .account-services-grid button > span svg {
     width: 20px;
     height: 20px;
+}
+
+.account-services-grid button > span em {
+    min-width: 20px;
+    height: 16px;
+    padding: 0 4px;
+    position: absolute;
+    top: -5px;
+    right: -8px;
+    border: 1.5px solid white;
+    border-radius: 999px;
+    background: var(--accent);
+    color: white;
+    font-size: 9px;
+    font-weight: 600;
+    font-style: normal;
+    line-height: 13px;
+    display: grid;
+    place-items: center;
 }
 
 .account-services-grid button b {
@@ -9082,18 +9437,18 @@ img {
         text-overflow: clip;
     }
 
-    .home-intro-grid .benefit-row {
+    .coupon-hub-section {
         width: 100%;
-        min-height: 112px;
-        margin: 0;
-        padding: 18px;
+        margin-top: 18px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
     }
 
-    .home-intro-grid .benefit-row strong {
-        overflow: visible;
-        line-height: 1.4;
-        white-space: normal;
-        text-overflow: clip;
+    .coupon-ticket-card {
+        flex: 0 0 calc(25% - 8px);
+        min-width: 0;
+        max-width: none;
+        height: 88px;
     }
 
     .content-section,
