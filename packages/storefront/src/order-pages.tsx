@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     ArrowLeft,
+    Boxes,
     ChevronRight,
     CircleAlert,
     CircleCheck,
@@ -9,8 +10,11 @@ import {
     Navigation,
     Package,
     PackageCheck,
+    Radio,
     RotateCcw,
     Search,
+    ShieldCheck,
+    Sparkles,
     Store,
     Truck,
     UserRound,
@@ -391,29 +395,100 @@ export function LogisticsPage({
                     ? '物流信息加载失败'
                     : 'Could not load delivery updates'
                 : '';
-    const filters: Array<{ id: LogisticsFilter; label: string }> = [
-        { id: 'all', label: isZh ? '全部' : 'All' },
-        { id: 'transit', label: isZh ? '运输中' : 'In transit' },
-        { id: 'preparing', label: isZh ? '待发货' : 'Preparing' },
-        { id: 'delivered', label: isZh ? '已签收' : 'Delivered' },
-    ];
+    const counts = {
+        all: logisticsOrders.length,
+        transit: logisticsOrders.filter(o => logisticsStatusForOrder(o) === 'transit').length,
+        preparing: logisticsOrders.filter(o => logisticsStatusForOrder(o) === 'preparing').length,
+        delivered: logisticsOrders.filter(o => logisticsStatusForOrder(o) === 'delivered').length,
+    };
 
     return (
         <main className="page subpage logistics-page">
             <SubHeader title={isZh ? '物流动态' : 'Delivery updates'} language={language} onBack={onBack} />
-            <nav className="logistics-tabs" aria-label={isZh ? '物流状态筛选' : 'Filter delivery status'}>
-                {filters.map(item => (
+
+            {/* 1. 模块化物流状态仪表盘 */}
+            <div className="logistics-modular-hub">
+                <nav
+                    className="logistics-stats-grid"
+                    aria-label={isZh ? '物流状态筛选' : 'Filter delivery status'}
+                >
                     <button
                         type="button"
-                        key={item.id}
-                        className={filter === item.id ? 'is-active' : undefined}
-                        aria-pressed={filter === item.id}
-                        onClick={() => setFilter(item.id)}
+                        className={`logistics-stat-card ${filter === 'all' ? 'is-active' : ''}`}
+                        aria-pressed={filter === 'all'}
+                        onClick={() => setFilter('all')}
                     >
-                        {item.label}
+                        <div className="stat-card-top">
+                            <span className="stat-card-icon icon-all">
+                                <Boxes size={18} />
+                            </span>
+                            <span className="stat-card-count">{counts.all}</span>
+                        </div>
+                        <span className="stat-card-label">{isZh ? '全部包裹' : 'All'}</span>
                     </button>
-                ))}
-            </nav>
+
+                    <button
+                        type="button"
+                        className={`logistics-stat-card ${filter === 'transit' ? 'is-active' : ''}`}
+                        aria-pressed={filter === 'transit'}
+                        onClick={() => setFilter('transit')}
+                    >
+                        <div className="stat-card-top">
+                            <span className="stat-card-icon icon-transit">
+                                <Truck size={18} />
+                            </span>
+                            <span className="stat-card-count">{counts.transit}</span>
+                        </div>
+                        <span className="stat-card-label">{isZh ? '运输中' : 'In transit'}</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        className={`logistics-stat-card ${filter === 'preparing' ? 'is-active' : ''}`}
+                        aria-pressed={filter === 'preparing'}
+                        onClick={() => setFilter('preparing')}
+                    >
+                        <div className="stat-card-top">
+                            <span className="stat-card-icon icon-preparing">
+                                <Clock3 size={18} />
+                            </span>
+                            <span className="stat-card-count">{counts.preparing}</span>
+                        </div>
+                        <span className="stat-card-label">{isZh ? '待发货' : 'Preparing'}</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        className={`logistics-stat-card ${filter === 'delivered' ? 'is-active' : ''}`}
+                        aria-pressed={filter === 'delivered'}
+                        onClick={() => setFilter('delivered')}
+                    >
+                        <div className="stat-card-top">
+                            <span className="stat-card-icon icon-delivered">
+                                <PackageCheck size={18} />
+                            </span>
+                            <span className="stat-card-count">{counts.delivered}</span>
+                        </div>
+                        <span className="stat-card-label">{isZh ? '已签收' : 'Delivered'}</span>
+                    </button>
+                </nav>
+
+                {/* 2. 物流官方服务保障微条 */}
+                <div className="logistics-service-strip" aria-hidden="true">
+                    <div className="service-strip-item">
+                        <ShieldCheck size={13} />
+                        <span>{isZh ? '正品极速配送' : 'Fast Delivery'}</span>
+                    </div>
+                    <div className="service-strip-item">
+                        <Radio size={13} />
+                        <span>{isZh ? '实时路由追踪' : 'Live Tracking'}</span>
+                    </div>
+                    <div className="service-strip-item">
+                        <Sparkles size={13} />
+                        <span>{isZh ? '丢损必赔保障' : 'Guaranteed'}</span>
+                    </div>
+                </div>
+            </div>
             {!customer ? (
                 <EmptyState
                     icon={<UserRound />}
