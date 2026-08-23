@@ -194,10 +194,10 @@ pm2 save
 
 ```bash
 PREVIOUS_RUNTIME="$(readlink -f /var/www/kaiyuangouwu-current 2>/dev/null || true)"
-ln -s "${CANDIDATE}" /var/www/.kaiyuangouwu-current.new
-mv -Tf /var/www/.kaiyuangouwu-current.new /var/www/kaiyuangouwu-current
-nginx -t
-systemctl reload nginx
+sudo -n ln -s "${CANDIDATE}" /var/www/.kaiyuangouwu-current.new
+sudo -n mv -Tf /var/www/.kaiyuangouwu-current.new /var/www/kaiyuangouwu-current
+sudo -n nginx -t
+sudo -n systemctl reload nginx
 ```
 
 `PREVIOUS_RUNTIME` 只能是上一个已通过验收的发布目录，并必须写入当次发布记录。切换失败时，调用 `switch-production-runtime.sh "${PREVIOUS_RUNTIME}"` 重建上一版本的进程定义，执行 `pm2 save`，再原子恢复稳定指针；不重新安装依赖，不删除数据库、上传资产或 `.env`。
