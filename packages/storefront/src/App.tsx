@@ -2113,7 +2113,7 @@ function HomePage(props: HomePageProps) {
             ? products.find(product => product.id === managedHero.targetValue)
             : undefined;
     const heroFallbackImage = productImage(managedHeroProduct ?? hero) ?? '/storefront/default-hero.jpg';
-    const quickCollections = collections.slice(0, 3);
+    const quickCollections = (collections.length ? collections : fallbackCollections(isZh)).slice(0, 5);
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -2243,12 +2243,19 @@ function HomePage(props: HomePageProps) {
               onClick: () => onContentTarget(item.targetType, item.targetValue),
           }))
         : [
-              ...quickCollections.map((collection, index) => ({
-                  id: collection.id,
-                  label: collection.name,
-                  icon: quickIcon(index),
-                  onClick: () => onCategorySelect(collection),
-              })),
+              ...quickCollections.map((collection, index) => {
+                  const image = collectionImage(collection);
+                  return {
+                      id: collection.id,
+                      label: collection.name,
+                      icon: image ? (
+                          <SafeImage src={image} alt="" imageKind="thumbnail" />
+                      ) : (
+                          quickIcon(index)
+                      ),
+                      onClick: () => onCategorySelect(collection),
+                  };
+              }),
               {
                   id: 'all-products',
                   label: isZh ? '全部商品' : 'All products',
@@ -3876,61 +3883,103 @@ function AccountPage(props: AccountPageProps) {
                 className={`account-identity-hero${customer ? ' is-authenticated' : ' is-guest'}`}
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
-                <div className="account-hero-brand" aria-label={storefrontName}>
-                    <span className="account-hero-brand-mark">
-                        <Cloud aria-hidden="true" />
-                    </span>
-                    <strong>{storefrontName.replace(/ai$/i, '')}</strong>
-                    {/ai$/i.test(storefrontName) && <b>{storefrontName.slice(-2)}</b>}
-                </div>
                 {customer ? (
-                    <div className="account-hero-customer">
-                        <button
-                            className="account-hero-customer-summary"
-                            type="button"
-                            onClick={() => onNavigate({ name: 'account-security' })}
-                        >
-                            <span className="account-hero-avatar">
-                                {customerName.slice(0, 1).toUpperCase()}
-                            </span>
-                            <span>
-                                <strong>{isZh ? `${customerName}，你好` : `Hello, ${customerName}`}</strong>
-                                <small>{isZh ? '普通会员' : 'Member'}</small>
-                                <em>{customer.emailAddress}</em>
-                            </span>
-                        </button>
-                        <div className="account-hero-manage">
-                            <button type="button" onClick={() => onNavigate({ name: 'account-security' })}>
+                    <div className="account-hero-customer-card">
+                        <div className="account-hero-profile-row">
+                            <button
+                                className="account-hero-customer-summary"
+                                type="button"
+                                onClick={() => onNavigate({ name: 'account-security' })}
+                            >
+                                <span className="account-hero-avatar">
+                                    {customerName.slice(0, 1).toUpperCase()}
+                                </span>
+                                <span className="account-hero-info">
+                                    <strong className="account-hero-name">
+                                        {isZh ? `${customerName}，你好` : `Hello, ${customerName}`}
+                                    </strong>
+                                    <span className="account-hero-email">{customer.emailAddress}</span>
+                                </span>
+                            </button>
+                            <button
+                                className="account-hero-settings-btn"
+                                type="button"
+                                title={isZh ? '账户与安全' : 'Account and security'}
+                                aria-label={isZh ? '账户与安全' : 'Account and security'}
+                                onClick={() => onNavigate({ name: 'account-security' })}
+                            >
                                 <Settings aria-hidden="true" />
-                                {isZh ? '管理账户' : 'Manage account'}
+                            </button>
+                        </div>
+                        <div className="account-metrics-bar" role="group" aria-label={isZh ? '账户资产' : 'Account assets'}>
+                            <button
+                                type="button"
+                                className="account-metric-item"
+                                onClick={() => onNavigate({ name: 'favorites' })}
+                            >
+                                <b>{favoriteProductCount}</b>
+                                <span>{isZh ? '我的收藏' : 'Favorites'}</span>
+                            </button>
+                            <span className="account-metric-divider" aria-hidden="true" />
+                            <button
+                                type="button"
+                                className="account-metric-item"
+                                onClick={() => onNavigate({ name: 'coupons' })}
+                            >
+                                <b>
+                                    {couponCount}
+                                    {couponCount > 0 && <span className="account-metric-dot" />}
+                                </b>
+                                <span>{isZh ? '优惠券' : 'Coupons'}</span>
+                            </button>
+                            <span className="account-metric-divider" aria-hidden="true" />
+                            <button
+                                type="button"
+                                className="account-metric-item"
+                                onClick={() => onNavigate({ name: 'history' })}
+                            >
+                                <b>{recentProductCount}</b>
+                                <span>{isZh ? '浏览足迹' : 'History'}</span>
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="account-hero-guest">
-                        <div>
+                    <div className="account-hero-guest-card">
+                        <div className="account-hero-brand" aria-label={storefrontName}>
+                            <span className="account-hero-brand-mark">
+                                <Cloud aria-hidden="true" />
+                            </span>
+                            <strong>{storefrontName.replace(/ai$/i, '')}</strong>
+                            {/ai$/i.test(storefrontName) && <b>{storefrontName.slice(-2)}</b>}
+                        </div>
+                        <div className="account-hero-guest-body">
                             <h1 id="guest-account-title">
-                                {isZh ? `登录${storefrontName}账户` : `Sign in to ${storefrontName}`}
+                                {isZh ? `欢迎来到 ${storefrontName}` : `Welcome to ${storefrontName}`}
                             </h1>
                             <p>
                                 {isZh
-                                    ? '连接订单、服务与智能体验'
-                                    : 'Connect orders, services and intelligent experiences'}
+                                    ? '登录后可查看订单物流、管理收货地址与专享优惠'
+                                    : 'Sign in to manage orders, addresses and benefits'}
                             </p>
-                        </div>
-                        <div className="account-hero-actions">
-                            <button type="button" onClick={() => onNavigate({ name: 'login' })}>
-                                {isZh ? '登录' : 'Sign in'}
-                            </button>
-                            <button type="button" onClick={() => onNavigate({ name: 'register' })}>
-                                {isZh ? '注册账户' : 'Create account'}
-                            </button>
+                            <div className="account-hero-actions">
+                                <button type="button" onClick={() => onNavigate({ name: 'login' })}>
+                                    {isZh ? '立即登录' : 'Sign in'}
+                                </button>
+                                <button type="button" onClick={() => onNavigate({ name: 'register' })}>
+                                    {isZh ? '注册账户' : 'Create account'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
             </section>
 
             <section className="account-section order-shortcuts">
+                <SectionHeader
+                    title={isZh ? '我的订单' : 'My orders'}
+                    action={isZh ? '全部订单' : 'All orders'}
+                    onAction={() => onNavigate({ name: 'orders', tab: 'all' })}
+                />
                 <nav>
                     <AccountShortcut
                         icon={<WalletCards />}
@@ -4014,20 +4063,8 @@ function AccountPage(props: AccountPageProps) {
             )}
 
             <section className="account-section services-section">
-                <div>
-                    <ServiceButton
-                        icon={<Heart />}
-                        label={
-                            favoriteProductCount
-                                ? isZh
-                                    ? `收藏 ${favoriteProductCount}`
-                                    : `Favorites ${favoriteProductCount}`
-                                : isZh
-                                  ? '我的收藏'
-                                  : 'Favorites'
-                        }
-                        onClick={() => onNavigate({ name: 'favorites' })}
-                    />
+                <SectionHeader title={isZh ? '常用服务' : 'Services'} />
+                <div className="account-services-grid">
                     <ServiceButton
                         icon={<MapPin />}
                         label={isZh ? '地址管理' : 'Addresses'}
@@ -4036,28 +4073,9 @@ function AccountPage(props: AccountPageProps) {
                         }
                     />
                     <ServiceButton
-                        icon={<Clock3 />}
-                        label={
-                            recentProductCount
-                                ? isZh
-                                    ? `足迹 ${recentProductCount}`
-                                    : `History ${recentProductCount}`
-                                : isZh
-                                  ? '浏览足迹'
-                                  : 'History'
-                        }
-                        onClick={() => onNavigate({ name: 'history' })}
-                    />
-                    <ServiceButton
                         icon={<Bell />}
                         label={isZh ? '消息通知' : 'Notifications'}
                         onClick={() => onNavigate({ name: 'notifications' })}
-                    />
-                    <ServiceButton
-                        icon={<TicketPercent />}
-                        label={isZh ? '优惠券' : 'Coupons'}
-                        badge={couponCount > 0 ? String(couponCount) : undefined}
-                        onClick={() => onNavigate({ name: 'coupons' })}
                     />
                     <ServiceButton
                         icon={<CircleCheck />}
@@ -4068,11 +4086,6 @@ function AccountPage(props: AccountPageProps) {
                         icon={<Headphones />}
                         label={isZh ? '客服中心' : 'Support'}
                         onClick={() => onNavigate({ name: 'support' })}
-                    />
-                    <ServiceButton
-                        icon={<Store />}
-                        label={isZh ? '店铺首页' : 'Store home'}
-                        onClick={() => onNavigate({ name: 'home' })}
                     />
                 </div>
             </section>
@@ -7012,31 +7025,49 @@ function orderStatesForTab(tab: OrderTab): string[] | undefined {
 function fallbackCollections(isZh: boolean): CollectionSummary[] {
     return [
         {
-            id: 'all',
-            name: isZh ? '全部' : 'All',
-            slug: 'all',
+            id: '3',
+            name: isZh ? '桌面工作站' : 'Workstations',
+            slug: 'cn-workstations',
             description: '',
             position: 0,
             parentId: '',
-            featuredAsset: null,
+            featuredAsset: { id: '8', preview: '/storefront/categories/category-workstations.jpg' },
         },
         {
-            id: 'physical',
-            name: isZh ? '实物' : 'Physical',
-            slug: 'physical',
+            id: '4',
+            name: isZh ? '办公输入设备' : 'Office Input',
+            slug: 'cn-office-input',
             description: '',
             position: 1,
             parentId: '',
-            featuredAsset: null,
+            featuredAsset: { id: '9', preview: '/storefront/categories/category-office-input.jpg' },
         },
         {
-            id: 'digital',
-            name: isZh ? '数字' : 'Digital',
-            slug: 'digital',
+            id: '5',
+            name: isZh ? '移动办公' : 'Mobile Computing',
+            slug: 'my-mobile-computing',
             description: '',
             position: 2,
             parentId: '',
-            featuredAsset: null,
+            featuredAsset: { id: '10', preview: '/storefront/categories/category-mobile-computing.jpg' },
+        },
+        {
+            id: '6',
+            name: isZh ? '桌面搭配' : 'Desk Setup',
+            slug: 'my-desk-setup',
+            description: '',
+            position: 3,
+            parentId: '',
+            featuredAsset: { id: '11', preview: '/storefront/categories/category-desk-setup.jpg' },
+        },
+        {
+            id: '7',
+            name: isZh ? '数字内容库' : 'Digital Library',
+            slug: 'cn-digital-library',
+            description: '',
+            position: 4,
+            parentId: '',
+            featuredAsset: { id: '12', preview: '/storefront/categories/category-digital-library.jpg' },
         },
     ];
 }

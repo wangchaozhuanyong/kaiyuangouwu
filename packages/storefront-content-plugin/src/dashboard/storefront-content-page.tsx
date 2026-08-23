@@ -1036,10 +1036,22 @@ function ItemEditor({
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label={text.imageUrl}>
-                    <Input
-                        value={item.imageUrl ?? ''}
-                        onChange={event => update('imageUrl', event.target.value || null)}
-                    />
+                    <div className="flex items-center gap-2">
+                        {item.imageUrl ? (
+                            <img
+                                className="size-9 shrink-0 rounded-md object-cover border border-border"
+                                src={item.imageUrl}
+                                alt=""
+                                onError={e => {
+                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                }}
+                            />
+                        ) : null}
+                        <Input
+                            value={item.imageUrl ?? ''}
+                            onChange={event => update('imageUrl', event.target.value || null)}
+                        />
+                    </div>
                 </Field>
                 <Field label={text.position}>
                     <Input

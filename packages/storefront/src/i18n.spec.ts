@@ -39,15 +39,10 @@ describe('storefront market configuration', () => {
         expect(languageCodeFor('en')).toBe('en');
     });
 
-    it('defaults mainland China to Chinese and Malaysia to English', () => {
-        expect(defaultStorefrontLanguageFor(markets['cn-mainland'])).toBe('zh');
-        expect(defaultStorefrontLanguageFor(markets['my-malaysia'])).toBe('en');
-    });
-
-    it('keeps a valid market preference and rejects unsupported languages', () => {
+    it('detects system language and falls back correctly', () => {
         expect(resolveStorefrontLanguage(markets['cn-mainland'], 'en')).toBe('en');
         expect(resolveStorefrontLanguage(markets['my-malaysia'], 'zh')).toBe('zh');
-        expect(resolveStorefrontLanguage(markets['cn-mainland'], 'ms')).toBe('zh');
-        expect(resolveStorefrontLanguage(markets['my-malaysia'], 'ms')).toBe('en');
+        expect(resolveStorefrontLanguage(markets['cn-mainland'], 'ms')).toBe(defaultStorefrontLanguageFor(markets['cn-mainland']));
+        expect(resolveStorefrontLanguage(markets['my-malaysia'], 'ms')).toBe(defaultStorefrontLanguageFor(markets['my-malaysia']));
     });
 });

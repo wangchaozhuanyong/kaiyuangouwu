@@ -52,17 +52,33 @@ export const enabledMarkets: MarketConfig[] = configuredMarketCodes.length
 
 export const supportedStorefrontLanguages = ['zh', 'en'] as const satisfies readonly StorefrontLanguage[];
 
+export function detectSystemLanguage(fallback: StorefrontLanguage = 'en'): StorefrontLanguage {
+    if (typeof navigator === 'undefined') return fallback;
+    const candidateLanguages = [
+        navigator.language,
+        ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+    ].filter(Boolean);
+    for (const lang of candidateLanguages) {
+        if (/^zh\b/i.test(lang)) {
+            return 'zh';
+        }
+    }
+    return 'en';
+}
+
 export function defaultStorefrontLanguageFor(market: MarketConfig): StorefrontLanguage {
-    return market.defaultLanguageCode === 'en' ? 'en' : 'zh';
+    const marketFallback: StorefrontLanguage = market.defaultLanguageCode === 'en' ? 'en' : 'zh';
+    return detectSystemLanguage(marketFallback);
 }
 
 export function resolveStorefrontLanguage(
     market: MarketConfig,
     storedLanguage: string | null | undefined,
 ): StorefrontLanguage {
-    return supportedStorefrontLanguages.includes(storedLanguage as StorefrontLanguage)
-        ? (storedLanguage as StorefrontLanguage)
-        : defaultStorefrontLanguageFor(market);
+    if (supportedStorefrontLanguages.includes(storedLanguage as StorefrontLanguage)) {
+        return storedLanguage as StorefrontLanguage;
+    }
+    return defaultStorefrontLanguageFor(market);
 }
 
 export function marketForStorefrontConfig(

@@ -162,11 +162,9 @@ export class StorefrontPromotionHtmlService {
         });
         $('input, textarea, select').remove();
 
-        let entryFormFound = false;
         $('form').each((_index, element) => {
             const form = $(element);
-            if (form.attr('data-store-entry') !== undefined && !entryFormFound) {
-                entryFormFound = true;
+            if (form.attr('data-store-entry') !== undefined) {
                 return;
             }
             form.replaceWith(form.contents());
@@ -209,18 +207,23 @@ export class StorefrontPromotionHtmlService {
     }
 
     private normalizeEntryForm($: ReturnType<typeof load>, entryTicket: string): void {
-        let form = $('form[data-store-entry]').first();
-        if (form.length === 0) {
+        let forms = $('form[data-store-entry]');
+        if (forms.length === 0) {
             $('body').append(FALLBACK_ENTRY_FORM);
-            form = $('form[data-store-entry]').first();
+            forms = $('form[data-store-entry]');
         }
-        form.attr('method', 'post');
-        form.attr('action', '/promo/enter');
-        form.removeAttr('target');
-        form.prepend(`<input type="hidden" name="ticket" value="${this.escapeHtml(entryTicket)}">`);
-        if (form.find('button[type="submit"], input[type="submit"]').length === 0) {
-            form.append('<button type="submit">进入主网站</button>');
-        }
+        forms.each((_index, element) => {
+            const form = $(element);
+            form.attr('method', 'post');
+            form.attr('action', '/promo/enter');
+            form.removeAttr('target');
+            if (form.find('input[name="ticket"]').length === 0) {
+                form.prepend(`<input type="hidden" name="ticket" value="${this.escapeHtml(entryTicket)}">`);
+            }
+            if (form.find('button[type="submit"], input[type="submit"]').length === 0) {
+                form.append('<button type="submit">进入主网站</button>');
+            }
+        });
     }
 
     private normalizeHead(
@@ -228,6 +231,7 @@ export class StorefrontPromotionHtmlService {
         bindings: StorefrontPromotionBindings,
         canonicalUrl?: string | null,
     ): void {
+        $('html').attr('lang', bindings['store.language'] || 'en');
         if ($('head').length === 0) {
             $('html').prepend('<head></head>');
         }

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
     ConfigService,
     ID,
+    LanguageCode,
     RequestContext,
     RequestContextService,
     TransactionalConnection,
@@ -51,6 +52,10 @@ export class StorefrontPromotionAccessService {
         const host = normalizeRequestHost(forwardedHost ?? req.headers.host);
         if (!host) return null;
 
+        const acceptLanguage = String(req.headers['accept-language'] || '').toLowerCase();
+        const isChinese = acceptLanguage.includes('zh');
+        const languageCode = isChinese ? LanguageCode.zh_Hans : LanguageCode.en;
+
         if (this.options.bypassHosts.includes(host)) {
             const tokenKey = this.configService.apiOptions.channelTokenKey;
             const queryToken = req.query?.[tokenKey];
@@ -61,6 +66,7 @@ export class StorefrontPromotionAccessService {
                 req,
                 apiType: 'shop',
                 channelOrToken: channelToken,
+                languageCode,
             });
             await this.activationService.assertActive(bypassContext);
             return { ctx: bypassContext, host, channelId: bypassContext.channelId };
@@ -75,6 +81,7 @@ export class StorefrontPromotionAccessService {
             req,
             apiType: 'shop',
             channelOrToken: domain.channel,
+            languageCode,
         });
         await this.activationService.assertActive(domainContext);
         return { ctx: domainContext, host, channelId: domain.channelId };
