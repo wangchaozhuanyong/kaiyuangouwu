@@ -3632,19 +3632,16 @@ function CategoryPage(props: CategoryPageProps) {
                     onClose={() => setFilterOpen(false)}
                 >
                     <div className="filter-sheet-content">
-                        <label className="switch-row filter-stock-row">
-                            <span>
-                                <strong>{isZh ? '仅看有货' : 'In stock only'}</strong>
-                                <small>{isZh ? '隐藏当前不可售规格' : 'Hide unavailable variants'}</small>
-                            </span>
+                        <label className="filter-card filter-stock-card">
+                            <span className="filter-stock-title">{isZh ? '仅看有货' : 'In stock only'}</span>
                             <input
                                 type="checkbox"
                                 checked={draftStock}
                                 onChange={event => setDraftStock(event.target.checked)}
                             />
                         </label>
-                        <fieldset>
-                            <legend>{isZh ? '价格区间' : 'Price range'}</legend>
+                        <fieldset className="filter-fieldset">
+                            <legend className="filter-legend">{isZh ? '价格区间' : 'Price range'}</legend>
                             <div className="price-range-inputs">
                                 <label>
                                     <span>{market.currencyCode}</span>
@@ -3657,7 +3654,7 @@ function CategoryPage(props: CategoryPageProps) {
                                         onChange={event => setDraftMinimumPrice(event.target.value)}
                                     />
                                 </label>
-                                <i />
+                                <span className="price-separator">—</span>
                                 <label>
                                     <span>{market.currencyCode}</span>
                                     <input
@@ -3700,8 +3697,8 @@ function CategoryPage(props: CategoryPageProps) {
                                 ))}
                             </div>
                         </fieldset>
-                        <fieldset>
-                            <legend>{isZh ? '商品类型' : 'Product type'}</legend>
+                        <fieldset className="filter-fieldset">
+                            <legend className="filter-legend">{isZh ? '商品类型' : 'Product type'}</legend>
                             <div className="segmented-options">
                                 {(['all', 'physical', 'digital'] as const).map(type => (
                                     <button
@@ -3725,10 +3722,7 @@ function CategoryPage(props: CategoryPageProps) {
                                 ))}
                             </div>
                         </fieldset>
-                        <div className="sheet-actions">
-                            <button type="button" onClick={() => setFilterOpen(false)}>
-                                {isZh ? '取消' : 'Cancel'}
-                            </button>
+                        <div className="sheet-actions filter-actions">
                             <button
                                 type="button"
                                 className="reset-filter-button"
@@ -3743,7 +3737,7 @@ function CategoryPage(props: CategoryPageProps) {
                             </button>
                             <button
                                 type="button"
-                                className="primary-action"
+                                className="primary-action filter-confirm-button"
                                 onClick={() => {
                                     onFilterChange(
                                         draftType,
