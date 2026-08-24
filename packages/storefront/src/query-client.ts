@@ -20,7 +20,8 @@ export function createStorefrontQueryClient(): QueryClient {
                 retry: 1,
                 staleTime: ROUTE_QUERY_STALE_TIME,
                 gcTime: PUBLIC_QUERY_GC_TIME,
-                refetchOnWindowFocus: true,
+                refetchOnMount: storefrontRefetchPolicy,
+                refetchOnWindowFocus: storefrontRefetchPolicy,
                 networkMode: 'online',
             },
             mutations: {
@@ -35,6 +36,10 @@ export const storefrontQueryClient = createStorefrontQueryClient();
 
 export function publicQueryMeta() {
     return { persistPublic: true } as const;
+}
+
+export function storefrontRefetchPolicy(query: { meta?: Record<string, unknown> }): true | 'always' {
+    return query.meta?.persistPublic === true ? 'always' : true;
 }
 
 export function persistPublicQueryCache(

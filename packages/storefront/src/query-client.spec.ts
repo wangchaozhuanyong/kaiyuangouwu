@@ -8,6 +8,7 @@ import {
     publicQueryMeta,
     restorePublicQueryCache,
     storefrontQueryKeys,
+    storefrontRefetchPolicy,
 } from './query-client';
 
 function memoryStorage() {
@@ -21,6 +22,15 @@ function memoryStorage() {
 }
 
 describe('public React Query session cache', () => {
+    it('always refreshes public data when the page mounts or regains focus', () => {
+        const queryDefaults = createStorefrontQueryClient().getDefaultOptions().queries;
+
+        expect(queryDefaults?.refetchOnMount).toBe(storefrontRefetchPolicy);
+        expect(queryDefaults?.refetchOnWindowFocus).toBe(storefrontRefetchPolicy);
+        expect(storefrontRefetchPolicy({ meta: publicQueryMeta() })).toBe('always');
+        expect(storefrontRefetchPolicy({})).toBe(true);
+    });
+
     it('deduplicates concurrent queries and refreshes after invalidation', async () => {
         const client = createStorefrontQueryClient();
         let requestCount = 0;
@@ -109,7 +119,7 @@ describe('public React Query session cache', () => {
         });
         const storage = memoryStorage();
 
-        persistPublicQueryCache(client, storage as any, 1_000);
+        persistPublicQueryCache(client, storage, 1_000);
         const serialized = storage.values.get(PUBLIC_QUERY_CACHE_KEY) ?? '';
 
         expect(serialized).toContain('product');
@@ -125,16 +135,14 @@ describe('public React Query session cache', () => {
             meta: publicQueryMeta(),
         });
         const storage = memoryStorage();
-        persistPublicQueryCache(source, storage as any, 1_000);
+        persistPublicQueryCache(source, storage, 1_000);
 
         const fresh = createStorefrontQueryClient();
-        expect(restorePublicQueryCache(fresh, storage as any, 2_000)).toBe(true);
+        expect(restorePublicQueryCache(fresh, storage, 2_000)).toBe(true);
         expect(fresh.getQueryData(['storefront', 'my', 'en', 'content'])).toEqual(['hero']);
 
         const expired = createStorefrontQueryClient();
-        expect(restorePublicQueryCache(expired, storage as any, 1_000 + PUBLIC_QUERY_CACHE_MAX_AGE + 1)).toBe(
-            false,
-        );
+        expect(restorePublicQueryCache(expired, storage, 1_000 + PUBLIC_QUERY_CACHE_MAX_AGE + 1)).toBe(false);
         expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
     });
 });
