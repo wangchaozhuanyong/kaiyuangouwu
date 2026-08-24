@@ -663,8 +663,10 @@ const pageHelpTopics: Record<string, PageHelpTopic> = {
     country: {
         title: text('国家或地区操作说明', 'Country and region guide'),
         purpose: text(
-            '维护可用于地址、区域、税务和配送的国家或地区。',
-            'Maintain countries or regions used by addresses, zones, tax, and shipping.',
+            '维护可用于客户地址、区域、税务和配送的国家或地区。启用地区不等于自动允许配送，最终范围由商品类型、配送方式和支付规则共同决定。',
+            'Maintain countries or regions used by customer addresses, zones, tax, and shipping. ' +
+                'Enabling a region does not automatically enable delivery; product type, shipping methods, ' +
+                'and payment rules determine the final sales coverage.',
         ),
         listSteps: [
             text('按名称或代码查找国家或地区。', 'Find a country or region by name or code.'),
@@ -687,8 +689,9 @@ const pageHelpTopics: Record<string, PageHelpTopic> = {
     zone: {
         title: text('业务区域操作说明', 'Business zone guide'),
         purpose: text(
-            '把国家或地区组合成税务、配送和渠道配置可复用的区域。',
-            'Group countries or regions for reuse in tax, shipping, and channel settings.',
+            '把国家或地区组合成税务、配送和渠道配置可复用的区域。它是业务规则分组，不是独立站的访问地区封锁。',
+            'Group countries or regions for reuse in tax, shipping, and channel settings. ' +
+                'A zone groups business rules; it is not a geographic access block for the storefront.',
         ),
         listSteps: [
             text(
@@ -1032,8 +1035,8 @@ const fieldHelpTopics: Record<string, FieldHelpTopic> = {
     zoneId: {
         title: text('适用地区', 'Applicable zone'),
         description: text(
-            '选择税率或业务规则适用的国家和地区组合。中国大陆与马来西亚应分别设置。',
-            'Select the countries and regions covered by this tax or business rule. Configure China Mainland and Malaysia separately.',
+            '选择税率或业务规则适用的国家和地区组合。当不同司法辖区的税率或配送规则不同时，应分开建立区域。',
+            'Select the countries and regions covered by this tax or business rule. Create separate zones when tax or shipping rules differ between jurisdictions.',
         ),
     },
     startsAt: {

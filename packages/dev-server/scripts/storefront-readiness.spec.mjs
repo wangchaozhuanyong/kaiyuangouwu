@@ -38,14 +38,15 @@ function product(overrides = {}) {
 }
 
 function channel(code, overrides = {}) {
-    const isChina = code === 'cn-mainland';
-    const countryCode = isChina ? 'CN' : 'MY';
-    const currencyCode = isChina ? 'CNY' : 'MYR';
+    const countryCode = 'MY';
+    const currencyCode = 'MYR';
     return {
-        id: isChina ? '2' : '3',
+        id: '3',
         code,
-        defaultLanguageCode: isChina ? 'zh_Hans' : 'en',
+        defaultLanguageCode: 'en',
+        availableLanguageCodes: ['en', 'zh_Hans'],
         defaultCurrencyCode: currencyCode,
+        availableCurrencyCodes: [currencyCode],
         pricesIncludeTax: false,
         defaultTaxZone: {
             id: `${String(countryCode)}-tax`,
@@ -68,7 +69,12 @@ function channel(code, overrides = {}) {
             },
         ],
         shippingMethods: [
-            { code: `${String(code)}-delivery`, name: 'Delivery', description: 'Approved delivery' },
+            {
+                code: `${String(code)}-delivery`,
+                name: 'Delivery',
+                description: 'Approved delivery',
+                checker: { code: 'supported-destination-eligibility-checker', args: [] },
+            },
         ],
         taxRates: [
             {
@@ -81,6 +87,7 @@ function channel(code, overrides = {}) {
             },
         ],
         products: [product({ variants: [{ ...product().variants[0], currencyCode }] })],
+        availableCountryCodes: ['MY', 'SG', 'US'],
         contentBlocks: [
             {
                 code: 'primary-hero',
@@ -101,12 +108,12 @@ function readySnapshot() {
         demoAssetCount: 0,
         pendingSearchIndexUpdates: 0,
         activeSearchIndexJobs: 0,
-        channels: [channel('cn-mainland'), channel('my-malaysia')],
+        storefrontChannelCodes: ['my-malaysia'],
+        channels: [channel('my-malaysia')],
     };
 }
 
 const approvedTaxPolicy = {
-    'cn-mainland': { pricesIncludeTax: false, rates: { 'Standard Tax': 0 } },
     'my-malaysia': { pricesIncludeTax: false, rates: { 'Standard Tax': 0 } },
 };
 
@@ -137,9 +144,9 @@ void test('reports demo data, test payment, bad zones and missing domains', () =
     const snapshot = readySnapshot();
     snapshot.configuration = { routingMode: 'prefer-domain', cnameTarget: 'vendure.localhost' };
     snapshot.demoAssetCount = 4;
-    snapshot.channels[1] = channel('my-malaysia', {
-        defaultTaxZone: { id: 'CN-tax', name: 'China', members: [{ code: 'CN' }] },
-        defaultShippingZone: { id: 'CN-shipping', name: 'China', members: [{ code: 'CN' }] },
+    snapshot.channels[0] = channel('my-malaysia', {
+        defaultTaxZone: { id: 'tax-zone', name: 'Tax zone', members: [] },
+        defaultShippingZone: { id: 'shipping-zone', name: 'Shipping zone', members: [] },
         domains: [],
         paymentMethods: [
             {
@@ -174,22 +181,59 @@ void test('reports demo data, test payment, bad zones and missing domains', () =
     assert.ok(failedIds.has('shipping-methods-my-malaysia'));
     assert.ok(failedIds.has('products-real-my-malaysia'));
     assert.ok(failedIds.has('content-real-my-malaysia'));
-    assert.ok(failedIds.has('market-tax-zone-separation'));
 });
 
 void test('keeps tax mode approval as an explicit manual gate', () => {
     const report = evaluateStorefrontReadiness(readySnapshot());
     assert.equal(report.ready, false);
-    assert.equal(report.summary.manual, 4);
+    assert.equal(report.summary.manual, 2);
 });
 
 void test('blocks an enabled but unapproved tax rate', () => {
     const snapshot = readySnapshot();
-    snapshot.channels[1].taxRates[0].value = 20;
+    snapshot.channels[0].taxRates[0].value = 20;
     const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
 
     assert.equal(
         report.checks.find(check => check.id === 'tax-rates-approved-my-malaysia')?.status,
+        'blocker',
+    );
+});
+
+void test('does not require a hard-coded regional Channel for a global independent storefront', () => {
+    const report = evaluateStorefrontReadiness(readySnapshot(), approvedTaxPolicy);
+    const ids = new Set(report.checks.map(check => check.id));
+
+    assert.equal(report.ready, true);
+    assert.equal(ids.has('channel-cn-mainland'), false);
+    assert.equal(ids.has('market-tax-zone-separation'), false);
+    assert.equal(
+        report.checks.find(check => check.id === 'global-country-availability-my-malaysia')?.status,
+        'pass',
+    );
+});
+
+void test('allows global digital sales even when the physical shipping method is regional', () => {
+    const snapshot = readySnapshot();
+    snapshot.channels[0].products[0].variants[0].customFields.fulfillmentType = 'digital';
+    snapshot.channels[0].shippingMethods[0].checker.args = [{ name: 'allowedCountryCodes', value: 'MY' }];
+
+    const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
+
+    assert.equal(
+        report.checks.find(check => check.id === 'global-physical-shipping-my-malaysia')?.status,
+        'pass',
+    );
+});
+
+void test('blocks a global physical catalog when shipping remains regional', () => {
+    const snapshot = readySnapshot();
+    snapshot.channels[0].shippingMethods[0].checker.args = [{ name: 'allowedCountryCodes', value: 'MY' }];
+
+    const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
+
+    assert.equal(
+        report.checks.find(check => check.id === 'global-physical-shipping-my-malaysia')?.status,
         'blocker',
     );
 });

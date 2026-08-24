@@ -2,10 +2,6 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const requiredMarkets = [
-    { code: 'cn-mainland', languageCode: 'zh_Hans', currencyCode: 'CNY', countryCode: 'CN' },
-    { code: 'my-malaysia', languageCode: 'en', currencyCode: 'MYR', countryCode: 'MY' },
-];
 const testContentPattern = /(?:^|[-_\s])(demo|dummy|test|crud)(?:$|[-_\s])|测试|临时演示/iu;
 const placeholderShippingLabels = new Set([
     'standard-shipping',
@@ -68,10 +64,13 @@ export function parseTaxPolicy(value) {
                 policy.rates && typeof policy.rates === 'object' && !Array.isArray(policy.rates),
                 `Tax policy rates for ${String(channelCode)} must be an object`,
             );
-            for (const [category, value] of Object.entries(policy.rates)) {
+            for (const [category, rateValue] of Object.entries(policy.rates)) {
                 assert.ok(category.trim(), `Tax category for ${String(channelCode)} cannot be empty`);
                 assert.ok(
-                    typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100,
+                    typeof rateValue === 'number' &&
+                        Number.isFinite(rateValue) &&
+                        rateValue >= 0 &&
+                        rateValue <= 100,
                     `Tax rate for ${String(channelCode)}/${String(category)} must be between 0 and 100`,
                 );
             }
@@ -167,6 +166,7 @@ function incompleteProducts(products, currencyCode) {
 export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
     const checks = [];
     const channelByCode = new Map((snapshot.channels ?? []).map(channel => [channel.code, channel]));
+    const storefrontChannelCodes = snapshot.storefrontChannelCodes ?? [...channelByCode.keys()];
 
     pushCheck(checks, {
         id: 'domain-routing-mode',
@@ -194,25 +194,37 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             snapshot.activeSearchIndexJobs ?? 0,
         )}`,
     });
+    const missingStorefrontChannels = storefrontChannelCodes.filter(code => !channelByCode.has(code));
+    pushCheck(checks, {
+        id: 'storefront-channels',
+        title: '独立站店铺渠道',
+        passed: storefrontChannelCodes.length > 0 && missingStorefrontChannels.length === 0,
+        detail: missingStorefrontChannels.length
+            ? `missing: ${missingStorefrontChannels.join(', ')}`
+            : `${String(storefrontChannelCodes.length)} operational storefronts`,
+    });
 
-    for (const expected of requiredMarkets) {
-        const channel = channelByCode.get(expected.code);
+    for (const channelCode of storefrontChannelCodes) {
+        const channel = channelByCode.get(channelCode);
         pushCheck(checks, {
-            id: `channel-${expected.code}`,
-            scope: expected.code,
-            title: '市场 Channel 存在',
+            id: `channel-${channelCode}`,
+            scope: channelCode,
+            title: '店铺 Channel 存在',
             passed: Boolean(channel),
-            detail: channel ? `channelId=${String(channel.id)}` : `Missing ${expected.code}`,
+            detail: channel ? `channelId=${String(channel.id)}` : `Missing ${channelCode}`,
         });
         if (!channel) continue;
 
+        const availableLanguageCodes = new Set(channel.availableLanguageCodes ?? []);
+        const availableCurrencyCodes = new Set(channel.availableCurrencyCodes ?? []);
         pushCheck(checks, {
-            id: `locale-${expected.code}`,
-            scope: expected.code,
-            title: '默认语言与币种',
+            id: `locale-${channelCode}`,
+            scope: channelCode,
+            title: '默认语言与币种已配置',
             passed:
-                channel.defaultLanguageCode === expected.languageCode &&
-                channel.defaultCurrencyCode === expected.currencyCode,
+                Boolean(channel.defaultLanguageCode && channel.defaultCurrencyCode) &&
+                (!availableLanguageCodes.size || availableLanguageCodes.has(channel.defaultLanguageCode)) &&
+                (!availableCurrencyCodes.size || availableCurrencyCodes.has(channel.defaultCurrencyCode)),
             detail: `${String(channel.defaultLanguageCode)}/${String(channel.defaultCurrencyCode)}`,
         });
 
@@ -220,10 +232,10 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             (channel.defaultTaxZone?.members ?? []).map(member => String(member.code).toUpperCase()),
         );
         pushCheck(checks, {
-            id: `tax-zone-${expected.code}`,
-            scope: expected.code,
-            title: '默认税区覆盖正确国家',
-            passed: taxMemberCodes.has(expected.countryCode),
+            id: `tax-zone-${channelCode}`,
+            scope: channelCode,
+            title: '默认税区已配置',
+            passed: Boolean(channel.defaultTaxZone?.id) && taxMemberCodes.size > 0,
             detail: `${String(channel.defaultTaxZone?.name ?? 'missing')} [${[...taxMemberCodes].join(
                 ', ',
             )}]`,
@@ -233,19 +245,19 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             (channel.defaultShippingZone?.members ?? []).map(member => String(member.code).toUpperCase()),
         );
         pushCheck(checks, {
-            id: `shipping-zone-${expected.code}`,
-            scope: expected.code,
-            title: '默认配送区覆盖正确国家',
-            passed: shippingMemberCodes.has(expected.countryCode),
+            id: `shipping-zone-${channelCode}`,
+            scope: channelCode,
+            title: '默认配送区已配置',
+            passed: Boolean(channel.defaultShippingZone?.id) && shippingMemberCodes.size > 0,
             detail: `${String(channel.defaultShippingZone?.name ?? 'missing')} [${[
                 ...shippingMemberCodes,
             ].join(', ')}]`,
         });
 
-        const approvedTaxMode = taxPolicy[expected.code]?.pricesIncludeTax;
+        const approvedTaxMode = taxPolicy[channelCode]?.pricesIncludeTax;
         pushCheck(checks, {
-            id: `tax-mode-${expected.code}`,
-            scope: expected.code,
+            id: `tax-mode-${channelCode}`,
+            scope: channelCode,
             title: '价格含税规则已批准',
             passed: typeof approvedTaxMode === 'boolean' && approvedTaxMode === channel.pricesIncludeTax,
             unresolved: typeof approvedTaxMode !== 'boolean',
@@ -269,14 +281,12 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
         const missingTaxCategories = [...usedTaxCategories.entries()].filter(
             ([categoryId]) =>
                 !enabledDefaultZoneRates.some(
-                    rate =>
-                        String(rate.category?.id) === categoryId &&
-                        !rate.customerGroup,
+                    rate => String(rate.category?.id) === categoryId && !rate.customerGroup,
                 ),
         );
         pushCheck(checks, {
-            id: `tax-rate-coverage-${expected.code}`,
-            scope: expected.code,
+            id: `tax-rate-coverage-${channelCode}`,
+            scope: channelCode,
             title: '在售商品税类已有默认税率',
             passed: usedTaxCategories.size > 0 && missingTaxCategories.length === 0,
             detail: missingTaxCategories.length
@@ -284,7 +294,7 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
                 : `${String(usedTaxCategories.size)} categories covered`,
         });
 
-        const approvedRates = taxPolicy[expected.code]?.rates;
+        const approvedRates = taxPolicy[channelCode]?.rates;
         const taxRatesApproved =
             approvedRates &&
             Object.entries(approvedRates).every(([categoryName, approvedValue]) =>
@@ -296,8 +306,8 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
                 ),
             );
         pushCheck(checks, {
-            id: `tax-rates-approved-${expected.code}`,
-            scope: expected.code,
+            id: `tax-rates-approved-${channelCode}`,
+            scope: channelCode,
             title: '税率数值已批准',
             passed: Boolean(taxRatesApproved),
             unresolved: !approvedRates,
@@ -312,8 +322,8 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             domain => domain.isPrimary && domain.status === 'ACTIVE' && isPublicHostname(domain.domain),
         );
         pushCheck(checks, {
-            id: `primary-domain-${expected.code}`,
-            scope: expected.code,
+            id: `primary-domain-${channelCode}`,
+            scope: channelCode,
             title: '已验证的公开主域名',
             passed: activePrimaryDomains.length === 1,
             detail: `${String(activePrimaryDomains.length)} active public primary domains`,
@@ -326,8 +336,8 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             ),
         );
         pushCheck(checks, {
-            id: `payments-${expected.code}`,
-            scope: expected.code,
+            id: `payments-${channelCode}`,
+            scope: channelCode,
             title: '真实支付方式',
             passed: enabledPayments.length > 0 && testPayments.length === 0,
             detail: testPayments.length
@@ -339,8 +349,8 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             isPlaceholderShippingMethod(method),
         );
         pushCheck(checks, {
-            id: `shipping-methods-${expected.code}`,
-            scope: expected.code,
+            id: `shipping-methods-${channelCode}`,
+            scope: channelCode,
             title: '真实配送方式',
             passed: (channel.shippingMethods ?? []).length > 0 && testShippingMethods.length === 0,
             detail: testShippingMethods.length
@@ -351,8 +361,8 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
         const products = channel.products ?? [];
         const temporaryProducts = demoProducts(products);
         pushCheck(checks, {
-            id: `products-real-${expected.code}`,
-            scope: expected.code,
+            id: `products-real-${channelCode}`,
+            scope: channelCode,
             title: '真实商品内容',
             passed: products.length > 0 && temporaryProducts.length === 0,
             detail: temporaryProducts.length
@@ -362,8 +372,8 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
 
         const missingTranslations = missingBilingualItems(products);
         pushCheck(checks, {
-            id: `products-bilingual-${expected.code}`,
-            scope: expected.code,
+            id: `products-bilingual-${channelCode}`,
+            scope: channelCode,
             title: '商品与规格中英文完整',
             passed: products.length > 0 && missingTranslations.length === 0,
             detail: missingTranslations.length
@@ -371,10 +381,10 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
                 : `${String(products.length)} products checked`,
         });
 
-        const incomplete = incompleteProducts(products, expected.currencyCode);
+        const incomplete = incompleteProducts(products, channel.defaultCurrencyCode);
         pushCheck(checks, {
-            id: `products-publishable-${expected.code}`,
-            scope: expected.code,
+            id: `products-publishable-${channelCode}`,
+            scope: channelCode,
             title: '商品图片、价格和交付类型完整',
             passed: products.length > 0 && incomplete.length === 0,
             detail: incomplete.length
@@ -384,29 +394,54 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
 
         const temporaryBlocks = demoContentBlocks(channel.contentBlocks ?? []);
         pushCheck(checks, {
-            id: `content-real-${expected.code}`,
-            scope: expected.code,
+            id: `content-real-${channelCode}`,
+            scope: channelCode,
             title: '首页与政策内容已替换',
             passed: (channel.contentBlocks ?? []).length > 0 && temporaryBlocks.length === 0,
             detail: temporaryBlocks.length
                 ? `demo blocks: ${String(temporaryBlocks.map(block => String(block.code)).join(', '))}`
                 : `${String((channel.contentBlocks ?? []).length)} content blocks`,
         });
-    }
 
-    const chinaChannel = channelByCode.get('cn-mainland');
-    const malaysiaChannel = channelByCode.get('my-malaysia');
-    pushCheck(checks, {
-        id: 'market-tax-zone-separation',
-        title: '中国与马来西亚税区分离',
-        passed:
-            Boolean(chinaChannel?.defaultTaxZone?.id) &&
-            Boolean(malaysiaChannel?.defaultTaxZone?.id) &&
-            chinaChannel.defaultTaxZone.id !== malaysiaChannel.defaultTaxZone.id,
-        detail: `cn=${String(chinaChannel?.defaultTaxZone?.name ?? 'missing')}, my=${String(
-            malaysiaChannel?.defaultTaxZone?.name ?? 'missing',
-        )}`,
-    });
+        const availableCountryCodes = new Set(channel.availableCountryCodes ?? []);
+        pushCheck(checks, {
+            id: `global-country-availability-${channelCode}`,
+            scope: channelCode,
+            title: '独立站可用国家或地区',
+            passed: availableCountryCodes.size > 1,
+            detail: `${String(availableCountryCodes.size)} enabled countries or regions`,
+        });
+
+        const physicalVariants = products
+            .flatMap(product => product.variants ?? [])
+            .filter(variant => variant.customFields?.fulfillmentType === 'physical');
+        const restrictedShippingMethods = (channel.shippingMethods ?? []).filter(method => {
+            if (method.checker?.code !== 'supported-destination-eligibility-checker') return false;
+            const allowed = method.checker.args?.find(arg => arg.name === 'allowedCountryCodes')?.value ?? '';
+            const allowedCodes = new Set(
+                String(allowed)
+                    .split(/[\s,;]+/u)
+                    .map(code => code.trim().toUpperCase())
+                    .filter(Boolean),
+            );
+            return (
+                allowedCodes.size > 0 &&
+                [...availableCountryCodes].some(code => !allowedCodes.has(String(code).toUpperCase()))
+            );
+        });
+        pushCheck(checks, {
+            id: `global-physical-shipping-${channelCode}`,
+            scope: channelCode,
+            title: '全球实物配送范围',
+            passed: physicalVariants.length === 0 || restrictedShippingMethods.length === 0,
+            detail:
+                physicalVariants.length === 0
+                    ? 'digital-only catalog; shipping restrictions do not limit sales'
+                    : restrictedShippingMethods.length
+                      ? `restricted methods: ${restrictedShippingMethods.map(method => method.code).join(', ')}`
+                      : `${String(physicalVariants.length)} physical variants with global coverage`,
+        });
+    }
 
     const summary = {
         pass: checks.filter(check => check.status === 'pass').length,
@@ -552,7 +587,9 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                         id
                         code
                         defaultLanguageCode
+                        availableLanguageCodes
                         defaultCurrencyCode
+                        availableCurrencyCodes
                         pricesIncludeTax
                         defaultTaxZone {
                             id
@@ -570,6 +607,15 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                                 name
                             }
                         }
+                    }
+                }
+                storeProfiles {
+                    status
+                    isOperational
+                    primaryDomain
+                    channel {
+                        id
+                        code
                     }
                 }
                 storeDomainConfiguration {
@@ -597,10 +643,17 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
         requestHeaders(authToken, defaultChannel.token),
     );
 
+    const storefrontChannelCodes = globalResult.data.storeProfiles
+        .filter(
+            profile =>
+                profile.isOperational &&
+                (profile.status === 'ACTIVE' || Boolean(profile.primaryDomain?.trim())),
+        )
+        .map(profile => profile.channel.code);
     const channels = [];
-    for (const expected of requiredMarkets) {
-        const baseChannel = globalResult.data.channels.items.find(channel => channel.code === expected.code);
-        const loginChannel = loginChannels.get(expected.code);
+    for (const channelCode of storefrontChannelCodes) {
+        const baseChannel = globalResult.data.channels.items.find(channel => channel.code === channelCode);
+        const loginChannel = loginChannels.get(channelCode);
         if (!baseChannel || !loginChannel) continue;
         const result = await graphql(
             fetchImpl,
@@ -626,6 +679,10 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                             fulfillmentHandlerCode
                             checker {
                                 code
+                                args {
+                                    name
+                                    value
+                                }
                             }
                             calculator {
                                 code
@@ -676,6 +733,11 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                         isPrimary
                         status
                     }
+                    countries(options: { take: 300, filter: { enabled: { eq: true } } }) {
+                        items {
+                            code
+                        }
+                    }
                 }
             `,
             { channelId: baseChannel.id },
@@ -688,6 +750,7 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
             shippingMethods: result.data.shippingMethods.items,
             taxRates: result.data.taxRates.items,
             contentBlocks: result.data.storefrontContentBlocks,
+            availableCountryCodes: result.data.countries.items.map(country => country.code),
             products: await fetchProducts(fetchImpl, normalizedOrigin, authToken, loginChannel.token),
         });
     }
@@ -697,6 +760,7 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
         demoAssetCount: globalResult.data.assets.totalItems,
         pendingSearchIndexUpdates: globalResult.data.pendingSearchIndexUpdates,
         activeSearchIndexJobs: globalResult.data.jobs.totalItems,
+        storefrontChannelCodes,
         channels,
     };
 }

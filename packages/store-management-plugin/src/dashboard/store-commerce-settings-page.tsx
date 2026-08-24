@@ -64,8 +64,10 @@ const zhCopy = {
     retry: '重试',
     loadError: '配置加载失败',
     tax: '税务设置',
-    taxDescription: '当前店铺商品价格与标准税率。',
-    country: '经营及配送国家',
+    taxDescription: '当前店铺的默认税务地区、商品价格和基准税率。',
+    country: '经营主体及默认配送国家',
+    countryHelp:
+        '用于建立默认税区和实物配送区，不会限制数字商品面向其他国家销售。全球实物配送请另行配置业务区域和配送方式。',
     selectCountry: '选择国家',
     taxRate: '商品税率（%）',
     pricesIncludeTax: '商品价格已含税',
@@ -102,8 +104,11 @@ const enCopy: typeof zhCopy = {
     retry: 'Retry',
     loadError: 'Could not load the configuration',
     tax: 'Tax settings',
-    taxDescription: 'Product pricing and standard tax rate for the active store.',
-    country: 'Operating and delivery country',
+    taxDescription: 'Default tax jurisdiction, product pricing, and baseline tax rate for the active store.',
+    country: 'Business and default delivery country',
+    countryHelp:
+        'Creates the default tax and physical-delivery zones. It does not restrict digital-product ' +
+        'sales to other countries. Configure business zones and shipping methods separately for global physical delivery.',
     selectCountry: 'Select a country',
     taxRate: 'Product tax rate (%)',
     pricesIncludeTax: 'Product prices include tax',
@@ -154,8 +159,7 @@ function StoreCommerceSettingsPage() {
     const [draft, setDraft] = useState<CommerceDraft | null>(null);
     const configurationQuery = useQuery({
         queryKey: ['my-store-commerce-configuration', activeChannel?.id],
-        queryFn: () =>
-            api.query(myStoreCommerceConfigurationQuery) as Promise<MyStoreCommerceConfigurationResult>,
+        queryFn: () => api.query<MyStoreCommerceConfigurationResult>(myStoreCommerceConfigurationQuery),
         enabled: Boolean(activeChannel?.id),
     });
     const configuration = configurationQuery.data?.myStoreCommerceConfiguration;
@@ -167,7 +171,7 @@ function StoreCommerceSettingsPage() {
 
     const mutation = useMutation({
         mutationFn: (value: CommerceDraft) =>
-            api.mutate(updateMyStoreCommerceConfigurationMutation, {
+            api.mutate<UpdateMyStoreCommerceConfigurationResult>(updateMyStoreCommerceConfigurationMutation, {
                 input: {
                     ...value,
                     baseRate: majorToMinor(value.baseRate, configuration?.currencyCode),
@@ -176,10 +180,10 @@ function StoreCommerceSettingsPage() {
                         configuration?.currencyCode,
                     ),
                 },
-            }) as Promise<UpdateMyStoreCommerceConfigurationResult>,
+            }),
         onSuccess: result => {
             setDraft(toDraft(result.updateMyStoreCommerceConfiguration));
-            configurationQuery.refetch();
+            void configurationQuery.refetch();
             toast.success(text.saved);
         },
         onError: error => toast.error(errorMessage(error)),
@@ -222,6 +226,7 @@ function StoreCommerceSettingsPage() {
                                         placeholder={text.selectCountry}
                                         onChange={value => update('countryCode', value)}
                                     />
+                                    <p className="text-sm text-muted-foreground">{text.countryHelp}</p>
                                 </Field>
                                 <Field id="store-tax-rate" label={text.taxRate}>
                                     <Input
@@ -459,7 +464,10 @@ function CountrySelect({
     onChange: (value: string) => void;
 }>) {
     return (
-        <Select value={value || undefined} onValueChange={value => value && onChange(value)}>
+        <Select
+            value={value || undefined}
+            onValueChange={selectedValue => selectedValue && onChange(selectedValue)}
+        >
             <SelectTrigger id={id} className="w-full">
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
