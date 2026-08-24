@@ -103,7 +103,8 @@ export class StorefrontPromotionController {
                 "font-src 'self' data: https:",
                 "style-src 'self' 'unsafe-inline' https:",
                 "script-src 'none'",
-                "connect-src 'none'",
+                'script-src-elem https://static.cloudflareinsights.com',
+                'connect-src https://cloudflareinsights.com',
             ].join('; '),
         );
     }

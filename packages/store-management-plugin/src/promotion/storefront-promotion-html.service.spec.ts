@@ -82,4 +82,20 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).toContain('data-storefront-promotion-accessibility');
         expect(html).toContain(':focus-visible');
     });
+
+    it('keeps the browser icons synchronized with the current store logo', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: `<!doctype html><html><head>
+                <link rel="icon" href="https://old.example/favicon.ico">
+                <link rel="apple-touch-icon" href="https://old.example/apple-touch-icon.png">
+            </head><body><form data-store-entry><button type="submit">进入</button></form></body></html>`,
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html).not.toContain('old.example');
+        expect(html).toContain('<link rel="icon" href="https://cdn.example.com/logo.png">');
+        expect(html).toContain('<link rel="apple-touch-icon" href="https://cdn.example.com/logo.png">');
+    });
 });

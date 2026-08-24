@@ -254,6 +254,13 @@ export class StorefrontPromotionHtmlService {
         if ($('title').length === 0) {
             $('head').append(`<title>${this.escapeHtml(bindings['store.name'])}</title>`);
         }
+        const logoUrl = bindings['store.logoUrl'];
+        if (logoUrl && this.isSafeUrl(logoUrl, true)) {
+            $('link[rel~="icon"], link[rel="apple-touch-icon"]').remove();
+            const escapedLogoUrl = this.escapeHtml(logoUrl);
+            $('head').append(`<link rel="icon" href="${escapedLogoUrl}">`);
+            $('head').append(`<link rel="apple-touch-icon" href="${escapedLogoUrl}">`);
+        }
         $('link[rel="canonical"]').remove();
         if (canonicalUrl && this.isSafeUrl(canonicalUrl, false)) {
             $('head').append(`<link rel="canonical" href="${this.escapeHtml(canonicalUrl)}">`);

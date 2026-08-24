@@ -17,7 +17,32 @@ function responseMock() {
     return response;
 }
 
-describe('StorefrontPromotionController account entry', () => {
+describe('StorefrontPromotionController', () => {
+    it('allows only the Cloudflare Insights resources injected into promotion pages', async () => {
+        const request = { ctx: {}, host: 'shop.example.com' };
+        const accessService = {
+            resolveRequest: vi.fn(() => Promise.resolve(request)),
+            createEntryTicket: vi.fn(() => 'entry-ticket'),
+        };
+        const promotionService = {
+            renderPublished: vi.fn(() => Promise.resolve('<!doctype html><html></html>')),
+        };
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            promotionService as never,
+        );
+        const response = responseMock();
+
+        await controller.promotion({} as Request, response as unknown as Response);
+
+        const contentSecurityPolicy = response.setHeader.mock.calls.find(
+            ([name]) => name === 'Content-Security-Policy',
+        )?.[1];
+        expect(contentSecurityPolicy).toContain("script-src 'none'");
+        expect(contentSecurityPolicy).toContain('script-src-elem https://static.cloudflareinsights.com');
+        expect(contentSecurityPolicy).toContain('connect-src https://cloudflareinsights.com');
+    });
+
     it('does not issue an entry cookie without a valid signed proof', async () => {
         const request = { host: 'shop.example.com' };
         const accessService = {
