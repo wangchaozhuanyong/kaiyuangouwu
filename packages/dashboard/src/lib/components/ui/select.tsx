@@ -1,6 +1,5 @@
-import * as React from 'react';
 import {
-    Select,
+    Select as OriginalSelect,
     SelectContent as OriginalSelectContent,
     SelectGroup,
     SelectItem,
@@ -11,6 +10,29 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@vendure-io/ui/components/ui/select';
+import * as React from 'react';
+
+import { inferSelectItemLabels } from './select-items.js';
+
+/**
+ * Base UI requires an `items` value-to-label map to render the selected
+ * option's display label. Infer that map from SelectItem children so every
+ * dashboard select consistently shows its localized label rather than a raw
+ * enum, ID, or code. Callers can still pass `items` explicitly for dynamic or
+ * object-valued options.
+ */
+const Select = (({ children, items, ...props }: React.ComponentProps<typeof OriginalSelect>) => {
+    const resolvedItems = React.useMemo(
+        () => items ?? inferSelectItemLabels(children, SelectItem),
+        [children, items],
+    );
+
+    return (
+        <OriginalSelect {...props} items={resolvedItems}>
+            {children}
+        </OriginalSelect>
+    );
+}) as typeof OriginalSelect;
 
 /**
  * Wrapper around the upstream SelectContent that forces a remount when
@@ -25,14 +47,11 @@ import {
  * NOTE: Only inspects top-level children. If SelectItems are nested
  * inside SelectGroup or fragments, the key may not update correctly.
  */
-function SelectContent({
-    children,
-    ...props
-}: React.ComponentProps<typeof OriginalSelectContent>) {
+function SelectContent({ children, ...props }: React.ComponentProps<typeof OriginalSelectContent>) {
     const childrenKey = React.useMemo(
         () =>
             React.Children.toArray(children)
-                .map(c => (React.isValidElement(c) ? (c.props as any)?.value ?? c.key : ''))
+                .map(c => (React.isValidElement(c) ? ((c.props as any)?.value ?? c.key) : ''))
                 .join('|'),
         [children],
     );
