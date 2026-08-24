@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+
 import { patchStorybookTestTransform } from './storybook-test-compat.mjs';
 import dashboardViteConfigFactory from './vite.config.mjs';
 
@@ -14,9 +15,7 @@ const previousVitestFlag = process.env.VITEST;
 // Keep the mutation scoped to config creation so it cannot leak to other builds.
 process.env.VITEST = 'true';
 
-type DashboardViteConfigFactory = (env: { mode: string }) => { plugins?: readonly unknown[] };
-
-const dashboardViteConfig = (dashboardViteConfigFactory as DashboardViteConfigFactory)({ mode: 'test' });
+const dashboardViteConfig: { plugins?: readonly unknown[] } = dashboardViteConfigFactory({ mode: 'test' });
 const dashboardPlugins = (dashboardViteConfig.plugins ?? [])
     .flat(Infinity)
     .filter(Boolean) as unknown as Plugin[];
@@ -26,7 +25,7 @@ const storybookPlugins = (
     })
 )
     .flat(Infinity)
-    .filter(Boolean) as Plugin[];
+    .filter(Boolean);
 
 if (previousVitestFlag === undefined) {
     delete process.env.VITEST;
@@ -50,6 +49,33 @@ const browserOptimizeDependencies = [
     'react-dom',
     'react-dom/client',
     'react/jsx-runtime',
+    'react-day-picker/locale/ar',
+    'react-day-picker/locale/bg',
+    'react-day-picker/locale/cs',
+    'react-day-picker/locale/de',
+    'react-day-picker/locale/en-US',
+    'react-day-picker/locale/es',
+    'react-day-picker/locale/fa-IR',
+    'react-day-picker/locale/fr',
+    'react-day-picker/locale/he',
+    'react-day-picker/locale/hr',
+    'react-day-picker/locale/hu',
+    'react-day-picker/locale/it',
+    'react-day-picker/locale/ja',
+    'react-day-picker/locale/ko',
+    'react-day-picker/locale/nb',
+    'react-day-picker/locale/nl',
+    'react-day-picker/locale/pl',
+    'react-day-picker/locale/pt',
+    'react-day-picker/locale/pt-BR',
+    'react-day-picker/locale/ro',
+    'react-day-picker/locale/ru',
+    'react-day-picker/locale/sv',
+    'react-day-picker/locale/tr',
+    'react-day-picker/locale/uk',
+    'react-day-picker/locale/uz',
+    'react-day-picker/locale/zh-CN',
+    'react-day-picker/locale/zh-TW',
     'strip-literal',
     'strip-literal > js-tokens',
     'tailwind-merge',
