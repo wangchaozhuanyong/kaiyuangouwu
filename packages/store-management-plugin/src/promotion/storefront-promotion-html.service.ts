@@ -76,6 +76,13 @@ const FALLBACK_ENTRY_FORM = `<form data-store-entry style="position:fixed;right:
     </button>
 </form>`;
 
+const PROMOTION_ACCESSIBILITY_STYLE = `<style data-storefront-promotion-accessibility>
+    :where(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible {
+        outline: 3px solid #38bdf8;
+        outline-offset: 3px;
+    }
+</style>`;
+
 @Injectable()
 export class StorefrontPromotionHtmlService {
     private readonly markdown = new MarkdownIt({ html: false, linkify: true, typographer: false });
@@ -238,9 +245,10 @@ export class StorefrontPromotionHtmlService {
         if ($('meta[charset]').length === 0) {
             $('head').prepend('<meta charset="utf-8">');
         }
-        if ($('meta[name="viewport"]').length === 0) {
-            $('head').append('<meta name="viewport" content="width=device-width, initial-scale=1">');
-        }
+        $('meta[name="viewport"]').remove();
+        $('head').append('<meta name="viewport" content="width=device-width, initial-scale=1">');
+        $('style[data-storefront-promotion-accessibility]').remove();
+        $('head').append(PROMOTION_ACCESSIBILITY_STYLE);
         $('meta[name="robots"]').remove();
         $('head').append('<meta name="robots" content="index,follow,max-image-preview:large">');
         if ($('title').length === 0) {

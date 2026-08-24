@@ -42,6 +42,24 @@ const SEND_CLIENT_CHANNEL_TOKEN =
     import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
     (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
 
+interface StorefrontContentQueryResult {
+    storefrontContent: StorefrontContentBlock[];
+    activeStorefrontCoupons?: StorefrontCouponCampaign[];
+    activeStorefrontFlashSales?: StorefrontFlashSale[];
+    activeSystemAnnouncements?: StorefrontSystemAnnouncement[];
+    storefrontContentSettings?: {
+        heroAutoplayIntervalSeconds: number;
+        configuredBlockTypes?: Array<StorefrontContentBlock['type']>;
+    };
+}
+
+function isStorefrontContentSchemaCompatibilityError(error: unknown): boolean {
+    return (
+        error instanceof Error &&
+        /cannot query field|unknown (?:field|argument)|is not defined by type/iu.test(error.message)
+    );
+}
+
 const productFields = `
     id
     createdAt
@@ -426,17 +444,10 @@ export class ShopApi {
     }
 
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
-        const result = await this.request<{
-            storefrontContent: StorefrontContentBlock[];
-            activeStorefrontCoupons?: StorefrontCouponCampaign[];
-            activeStorefrontFlashSales?: StorefrontFlashSale[];
-            activeSystemAnnouncements?: StorefrontSystemAnnouncement[];
-            storefrontContentSettings?: {
-                heroAutoplayIntervalSeconds: number;
-                configuredBlockTypes: Array<StorefrontContentBlock['type']>;
-            };
-        }>(
-            `
+        let result: StorefrontContentQueryResult;
+        try {
+            result = await this.request<StorefrontContentQueryResult>(
+                `
             query StorefrontContent {
                 storefrontContentSettings {
                     heroAutoplayIntervalSeconds
@@ -511,9 +522,53 @@ export class ShopApi {
                 }
             }
         `,
-            undefined,
-            signal,
-        );
+                undefined,
+                signal,
+            );
+        } catch (error) {
+            if (!isStorefrontContentSchemaCompatibilityError(error)) {
+                throw error;
+            }
+            result = await this.request<StorefrontContentQueryResult>(
+                `
+                query StorefrontContentLegacy {
+                    storefrontContentSettings {
+                        heroAutoplayIntervalSeconds
+                    }
+                    storefrontContent {
+                        id
+                        code
+                        type
+                        enabled
+                        position
+                        startsAt
+                        endsAt
+                        imageUrl
+                        backgroundColor
+                        textColor
+                        targetType
+                        targetValue
+                        title
+                        subtitle
+                        body
+                        ctaLabel
+                        items {
+                            id
+                            enabled
+                            position
+                            imageUrl
+                            targetType
+                            targetValue
+                            label
+                            description
+                        }
+                    }
+                }
+            `,
+                undefined,
+                signal,
+            );
+        }
         return {
             blocks: result.storefrontContent,
             coupons: result.activeStorefrontCoupons ?? [],

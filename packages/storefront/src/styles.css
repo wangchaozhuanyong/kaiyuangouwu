@@ -11648,6 +11648,22 @@ img.fatal-error-mark {
         grid-template-rows: auto;
     }
 
+    .home-intro-grid .quick-grid-5 {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .home-intro-grid .quick-grid-5 button {
+        grid-column: span 2;
+    }
+
+    .home-intro-grid .quick-grid-5 button:nth-child(4) {
+        grid-column: 2 / span 2;
+    }
+
+    .home-intro-grid .quick-grid-5 button:nth-child(5) {
+        grid-column: 4 / span 2;
+    }
+
     .home-intro-grid .quick-grid button:hover {
         background: var(--accent-soft);
         border-color: rgba(37, 99, 235, 0.2);

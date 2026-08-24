@@ -107,6 +107,64 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
+    it('falls back to the legacy storefront content query when optional commerce fields are unavailable', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message: 'Cannot query field "activeStorefrontCoupons" on type "Query".',
+                            },
+                        ],
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            storefrontContent: [],
+                            storefrontContentSettings: { heroAutoplayIntervalSeconds: 7 },
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(new ShopApi(market).storefrontContent()).resolves.toEqual({
+            blocks: [],
+            coupons: [],
+            flashSales: [],
+            systemAnnouncements: [],
+            settings: { heroAutoplayIntervalSeconds: 7, configuredBlockTypes: [] },
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const modernRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        const legacyRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])) as { query: string };
+        expect(modernRequest.query).toContain('activeStorefrontCoupons');
+        expect(legacyRequest.query).toContain('query StorefrontContentLegacy');
+        expect(legacyRequest.query).not.toContain('activeStorefrontCoupons');
+        expect(legacyRequest.query).not.toContain('configuredBlockTypes');
+    });
+
+    it('does not hide non-schema storefront content failures behind the legacy fallback', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ errors: [{ message: 'Internal server error' }] }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(new ShopApi(market).storefrontContent()).rejects.toThrow('Internal server error');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('reuses the Vendure bearer token for subsequent requests and clears it on logout', async () => {
         const responseBody = JSON.stringify({ data: { storefrontContent: [] } });
         const fetchMock = vi

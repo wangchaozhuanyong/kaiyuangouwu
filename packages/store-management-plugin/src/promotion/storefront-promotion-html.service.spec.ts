@@ -65,4 +65,21 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('data-bind-src="store.heroImageUrl"');
         expect(service.defaultTemplate).toContain('data-store-entry');
     });
+
+    it('normalizes custom page zoom and keyboard focus accessibility', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: `<!doctype html><html><head>
+                <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+            </head><body><form data-store-entry><button type="submit">进入</button></form></body></html>`,
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html).toContain('content="width=device-width, initial-scale=1"');
+        expect(html).not.toContain('maximum-scale');
+        expect(html).not.toContain('user-scalable');
+        expect(html).toContain('data-storefront-promotion-accessibility');
+        expect(html).toContain(':focus-visible');
+    });
 });
