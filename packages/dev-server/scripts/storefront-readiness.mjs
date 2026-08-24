@@ -113,8 +113,20 @@ function missingBilingualItems(products) {
 function demoProducts(products) {
     return products.filter(product => {
         const variantText = (product.variants ?? []).flatMap(variant => [variant.sku, variant.name]);
+        const assets = [
+            product.featuredAsset,
+            ...(product.assets ?? []),
+            ...(product.variants ?? []).flatMap(variant => [
+                variant.featuredAsset,
+                ...(variant.assets ?? []),
+            ]),
+        ].filter(Boolean);
+        const hasDemoAsset = assets.some(asset =>
+            (asset.tags ?? []).some(tag => tag.value === 'storefront-demo'),
+        );
         const text = normalizedText([product.name, product.description, ...variantText]);
         return (
+            hasDemoAsset ||
             (product.variants ?? []).some(variant => String(variant.sku).startsWith('DEMO-')) ||
             testContentPattern.test(text)
         );
@@ -179,12 +191,6 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
         title: '公开 CNAME 目标',
         passed: isPublicHostname(snapshot.configuration?.cnameTarget),
         detail: `cnameTarget=${String(snapshot.configuration?.cnameTarget ?? 'missing')}`,
-    });
-    pushCheck(checks, {
-        id: 'demo-assets',
-        title: '临时商品资源已清理',
-        passed: snapshot.demoAssetCount === 0,
-        detail: `${Number(snapshot.demoAssetCount ?? 0)} assets tagged storefront-demo`,
     });
     pushCheck(checks, {
         id: 'search-index-queue',
@@ -503,6 +509,15 @@ async function fetchProducts(fetchImpl, apiOrigin, authToken, channelToken) {
                             enabled
                             featuredAsset {
                                 id
+                                tags {
+                                    value
+                                }
+                            }
+                            assets {
+                                id
+                                tags {
+                                    value
+                                }
                             }
                             translations {
                                 languageCode
@@ -528,6 +543,18 @@ async function fetchProducts(fetchImpl, apiOrigin, authToken, channelToken) {
                                 }
                                 customFields {
                                     fulfillmentType
+                                }
+                                featuredAsset {
+                                    id
+                                    tags {
+                                        value
+                                    }
+                                }
+                                assets {
+                                    id
+                                    tags {
+                                        value
+                                    }
                                 }
                             }
                         }
@@ -621,9 +648,6 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                 storeDomainConfiguration {
                     cnameTarget
                     routingMode
-                }
-                assets(options: { take: 1, tags: ["storefront-demo"], tagsOperator: AND }) {
-                    totalItems
                 }
                 pendingSearchIndexUpdates
                 jobs(
@@ -757,7 +781,6 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
 
     return {
         configuration: globalResult.data.storeDomainConfiguration,
-        demoAssetCount: globalResult.data.assets.totalItems,
         pendingSearchIndexUpdates: globalResult.data.pendingSearchIndexUpdates,
         activeSearchIndexJobs: globalResult.data.jobs.totalItems,
         storefrontChannelCodes,

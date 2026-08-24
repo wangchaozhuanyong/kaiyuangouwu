@@ -13,7 +13,8 @@ function product(overrides = {}) {
         name: 'Production product',
         description: 'Approved product content',
         enabled: true,
-        featuredAsset: { id: 'asset-1' },
+        featuredAsset: { id: 'asset-1', tags: [] },
+        assets: [],
         translations: [
             { languageCode: 'en', name: 'Production product' },
             { languageCode: 'zh_Hans', name: '正式商品' },
@@ -26,6 +27,8 @@ function product(overrides = {}) {
                 price: 1000,
                 currencyCode: 'CNY',
                 taxCategory: { id: 'standard-tax', name: 'Standard Tax' },
+                featuredAsset: null,
+                assets: [],
                 translations: [
                     { languageCode: 'en', name: 'Standard' },
                     { languageCode: 'zh_Hans', name: '标准版' },
@@ -105,7 +108,6 @@ function channel(code, overrides = {}) {
 function readySnapshot() {
     return {
         configuration: { routingMode: 'require-domain', cnameTarget: 'stores.example.com' },
-        demoAssetCount: 0,
         pendingSearchIndexUpdates: 0,
         activeSearchIndexJobs: 0,
         storefrontChannelCodes: ['my-malaysia'],
@@ -143,7 +145,6 @@ void test('passes a complete production snapshot', () => {
 void test('reports demo data, test payment, bad zones and missing domains', () => {
     const snapshot = readySnapshot();
     snapshot.configuration = { routingMode: 'prefer-domain', cnameTarget: 'vendure.localhost' };
-    snapshot.demoAssetCount = 4;
     snapshot.channels[0] = channel('my-malaysia', {
         defaultTaxZone: { id: 'tax-zone', name: 'Tax zone', members: [] },
         defaultShippingZone: { id: 'shipping-zone', name: 'Shipping zone', members: [] },
@@ -172,7 +173,6 @@ void test('reports demo data, test payment, bad zones and missing domains', () =
     assert.equal(report.ready, false);
     assert.ok(failedIds.has('domain-routing-mode'));
     assert.ok(failedIds.has('public-cname-target'));
-    assert.ok(failedIds.has('demo-assets'));
     assert.ok(failedIds.has('tax-zone-my-malaysia'));
     assert.ok(failedIds.has('tax-rate-coverage-my-malaysia'));
     assert.ok(failedIds.has('shipping-zone-my-malaysia'));
@@ -181,6 +181,22 @@ void test('reports demo data, test payment, bad zones and missing domains', () =
     assert.ok(failedIds.has('shipping-methods-my-malaysia'));
     assert.ok(failedIds.has('products-real-my-malaysia'));
     assert.ok(failedIds.has('content-real-my-malaysia'));
+});
+
+void test('blocks demo-tagged assets only when the live catalog references them', () => {
+    const snapshot = readySnapshot();
+    snapshot.channels[0].products = [
+        product({
+            featuredAsset: {
+                id: 'asset-1',
+                tags: [{ value: 'storefront-demo' }],
+            },
+            variants: [{ ...product().variants[0], currencyCode: 'MYR' }],
+        }),
+    ];
+    const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
+
+    assert.equal(report.checks.find(check => check.id === 'products-real-my-malaysia')?.status, 'blocker');
 });
 
 void test('keeps tax mode approval as an explicit manual gate', () => {
