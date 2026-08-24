@@ -154,7 +154,8 @@ test.describe('floating controls inside modal layers', () => {
         const tabletLandscapeBox = await wideDialog.boundingBox();
         expect(tabletLandscapeBox).not.toBeNull();
         expect(tabletLandscapeBox?.width).toBeGreaterThan(980);
-        expect(tabletLandscapeBox?.width).toBeLessThanOrEqual(984);
+        expect(tabletLandscapeBox?.x ?? 0).toBeGreaterThanOrEqual(15);
+        expect((tabletLandscapeBox?.x ?? 0) + (tabletLandscapeBox?.width ?? 0)).toBeLessThanOrEqual(1009);
         const landscapeFormBox = await formPane.boundingBox();
         const landscapePreviewBox = await previewPane.boundingBox();
         expect(Math.abs((landscapeFormBox?.y ?? 0) - (landscapePreviewBox?.y ?? 0))).toBeLessThan(6);
