@@ -14,7 +14,7 @@ import { Form } from '@/vdb/components/ui/form.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { Label } from '@/vdb/components/ui/label.js';
 import { api } from '@/vdb/graphql/api.js';
-import { graphql } from '@/vdb/graphql/graphql.js';
+import { graphql, ResultOf } from '@/vdb/graphql/graphql.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -88,7 +88,7 @@ export function FulfillOrderDialog({
 
     const fulfillOrderMutation = useMutation({
         mutationFn: api.mutate(fulfillOrderDocument),
-        onSuccess: result => {
+        onSuccess: (result: ResultOf<typeof fulfillOrderDocument>) => {
             const { addFulfillmentToOrder } = result;
             if (addFulfillmentToOrder.__typename === 'Fulfillment') {
                 toast(t`Successfully fulfilled order`);
@@ -200,12 +200,12 @@ export function FulfillOrderDialog({
                     quantity: fulfillCount,
                 }));
 
-            const result = await fulfillOrderMutation.mutateAsync({
+            const result = (await fulfillOrderMutation.mutateAsync({
                 input: {
                     lines,
                     handler: data.handler,
                 },
-            });
+            })) as ResultOf<typeof fulfillOrderDocument>;
             if (result.addFulfillmentToOrder.__typename !== 'Fulfillment') {
                 return;
             }
