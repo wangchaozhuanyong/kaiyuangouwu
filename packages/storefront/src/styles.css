@@ -619,8 +619,10 @@ img {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .safe-image {
+    .safe-image,
+    .notice-strip span {
         transition: none;
+        animation: none;
     }
 
     .navigation-progress::after {
@@ -1038,6 +1040,18 @@ img.fatal-error-mark {
     white-space: nowrap;
     text-overflow: ellipsis;
     font-weight: var(--font-weight-medium);
+    animation: notice-ticker-enter 240ms ease-out;
+}
+
+@keyframes notice-ticker-enter {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .storefront-description {
@@ -1059,7 +1073,9 @@ img.fatal-error-mark {
     overflow: hidden;
     border-radius: 18px;
     background: #090d16;
-    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 8px 24px -4px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .hero.is-swipeable {
@@ -1086,11 +1102,13 @@ img.fatal-error-mark {
 .hero-rich-overlay-shade {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, 
-        rgba(9, 13, 22, 0.95) 0%, 
-        rgba(9, 14, 25, 0.88) 42%, 
-        rgba(10, 16, 30, 0.5) 68%, 
-        rgba(10, 16, 30, 0.1) 100%);
+    background: linear-gradient(
+        90deg,
+        rgba(9, 13, 22, 0.95) 0%,
+        rgba(9, 14, 25, 0.88) 42%,
+        rgba(10, 16, 30, 0.5) 68%,
+        rgba(10, 16, 30, 0.1) 100%
+    );
     pointer-events: none;
     z-index: 1;
 }
@@ -1141,7 +1159,9 @@ img.fatal-error-mark {
     line-height: 1.25;
     letter-spacing: -0.02em;
     color: #ffffff;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 20px rgba(14, 165, 233, 0.4);
+    text-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.9),
+        0 0 20px rgba(14, 165, 233, 0.4);
 }
 
 .hero-rich-desc {
@@ -1212,9 +1232,13 @@ img.fatal-error-mark {
     align-items: center;
     gap: 4px;
     align-self: flex-start;
-    box-shadow: 0 4px 14px rgba(6, 182, 212, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    box-shadow:
+        0 4px 14px rgba(6, 182, 212, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
     cursor: pointer;
-    transition: transform 180ms ease, box-shadow 180ms ease;
+    transition:
+        transform 180ms ease,
+        box-shadow 180ms ease;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
@@ -1225,7 +1249,9 @@ img.fatal-error-mark {
 .hero-rich-cta-btn.is-vip-btn {
     border-color: rgba(245, 158, 11, 0.7);
     background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-    box-shadow: 0 4px 14px rgba(217, 119, 6, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    box-shadow:
+        0 4px 14px rgba(217, 119, 6, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .hero-rich-cta-btn svg {
@@ -1531,7 +1557,10 @@ img.fatal-error-mark {
     position: relative;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
     scroll-snap-align: start;
-    transition: transform 180ms ease, box-shadow 180ms ease, opacity 200ms ease;
+    transition:
+        transform 180ms ease,
+        box-shadow 180ms ease,
+        opacity 200ms ease;
 }
 
 .coupon-ticket-card:active {
@@ -1682,7 +1711,9 @@ img.fatal-error-mark {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: transform 150ms ease, opacity 180ms ease;
+    transition:
+        transform 150ms ease,
+        opacity 180ms ease;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
     padding: 4px 2px;
 }
@@ -1778,7 +1809,7 @@ img.fatal-error-mark {
     flex-direction: column;
     justify-content: space-between;
     text-align: left;
-    transition: all 280ms cubic-bezier(.4, 0, .2, 1);
+    transition: all 280ms cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
 }
 
@@ -1809,6 +1840,14 @@ img.fatal-error-mark {
     transform: translateY(-2px);
 }
 
+.showcase-card:disabled {
+    cursor: default;
+}
+
+.showcase-card:disabled:hover {
+    transform: none;
+}
+
 .showcase-card:hover::after {
     opacity: 0.4;
 }
@@ -1824,8 +1863,20 @@ img.fatal-error-mark {
 
 .showcase-card.is-hardware::before {
     background:
-        linear-gradient(90deg, transparent 48%, rgba(34, 211, 238, 0.07) 49%, rgba(34, 211, 238, 0.07) 51%, transparent 52%),
-        linear-gradient(0deg, transparent 48%, rgba(34, 211, 238, 0.07) 49%, rgba(34, 211, 238, 0.07) 51%, transparent 52%);
+        linear-gradient(
+            90deg,
+            transparent 48%,
+            rgba(34, 211, 238, 0.07) 49%,
+            rgba(34, 211, 238, 0.07) 51%,
+            transparent 52%
+        ),
+        linear-gradient(
+            0deg,
+            transparent 48%,
+            rgba(34, 211, 238, 0.07) 49%,
+            rgba(34, 211, 238, 0.07) 51%,
+            transparent 52%
+        );
     background-size: 22px 22px;
 }
 
@@ -1857,7 +1908,10 @@ img.fatal-error-mark {
         radial-gradient(circle 1.5px at 50% 50%, rgba(167, 139, 250, 0.18) 0%, transparent 100%),
         radial-gradient(circle 1px at 25% 75%, rgba(167, 139, 250, 0.1) 0%, transparent 100%),
         radial-gradient(circle 1px at 80% 30%, rgba(167, 139, 250, 0.1) 0%, transparent 100%);
-    background-size: 28px 28px, 35px 35px, 42px 42px;
+    background-size:
+        28px 28px,
+        35px 35px,
+        42px 42px;
     opacity: 0.6;
 }
 
@@ -2317,6 +2371,137 @@ img.fatal-error-mark {
     gap: 12px 10px;
 }
 
+.flash-sale-countdown {
+    min-height: 34px;
+    margin: -4px 2px 10px;
+    padding: 6px 10px;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #fff7ed, #fff);
+    color: #c2410c;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+}
+
+.flash-sale-countdown svg {
+    width: 14px;
+    height: 14px;
+}
+
+.flash-sale-countdown strong {
+    font-family: var(--font-numeric);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.flash-sale-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 10px;
+}
+
+.flash-sale-card {
+    min-width: 0;
+    padding: 0 0 11px;
+    border: 1px solid rgba(234, 88, 12, 0.14);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    text-align: left;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition:
+        transform 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.flash-sale-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.flash-sale-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+.flash-sale-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--product-media-bg);
+    display: block;
+}
+
+.flash-sale-image img,
+.flash-sale-image .responsive-picture,
+.flash-sale-image .responsive-picture > img,
+.flash-sale-image .image-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.flash-sale-image em {
+    padding: 3px 7px;
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    border-radius: 5px;
+    background: #ea580c;
+    color: white;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 700;
+    box-shadow: 0 2px 7px rgba(194, 65, 12, 0.24);
+}
+
+.flash-sale-name {
+    min-height: 2.7em;
+    margin: 8px 10px 0;
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.flash-sale-card > small {
+    margin: 3px 10px 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.flash-sale-price {
+    margin: 8px 10px 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.flash-sale-price b {
+    color: #ea580c;
+    font-family: var(--font-numeric);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.flash-sale-price del {
+    color: var(--muted);
+    font-size: 10px;
+}
+
 .product-card {
     min-width: 0;
     position: relative;
@@ -2328,7 +2513,10 @@ img.fatal-error-mark {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease, border-color 180ms ease;
+    transition:
+        transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        box-shadow 180ms ease,
+        border-color 180ms ease;
 }
 
 .product-card:hover {
@@ -2411,7 +2599,10 @@ img.fatal-error-mark {
     place-items: center;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     backdrop-filter: blur(6px);
-    transition: transform 140ms ease, color 140ms ease, background 140ms ease;
+    transition:
+        transform 140ms ease,
+        color 140ms ease,
+        background 140ms ease;
 }
 
 .product-card-favorite:hover {
@@ -2533,7 +2724,10 @@ img.fatal-error-mark {
     display: grid;
     place-items: center;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14);
-    transition: transform 140ms ease, background 160ms ease, color 160ms ease;
+    transition:
+        transform 140ms ease,
+        background 160ms ease,
+        color 160ms ease;
 }
 
 .product-card-add-btn svg,
@@ -2843,7 +3037,12 @@ img.fatal-error-mark {
     position: relative;
     z-index: 1;
     border: 0;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.94) 22%, #ffffff 100%);
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.94) 22%,
+        #ffffff 100%
+    );
     color: var(--muted);
     display: flex;
     flex-direction: column;
@@ -3360,7 +3559,9 @@ img.fatal-error-mark {
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     border: 1px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+    box-shadow:
+        0 3px 10px rgba(0, 0, 0, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.6);
     transition: transform 180ms ease;
 }
 
@@ -4647,6 +4848,75 @@ img.fatal-error-mark {
     background: white;
 }
 
+.coupon-center-available {
+    margin: 12px 14px 0;
+    padding: 16px;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    background: linear-gradient(145deg, #fff7ed, #fff);
+}
+
+.coupon-center-available > header strong,
+.coupon-center-available > header small {
+    display: block;
+}
+
+.coupon-center-available > header small {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.coupon-center-available > div {
+    margin-top: 12px;
+    display: grid;
+    gap: 8px;
+}
+
+.coupon-center-available button {
+    min-height: 62px;
+    padding: 10px 12px;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    background: white;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+}
+
+.coupon-center-available button span,
+.coupon-center-available button b,
+.coupon-center-available button small {
+    display: block;
+}
+
+.coupon-center-available button b {
+    color: #ea580c;
+    font-family: var(--font-numeric);
+    font-size: 20px;
+}
+
+.coupon-center-available button small {
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.coupon-center-available button em {
+    flex: none;
+    color: #c2410c;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 700;
+}
+
+.coupon-center-available button:disabled {
+    cursor: default;
+    opacity: 0.58;
+}
+
 .coupon-center-intro {
     padding-bottom: 18px;
     display: flex;
@@ -5282,7 +5552,6 @@ img.fatal-error-mark {
     padding-bottom: 32px;
 }
 
-
 /* ==========================================================================
    Account Hero: Rich Vibrant Brand Red & Frosted Glass Layering
    ========================================================================== */
@@ -5363,8 +5632,15 @@ img.fatal-error-mark {
 .account-hero-avatar-halo {
     padding: 2.5px;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 158, 11, 0.5), rgba(255, 255, 255, 0.95));
-    box-shadow: 0 0 14px rgba(245, 158, 11, 0.25), 0 3px 10px rgba(15, 23, 42, 0.08);
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.95),
+        rgba(245, 158, 11, 0.5),
+        rgba(255, 255, 255, 0.95)
+    );
+    box-shadow:
+        0 0 14px rgba(245, 158, 11, 0.25),
+        0 3px 10px rgba(15, 23, 42, 0.08);
     margin-bottom: 8px;
 }
 
@@ -5977,7 +6253,9 @@ img.fatal-error-mark {
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
-    transition: border-color 160ms ease, box-shadow 160ms ease;
+    transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .account-page .security-row:hover {
@@ -6716,6 +6994,22 @@ img.fatal-error-mark {
     line-height: 1.2;
 }
 
+.detail-price strong,
+.detail-price del {
+    display: block;
+}
+
+.detail-price strong {
+    font: inherit;
+}
+
+.detail-price.is-flash-sale del {
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+}
+
 .detail-price-line {
     display: flex;
     align-items: baseline;
@@ -7217,7 +7511,9 @@ img.fatal-error-mark {
     font-size: 14px;
     display: grid;
     place-items: center;
-    transition: background 140ms ease, transform 120ms ease;
+    transition:
+        background 140ms ease,
+        transform 120ms ease;
 }
 
 .search-header > button:active {
@@ -7235,7 +7531,10 @@ img.fatal-error-mark {
     grid-template-columns: 18px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+    transition:
+        border-color 160ms ease,
+        background 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .search-header > label:focus-within {
@@ -7427,7 +7726,10 @@ img.fatal-error-mark {
     align-content: center;
     gap: 6px;
     box-shadow: var(--shadow-sm);
-    transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
+    transition:
+        transform 140ms ease,
+        background 140ms ease,
+        box-shadow 140ms ease;
 }
 
 .discovery-grid button:hover {
@@ -10675,7 +10977,9 @@ img.fatal-error-mark {
     align-items: center;
     justify-content: center;
     gap: 3px;
-    transition: transform 120ms ease, color 160ms ease;
+    transition:
+        transform 120ms ease,
+        color 160ms ease;
 }
 
 .bottom-navigation > button:active {
@@ -10709,7 +11013,9 @@ img.fatal-error-mark {
 .nav-icon svg {
     width: 20px;
     height: 20px;
-    transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), color 160ms ease;
+    transition:
+        transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+        color 160ms ease;
 }
 
 .bottom-navigation > button.is-active .nav-icon svg {
@@ -11178,24 +11484,27 @@ img.fatal-error-mark {
     .home-page > .content-warning,
     .home-page > .storefront-description {
         width: 100%;
+        margin-right: 0;
+        margin-left: 0;
     }
 
     .home-page > .storefront-description {
-        margin-right: 0;
-        margin-left: 0;
         font-size: 14px;
         text-align: left;
     }
 
     .home-page > .notice-strip {
-        padding-right: 16px;
-        padding-left: 16px;
+        margin-top: 16px;
+        margin-bottom: 0;
+        padding-right: 20px;
+        padding-left: 20px;
+        border-radius: 12px;
     }
 
     .home-intro-grid {
         width: 100%;
         margin: 0 auto;
-        padding: 24px 0 0;
+        padding: 16px 0 0;
         display: grid;
         grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr);
         grid-template-rows: auto 1fr;
@@ -12229,8 +12538,14 @@ img.fatal-error-mark {
 }
 
 @keyframes poster-fade-in {
-    from { opacity: 0; transform: scale(0.96); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .poster-modal-card {
