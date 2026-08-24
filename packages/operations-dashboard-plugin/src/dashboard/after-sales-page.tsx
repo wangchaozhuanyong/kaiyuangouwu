@@ -98,6 +98,10 @@ const messages = {
     approve: msg({ id: 'operations.afterSales.approve', message: 'Approve' }),
     reject: msg({ id: 'operations.afterSales.reject', message: 'Reject' }),
     complete: msg({ id: 'operations.afterSales.complete', message: 'Mark completed' }),
+    completeAfterRefund: msg({
+        id: 'operations.afterSales.completeAfterRefund',
+        message: 'Refund completed, mark complete',
+    }),
     cancel: msg({ id: 'operations.afterSales.cancel', message: 'Cancel' }),
     save: msg({ id: 'operations.afterSales.confirm', message: 'Confirm' }),
     saving: msg({ id: 'operations.afterSales.processing', message: 'Processing' }),
@@ -120,10 +124,10 @@ const messages = {
         id: 'operations.afterSales.invalidAmount',
         message: 'The approved amount must be between zero and the requested amount',
     }),
-    refundUnavailable: msg({
-        id: 'operations.afterSales.refundUnavailable',
+    refundReminder: msg({
+        id: 'operations.afterSales.refundReminder',
         message:
-            'Real payment refunds are not connected. A positive refund must be completed and verified before this request can be marked completed.',
+            'Process the payment refund in the order first. After confirming the refund result, return here and mark this request completed.',
     }),
     updated: msg({ id: 'operations.afterSales.updated', message: 'After-sales status updated' }),
     activeChannel: msg({ id: 'operations.afterSales.activeStore', message: 'Active store' }),
@@ -511,7 +515,7 @@ function RequestDetailsSheet({
                             </section>
                             {requiresVerifiedRefund && (
                                 <Alert>
-                                    <AlertDescription>{text.refundUnavailable}</AlertDescription>
+                                    <AlertDescription>{text.refundReminder}</AlertDescription>
                                 </Alert>
                             )}
                         </div>
@@ -542,21 +546,18 @@ function RequestDetailsSheet({
                                                     <Link
                                                         to="/orders/$id"
                                                         params={{ id: request.order.id }}
+                                                        search={{ action: 'refund' }}
                                                     />
                                                 }
                                             >
                                                 {text.openOrder}
                                             </Button>
                                         )}
-                                        <Button
-                                            disabled={pending || requiresVerifiedRefund}
-                                            title={
-                                                requiresVerifiedRefund ? text.refundUnavailable : undefined
-                                            }
-                                            onClick={() => onTransition('COMPLETED')}
-                                        >
+                                        <Button disabled={pending} onClick={() => onTransition('COMPLETED')}>
                                             <CheckCircle2 className="size-4" aria-hidden="true" />
-                                            {text.complete}
+                                            {requiresVerifiedRefund
+                                                ? text.completeAfterRefund
+                                                : text.complete}
                                         </Button>
                                     </>
                                 )}

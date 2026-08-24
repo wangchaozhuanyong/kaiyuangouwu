@@ -52,13 +52,26 @@ export class AlignAutoCardDeliverySchema1787598000000 implements MigrationInterf
     ): Promise<void> {
         const table = await queryRunner.getTable(tableName);
         const column = table?.findColumnByName(columnName);
-        if (!table || !column || (!column.isNullable && column.type === 'text')) return;
+        if (
+            !table ||
+            !column ||
+            (!column.isNullable && column.type === 'text' && column.default === undefined)
+        ) {
+            return;
+        }
 
         await queryRunner.query(
             `UPDATE ${this.quote(tableName, queryRunner)} ` +
                 `SET ${this.quote(columnName, queryRunner)} = '' ` +
                 `WHERE ${this.quote(columnName, queryRunner)} IS NULL`,
         );
+        if (['mysql', 'mariadb'].includes(queryRunner.connection.options.type)) {
+            await queryRunner.query(
+                `ALTER TABLE ${this.quote(tableName, queryRunner)} ` +
+                    `MODIFY ${this.quote(columnName, queryRunner)} text NOT NULL`,
+            );
+            return;
+        }
         const updatedColumn = column.clone();
         updatedColumn.type = 'text';
         updatedColumn.isNullable = false;

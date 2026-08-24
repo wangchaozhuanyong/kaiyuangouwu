@@ -99,10 +99,23 @@ describe('CartPage guest cart', () => {
         expect(markup).toContain('data-cart-action="remove"');
         expect(markup).toContain('class="cart-line-purchase-row"');
         expect(markup).not.toContain('class="cart-line-actions"><button');
-        expect(markup).toContain('aria-label="减少 32 英寸显示器 数量"');
+        expect(markup).toContain('aria-label="减少 32 英寸显示器 数量并删除商品"');
+        expect(markup).not.toContain('aria-label="减少 32 英寸显示器 数量并删除商品" disabled=""');
         expect(markup).toContain('aria-label="增加 32 英寸显示器 数量"');
         expect(markup).toContain('结算（1）');
         expect(markup).not.toContain('登录后使用购物车');
+    });
+
+    it('keeps the regular decrement action when a line has more than one item', () => {
+        const markup = renderCart({
+            ...cart,
+            totalQuantity: 2,
+            selectedQuantity: 2,
+            lines: [{ ...cart.lines[0], quantity: 2 }],
+        });
+
+        expect(markup).toContain('aria-label="减少 32 英寸显示器 数量"');
+        expect(markup).not.toContain('数量并删除商品');
     });
 
     it('shows the ordinary empty state when a guest cart has no lines', () => {
@@ -116,6 +129,7 @@ describe('CartPage guest cart', () => {
         });
 
         expect(markup).toContain('购物车还是空的');
+        expect(markup).toContain('class="page cart-page is-empty"');
         expect(markup).not.toContain('游客购物车已保存');
         expect(markup).not.toContain('结算（');
     });

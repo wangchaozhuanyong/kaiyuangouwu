@@ -4624,7 +4624,7 @@ export function CartPage(props: CartPageProps) {
     };
 
     return (
-        <main className="page cart-page">
+        <main className={`page cart-page${!lines.length ? ' is-empty' : ''}`}>
             <header className="topbar cart-topbar">
                 <h1 className="topbar-title">{isZh ? '我的购物车' : 'My Cart'}</h1>
                 {!!lines.length && (
@@ -7589,10 +7589,20 @@ function SwipeableCartLine({
                                 <button
                                     type="button"
                                     aria-label={
-                                        isZh ? `减少 ${productName} 数量` : `Decrease ${productName} quantity`
+                                        line.quantity === 1
+                                            ? isZh
+                                                ? `减少 ${productName} 数量并删除商品`
+                                                : `Decrease ${productName} quantity and remove item`
+                                            : isZh
+                                              ? `减少 ${productName} 数量`
+                                              : `Decrease ${productName} quantity`
                                     }
-                                    onClick={() => onQuantity(line.id, line.quantity - 1)}
-                                    disabled={loading || line.quantity <= 1}
+                                    onClick={() =>
+                                        line.quantity === 1
+                                            ? onRemove(line.id)
+                                            : onQuantity(line.id, line.quantity - 1)
+                                    }
+                                    disabled={loading}
                                 >
                                     <Minus />
                                 </button>

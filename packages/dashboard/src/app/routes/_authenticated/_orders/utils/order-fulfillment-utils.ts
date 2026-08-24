@@ -4,9 +4,13 @@ export interface FulfillmentQueueOrder {
     id: string;
     code: string;
     state: string;
+    type?: string;
 }
 
-export function isOrderReadyForFulfillment(order: Pick<FulfillmentQueueOrder, 'state'>): boolean {
+export function isOrderReadyForFulfillment(order: Pick<FulfillmentQueueOrder, 'state' | 'type'>): boolean {
+    if (order.type === 'Aggregate') {
+        return false;
+    }
     return orderStatesReadyForFulfillment.includes(
         order.state as (typeof orderStatesReadyForFulfillment)[number],
     );

@@ -1,3 +1,6 @@
+// Re-export DI runtime tokens so workspace packages always use the same
+// physical NestJS instance as Vendure Core (Bun may otherwise keep duplicates).
+export { ModuleRef, NestFactory } from '@nestjs/core';
 export {
     AdjustmentType,
     AssetType,

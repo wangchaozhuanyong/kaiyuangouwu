@@ -31,6 +31,7 @@ import { UpgradeStorefrontContentEditor1787551200000 } from './1787551200000-upg
 import { AddSystemAnnouncements1787554800000 } from './1787554800000-add-system-announcements';
 import { AddAutoCardDelivery1787594400000 } from './1787594400000-add-auto-card-delivery';
 import { AlignAutoCardDeliverySchema1787598000000 } from './1787598000000-align-auto-card-delivery-schema';
+import { BackfillMissingStoreProfiles1787605200000 } from './1787605200000-backfill-missing-store-profiles';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -66,4 +67,5 @@ export const devServerMigrations = [
     AddSystemAnnouncements1787554800000,
     AddAutoCardDelivery1787594400000,
     AlignAutoCardDeliverySchema1787598000000,
+    BackfillMissingStoreProfiles1787605200000,
 ];

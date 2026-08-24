@@ -17,7 +17,10 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { PlusIcon } from 'lucide-react';
+import { FulfillOrdersBulkAction } from './components/order-bulk-actions.js';
+import { FulfillmentQueueButton } from './components/order-fulfillment-queue.js';
 import { createDraftOrderDocument, orderListDocument } from './orders.graphql.js';
+import { isOrderReadyForFulfillment } from './utils/order-fulfillment-utils.js';
 
 const orderCenterMessages = {
     all: msg({ id: 'orderCenter.status.all', message: 'All orders' }),
@@ -174,31 +177,37 @@ function OrderListPage() {
             }}
             additionalColumns={{
                 operation: {
-                    meta: { dependencies: ['id', 'state'] },
+                    meta: { dependencies: ['id', 'code', 'state'] },
                     header: () => <Trans>Actions</Trans>,
                     cell: ({ row }) => {
                         const order = row.original;
-                        const canFulfill = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
+                        const canFulfill = isOrderReadyForFulfillment(order);
                         const hasShipped = ['PartiallyShipped', 'Shipped', 'PartiallyDelivered'].includes(
                             order.state,
                         );
+                        if (canFulfill) {
+                            return (
+                                <FulfillmentQueueButton order={order}>
+                                    {t(orderCenterMessages.fulfillNow)}
+                                </FulfillmentQueueButton>
+                            );
+                        }
                         return (
                             <Button
                                 size="sm"
-                                variant={canFulfill ? 'default' : 'outline'}
+                                variant="outline"
                                 render={<Link to="/orders/$id" params={{ id: order.id }} />}
                             >
-                                {canFulfill
-                                    ? t(orderCenterMessages.fulfillNow)
-                                    : hasShipped
-                                      ? t(orderCenterMessages.viewLogistics)
-                                      : t(orderCenterMessages.viewOrder)}
+                                {hasShipped
+                                    ? t(orderCenterMessages.viewLogistics)
+                                    : t(orderCenterMessages.viewOrder)}
                             </Button>
                         );
                     },
                     enableSorting: false,
                 },
             }}
+            bulkActions={[{ component: FulfillOrdersBulkAction }]}
         >
             <PageActionBarLeft>
                 <Tabs

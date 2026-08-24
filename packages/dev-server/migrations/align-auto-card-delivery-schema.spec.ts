@@ -30,15 +30,17 @@ describe('AlignAutoCardDeliverySchema migration', () => {
                 ],
             ]);
             const changedColumns: TableColumn[] = [];
-            const query = vi.fn(async () => undefined);
+            const query = vi.fn().mockResolvedValue(undefined);
             const queryRunner = {
                 connection: { options: { type: databaseType } },
-                getTable: vi.fn(async (name: string) => tables.get(name)),
-                addColumn: vi.fn(async (table: Table, column: TableColumn) => {
+                getTable: vi.fn((name: string) => Promise.resolve(tables.get(name))),
+                addColumn: vi.fn((table: Table, column: TableColumn) => {
                     table.addColumn(column);
+                    return Promise.resolve();
                 }),
-                changeColumn: vi.fn(async (_table: Table, _old: TableColumn, column: TableColumn) => {
+                changeColumn: vi.fn((_table: Table, _old: TableColumn, column: TableColumn) => {
                     changedColumns.push(column);
+                    return Promise.resolve();
                 }),
                 query,
             } as unknown as QueryRunner;
@@ -49,12 +51,16 @@ describe('AlignAutoCardDeliverySchema migration', () => {
                 type: 'varchar',
                 length: '16',
             });
-            expect(changedColumns.map(column => [column.name, column.type, column.isNullable])).toEqual([
-                ['languageCode', 'varchar', false],
-                ['instructions', 'text', false],
-                ['instructionsSnapshot', 'text', false],
-            ]);
-            expect(query).toHaveBeenCalledTimes(3);
+            expect(changedColumns.map(column => [column.name, column.type, column.isNullable])).toEqual(
+                databaseType === 'mysql'
+                    ? [['languageCode', 'varchar', false]]
+                    : [
+                          ['languageCode', 'varchar', false],
+                          ['instructions', 'text', false],
+                          ['instructionsSnapshot', 'text', false],
+                      ],
+            );
+            expect(query).toHaveBeenCalledTimes(databaseType === 'mysql' ? 5 : 3);
         },
     );
 });

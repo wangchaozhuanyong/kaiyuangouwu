@@ -5,13 +5,13 @@ import {
     OnApplicationBootstrap,
     OnApplicationShutdown,
 } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import {
     EventBus,
     Injector,
     JobQueue,
     JobQueueService,
     Logger,
+    ModuleRef,
     PluginCommonModule,
     ProcessContext,
     registerPluginStartupMessage,
@@ -343,7 +343,7 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
     /** @internal */
     async onApplicationBootstrap(): Promise<void> {
         await this.initInjectableStrategies();
-        await this.setupEventSubscribers();
+        this.setupEventSubscribers();
         const transport = await resolveTransportSettings(this.options, new Injector(this.moduleRef));
         if (!isDevModeOptions(this.options) && transport.type === 'testing') {
             // When running tests, we don't want to go through the JobQueue system,
@@ -370,7 +370,9 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
             Logger.info('Creating dev mailbox middleware', loggerCtx);
             this.devMailbox = new DevMailbox();
             consumer.apply(this.devMailbox.serve(this.options)).forRoutes(this.options.route);
-            this.devMailbox.handleMockEvent((handler, event) => this.handleEvent(handler, event));
+            this.devMailbox.handleMockEvent((handler, event) => {
+                void this.handleEvent(handler, event);
+            });
             registerPluginStartupMessage('Dev mailbox', this.options.route);
         }
     }
@@ -394,10 +396,10 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
         }
     }
 
-    private async setupEventSubscribers() {
+    private setupEventSubscribers() {
         for (const handler of EmailPlugin.options.handlers) {
             this.eventBus.ofType(handler.event).subscribe(event => {
-                return this.handleEvent(handler, event);
+                void this.handleEvent(handler, event);
             });
         }
     }
@@ -413,11 +415,7 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
             if (typeof globalTemplateVars === 'function') {
                 globalTemplateVars = await globalTemplateVars(event.ctx, injector);
             }
-            const result = await handler.handle(
-                event as any,
-                globalTemplateVars as { [key: string]: any },
-                injector,
-            );
+            const result = await handler.handle(event as any, globalTemplateVars, injector);
             if (!result) {
                 return;
             }

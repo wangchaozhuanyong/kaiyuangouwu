@@ -636,7 +636,10 @@ function ManageProductVariants() {
                                                                 variant="outline"
                                                                 onClick={() =>
                                                                     window.location.assign(
-                                                                        `/dashboard/auto-card?variantId=${variant.id}`,
+                                                                        new URL(
+                                                                            `auto-card?variantId=${encodeURIComponent(variant.id)}`,
+                                                                            document.baseURI,
+                                                                        ).toString(),
                                                                     )
                                                                 }
                                                             >

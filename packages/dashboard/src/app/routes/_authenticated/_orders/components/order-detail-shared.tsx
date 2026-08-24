@@ -21,7 +21,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ResultOf } from 'gql.tada';
 import { Pencil, RotateCcw, User } from 'lucide-react';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 
 import {
@@ -55,6 +55,7 @@ export interface OrderDetailSharedProps {
     titleSlot?: (order: OrderDetail) => React.ReactNode;
     // Optional content slots
     beforeOrderTable?: (order: OrderDetail) => React.ReactNode;
+    initialAction?: 'refund';
 }
 
 function DefaultOrderTitle({ entity }: { entity: any }) {
@@ -70,6 +71,7 @@ export function OrderDetailShared({
     orderId,
     titleSlot,
     beforeOrderTable,
+    initialAction,
 }: Readonly<OrderDetailSharedProps>) {
     const { t } = useLingui();
     const navigate = useNavigate();
@@ -109,6 +111,22 @@ export function OrderDetailShared({
 
     const customFieldConfig = useCustomFieldConfig('Order');
     const refundDialogRef = useRef<RefundOrderDialogRef>(null);
+    const openedInitialActionRef = useRef(false);
+
+    useEffect(() => {
+        if (
+            initialAction !== 'refund' ||
+            openedInitialActionRef.current ||
+            !entity ||
+            !isSuperAdmin ||
+            !canRefundOrder(entity) ||
+            !refundDialogRef.current
+        ) {
+            return;
+        }
+        openedInitialActionRef.current = true;
+        refundDialogRef.current.open();
+    }, [entity, initialAction, isSuperAdmin]);
 
     const refreshPage = useCallback(async () => {
         if (!entity) return;

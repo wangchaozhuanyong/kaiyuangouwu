@@ -5,11 +5,11 @@ import {
     OnApplicationBootstrap,
     OnApplicationShutdown,
 } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import { Type } from '@vendure/common/lib/shared-types';
 import {
     Injector,
     Logger,
+    ModuleRef,
     PluginCommonModule,
     ProcessContext,
     registerPluginStartupMessage,

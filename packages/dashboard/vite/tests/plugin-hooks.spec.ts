@@ -464,6 +464,13 @@ describe('viteConfigPlugin', () => {
         expect(aliases['@/graphql']).toBe(path.resolve(packageRoot, './src/lib/graphql'));
     });
 
+    it('deduplicates React for linked dashboard extensions', () => {
+        const plugin = viteConfigPlugin({ packageRoot });
+        const result = callConfig(plugin, { resolve: { dedupe: ['graphql'] } }, { command: 'serve' });
+
+        expect(result.resolve.dedupe).toEqual(['graphql', 'react', 'react-dom']);
+    });
+
     it('preserves existing resolve aliases', () => {
         const plugin = viteConfigPlugin({ packageRoot });
         const config = { resolve: { alias: { '@custom': '/custom/path' } } };
@@ -479,6 +486,24 @@ describe('viteConfigPlugin', () => {
         expect(result.optimizeDeps.exclude).toContain('@vendure/dashboard');
         expect(result.optimizeDeps.exclude).toContain('virtual:vendure-ui-config');
         expect(result.optimizeDeps.exclude).toContain('virtual:dashboard-extensions');
+    });
+
+    it('limits dependency discovery to the dashboard entry by default', () => {
+        const plugin = viteConfigPlugin({ packageRoot });
+        const result = callConfig(plugin, {}, { command: 'serve' });
+
+        expect(result.optimizeDeps.entries).toEqual([path.resolve(packageRoot, 'index.html')]);
+    });
+
+    it('preserves custom dependency discovery entries', () => {
+        const plugin = viteConfigPlugin({ packageRoot });
+        const result = callConfig(
+            plugin,
+            { optimizeDeps: { entries: ['./custom.html'] } },
+            { command: 'serve' },
+        );
+
+        expect(result.optimizeDeps.entries).toEqual(['./custom.html']);
     });
 
     it('preserves existing module resolution options while adding dashboard aliases', () => {

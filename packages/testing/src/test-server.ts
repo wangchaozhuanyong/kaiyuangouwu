@@ -1,7 +1,6 @@
 import { INestApplication } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { DefaultLogger, JobQueueService, Logger, VendureConfig } from '@vendure/core';
-import { preBootstrapConfig, configureSessionCookies } from '@vendure/core/dist/bootstrap';
+import { DefaultLogger, JobQueueService, Logger, NestFactory, VendureConfig } from '@vendure/core';
+import { configureSessionCookies, preBootstrapConfig } from '@vendure/core/dist/bootstrap';
 import { wrapEarlyMiddlewareHandler } from '@vendure/core/dist/wrap-early-middleware-handler';
 
 import { populateForTesting } from './data-population/populate-for-testing';
@@ -70,7 +69,7 @@ export class TestServer {
         let file: any;
         let frame: any;
 
-        const pst = Error.prepareStackTrace;
+        const pst = Error.prepareStackTrace?.bind(Error);
         Error.prepareStackTrace = (_, _stack) => {
             Error.prepareStackTrace = pst;
             return _stack;

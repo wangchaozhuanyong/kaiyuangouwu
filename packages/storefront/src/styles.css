@@ -50,7 +50,7 @@
     --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.12);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --bottom-navigation-height: 66px;
-    --root-page-end-gap: 12px;
+    --root-page-end-gap: 0px;
     --subpage-end-gap: 24px;
     --footer-end-gap: 0px;
     --layer-nav: 20;
@@ -4200,6 +4200,10 @@ img.fatal-error-mark {
 
 .cart-page {
     padding-bottom: calc(150px + var(--safe-bottom));
+}
+
+.cart-page.is-empty {
+    background: var(--paper);
 }
 
 .cart-groups {

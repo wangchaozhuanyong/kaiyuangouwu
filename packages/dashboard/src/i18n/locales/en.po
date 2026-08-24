@@ -1058,6 +1058,7 @@ msgstr "Add column after"
 msgid "Default tax region"
 msgstr "Default tax region"
 
+#: src/app/routes/_authenticated/_orders/orders.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
@@ -1849,7 +1850,6 @@ msgstr "Use as the default billing address"
 msgid "Delete"
 msgstr "Delete"
 
-#: src/app/routes/_authenticated/_orders/orders.tsx
 #: src/app/routes/_authenticated/_orders/orders.tsx
 msgid "Order status"
 msgstr "Order status"
@@ -3660,6 +3660,10 @@ msgstr "Building, unit, room, etc."
 msgid "Default content language"
 msgstr "Default content language"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Configure automatic delivery"
+msgstr "Configure automatic delivery"
+
 #: src/lib/components/help/page-help-button.tsx
 msgid "Practical tips"
 msgstr "Practical tips"
@@ -3732,6 +3736,11 @@ msgstr "All SKUs will require shipping. Configure stock and shipping methods bef
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Supported content languages"
 msgstr "Supported content languages"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.progress"
+msgstr "Fulfillment progress"
 
 #: src/lib/components/data-table/filters/data-table-id-filter.tsx
 msgid "Enter ID..."
@@ -5201,6 +5210,61 @@ msgid "All possible order states and their transitions. The current state is hig
 msgstr "All possible order states and their transitions. The current state is highlighted."
 
 #. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-bulk-actions.tsx
+msgid "orderCenter.actions.bulkFulfill"
+msgstr "Fulfill selected orders"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.actions.fulfillNow"
+msgstr "Fulfill now"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.actions.viewLogistics"
+msgstr "View logistics"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.actions.viewOrder"
+msgstr "View order"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.loadError"
+msgstr "Could not load this order"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.loading"
+msgstr "Loading order details"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.skip"
+msgstr "Skip this order"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.status.all"
+msgstr "All orders"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.status.awaitingPayment"
+msgstr "Awaiting payment"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.status.awaitingShipment"
+msgstr "Awaiting shipment"
+
+#. js-lingui-explicit-id
 #: src/lib/framework/defaults.ts
 msgid "Orders Summary Widget"
 msgstr "Orders Summary Widget"
@@ -5790,6 +5854,10 @@ msgstr "You must select a default currency from the list of available currencies
 msgid "Manage tags"
 msgstr "Manage tags"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "Filter by category"
+msgstr "Filter by category"
+
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Coupon code removed from order"
 msgstr "Coupon code removed from order"
@@ -6326,13 +6394,11 @@ msgid "settingsStore.globalSavedViews"
 msgstr "Shared table views"
 
 #. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_system/settings-store-utils.ts
 #: src/i18n/common-strings.ts
 msgid "settingsStore.pluginGlobalValue"
 msgstr "Plugin global setting"
 
 #. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_system/settings-store-utils.ts
 #: src/i18n/common-strings.ts
 msgid "settingsStore.pluginUserValue"
 msgstr "Plugin user setting"
@@ -7342,6 +7408,11 @@ msgstr "Error message"
 msgid "Add stock level for another location"
 msgstr "Add stock level for another location"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "All categories"
+msgstr "All categories"
+
 #: src/app/routes/_authenticated/_customers/components/customer-address-card.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-address-card.tsx
 msgid "Delete Address"
@@ -7768,33 +7839,3 @@ msgstr "Successfully updated API key"
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "These languages will be available for all channels to use"
 msgstr "These languages will be available for all sales channels to use"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.status.all"
-msgstr "All orders"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.status.awaitingPayment"
-msgstr "Awaiting payment"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.status.awaitingShipment"
-msgstr "Awaiting shipment"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.actions.fulfillNow"
-msgstr "Fulfill now"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.actions.viewLogistics"
-msgstr "View logistics"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.actions.viewOrder"
-msgstr "View order"

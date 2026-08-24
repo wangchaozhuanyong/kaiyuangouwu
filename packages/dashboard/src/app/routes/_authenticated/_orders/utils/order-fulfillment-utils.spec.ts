@@ -11,6 +11,10 @@ describe('order fulfillment queue', () => {
         expect(isOrderReadyForFulfillment({ state })).toBe(false);
     });
 
+    it('rejects aggregate orders even when payment is settled', () => {
+        expect(isOrderReadyForFulfillment({ state: 'PaymentSettled', type: 'Aggregate' })).toBe(false);
+    });
+
     it('keeps only orders that can be fulfilled', () => {
         const orders = [
             { id: '1', code: 'A-1', state: 'PaymentSettled' },

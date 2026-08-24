@@ -59,6 +59,11 @@ msgstr "Mark completed"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.completeAfterRefund"
+msgstr "Refund completed, mark complete"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.confirm"
 msgstr "Confirm"
 
@@ -144,8 +149,13 @@ msgstr "Refresh"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
-msgid "operations.afterSales.refundUnavailable"
-msgstr "Real payment refunds are not connected. A positive refund must be completed and verified before this request can be marked completed."
+msgid "operations.afterSales.refundReminder"
+msgstr "Process the payment refund in the order first. After confirming the refund result, return here and mark this request completed."
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+#~ msgid "operations.afterSales.refundUnavailable"
+#~ msgstr "Real payment refunds are not connected. A positive refund must be completed and verified before this request can be marked completed."
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -259,6 +269,16 @@ msgstr "Add field"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.adminOperationReason"
+msgstr "Dashboard operation"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.allocated"
+msgstr "Credential allocated"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.assigned"
 msgstr "Assigned"
 
@@ -304,8 +324,53 @@ msgstr "Disabled"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.disabledDescription"
+msgstr "Pause automatic delivery for new orders"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.enabled"
 msgstr "Enable automatic delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.enabledDescription"
+msgstr "Deliver the next credential automatically after payment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.field"
+msgstr "Field"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.field.account"
+msgstr "Account"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.field.email"
+msgstr "Email"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.field.emailPassword"
+msgstr "Email password"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.field.password"
+msgstr "Password"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.field.phone"
+msgstr "Phone"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.field.twoFactor"
+msgstr "2FA key"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
@@ -384,6 +449,16 @@ msgstr "Low-stock warning"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.lowStockSkus"
+msgstr "Low-stock SKUs"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.manualReview"
+msgstr "Manual review"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.noDeliveries"
 msgstr "No delivery records for this SKU."
 
@@ -409,6 +484,26 @@ msgstr "Pool records"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.preset.accountPassword"
+msgstr "Account and password"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.preset.accountPhone2fa"
+msgstr "Account, password, phone and 2FA"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.preset.custom"
+msgstr "Custom"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.preset.emailPassword"
+msgstr "Email and email password"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.preview"
 msgstr "Preview parsing"
 
@@ -431,6 +526,11 @@ msgstr "Restore"
 #: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.retry"
 msgstr "Resend same credentials"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.retrying"
+msgstr "Retrying delivery"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
@@ -471,6 +571,11 @@ msgstr "Secret"
 #: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.selectSku"
 msgstr "Select an SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.sent"
+msgstr "Delivered"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx

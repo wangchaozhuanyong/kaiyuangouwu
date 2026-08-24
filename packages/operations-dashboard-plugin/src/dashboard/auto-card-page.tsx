@@ -81,7 +81,28 @@ const messages = {
             'Each pasted line is one sellable credential. Field order controls parsing and email display.',
     }),
     enabled: msg({ id: 'operations.autoCard.enabled', message: 'Enable automatic delivery' }),
+    enabledDescription: msg({
+        id: 'operations.autoCard.enabledDescription',
+        message: 'Deliver the next credential automatically after payment',
+    }),
+    disabledDescription: msg({
+        id: 'operations.autoCard.disabledDescription',
+        message: 'Pause automatic delivery for new orders',
+    }),
     formatPreset: msg({ id: 'operations.autoCard.formatPreset', message: 'Format preset' }),
+    presetAccountPassword: msg({
+        id: 'operations.autoCard.preset.accountPassword',
+        message: 'Account and password',
+    }),
+    presetEmailPassword: msg({
+        id: 'operations.autoCard.preset.emailPassword',
+        message: 'Email and email password',
+    }),
+    presetAccountPhone2fa: msg({
+        id: 'operations.autoCard.preset.accountPhone2fa',
+        message: 'Account, password, phone and 2FA',
+    }),
+    presetCustom: msg({ id: 'operations.autoCard.preset.custom', message: 'Custom' }),
     formatName: msg({ id: 'operations.autoCard.formatName', message: 'Format name' }),
     delimiter: msg({ id: 'operations.autoCard.delimiter', message: 'Field separator' }),
     lowStock: msg({ id: 'operations.autoCard.lowStock', message: 'Low-stock warning' }),
@@ -93,6 +114,16 @@ const messages = {
     fields: msg({ id: 'operations.autoCard.fields', message: 'Fields in one line' }),
     fieldKey: msg({ id: 'operations.autoCard.fieldKey', message: 'Field key' }),
     fieldLabel: msg({ id: 'operations.autoCard.fieldLabel', message: 'Email label' }),
+    field: msg({ id: 'operations.autoCard.field', message: 'Field' }),
+    fieldAccount: msg({ id: 'operations.autoCard.field.account', message: 'Account' }),
+    fieldPassword: msg({ id: 'operations.autoCard.field.password', message: 'Password' }),
+    fieldEmail: msg({ id: 'operations.autoCard.field.email', message: 'Email' }),
+    fieldEmailPassword: msg({
+        id: 'operations.autoCard.field.emailPassword',
+        message: 'Email password',
+    }),
+    fieldPhone: msg({ id: 'operations.autoCard.field.phone', message: 'Phone' }),
+    fieldTwoFactor: msg({ id: 'operations.autoCard.field.twoFactor', message: '2FA key' }),
     secret: msg({ id: 'operations.autoCard.secret', message: 'Secret' }),
     addField: msg({ id: 'operations.autoCard.addField', message: 'Add field' }),
     save: msg({ id: 'operations.autoCard.save', message: 'Save delivery format' }),
@@ -104,6 +135,9 @@ const messages = {
     waiting: msg({ id: 'operations.autoCard.waiting', message: 'Waiting for stock' }),
     lowStockSkus: msg({ id: 'operations.autoCard.lowStockSkus', message: 'Low-stock SKUs' }),
     manualReview: msg({ id: 'operations.autoCard.manualReview', message: 'Manual review' }),
+    allocated: msg({ id: 'operations.autoCard.allocated', message: 'Credential allocated' }),
+    retrying: msg({ id: 'operations.autoCard.retrying', message: 'Retrying delivery' }),
+    sent: msg({ id: 'operations.autoCard.sent', message: 'Delivered' }),
     importTitle: msg({ id: 'operations.autoCard.importTitle', message: 'Paste credentials' }),
     importDescription: msg({
         id: 'operations.autoCard.importDescription',
@@ -145,37 +179,48 @@ const messages = {
         id: 'operations.autoCard.revealWarning',
         message: 'Sensitive content is shown only for this record. Do not copy it into chat or logs.',
     }),
+    adminOperationReason: msg({
+        id: 'operations.autoCard.adminOperationReason',
+        message: 'Dashboard operation',
+    }),
 };
 
-const presets: Record<string, { formatName: string; delimiter: string; fields: AutoCardFieldDefinition[] }> =
-    {
+type AutoCardText = Record<keyof typeof messages, string>;
+type AutoCardPresets = Record<
+    string,
+    { formatName: string; delimiter: string; fields: AutoCardFieldDefinition[] }
+>;
+
+function createPresets(text: AutoCardText): AutoCardPresets {
+    return {
         accountPassword: {
-            formatName: '账号密码',
+            formatName: text.presetAccountPassword,
             delimiter: '----',
             fields: [
-                { key: 'account', label: '账号', secret: false },
-                { key: 'password', label: '密码', secret: true },
+                { key: 'account', label: text.fieldAccount, secret: false },
+                { key: 'password', label: text.fieldPassword, secret: true },
             ],
         },
         emailPassword: {
-            formatName: '邮箱账号',
+            formatName: text.presetEmailPassword,
             delimiter: '----',
             fields: [
-                { key: 'email', label: '邮箱', secret: false },
-                { key: 'emailPassword', label: '邮箱密码', secret: true },
+                { key: 'email', label: text.fieldEmail, secret: false },
+                { key: 'emailPassword', label: text.fieldEmailPassword, secret: true },
             ],
         },
         accountPhone2fa: {
-            formatName: '账号密码手机2FA',
+            formatName: text.presetAccountPhone2fa,
             delimiter: '----',
             fields: [
-                { key: 'account', label: '账号', secret: false },
-                { key: 'password', label: '密码', secret: true },
-                { key: 'phone', label: '手机', secret: false },
-                { key: 'twoFactor', label: '2FA密钥', secret: true },
+                { key: 'account', label: text.fieldAccount, secret: false },
+                { key: 'password', label: text.fieldPassword, secret: true },
+                { key: 'phone', label: text.fieldPhone, secret: false },
+                { key: 'twoFactor', label: text.fieldTwoFactor, secret: true },
             ],
         },
     };
+}
 
 interface ConfigDraft {
     enabled: boolean;
@@ -186,12 +231,14 @@ interface ConfigDraft {
     lowStockThreshold: number;
 }
 
-const defaultDraft: ConfigDraft = {
-    enabled: true,
-    ...presets.accountPassword,
-    instructions: '',
-    lowStockThreshold: 5,
-};
+function createDefaultDraft(text: AutoCardText): ConfigDraft {
+    return {
+        enabled: true,
+        ...createPresets(text).accountPassword,
+        instructions: '',
+        lowStockThreshold: 5,
+    };
+}
 
 export const autoCardRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -211,13 +258,13 @@ function AutoCardPage() {
     const { t } = useLingui();
     const text = Object.fromEntries(
         Object.entries(messages).map(([key, value]) => [key, t(value)]),
-    ) as Record<keyof typeof messages, string>;
+    ) as AutoCardText;
     const { activeChannel } = useChannel();
     const [search, setSearch] = useState('');
     const [selectedVariantId, setSelectedVariantId] = useState(
         () => new URLSearchParams(window.location.search).get('variantId') ?? '',
     );
-    const [draft, setDraft] = useState<ConfigDraft>(defaultDraft);
+    const [draft, setDraft] = useState<ConfigDraft>(() => createDefaultDraft(text));
     const [importText, setImportText] = useState('');
     const [preview, setPreview] = useState<null | {
         validCount: number;
@@ -279,7 +326,7 @@ function AutoCardPage() {
     }, [selectedVariantId]);
 
     useEffect(() => {
-        setDraft(config ? draftFromConfig(config) : defaultDraft);
+        setDraft(config ? draftFromConfig(config) : createDefaultDraft(text));
         setPreview(null);
         setImportText('');
     }, [config, selectedVariantId]);
@@ -329,7 +376,11 @@ function AutoCardPage() {
     });
     const togglePoolItem = useMutation({
         mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-            api.mutate(setAutoCardPoolItemEnabledMutation, { id, enabled, reason: '管理后台操作' }),
+            api.mutate(setAutoCardPoolItemEnabledMutation, {
+                id,
+                enabled,
+                reason: text.adminOperationReason,
+            }),
         onSuccess: async () => workspaceQuery.refetch(),
         onError: error => toast.error(errorMessage(error)),
     });
@@ -585,10 +636,11 @@ function ConfigEditor({
     draft,
     onChange,
 }: {
-    text: Record<keyof typeof messages, string>;
+    text: AutoCardText;
     draft: ConfigDraft;
     onChange: (value: ConfigDraft) => void;
 }) {
+    const presets = createPresets(text);
     const applyPreset = (key: string | null) => {
         if (!key || key === 'custom') return;
         const preset = presets[key];
@@ -606,7 +658,7 @@ function ConfigEditor({
                 <div>
                     <div className="font-medium">{text.enabled}</div>
                     <div className="text-sm text-muted-foreground">
-                        {draft.enabled ? '付款后自动按顺序发卡' : '暂停新订单发卡'}
+                        {draft.enabled ? text.enabledDescription : text.disabledDescription}
                     </div>
                 </div>
                 <Switch
@@ -622,10 +674,10 @@ function ConfigEditor({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="accountPassword">账号 + 密码</SelectItem>
-                            <SelectItem value="emailPassword">邮箱 + 邮箱密码</SelectItem>
-                            <SelectItem value="accountPhone2fa">账号 + 密码 + 手机 + 2FA</SelectItem>
-                            <SelectItem value="custom">自定义</SelectItem>
+                            <SelectItem value="accountPassword">{text.presetAccountPassword}</SelectItem>
+                            <SelectItem value="emailPassword">{text.presetEmailPassword}</SelectItem>
+                            <SelectItem value="accountPhone2fa">{text.presetAccountPhone2fa}</SelectItem>
+                            <SelectItem value="custom">{text.presetCustom}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -669,7 +721,7 @@ function ConfigEditor({
                                     ...draft.fields,
                                     {
                                         key: `field${draft.fields.length + 1}`,
-                                        label: `字段${draft.fields.length + 1}`,
+                                        label: `${text.field} ${draft.fields.length + 1}`,
                                         secret: false,
                                     },
                                 ],
@@ -739,7 +791,7 @@ function ImportPreview({
     text,
     preview,
 }: {
-    text: Record<keyof typeof messages, string>;
+    text: AutoCardText;
     preview: {
         validCount: number;
         invalidCount: number;
@@ -819,7 +871,7 @@ function PoolTable({
                                 </div>
                             </TableCell>
                             <TableCell>
-                                <StatusBadge state={item.state} />
+                                <StatusBadge state={item.state} text={text} />
                             </TableCell>
                             <TableCell>
                                 <div className="flex gap-1">
@@ -851,7 +903,7 @@ function DeliveryTable({
     deliveries,
     onRetry,
 }: {
-    text: Record<keyof typeof messages, string>;
+    text: AutoCardText;
     deliveries: AutoCardDeliveryRecord[];
     onRetry: (id: string) => void;
 }) {
@@ -875,7 +927,10 @@ function DeliveryTable({
                             <TableCell>
                                 <a
                                     className="font-medium text-primary hover:underline"
-                                    href={`/dashboard/orders/${delivery.order.id}`}
+                                    href={new URL(
+                                        `orders/${encodeURIComponent(delivery.order.id)}`,
+                                        document.baseURI,
+                                    ).toString()}
                                 >
                                     #{delivery.order.code}
                                 </a>
@@ -885,7 +940,7 @@ function DeliveryTable({
                             </TableCell>
                             <TableCell>{delivery.recipientEmail}</TableCell>
                             <TableCell>
-                                <StatusBadge state={delivery.state} />
+                                <StatusBadge state={delivery.state} text={text} />
                                 {delivery.lastError && (
                                     <div className="mt-1 max-w-64 text-xs text-destructive">
                                         {delivery.lastError}
@@ -907,13 +962,13 @@ function DeliveryTable({
     );
 }
 
-function StatusBadge({ state }: { state: string }) {
+function StatusBadge({ state, text }: { state: string; text: AutoCardText }) {
     const variant = ['WAITING_STOCK', 'MANUAL_REVIEW'].includes(state)
         ? 'destructive'
         : state === 'SENT' || state === 'AVAILABLE'
           ? 'secondary'
           : 'outline';
-    return <Badge variant={variant}>{stateLabel(state)}</Badge>;
+    return <Badge variant={variant}>{stateLabel(state, text)}</Badge>;
 }
 
 function AlertStat({ label, value }: { label: string; value: number }) {
@@ -927,16 +982,16 @@ function AlertStat({ label, value }: { label: string; value: number }) {
     );
 }
 
-function stateLabel(state: string): string {
+function stateLabel(state: string, text: AutoCardText): string {
     const labels: Record<string, string> = {
-        AVAILABLE: '可用',
-        ASSIGNED: '已分配',
-        DISABLED: '已停用',
-        WAITING_STOCK: '等待补货',
-        ALLOCATED: '已取号',
-        RETRYING: '发送重试中',
-        SENT: '已发卡',
-        MANUAL_REVIEW: '待人工处理',
+        AVAILABLE: text.available,
+        ASSIGNED: text.assigned,
+        DISABLED: text.disabled,
+        WAITING_STOCK: text.waiting,
+        ALLOCATED: text.allocated,
+        RETRYING: text.retrying,
+        SENT: text.sent,
+        MANUAL_REVIEW: text.manualReview,
     };
     return labels[state] ?? state;
 }

@@ -1058,6 +1058,7 @@ msgstr "在后面添加列"
 msgid "Default tax region"
 msgstr "默认税务区域"
 
+#: src/app/routes/_authenticated/_orders/orders.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
@@ -1849,7 +1850,6 @@ msgstr "用作默认账单地址"
 msgid "Delete"
 msgstr "删除"
 
-#: src/app/routes/_authenticated/_orders/orders.tsx
 #: src/app/routes/_authenticated/_orders/orders.tsx
 msgid "Order status"
 msgstr "订单状态"
@@ -3660,6 +3660,10 @@ msgstr "楼栋、单元、房间号等"
 msgid "Default content language"
 msgstr "默认内容语言"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Configure automatic delivery"
+msgstr "配置自动发卡"
+
 #: src/lib/components/help/page-help-button.tsx
 msgid "Practical tips"
 msgstr "实用提示"
@@ -3732,6 +3736,11 @@ msgstr "所有 SKU 将需要物流配送。请在接受订单前配置库存和�
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Supported content languages"
 msgstr "支持的内容语言"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.progress"
+msgstr "发货进度"
 
 #: src/lib/components/data-table/filters/data-table-id-filter.tsx
 msgid "Enter ID..."
@@ -5201,6 +5210,61 @@ msgid "All possible order states and their transitions. The current state is hig
 msgstr "所有可能的订单状态及其转换。当前状态已高亮显示。"
 
 #. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-bulk-actions.tsx
+msgid "orderCenter.actions.bulkFulfill"
+msgstr "批量发货"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.actions.fulfillNow"
+msgstr "立即发货"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.actions.viewLogistics"
+msgstr "查看物流"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.actions.viewOrder"
+msgstr "查看订单"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.loadError"
+msgstr "待发货订单加载失败"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.loading"
+msgstr "正在加载待发货订单"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.retry"
+msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.skip"
+msgstr "跳过此订单"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.status.all"
+msgstr "全部订单"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.status.awaitingPayment"
+msgstr "待付款"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/orders.tsx
+msgid "orderCenter.status.awaitingShipment"
+msgstr "待发货"
+
+#. js-lingui-explicit-id
 #: src/lib/framework/defaults.ts
 msgid "Orders Summary Widget"
 msgstr "订单摘要小部件"
@@ -5790,6 +5854,10 @@ msgstr "默认交易币种必须来自可用币种列表"
 msgid "Manage tags"
 msgstr "管理标签"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "Filter by category"
+msgstr "按分类筛选"
+
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Coupon code removed from order"
 msgstr "优惠券代码已从订单中移除"
@@ -6326,13 +6394,11 @@ msgid "settingsStore.globalSavedViews"
 msgstr "公共表格视图"
 
 #. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_system/settings-store-utils.ts
 #: src/i18n/common-strings.ts
 msgid "settingsStore.pluginGlobalValue"
 msgstr "插件全局配置"
 
 #. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_system/settings-store-utils.ts
 #: src/i18n/common-strings.ts
 msgid "settingsStore.pluginUserValue"
 msgstr "插件用户配置"
@@ -7342,6 +7408,11 @@ msgstr "错误消息"
 msgid "Add stock level for another location"
 msgstr "为另一个位置添加库存水平"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "All categories"
+msgstr "全部分类"
+
 #: src/app/routes/_authenticated/_customers/components/customer-address-card.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-address-card.tsx
 msgid "Delete Address"
@@ -7768,33 +7839,3 @@ msgstr "API 密钥 更新成功"
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "These languages will be available for all channels to use"
 msgstr "这些语言将可供所有店铺使用"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.status.all"
-msgstr "全部订单"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.status.awaitingPayment"
-msgstr "待付款"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.status.awaitingShipment"
-msgstr "待发货"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.actions.fulfillNow"
-msgstr "立即发货"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.actions.viewLogistics"
-msgstr "查看物流"
-
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/orders.tsx
-msgid "orderCenter.actions.viewOrder"
-msgstr "查看订单"

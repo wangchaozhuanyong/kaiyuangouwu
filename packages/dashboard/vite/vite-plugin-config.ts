@@ -53,6 +53,10 @@ export function viteConfigPlugin({ packageRoot, useExperimentalBundle }: ViteCon
 
             config.resolve = {
                 ...config.resolve,
+                // Dashboard extensions can be linked workspace packages. Without explicit
+                // de-duplication Vite may load React once from the app and again from an
+                // extension dependency, which results in an "Invalid hook call" at runtime.
+                dedupe: [...new Set([...(config.resolve?.dedupe ?? []), 'react', 'react-dom'])],
                 alias: {
                     ...(config.resolve?.alias ?? {}),
                     // See the readme for an explanation of this alias.
@@ -82,6 +86,10 @@ export function viteConfigPlugin({ packageRoot, useExperimentalBundle }: ViteCon
             // resolvable to esbuild.
             config.optimizeDeps = {
                 ...config.optimizeDeps,
+                // The package also contains generated HTML (for example Storybook output).
+                // Restrict dependency discovery to the actual Dashboard entry so stale build
+                // artifacts cannot break the dev server's dependency scan.
+                entries: config.optimizeDeps?.entries ?? [path.resolve(packageRoot, 'index.html')],
                 exclude: [
                     ...(config.optimizeDeps?.exclude || []),
                     '@vendure/dashboard',
