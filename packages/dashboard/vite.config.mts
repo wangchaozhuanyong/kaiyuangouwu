@@ -73,9 +73,7 @@ export default ({ mode }: { mode: string }) => {
             }) as any,
         ],
         build: {
-            // The largest chunks are lazy-loaded framework/date utilities and
-            // remain below 200 kB gzip. Keep the entry chunk well below this limit.
-            chunkSizeWarningLimit: 700,
+            chunkSizeWarningLimit: 500,
             rollupOptions: {
                 output: {
                     manualChunks: dashboardManualChunks,

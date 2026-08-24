@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 
+import { loadDayPickerLocale } from '@/vdb/components/data-input/day-picker-locale.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Calendar } from '@/vdb/components/ui/calendar.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/vdb/components/ui/popover.js';
@@ -23,9 +24,15 @@ export function useDayPickerLocale() {
     const { bcp47Tag } = useDisplayLocale();
     const [calendarLocale, setCalendarLocale] = useState<Locale | undefined>(undefined);
     useEffect(() => {
-        import('react-day-picker/locale').then(mod => {
-            setCalendarLocale(bcpTagToDatePickerLocale(bcp47Tag, mod));
+        let cancelled = false;
+        loadDayPickerLocale(bcp47Tag).then(locale => {
+            if (!cancelled) {
+                setCalendarLocale(locale);
+            }
         });
+        return () => {
+            cancelled = true;
+        };
     }, [bcp47Tag]);
     return calendarLocale;
 }
@@ -191,22 +198,4 @@ export function DateTimeInput({
             </PopoverContent>
         </Popover>
     );
-}
-
-function bcpTagToDatePickerLocale(
-    tag: string,
-    module: typeof import('react-day-picker/locale'),
-): Locale | undefined {
-    switch (tag) {
-        case 'zh-Hans':
-            return module.zhCN;
-        case 'zh-Hant':
-            return module.zhTW;
-        case 'pt-BR':
-            return module.ptBR;
-        default: {
-            const lang = tag.split('-')[0];
-            return lang ? module[lang as keyof typeof module] : undefined;
-        }
-    }
 }
