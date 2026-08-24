@@ -54,9 +54,12 @@ export {
     getOrderLineFulfillmentType,
     hasCompleteShippingAddress,
     isAutoCardOrderLine,
+    isFileDownloadOrderLine,
+    isManualServiceOrderLine,
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
 export type { CheckoutFulfillmentSummary } from './fulfillment-classification';
+export { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
 export {
     ORDER_CONFIRMATION_TOKEN_CONFIGURATION,
     OrderConfirmationTokenService,

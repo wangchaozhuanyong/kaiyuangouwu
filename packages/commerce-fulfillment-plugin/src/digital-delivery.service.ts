@@ -6,7 +6,7 @@ import {
     DigitalDeliveryTokenPayload,
     DigitalDeliveryTokenService,
 } from './digital-delivery-token.service';
-import { getOrderLineFulfillmentType, isAutoCardOrderLine } from './fulfillment-classification';
+import { isFileDownloadOrderLine } from './fulfillment-classification';
 
 export type DigitalDeliveryStatus = 'READY' | 'PAYMENT_REQUIRED' | 'NOT_CONFIGURED' | 'FILE_MISSING';
 
@@ -36,7 +36,7 @@ export class DigitalDeliveryService {
             relations: ['lines', 'lines.productVariant', 'lines.productVariant.translations', 'payments'],
         });
         return order.lines
-            .filter(line => getOrderLineFulfillmentType(line) === 'digital' && !isAutoCardOrderLine(line))
+            .filter(line => isFileDownloadOrderLine(line))
             .map(line => this.deliveryForLine(ctx, order, line));
     }
 
@@ -53,12 +53,7 @@ export class DigitalDeliveryService {
             return;
         }
         const line = order.lines.find(item => String(item.id) === payload.orderLineId);
-        if (
-            !line ||
-            getOrderLineFulfillmentType(line) !== 'digital' ||
-            isAutoCardOrderLine(line) ||
-            line.productVariant.sku !== payload.sku
-        ) {
+        if (!line || !isFileDownloadOrderLine(line) || line.productVariant.sku !== payload.sku) {
             return;
         }
         const resource = this.tokens.resourceForSku(payload.sku);

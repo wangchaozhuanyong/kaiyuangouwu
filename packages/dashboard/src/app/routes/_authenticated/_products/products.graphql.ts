@@ -169,6 +169,7 @@ export const productDetailWithVariantsDocument = graphql(`
                 trackInventory
                 customFields {
                     fulfillmentType
+                    digitalDeliveryMode
                 }
                 currencyCode
                 priceWithTax

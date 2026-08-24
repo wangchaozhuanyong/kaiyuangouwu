@@ -51,7 +51,7 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
         }
         const fulfillmentType = event.orderLine.productVariant.customFields?.fulfillmentType ?? 'physical';
         const digitalDeliveryMode =
-            event.orderLine.productVariant.customFields?.digitalDeliveryMode ?? 'file_download';
+            event.orderLine.productVariant.customFields?.digitalDeliveryMode ?? 'manual_service';
         event.orderLine.customFields = {
             ...event.orderLine.customFields,
             fulfillmentTypeSnapshot: fulfillmentType,

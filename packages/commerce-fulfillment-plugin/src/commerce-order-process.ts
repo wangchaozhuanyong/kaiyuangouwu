@@ -18,7 +18,7 @@ import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import {
     getOrderLineFulfillmentType,
     hasCompleteShippingAddress,
-    isAutoCardOrderLine,
+    isFileDownloadOrderLine,
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
 
@@ -130,12 +130,13 @@ export const commerceOrderProcess: OrderProcess<string> = {
         });
         await autoCardService.allocateSettledOrder(ctx, settledOrder);
 
-        const digitalLines = settledOrder.lines.filter(
-            line => getOrderLineFulfillmentType(line) === 'digital' && !isAutoCardOrderLine(line),
-        );
-        if (digitalLines.length) {
+        const fileDownloadLines = settledOrder.lines.filter(line => isFileDownloadOrderLine(line));
+        if (fileDownloadLines.length) {
             const fulfillment = await orderService.createFulfillment(ctx, {
-                lines: digitalLines.map(line => ({ orderLineId: line.id, quantity: line.quantity })),
+                lines: fileDownloadLines.map(line => ({
+                    orderLineId: line.id,
+                    quantity: line.quantity,
+                })),
                 handler: { code: digitalFulfillmentHandler.code, arguments: [] },
             });
             if (isGraphQlErrorResult(fulfillment)) {

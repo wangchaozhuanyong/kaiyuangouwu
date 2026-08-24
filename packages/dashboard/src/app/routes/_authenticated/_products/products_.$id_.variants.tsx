@@ -35,8 +35,10 @@ import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
 import { AddProductVariantDialog } from './components/add-product-variant-dialog.js';
 import { ForceRemoveOptionGroupDialog } from './components/force-remove-option-group-dialog.js';
 import {
+    DigitalDeliveryMode,
     FulfillmentType,
     getUpdatedFulfillmentCustomFields,
+    getVariantDigitalDeliveryMode,
     getVariantFulfillmentType,
 } from './components/product-fulfillment-type.js';
 import { useRemoveOptionGroup } from './hooks/use-remove-option-group.js';
@@ -83,6 +85,7 @@ interface VariantDraft {
     price: number;
     stockOnHand: number;
     fulfillmentType: FulfillmentType;
+    digitalDeliveryMode: DigitalDeliveryMode;
 }
 
 function AddOptionValueDialog({
@@ -216,6 +219,7 @@ function ManageProductVariants() {
                         price: variant.price,
                         stockOnHand: variant.stockOnHand,
                         fulfillmentType: getVariantFulfillmentType(variant),
+                        digitalDeliveryMode: getVariantDigitalDeliveryMode(variant),
                     },
                 ]),
             ),
@@ -258,7 +262,11 @@ function ManageProductVariants() {
                 price: draft.price,
                 stockOnHand: draft.fulfillmentType === 'physical' ? draft.stockOnHand : 0,
                 trackInventory: draft.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
-                customFields: getUpdatedFulfillmentCustomFields(variant.customFields, draft.fulfillmentType),
+                customFields: getUpdatedFulfillmentCustomFields(
+                    variant.customFields,
+                    draft.fulfillmentType,
+                    draft.digitalDeliveryMode,
+                ),
             },
         });
     };
@@ -404,9 +412,9 @@ function ManageProductVariants() {
                     <div className="mb-4 space-y-3">
                         <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                             <Trans>
-                                Edit SKU, price, stock and delivery type directly in the table. Digital SKUs
-                                are delivered to the checkout email after payment and do not use stock or
-                                shipping.
+                                Edit SKU, price, stock and delivery settings directly in the table. Digital
+                                SKUs do not use shipping; choose manual service, file download or automatic
+                                credential delivery for each SKU.
                             </Trans>
                         </div>
                         <div className="overflow-x-auto">
@@ -427,6 +435,9 @@ function ManageProductVariants() {
                                         </TableHead>
                                         <TableHead className="min-w-44">
                                             <Trans>Product type</Trans>
+                                        </TableHead>
+                                        <TableHead className="min-w-52">
+                                            <Trans>Digital delivery</Trans>
                                         </TableHead>
                                         {productData.product.optionGroups.map(group => (
                                             <TableHead key={group.id}>{group.name}</TableHead>
@@ -505,6 +516,13 @@ function ManageProductVariants() {
                                                         onValueChange={value =>
                                                             updateVariantDraft(variant.id, {
                                                                 fulfillmentType: value as FulfillmentType,
+                                                                ...(value === 'digital' &&
+                                                                draft.fulfillmentType !== 'digital'
+                                                                    ? {
+                                                                          digitalDeliveryMode:
+                                                                              'manual_service',
+                                                                      }
+                                                                    : {}),
                                                             })
                                                         }
                                                     >
@@ -522,6 +540,47 @@ function ManageProductVariants() {
                                                             </SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {draft.fulfillmentType === 'digital' ? (
+                                                        <Select
+                                                            items={{
+                                                                manual_service: t`Manual digital service`,
+                                                                file_download: t`File download`,
+                                                                auto_card: t`Automatic credential delivery`,
+                                                            }}
+                                                            value={draft.digitalDeliveryMode}
+                                                            onValueChange={value =>
+                                                                updateVariantDraft(variant.id, {
+                                                                    digitalDeliveryMode:
+                                                                        value as DigitalDeliveryMode,
+                                                                })
+                                                            }
+                                                        >
+                                                            <SelectTrigger
+                                                                aria-label={t`Digital delivery for ${variant.name}`}
+                                                            >
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="manual_service">
+                                                                    <Trans>Manual digital service</Trans>
+                                                                </SelectItem>
+                                                                <SelectItem value="file_download">
+                                                                    <Trans>File download</Trans>
+                                                                </SelectItem>
+                                                                <SelectItem value="auto_card">
+                                                                    <Trans>
+                                                                        Automatic credential delivery
+                                                                    </Trans>
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    ) : (
+                                                        <span className="text-sm text-muted-foreground">
+                                                            <Trans>Not applicable</Trans>
+                                                        </span>
+                                                    )}
                                                 </TableCell>
                                                 {productData.product?.optionGroups.map(group => {
                                                     const option = getOption(variant, group.id);
@@ -629,24 +688,27 @@ function ManageProductVariants() {
                                                             <Save className="mr-1 h-4 w-4" />
                                                             <Trans>Save</Trans>
                                                         </Button>
-                                                        {draft.fulfillmentType === 'digital' && (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() =>
-                                                                    window.location.assign(
-                                                                        new URL(
-                                                                            `auto-card?variantId=${encodeURIComponent(variant.id)}`,
-                                                                            document.baseURI,
-                                                                        ).toString(),
-                                                                    )
-                                                                }
-                                                            >
-                                                                <KeyRound className="mr-1 h-4 w-4" />
-                                                                <Trans>Configure automatic delivery</Trans>
-                                                            </Button>
-                                                        )}
+                                                        {draft.fulfillmentType === 'digital' &&
+                                                            draft.digitalDeliveryMode === 'auto_card' && (
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() =>
+                                                                        window.location.assign(
+                                                                            new URL(
+                                                                                `auto-card?variantId=${encodeURIComponent(variant.id)}`,
+                                                                                document.baseURI,
+                                                                            ).toString(),
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <KeyRound className="mr-1 h-4 w-4" />
+                                                                    <Trans>
+                                                                        Configure automatic delivery
+                                                                    </Trans>
+                                                                </Button>
+                                                            )}
                                                         <ConfirmationDialog
                                                             title={t`Delete variant`}
                                                             description={t`Are you sure you want to delete this variant?`}

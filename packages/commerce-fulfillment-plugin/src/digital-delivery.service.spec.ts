@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DigitalDeliveryService } from './digital-delivery.service';
 import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
+import { DigitalDeliveryService } from './digital-delivery.service';
 
 const secret = '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b';
 
@@ -16,11 +16,17 @@ function digitalOrder(paymentState = 'Settled') {
             {
                 id: 'line-1',
                 quantity: 1,
-                customFields: { fulfillmentTypeSnapshot: 'digital' },
+                customFields: {
+                    fulfillmentTypeSnapshot: 'digital',
+                    digitalDeliveryModeSnapshot: 'file_download',
+                },
                 productVariant: {
                     sku: 'DIGITAL-001',
                     name: 'Digital product',
-                    customFields: { fulfillmentType: 'digital' },
+                    customFields: {
+                        fulfillmentType: 'digital',
+                        digitalDeliveryMode: 'file_download',
+                    },
                 },
             },
         ],
@@ -57,16 +63,17 @@ describe('DigitalDeliveryService', () => {
             }),
         ]);
         const pendingDeliveries = await pending.service.deliveriesForOrder({} as any, 'order-1');
-        expect(pendingDeliveries).toEqual([
-            expect.objectContaining({ status: 'PAYMENT_REQUIRED' }),
-        ]);
+        expect(pendingDeliveries).toEqual([expect.objectContaining({ status: 'PAYMENT_REQUIRED' })]);
         expect(pendingDeliveries[0]).not.toHaveProperty('downloadUrl');
     });
 
     it('revalidates the order line and payment before authorizing a download', async () => {
         const { service } = createService(digitalOrder('Authorized'));
         const [delivery] = await service.deliveriesForOrder({} as any, 'order-1');
-        const token = delivery.downloadUrl!.split('/').at(-1)!;
+        const token = delivery?.downloadUrl?.split('/').at(-1);
+        if (!token) {
+            throw new Error('Expected a signed digital delivery token');
+        }
 
         await expect(service.authorizeDownload(token)).resolves.toMatchObject({
             resource: { downloadName: 'DIGITAL-001.txt' },
@@ -91,5 +98,16 @@ describe('DigitalDeliveryService', () => {
         await expect(service.deliveriesForOrder({ languageCode: 'en' } as any, 'order-1')).resolves.toEqual([
             expect.objectContaining({ name: 'DIGITAL-001' }),
         ]);
+    });
+
+    it('does not expose download links for manual services or auto-card products', async () => {
+        const order = digitalOrder('Settled');
+        const { service } = createService(order);
+
+        order.lines[0].customFields.digitalDeliveryModeSnapshot = 'manual_service';
+        await expect(service.deliveriesForOrder({} as any, 'order-1')).resolves.toEqual([]);
+
+        order.lines[0].customFields.digitalDeliveryModeSnapshot = 'auto_card';
+        await expect(service.deliveriesForOrder({} as any, 'order-1')).resolves.toEqual([]);
     });
 });

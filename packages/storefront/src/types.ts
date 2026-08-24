@@ -2,7 +2,7 @@ export type MarketCode = string;
 export type StorefrontLanguage = 'zh' | 'en';
 export type VendureLanguageCode = 'zh_Hans' | 'en';
 export type FulfillmentType = 'physical' | 'digital';
-export type DigitalDeliveryMode = 'file_download' | 'auto_card';
+export type DigitalDeliveryMode = 'manual_service' | 'file_download' | 'auto_card';
 
 export interface Asset {
     id: string;
@@ -199,6 +199,7 @@ export interface OrderFulfillment {
     id: string;
     state: string;
     method: string;
+    handlerCode?: string;
     trackingCode?: string | null;
     createdAt: string;
     updatedAt: string;

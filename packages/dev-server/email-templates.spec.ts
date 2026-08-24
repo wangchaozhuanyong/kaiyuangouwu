@@ -167,15 +167,15 @@ describe('localized email templates', () => {
     it('includes secure digital delivery and a shipping address for a mixed order', async () => {
         const result = await renderTemplate('order-confirmation', 'zh_Hans', false, true);
 
-        expect(result.body).toContain('数字内容已准备');
-        expect(result.body).toContain('查看订单并领取');
+        expect(result.body).toContain('数字订单已进入处理流程');
+        expect(result.body).toContain('查看订单与交付进度');
         expect(result.body).toContain('收货地址');
         expect(result.body).toContain('1 Market Street');
     });
 
     it.each([
-        ['zh_Hans', '数字内容已准备', '查看订单并领取'],
-        ['en', 'Your digital content is ready', 'View order and collect'],
+        ['zh_Hans', '数字订单已进入处理流程', '查看订单与交付进度'],
+        ['en', 'Your digital order is being processed', 'View order and delivery status'],
     ])('renders the secure digital delivery entry in %s', async (languageCode, heading, action) => {
         const result = await renderTemplate('order-confirmation', languageCode, true);
 

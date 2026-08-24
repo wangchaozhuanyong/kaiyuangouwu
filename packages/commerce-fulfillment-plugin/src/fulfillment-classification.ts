@@ -24,7 +24,21 @@ export function getOrderLineDigitalDeliveryMode(line: OrderLine): DigitalDeliver
     return (
         line.customFields?.digitalDeliveryModeSnapshot ??
         line.productVariant?.customFields?.digitalDeliveryMode ??
-        'file_download'
+        'manual_service'
+    );
+}
+
+export function isManualServiceOrderLine(line: OrderLine): boolean {
+    return (
+        getOrderLineFulfillmentType(line) === 'digital' &&
+        getOrderLineDigitalDeliveryMode(line) === 'manual_service'
+    );
+}
+
+export function isFileDownloadOrderLine(line: OrderLine): boolean {
+    return (
+        getOrderLineFulfillmentType(line) === 'digital' &&
+        getOrderLineDigitalDeliveryMode(line) === 'file_download'
     );
 }
 

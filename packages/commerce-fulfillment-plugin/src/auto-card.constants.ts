@@ -1,4 +1,4 @@
-export const digitalDeliveryModes = ['file_download', 'auto_card'] as const;
+export const digitalDeliveryModes = ['manual_service', 'file_download', 'auto_card'] as const;
 export type DigitalDeliveryMode = (typeof digitalDeliveryModes)[number];
 
 export const autoCardPoolItemStates = ['AVAILABLE', 'ASSIGNED', 'DISABLED'] as const;

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     getProductFulfillmentType,
     getUpdatedFulfillmentCustomFields,
+    getVariantDigitalDeliveryMode,
     getVariantFulfillmentType,
 } from './product-fulfillment-type.js';
 
@@ -40,6 +41,29 @@ describe('product fulfillment type', () => {
         expect(getUpdatedFulfillmentCustomFields({ licence: 'pro' }, 'digital')).toEqual({
             licence: 'pro',
             fulfillmentType: 'digital',
+            digitalDeliveryMode: 'manual_service',
+        });
+    });
+
+    it('preserves an existing digital delivery mode and accepts an explicit mode', () => {
+        const customFields = { fulfillmentType: 'digital', digitalDeliveryMode: 'file_download' };
+        expect(getVariantDigitalDeliveryMode({ customFields })).toBe('file_download');
+        expect(getUpdatedFulfillmentCustomFields(customFields, 'digital')).toEqual(customFields);
+        expect(getUpdatedFulfillmentCustomFields(customFields, 'digital', 'auto_card')).toEqual({
+            fulfillmentType: 'digital',
+            digitalDeliveryMode: 'auto_card',
+        });
+    });
+
+    it('uses manual service when converting a physical SKU to digital', () => {
+        expect(
+            getUpdatedFulfillmentCustomFields(
+                { fulfillmentType: 'physical', digitalDeliveryMode: 'file_download' },
+                'digital',
+            ),
+        ).toEqual({
+            fulfillmentType: 'digital',
+            digitalDeliveryMode: 'manual_service',
         });
     });
 });

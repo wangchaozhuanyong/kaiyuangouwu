@@ -150,6 +150,7 @@ export const orderLineFragment = graphql(
                 sku
                 trackInventory
                 stockOnHand
+                customFields
             }
             discounts {
                 ...Discount
@@ -164,6 +165,7 @@ export const orderLineFragment = graphql(
             proratedUnitPriceWithTax
             quantity
             orderPlacedQuantity
+            customFields
             linePrice
             lineTax
             linePriceWithTax

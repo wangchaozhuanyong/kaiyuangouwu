@@ -35,6 +35,7 @@ import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entit
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { FulfillmentModelService } from './fulfillment-model.service';
+import { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
 import { OrderConfirmationTokenService } from './order-confirmation-token.service';
 import { OrderConfirmationResolver } from './order-confirmation.resolver';
 import { CustomerOrderCancellationResolver, OrderFulfillmentResolver } from './order-fulfillment.resolver';
@@ -126,7 +127,7 @@ import './types';
         config.customFields.ProductVariant.push({
             name: 'digitalDeliveryMode',
             type: 'string',
-            defaultValue: 'file_download',
+            defaultValue: 'manual_service',
             public: true,
             label: [
                 { languageCode: LanguageCode.zh_Hans, value: '虚拟商品交付方式' },
@@ -135,16 +136,24 @@ import './types';
             description: [
                 {
                     languageCode: LanguageCode.zh_Hans,
-                    value: '文件下载需要为 SKU 配置数字文件；自动发卡从号池按顺序取出卡密并发送到下单邮箱。',
+                    value: '人工数字服务由商家付款后处理；文件下载需要为 SKU 配置数字文件；自动发卡从号池按顺序取出卡密并发送到下单邮箱。',
                 },
                 {
                     languageCode: LanguageCode.en,
                     value:
-                        'File downloads use a configured SKU file. Auto-card delivery allocates credentials ' +
-                        'from the SKU pool in order and sends them to the checkout email.',
+                        'Manual digital services are processed by the merchant after payment. File downloads use ' +
+                        'a configured SKU file. Auto-card delivery allocates credentials from the SKU pool in order ' +
+                        'and sends them to the checkout email.',
                 },
             ],
             options: [
+                {
+                    value: 'manual_service',
+                    label: [
+                        { languageCode: LanguageCode.zh_Hans, value: '人工数字服务' },
+                        { languageCode: LanguageCode.en, value: 'Manual digital service' },
+                    ],
+                },
                 {
                     value: 'file_download',
                     label: [
@@ -172,7 +181,7 @@ import './types';
         config.customFields.OrderLine.push({
             name: 'digitalDeliveryModeSnapshot',
             type: 'string',
-            defaultValue: 'file_download',
+            defaultValue: 'manual_service',
             public: true,
             readonly: true,
             ui: { dashboard: false },
@@ -180,6 +189,7 @@ import './types';
 
         config.shippingOptions.fulfillmentHandlers.push(digitalFulfillmentHandler);
         config.shippingOptions.fulfillmentHandlers.push(autoCardFulfillmentHandler);
+        config.shippingOptions.fulfillmentHandlers.push(manualServiceFulfillmentHandler);
         config.shippingOptions.shippingCalculators.push(physicalSubtotalShippingCalculator);
         config.shippingOptions.shippingEligibilityCheckers.push(supportedDestinationEligibilityChecker);
         config.shippingOptions.shippingLineAssignmentStrategy = new CommerceShippingLineAssignmentStrategy();

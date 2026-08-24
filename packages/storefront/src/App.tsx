@@ -126,6 +126,7 @@ import {
     CollectionSummary,
     CreateAfterSalesRequestInput,
     CustomerAddress,
+    DigitalDeliveryMode,
     FulfillmentType,
     MarketConfig,
     Order,
@@ -4743,7 +4744,11 @@ export function CartPage(props: CartPageProps) {
                         {!!digital.length && (
                             <CartGroup
                                 title={isZh ? '数字商品' : 'Digital products'}
-                                hint={isZh ? '付款后自动交付' : 'Delivered after payment'}
+                                hint={
+                                    isZh
+                                        ? '付款后按商品交付方式处理'
+                                        : 'Processed by the selected delivery method after payment'
+                                }
                                 lines={sortPinnedLines(digital)}
                                 market={market}
                                 locale={locale}
@@ -5912,8 +5917,8 @@ function orderNotification(
         return {
             title: order.checkoutFulfillment?.containsDigitalProducts
                 ? isZh
-                    ? '数字商品已进入交付流程'
-                    : 'Digital delivery is ready'
+                    ? '数字商品正在处理中'
+                    : 'Digital order processing has started'
                 : isZh
                   ? '商家正在准备订单'
                   : 'Your order is being prepared',
@@ -5993,7 +5998,10 @@ function ProductDetailPage({
           ? [product.featuredAsset]
           : [];
     const isDigital = variant?.customFields.fulfillmentType === 'digital';
-    const isAutoCard = isDigital && variant?.customFields.digitalDeliveryMode === 'auto_card';
+    const digitalDeliveryMode: DigitalDeliveryMode =
+        variant?.customFields.digitalDeliveryMode ?? 'manual_service';
+    const isAutoCard = isDigital && digitalDeliveryMode === 'auto_card';
+    const isFileDownload = isDigital && digitalDeliveryMode === 'file_download';
     const unavailable =
         !variant ||
         (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
@@ -6121,26 +6129,34 @@ function ProductDetailPage({
                             ? isZh
                                 ? '虚拟商品 · 自动发卡'
                                 : 'Digital · automatic credentials'
-                            : isDigital
+                            : isFileDownload
                               ? isZh
-                                  ? '数字商品'
-                                  : 'Digital'
-                              : isZh
-                                ? '现货商品'
-                                : 'Physical'}
+                                  ? '数字商品 · 文件下载'
+                                  : 'Digital · file download'
+                              : isDigital
+                                ? isZh
+                                    ? '数字商品 · 人工服务'
+                                    : 'Digital · manual service'
+                                : isZh
+                                  ? '现货商品'
+                                  : 'Physical'}
                     </span>
                     <span>
                         {isAutoCard
                             ? isZh
                                 ? '付款成功后发送到下单邮箱'
                                 : 'Emailed automatically after payment'
-                            : isDigital
+                            : isFileDownload
                               ? isZh
-                                  ? '支付后交付'
-                                  : 'Delivered after payment'
-                              : isZh
-                                ? '运费结算页计算'
-                                : 'Shipping at checkout'}
+                                  ? '付款后可在订单中下载'
+                                  : 'Download from your order after payment'
+                              : isDigital
+                                ? isZh
+                                    ? '付款后由商家处理并通知'
+                                    : 'Processed and updated by the merchant after payment'
+                                : isZh
+                                  ? '运费结算页计算'
+                                  : 'Shipping at checkout'}
                     </span>
                 </div>
                 <h1>{product.name}</h1>
@@ -6192,13 +6208,17 @@ function ProductDetailPage({
                         ? isZh
                             ? '付款后系统按号池顺序发送到下单邮箱'
                             : 'Credentials are assigned in sequence and emailed after payment'
-                        : isDigital
+                        : isFileDownload
                           ? isZh
-                              ? '付款后自动添加到订单'
-                              : 'Access details are added to your order after payment'
-                          : isZh
-                            ? '结算页选择收货地址并确认时效'
-                            : 'Choose an address and confirm timing at checkout'}
+                              ? '付款后在订单中获取文件下载入口'
+                              : 'Get the file download from your order after payment'
+                          : isDigital
+                            ? isZh
+                                ? '付款后由商家处理，进度与结果通过订单和邮箱通知'
+                                : 'The merchant processes it after payment and sends order and email updates'
+                            : isZh
+                              ? '结算页选择收货地址并确认时效'
+                              : 'Choose an address and confirm timing at checkout'}
                 </strong>
             </div>
             <section className="detail-service-bar">
@@ -6208,20 +6228,32 @@ function ProductDetailPage({
                         ? isZh
                             ? '邮箱自动发卡'
                             : 'Automatic email delivery'
-                        : isDigital
+                        : isFileDownload
                           ? isZh
-                              ? '数字订单'
-                              : 'Digital order'
-                          : isZh
-                            ? '下单信息'
-                            : 'Order details'}
+                              ? '安全文件下载'
+                              : 'Secure file download'
+                          : isDigital
+                            ? isZh
+                                ? '人工数字服务'
+                                : 'Manual digital service'
+                            : isZh
+                              ? '下单信息'
+                              : 'Order details'}
                 </span>
                 <span>
                     <Truck />
                     {isDigital
-                        ? isZh
-                            ? '自动交付'
-                            : 'Automatic delivery'
+                        ? isAutoCard
+                            ? isZh
+                                ? '自动交付'
+                                : 'Automatic delivery'
+                            : isFileDownload
+                              ? isZh
+                                  ? '支付后下载'
+                                  : 'Download after payment'
+                              : isZh
+                                ? '商家处理'
+                                : 'Merchant processed'
                         : isZh
                           ? '配送可追踪'
                           : 'Tracked delivery'}
@@ -6266,13 +6298,17 @@ function ProductDetailPage({
                                 ? isZh
                                     ? '虚拟自动发卡商品'
                                     : 'Automatic credential product'
-                                : isDigital
+                                : isFileDownload
                                   ? isZh
-                                      ? '数字商品'
-                                      : 'Digital'
-                                  : isZh
-                                    ? '普通商品'
-                                    : 'Physical'}
+                                      ? '数字文件下载商品'
+                                      : 'Digital file download'
+                                  : isDigital
+                                    ? isZh
+                                        ? '人工数字服务'
+                                        : 'Manual digital service'
+                                    : isZh
+                                      ? '普通商品'
+                                      : 'Physical'}
                         </dd>
                     </div>
                     <div>
@@ -6298,13 +6334,17 @@ function ProductDetailPage({
                                 ? isZh
                                     ? '付款后邮箱发卡'
                                     : 'Email after payment'
-                                : isDigital
+                                : isFileDownload
                                   ? isZh
-                                      ? '自动交付'
-                                      : 'Automatic'
-                                  : isZh
-                                    ? '快递配送'
-                                    : 'Shipping'}
+                                      ? '付款后文件下载'
+                                      : 'File download after payment'
+                                  : isDigital
+                                    ? isZh
+                                        ? '商家处理后通知'
+                                        : 'Merchant processed with updates'
+                                    : isZh
+                                      ? '快递配送'
+                                      : 'Shipping'}
                         </dd>
                     </div>
                 </dl>
@@ -7047,7 +7087,10 @@ function ProductCard({
     const isZh = locale.startsWith('zh');
     const variant = product.variants[0];
     const isDigital = variant?.customFields?.fulfillmentType === 'digital';
-    const isAutoCard = isDigital && variant?.customFields?.digitalDeliveryMode === 'auto_card';
+    const digitalDeliveryMode: DigitalDeliveryMode =
+        variant?.customFields?.digitalDeliveryMode ?? 'manual_service';
+    const isAutoCard = isDigital && digitalDeliveryMode === 'auto_card';
+    const isFileDownload = isDigital && digitalDeliveryMode === 'file_download';
     const isOutOfStock =
         (variant?.customFields?.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
         (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
@@ -7073,9 +7116,13 @@ function ProductCard({
                             ? isZh
                                 ? '邮箱自动发卡'
                                 : 'Automatic email delivery'
-                            : isZh
-                              ? '数字即时交付'
-                              : 'Digital'}
+                            : isFileDownload
+                              ? isZh
+                                  ? '数字文件下载'
+                                  : 'File download'
+                              : isZh
+                                ? '人工数字服务'
+                                : 'Manual service'}
                     </span>
                 ) : isOutOfStock ? (
                     <span className="product-card-badge is-out-badge">
@@ -7153,9 +7200,12 @@ function ProductRow({
 }) {
     const isZh = language === 'zh';
     const variant = product.variants[0];
+    const digitalDeliveryMode: DigitalDeliveryMode =
+        variant?.customFields.digitalDeliveryMode ?? 'manual_service';
     const isAutoCard =
-        variant?.customFields.fulfillmentType === 'digital' &&
-        variant.customFields.digitalDeliveryMode === 'auto_card';
+        variant?.customFields.fulfillmentType === 'digital' && digitalDeliveryMode === 'auto_card';
+    const isFileDownload =
+        variant?.customFields.fulfillmentType === 'digital' && digitalDeliveryMode === 'file_download';
     const isOutOfStock =
         (variant?.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
         (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
@@ -7186,17 +7236,21 @@ function ProductRow({
                             ? isZh
                                 ? '⚡ 付款后邮箱自动发卡'
                                 : 'Automatic email delivery'
-                            : variant?.customFields.fulfillmentType === 'digital'
+                            : isFileDownload
                               ? isZh
-                                  ? '⚡ 自动发货 · 极速交付'
-                                  : 'Instant Delivery'
-                              : variant?.stockLevel === 'OUT_OF_STOCK'
+                                  ? '付款后可下载数字文件'
+                                  : 'File download after payment'
+                              : variant?.customFields.fulfillmentType === 'digital'
                                 ? isZh
-                                    ? '暂时缺货'
-                                    : 'Out of stock'
-                                : isZh
-                                  ? '现货在售'
-                                  : 'In stock'}
+                                    ? '付款后由商家处理'
+                                    : 'Processed by the merchant after payment'
+                                : variant?.stockLevel === 'OUT_OF_STOCK'
+                                  ? isZh
+                                      ? '暂时缺货'
+                                      : 'Out of stock'
+                                  : isZh
+                                    ? '现货在售'
+                                    : 'In stock'}
                     </span>
                 </div>
                 <div className="product-row-bottom">

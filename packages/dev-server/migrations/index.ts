@@ -34,6 +34,7 @@ import { AlignAutoCardDeliverySchema1787598000000 } from './1787598000000-align-
 import { BackfillMissingStoreProfiles1787605200000 } from './1787605200000-backfill-missing-store-profiles';
 import { AddAutoCardBilingualInstructions1787608800000 } from './1787608800000-add-auto-card-bilingual-instructions';
 import { CompleteBilingualServiceCatalog1787612400000 } from './1787612400000-complete-bilingual-service-catalog';
+import { AddManualDigitalServiceMode1787616000000 } from './1787616000000-add-manual-digital-service-mode';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -72,4 +73,5 @@ export const devServerMigrations = [
     BackfillMissingStoreProfiles1787605200000,
     AddAutoCardBilingualInstructions1787608800000,
     CompleteBilingualServiceCatalog1787612400000,
+    AddManualDigitalServiceMode1787616000000,
 ];

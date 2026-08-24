@@ -73,8 +73,16 @@ describe('commerceOrderProcess digital fulfillment', () => {
                 {
                     id: 'digital-line',
                     quantity: 2,
-                    customFields: { fulfillmentTypeSnapshot: 'digital' },
-                    productVariant: { customFields: { fulfillmentType: 'digital' } },
+                    customFields: {
+                        fulfillmentTypeSnapshot: 'digital',
+                        digitalDeliveryModeSnapshot: 'file_download',
+                    },
+                    productVariant: {
+                        customFields: {
+                            fulfillmentType: 'digital',
+                            digitalDeliveryMode: 'file_download',
+                        },
+                    },
                 },
                 {
                     id: 'physical-line',
@@ -118,6 +126,38 @@ describe('commerceOrderProcess digital fulfillment', () => {
             },
         } as any);
 
+        expect(orderService.createFulfillment).not.toHaveBeenCalled();
+    });
+
+    it('leaves a manual digital service pending for an administrator to complete', async () => {
+        const order = {
+            state: 'PaymentSettled',
+            customer: { emailAddress: 'buyer@example.com' },
+            lines: [
+                {
+                    id: 'manual-line',
+                    quantity: 1,
+                    customFields: {
+                        fulfillmentTypeSnapshot: 'digital',
+                        digitalDeliveryModeSnapshot: 'manual_service',
+                    },
+                    productVariant: {
+                        customFields: {
+                            fulfillmentType: 'digital',
+                            digitalDeliveryMode: 'manual_service',
+                        },
+                    },
+                },
+            ],
+        };
+        hydratedOrder = order;
+
+        await commerceOrderProcess.onTransitionEnd?.('ArrangingPayment', 'PaymentSettled', {
+            ctx: { channelId: 'channel-1' },
+            order,
+        } as any);
+
+        expect(autoCardService.allocateSettledOrder).toHaveBeenCalled();
         expect(orderService.createFulfillment).not.toHaveBeenCalled();
     });
 

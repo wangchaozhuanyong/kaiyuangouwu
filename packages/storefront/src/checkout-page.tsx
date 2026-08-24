@@ -414,7 +414,7 @@ export function CheckoutPage({
                                 <p>
                                     {isZh
                                         ? '付款成功后，订单与数字内容领取入口将发送至此邮箱。'
-                                        : 'After payment, the order and secure digital-content entry will be sent here.'}
+                                        : 'Order updates and digital delivery instructions will be sent here after payment.'}
                                 </p>
                             </div>
                             <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
@@ -897,13 +897,17 @@ function CheckoutItemsGroup({
                                     ? isZh
                                         ? `付款后邮箱自动发卡 · 不支持退款 · 可用 ${line.productVariant.autoCardAvailableStock ?? 0} 份`
                                         : `Automatic email delivery · non-refundable · ${line.productVariant.autoCardAvailableStock ?? 0} available`
-                                    : line.productVariant.customFields.fulfillmentType === 'digital'
+                                    : line.productVariant.customFields.digitalDeliveryMode === 'file_download'
                                       ? isZh
-                                          ? '付款后发送至邮箱'
-                                          : 'Sent by email after payment'
-                                      : isZh
-                                        ? '配送与售后信息以订单为准'
-                                        : 'After-sales support'}
+                                          ? '付款后可在订单内下载文件'
+                                          : 'Download the file from your order after payment'
+                                      : line.productVariant.customFields.fulfillmentType === 'digital'
+                                        ? isZh
+                                            ? '付款后由商家处理，进度与结果通过订单和邮箱通知'
+                                            : 'Processed by the merchant after payment with order and email updates'
+                                        : isZh
+                                          ? '配送与售后信息以订单为准'
+                                          : 'After-sales support'}
                             </em>
                         </div>
                         <span className="checkout-line-meta">

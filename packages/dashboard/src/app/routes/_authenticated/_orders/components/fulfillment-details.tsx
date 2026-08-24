@@ -35,8 +35,11 @@ type FulfillmentDetailsProps = {
 export function getFulfillmentMethodDisplay(
     fulfillment: Pick<ResultOf<typeof fulfillmentFragment>, 'handlerCode' | 'method'>,
     digitalDeliveryLabel: string,
+    manualServiceLabel: string,
 ) {
-    return fulfillment.handlerCode === 'digital-fulfillment' ? digitalDeliveryLabel : fulfillment.method;
+    if (fulfillment.handlerCode === 'digital-fulfillment') return digitalDeliveryLabel;
+    if (fulfillment.handlerCode === 'manual-service-fulfillment') return manualServiceLabel;
+    return fulfillment.method;
 }
 
 export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<FulfillmentDetailsProps>) {
@@ -44,7 +47,11 @@ export function FulfillmentDetails({ order, fulfillment, onSuccess }: Readonly<F
     const { t } = useLingui();
     const { getTranslatedFulfillmentState } = useDynamicTranslations();
     const customFieldConfig = useCustomFieldConfig('Fulfillment');
-    const fulfillmentMethod = getFulfillmentMethodDisplay(fulfillment, t`Digital delivery`);
+    const fulfillmentMethod = getFulfillmentMethodDisplay(
+        fulfillment,
+        t`Digital delivery`,
+        t`Manual digital service`,
+    );
     const customFieldsForm = useForm({
         values: {
             customFields: (fulfillment as any).customFields ?? {},

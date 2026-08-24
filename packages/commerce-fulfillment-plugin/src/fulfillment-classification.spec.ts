@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasCompleteShippingAddress, summarizeOrderFulfillment } from './fulfillment-classification';
+import {
+    getOrderLineDigitalDeliveryMode,
+    hasCompleteShippingAddress,
+    isAutoCardOrderLine,
+    isFileDownloadOrderLine,
+    isManualServiceOrderLine,
+    summarizeOrderFulfillment,
+} from './fulfillment-classification';
 
 function line(type: 'physical' | 'digital') {
     return {
@@ -28,6 +35,29 @@ describe('summarizeOrderFulfillment', () => {
             requiresShippingAddress: true,
             requiresShippingMethod: true,
         });
+    });
+});
+
+describe('digital delivery modes', () => {
+    it('defaults digital products to manual merchant processing', () => {
+        const orderLine = line('digital');
+
+        expect(getOrderLineDigitalDeliveryMode(orderLine)).toBe('manual_service');
+        expect(isManualServiceOrderLine(orderLine)).toBe(true);
+        expect(isFileDownloadOrderLine(orderLine)).toBe(false);
+        expect(isAutoCardOrderLine(orderLine)).toBe(false);
+    });
+
+    it('keeps explicit file downloads and auto-card lines separate', () => {
+        const download = line('digital');
+        download.customFields.digitalDeliveryModeSnapshot = 'file_download';
+        const autoCard = line('digital');
+        autoCard.customFields.digitalDeliveryModeSnapshot = 'auto_card';
+
+        expect(isFileDownloadOrderLine(download)).toBe(true);
+        expect(isAutoCardOrderLine(autoCard)).toBe(true);
+        expect(isManualServiceOrderLine(download)).toBe(false);
+        expect(isManualServiceOrderLine(autoCard)).toBe(false);
     });
 });
 

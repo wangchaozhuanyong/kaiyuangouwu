@@ -220,6 +220,9 @@ export function AddProductVariantDialog({
                             values.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
                         customFields: {
                             fulfillmentType: values.fulfillmentType,
+                            ...(values.fulfillmentType === 'digital'
+                                ? { digitalDeliveryMode: 'manual_service' as const }
+                                : {}),
                         },
                         optionIds: Object.values(values.options),
                         translations: [

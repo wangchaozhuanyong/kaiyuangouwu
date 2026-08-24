@@ -1,4 +1,5 @@
 export type FulfillmentType = 'physical' | 'digital';
+export type DigitalDeliveryMode = 'manual_service' | 'file_download' | 'auto_card';
 
 export type ProductFulfillmentType = FulfillmentType | 'mixed';
 
@@ -18,6 +19,23 @@ export function getVariantFulfillmentType(variant: VariantWithFulfillmentType): 
     return 'physical';
 }
 
+export function getVariantDigitalDeliveryMode(variant: VariantWithFulfillmentType): DigitalDeliveryMode {
+    if (variant.customFields && typeof variant.customFields === 'object') {
+        const deliveryMode =
+            'digitalDeliveryMode' in variant.customFields
+                ? variant.customFields.digitalDeliveryMode
+                : undefined;
+        if (
+            deliveryMode === 'manual_service' ||
+            deliveryMode === 'file_download' ||
+            deliveryMode === 'auto_card'
+        ) {
+            return deliveryMode;
+        }
+    }
+    return 'manual_service';
+}
+
 export function getProductFulfillmentType(
     variants: ReadonlyArray<VariantWithFulfillmentType>,
 ): ProductFulfillmentType {
@@ -32,9 +50,22 @@ export function getProductFulfillmentType(
 export function getUpdatedFulfillmentCustomFields(
     customFields: unknown,
     fulfillmentType: FulfillmentType,
+    digitalDeliveryMode?: DigitalDeliveryMode,
 ): Record<string, unknown> {
+    const currentCustomFields = customFields && typeof customFields === 'object' ? customFields : {};
+    const wasDigital =
+        'fulfillmentType' in currentCustomFields && currentCustomFields.fulfillmentType === 'digital';
     return {
-        ...(customFields && typeof customFields === 'object' ? customFields : {}),
+        ...currentCustomFields,
         fulfillmentType,
+        ...(fulfillmentType === 'digital'
+            ? {
+                  digitalDeliveryMode:
+                      digitalDeliveryMode ??
+                      (wasDigital
+                          ? getVariantDigitalDeliveryMode({ customFields: currentCustomFields })
+                          : 'manual_service'),
+              }
+            : {}),
     };
 }

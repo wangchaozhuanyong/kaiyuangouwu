@@ -38,9 +38,9 @@
 {{#if digitalDeliveryActionUrl}}
 <mj-section background-color="#f3f8f5" padding="20px 28px">
     <mj-column>
-        <mj-text font-size="17px" font-weight="700" padding="0 0 6px">{{#if isChinese}}数字内容已准备{{else}}Your digital content is ready{{/if}}</mj-text>
-        <mj-text color="#53625b" padding="0 0 14px">{{#if isChinese}}请通过安全入口查看订单并领取数字内容。为保护订单信息，入口会在一段时间后失效。{{else}}Use the secure entry to view your order and collect your digital content. The entry expires after a limited time to protect your order.{{/if}}</mj-text>
-        <mj-button href="{{ digitalDeliveryActionUrl }}" background-color="#d94a3d" border-radius="8px" font-weight="700" inner-padding="12px 22px" padding="0">{{#if isChinese}}查看订单并领取{{else}}View order and collect{{/if}}</mj-button>
+        <mj-text font-size="17px" font-weight="700" padding="0 0 6px">{{#if isChinese}}数字订单已进入处理流程{{else}}Your digital order is being processed{{/if}}</mj-text>
+        <mj-text color="#53625b" padding="0 0 14px">{{#if isChinese}}请通过安全入口查看交付进度。自动发卡会另行发送卡密邮件，文件商品可在订单中下载，人工服务由商家处理后通知。{{else}}Use the secure entry to follow delivery progress. Automatic credentials are sent in a separate email, file products are downloaded from the order, and manual services are updated after merchant processing.{{/if}}</mj-text>
+        <mj-button href="{{ digitalDeliveryActionUrl }}" background-color="#d94a3d" border-radius="8px" font-weight="700" inner-padding="12px 22px" padding="0">{{#if isChinese}}查看订单与交付进度{{else}}View order and delivery status{{/if}}</mj-button>
     </mj-column>
 </mj-section>
 {{/if}}

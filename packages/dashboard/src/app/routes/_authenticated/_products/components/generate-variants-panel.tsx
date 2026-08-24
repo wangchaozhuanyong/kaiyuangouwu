@@ -181,6 +181,9 @@ export function GenerateVariantsPanel({
                         formValues.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
                     customFields: {
                         fulfillmentType: formValues.fulfillmentType,
+                        ...(formValues.fulfillmentType === 'digital'
+                            ? { digitalDeliveryMode: 'manual_service' as const }
+                            : {}),
                     },
                     optionIds: v.optionIds,
                     translations: [

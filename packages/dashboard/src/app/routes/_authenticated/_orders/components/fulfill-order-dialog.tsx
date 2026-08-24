@@ -45,6 +45,44 @@ interface FulfillmentQuantity {
     max: number;
 }
 
+export function isManualDigitalOrderLine(
+    line: Pick<Order['lines'][number], 'customFields' | 'productVariant'>,
+) {
+    const lineCustomFields = line.customFields as
+        { fulfillmentTypeSnapshot?: string; digitalDeliveryModeSnapshot?: string } | undefined;
+    const variantCustomFields = line.productVariant.customFields as
+        { fulfillmentType?: string; digitalDeliveryMode?: string } | undefined;
+    const fulfillmentType = lineCustomFields?.fulfillmentTypeSnapshot ?? variantCustomFields?.fulfillmentType;
+    const deliveryMode =
+        lineCustomFields?.digitalDeliveryModeSnapshot ??
+        variantCustomFields?.digitalDeliveryMode ??
+        'manual_service';
+    return fulfillmentType === 'digital' && deliveryMode === 'manual_service';
+}
+
+export function getInitialFulfillCount(
+    handlerCode: string | undefined,
+    line: Pick<Order['lines'][number], 'customFields' | 'productVariant'>,
+    max: number,
+): number {
+    const isManualDigital = isManualDigitalOrderLine(line);
+    if (handlerCode === 'manual-service-fulfillment') {
+        return isManualDigital ? max : 0;
+    }
+    return isManualDigital ? 0 : max;
+}
+
+export function getPreferredFulfillmentHandlerCode(
+    order: Pick<Order, 'lines' | 'shippingLines'>,
+): string | undefined {
+    const shippingHandlerCode = order.shippingLines[0]?.shippingMethod?.fulfillmentHandlerCode;
+    if (shippingHandlerCode) {
+        return shippingHandlerCode;
+    }
+    const containsManualDigitalService = order.lines.some(isManualDigitalOrderLine);
+    return containsManualDigitalService ? 'manual-service-fulfillment' : undefined;
+}
+
 export function FulfillOrderDialog({
     order,
     onSuccess,
@@ -127,18 +165,21 @@ export function FulfillOrderDialog({
     const initializeFulfillmentQuantities = () => {
         if (!globalSettingsData?.globalSettings) return;
 
+        const preferredHandlerCode = getPreferredFulfillmentHandlerCode(order);
         const quantities: { [lineId: string]: FulfillmentQuantity } = {};
         order.lines.forEach(line => {
-            const fulfillCount = getFulfillableCount(line, globalSettingsData.globalSettings.trackInventory);
-            quantities[line.id] = { fulfillCount, max: fulfillCount };
+            const max = getFulfillableCount(line, globalSettingsData.globalSettings.trackInventory);
+            quantities[line.id] = {
+                fulfillCount: getInitialFulfillCount(preferredHandlerCode, line, max),
+                max,
+            };
         });
         setFulfillmentQuantities(quantities);
 
         // Set default fulfillment handler
         const defaultHandler =
-            fulfillmentHandlersData?.fulfillmentHandlers.find(
-                h => h.code === order.shippingLines[0]?.shippingMethod?.fulfillmentHandlerCode,
-            ) ?? fulfillmentHandlersData?.fulfillmentHandlers[0];
+            fulfillmentHandlersData?.fulfillmentHandlers.find(h => h.code === preferredHandlerCode) ??
+            fulfillmentHandlersData?.fulfillmentHandlers[0];
 
         if (defaultHandler) {
             form.setValue('handler', {

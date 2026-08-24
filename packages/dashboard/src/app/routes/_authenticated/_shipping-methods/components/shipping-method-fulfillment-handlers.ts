@@ -1,5 +1,5 @@
-// Digital fulfillment is created automatically after payment and is not a shipping method.
-const NON_SHIPPING_FULFILLMENT_HANDLER_CODES = new Set(['digital-fulfillment']);
+// Digital fulfillment handlers never represent a parcel shipping method.
+const NON_SHIPPING_FULFILLMENT_HANDLER_CODES = new Set(['digital-fulfillment', 'manual-service-fulfillment']);
 
 interface FulfillmentHandlerOption {
     code: string;
