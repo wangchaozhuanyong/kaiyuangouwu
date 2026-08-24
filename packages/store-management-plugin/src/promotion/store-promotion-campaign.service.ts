@@ -6,6 +6,7 @@ import {
     LanguageCode,
 } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
+import type { ProductVariant } from '@vendure/core';
 import {
     Collection,
     idsAreEqual,
@@ -26,6 +27,7 @@ import {
     StoreFlashSaleItemView,
     StoreFlashSaleView,
 } from '../types';
+
 import { parseFlashSaleVariantRules } from './store-commerce-promotion-actions';
 
 @Injectable()
@@ -330,19 +332,36 @@ export class StorePromotionCampaignService {
     }
 
     private findPromotions(ctx: RequestContext): Promise<Promotion[]> {
-        return this.promotionService.findAll(ctx, { take: 1_000 }).then(result => result.items);
+        return this.loadPromotions(ctx);
     }
 
     private async variantsForProducts(ctx: RequestContext, productIds: ID[]) {
         const uniqueProductIds = uniqueIds(productIds);
         const variants = await Promise.all(
-            uniqueProductIds.map(productId =>
-                this.productVariantService
-                    .getVariantsByProductId(ctx, productId, { take: 1_000 })
-                    .then(result => result.items),
-            ),
+            uniqueProductIds.map(productId => this.loadProductVariants(ctx, productId)),
         );
         return variants.flat();
+    }
+
+    private async loadPromotions(ctx: RequestContext): Promise<Promotion[]> {
+        const items: Promotion[] = [];
+        while (true) {
+            const page = await this.promotionService.findAll(ctx, { take: 100, skip: items.length });
+            items.push(...page.items);
+            if (items.length >= page.totalItems || page.items.length === 0) return items;
+        }
+    }
+
+    private async loadProductVariants(ctx: RequestContext, productId: ID): Promise<ProductVariant[]> {
+        const items: ProductVariant[] = [];
+        while (true) {
+            const page = await this.productVariantService.getVariantsByProductId(ctx, productId, {
+                take: 100,
+                skip: items.length,
+            });
+            items.push(...page.items);
+            if (items.length >= page.totalItems || page.items.length === 0) return items;
+        }
     }
 
     private async assertNoOverlappingFlashSale(

@@ -113,32 +113,86 @@ describe('StorePromotionCampaignService', () => {
         ).rejects.toThrow('时间重叠');
         expect(harness.createPromotion).not.toHaveBeenCalled();
     });
+
+    it('loads promotions in pages that respect the production list limit', async () => {
+        const promotions = Array.from({ length: 101 }, (_, index) => ({
+            id: `promotion-${index + 1}`,
+            name: `秒杀活动 ${index + 1}`,
+            enabled: true,
+            startsAt: null,
+            endsAt: null,
+            actions: [{ code: 'store_flash_sale_price', args: { variantRules: '[]' } }],
+        }));
+        const harness = createHarness({ promotions });
+
+        const sales = await harness.service.findFlashSales(ctx, true);
+
+        expect(sales).toHaveLength(10);
+        expect(harness.findAllPromotions).toHaveBeenNthCalledWith(1, ctx, { take: 100, skip: 0 });
+        expect(harness.findAllPromotions).toHaveBeenNthCalledWith(2, ctx, { take: 100, skip: 100 });
+    });
+
+    it('loads every product variant in pages that respect the production list limit', async () => {
+        const variants = Array.from({ length: 101 }, (_, index) =>
+            productVariant(`variant-${index + 1}`, 10_000 + index),
+        );
+        const harness = createHarness({ variants });
+
+        await harness.service.createFlashSale(ctx, {
+            name: '全规格秒杀',
+            productIds: ['product-1'],
+            percentageOff: 20,
+            startsAt: new Date('2026-08-23T10:00:00.000Z'),
+            endsAt: new Date('2026-08-24T10:00:00.000Z'),
+        });
+
+        expect(harness.getVariantsByProductId).toHaveBeenNthCalledWith(1, ctx, 'product-1', {
+            take: 100,
+            skip: 0,
+        });
+        expect(harness.getVariantsByProductId).toHaveBeenNthCalledWith(2, ctx, 'product-1', {
+            take: 100,
+            skip: 100,
+        });
+        const input = harness.createPromotion.mock.calls[0][1];
+        expect(JSON.parse(input.actions[0].arguments[0].value)).toHaveLength(101);
+    });
 });
 
 function createHarness({ variants = [], promotions = [] }: { variants?: any[]; promotions?: any[] } = {}) {
-    const createPromotion = vi.fn(async (_ctx: unknown, input: CreatePromotionInput) =>
-        promotionFromInput(input),
-    );
+    const createPromotion = vi.fn((_ctx: unknown, input: CreatePromotionInput) => promotionFromInput(input));
+    const findAllPromotions = vi.fn((_ctx: unknown, options?: { skip?: number; take?: number }) => {
+        const skip = options?.skip ?? 0;
+        const take = options?.take ?? promotions.length;
+        return { items: promotions.slice(skip, skip + take), totalItems: promotions.length };
+    });
     const promotionService = {
-        findAll: vi.fn(async () => ({ items: promotions, totalItems: promotions.length })),
-        findOne: vi.fn(async (_ctx: unknown, id: string) =>
-            promotions.find(promotion => promotion.id === id),
-        ),
+        findAll: findAllPromotions,
+        findOne: vi.fn((_ctx: unknown, id: string) => promotions.find(promotion => promotion.id === id)),
         createPromotion,
         updatePromotion: vi.fn(),
         softDeletePromotion: vi.fn(),
     };
+    const getVariantsByProductId = vi.fn(
+        (_ctx: unknown, _productId: string, options?: { skip?: number; take?: number }) => {
+            const skip = options?.skip ?? 0;
+            const take = options?.take ?? variants.length;
+            return { items: variants.slice(skip, skip + take), totalItems: variants.length };
+        },
+    );
     const productVariantService = {
-        getVariantsByProductId: vi.fn(async () => ({ items: variants, totalItems: variants.length })),
-        findOne: vi.fn(async (_ctx: unknown, id: string) =>
+        getVariantsByProductId,
+        findOne: vi.fn((_ctx: unknown, id: string) =>
             variants.find(variant => String(variant.id) === String(id)),
         ),
     };
     const connection = {
-        findByIdsInChannel: vi.fn(async () => []),
+        findByIdsInChannel: vi.fn(() => []),
     };
     return {
         createPromotion,
+        findAllPromotions,
+        getVariantsByProductId,
         service: new StorePromotionCampaignService(
             connection as any,
             promotionService as any,
