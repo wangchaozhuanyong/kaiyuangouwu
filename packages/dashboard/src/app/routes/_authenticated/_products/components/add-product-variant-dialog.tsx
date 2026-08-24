@@ -23,7 +23,9 @@ import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+
 import { createProductOptionDocument, createProductVariantsDocument } from '../products.graphql.js';
+
 import { getProductFulfillmentType } from './product-fulfillment-type.js';
 import { ProductOptionSelect } from './product-option-select.js';
 
@@ -46,7 +48,9 @@ const getProductOptionGroupsDocument = graphql(`
                 id
                 name
                 sku
-                customFields
+                customFields {
+                    fulfillmentType
+                }
                 options {
                     id
                     code
@@ -195,7 +199,7 @@ export function AddProductVariantDialog({
                     [variables.input.productOptionGroupId]: result.createProductOption.id,
                 });
                 // Refetch product data to get the new option
-                refetch();
+                void refetch();
             }
         },
     });
@@ -261,7 +265,7 @@ export function AddProductVariantDialog({
                     <form
                         onSubmit={e => {
                             e.stopPropagation();
-                            form.handleSubmit(onSubmit)(e);
+                            void form.handleSubmit(onSubmit)(e);
                         }}
                         className="space-y-4"
                     >

@@ -117,7 +117,7 @@ export function OverlayLayeringTestPage() {
                             <DialogTrigger render={<Button variant="outline" />}>
                                 Open wide dialog
                             </DialogTrigger>
-                            <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1180px,96vw)]">
+                            <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[96vw] xl:max-w-[1180px]">
                                 <DialogHeader className="shrink-0 border-b px-6 py-4">
                                     <DialogTitle>Wide dialog</DialogTitle>
                                     <DialogDescription>

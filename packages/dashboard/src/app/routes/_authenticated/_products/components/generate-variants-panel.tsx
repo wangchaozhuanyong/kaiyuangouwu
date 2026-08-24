@@ -18,6 +18,7 @@ import { Mail, Save, Search, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
+
 import { createProductVariantsDocument } from '../products.graphql.js';
 
 interface OptionGroup {
@@ -94,7 +95,7 @@ function generateVariantCombinations(optionGroups: OptionGroup[]): GeneratedVari
     const combine = (
         groups: OptionGroup[],
         index: number,
-        current: { id: string; name: string }[],
+        current: Array<{ id: string; name: string }>,
     ): GeneratedVariant[] => {
         if (index === groups.length) {
             return [
@@ -276,6 +277,7 @@ export function GenerateVariantsPanel({
                                         <RadioGroupItem
                                             id="new-variant-type-physical"
                                             value="physical"
+                                            aria-label={t`Physical product`}
                                             className="mt-1"
                                         />
                                         <div>
@@ -301,6 +303,7 @@ export function GenerateVariantsPanel({
                                         <RadioGroupItem
                                             id="new-variant-type-digital"
                                             value="digital"
+                                            aria-label={t`Digital product`}
                                             className="mt-1"
                                         />
                                         <div>
@@ -517,7 +520,7 @@ export function GenerateVariantsPanel({
                     </div>
                     <Button
                         type="button"
-                        onClick={handleCreateVariants}
+                        onClick={() => void handleCreateVariants()}
                         disabled={createVariantsMutation.isPending || enabledCount === 0}
                     >
                         <Save className="mr-2 h-4 w-4" />

@@ -109,13 +109,13 @@ test.describe('product variant generation', () => {
         await page.goto(`/products/${productId}`);
         await expect(page.getByText('Product type and delivery', { exact: true })).toBeVisible();
 
-        await page.getByLabel('Digital product', { exact: true }).click();
+        await page.getByRole('radio', { name: /^Digital product/ }).click();
         await expect(page.getByTestId('variant-stock-input')).toHaveCount(0);
         await expect(
             page.getByText('Delivered to the checkout email after payment; no shipping or stock.'),
         ).toBeVisible();
 
-        await page.getByLabel('Physical product', { exact: true }).click();
+        await page.getByRole('radio', { name: /^Physical product/ }).click();
         await expect(page.getByTestId('variant-stock-input')).toHaveCount(3);
     });
 

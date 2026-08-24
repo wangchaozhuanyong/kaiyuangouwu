@@ -130,7 +130,9 @@ export const productDetailDocument = graphql(
                 }
                 variants {
                     id
-                    customFields
+                    customFields {
+                        fulfillmentType
+                    }
                 }
             }
         }
@@ -165,7 +167,9 @@ export const productDetailWithVariantsDocument = graphql(`
                 price
                 stockOnHand
                 trackInventory
-                customFields
+                customFields {
+                    fulfillmentType
+                }
                 currencyCode
                 priceWithTax
                 createdAt
