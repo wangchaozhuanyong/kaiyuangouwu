@@ -152,7 +152,9 @@ sha256sum --check "${ARCHIVE_NAME}.sha256"
 ARTIFACT_NAME="${ARCHIVE_NAME%.tar.gz}"
 test "${ARTIFACT_NAME}" != "${ARCHIVE_NAME}"
 test ! -e "${ARTIFACT_NAME}"
-tar --extract --gzip --file "${ARCHIVE_NAME}"
+# 发布 shell 可能使用 umask 077；必须恢复归档中已验证的 755/644 权限，
+# 否则 Nginx 的 www-data 用户无法遍历 Storefront 目录。
+tar --extract --gzip --same-permissions --file "${ARCHIVE_NAME}"
 CANDIDATE="/var/www/kaiyuangouwu-releases/${ARTIFACT_NAME}"
 node "${CANDIDATE}/verify-runtime.mjs" --expected-sha "${TARGET_SHA}"
 ```
