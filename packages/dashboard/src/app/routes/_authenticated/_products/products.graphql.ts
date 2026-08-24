@@ -22,7 +22,9 @@ export const productListDocument = graphql(`
                     token
                 }
                 variants {
-                    customFields
+                    customFields {
+                        fulfillmentType
+                    }
                 }
             }
             totalItems

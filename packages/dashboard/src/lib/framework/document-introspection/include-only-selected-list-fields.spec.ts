@@ -1718,6 +1718,9 @@ describe('includeOnlySelectedListFields', () => {
                             variants {
                                 id
                                 name
+                                customFields {
+                                    fulfillmentType
+                                }
                             }
                             assets {
                                 id
@@ -1755,6 +1758,7 @@ describe('includeOnlySelectedListFields', () => {
             // Should include dependency fields
             expect(resultQuery).toContain('featuredAsset');
             expect(resultQuery).toContain('variants');
+            expect(resultQuery).toContain('customFields { fulfillmentType }');
 
             // Should exclude non-selected, non-dependency fields
             expect(resultQuery).not.toContain('slug');
