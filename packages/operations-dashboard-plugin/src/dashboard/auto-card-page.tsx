@@ -209,7 +209,9 @@ function createPresets(text: AutoCardText): AutoCardPresets {
             formatName: text.presetAccountPassword,
             delimiter: '----',
             fields: [
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'account', label: '账号', labelEn: 'Account', secret: false },
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'password', label: '密码', labelEn: 'Password', secret: true },
             ],
         },
@@ -217,7 +219,9 @@ function createPresets(text: AutoCardText): AutoCardPresets {
             formatName: text.presetEmailPassword,
             delimiter: '----',
             fields: [
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'email', label: '邮箱', labelEn: 'Email', secret: false },
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'emailPassword', label: '邮箱密码', labelEn: 'Email password', secret: true },
             ],
         },
@@ -225,9 +229,13 @@ function createPresets(text: AutoCardText): AutoCardPresets {
             formatName: text.presetAccountPhone2fa,
             delimiter: '----',
             fields: [
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'account', label: '账号', labelEn: 'Account', secret: false },
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'password', label: '密码', labelEn: 'Password', secret: true },
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'phone', label: '手机', labelEn: 'Phone', secret: false },
+                // i18n-audit-ignore -- Fixed bilingual delivery payload label.
                 { key: 'twoFactor', label: '2FA代码', labelEn: '2FA code', secret: true },
             ],
         },
