@@ -118,12 +118,14 @@ const autoCardAdminTypes = gql`
     type AutoCardFieldDefinition {
         key: String!
         label: String!
+        labelEn: String!
         secret: Boolean!
     }
 
     type AutoCardField {
         key: String!
         label: String!
+        labelEn: String!
         value: String!
         secret: Boolean!
     }
@@ -131,6 +133,7 @@ const autoCardAdminTypes = gql`
     input AutoCardFieldInput {
         key: String!
         label: String!
+        labelEn: String
         secret: Boolean!
     }
 
@@ -144,6 +147,8 @@ const autoCardAdminTypes = gql`
         delimiter: String!
         fields: [AutoCardFieldDefinition!]!
         instructions: String!
+        instructionsZh: String!
+        instructionsEn: String!
         lowStockThreshold: Int!
         availableCount: Int!
         assignedCount: Int!
@@ -157,7 +162,9 @@ const autoCardAdminTypes = gql`
         formatName: String!
         delimiter: String!
         fields: [AutoCardFieldInput!]!
-        instructions: String!
+        instructions: String
+        instructionsZh: String
+        instructionsEn: String
         lowStockThreshold: Int!
     }
 

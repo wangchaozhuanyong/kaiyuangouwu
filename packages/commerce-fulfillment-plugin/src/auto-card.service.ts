@@ -21,6 +21,7 @@ import { AutoCardCipherService } from './auto-card-cipher.service';
 import { AutoCardDeliveryReadyEvent } from './auto-card-delivery.event';
 import {
     AutoCardFieldDefinition,
+    autoCardFieldLabel,
     maskAutoCardValues,
     normalizeAutoCardDelimiter,
     parseAutoCardFieldsJson,
@@ -136,12 +137,20 @@ export class AutoCardService {
         const fields = validateAutoCardFields(input.fields);
         const delimiter = normalizeAutoCardDelimiter(input.delimiter);
         const formatName = input.formatName.trim();
-        const instructions = input.instructions.trim();
+        const instructionsZh = (input.instructionsZh ?? input.instructions ?? '').trim();
+        const instructionsEn = (input.instructionsEn ?? '').trim();
+        const instructions = instructionsZh || instructionsEn;
         if (!formatName || formatName.length > 80) {
             throw new UserInputError('发卡格式名称不能为空且不能超过 80 个字符');
         }
-        if (instructions.length > AUTO_CARD_MAX_INSTRUCTIONS_LENGTH) {
-            throw new UserInputError(`发货说明不能超过 ${AUTO_CARD_MAX_INSTRUCTIONS_LENGTH} 个字符`);
+        if (
+            instructionsZh.length > AUTO_CARD_MAX_INSTRUCTIONS_LENGTH ||
+            instructionsEn.length > AUTO_CARD_MAX_INSTRUCTIONS_LENGTH
+        ) {
+            throw new UserInputError(`中英文发货说明均不能超过 ${AUTO_CARD_MAX_INSTRUCTIONS_LENGTH} 个字符`);
+        }
+        if (input.enabled && (!instructionsZh || !instructionsEn)) {
+            throw new UserInputError('启用自动发卡前必须填写中英文发货说明');
         }
         if (
             !Number.isInteger(input.lowStockThreshold) ||
@@ -161,6 +170,8 @@ export class AutoCardService {
             delimiter,
             fieldsJson: JSON.stringify(fields),
             instructions,
+            instructionsZh,
+            instructionsEn,
             lowStockThreshold: input.lowStockThreshold,
             channel: ctx.channel,
             channelId: ctx.channelId,
@@ -471,13 +482,14 @@ export class AutoCardService {
             throw new Error('当前发卡记录尚未分配卡密');
         }
         const fields = parseAutoCardFieldsJson(delivery.schemaSnapshot);
+        const isChinese = delivery.languageCode === 'zh_Hans';
         return {
             deliveryId: String(delivery.id),
             recipientEmail: delivery.recipientEmail,
             orderCode: delivery.order.code,
             productName: delivery.productName,
             sku: delivery.sku,
-            isChinese: delivery.languageCode === 'zh_Hans',
+            isChinese,
             instructions: delivery.instructionsSnapshot,
             credentials: delivery.poolItems
                 .slice()
@@ -486,7 +498,11 @@ export class AutoCardService {
                     const values = this.cipher.decrypt(item.encryptedPayload);
                     return {
                         number: index + 1,
-                        fields: fields.map(field => ({ ...field, value: values[field.key] ?? '' })),
+                        fields: fields.map(field => ({
+                            ...field,
+                            label: autoCardFieldLabel(field, isChinese),
+                            value: values[field.key] ?? '',
+                        })),
                     };
                 }),
         };
@@ -629,7 +645,7 @@ export class AutoCardService {
                 sku: line.productVariant.sku,
                 quantity: line.quantity,
                 schemaSnapshot: config.fieldsJson,
-                instructionsSnapshot: config.instructions,
+                instructionsSnapshot: this.localizedInstructions(config, String(ctx.languageCode)),
                 attemptCount: 0,
                 lastError: null,
                 lastDispatchedAt: null,
@@ -796,6 +812,8 @@ export class AutoCardService {
         ]);
         return Object.assign(config, {
             fields: parseAutoCardFieldsJson(config.fieldsJson),
+            instructionsZh: config.instructionsZh ?? config.instructions ?? '',
+            instructionsEn: config.instructionsEn ?? '',
             availableCount,
             assignedCount,
             disabledCount,
@@ -808,6 +826,23 @@ export class AutoCardService {
             where: { channelId: ctx.channelId, productVariantId },
             relations: { productVariant: true },
         });
+    }
+
+    private localizedInstructions(config: AutoCardConfig, languageCode: string): string {
+        if (languageCode === 'zh_Hans') {
+            return (
+                config.instructionsZh?.trim() ||
+                config.instructions?.trim() ||
+                config.instructionsEn?.trim() ||
+                ''
+            );
+        }
+        return (
+            config.instructionsEn?.trim() ||
+            config.instructionsZh?.trim() ||
+            config.instructions?.trim() ||
+            ''
+        );
     }
 
     private async configOrThrow(ctx: RequestContext, productVariantId: ID): Promise<AutoCardConfig> {

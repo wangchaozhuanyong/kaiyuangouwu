@@ -65,7 +65,10 @@ const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }
         zh: '所有店铺管理员完成首次改密',
         en: 'Complete the initial password change for every store administrator',
     },
-    CATALOG: { zh: '至少上架一个可售商品', en: 'Publish at least one sellable product' },
+    CATALOG: {
+        zh: '至少上架一个中英文资料完整的可售商品',
+        en: 'Publish at least one sellable product with complete Chinese and English content',
+    },
     SUPPORT: { zh: '发布中英文客服内容', en: 'Publish support content in Chinese and English' },
     PRIVACY: { zh: '发布中英文隐私政策', en: 'Publish the privacy policy in Chinese and English' },
     TERMS: { zh: '发布中英文使用条款', en: 'Publish the terms in Chinese and English' },
@@ -114,36 +117,43 @@ export class StoreActivationReadinessService {
             return evaluateStoreActivationReadiness(this.emptySnapshot());
         }
 
-        const [domain, temporaryPasswordCount, catalogCount, contentBlocks, paymentMethods, shippingMethods] =
-            await Promise.all([
-                this.connection.getRepository(ctx, StoreDomain).findOne({
-                    where: {
-                        channelId: profile.channelId,
-                        isPrimary: true,
-                        status: 'ACTIVE',
-                    },
-                }),
-                this.temporaryPasswordCount(ctx, profile.channelId),
-                this.connection.getRepository(ctx, ProductVariant).count({
-                    where: {
-                        enabled: true,
-                        product: { enabled: true },
-                        channels: { id: profile.channelId },
-                    },
-                }),
-                this.connection.getRepository(ctx, StorefrontContentBlock).find({
-                    where: { channelId: profile.channelId, enabled: true },
-                    relations: { items: { translations: true } },
-                }),
-                this.connection.getRepository(ctx, PaymentMethod).find({
-                    where: { enabled: true, channels: { id: profile.channelId } },
-                    relations: { channels: true, translations: true },
-                }),
-                this.connection.getRepository(ctx, ShippingMethod).find({
-                    where: { channels: { id: profile.channelId }, deletedAt: IsNull() },
-                    relations: { channels: true },
-                }),
-            ]);
+        const [
+            domain,
+            temporaryPasswordCount,
+            catalogVariants,
+            contentBlocks,
+            paymentMethods,
+            shippingMethods,
+        ] = await Promise.all([
+            this.connection.getRepository(ctx, StoreDomain).findOne({
+                where: {
+                    channelId: profile.channelId,
+                    isPrimary: true,
+                    status: 'ACTIVE',
+                },
+            }),
+            this.temporaryPasswordCount(ctx, profile.channelId),
+            this.connection.getRepository(ctx, ProductVariant).find({
+                where: {
+                    enabled: true,
+                    product: { enabled: true },
+                    channels: { id: profile.channelId },
+                },
+                relations: { translations: true, product: { translations: true } },
+            }),
+            this.connection.getRepository(ctx, StorefrontContentBlock).find({
+                where: { channelId: profile.channelId, enabled: true },
+                relations: { items: { translations: true } },
+            }),
+            this.connection.getRepository(ctx, PaymentMethod).find({
+                where: { enabled: true, channels: { id: profile.channelId } },
+                relations: { channels: true, translations: true },
+            }),
+            this.connection.getRepository(ctx, ShippingMethod).find({
+                where: { channels: { id: profile.channelId }, deletedAt: IsNull() },
+                relations: { channels: true },
+            }),
+        ]);
 
         const taxRate = channel.defaultTaxZone
             ? await this.connection.getRepository(ctx, TaxRate).findOne({
@@ -167,7 +177,7 @@ export class StoreActivationReadinessService {
             profile: this.hasCompleteProfile(profile),
             domain: Boolean(domain),
             password: temporaryPasswordCount === 0,
-            catalog: catalogCount > 0,
+            catalog: this.hasBilingualCatalog(catalogVariants),
             support: this.hasSupportContent(activeContent),
             privacy: this.hasLegalContent(activeContent, 'privacy'),
             terms: this.hasLegalContent(activeContent, 'terms'),
@@ -205,8 +215,7 @@ export class StoreActivationReadinessService {
 
     private hasCompleteProfile(profile: StoreProfile): boolean {
         const customFields = profile.channel?.customFields as
-            | { storefrontNameZh?: string | null; storefrontNameEn?: string | null }
-            | undefined;
+            { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | undefined;
         return [
             customFields?.storefrontNameZh,
             customFields?.storefrontNameEn,
@@ -214,6 +223,21 @@ export class StoreActivationReadinessService {
             profile.descriptionEn,
             profile.logoAssetId,
         ].every(value => String(value ?? '').trim().length > 0);
+    }
+
+    private hasBilingualCatalog(variants: ProductVariant[]): boolean {
+        return (
+            variants.length > 0 &&
+            variants.every(
+                variant =>
+                    this.hasBilingualTranslations(variant.translations, ['name']) &&
+                    this.hasBilingualTranslations(variant.product?.translations, [
+                        'name',
+                        'slug',
+                        'description',
+                    ]),
+            )
+        );
     }
 
     private isActiveContent(block: StorefrontContentBlock): boolean {
@@ -258,7 +282,10 @@ export class StoreActivationReadinessService {
             (translations ?? []).some(
                 translation =>
                     translation.languageCode === languageCode &&
-                    fields.every(field => String(translation[field] ?? '').trim().length > 0),
+                    fields.every(field => {
+                        const value = translation[field];
+                        return typeof value === 'string' && value.trim().length > 0;
+                    }),
             ),
         );
     }

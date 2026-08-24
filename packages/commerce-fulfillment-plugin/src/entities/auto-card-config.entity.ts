@@ -27,6 +27,12 @@ export class AutoCardConfig extends VendureEntity {
     @Column({ type: 'text' })
     instructions: string;
 
+    @Column({ type: 'text', nullable: true })
+    instructionsZh: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    instructionsEn: string | null;
+
     @Column({ type: 'int', default: 5 })
     lowStockThreshold: number;
 

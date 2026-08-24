@@ -106,14 +106,26 @@ const messages = {
     formatName: msg({ id: 'operations.autoCard.formatName', message: 'Format name' }),
     delimiter: msg({ id: 'operations.autoCard.delimiter', message: 'Field separator' }),
     lowStock: msg({ id: 'operations.autoCard.lowStock', message: 'Low-stock warning' }),
-    instructions: msg({ id: 'operations.autoCard.instructions', message: 'Product delivery instructions' }),
-    instructionsHint: msg({
-        id: 'operations.autoCard.instructionsHint',
-        message: 'This text is appended to the delivery email for this SKU.',
+    instructionsZh: msg({
+        id: 'operations.autoCard.instructionsZh',
+        message: 'Chinese delivery instructions',
+    }),
+    instructionsZhHint: msg({
+        id: 'operations.autoCard.instructionsZhHint',
+        message: 'Shown in the delivery email when the customer uses Chinese.',
+    }),
+    instructionsEn: msg({
+        id: 'operations.autoCard.instructionsEn',
+        message: 'English delivery instructions',
+    }),
+    instructionsEnHint: msg({
+        id: 'operations.autoCard.instructionsEnHint',
+        message: 'Shown in the delivery email when the customer uses English.',
     }),
     fields: msg({ id: 'operations.autoCard.fields', message: 'Fields in one line' }),
     fieldKey: msg({ id: 'operations.autoCard.fieldKey', message: 'Field key' }),
-    fieldLabel: msg({ id: 'operations.autoCard.fieldLabel', message: 'Email label' }),
+    fieldLabelZh: msg({ id: 'operations.autoCard.fieldLabelZh', message: 'Chinese email label' }),
+    fieldLabelEn: msg({ id: 'operations.autoCard.fieldLabelEn', message: 'English email label' }),
     field: msg({ id: 'operations.autoCard.field', message: 'Field' }),
     fieldAccount: msg({ id: 'operations.autoCard.field.account', message: 'Account' }),
     fieldPassword: msg({ id: 'operations.autoCard.field.password', message: 'Password' }),
@@ -197,26 +209,26 @@ function createPresets(text: AutoCardText): AutoCardPresets {
             formatName: text.presetAccountPassword,
             delimiter: '----',
             fields: [
-                { key: 'account', label: text.fieldAccount, secret: false },
-                { key: 'password', label: text.fieldPassword, secret: true },
+                { key: 'account', label: '账号', labelEn: 'Account', secret: false },
+                { key: 'password', label: '密码', labelEn: 'Password', secret: true },
             ],
         },
         emailPassword: {
             formatName: text.presetEmailPassword,
             delimiter: '----',
             fields: [
-                { key: 'email', label: text.fieldEmail, secret: false },
-                { key: 'emailPassword', label: text.fieldEmailPassword, secret: true },
+                { key: 'email', label: '邮箱', labelEn: 'Email', secret: false },
+                { key: 'emailPassword', label: '邮箱密码', labelEn: 'Email password', secret: true },
             ],
         },
         accountPhone2fa: {
             formatName: text.presetAccountPhone2fa,
             delimiter: '----',
             fields: [
-                { key: 'account', label: text.fieldAccount, secret: false },
-                { key: 'password', label: text.fieldPassword, secret: true },
-                { key: 'phone', label: text.fieldPhone, secret: false },
-                { key: 'twoFactor', label: text.fieldTwoFactor, secret: true },
+                { key: 'account', label: '账号', labelEn: 'Account', secret: false },
+                { key: 'password', label: '密码', labelEn: 'Password', secret: true },
+                { key: 'phone', label: '手机', labelEn: 'Phone', secret: false },
+                { key: 'twoFactor', label: '2FA代码', labelEn: '2FA code', secret: true },
             ],
         },
     };
@@ -227,7 +239,8 @@ interface ConfigDraft {
     formatName: string;
     delimiter: string;
     fields: AutoCardFieldDefinition[];
-    instructions: string;
+    instructionsZh: string;
+    instructionsEn: string;
     lowStockThreshold: number;
 }
 
@@ -235,7 +248,8 @@ function createDefaultDraft(text: AutoCardText): ConfigDraft {
     return {
         enabled: true,
         ...createPresets(text).accountPassword,
-        instructions: '',
+        instructionsZh: '',
+        instructionsEn: '',
         lowStockThreshold: 5,
     };
 }
@@ -721,7 +735,8 @@ function ConfigEditor({
                                     ...draft.fields,
                                     {
                                         key: `field${draft.fields.length + 1}`,
-                                        label: `${text.field} ${draft.fields.length + 1}`,
+                                        label: `字段 ${draft.fields.length + 1}`,
+                                        labelEn: `Field ${draft.fields.length + 1}`,
                                         secret: false,
                                     },
                                 ],
@@ -735,7 +750,7 @@ function ConfigEditor({
                 {draft.fields.map((field, index) => (
                     <div
                         key={`${index}-${field.key}`}
-                        className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_1fr_auto_auto] md:items-end"
+                        className="grid gap-3 rounded-lg border p-3 md:grid-cols-[0.8fr_1fr_1fr_auto_auto] md:items-end"
                     >
                         <div className="space-y-1">
                             <Label>{text.fieldKey}</Label>
@@ -745,10 +760,17 @@ function ConfigEditor({
                             />
                         </div>
                         <div className="space-y-1">
-                            <Label>{text.fieldLabel}</Label>
+                            <Label>{text.fieldLabelZh}</Label>
                             <Input
                                 value={field.label}
                                 onChange={event => updateField(index, { label: event.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <Label>{text.fieldLabelEn}</Label>
+                            <Input
+                                value={field.labelEn}
+                                onChange={event => updateField(index, { labelEn: event.target.value })}
                             />
                         </div>
                         <div className="flex h-9 items-center gap-2">
@@ -774,14 +796,25 @@ function ConfigEditor({
                     </div>
                 ))}
             </div>
-            <div className="space-y-2">
-                <Label>{text.instructions}</Label>
-                <Textarea
-                    rows={5}
-                    value={draft.instructions}
-                    onChange={event => onChange({ ...draft, instructions: event.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">{text.instructionsHint}</p>
+            <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                    <Label>{text.instructionsZh}</Label>
+                    <Textarea
+                        rows={5}
+                        value={draft.instructionsZh}
+                        onChange={event => onChange({ ...draft, instructionsZh: event.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">{text.instructionsZhHint}</p>
+                </div>
+                <div className="space-y-2">
+                    <Label>{text.instructionsEn}</Label>
+                    <Textarea
+                        rows={5}
+                        value={draft.instructionsEn}
+                        onChange={event => onChange({ ...draft, instructionsEn: event.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">{text.instructionsEnHint}</p>
+                </div>
             </div>
         </div>
     );
@@ -1002,7 +1035,8 @@ function draftFromConfig(config: AutoCardConfigRecord): ConfigDraft {
         formatName: config.formatName,
         delimiter: config.delimiter === '\t' ? '\\t' : config.delimiter,
         fields: config.fields.map(field => ({ ...field })),
-        instructions: config.instructions,
+        instructionsZh: config.instructionsZh || config.instructions,
+        instructionsEn: config.instructionsEn,
         lowStockThreshold: config.lowStockThreshold,
     };
 }

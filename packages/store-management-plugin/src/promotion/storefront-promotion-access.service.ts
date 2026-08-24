@@ -19,6 +19,33 @@ import { AccountEntryRoute, validateAccountEntryProof as validateProof } from '.
 
 type SignedValueKind = 'entry-ticket' | 'entry-cookie';
 
+export function primaryLanguageFromAcceptLanguage(value: string | string[] | undefined): string {
+    const header = Array.isArray(value) ? value[0] : value;
+    if (!header) return '';
+    return (
+        header
+            .split(',')
+            .map((entry, index) => {
+                const [tagPart, ...parameters] = entry.trim().split(';');
+                const qualityParameter = parameters.find(parameter => /^\s*q\s*=/i.test(parameter));
+                const quality = qualityParameter ? Number(qualityParameter.split('=')[1]) : 1;
+                return {
+                    tag: tagPart.trim(),
+                    quality: Number.isFinite(quality) ? quality : 0,
+                    index,
+                };
+            })
+            .filter(candidate => candidate.tag && candidate.tag !== '*' && candidate.quality > 0)
+            .sort((left, right) => right.quality - left.quality || left.index - right.index)[0]?.tag ?? ''
+    );
+}
+
+export function storefrontLanguageCodeFromAcceptLanguage(value: string | string[] | undefined): LanguageCode {
+    return /^zh(?:[-_]|$)/i.test(primaryLanguageFromAcceptLanguage(value))
+        ? LanguageCode.zh_Hans
+        : LanguageCode.en;
+}
+
 interface SignedValuePayload {
     kind: SignedValueKind;
     channelId: string;
@@ -54,9 +81,7 @@ export class StorefrontPromotionAccessService {
         const host = normalizeRequestHost(forwardedHost ?? req.headers.host);
         if (!host) return null;
 
-        const acceptLanguage = String(req.headers['accept-language'] || '').toLowerCase();
-        const isChinese = acceptLanguage.includes('zh');
-        const languageCode = isChinese ? LanguageCode.zh_Hans : LanguageCode.en;
+        const languageCode = storefrontLanguageCodeFromAcceptLanguage(req.headers['accept-language']);
 
         if (this.options.bypassHosts.includes(host)) {
             const tokenKey = this.configService.apiOptions.channelTokenKey;

@@ -91,7 +91,9 @@ import {
     languageCodeFor,
     localeFor,
     marketForStorefrontConfig,
+    parseManualStorefrontLanguagePreference,
     resolveStorefrontLanguage,
+    serializeManualStorefrontLanguagePreference,
     uiCopy,
 } from './i18n';
 import { resolveManagedLegalDocument } from './legal-content';
@@ -180,7 +182,7 @@ const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
 const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
 const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 const SEARCH_HISTORY_STORAGE_KEY = 'storefront-search-history';
-const STOREFRONT_LANGUAGE_STORAGE_KEY = 'storefront-language';
+const STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY = 'storefront-language-preference-v2';
 const FAVORITE_PRODUCT_LIMIT = 100;
 const RECENT_PRODUCT_LIMIT = 20;
 
@@ -259,18 +261,25 @@ function scopedStorageKey(baseKey: string, channelCode: string): string {
     return channelCode ? `${baseKey}:${channelCode}` : '';
 }
 
-function readStoredLanguage(market: MarketConfig, includeLegacyPreference = false): StorefrontLanguage {
+function readStoredLanguage(market: MarketConfig): StorefrontLanguage {
     try {
-        const scopedPreference = localStorage.getItem(
-            scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, market.code),
+        const manualPreference = parseManualStorefrontLanguagePreference(
+            localStorage.getItem(scopedStorageKey(STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY, market.code)),
         );
-        const legacyPreference =
-            includeLegacyPreference && scopedPreference === null
-                ? localStorage.getItem(STOREFRONT_LANGUAGE_STORAGE_KEY)
-                : null;
-        return resolveStorefrontLanguage(market, scopedPreference ?? legacyPreference);
+        return resolveStorefrontLanguage(market, manualPreference);
     } catch {
         return resolveStorefrontLanguage(market, null);
+    }
+}
+
+function writeManualLanguage(marketCode: string, language: StorefrontLanguage): void {
+    try {
+        localStorage.setItem(
+            scopedStorageKey(STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY, marketCode),
+            serializeManualStorefrontLanguagePreference(language),
+        );
+    } catch {
+        // A disabled localStorage must not prevent language changes.
     }
 }
 
@@ -539,7 +548,7 @@ export function App() {
         const initialMarket = enabledMarkets[0];
         return {
             market: initialMarket,
-            language: readStoredLanguage(initialMarket, true),
+            language: readStoredLanguage(initialMarket),
         };
     });
     const [route, setRoute] = useState<RouteState>(routeFromLocation);
@@ -1046,13 +1055,8 @@ export function App() {
     }, [collectionsQuery, configQuery, productsQuery]);
 
     useEffect(() => {
-        try {
-            localStorage.setItem(scopedStorageKey(STOREFRONT_LANGUAGE_STORAGE_KEY, market.code), language);
-        } catch {
-            // A disabled localStorage must not prevent language changes.
-        }
         document.documentElement.lang = locale;
-    }, [language, locale, market.code]);
+    }, [locale]);
 
     useEffect(() => {
         if (activeCollectionId === 'all' && collections.length) {
@@ -1635,10 +1639,11 @@ export function App() {
             : 'account';
 
     const toggleLanguage = () =>
-        setStorefrontContext(currentContext => ({
-            ...currentContext,
-            language: currentContext.language === 'zh' ? 'en' : 'zh',
-        }));
+        setStorefrontContext(currentContext => {
+            const nextLanguage = currentContext.language === 'zh' ? 'en' : 'zh';
+            writeManualLanguage(currentContext.market.code, nextLanguage);
+            return { ...currentContext, language: nextLanguage };
+        });
 
     const updateCategory = useCallback(
         (

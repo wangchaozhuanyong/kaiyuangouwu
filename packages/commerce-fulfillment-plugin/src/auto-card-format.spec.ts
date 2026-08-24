@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { maskAutoCardValues, normalizeAutoCardDelimiter, parseAutoCardRows } from './auto-card-format';
+import {
+    autoCardFieldLabel,
+    maskAutoCardValues,
+    normalizeAutoCardDelimiter,
+    parseAutoCardRows,
+    validateAutoCardFields,
+} from './auto-card-format';
 
 const fields = [
-    { key: 'account', label: '账号', secret: false },
-    { key: 'password', label: '密码', secret: true },
-    { key: 'twoFactor', label: '2FA密钥', secret: true },
+    { key: 'account', label: '账号', labelEn: 'Account', secret: false },
+    { key: 'password', label: '密码', labelEn: 'Password', secret: true },
+    { key: 'twoFactor', label: '2FA密钥', labelEn: '2FA code', secret: true },
 ];
 
 describe('auto card format', () => {
@@ -48,5 +54,14 @@ describe('auto card format', () => {
         expect(masked[0].value).toBe('so***@example.com');
         expect(masked[1].value).not.toContain('visible-password');
         expect(masked[2].value).not.toContain('seed');
+    });
+
+    it('backfills common English labels and localizes email fields', () => {
+        const [field] = validateAutoCardFields([
+            { key: 'emailPassword', label: '邮箱密码', secret: true } as (typeof fields)[number],
+        ]);
+        expect(field.labelEn).toBe('Email password');
+        expect(autoCardFieldLabel(field, true)).toBe('邮箱密码');
+        expect(autoCardFieldLabel(field, false)).toBe('Email password');
     });
 });

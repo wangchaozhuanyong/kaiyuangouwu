@@ -10,6 +10,7 @@ const FIELD_KEY_PATTERN = /^[a-z][a-zA-Z0-9_]{0,39}$/u;
 export interface AutoCardFieldDefinition {
     key: string;
     label: string;
+    labelEn: string;
     secret: boolean;
 }
 
@@ -45,22 +46,53 @@ export function validateAutoCardFields(fields: AutoCardFieldDefinition[]): AutoC
     }
     const keys = new Set<string>();
     const labels = new Set<string>();
+    const englishLabels = new Set<string>();
     return fields.map(field => {
         const key = field.key?.trim();
         const label = field.label?.trim();
+        const labelEn = field.labelEn?.trim() || defaultEnglishAutoCardFieldLabel(key, label);
         if (!FIELD_KEY_PATTERN.test(key)) {
             throw new Error(`字段键“${key || '空'}”格式无效`);
         }
         if (!label || label.length > 40) {
-            throw new Error('字段名称不能为空且不能超过 40 个字符');
+            throw new Error('中文字段名称不能为空且不能超过 40 个字符');
         }
-        if (keys.has(key) || labels.has(label)) {
+        if (!labelEn || labelEn.length > 40) {
+            throw new Error('英文字段名称不能为空且不能超过 40 个字符');
+        }
+        if (keys.has(key) || labels.has(label) || englishLabels.has(labelEn.toLowerCase())) {
             throw new Error(`发卡字段“${label}”重复`);
         }
         keys.add(key);
         labels.add(label);
-        return { key, label, secret: Boolean(field.secret) };
+        englishLabels.add(labelEn.toLowerCase());
+        return { key, label, labelEn, secret: Boolean(field.secret) };
     });
+}
+
+export function autoCardFieldLabel(field: AutoCardFieldDefinition, isChinese: boolean): string {
+    return isChinese ? field.label : field.labelEn;
+}
+
+function defaultEnglishAutoCardFieldLabel(key: string, label: string): string {
+    const knownLabels: Record<string, string> = {
+        account: 'Account',
+        username: 'Username',
+        password: 'Password',
+        email: 'Email',
+        emailPassword: 'Email password',
+        phone: 'Phone',
+        twoFactor: '2FA code',
+        twoFactorCode: '2FA code',
+        otp: 'OTP code',
+        backupCode: 'Backup code',
+    };
+    if (knownLabels[key]) return knownLabels[key];
+    if (label && !/[\p{Script=Han}]/u.test(label)) return label;
+    return key
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/_/g, ' ')
+        .replace(/^./, character => character.toUpperCase());
 }
 
 export function parseAutoCardRows(
@@ -121,7 +153,7 @@ export function parseAutoCardFieldsJson(value: string): AutoCardFieldDefinition[
 export function maskAutoCardValues(
     values: Record<string, string>,
     fields: AutoCardFieldDefinition[],
-): Array<{ key: string; label: string; value: string; secret: boolean }> {
+): Array<AutoCardFieldDefinition & { value: string }> {
     return fields.map(field => ({
         ...field,
         value: field.secret ? maskSecret(values[field.key] ?? '') : maskIdentifier(values[field.key] ?? ''),

@@ -17,7 +17,9 @@ export interface UpdateAutoCardConfigInput {
     formatName: string;
     delimiter: string;
     fields: AutoCardFieldDefinition[];
-    instructions: string;
+    instructions?: string | null;
+    instructionsZh?: string | null;
+    instructionsEn?: string | null;
     lowStockThreshold: number;
 }
 

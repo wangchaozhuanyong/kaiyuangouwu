@@ -1,9 +1,4 @@
-import {
-    MarketConfig,
-    StorefrontConfig,
-    StorefrontLanguage,
-    VendureLanguageCode,
-} from './types';
+import { MarketConfig, StorefrontConfig, StorefrontLanguage, VendureLanguageCode } from './types';
 
 export const markets: Record<string, MarketConfig> = {
     'cn-mainland': {
@@ -52,18 +47,45 @@ export const enabledMarkets: MarketConfig[] = configuredMarketCodes.length
 
 export const supportedStorefrontLanguages = ['zh', 'en'] as const satisfies readonly StorefrontLanguage[];
 
+export interface ManualStorefrontLanguagePreference {
+    version: 2;
+    source: 'manual';
+    language: StorefrontLanguage;
+}
+
+export function languageFromPrimaryTag(
+    languageTag: string | null | undefined,
+    fallback: StorefrontLanguage = 'en',
+): StorefrontLanguage {
+    const normalized = languageTag?.trim();
+    if (!normalized) return fallback;
+    return /^zh(?:[-_]|$)/i.test(normalized) ? 'zh' : 'en';
+}
+
 export function detectSystemLanguage(fallback: StorefrontLanguage = 'en'): StorefrontLanguage {
     if (typeof navigator === 'undefined') return fallback;
-    const candidateLanguages = [
-        navigator.language,
-        ...(Array.isArray(navigator.languages) ? navigator.languages : []),
-    ].filter(Boolean);
-    for (const lang of candidateLanguages) {
-        if (/^zh\b/i.test(lang)) {
-            return 'zh';
-        }
+    const primaryLanguage = navigator.language || navigator.languages?.[0];
+    return languageFromPrimaryTag(primaryLanguage, fallback);
+}
+
+export function parseManualStorefrontLanguagePreference(
+    value: string | null | undefined,
+): StorefrontLanguage | null {
+    if (!value) return null;
+    try {
+        const parsed = JSON.parse(value) as Partial<ManualStorefrontLanguagePreference>;
+        return parsed.version === 2 &&
+            parsed.source === 'manual' &&
+            supportedStorefrontLanguages.includes(parsed.language as StorefrontLanguage)
+            ? (parsed.language as StorefrontLanguage)
+            : null;
+    } catch {
+        return null;
     }
-    return 'en';
+}
+
+export function serializeManualStorefrontLanguagePreference(language: StorefrontLanguage): string {
+    return JSON.stringify({ version: 2, source: 'manual', language });
 }
 
 export function defaultStorefrontLanguageFor(market: MarketConfig): StorefrontLanguage {

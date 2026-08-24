@@ -1,9 +1,11 @@
-import { RequestContext } from '@vendure/core';
+import { LanguageCode, RequestContext } from '@vendure/core';
 import type { Request } from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAccountEntryProof } from './account-entry-proof';
 import {
+    primaryLanguageFromAcceptLanguage,
+    storefrontLanguageCodeFromAcceptLanguage,
     StorefrontPromotionAccessService,
     StorefrontPromotionRequest,
 } from './storefront-promotion-access.service';
@@ -89,5 +91,16 @@ describe('StorefrontPromotionAccessService', () => {
                 promotionRequest({ host: 'other.example.com' }),
             ),
         ).toBe(false);
+    });
+
+    it.each([
+        ['zh-CN,zh;q=0.9,en;q=0.8', 'zh-CN', LanguageCode.zh_Hans],
+        ['zh-TW,zh;q=0.9,en;q=0.8', 'zh-TW', LanguageCode.zh_Hans],
+        ['en-US,en;q=0.9,zh-CN;q=0.8', 'en-US', LanguageCode.en],
+        ['ms-MY,ms;q=0.9,zh-CN;q=0.8', 'ms-MY', LanguageCode.en],
+        ['zh-CN;q=0.4,en-US;q=1', 'en-US', LanguageCode.en],
+    ])('uses the highest-priority device language from %s', (header, primary, languageCode) => {
+        expect(primaryLanguageFromAcceptLanguage(header)).toBe(primary);
+        expect(storefrontLanguageCodeFromAcceptLanguage(header)).toBe(languageCode);
     });
 });

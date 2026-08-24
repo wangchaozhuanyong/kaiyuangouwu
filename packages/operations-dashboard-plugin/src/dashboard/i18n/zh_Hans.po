@@ -379,8 +379,18 @@ msgstr "字段标识"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
-msgid "operations.autoCard.fieldLabel"
-msgstr "邮件显示名称"
+#~ msgid "operations.autoCard.fieldLabel"
+#~ msgstr "邮件显示名称"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldLabelEn"
+msgstr "英文邮件字段名"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldLabelZh"
+msgstr "中文邮件字段名"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
@@ -419,13 +429,33 @@ msgstr "粘贴卡密"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
-msgid "operations.autoCard.instructions"
-msgstr "商品发卡说明"
+#~ msgid "operations.autoCard.instructions"
+#~ msgstr "商品发卡说明"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
-msgid "operations.autoCard.instructionsHint"
-msgstr "这段说明会随该 SKU 的卡密一起发送到客户邮箱。"
+msgid "operations.autoCard.instructionsEn"
+msgstr "英文发卡说明"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsEnHint"
+msgstr "客户使用英文时，这段说明会随卡密发送到邮箱。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+#~ msgid "operations.autoCard.instructionsHint"
+#~ msgstr "这段说明会随该 SKU 的卡密一起发送到客户邮箱。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsZh"
+msgstr "中文发卡说明"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsZhHint"
+msgstr "客户使用中文时，这段说明会随卡密发送到邮箱。"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx

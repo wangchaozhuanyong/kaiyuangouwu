@@ -379,8 +379,18 @@ msgstr "Field key"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
-msgid "operations.autoCard.fieldLabel"
-msgstr "Email label"
+#~ msgid "operations.autoCard.fieldLabel"
+#~ msgstr "Email label"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldLabelEn"
+msgstr "English email label"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldLabelZh"
+msgstr "Chinese email label"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
@@ -419,13 +429,33 @@ msgstr "Paste credentials"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
-msgid "operations.autoCard.instructions"
-msgstr "Product delivery instructions"
+#~ msgid "operations.autoCard.instructions"
+#~ msgstr "Product delivery instructions"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
-msgid "operations.autoCard.instructionsHint"
-msgstr "This text is appended to the delivery email for this SKU."
+msgid "operations.autoCard.instructionsEn"
+msgstr "English delivery instructions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsEnHint"
+msgstr "Shown in the delivery email when the customer uses English."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+#~ msgid "operations.autoCard.instructionsHint"
+#~ msgstr "This text is appended to the delivery email for this SKU."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsZh"
+msgstr "Chinese delivery instructions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsZhHint"
+msgstr "Shown in the delivery email when the customer uses Chinese."
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx

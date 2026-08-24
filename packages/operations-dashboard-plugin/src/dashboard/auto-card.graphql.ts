@@ -6,6 +6,7 @@ export type AutoCardDeliveryState = 'WAITING_STOCK' | 'ALLOCATED' | 'RETRYING' |
 export interface AutoCardFieldDefinition {
     key: string;
     label: string;
+    labelEn: string;
     secret: boolean;
 }
 
@@ -26,6 +27,8 @@ export interface AutoCardConfigRecord {
     delimiter: string;
     fields: AutoCardFieldDefinition[];
     instructions: string;
+    instructionsZh: string;
+    instructionsEn: string;
     lowStockThreshold: number;
     availableCount: number;
     assignedCount: number;
@@ -105,9 +108,12 @@ export const autoCardWorkspaceQuery = gql`
             fields {
                 key
                 label
+                labelEn
                 secret
             }
             instructions
+            instructionsZh
+            instructionsEn
             lowStockThreshold
             availableCount
             assignedCount
@@ -127,6 +133,7 @@ export const autoCardWorkspaceQuery = gql`
                 maskedFields {
                     key
                     label
+                    labelEn
                     value
                     secret
                 }
@@ -171,9 +178,12 @@ export const updateAutoCardConfigMutation = gql`
             fields {
                 key
                 label
+                labelEn
                 secret
             }
             instructions
+            instructionsZh
+            instructionsEn
             lowStockThreshold
             availableCount
             assignedCount
@@ -193,6 +203,7 @@ export const previewAutoCardPoolImportMutation = gql`
                 fields {
                     key
                     label
+                    labelEn
                     value
                     secret
                 }
@@ -220,6 +231,7 @@ export const revealAutoCardPoolItemMutation = gql`
         revealAutoCardPoolItem(id: $id) {
             key
             label
+            labelEn
             value
             secret
         }
