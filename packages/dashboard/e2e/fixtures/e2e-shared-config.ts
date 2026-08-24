@@ -161,6 +161,27 @@ export const e2eCustomFields: CustomFields = {
                 },
             ],
         },
+        {
+            name: 'digitalDeliveryMode',
+            type: 'string',
+            defaultValue: 'manual_service',
+            public: true,
+            label: [{ languageCode: LanguageCode.en, value: 'Digital delivery mode' }],
+            options: [
+                {
+                    value: 'manual_service',
+                    label: [{ languageCode: LanguageCode.en, value: 'Manual digital service' }],
+                },
+                {
+                    value: 'file_download',
+                    label: [{ languageCode: LanguageCode.en, value: 'File download' }],
+                },
+                {
+                    value: 'auto_card',
+                    label: [{ languageCode: LanguageCode.en, value: 'Automatic credential delivery' }],
+                },
+            ],
+        },
     ],
 };
 
