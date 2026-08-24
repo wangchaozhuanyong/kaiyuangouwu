@@ -1662,6 +1662,7 @@ msgid "Edit focal point"
 msgstr "编辑焦点"
 
 #: src/app/routes/_authenticated/_orders/components/fulfillment-details.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Digital delivery"
 msgstr "电子交付"
 
@@ -1745,6 +1746,7 @@ msgstr "库存必须是非负整数"
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
@@ -1805,6 +1807,11 @@ msgstr "马来西亚"
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "View converted to global successfully"
 msgstr "视图已成功转换为全局"
+
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Automatic credential delivery"
+msgstr "自动凭证交付"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "before"
@@ -3392,6 +3399,11 @@ msgstr "确定要删除此全局视图吗？此操作无法撤销，将影响所
 msgid "Force remove option group"
 msgstr "强制移除规格组"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "File download"
+msgstr "文件下载"
+
 #: src/app/routes/_authenticated/_profile/profile.tsx
 msgid "Added"
 msgstr "已添加"
@@ -4298,6 +4310,10 @@ msgstr "运费已退款"
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Asset type"
 msgstr "素材类型"
+
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Not applicable"
+msgstr "不适用"
 
 #: src/app/routes/_authenticated/_stock-locations/stock-locations.tsx
 msgid "New Stock Location"
@@ -6139,6 +6155,11 @@ msgstr "更新订单失败"
 msgid "With selected..."
 msgstr "对所选..."
 
+#. placeholder {0}: variant.name
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Digital delivery for {0}"
+msgstr "{0} 的电子交付"
+
 #: src/app/routes/_authenticated/_stock-locations/stock-locations_.$id.tsx
 msgid "Failed to create stock location"
 msgstr "创建库存点失败"
@@ -7155,6 +7176,10 @@ msgstr "默认配送区域"
 msgid "Refund and cancel order"
 msgstr "退款并取消订单"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Edit SKU, price, stock and delivery settings directly in the table. Digital SKUs do not use shipping; choose manual service, file download or automatic credential delivery for each SKU."
+msgstr "可直接在表格中修改 SKU、价格、库存和交付设置。虚拟 SKU 无需物流配送；请为每个 SKU 选择人工数字服务、文件下载或自动凭证交付。"
+
 #: src/app/routes/_authenticated/_customers/components/customer-history/customer-history-utils.tsx
 msgid "Email update verified"
 msgstr "电子邮件更新已验证"
@@ -7208,6 +7233,7 @@ msgstr "常规"
 #: src/app/routes/_authenticated/_product-variants/product-variants.tsx
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
@@ -7374,6 +7400,12 @@ msgstr "移动到顶层"
 #: src/lib/components/data-input/product-multi-selector-input.tsx
 msgid "Clear"
 msgstr "清除"
+
+#: src/app/routes/_authenticated/_orders/components/fulfillment-details.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Manual digital service"
+msgstr "人工数字服务"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Search assets..."
@@ -7611,8 +7643,8 @@ msgid "Search..."
 msgstr "搜索..."
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-msgid "Edit SKU, price, stock and delivery type directly in the table. Digital SKUs are delivered to the checkout email after payment and do not use stock or shipping."
-msgstr "可直接在表格中修改 SKU、价格、库存和交付类型。虚拟 SKU 付款后发送到结账邮箱，不使用库存和物流配送。"
+#~ msgid "Edit SKU, price, stock and delivery type directly in the table. Digital SKUs are delivered to the checkout email after payment and do not use stock or shipping."
+#~ msgstr "可直接在表格中修改 SKU、价格、库存和交付类型。虚拟 SKU 付款后发送到结账邮箱，不使用库存和物流配送。"
 
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "You don't have permission to view global language settings"

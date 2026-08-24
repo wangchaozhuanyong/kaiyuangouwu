@@ -1662,6 +1662,7 @@ msgid "Edit focal point"
 msgstr "Edit focal point"
 
 #: src/app/routes/_authenticated/_orders/components/fulfillment-details.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Digital delivery"
 msgstr "Digital delivery"
 
@@ -1745,6 +1746,7 @@ msgstr "Stock must be a non-negative integer"
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
@@ -1805,6 +1807,11 @@ msgstr "Malaysia"
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "View converted to global successfully"
 msgstr "View converted to global successfully"
+
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Automatic credential delivery"
+msgstr "Automatic credential delivery"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "before"
@@ -3392,6 +3399,11 @@ msgstr "Are you sure you want to delete this global view? This action cannot be 
 msgid "Force remove option group"
 msgstr "Force remove option group"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "File download"
+msgstr "File download"
+
 #: src/app/routes/_authenticated/_profile/profile.tsx
 msgid "Added"
 msgstr "Added"
@@ -4298,6 +4310,10 @@ msgstr "Shipping refunded"
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Asset type"
 msgstr "Asset type"
+
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Not applicable"
+msgstr "Not applicable"
 
 #: src/app/routes/_authenticated/_stock-locations/stock-locations.tsx
 msgid "New Stock Location"
@@ -6139,6 +6155,11 @@ msgstr "Failed to update order"
 msgid "With selected..."
 msgstr "With selected..."
 
+#. placeholder {0}: variant.name
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Digital delivery for {0}"
+msgstr "Digital delivery for {0}"
+
 #: src/app/routes/_authenticated/_stock-locations/stock-locations_.$id.tsx
 msgid "Failed to create stock location"
 msgstr "Failed to create stock location"
@@ -7155,6 +7176,10 @@ msgstr "Default delivery region"
 msgid "Refund and cancel order"
 msgstr "Refund and cancel order"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Edit SKU, price, stock and delivery settings directly in the table. Digital SKUs do not use shipping; choose manual service, file download or automatic credential delivery for each SKU."
+msgstr "Edit SKU, price, stock and delivery settings directly in the table. Digital SKUs do not use shipping; choose manual service, file download or automatic credential delivery for each SKU."
+
 #: src/app/routes/_authenticated/_customers/components/customer-history/customer-history-utils.tsx
 msgid "Email update verified"
 msgstr "Email update verified"
@@ -7208,6 +7233,7 @@ msgstr "General"
 #: src/app/routes/_authenticated/_product-variants/product-variants.tsx
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
@@ -7374,6 +7400,12 @@ msgstr "Move to the top level"
 #: src/lib/components/data-input/product-multi-selector-input.tsx
 msgid "Clear"
 msgstr "Clear"
+
+#: src/app/routes/_authenticated/_orders/components/fulfillment-details.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Manual digital service"
+msgstr "Manual digital service"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Search assets..."
@@ -7611,8 +7643,8 @@ msgid "Search..."
 msgstr "Search..."
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-msgid "Edit SKU, price, stock and delivery type directly in the table. Digital SKUs are delivered to the checkout email after payment and do not use stock or shipping."
-msgstr "Edit SKU, price, stock and delivery type directly in the table. Digital SKUs are delivered to the checkout email after payment and do not use stock or shipping."
+#~ msgid "Edit SKU, price, stock and delivery type directly in the table. Digital SKUs are delivered to the checkout email after payment and do not use stock or shipping."
+#~ msgstr "Edit SKU, price, stock and delivery type directly in the table. Digital SKUs are delivered to the checkout email after payment and do not use stock or shipping."
 
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "You don't have permission to view global language settings"
