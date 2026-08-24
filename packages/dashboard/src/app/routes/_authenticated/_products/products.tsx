@@ -20,7 +20,7 @@ import {
     RemoveProductsFromChannelBulkAction,
 } from './components/product-bulk-actions.js';
 import { getProductFulfillmentType } from './components/product-fulfillment-type.js';
-import { productListDocument, reindexDocument } from './products.graphql.js';
+import { productListDocument, reindexDocument, withProductVariantCustomFields } from './products.graphql.js';
 
 export const Route = createFileRoute('/_authenticated/_products/products')({
     component: ProductListPage,
@@ -46,7 +46,7 @@ function ProductListPage() {
     return (
         <ListPage
             pageId="product-list"
-            listQuery={productListDocument}
+            listQuery={withProductVariantCustomFields(productListDocument)}
             title={<Trans>Products</Trans>}
             searchPlaceholder={t`Search product name, URL identifier or SKU`}
             customizeColumns={{

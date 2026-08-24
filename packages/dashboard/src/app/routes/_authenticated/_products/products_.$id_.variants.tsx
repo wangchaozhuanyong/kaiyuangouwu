@@ -47,6 +47,7 @@ import {
     deleteProductVariantDocument,
     productDetailWithVariantsDocument,
     updateProductVariantDocument,
+    withProductVariantCustomFields,
 } from './products.graphql.js';
 
 const pageId = 'manage-product-variants';
@@ -60,7 +61,10 @@ export const Route = createFileRoute('/_authenticated/_products/products_/$id_/v
         }
         const result = await context.queryClient.ensureQueryData({
             queryKey: getQueryKey(params.id),
-            queryFn: () => api.query(productDetailWithVariantsDocument, { id: params.id }),
+            queryFn: () =>
+                api.query(withProductVariantCustomFields(productDetailWithVariantsDocument), {
+                    id: params.id,
+                }),
         });
         return {
             breadcrumb: [
@@ -187,7 +191,7 @@ function ManageProductVariants() {
         refetch,
         isFetching,
     } = useQuery({
-        queryFn: () => api.query(productDetailWithVariantsDocument, { id }),
+        queryFn: () => api.query(withProductVariantCustomFields(productDetailWithVariantsDocument), { id }),
         queryKey: getQueryKey(id),
     });
 

@@ -43,6 +43,7 @@ import {
     productDetailDocument,
     removeProductsFromChannelDocument,
     updateProductDocument,
+    withProductVariantCustomFields,
 } from './products.graphql.js';
 
 const pageId = 'product-detail';
@@ -51,7 +52,7 @@ export const Route = createFileRoute('/_authenticated/_products/products_/$id')(
     component: ProductDetailPage,
     loader: detailPageRouteLoader({
         pageId,
-        queryDocument: productDetailDocument,
+        queryDocument: () => withProductVariantCustomFields(productDetailDocument),
         breadcrumb(isNew, entity) {
             return [
                 { path: '/products', label: <Trans>Products</Trans> },
@@ -137,7 +138,7 @@ function ProductDetailPage() {
     const { form, submitHandler, entity, isPending, refreshEntity, resetForm } = useDetailPage({
         pageId,
         entityName: 'Product',
-        queryDocument: productDetailDocument,
+        queryDocument: withProductVariantCustomFields(productDetailDocument),
         createDocument: createProductDocument,
         updateDocument: updateProductDocument,
         extendSchema: schema =>

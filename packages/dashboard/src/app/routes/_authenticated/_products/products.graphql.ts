@@ -1,36 +1,56 @@
+import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { assetFragment } from '@/vdb/graphql/fragments.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
-export const productListDocument = graphql(`
-    query ProductList($options: ProductListOptions) {
-        products(options: $options) {
-            items {
-                id
-                createdAt
-                updatedAt
-                featuredAsset {
-                    id
-                    preview
-                }
-                name
-                slug
-                enabled
-                description
-                channels {
-                    id
-                    code
-                    token
-                }
-                variants {
-                    customFields {
-                        fulfillmentType
-                    }
-                }
-            }
-            totalItems
-        }
+const productVariantFulfillmentFragment = graphql(`
+    fragment ProductVariantFulfillment on ProductVariant {
+        customFields
     }
 `);
+
+/**
+ * Product variants are nested below Product in these documents. Opt their
+ * fragment into runtime custom-field expansion so a configured
+ * ProductVariantCustomFields object is never sent as a bare GraphQL field.
+ */
+export function withProductVariantCustomFields<T extends TypedDocumentNode<any, any>>(document: T): T {
+    return addCustomFields(document, {
+        includeNestedFragments: ['ProductVariantFulfillment'],
+    }) as T;
+}
+
+export const productListDocument = graphql(
+    `
+        query ProductList($options: ProductListOptions) {
+            products(options: $options) {
+                items {
+                    id
+                    createdAt
+                    updatedAt
+                    featuredAsset {
+                        id
+                        preview
+                    }
+                    name
+                    slug
+                    enabled
+                    description
+                    channels {
+                        id
+                        code
+                        token
+                    }
+                    variants {
+                        ...ProductVariantFulfillment
+                    }
+                }
+                totalItems
+            }
+        }
+    `,
+    [productVariantFulfillmentFragment],
+);
 
 export const productDetailFragment = graphql(
     `
@@ -130,61 +150,59 @@ export const productDetailDocument = graphql(
                 }
                 variants {
                     id
-                    customFields {
-                        fulfillmentType
+                    ...ProductVariantFulfillment
+                }
+            }
+        }
+    `,
+    [productDetailFragment, productVariantFulfillmentFragment],
+);
+
+export const productDetailWithVariantsDocument = graphql(
+    `
+        query ProductDetailWithVariants($id: ID!) {
+            product(id: $id) {
+                id
+                createdAt
+                updatedAt
+                name
+                variantList {
+                    totalItems
+                }
+                optionGroups {
+                    id
+                    code
+                    name
+                    options {
+                        id
+                        code
+                        name
+                    }
+                }
+                variants {
+                    id
+                    name
+                    sku
+                    price
+                    stockOnHand
+                    trackInventory
+                    ...ProductVariantFulfillment
+                    currencyCode
+                    priceWithTax
+                    createdAt
+                    updatedAt
+                    options {
+                        id
+                        code
+                        name
+                        groupId
                     }
                 }
             }
         }
     `,
-    [productDetailFragment],
+    [productVariantFulfillmentFragment],
 );
-
-export const productDetailWithVariantsDocument = graphql(`
-    query ProductDetailWithVariants($id: ID!) {
-        product(id: $id) {
-            id
-            createdAt
-            updatedAt
-            name
-            variantList {
-                totalItems
-            }
-            optionGroups {
-                id
-                code
-                name
-                options {
-                    id
-                    code
-                    name
-                }
-            }
-            variants {
-                id
-                name
-                sku
-                price
-                stockOnHand
-                trackInventory
-                customFields {
-                    fulfillmentType
-                    digitalDeliveryMode
-                }
-                currencyCode
-                priceWithTax
-                createdAt
-                updatedAt
-                options {
-                    id
-                    code
-                    name
-                    groupId
-                }
-            }
-        }
-    }
-`);
 
 export const createProductDocument = graphql(`
     mutation CreateProduct($input: CreateProductInput!) {

@@ -23,44 +23,53 @@ import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-
-import { createProductOptionDocument, createProductVariantsDocument } from '../products.graphql.js';
-
+import {
+    createProductOptionDocument,
+    createProductVariantsDocument,
+    withProductVariantCustomFields,
+} from '../products.graphql.js';
 import { getProductFulfillmentType } from './product-fulfillment-type.js';
 import { ProductOptionSelect } from './product-option-select.js';
 
-const getProductOptionGroupsDocument = graphql(`
-    query GetProductOptionGroups($productId: ID!) {
-        product(id: $productId) {
-            id
-            name
-            optionGroups {
+const productVariantFulfillmentFragment = graphql(`
+    fragment ProductVariantFulfillment on ProductVariant {
+        customFields
+    }
+`);
+
+const getProductOptionGroupsDocument = graphql(
+    `
+        query GetProductOptionGroups($productId: ID!) {
+            product(id: $productId) {
                 id
-                code
                 name
-                options {
+                optionGroups {
                     id
                     code
                     name
+                    options {
+                        id
+                        code
+                        name
+                    }
                 }
-            }
-            variants {
-                id
-                name
-                sku
-                customFields {
-                    fulfillmentType
-                }
-                options {
+                variants {
                     id
-                    code
                     name
-                    groupId
+                    sku
+                    ...ProductVariantFulfillment
+                    options {
+                        id
+                        code
+                        name
+                        groupId
+                    }
                 }
             }
         }
-    }
-`);
+    `,
+    [productVariantFulfillmentFragment],
+);
 
 type Translate = ReturnType<typeof useLingui>['t'];
 
@@ -92,7 +101,8 @@ export function AddProductVariantDialog({
 
     const { data: productData, refetch } = useQuery({
         queryKey: ['productOptionGroups', productId],
-        queryFn: () => api.query(getProductOptionGroupsDocument, { productId }),
+        queryFn: () =>
+            api.query(withProductVariantCustomFields(getProductOptionGroupsDocument), { productId }),
     });
 
     const form = useForm<FormValues>({
@@ -199,7 +209,7 @@ export function AddProductVariantDialog({
                     [variables.input.productOptionGroupId]: result.createProductOption.id,
                 });
                 // Refetch product data to get the new option
-                void refetch();
+                refetch();
             }
         },
     });
@@ -268,7 +278,7 @@ export function AddProductVariantDialog({
                     <form
                         onSubmit={e => {
                             e.stopPropagation();
-                            void form.handleSubmit(onSubmit)(e);
+                            form.handleSubmit(onSubmit)(e);
                         }}
                         className="space-y-4"
                     >
