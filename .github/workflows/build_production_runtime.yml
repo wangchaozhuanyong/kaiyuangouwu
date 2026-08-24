@@ -139,6 +139,7 @@ jobs:
                     --require-platform linux/x64 \
                     --audit-level high
                   node "$ARTIFACT_DIR/verify-runtime.mjs" --expected-sha "$TARGET_SHA"
+                  test "$(stat --format='%a' "$ARTIFACT_DIR")" = "755"
 
                   tar --create --gzip --file "$ARCHIVE_PATH" \
                     --directory "$(dirname "$ARTIFACT_DIR")" \

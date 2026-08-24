@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
     assertSafeOutputPath,
+    ensureRuntimeRootPermissions,
     pruneDeniedRuntimePackages,
     repositoryRoot,
     runtimeArtifactsRoot,
@@ -18,6 +19,16 @@ import {
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
+
+void test('runtime artifact root is readable and traversable by the web server', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-permissions-'));
+    try {
+        await ensureRuntimeRootPermissions(fixtureRoot);
+        assert.equal((await stat(fixtureRoot)).mode % 0o1000, 0o755);
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
 
 void test('runtime artifact output is restricted to a new child of the artifact directory', async () => {
     await assert.rejects(() => assertSafeOutputPath(repositoryRoot), /Output must be a child/u);

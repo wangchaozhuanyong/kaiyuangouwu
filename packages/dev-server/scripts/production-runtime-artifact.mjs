@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -70,6 +70,14 @@ export async function assertSafeOutputPath(outputPath) {
         }
     }
     return resolvedOutput;
+}
+
+export async function ensureRuntimeRootPermissions(runtimeRoot) {
+    await chmod(runtimeRoot, 0o755);
+    const mode = (await stat(runtimeRoot)).mode % 0o1000;
+    if (mode !== 0o755) {
+        throw new Error(`Runtime artifact root must use mode 755, received ${mode.toString(8)}`);
+    }
 }
 
 function git(...args) {
@@ -304,6 +312,7 @@ export async function buildRuntimeArtifact({
         await auditRuntimePackages(stagingRoot, runtimePackages, { failOn: auditLevel });
         await writeIntegrityFiles(stagingRoot);
         await verifyRuntimeArtifact(stagingRoot, { allowDirty, expectedSha: gitSha });
+        await ensureRuntimeRootPermissions(stagingRoot);
         await rename(stagingRoot, resolvedOutput);
         return resolvedOutput;
     } catch (error) {

@@ -156,6 +156,7 @@ test ! -e "${ARTIFACT_NAME}"
 # 否则 Nginx 的 www-data 用户无法遍历 Storefront 目录。
 tar --extract --gzip --same-permissions --file "${ARCHIVE_NAME}"
 CANDIDATE="/var/www/kaiyuangouwu-releases/${ARTIFACT_NAME}"
+test "$(stat --format='%a' "${CANDIDATE}")" = "755"
 node "${CANDIDATE}/verify-runtime.mjs" --expected-sha "${TARGET_SHA}"
 ```
 

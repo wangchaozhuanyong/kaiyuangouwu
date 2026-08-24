@@ -42,8 +42,14 @@ void test('production runtime switch rebuilds PM2 definitions for an immutable r
 
 void test('production runbook elevates only the root-owned atomic runtime switch', async () => {
     const runbook = await readFile(path.join(repositoryRoot, 'deploy/DEPLOYMENT_RUNBOOK.md'), 'utf8');
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
+        'utf8',
+    );
 
     assert.match(runbook, /tar --extract --gzip --same-permissions --file/u);
+    assert.match(runbook, /stat --format='%a' "\$\{CANDIDATE\}"/u);
+    assert.match(workflow, /stat --format='%a' "\$ARTIFACT_DIR"/u);
     assert.match(runbook, /sudo -n ln -s "\$\{CANDIDATE\}"/u);
     assert.match(runbook, /sudo -n mv -Tf/u);
     assert.match(runbook, /sudo -n nginx -t/u);
