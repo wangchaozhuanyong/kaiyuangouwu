@@ -1,10 +1,9 @@
-import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { getDetailQueryOptions } from '@/vdb/framework/page/use-detail-page.js';
 import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { Trans } from '@lingui/react/macro';
 import { redirect } from '@tanstack/react-router';
 import { OrderDetail } from '../components/order-detail-shared.js';
-import { orderDetailDocument } from '../orders.graphql.js';
+import { orderDetailDocument, withOrderCustomFields } from '../orders.graphql.js';
 
 async function ensureOrderWithIdExists(context: any, params: { id: string }): Promise<OrderDetail> {
     if (!params.id) {
@@ -12,10 +11,7 @@ async function ensureOrderWithIdExists(context: any, params: { id: string }): Pr
     }
 
     const result: ResultOf<typeof orderDetailDocument> = await context.queryClient.ensureQueryData(
-        getDetailQueryOptions(
-            addCustomFields(orderDetailDocument, { includeNestedFragments: ['OrderLine', 'Fulfillment'] }),
-            { id: params.id },
-        ),
+        getDetailQueryOptions(withOrderCustomFields(orderDetailDocument), { id: params.id }),
     );
 
     if (!result.order) {
@@ -89,10 +85,7 @@ export async function loadSellerOrder(
     }
 
     const result: ResultOf<typeof orderDetailDocument> = await context.queryClient.ensureQueryData(
-        getDetailQueryOptions(
-            addCustomFields(orderDetailDocument, { includeNestedFragments: ['OrderLine', 'Fulfillment'] }),
-            { id: params.sellerOrderId },
-        ),
+        getDetailQueryOptions(withOrderCustomFields(orderDetailDocument), { id: params.sellerOrderId }),
     );
 
     if (!result.order) {

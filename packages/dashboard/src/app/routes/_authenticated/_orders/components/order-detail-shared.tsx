@@ -2,7 +2,6 @@ import { CustomFieldsForm } from '@/vdb/components/shared/custom-fields-form.js'
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { DropdownMenuItem } from '@/vdb/components/ui/dropdown-menu.js';
-import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import {
     Page,
@@ -28,6 +27,7 @@ import {
     orderDetailDocument,
     setOrderCustomFieldsDocument,
     transitionOrderToStateDocument,
+    withOrderCustomFields,
 } from '../orders.graphql.js';
 import { canAddFulfillment, canRefundOrder, shouldShowAddManualPaymentButton } from '../utils/order-utils.js';
 import { OrderProcessDialog } from './order-process-dialog.js';
@@ -82,9 +82,7 @@ export function OrderDetailShared({
 
     const { form, submitHandler, entity, refreshEntity } = useDetailPage({
         pageId,
-        queryDocument: addCustomFields(orderDetailDocument, {
-            includeNestedFragments: ['OrderLine', 'Fulfillment'],
-        }),
+        queryDocument: withOrderCustomFields(orderDetailDocument),
         updateDocument: setOrderCustomFieldsDocument,
         setValuesForUpdate: (entity: any) => {
             return {

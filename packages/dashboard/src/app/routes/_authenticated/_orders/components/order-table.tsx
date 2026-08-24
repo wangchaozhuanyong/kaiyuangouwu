@@ -7,14 +7,13 @@ import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js'
 import { VendureImage } from '@/vdb/components/shared/vendure-image.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/vdb/components/ui/dropdown-menu.js';
-import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { getFieldsFromDocumentNode } from '@/vdb/framework/document-introspection/get-document-structure.js';
 import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans } from '@lingui/react/macro';
 import { EllipsisVertical } from 'lucide-react';
 import { Fragment, useMemo } from 'react';
-import { orderDetailDocument, orderLineFragment } from '../orders.graphql.js';
+import { orderDetailDocument, orderLineFragment, withOrderCustomFields } from '../orders.graphql.js';
 import { MoneyGrossNet } from './money-gross-net.js';
 import { OrderTableTotals } from './order-table-totals.js';
 
@@ -163,10 +162,7 @@ export function OrderTable({ order, pageId }: Readonly<OrderTableProps>) {
     ];
     const currencyCode = order.currencyCode;
 
-    const fields = getFieldsFromDocumentNode(
-        addCustomFields(orderDetailDocument, { includeNestedFragments: ['OrderLine'] }),
-        ['order', 'lines'],
-    );
+    const fields = getFieldsFromDocumentNode(withOrderCustomFields(orderDetailDocument), ['order', 'lines']);
 
     const customizeColumns = useMemo(() => createCustomizeColumns(currencyCode), [currencyCode]);
 

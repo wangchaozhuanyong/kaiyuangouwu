@@ -1,9 +1,11 @@
+import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import {
     assetFragment,
     configurableOperationDefFragment,
     errorResultFragment,
 } from '@/vdb/graphql/fragments.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { addressFragment } from '../_customers/customers.graphql.js';
 
@@ -86,6 +88,27 @@ export const orderAddressFragment = graphql(`
     }
 `);
 
+const orderProductVariantFragment = graphql(`
+    fragment OrderProductVariant on ProductVariant {
+        id
+        name
+        sku
+        trackInventory
+        stockOnHand
+        customFields
+    }
+`);
+
+/**
+ * Expands custom fields for the order itself and every nested entity fragment
+ * used by the shared order detail document.
+ */
+export function withOrderCustomFields<T extends TypedDocumentNode<any, any>>(document: T): T {
+    return addCustomFields(document, {
+        includeNestedFragments: ['OrderLine', 'Fulfillment', 'OrderProductVariant'],
+    }) as T;
+}
+
 export const fulfillmentFragment = graphql(`
     fragment Fulfillment on Fulfillment {
         id
@@ -145,12 +168,7 @@ export const orderLineFragment = graphql(
                 ...Asset
             }
             productVariant {
-                id
-                name
-                sku
-                trackInventory
-                stockOnHand
-                customFields
+                ...OrderProductVariant
             }
             discounts {
                 ...Discount
@@ -173,7 +191,7 @@ export const orderLineFragment = graphql(
             discountedLinePriceWithTax
         }
     `,
-    [assetFragment],
+    [assetFragment, orderProductVariantFragment],
 );
 
 export const orderDetailFragment = graphql(

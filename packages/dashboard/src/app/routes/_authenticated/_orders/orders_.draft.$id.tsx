@@ -4,7 +4,6 @@ import { CustomerSelector } from '@/vdb/components/shared/customer-selector.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Form } from '@/vdb/components/ui/form.js';
-import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { useGeneratedForm } from '@/vdb/framework/form-engine/use-generated-form.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import {
@@ -50,6 +49,7 @@ import {
     transitionOrderToStateDocument,
     unsetBillingAddressForDraftOrderDocument,
     unsetShippingAddressForDraftOrderDocument,
+    withOrderCustomFields,
 } from './orders.graphql.js';
 import { loadDraftOrder } from './utils/order-detail-loaders.js';
 
@@ -65,9 +65,7 @@ function DraftOrderPage() {
     const navigate = useNavigate();
 
     const { entity, refreshEntity, form } = useDetailPage({
-        queryDocument: addCustomFields(orderDetailDocument, {
-            includeNestedFragments: ['OrderLine', 'Fulfillment'],
-        }),
+        queryDocument: withOrderCustomFields(orderDetailDocument),
         setValuesForUpdate: entity => {
             return {
                 id: entity.id,

@@ -1,17 +1,17 @@
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { Button } from '@/vdb/components/ui/button.js';
-import {    Page,
+import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
+import {
+    Page,
     PageActionBar,
     PageBlock,
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
-import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
-import { useCustomFieldConfig } from '@/vdb/hooks/use-custom-field-config.js';
 import { getDetailQueryOptions, useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { type CreateAddressInput } from '@/vdb/graphql/common-operations.js';
+import { useCustomFieldConfig } from '@/vdb/hooks/use-custom-field-config.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
@@ -25,7 +25,11 @@ import { OrderAddress } from './components/order-address.js';
 import { OrderModificationPreviewDialog } from './components/order-modification-preview-dialog.js';
 import { OrderModificationSummary } from './components/order-modification-summary.js';
 import { useTransitionOrderToState } from './components/use-transition-order-to-state.js';
-import { draftOrderEligibleShippingMethodsDocument, orderDetailDocument } from './orders.graphql.js';
+import {
+    draftOrderEligibleShippingMethodsDocument,
+    orderDetailDocument,
+    withOrderCustomFields,
+} from './orders.graphql.js';
 import { loadModifyingOrder } from './utils/order-detail-loaders.js';
 import { AddressFragment } from './utils/order-types.js';
 import { computePendingOrder } from './utils/order-utils.js';
@@ -46,9 +50,7 @@ function ModifyOrderPage() {
     const queryClient = useQueryClient();
     const { form, submitHandler, entity } = useDetailPage({
         pageId,
-        queryDocument: addCustomFields(orderDetailDocument, {
-            includeNestedFragments: ['OrderLine', 'Fulfillment'],
-        }),
+        queryDocument: withOrderCustomFields(orderDetailDocument),
         setValuesForUpdate: entity => {
             return {
                 id: entity.id,

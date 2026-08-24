@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 
-import { orderDetailDocument } from '../orders.graphql.js';
+import { orderDetailDocument, withOrderCustomFields } from '../orders.graphql.js';
 import { FulfillmentQueueOrder } from '../utils/order-fulfillment-utils.js';
 import { FulfillOrderDialog } from './fulfill-order-dialog.js';
 
@@ -69,7 +69,7 @@ export function FulfillmentQueueDialog({
             if (!current) {
                 throw new Error('No order selected for fulfillment');
             }
-            return api.query(orderDetailDocument, { id: current.id });
+            return api.query(withOrderCustomFields(orderDetailDocument), { id: current.id });
         },
         enabled: open && Boolean(current),
         staleTime: 0,
