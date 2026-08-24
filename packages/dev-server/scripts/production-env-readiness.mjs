@@ -213,6 +213,14 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         passed: isConfiguredSecret(env.COOKIE_SECRET, 32),
         detail: isConfiguredSecret(env.COOKIE_SECRET, 32) ? 'configured' : 'missing, short, or placeholder',
     });
+    pushCheck(checks, {
+        id: 'auto-card-encryption-key',
+        title: '自动发卡数据加密密钥',
+        passed: isConfiguredSecret(env.AUTO_CARD_ENCRYPTION_KEY, 32),
+        detail: isConfiguredSecret(env.AUTO_CARD_ENCRYPTION_KEY, 32)
+            ? 'configured'
+            : 'missing, short, or placeholder',
+    });
     const orderEmailTokenTtl = Number(env.ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS);
     const orderConfirmationTokensReady =
         isConfiguredSecret(env.ORDER_CONFIRMATION_TOKEN_SECRET, 32) &&

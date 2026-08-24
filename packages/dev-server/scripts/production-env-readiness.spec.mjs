@@ -21,6 +21,7 @@ function readyEnvironment(overrides = {}) {
         SUPERADMIN_USERNAME: 'operations-admin',
         SUPERADMIN_PASSWORD: 'p4ssword-that-is-long-and-random',
         COOKIE_SECRET: 'cookie-secret-that-is-longer-than-thirty-two-characters',
+        AUTO_CARD_ENCRYPTION_KEY: 'auto-card-secret-that-is-longer-than-thirty-two-characters',
         ORDER_CONFIRMATION_TOKEN_SECRET:
             'order-confirmation-secret-that-is-longer-than-thirty-two-characters',
         ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS: '604800',
@@ -79,7 +80,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 29, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 30, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -195,7 +196,24 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 30, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 31, manual: 0, blocker: 0 });
+});
+
+void test('blocks a missing or placeholder auto-card encryption key', () => {
+    for (const value of ['', 'replace-with-a-random-secret-at-least-32-characters']) {
+        const report = evaluateProductionEnvironment(
+            readyEnvironment({ AUTO_CARD_ENCRYPTION_KEY: value }),
+            'server',
+            confirmedControls,
+        );
+        assert.equal(report.ready, false);
+        assert.equal(
+            report.checks.some(
+                check => check.id === 'auto-card-encryption-key' && check.status === 'blocker',
+            ),
+            true,
+        );
+    }
 });
 
 void test('blocks a single-host release without a required offsite backup destination', () => {
