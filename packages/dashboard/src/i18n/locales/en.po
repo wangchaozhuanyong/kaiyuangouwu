@@ -3737,11 +3737,6 @@ msgstr "All SKUs will require shipping. Configure stock and shipping methods bef
 msgid "Supported content languages"
 msgstr "Supported content languages"
 
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
-msgid "orderCenter.fulfillment.progress"
-msgstr "Fulfillment progress"
-
 #: src/lib/components/data-table/filters/data-table-id-filter.tsx
 msgid "Enter ID..."
 msgstr "Enter ID..."
@@ -5238,6 +5233,11 @@ msgstr "Could not load this order"
 #: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
 msgid "orderCenter.fulfillment.loading"
 msgstr "Loading order details"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.progress"
+msgstr "Fulfillment progress"
 
 #. js-lingui-explicit-id
 #: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx

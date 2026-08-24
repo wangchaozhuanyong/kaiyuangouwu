@@ -3737,11 +3737,6 @@ msgstr "所有 SKU 将需要物流配送。请在接受订单前配置库存和�
 msgid "Supported content languages"
 msgstr "支持的内容语言"
 
-#. js-lingui-explicit-id
-#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
-msgid "orderCenter.fulfillment.progress"
-msgstr "发货进度"
-
 #: src/lib/components/data-table/filters/data-table-id-filter.tsx
 msgid "Enter ID..."
 msgstr "输入 ID..."
@@ -5238,6 +5233,11 @@ msgstr "待发货订单加载失败"
 #: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
 msgid "orderCenter.fulfillment.loading"
 msgstr "正在加载待发货订单"
+
+#. js-lingui-explicit-id
+#: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
+msgid "orderCenter.fulfillment.progress"
+msgstr "发货进度"
 
 #. js-lingui-explicit-id
 #: src/app/routes/_authenticated/_orders/components/order-fulfillment-queue.tsx
