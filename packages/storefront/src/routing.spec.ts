@@ -65,6 +65,8 @@ describe('storefront hash routing', () => {
         expect(routeFromHash('#/support').name).toBe('support');
         expect(routeFromHash('#/coupons').name).toBe('coupons');
         expect(routeFromHash('#/reviews').name).toBe('reviews');
+        expect(routeFromHash('#/flash-sale').name).toBe('flash-sale');
+        expect(routeFromHash('#/recommendations').name).toBe('recommendations');
     });
 
     it('preserves email verification and password reset tokens', () => {

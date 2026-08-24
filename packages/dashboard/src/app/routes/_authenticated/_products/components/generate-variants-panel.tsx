@@ -5,6 +5,8 @@ import { Checkbox } from '@/vdb/components/ui/checkbox.js';
 import { Field, FieldError } from '@/vdb/components/ui/field.js';
 import { Form } from '@/vdb/components/ui/form.js';
 import { Input } from '@/vdb/components/ui/input.js';
+import { Label } from '@/vdb/components/ui/label.js';
+import { RadioGroup, RadioGroupItem } from '@/vdb/components/ui/radio-group.js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/vdb/components/ui/table.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
@@ -12,7 +14,7 @@ import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
 import { useDebounce } from '@uidotdev/usehooks';
-import { Save, Search } from 'lucide-react';
+import { Mail, Save, Search, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -76,6 +78,7 @@ function createVariantFormSchema(t: Translate) {
         });
 
     return z.object({
+        fulfillmentType: z.enum(['physical', 'digital']),
         variants: z.record(variantSchema),
     });
 }
@@ -147,6 +150,7 @@ export function GenerateVariantsPanel({
     const form = useForm<VariantFormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
+            fulfillmentType: 'physical',
             variants: Object.fromEntries(
                 variants.map(v => [v.id, { enabled: enableByDefault, sku: '', price: '', stock: '' }]),
             ),
@@ -171,7 +175,12 @@ export function GenerateVariantsPanel({
                     productId,
                     sku: data.sku,
                     price: Number(data.price),
-                    stockOnHand: Number(data.stock),
+                    stockOnHand: formValues.fulfillmentType === 'physical' ? Number(data.stock) : 0,
+                    trackInventory:
+                        formValues.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
+                    customFields: {
+                        fulfillmentType: formValues.fulfillmentType,
+                    },
                     optionIds: v.optionIds,
                     translations: [
                         {
@@ -196,6 +205,7 @@ export function GenerateVariantsPanel({
     });
 
     const watchedVariants = useWatch({ control: form.control, name: 'variants' });
+    const fulfillmentType = useWatch({ control: form.control, name: 'fulfillmentType' });
     const enabledCount = variants.filter(v => watchedVariants?.[v.id]?.enabled).length;
 
     const [filter, setFilter] = useState('');
@@ -238,6 +248,79 @@ export function GenerateVariantsPanel({
     return (
         <Form {...form}>
             <div className="space-y-4">
+                <div className="space-y-2">
+                    <div>
+                        <p className="text-sm font-medium">
+                            <Trans>Product type and delivery</Trans>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            <Trans>This setting will be saved on every SKU created below.</Trans>
+                        </p>
+                    </div>
+                    <Controller
+                        control={form.control}
+                        name="fulfillmentType"
+                        render={({ field }) => (
+                            <RadioGroup
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                className="grid gap-3 md:grid-cols-2"
+                            >
+                                <Label
+                                    htmlFor="new-variant-type-physical"
+                                    className={`cursor-pointer rounded-lg border p-3 hover:bg-accent/50 ${
+                                        field.value === 'physical' ? 'border-primary bg-primary/5' : ''
+                                    }`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <RadioGroupItem
+                                            id="new-variant-type-physical"
+                                            value="physical"
+                                            className="mt-1"
+                                        />
+                                        <div>
+                                            <div className="flex items-center gap-2 font-medium">
+                                                <Truck className="h-4 w-4" />
+                                                <Trans>Physical product</Trans>
+                                            </div>
+                                            <p className="mt-1 text-sm font-normal text-muted-foreground">
+                                                <Trans>
+                                                    Uses stock, shipping address and logistics fulfillment.
+                                                </Trans>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </Label>
+                                <Label
+                                    htmlFor="new-variant-type-digital"
+                                    className={`cursor-pointer rounded-lg border p-3 hover:bg-accent/50 ${
+                                        field.value === 'digital' ? 'border-primary bg-primary/5' : ''
+                                    }`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <RadioGroupItem
+                                            id="new-variant-type-digital"
+                                            value="digital"
+                                            className="mt-1"
+                                        />
+                                        <div>
+                                            <div className="flex items-center gap-2 font-medium">
+                                                <Mail className="h-4 w-4" />
+                                                <Trans>Digital product</Trans>
+                                            </div>
+                                            <p className="mt-1 text-sm font-normal text-muted-foreground">
+                                                <Trans>
+                                                    Delivered to the checkout email after payment; no shipping
+                                                    or stock.
+                                                </Trans>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </Label>
+                            </RadioGroup>
+                        )}
+                    />
+                </div>
                 {showVariantTools && (
                     <div className="flex items-center gap-3">
                         <div className="relative w-full max-w-sm">
@@ -297,16 +380,20 @@ export function GenerateVariantsPanel({
                             <TableHead>
                                 <Trans>Price</Trans>
                             </TableHead>
-                            <TableHead>
-                                <Trans>Stock on Hand</Trans>
-                            </TableHead>
+                            {fulfillmentType === 'physical' && (
+                                <TableHead>
+                                    <Trans>Stock on Hand</Trans>
+                                </TableHead>
+                            )}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredVariants.length === 0 && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={showVariantTools ? 5 : 3}
+                                    colSpan={
+                                        (showVariantTools ? 4 : 2) + (fulfillmentType === 'physical' ? 1 : 0)
+                                    }
                                     className="text-center text-muted-foreground py-8"
                                 >
                                     <Trans>No variants match the current filter.</Trans>
@@ -375,26 +462,28 @@ export function GenerateVariantsPanel({
                                     />
                                 </TableCell>
 
-                                <TableCell>
-                                    <Controller
-                                        control={form.control}
-                                        name={`variants.${variant.id}.stock`}
-                                        render={({ field, fieldState }) => (
-                                            <Field data-invalid={fieldState.invalid || undefined}>
-                                                <Input
-                                                    {...field}
-                                                    type="number"
-                                                    min="0"
-                                                    step="1"
-                                                    data-testid="variant-stock-input"
-                                                />
-                                                {fieldState.invalid && (
-                                                    <FieldError errors={[fieldState.error]} />
-                                                )}
-                                            </Field>
-                                        )}
-                                    />
-                                </TableCell>
+                                {fulfillmentType === 'physical' && (
+                                    <TableCell>
+                                        <Controller
+                                            control={form.control}
+                                            name={`variants.${variant.id}.stock`}
+                                            render={({ field, fieldState }) => (
+                                                <Field data-invalid={fieldState.invalid || undefined}>
+                                                    <Input
+                                                        {...field}
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        data-testid="variant-stock-input"
+                                                    />
+                                                    {fieldState.invalid && (
+                                                        <FieldError errors={[fieldState.error]} />
+                                                    )}
+                                                </Field>
+                                            )}
+                                        />
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))}
                     </TableBody>

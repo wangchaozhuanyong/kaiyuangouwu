@@ -1,6 +1,7 @@
 import { OrderAddress } from '@vendure/common/lib/generated-types';
 import { Order, OrderLine, RequestContext } from '@vendure/core';
 
+import { DigitalDeliveryMode } from './auto-card.constants';
 import { FulfillmentType } from './types';
 
 export interface CheckoutFulfillmentSummary {
@@ -16,6 +17,21 @@ export function getOrderLineFulfillmentType(line: OrderLine): FulfillmentType {
         line.customFields?.fulfillmentTypeSnapshot ??
         line.productVariant?.customFields?.fulfillmentType ??
         'physical'
+    );
+}
+
+export function getOrderLineDigitalDeliveryMode(line: OrderLine): DigitalDeliveryMode {
+    return (
+        line.customFields?.digitalDeliveryModeSnapshot ??
+        line.productVariant?.customFields?.digitalDeliveryMode ??
+        'file_download'
+    );
+}
+
+export function isAutoCardOrderLine(line: OrderLine): boolean {
+    return (
+        getOrderLineFulfillmentType(line) === 'digital' &&
+        getOrderLineDigitalDeliveryMode(line) === 'auto_card'
     );
 }
 

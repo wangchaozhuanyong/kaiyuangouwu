@@ -1,8 +1,9 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { EntityId, LocaleString, Translatable, Translation, VendureEntity } from '@vendure/core';
+import { Asset, EntityId, LocaleString, Translatable, Translation, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 
 import { StorefrontContentTargetType } from '../constants';
+import { StorefrontContentSettingsValue } from '../types';
 import { StorefrontContentBlock } from './storefront-content-block.entity';
 import { StorefrontContentItemTranslation } from './storefront-content-item-translation.entity';
 
@@ -22,11 +23,25 @@ export class StorefrontContentItem extends VendureEntity implements Translatable
     @Column({ type: 'varchar', length: 2048, nullable: true })
     imageUrl: string | null;
 
+    @Index('IDX_storefront_content_item_image_asset')
+    @ManyToOne(() => Asset, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({
+        name: 'imageAssetId',
+        foreignKeyConstraintName: 'FK_storefront_content_item_image_asset',
+    })
+    imageAsset: Asset | null;
+
+    @EntityId({ nullable: true })
+    imageAssetId: ID | null;
+
     @Column({ type: 'varchar', length: 32, default: 'NONE' })
     targetType: StorefrontContentTargetType;
 
     @Column({ type: 'varchar', length: 2048, nullable: true })
     targetValue: string | null;
+
+    @Column({ type: 'simple-json', nullable: true })
+    settings: StorefrontContentSettingsValue | null;
 
     label: LocaleString;
 

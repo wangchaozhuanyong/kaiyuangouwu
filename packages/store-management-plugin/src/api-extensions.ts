@@ -11,6 +11,13 @@ const commonTypes = gql`
         HTML
         MARKDOWN
     }
+
+    enum StoreCouponCampaignKind {
+        ORDER_FIXED
+        ORDER_PERCENTAGE
+        COLLECTION_PERCENTAGE
+        PRODUCT_PERCENTAGE
+    }
 `;
 
 export const adminApiExtensions = gql`
@@ -51,9 +58,11 @@ export const adminApiExtensions = gql`
         sortOrder: Int!
         descriptionZh: String!
         descriptionEn: String!
+        internalNote: String
         logoAsset: Asset
         primaryDomain: String
         storefrontUrl: String
+        isOperational: Boolean!
         activationReadiness: StoreActivationReadiness!
     }
 
@@ -81,6 +90,7 @@ export const adminApiExtensions = gql`
         sortOrder: Int
         descriptionZh: String
         descriptionEn: String
+        internalNote: String
         logoAssetId: ID
     }
 
@@ -135,6 +145,46 @@ export const adminApiExtensions = gql`
         blockedPostalPrefixes: String!
     }
 
+    type SystemAnnouncement implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        enabled: Boolean!
+        priority: Int!
+        titleZh: String!
+        titleEn: String!
+        contentZh: String!
+        contentEn: String!
+        linkUrl: String
+        startsAt: DateTime
+        endsAt: DateTime
+    }
+
+    input CreateSystemAnnouncementInput {
+        enabled: Boolean
+        priority: Int
+        titleZh: String!
+        titleEn: String
+        contentZh: String!
+        contentEn: String
+        linkUrl: String
+        startsAt: DateTime
+        endsAt: DateTime
+    }
+
+    input UpdateSystemAnnouncementInput {
+        id: ID!
+        enabled: Boolean
+        priority: Int
+        titleZh: String!
+        titleEn: String
+        contentZh: String!
+        contentEn: String
+        linkUrl: String
+        startsAt: DateTime
+        endsAt: DateTime
+    }
+
     type StorefrontPromotionPage {
         id: ID
         contentType: StorefrontPromotionContentType!
@@ -152,12 +202,87 @@ export const adminApiExtensions = gql`
         source: String!
     }
 
+    type StoreCouponCampaign {
+        id: ID!
+        name: String!
+        couponCode: String!
+        kind: StoreCouponCampaignKind!
+        enabled: Boolean!
+        startsAt: DateTime
+        endsAt: DateTime
+        minimumSpend: Money!
+        discountAmount: Money
+        discountRate: Float
+        collectionIds: [ID!]!
+        productVariantIds: [ID!]!
+        usageLimit: Int
+        perCustomerUsageLimit: Int
+    }
+
+    input CreateStoreCouponCampaignInput {
+        name: String!
+        couponCode: String!
+        kind: StoreCouponCampaignKind!
+        minimumSpend: Money
+        discountAmount: Money
+        discountRate: Float
+        collectionIds: [ID!]
+        productIds: [ID!]
+        startsAt: DateTime
+        endsAt: DateTime
+        usageLimit: Int
+        perCustomerUsageLimit: Int
+    }
+
+    input StoreFlashSaleVariantPriceInput {
+        productVariantId: ID!
+        salePrice: Money!
+    }
+
+    input CreateStoreFlashSaleInput {
+        name: String!
+        productIds: [ID!]!
+        percentageOff: Float!
+        variantPrices: [StoreFlashSaleVariantPriceInput!]
+        startsAt: DateTime!
+        endsAt: DateTime!
+    }
+
+    type StoreFlashSaleItem {
+        productId: ID!
+        productVariantId: ID!
+        productName: String!
+        variantName: String!
+        originalPrice: Money!
+        salePrice: Money!
+        currencyCode: CurrencyCode!
+        imageUrl: String
+    }
+
+    type StoreFlashSale {
+        id: ID!
+        name: String!
+        enabled: Boolean!
+        startsAt: DateTime
+        endsAt: DateTime
+        items: [StoreFlashSaleItem!]!
+    }
+
+    type StorePromotionToggleResult {
+        id: ID!
+        enabled: Boolean!
+    }
+
     extend type Query {
+        storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
+        storeCouponCampaigns: [StoreCouponCampaign!]!
+        storeFlashSales: [StoreFlashSale!]!
+        systemAnnouncements: [SystemAnnouncement!]!
     }
 
     extend type Mutation {
@@ -172,16 +297,70 @@ export const adminApiExtensions = gql`
         publishStorefrontPromotionPage: StorefrontPromotionPage!
         resetStorefrontPromotionPage: StorefrontPromotionPage!
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
+        createStoreCouponCampaign(input: CreateStoreCouponCampaignInput!): StoreCouponCampaign!
+        createStoreFlashSale(input: CreateStoreFlashSaleInput!): StoreFlashSale!
+        setStorePromotionEnabled(id: ID!, enabled: Boolean!): StorePromotionToggleResult!
+        deleteStorePromotion(id: ID!): DeletionResponse!
+        createSystemAnnouncement(input: CreateSystemAnnouncementInput!): SystemAnnouncement!
+        updateSystemAnnouncement(input: UpdateSystemAnnouncementInput!): SystemAnnouncement!
+        deleteSystemAnnouncement(id: ID!): DeletionResponse!
     }
 `;
 
 export const shopApiExtensions = gql`
+    ${commonTypes}
+
     type StorefrontBranding {
         logoUrl: String
         name: String!
+        description: String!
+    }
+
+    type StoreFlashSaleItem {
+        productId: ID!
+        productVariantId: ID!
+        productName: String!
+        variantName: String!
+        originalPrice: Money!
+        salePrice: Money!
+        currencyCode: CurrencyCode!
+        imageUrl: String
+    }
+
+    type StoreFlashSale {
+        id: ID!
+        name: String!
+        enabled: Boolean!
+        startsAt: DateTime
+        endsAt: DateTime
+        items: [StoreFlashSaleItem!]!
+    }
+
+    type StorefrontCoupon {
+        id: ID!
+        name: String!
+        couponCode: String!
+        kind: StoreCouponCampaignKind!
+        startsAt: DateTime
+        endsAt: DateTime
+        minimumSpend: Money!
+        discountAmount: Money
+        discountRate: Float
+    }
+
+    type StorefrontSystemAnnouncement {
+        id: ID!
+        title: String!
+        content: String!
+        linkUrl: String
+        startsAt: DateTime
+        endsAt: DateTime
     }
 
     extend type Query {
         storefrontBranding: StorefrontBranding!
+        activeStorefrontCoupons: [StorefrontCoupon!]!
+        activeStorefrontFlashSales: [StoreFlashSale!]!
+        activeSystemAnnouncements: [StorefrontSystemAnnouncement!]!
     }
 `;

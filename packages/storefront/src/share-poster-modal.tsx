@@ -1,83 +1,8 @@
 import { Check, Copy, Download, Sparkles, X } from 'lucide-react';
+import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 
 import { Product, StorefrontLanguage } from './types';
-
-// 轻量级简易 QR 码矩阵生成（基于标准 QRCode 编码算法或 SVG 离线矢量呈现）
-function generateSimpleQRCodeDataUrl(text: string): string {
-    // 创建一个专用的离线 200x200 Canvas 生成高清晰度二维码与中心 Micro Icon
-    const canvas = document.createElement('canvas');
-    canvas.width = 240;
-    canvas.height = 240;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return '';
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 240, 240);
-
-    // 简单哈希衍生矩阵网格，确保离线快速绘制视觉标准码
-    const size = 25;
-    const cellSize = Math.floor(220 / size);
-    const offset = Math.floor((240 - cellSize * size) / 2);
-
-    // 伪随机确定性生成器（基于 text 字符码）
-    let seed = 0;
-    for (let i = 0; i < text.length; i++) {
-        seed = (seed * 31 + text.charCodeAt(i)) % 2147483647;
-    }
-
-    const nextRandom = () => {
-        seed = (seed * 9301 + 49297) % 233280;
-        return seed / 233280;
-    };
-
-    const matrix: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
-
-    // 绘制定位角标 Finder Patterns (左上、右上、左下)
-    const drawFinder = (startX: number, startY: number) => {
-        for (let r = 0; r < 7; r++) {
-            for (let c = 0; c < 7; c++) {
-                if (r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4)) {
-                    matrix[startY + r][startX + c] = true;
-                }
-            }
-        }
-    };
-
-    drawFinder(0, 0);
-    drawFinder(size - 7, 0);
-    drawFinder(0, size - 7);
-
-    // 填充数据点
-    for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-            // 避开 3 个角标
-            if ((r < 8 && c < 8) || (r < 8 && c >= size - 8) || (r >= size - 8 && c < 8)) {
-                continue;
-            }
-            matrix[r][c] = nextRandom() > 0.48;
-        }
-    }
-
-    ctx.fillStyle = '#0f172a';
-    for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-            if (matrix[r][c]) {
-                ctx.beginPath();
-                ctx.roundRect(
-                    offset + c * cellSize,
-                    offset + r * cellSize,
-                    cellSize - 0.4,
-                    cellSize - 0.4,
-                    1.5,
-                );
-                ctx.fill();
-            }
-        }
-    }
-
-    return canvas.toDataURL('image/png');
-}
 
 export function SharePosterModal({
     product,
@@ -106,14 +31,30 @@ export function SharePosterModal({
     const mainImage = product.featuredAsset?.preview ?? product.assets[0]?.preview ?? '';
 
     useEffect(() => {
-        if (productUrl) {
-            setQrCodeUrl(generateSimpleQRCodeDataUrl(productUrl));
-        }
+        if (!productUrl) return;
+        let cancelled = false;
+        void QRCode.toDataURL(productUrl, {
+            width: 240,
+            margin: 2,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#0f172a', light: '#ffffff' },
+        })
+            .then(url => {
+                if (!cancelled) setQrCodeUrl(url);
+            })
+            .catch(() => {
+                if (!cancelled) setQrCodeUrl('');
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [productUrl]);
 
     // 复制图文口令
     const copyShareText = async () => {
-        const shareText = `【${storefrontName}】${product.name}\n⚡ 官方精选品质：${formattedPrice}\n🔗 直达选购：${productUrl}`;
+        const shareText = isZh
+            ? `【${storefrontName}】${product.name}\n价格：${formattedPrice}\n商品链接：${productUrl}`
+            : `[${storefrontName}] ${product.name}\nPrice: ${formattedPrice}\nProduct link: ${productUrl}`;
         try {
             await navigator.clipboard.writeText(shareText);
             setCopied(true);
@@ -155,7 +96,7 @@ export function SharePosterModal({
 
             ctx.fillStyle = '#10b981';
             ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-            ctx.fillText('✓ 官方正品保障 · 极速交付', 24, 58);
+            ctx.fillText(isZh ? '✓ 商品信息 · 扫码直达' : '✓ Product details · Scan to view', 24, 58);
 
             // 3. 商品大图
             const img = new Image();
@@ -245,7 +186,7 @@ export function SharePosterModal({
                             <span className="poster-brand-name">{storefrontName}</span>
                             <span className="poster-brand-trust">
                                 <Sparkles size={11} />
-                                {isZh ? '官方正品保障' : 'Official Guarantee'}
+                                {isZh ? '商品分享' : 'Product share'}
                             </span>
                         </div>
                     </div>

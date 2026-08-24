@@ -143,6 +143,25 @@ export const e2eCustomFields: CustomFields = {
             ],
         },
     ],
+    ProductVariant: [
+        {
+            name: 'fulfillmentType',
+            type: 'string',
+            defaultValue: 'physical',
+            public: true,
+            label: [{ languageCode: LanguageCode.en, value: 'Product fulfillment type' }],
+            options: [
+                {
+                    value: 'physical',
+                    label: [{ languageCode: LanguageCode.en, value: 'Physical product' }],
+                },
+                {
+                    value: 'digital',
+                    label: [{ languageCode: LanguageCode.en, value: 'Digital product' }],
+                },
+            ],
+        },
+    ],
 };
 
 export const e2ePaymentMethodHandlers = [dummyPaymentHandler];

@@ -7,6 +7,7 @@ import {
     Download,
     House,
     Package,
+    ShieldCheck,
     WalletCards,
 } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
@@ -495,6 +496,34 @@ export function OrderConfirmationPage({
                     </div>
                 </section>
             )}
+            {!!order.autoCardDeliveries?.length && (
+                <section className="digital-delivery-panel auto-card-delivery-panel">
+                    <header>
+                        <div>
+                            <ShieldCheck aria-hidden="true" />
+                            <strong>{isZh ? '邮箱自动发卡' : 'Automatic email delivery'}</strong>
+                        </div>
+                        <small>
+                            {isZh
+                                ? '系统会按号池顺序发送到下单邮箱，请同时检查垃圾邮件。'
+                                : 'Credentials are assigned in sequence and sent to the checkout email.'}
+                        </small>
+                    </header>
+                    <div>
+                        {order.autoCardDeliveries.map(delivery => (
+                            <article key={delivery.id}>
+                                <span>
+                                    <strong>{delivery.productName}</strong>
+                                    <small>
+                                        {delivery.sku} × {delivery.quantity}
+                                    </small>
+                                </span>
+                                <em>{confirmationAutoCardStatus(delivery.state, language)}</em>
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
             <div className="order-confirmation-actions">
                 <button type="button" className="primary-action" onClick={() => onNavigate({ name: 'home' })}>
                     <House aria-hidden="true" />
@@ -509,6 +538,20 @@ export function OrderConfirmationPage({
             </div>
         </main>
     );
+}
+
+function confirmationAutoCardStatus(
+    state: NonNullable<Order['autoCardDeliveries']>[number]['state'],
+    language: StorefrontLanguage,
+): string {
+    const labels = {
+        WAITING_STOCK: language === 'zh' ? '等待补货，商家已收到告警' : 'Waiting for stock',
+        ALLOCATED: language === 'zh' ? '已取号，准备发送' : 'Credentials allocated',
+        RETRYING: language === 'zh' ? '邮件发送重试中' : 'Email delivery retrying',
+        SENT: language === 'zh' ? '已发送到下单邮箱' : 'Sent to checkout email',
+        MANUAL_REVIEW: language === 'zh' ? '发送异常，已转人工处理' : 'Delivery needs manual review',
+    };
+    return labels[state];
 }
 
 function shippingEstimate(order: Order, language: StorefrontLanguage): string {

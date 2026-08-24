@@ -11,6 +11,7 @@ import {
     DialogTitle,
 } from '@/vdb/components/ui/dialog.js';
 import { Input } from '@/vdb/components/ui/input.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/vdb/components/ui/select.js';
 import { DashboardFormComponent } from '@/vdb/framework/form-engine/form-engine-types.js';
 import { api } from '@/vdb/graphql/api.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
@@ -52,6 +53,17 @@ const searchProductsDocument = graphql(`
                         name
                     }
                 }
+            }
+        }
+    }
+`);
+
+const productSelectorCollectionsDocument = graphql(`
+    query ProductSelectorCollections {
+        collections(options: { take: 200, sort: { name: ASC } }) {
+            items {
+                id
+                name
             }
         }
     }
@@ -255,6 +267,7 @@ export function ProductMultiSelectorDialog({
 }: Readonly<ProductMultiSelectorProps>) {
     const { t } = useLingui();
     const [searchTerm, setSearchTerm] = useState('');
+    const [collectionId, setCollectionId] = useState('ALL');
     const [selectedItems, setSelectedItems] = useState<SearchItem[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -268,9 +281,16 @@ export function ProductMultiSelectorDialog({
             groupByProduct: mode === 'product',
             take: 50,
             skip: 0,
+            ...(collectionId === 'ALL' ? {} : { collectionId }),
         }),
-        [debouncedSearchTerm, mode],
+        [collectionId, debouncedSearchTerm, mode],
     );
+
+    const { data: collectionData } = useQuery({
+        queryKey: ['productMultiSelectorCollections'],
+        queryFn: () => api.query(productSelectorCollectionsDocument),
+        enabled: open,
+    });
 
     // Query search results
     const { data: searchData, isLoading } = useQuery({
@@ -364,6 +384,7 @@ export function ProductMultiSelectorDialog({
             setSelectedIds(new Set(initialSelectionIds));
             setSelectedItems([]);
             setSearchTerm('');
+            setCollectionId('ALL');
             hydratedRef.current = false;
         }
     }, [open, initialSelectionIds]);
@@ -398,13 +419,28 @@ export function ProductMultiSelectorDialog({
 
                 <div className="flex-1 min-h-0 flex flex-col">
                     {/* Search Input */}
-                    <div className="flex-shrink-0 mb-4">
+                    <div className="mb-4 grid flex-shrink-0 gap-3 sm:grid-cols-[minmax(0,1fr)_240px]">
                         <Input
                             id="search"
                             placeholder={t`Search products...`}
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                         />
+                        <Select value={collectionId} onValueChange={value => value && setCollectionId(value)}>
+                            <SelectTrigger aria-label={t`Filter by category`}>
+                                <SelectValue placeholder={t`All categories`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">
+                                    <Trans>All categories</Trans>
+                                </SelectItem>
+                                {collectionData?.collections.items.map(collection => (
+                                    <SelectItem key={collection.id} value={collection.id}>
+                                        {collection.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-6">

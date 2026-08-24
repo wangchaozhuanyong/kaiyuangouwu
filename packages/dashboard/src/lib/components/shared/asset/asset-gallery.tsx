@@ -154,6 +154,11 @@ export interface AssetGalleryProps {
      * When provided, a toggle will be rendered in the header bar.
      */
     onViewModeChange?: (mode: AssetViewMode) => void;
+    /**
+     * Whether each asset should show a direct, always-visible link to its detail page.
+     * Keep this disabled in picker dialogs so selecting an asset cannot navigate away.
+     */
+    showDetailLinks?: boolean;
 }
 
 /**
@@ -190,6 +195,7 @@ export function AssetGallery({
     onPageSizeChange,
     viewMode = 'grid',
     onViewModeChange,
+    showDetailLinks = false,
 }: AssetGalleryProps) {
     const { t } = useLingui();
 
@@ -482,6 +488,7 @@ export function AssetGallery({
                         isSelected={isSelected}
                         handleSelect={handleSelect}
                         toggleAssetSelection={toggleAssetSelection}
+                        showDetailLinks={showDetailLinks}
                     />
                 ) : (
                     <AssetGridView
@@ -491,6 +498,7 @@ export function AssetGallery({
                         isSelected={isSelected}
                         handleSelect={handleSelect}
                         toggleAssetSelection={toggleAssetSelection}
+                        showDetailLinks={showDetailLinks}
                     />
                 )}
             </div>
@@ -653,6 +661,7 @@ interface AssetViewProps {
     isSelected: (asset: Asset) => boolean;
     handleSelect: (asset: Asset, event: React.MouseEvent | React.KeyboardEvent) => void;
     toggleAssetSelection: (asset: Asset) => void;
+    showDetailLinks: boolean;
 }
 
 function AssetEmptyState() {
@@ -670,7 +679,9 @@ function AssetGridView({
     isSelected,
     handleSelect,
     toggleAssetSelection,
+    showDetailLinks,
 }: Readonly<AssetViewProps>) {
+    const { t } = useLingui();
     if (isLoading) {
         return (
             <div data-asset-gallery className="flex justify-center py-12">
@@ -693,49 +704,60 @@ function AssetGridView({
             className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-1"
         >
             {assets.map(asset => (
-                <button
-                    type="button"
+                <div
                     key={asset.id}
                     className={`
-                        group cursor-pointer transition-all overflow-hidden rounded-xl
+                        group relative transition-all overflow-hidden rounded-xl
                         bg-card text-card-foreground ring-1 text-left
                         hover:ring-primary/40
                         ${isSelected(asset) ? 'ring-2 ring-primary' : 'ring-foreground/10'}
                     `}
-                    onClick={e => handleSelect(asset, e)}
                 >
-                    <div className="relative aspect-square bg-muted/30 overflow-hidden">
-                        <VendureImage asset={asset} preset="thumb" className="w-full h-full object-cover" />
-                        {selectable && (
-                            <div className="absolute top-1.5 left-1.5">
-                                <Checkbox
-                                    checked={isSelected(asset)}
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        toggleAssetSelection(asset);
-                                    }}
-                                />
-                            </div>
-                        )}
-                    </div>
-                    <div className="px-2 py-1.5">
-                        <p className="text-sm font-medium leading-tight line-clamp-1" title={asset.name}>
-                            {asset.name}
-                        </p>
-                        <div className="flex items-center justify-between mt-0.5">
-                            <span className="text-xs text-muted-foreground">
+                    <button
+                        type="button"
+                        className="block w-full cursor-pointer text-left"
+                        onClick={e => handleSelect(asset, e)}
+                        aria-label={selectable ? t`Select ${asset.name}` : asset.name}
+                    >
+                        <div className="relative aspect-square bg-muted/30 overflow-hidden">
+                            <VendureImage
+                                asset={asset}
+                                preset="thumb"
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                        <div className="px-2 py-1.5">
+                            <p className="text-sm font-medium leading-tight line-clamp-1" title={asset.name}>
+                                {asset.name}
+                            </p>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
                                 {asset.fileSize ? formatFileSize(asset.fileSize) : ''}
                             </span>
-                            <Link
-                                to={`/assets/${asset.id}`}
-                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                                className="p-0.5 rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
-                            >
-                                <ChevronRight className="h-3.5 w-3.5" />
-                            </Link>
                         </div>
-                    </div>
-                </button>
+                    </button>
+                    {selectable && (
+                        <div className="absolute left-1.5 top-1.5 z-10 rounded bg-background/80 p-0.5">
+                            <Checkbox
+                                checked={isSelected(asset)}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    toggleAssetSelection(asset);
+                                }}
+                                aria-label={t`Select ${asset.name}`}
+                            />
+                        </div>
+                    )}
+                    {showDetailLinks && (
+                        <Link
+                            to={`/assets/${asset.id}`}
+                            className="absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md border bg-background/95 px-1.5 py-1 text-xs font-medium shadow-sm hover:bg-accent"
+                            aria-label={t`Edit ${asset.name}`}
+                        >
+                            <Trans>Edit</Trans>
+                            <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                    )}
+                </div>
             ))}
         </div>
     );
@@ -748,6 +770,7 @@ function AssetListView({
     isSelected,
     handleSelect,
     toggleAssetSelection,
+    showDetailLinks,
 }: Readonly<AssetViewProps>) {
     const { formatDate } = useLocalFormat();
 
@@ -789,7 +812,7 @@ function AssetListView({
                         <TableHead>
                             <Trans>Created</Trans>
                         </TableHead>
-                        <TableHead className="w-10" />
+                        <TableHead className={showDetailLinks ? 'w-24' : 'w-10'} />
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -808,6 +831,7 @@ function AssetListView({
                                             e.stopPropagation();
                                             toggleAssetSelection(asset);
                                         }}
+                                        aria-label={`Select ${asset.name}`}
                                     />
                                 </TableCell>
                             )}
@@ -818,7 +842,19 @@ function AssetListView({
                                     className="h-9 w-9 rounded object-cover"
                                 />
                             </TableCell>
-                            <TableCell className="font-medium">{asset.name}</TableCell>
+                            <TableCell className="font-medium">
+                                {showDetailLinks ? (
+                                    <Link
+                                        to={`/assets/${asset.id}`}
+                                        className="hover:underline"
+                                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                    >
+                                        {asset.name}
+                                    </Link>
+                                ) : (
+                                    asset.name
+                                )}
+                            </TableCell>
                             <TableCell>
                                 <Badge variant="secondary" className="text-xs font-normal">
                                     {asset.type.toLowerCase()}
@@ -834,13 +870,16 @@ function AssetListView({
                                 {formatDate(asset.createdAt)}
                             </TableCell>
                             <TableCell>
-                                <Link
-                                    to={`/assets/${asset.id}`}
-                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                                    className="p-1 rounded-sm text-muted-foreground hover:text-foreground"
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </Link>
+                                {showDetailLinks && (
+                                    <Link
+                                        to={`/assets/${asset.id}`}
+                                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    >
+                                        <Trans>Edit</Trans>
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Link>
+                                )}
                             </TableCell>
                         </TableRow>
                     ))}

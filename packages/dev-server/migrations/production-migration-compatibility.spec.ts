@@ -15,6 +15,10 @@ import { AlignSearchStockDefaults1787328000000 } from './1787328000000-align-sea
 import { NormalizeSearchStockMysqlColumns1787331600000 } from './1787331600000-normalize-search-stock-mysql-columns';
 import { AddStorefrontContentSettings1787335200000 } from './1787335200000-add-storefront-content-settings';
 import { AddStorefrontPromotionPages1787338800000 } from './1787338800000-add-storefront-promotion-pages';
+import { AddStoreProfileNotesAndTemplates1787500800000 } from './1787500800000-add-store-profile-notes-and-templates';
+import { UpgradeStorefrontContentEditor1787551200000 } from './1787551200000-upgrade-storefront-content-editor';
+import { AddSystemAnnouncements1787554800000 } from './1787554800000-add-system-announcements';
+import { AddAutoCardDelivery1787594400000 } from './1787594400000-add-auto-card-delivery';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -32,6 +36,218 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'creates portable automatic credential delivery storage on %s',
+        async databaseType => {
+            const createdTables: Table[] = [];
+            const addedColumns: Array<{ table: string; column: TableColumn }> = [];
+            const baseTables = {
+                product_variant: new Table({
+                    name: 'product_variant',
+                    columns: [{ name: 'id', type: 'int' }],
+                }),
+                order_line: new Table({ name: 'order_line', columns: [{ name: 'id', type: 'int' }] }),
+            };
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                hasTable: vi.fn(async () => false),
+                getTable: vi.fn(async (name: keyof typeof baseTables) => {
+                    const table = baseTables[name];
+                    return table
+                        ? new Table({
+                              name: table.name,
+                              columns: [
+                                  ...table.columns,
+                                  ...addedColumns
+                                      .filter(item => item.table === name)
+                                      .map(item => item.column),
+                              ],
+                          })
+                        : undefined;
+                }),
+                addColumn: vi.fn(async (table: string, column: TableColumn) => {
+                    addedColumns.push({ table, column });
+                }),
+                createTable: vi.fn(async (createdTable: Table) => createdTables.push(createdTable)),
+            } as unknown as QueryRunner;
+
+            await new AddAutoCardDelivery1787594400000().up(queryRunner);
+
+            expect(addedColumns.map(item => `${item.table}.${item.column.name}`)).toEqual([
+                'product_variant.customFieldsDigitaldeliverymode',
+                'order_line.customFieldsDigitaldeliverymodesnapshot',
+            ]);
+            expect(createdTables.map(table => table.name)).toEqual([
+                'auto_card_config',
+                'auto_card_delivery',
+                'auto_card_pool_item',
+                'auto_card_delivery_event',
+            ]);
+            const config = createdTables[0];
+            const delivery = createdTables[1];
+            expect(config.findColumnByName('id')?.type).toBe(databaseType === 'mysql' ? 'int' : 'integer');
+            expect(config.findColumnByName('instructions')).toMatchObject({ type: 'text' });
+            expect(config.findColumnByName('instructions')?.default).toBeUndefined();
+            expect(delivery.findColumnByName('instructionsSnapshot')?.default).toBeUndefined();
+            expect(createdTables[2].indices).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'IDX_auto_card_pool_config_fingerprint',
+                        isUnique: true,
+                    }),
+                    expect.objectContaining({
+                        name: 'IDX_auto_card_pool_config_sequence',
+                        isUnique: true,
+                    }),
+                ]),
+            );
+        },
+    );
+
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'creates portable system announcement storage on %s',
+        async databaseType => {
+            const createdTables: Table[] = [];
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                hasTable: vi.fn(async () => false),
+                createTable: vi.fn(async (createdTable: Table) => createdTables.push(createdTable)),
+            } as unknown as QueryRunner;
+
+            await new AddSystemAnnouncements1787554800000().up(queryRunner);
+
+            expect(createdTables).toHaveLength(1);
+            const table = createdTables[0];
+            expect(table.name).toBe('system_announcement');
+            expect(table.findColumnByName('enabled')?.type).toBe(
+                databaseType === 'mysql' ? 'tinyint' : 'boolean',
+            );
+            expect(table.findColumnByName('startsAt')).toMatchObject({ isNullable: true });
+            expect(table.indices).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ name: 'IDX_system_announcement_schedule' }),
+                ]),
+            );
+        },
+    );
+
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'adds portable storefront editor fields and Asset relations on %s',
+        async databaseType => {
+            const initialTables = {
+                asset: new Table({ name: 'asset', columns: [{ name: 'id', type: 'int' }] }),
+                storefront_content_block: new Table({
+                    name: 'storefront_content_block',
+                    columns: [
+                        { name: 'id', type: 'int' },
+                        { name: 'code', type: 'varchar' },
+                    ],
+                }),
+                storefront_content_item: new Table({
+                    name: 'storefront_content_item',
+                    columns: [{ name: 'id', type: 'int' }],
+                }),
+            };
+            const addedColumns: Array<{ table: string; column: TableColumn }> = [];
+            const createIndex = vi.fn(async () => undefined);
+            const createForeignKey = vi.fn(async () => undefined);
+            const query = vi.fn(async () => undefined);
+            const getTable = vi.fn(async (name: keyof typeof initialTables) => {
+                const source = initialTables[name];
+                if (!source) return undefined;
+                return new Table({
+                    name: source.name,
+                    columns: [
+                        ...source.columns,
+                        ...addedColumns.filter(item => item.table === source.name).map(item => item.column),
+                    ],
+                });
+            });
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                getTable,
+                addColumn: vi.fn(async (table: Table, column: TableColumn) => {
+                    addedColumns.push({ table: table.name, column });
+                }),
+                createIndex,
+                createForeignKey,
+                query,
+            } as unknown as QueryRunner;
+
+            await new UpgradeStorefrontContentEditor1787551200000().up(queryRunner);
+
+            expect(addedColumns).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        table: 'storefront_content_block',
+                        column: expect.objectContaining({ name: 'internalName', type: 'varchar' }),
+                    }),
+                    expect.objectContaining({
+                        table: 'storefront_content_block',
+                        column: expect.objectContaining({ name: 'layoutVariant', type: 'varchar' }),
+                    }),
+                    expect.objectContaining({
+                        table: 'storefront_content_block',
+                        column: expect.objectContaining({ name: 'settings', type: 'text' }),
+                    }),
+                    expect.objectContaining({
+                        table: 'storefront_content_item',
+                        column: expect.objectContaining({ name: 'settings', type: 'text' }),
+                    }),
+                ]),
+            );
+            const imageAssetColumns = addedColumns.filter(item => item.column.name === 'imageAssetId');
+            expect(imageAssetColumns).toHaveLength(2);
+            expect(
+                imageAssetColumns.every(
+                    item => item.column.type === (databaseType === 'mysql' ? 'int' : 'integer'),
+                ),
+            ).toBe(true);
+            expect(createIndex).toHaveBeenCalledTimes(2);
+            expect(createForeignKey).toHaveBeenCalledTimes(2);
+            expect(query.mock.calls.at(-1)?.[0]).toContain('UPDATE "storefront_content_block"');
+        },
+    );
+
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'adds portable store notes and provisioning template markers on %s',
+        async databaseType => {
+            const addedColumns: Array<{ table: string; column: TableColumn }> = [];
+            const tables = {
+                channel: new Table({ name: 'channel', columns: [] }),
+                store_profile: new Table({ name: 'store_profile', columns: [] }),
+            };
+            const query = vi.fn(async () => undefined);
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                getTable: vi.fn(async (name: keyof typeof tables) => tables[name]),
+                addColumn: vi.fn(async (table: string, column: TableColumn) => {
+                    addedColumns.push({ table, column });
+                }),
+                query,
+            } as unknown as QueryRunner;
+
+            await new AddStoreProfileNotesAndTemplates1787500800000().up(queryRunner);
+
+            expect(addedColumns).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        table: 'store_profile',
+                        column: expect.objectContaining({ name: 'internalNote', type: 'text' }),
+                    }),
+                    expect.objectContaining({
+                        table: 'channel',
+                        column: expect.objectContaining({
+                            name: 'customFieldsIsstoreprovisioningtemplate',
+                            type: databaseType === 'mysql' ? 'tinyint' : 'boolean',
+                        }),
+                    }),
+                ]),
+            );
+            expect(query.mock.calls.at(-1)?.[0]).toContain('UPDATE "channel"');
+        },
+    );
+
     it.each(['mysql', 'postgres', 'sqlite'] as const)(
         'creates portable per-Channel promotion pages on %s',
         async databaseType => {

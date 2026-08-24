@@ -1,8 +1,8 @@
 import { AssetGallery, AssetViewMode } from '@/vdb/components/shared/asset/asset-gallery.js';
 import { Page, PageBlock, PageTitle } from '@/vdb/framework/layout-engine/page-layout.js';
+import { z } from '@/vdb/lib/zod.js';
 import { Trans } from '@lingui/react/macro';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { z } from '@/vdb/lib/zod.js';
 import { DeleteAssetsBulkAction } from './components/asset-bulk-actions.js';
 
 const assetSearchSchema = z.object({
@@ -47,6 +47,7 @@ function RouteComponent() {
                     onPageSizeChange={handlePageSizeChange}
                     viewMode={viewMode}
                     onViewModeChange={handleViewModeChange}
+                    showDetailLinks={true}
                     bulkActions={[
                         {
                             component: DeleteAssetsBulkAction,

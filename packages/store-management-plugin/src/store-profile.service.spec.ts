@@ -10,7 +10,8 @@ function channel(id = 'channel-1') {
     return {
         id,
         code: `store-${id}`,
-        seller: { name: `Merchant ${id}` },
+        sellerId: 'platform-seller',
+        seller: { id: 'platform-seller', name: `Merchant ${id}` },
         customFields: {
             storefrontNameZh: `中文店铺 ${id}`,
             storefrontNameEn: `English store ${id}`,
@@ -29,6 +30,7 @@ function profile(overrides: Record<string, unknown> = {}) {
             sortOrder: 0,
             descriptionZh: '',
             descriptionEn: '',
+            internalNote: '',
             logoAsset: null,
             logoAssetId: null,
         }),
@@ -50,7 +52,10 @@ function createService(
             return domainRepository;
         }),
     };
-    const channelService = { update: vi.fn(async (_ctx, input) => ({ ...channel(), ...input })) };
+    const channelService = {
+        getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform-seller' }),
+        update: vi.fn(async (_ctx, input) => ({ ...channel(), ...input })),
+    };
     const activationReadinessService = { get: vi.fn().mockResolvedValue(readiness) };
     return {
         activationReadinessService,
@@ -96,7 +101,7 @@ describe('StoreProfileService', () => {
 
         const updated = await service.update({} as any, { id: current.id, status: 'ACTIVE' });
 
-        expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false });
+        expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false, isOperational: true });
     });
 
     it('rejects activation until every launch check passes', async () => {
@@ -151,6 +156,34 @@ describe('StoreProfileService', () => {
                 }),
             }),
         );
+    });
+
+    it('updates descriptions and an internal note without revalidating unchanged storefront names', async () => {
+        const current = profile({
+            channel: {
+                ...channel(),
+                customFields: {
+                    storefrontNameZh: '历史超长店铺名称需要单独修复',
+                    storefrontNameEn: 'Legacy',
+                },
+            },
+        });
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(async value => value),
+        };
+        const domainRepository = { find: vi.fn().mockResolvedValue([]) };
+        const { channelService, service } = createService(profileRepository, domainRepository);
+
+        const updated = await service.update({} as any, {
+            id: current.id,
+            descriptionZh: ' AI 软件商城 ',
+            internalNote: ' 马来西亚团队跟进 ',
+        });
+
+        expect(channelService.update).not.toHaveBeenCalled();
+        expect(updated.descriptionZh).toBe('AI 软件商城');
+        expect(updated.internalNote).toBe('马来西亚团队跟进');
     });
 
     it('updates only the active Channel profile for a merchant', async () => {

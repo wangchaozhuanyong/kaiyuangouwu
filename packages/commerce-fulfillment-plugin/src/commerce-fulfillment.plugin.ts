@@ -4,6 +4,16 @@ import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.r
 import { AfterSalesService } from './after-sales.service';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { AuthenticatedOrderByCodeAccessStrategy } from './authenticated-order-by-code-access-strategy';
+import { AutoCardCipherService } from './auto-card-cipher.service';
+import { AutoCardEmailResultService } from './auto-card-email-result.service';
+import { autoCardFulfillmentHandler } from './auto-card-fulfillment-handler';
+import { reconcileAutoCardDeliveriesTask } from './auto-card-tasks';
+import {
+    AutoCardAdminResolver,
+    AutoCardOrderResolver,
+    AutoCardProductVariantResolver,
+} from './auto-card.resolver';
+import { AutoCardService } from './auto-card.service';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { commerceOrderProcess } from './commerce-order-process';
 import { commercePaymentProcess } from './commerce-payment-process';
@@ -20,6 +30,10 @@ import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import { AfterSalesEvent } from './entities/after-sales-event.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
+import { AutoCardConfig } from './entities/auto-card-config.entity';
+import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
+import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
+import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { FulfillmentModelService } from './fulfillment-model.service';
 import { OrderConfirmationTokenService } from './order-confirmation-token.service';
 import { OrderConfirmationResolver } from './order-confirmation.resolver';
@@ -31,10 +45,21 @@ import './types';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
-    entities: [AfterSalesRequest, AfterSalesItem, AfterSalesEvent],
+    entities: [
+        AfterSalesRequest,
+        AfterSalesItem,
+        AfterSalesEvent,
+        AutoCardConfig,
+        AutoCardPoolItem,
+        AutoCardDelivery,
+        AutoCardDeliveryEvent,
+    ],
     controllers: [DigitalDeliveryController],
     providers: [
         AfterSalesService,
+        AutoCardCipherService,
+        AutoCardService,
+        AutoCardEmailResultService,
         FulfillmentModelService,
         CommerceI18nService,
         CustomerOrderCancellationService,
@@ -45,7 +70,7 @@ import './types';
     ],
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [AfterSalesAdminResolver, OrderOperationsAdminResolver],
+        resolvers: [AfterSalesAdminResolver, OrderOperationsAdminResolver, AutoCardAdminResolver],
     },
     shopApiExtensions: {
         schema: shopApiExtensions,
@@ -54,6 +79,8 @@ import './types';
             OrderConfirmationResolver,
             CustomerOrderCancellationResolver,
             AfterSalesShopResolver,
+            AutoCardOrderResolver,
+            AutoCardProductVariantResolver,
         ],
     },
     configuration: config => {
@@ -96,6 +123,44 @@ import './types';
                 },
             ],
         });
+        config.customFields.ProductVariant.push({
+            name: 'digitalDeliveryMode',
+            type: 'string',
+            defaultValue: 'file_download',
+            public: true,
+            label: [
+                { languageCode: LanguageCode.zh_Hans, value: '虚拟商品交付方式' },
+                { languageCode: LanguageCode.en, value: 'Digital delivery mode' },
+            ],
+            description: [
+                {
+                    languageCode: LanguageCode.zh_Hans,
+                    value: '文件下载需要为 SKU 配置数字文件；自动发卡从号池按顺序取出卡密并发送到下单邮箱。',
+                },
+                {
+                    languageCode: LanguageCode.en,
+                    value:
+                        'File downloads use a configured SKU file. Auto-card delivery allocates credentials ' +
+                        'from the SKU pool in order and sends them to the checkout email.',
+                },
+            ],
+            options: [
+                {
+                    value: 'file_download',
+                    label: [
+                        { languageCode: LanguageCode.zh_Hans, value: '文件下载' },
+                        { languageCode: LanguageCode.en, value: 'File download' },
+                    ],
+                },
+                {
+                    value: 'auto_card',
+                    label: [
+                        { languageCode: LanguageCode.zh_Hans, value: '号池自动发卡' },
+                        { languageCode: LanguageCode.en, value: 'Credential pool auto-delivery' },
+                    ],
+                },
+            ],
+        });
         config.customFields.OrderLine.push({
             name: 'fulfillmentTypeSnapshot',
             type: 'string',
@@ -104,8 +169,17 @@ import './types';
             readonly: true,
             ui: { dashboard: false },
         });
+        config.customFields.OrderLine.push({
+            name: 'digitalDeliveryModeSnapshot',
+            type: 'string',
+            defaultValue: 'file_download',
+            public: true,
+            readonly: true,
+            ui: { dashboard: false },
+        });
 
         config.shippingOptions.fulfillmentHandlers.push(digitalFulfillmentHandler);
+        config.shippingOptions.fulfillmentHandlers.push(autoCardFulfillmentHandler);
         config.shippingOptions.shippingCalculators.push(physicalSubtotalShippingCalculator);
         config.shippingOptions.shippingEligibilityCheckers.push(supportedDestinationEligibilityChecker);
         config.shippingOptions.shippingLineAssignmentStrategy = new CommerceShippingLineAssignmentStrategy();
@@ -119,6 +193,7 @@ import './types';
             }),
         ];
         config.paymentOptions.process = [...(config.paymentOptions.process ?? []), commercePaymentProcess];
+        config.schedulerOptions.tasks.push(reconcileAutoCardDeliveriesTask);
         return config;
     },
     compatibility: '^3.7.0',

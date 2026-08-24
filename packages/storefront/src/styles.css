@@ -8492,6 +8492,17 @@ img.fatal-error-mark {
     height: 16px;
 }
 
+.auto-card-delivery-panel {
+    border-left: 3px solid #2f8f68;
+}
+
+.auto-card-delivery-panel article em {
+    max-width: 48%;
+    color: #246b50;
+    font-weight: 600;
+    text-align: right;
+}
+
 .notification-list {
     margin-top: 9px;
     padding: 0 14px;
@@ -10088,6 +10099,18 @@ img.fatal-error-mark {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+}
+
+.after-sales-line-selection > .inline-notice {
+    min-height: auto;
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #f0d8aa;
+    border-radius: 7px;
+    background: #fff9ec;
+    color: #815f1c;
+    font-size: 12px;
+    line-height: 1.5;
 }
 
 .after-sales-line-selection > div > label:first-child {

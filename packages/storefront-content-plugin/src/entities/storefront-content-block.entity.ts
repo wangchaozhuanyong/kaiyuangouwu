@@ -1,8 +1,21 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { Channel, EntityId, LocaleString, Translatable, Translation, VendureEntity } from '@vendure/core';
+import {
+    Asset,
+    Channel,
+    EntityId,
+    LocaleString,
+    Translatable,
+    Translation,
+    VendureEntity,
+} from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 
-import { StorefrontContentBlockType, StorefrontContentTargetType } from '../constants';
+import {
+    StorefrontContentBlockType,
+    StorefrontContentLayoutVariant,
+    StorefrontContentTargetType,
+} from '../constants';
+import { StorefrontContentSettingsValue } from '../types';
 import { StorefrontContentBlockTranslation } from './storefront-content-block-translation.entity';
 import { StorefrontContentItem } from './storefront-content-item.entity';
 
@@ -17,8 +30,14 @@ export class StorefrontContentBlock extends VendureEntity implements Translatabl
     @Column({ type: 'varchar', length: 64 })
     code: string;
 
+    @Column({ type: 'varchar', length: 128, default: '' })
+    internalName: string;
+
     @Column({ type: 'varchar', length: 32 })
     type: StorefrontContentBlockType;
+
+    @Column({ type: 'varchar', length: 32, default: 'AUTO' })
+    layoutVariant: StorefrontContentLayoutVariant;
 
     @Column('boolean', { default: true })
     enabled: boolean;
@@ -35,6 +54,17 @@ export class StorefrontContentBlock extends VendureEntity implements Translatabl
     @Column({ type: 'varchar', length: 2048, nullable: true })
     imageUrl: string | null;
 
+    @Index('IDX_storefront_content_block_image_asset')
+    @ManyToOne(() => Asset, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({
+        name: 'imageAssetId',
+        foreignKeyConstraintName: 'FK_storefront_content_block_image_asset',
+    })
+    imageAsset: Asset | null;
+
+    @EntityId({ nullable: true })
+    imageAssetId: ID | null;
+
     @Column({ type: 'varchar', length: 32, nullable: true })
     backgroundColor: string | null;
 
@@ -46,6 +76,9 @@ export class StorefrontContentBlock extends VendureEntity implements Translatabl
 
     @Column({ type: 'varchar', length: 2048, nullable: true })
     targetValue: string | null;
+
+    @Column({ type: 'simple-json', nullable: true })
+    settings: StorefrontContentSettingsValue | null;
 
     title: LocaleString;
 

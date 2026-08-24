@@ -1,0 +1,68 @@
+{{#if isChinese}}
+    {{> header title="虚拟商品发货通知" }}
+{{else}}
+    {{> header title="Digital credential delivery" }}
+{{/if}}
+
+<mj-section background-color="#ffffff" padding="12px 28px">
+    <mj-column>
+        <mj-text padding="0 0 8px">{{#if isChinese}}您好：{{else}}Hello,{{/if}}</mj-text>
+        <mj-text padding="0">
+            {{#if isChinese}}
+                订单 {{ orderCode }} 中的虚拟商品已完成自动发货。请妥善保管下方账号与卡密信息。
+            {{else}}
+                The digital item in order {{ orderCode }} has been delivered automatically. Keep the credentials below private.
+            {{/if}}
+        </mj-text>
+    </mj-column>
+</mj-section>
+
+<mj-section background-color="#eaf5f0" padding="18px 28px">
+    <mj-column>
+        <mj-text font-size="17px" font-weight="700" padding="0 0 4px">{{ productName }}</mj-text>
+        <mj-text color="#53625b" padding="0">SKU: {{ sku }}</mj-text>
+    </mj-column>
+</mj-section>
+
+{{#each credentials}}
+<mj-section background-color="#ffffff" padding="16px 28px 4px">
+    <mj-column>
+        <mj-text font-weight="700" padding="0 0 8px">
+            {{#if ../isChinese}}第 {{ number }} 份{{else}}Item {{ number }}{{/if}}
+        </mj-text>
+        <mj-table cellpadding="7px" border="0">
+            {{#each fields}}
+                <tr style="border-bottom: 1px solid #e6eaed;">
+                    <td style="width: 32%; color: #53625b;">{{ label }}</td>
+                    <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all;">{{ value }}</td>
+                </tr>
+            {{/each}}
+        </mj-table>
+    </mj-column>
+</mj-section>
+{{/each}}
+
+{{#if instructions}}
+<mj-section background-color="#f3f8f5" padding="18px 28px">
+    <mj-column>
+        <mj-text font-size="16px" font-weight="700" padding="0 0 8px">
+            {{#if isChinese}}商品使用说明{{else}}Product instructions{{/if}}
+        </mj-text>
+        <mj-text padding="0" line-height="1.8"><div style="white-space: pre-line;">{{ instructions }}</div></mj-text>
+    </mj-column>
+</mj-section>
+{{/if}}
+
+<mj-section background-color="#fff7ed" padding="16px 28px">
+    <mj-column>
+        <mj-text color="#9a3412" padding="0">
+            {{#if isChinese}}
+                本商品为虚拟自动发卡商品，一经发出不支持自助退款。如果账号信息无法使用，请联系客服处理。
+            {{else}}
+                This is an automatically delivered digital item and is not eligible for self-service refunds after delivery. Contact support if the credentials do not work.
+            {{/if}}
+        </mj-text>
+    </mj-column>
+</mj-section>
+
+{{> footer }}

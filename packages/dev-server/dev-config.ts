@@ -2,6 +2,8 @@
 import { OnApplicationBootstrap } from '@nestjs/common';
 import { AssetServerPlugin, PresetOnlyStrategy } from '@vendure/asset-server-plugin';
 import {
+    AutoCardDeliveryReadyEvent,
+    AutoCardService,
     CommerceFulfillmentPlugin,
     OrderConfirmationTokenService,
     summarizeOrderFulfillment,
@@ -22,7 +24,6 @@ import {
     PluginCommonModule,
     RequestContext,
     RequestContextService,
-    SettingsStoreScopes,
     SettingsStoreService,
     ShippingLine,
     TransactionalConnection,
@@ -33,6 +34,7 @@ import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import {
     defaultEmailHandlers,
     EmailEventHandlerWithAsyncData,
+    EmailEventListener,
     EmailPlugin,
     type EmailPluginDevModeOptions,
     type EmailPluginOptions,
@@ -53,13 +55,13 @@ import path from 'path';
 import { DataSourceOptions } from 'typeorm';
 import './business-time';
 
-import { ACCOUNT_TOKEN_DURATION, ACCOUNT_TOKEN_EXPIRY_HOURS, buildAccountActionUrl } from './account-auth';
 import {
-    emailLanguageVariables,
-    localizedEmailSubjects,
-    localizedEmailText,
-    type StorefrontNameFields,
-} from './email-localization';
+    ACCOUNT_TOKEN_DURATION,
+    ACCOUNT_TOKEN_EXPIRY_HOURS,
+    buildAccountActionUrl,
+    buildSignedStorefrontAccountActionUrl,
+} from './account-auth';
+import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
 import { devServerMigrations } from './migrations';
 import {
     buildOrderConfirmationUrl,
@@ -94,6 +96,10 @@ const storefrontPromotionGateEnabled =
 if (IS_PRODUCTION && !storefrontPromotionGateEnabled) {
     throw new Error('STOREFRONT_PROMOTION_GATE_ENABLED must be true in production');
 }
+const storefrontEntrySecret = configuredValue(
+    'STOREFRONT_ENTRY_SECRET',
+    'development-storefront-entry-secret',
+);
 const dashboardAppDir =
     path.basename(__dirname) === 'dist'
         ? path.join(__dirname, './dashboard')
@@ -101,11 +107,28 @@ const dashboardAppDir =
 const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
-const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
+const autoCardDeliveryEmailHandler = new EmailEventListener('auto-card-delivery')
+    .on(AutoCardDeliveryReadyEvent)
+    .loadData(({ event, injector }) =>
+        injector.get(AutoCardService).emailPayload(event.ctx, event.deliveryId),
+    )
+    .setRecipient(event => event.data.recipientEmail)
+    .setFrom('{{ fromAddress }}')
+    .setSubject(event =>
+        event.data.isChinese ? '您购买的虚拟商品已自动发货' : 'Your digital credentials are ready',
+    )
+    .setTemplateVars(event => event.data)
+    .setMetadata(event => ({
+        type: 'auto-card-delivery',
+        deliveryId: event.data.deliveryId,
+    }));
+
+const localizedEmailHandlers = [...defaultEmailHandlers, autoCardDeliveryEmailHandler].map(handler => {
     if (handler.type === 'order-confirmation') {
         type DefaultOrderEmailData = { shippingLines: ShippingLine[] };
         type StorefrontOrderEmailData = DefaultOrderEmailData & {
             isDigitalOrder: boolean;
+            containsDigitalProducts: boolean;
             recipientEmail: string;
             digitalDeliveryActionUrl?: string;
         };
@@ -119,19 +142,20 @@ const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
         const loadDefaultOrderData = orderHandler._loadDataFn.bind(orderHandler);
         orderHandler._loadDataFn = async context => {
             const data = await loadDefaultOrderData(context);
-            const isDigitalOrder =
-                summarizeOrderFulfillment(context.event.order).fulfillmentType === 'DIGITAL';
+            const fulfillment = summarizeOrderFulfillment(context.event.order);
+            const isDigitalOrder = fulfillment.fulfillmentType === 'DIGITAL';
+            const containsDigitalProducts = fulfillment.containsDigitalProducts;
             const customerEmail = context.event.order.customer?.emailAddress;
             if (!customerEmail) {
                 throw new Error('Order confirmation email requires an order customer email address');
             }
             const recipientEmail = orderConfirmationRecipient(
-                isDigitalOrder,
+                containsDigitalProducts,
                 context.event.order.customFields?.deliveryEmail,
                 customerEmail,
             );
             let digitalDeliveryActionUrl: string | undefined;
-            if (isDigitalOrder) {
+            if (containsDigitalProducts) {
                 const confirmation = context.injector
                     .get(OrderConfirmationTokenService)
                     .createForSettledOrder(context.event.ctx, {
@@ -151,6 +175,7 @@ const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
             return {
                 ...data,
                 isDigitalOrder,
+                containsDigitalProducts,
                 recipientEmail,
                 digitalDeliveryActionUrl,
             } satisfies StorefrontOrderEmailData;
@@ -165,21 +190,24 @@ const localizedEmailHandlers = defaultEmailHandlers.map(handler => {
                 order: event.order,
                 shippingLines: data.shippingLines,
                 isDigitalOrder: data.isDigitalOrder,
+                containsDigitalProducts: data.containsDigitalProducts,
                 digitalDeliveryActionUrl: data.digitalDeliveryActionUrl,
             };
         });
     } else if (handler.type === 'email-verification') {
         handler.setTemplateVars((event, globals) => ({
-            verifyEmailAddressActionUrl: buildAccountActionUrl(
+            verifyEmailAddressActionUrl: buildSignedStorefrontAccountActionUrl(
                 globals.verifyEmailAddressUrl,
                 event.user.getNativeAuthenticationMethod().verificationToken,
+                storefrontEntrySecret,
             ),
         }));
     } else if (handler.type === 'password-reset') {
         handler.setTemplateVars((event, globals) => ({
-            passwordResetActionUrl: buildAccountActionUrl(
+            passwordResetActionUrl: buildSignedStorefrontAccountActionUrl(
                 globals.passwordResetUrl,
                 event.user.getNativeAuthenticationMethod().passwordResetToken,
+                storefrontEntrySecret,
             ),
         }));
     } else if (handler.type === 'email-address-change') {
@@ -297,7 +325,7 @@ async function storefrontUrlForChannel(
 async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAddress: string) {
     const storefrontUrl = await storefrontUrlForChannel(ctx, injector.get(TransactionalConnection));
     return {
-        ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields as StorefrontNameFields),
+        ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields),
         fromAddress,
         accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
         verifyEmailAddressUrl: `${storefrontUrl}/promo/account-entry?route=verify-account`,
@@ -505,17 +533,6 @@ export const devConfig: VendureConfig = {
             syncPricesAcrossChannels: true,
         }),
     },
-    settingsStoreFields: {
-        MyPlugin: [
-            {
-                name: 'globalVal',
-            },
-            {
-                name: 'userVal',
-                scope: SettingsStoreScopes.user,
-            },
-        ],
-    },
     customFields: {
         Order: [
             {
@@ -597,6 +614,27 @@ export const devConfig: VendureConfig = {
                     },
                 ],
             },
+            {
+                name: 'isStoreProvisioningTemplate',
+                type: 'boolean',
+                nullable: false,
+                defaultValue: false,
+                public: false,
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '可作为开店配置模板' },
+                    { languageCode: LanguageCode.en, value: 'Use as store provisioning template' },
+                ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '允许平台管理员基于此 Channel 的语言、币种、税务、库存、支付和配送配置创建新网店',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Allows platform administrators to provision stores from this Channel configuration',
+                    },
+                ],
+            },
         ],
     },
     logger: new DefaultLogger({ level: IS_PRODUCTION ? LogLevel.Info : LogLevel.Verbose }),
@@ -625,10 +663,7 @@ export const devConfig: VendureConfig = {
                   CommerceFulfillmentPlugin,
                   StoreManagementPlugin.init({
                       enabled: storefrontPromotionGateEnabled,
-                      signingSecret: configuredValue(
-                          'STOREFRONT_ENTRY_SECRET',
-                          'development-storefront-entry-secret',
-                      ),
+                      signingSecret: storefrontEntrySecret,
                       secureCookie: IS_PRODUCTION,
                       trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
                       bypassHosts: storeDomainBypassHosts(),

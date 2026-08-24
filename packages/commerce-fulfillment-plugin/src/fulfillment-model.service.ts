@@ -50,9 +50,12 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
             return;
         }
         const fulfillmentType = event.orderLine.productVariant.customFields?.fulfillmentType ?? 'physical';
+        const digitalDeliveryMode =
+            event.orderLine.productVariant.customFields?.digitalDeliveryMode ?? 'file_download';
         event.orderLine.customFields = {
             ...event.orderLine.customFields,
             fulfillmentTypeSnapshot: fulfillmentType,
+            digitalDeliveryModeSnapshot: digitalDeliveryMode,
         };
         await this.connection.getRepository(event.ctx, OrderLine).save(event.orderLine, { reload: false });
     }

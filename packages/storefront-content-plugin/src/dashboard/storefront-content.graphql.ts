@@ -1,25 +1,53 @@
+import type { Asset } from '@vendure/dashboard';
 import { gql } from 'graphql-tag';
 
 export const storefrontContentBlocksQuery = gql`
     query StorefrontContentBlocks {
         storefrontContentSettings {
             heroAutoplayIntervalSeconds
+            configuredBlockTypes
         }
         storefrontContentBlocks {
             id
             createdAt
             updatedAt
             code
+            internalName
             type
+            layoutVariant
             enabled
             position
             startsAt
             endsAt
+            imageAsset {
+                id
+                createdAt
+                updatedAt
+                languageCode
+                name
+                fileSize
+                mimeType
+                type
+                preview
+                source
+                width
+                height
+                focalPoint {
+                    x
+                    y
+                }
+                translations {
+                    id
+                    languageCode
+                    name
+                }
+            }
             imageUrl
             backgroundColor
             textColor
             targetType
             targetValue
+            settings
             title
             subtitle
             body
@@ -36,9 +64,33 @@ export const storefrontContentBlocksQuery = gql`
                 id
                 enabled
                 position
+                imageAsset {
+                    id
+                    createdAt
+                    updatedAt
+                    languageCode
+                    name
+                    fileSize
+                    mimeType
+                    type
+                    preview
+                    source
+                    width
+                    height
+                    focalPoint {
+                        x
+                        y
+                    }
+                    translations {
+                        id
+                        languageCode
+                        name
+                    }
+                }
                 imageUrl
                 targetType
                 targetValue
+                settings
                 label
                 description
                 translations {
@@ -100,19 +152,22 @@ export type ContentBlockType =
     | 'QUICK_LINKS'
     | 'CATEGORY_AD'
     | 'FEATURED_COLLECTION'
+    | 'COUPONS'
+    | 'TRUST_BAR'
+    | 'CORE_CATEGORIES'
+    | 'FLASH_SALE'
+    | 'BEST_SELLERS'
+    | 'RECOMMENDATIONS'
     | 'STORY'
     | 'LEGAL'
-    | 'SUPPORT';
+    | 'SUPPORT'
+    | 'CUSTOM';
+
+export type ContentLayoutVariant =
+    'AUTO' | 'HERO_OVERLAY' | 'TICKER' | 'ICON_GRID' | 'CARD_GRID' | 'PRODUCT_GRID' | 'RICH_TEXT' | 'CUSTOM';
 
 export type ContentTargetType =
-    | 'NONE'
-    | 'URL'
-    | 'PRODUCT'
-    | 'COLLECTION'
-    | 'CATEGORY'
-    | 'SEARCH'
-    | 'PAGE'
-    | 'SUPPORT';
+    'NONE' | 'URL' | 'PRODUCT' | 'COLLECTION' | 'CATEGORY' | 'SEARCH' | 'PAGE' | 'SUPPORT' | 'COUPON';
 
 export interface ContentBlockTranslation {
     id?: string;
@@ -134,9 +189,12 @@ export interface ContentItem {
     id?: string;
     enabled: boolean;
     position: number;
+    imageAsset: Asset | null;
+    imageAssetId?: string | null;
     imageUrl: string | null;
     targetType: ContentTargetType;
     targetValue: string | null;
+    settings: Record<string, unknown> | null;
     label?: string;
     description?: string;
     translations: ContentItemTranslation[];
@@ -145,16 +203,21 @@ export interface ContentItem {
 export interface ContentBlock {
     id?: string;
     code: string;
+    internalName: string;
     type: ContentBlockType;
+    layoutVariant: ContentLayoutVariant;
     enabled: boolean;
     position: number;
     startsAt: string | null;
     endsAt: string | null;
+    imageAsset: Asset | null;
+    imageAssetId?: string | null;
     imageUrl: string | null;
     backgroundColor: string | null;
     textColor: string | null;
     targetType: ContentTargetType;
     targetValue: string | null;
+    settings: Record<string, unknown> | null;
     title?: string;
     subtitle?: string;
     body?: string;
@@ -166,6 +229,7 @@ export interface ContentBlock {
 export interface StorefrontContentBlocksResult {
     storefrontContentSettings: {
         heroAutoplayIntervalSeconds: number;
+        configuredBlockTypes: ContentBlockType[];
     };
     storefrontContentBlocks: ContentBlock[];
 }

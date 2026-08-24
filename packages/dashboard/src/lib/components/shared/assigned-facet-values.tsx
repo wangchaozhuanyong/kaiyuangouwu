@@ -50,6 +50,7 @@ export function AssignedFacetValues({
                                 facetValue={facetValue}
                                 removable={canUpdate}
                                 onRemove={onRemoveHandler}
+                                showEditLink={true}
                             />
                         </div>
                     );

@@ -23,9 +23,12 @@ import {
     StorefrontConfig,
     StorefrontContentBlock,
     StorefrontContentResponse,
+    StorefrontCouponCampaign,
+    StorefrontFlashSale,
     StorefrontReview,
     StorefrontReviewCandidate,
     StorefrontReviewList,
+    StorefrontSystemAnnouncement,
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
@@ -55,9 +58,10 @@ const productFields = `
         priceWithTax
         currencyCode
         stockLevel
+        autoCardAvailableStock
         featuredAsset { id preview }
         product { id name featuredAsset { id preview } }
-        customFields { fulfillmentType }
+        customFields { fulfillmentType digitalDeliveryMode }
     }
 `;
 
@@ -92,6 +96,18 @@ const orderFields = `
         downloadUrl
         expiresAt
     }
+    autoCardDeliveries {
+        id
+        createdAt
+        updatedAt
+        state
+        productName
+        sku
+        quantity
+        attemptCount
+        sentAt
+        orderLineId
+    }
     lines {
         id
         quantity
@@ -104,11 +120,12 @@ const orderFields = `
             priceWithTax
             currencyCode
             stockLevel
+            autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType }
+            customFields { fulfillmentType digitalDeliveryMode }
         }
-        customFields { fulfillmentTypeSnapshot }
+        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot }
     }
     checkoutFulfillment {
         fulfillmentType
@@ -155,11 +172,12 @@ const orderSummaryFields = `
             priceWithTax
             currencyCode
             stockLevel
+            autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType }
+            customFields { fulfillmentType digitalDeliveryMode }
         }
-        customFields { fulfillmentTypeSnapshot }
+        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot }
     }
     checkoutFulfillment { containsDigitalProducts }
     checkoutShipping { methodName }
@@ -242,9 +260,10 @@ const cartFields = `
             priceWithTax
             currencyCode
             stockLevel
+            autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType }
+            customFields { fulfillmentType digitalDeliveryMode }
         }
     }
     checkoutOrder { ${orderFields} }
@@ -370,9 +389,9 @@ export class ShopApi {
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
         const result = await this.request<{
-            activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl'>;
+            activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl' | 'description'>;
             availableCountries: StorefrontConfig['availableCountries'];
-            storefrontBranding: { logoUrl: string | null };
+            storefrontBranding: { logoUrl: string | null; description: string };
         }>(
             `
             query StorefrontConfig {
@@ -391,6 +410,7 @@ export class ShopApi {
                 }
                 storefrontBranding {
                     logoUrl
+                    description
                 }
             }
         `,
@@ -401,23 +421,68 @@ export class ShopApi {
             ...result.activeChannel,
             availableCountries: result.availableCountries,
             logoUrl: result.storefrontBranding?.logoUrl ?? null,
+            description: result.storefrontBranding?.description ?? '',
         };
     }
 
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
         const result = await this.request<{
             storefrontContent: StorefrontContentBlock[];
-            storefrontContentSettings?: { heroAutoplayIntervalSeconds: number };
+            activeStorefrontCoupons?: StorefrontCouponCampaign[];
+            activeStorefrontFlashSales?: StorefrontFlashSale[];
+            activeSystemAnnouncements?: StorefrontSystemAnnouncement[];
+            storefrontContentSettings?: {
+                heroAutoplayIntervalSeconds: number;
+                configuredBlockTypes: Array<StorefrontContentBlock['type']>;
+            };
         }>(
             `
             query StorefrontContent {
                 storefrontContentSettings {
                     heroAutoplayIntervalSeconds
+                    configuredBlockTypes
+                }
+                activeStorefrontCoupons {
+                    id
+                    name
+                    couponCode
+                    kind
+                    startsAt
+                    endsAt
+                    minimumSpend
+                    discountAmount
+                    discountRate
+                }
+                activeStorefrontFlashSales {
+                    id
+                    name
+                    startsAt
+                    endsAt
+                    items {
+                        productId
+                        productVariantId
+                        productName
+                        variantName
+                        originalPrice
+                        salePrice
+                        currencyCode
+                        imageUrl
+                    }
+                }
+                activeSystemAnnouncements {
+                    id
+                    title
+                    content
+                    linkUrl
+                    startsAt
+                    endsAt
                 }
                 storefrontContent {
                     id
                     code
+                    internalName
                     type
+                    layoutVariant
                     enabled
                     position
                     startsAt
@@ -427,6 +492,7 @@ export class ShopApi {
                     textColor
                     targetType
                     targetValue
+                    settings
                     title
                     subtitle
                     body
@@ -438,6 +504,7 @@ export class ShopApi {
                         imageUrl
                         targetType
                         targetValue
+                        settings
                         label
                         description
                     }
@@ -449,9 +516,13 @@ export class ShopApi {
         );
         return {
             blocks: result.storefrontContent,
+            coupons: result.activeStorefrontCoupons ?? [],
+            flashSales: result.activeStorefrontFlashSales ?? [],
+            systemAnnouncements: result.activeSystemAnnouncements ?? [],
             settings: {
                 heroAutoplayIntervalSeconds:
                     result.storefrontContentSettings?.heroAutoplayIntervalSeconds ?? 5,
+                configuredBlockTypes: result.storefrontContentSettings?.configuredBlockTypes ?? [],
             },
         };
     }

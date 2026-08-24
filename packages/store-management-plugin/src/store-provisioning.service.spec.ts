@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { storeAdministratorPermissions, StoreProvisioningService } from './store-provisioning.service';
 
 function createService() {
-    const repository = { findOne: vi.fn().mockResolvedValue(null) };
+    const repository = { find: vi.fn(), findOne: vi.fn().mockResolvedValue(null) };
     const stockLocationRepository = {
         find: vi.fn().mockResolvedValue([{ id: 'stock-location-1' }, { id: 'stock-location-2' }]),
     };
@@ -35,6 +35,7 @@ function createService() {
             outOfStockThreshold: 0,
             defaultShippingZone: { id: 'shipping-zone-1' },
             defaultTaxZone: { id: 'tax-zone-1' },
+            customFields: { isStoreProvisioningTemplate: true },
         }),
         create: vi.fn().mockResolvedValue(channel),
         assignToChannels: vi.fn().mockResolvedValue(undefined),
@@ -69,6 +70,7 @@ function createService() {
         service,
         storeProfileService,
         merchantInitialPasswordService,
+        repository,
     };
 }
 
@@ -118,6 +120,7 @@ describe('StoreProvisioningService', () => {
                 customFields: {
                     storefrontNameZh: '阿尔法商城',
                     storefrontNameEn: 'Alpha Shop',
+                    isStoreProvisioningTemplate: false,
                 },
             }),
         );
@@ -215,6 +218,35 @@ describe('StoreProvisioningService', () => {
             ),
         ).rejects.toThrow('没有可共享的库存点');
         expect(sellerService.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a Channel that is not explicitly enabled as a provisioning template', async () => {
+        const { channelService, sellerService, service } = createService();
+        channelService.findOne.mockResolvedValueOnce({
+            id: 'ordinary-channel',
+            customFields: { isStoreProvisioningTemplate: false },
+        });
+
+        await expect(
+            service.provision(
+                { channelId: 'template-1', session: { user: { channelPermissions: [] } } } as any,
+                input,
+            ),
+        ).rejects.toThrow('未启用“开店配置模板”');
+        expect(sellerService.create).not.toHaveBeenCalled();
+    });
+
+    it('lists only Channels explicitly enabled as provisioning templates', async () => {
+        const { repository, service } = createService();
+        repository.find.mockResolvedValueOnce([
+            { id: 'template', code: 'template', customFields: { isStoreProvisioningTemplate: true } },
+            { id: 'store', code: 'store', customFields: { isStoreProvisioningTemplate: false } },
+        ]);
+
+        await expect(service.findTemplates({} as any)).resolves.toEqual([
+            expect.objectContaining({ id: 'template' }),
+        ]);
+        expect(repository.find).toHaveBeenCalledWith({ order: { code: 'ASC' } });
     });
 
     it('does not grant platform-level or destructive order permissions', () => {

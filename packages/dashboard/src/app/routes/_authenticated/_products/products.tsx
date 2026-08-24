@@ -19,6 +19,7 @@ import {
     DuplicateProductsBulkAction,
     RemoveProductsFromChannelBulkAction,
 } from './components/product-bulk-actions.js';
+import { getProductFulfillmentType } from './components/product-fulfillment-type.js';
 import { productListDocument, reindexDocument } from './products.graphql.js';
 
 export const Route = createFileRoute('/_authenticated/_products/products')({
@@ -82,6 +83,21 @@ function ProductListPage() {
                     : {};
             }}
             additionalColumns={{
+                fulfillmentType: {
+                    meta: { dependencies: ['variants'] },
+                    header: () => <Trans>Product type</Trans>,
+                    cell: ({ row }) => {
+                        const fulfillmentType = getProductFulfillmentType(row.original.variants);
+                        return (
+                            <Badge variant={fulfillmentType === 'mixed' ? 'outline' : 'secondary'}>
+                                {fulfillmentType === 'physical' && <Trans>Physical product</Trans>}
+                                {fulfillmentType === 'digital' && <Trans>Digital product</Trans>}
+                                {fulfillmentType === 'mixed' && <Trans>Mixed product</Trans>}
+                            </Badge>
+                        );
+                    },
+                    enableSorting: false,
+                },
                 facetValueId: {
                     header: '',
                     cell: () => null,
@@ -105,10 +121,19 @@ function ProductListPage() {
                 };
             }}
             defaultSort={[{ id: 'updatedAt', desc: true }]}
-            defaultColumnOrder={['featuredAsset', 'name', 'enabled', 'channels', 'slug', 'updatedAt']}
+            defaultColumnOrder={[
+                'featuredAsset',
+                'name',
+                'fulfillmentType',
+                'enabled',
+                'channels',
+                'slug',
+                'updatedAt',
+            ]}
             defaultVisibility={{
                 featuredAsset: true,
                 name: true,
+                fulfillmentType: true,
                 enabled: true,
                 channels: true,
                 slug: true,

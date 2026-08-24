@@ -19,12 +19,10 @@ import {
     PageBlock,
     PageLayout,
     PageTitle,
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
     Skeleton,
+    Tabs,
+    TabsList,
+    TabsTrigger,
     Textarea,
     api,
     toast,
@@ -61,11 +59,10 @@ interface ModerationDraft {
 }
 
 const messages = {
-    title: msg({ id: 'operations.reviews.title', message: 'Review moderation' }),
+    title: msg({ id: 'operations.reviews.title', message: 'Review management' }),
     description: msg({
         id: 'operations.reviews.description',
-        message:
-            'Moderate verified-purchase reviews for the active store. Only approved reviews appear publicly.',
+        message: 'Prioritize pending verified-purchase reviews. Approve clean reviews in one click.',
     }),
     refresh: msg({ id: 'operations.reviews.refresh', message: 'Refresh' }),
     filter: msg({ id: 'operations.reviews.filter', message: 'Status filter' }),
@@ -76,6 +73,10 @@ const messages = {
     retry: msg({ id: 'operations.reviews.retry', message: 'Retry' }),
     verified: msg({ id: 'operations.reviews.verified', message: 'Verified purchase' }),
     approve: msg({ id: 'operations.reviews.approve', message: 'Approve and publish' }),
+    replyAndApprove: msg({
+        id: 'operations.reviews.replyAndApprove',
+        message: 'Reply and publish',
+    }),
     reject: msg({ id: 'operations.reviews.reject', message: 'Reject' }),
     response: msg({
         id: 'operations.reviews.response',
@@ -192,29 +193,23 @@ function ReviewModerationPage() {
                     description={text.description}
                 >
                     <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
-                        <div className="space-y-1.5">
-                            <Label>{text.filter}</Label>
-                            <Select
-                                value={state}
-                                onValueChange={value => {
-                                    if (!value) return;
-                                    setState(value);
-                                    setSkip(0);
-                                }}
-                            >
-                                <SelectTrigger className="w-52">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ALL">{text.all}</SelectItem>
-                                    {states.map(item => (
-                                        <SelectItem key={item} value={item}>
-                                            {stateLabel(item, text)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <Tabs
+                            value={state}
+                            onValueChange={value => {
+                                if (value !== 'ALL' && !states.includes(value as ReviewState)) return;
+                                setState(value as ReviewState | 'ALL');
+                                setSkip(0);
+                            }}
+                        >
+                            <TabsList className="h-auto flex-wrap justify-start">
+                                <TabsTrigger value="ALL">{text.all}</TabsTrigger>
+                                {states.map(item => (
+                                    <TabsTrigger key={item} value={item}>
+                                        {stateLabel(item, text)}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </Tabs>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span>{text.activeChannel}</span>
                             <Badge variant="outline">{activeChannel?.code ?? '-'}</Badge>
@@ -239,13 +234,20 @@ function ReviewModerationPage() {
                         <div className="py-14 text-center text-sm text-muted-foreground">{text.empty}</div>
                     ) : (
                         <>
-                            <div className="space-y-4">
+                            <div className="divide-y overflow-hidden rounded-lg border bg-card">
                                 {reviews.map(review => (
                                     <ReviewCard
                                         key={review.id}
                                         review={review}
                                         text={text}
                                         pending={moderation.isPending}
+                                        onApprove={() =>
+                                            moderation.mutate({
+                                                review,
+                                                state: 'APPROVED',
+                                                response: '',
+                                            })
+                                        }
                                         onModerate={target =>
                                             setDraft({
                                                 review,
@@ -299,60 +301,80 @@ function ReviewCard({
     review,
     text,
     pending,
+    onApprove,
     onModerate,
 }: {
     review: ReviewRecord;
     text: ReviewText;
     pending: boolean;
+    onApprove: () => void;
     onModerate: (target: ModerationTarget) => void;
 }) {
     return (
-        <article className="rounded-lg border bg-card p-4 shadow-sm">
-            <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
-                <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <strong>{review.productName}</strong>
-                        <Badge variant={badgeVariant(review.state)}>{stateLabel(review.state, text)}</Badge>
-                        <Badge variant="outline">{review.sku}</Badge>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {review.customerName} · {formatDate(review.createdAt)}
-                    </p>
+        <article className="grid gap-4 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto] lg:items-center">
+            <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                    <strong className="truncate">{review.productName}</strong>
+                    <Badge variant={badgeVariant(review.state)}>{stateLabel(review.state, text)}</Badge>
+                    <Badge variant="outline">{review.sku}</Badge>
                 </div>
-                <span className="flex items-center gap-1 text-sm text-amber-600">
-                    <Star className="size-4 fill-current" aria-hidden="true" />
-                    <strong>{review.rating}/5</strong>
-                </span>
-            </header>
-            <div className="py-4">
-                <div className="flex items-center gap-2 text-xs text-emerald-700">
-                    <ShieldCheck className="size-4" aria-hidden="true" />
-                    {text.verified}
+                <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{review.customerName}</span>
+                    <span aria-hidden="true">·</span>
+                    <time dateTime={review.createdAt}>{formatDate(review.createdAt)}</time>
+                </p>
+                <div className="mt-2 flex items-center gap-3 text-xs">
+                    <span className="flex items-center gap-1 text-amber-600">
+                        <Star className="size-4 fill-current" aria-hidden="true" />
+                        <strong>{review.rating}/5</strong>
+                    </span>
+                    <span className="flex items-center gap-1 text-emerald-700">
+                        <ShieldCheck className="size-4" aria-hidden="true" />
+                        {text.verified}
+                    </span>
                 </div>
-                <h3 className="mt-3 text-base font-semibold">{review.title}</h3>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+            </div>
+            <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold">{review.title}</h3>
+                <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                     {review.body}
                 </p>
                 {review.merchantResponse && (
-                    <div className="mt-3 rounded-md bg-muted/50 p-3 text-sm">
-                        <strong className="block text-xs">{text.response}</strong>
-                        <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                            {review.merchantResponse}
-                        </p>
-                    </div>
+                    <p className="mt-2 line-clamp-1 text-xs text-muted-foreground">
+                        <strong>{text.response}：</strong>
+                        {review.merchantResponse}
+                    </p>
                 )}
             </div>
-            {review.state === 'PENDING' && (
-                <footer className="flex flex-wrap justify-end gap-2 border-t pt-3">
-                    <Button variant="outline" disabled={pending} onClick={() => onModerate('REJECTED')}>
+            {review.state === 'PENDING' ? (
+                <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => onModerate('REJECTED')}
+                    >
                         <XCircle className="size-4" aria-hidden="true" />
                         {text.reject}
                     </Button>
-                    <Button disabled={pending} onClick={() => onModerate('APPROVED')}>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => onModerate('APPROVED')}
+                    >
+                        <MessageSquareText className="size-4" aria-hidden="true" />
+                        {text.replyAndApprove}
+                    </Button>
+                    <Button size="sm" disabled={pending} onClick={onApprove}>
                         <CheckCircle2 className="size-4" aria-hidden="true" />
                         {text.approve}
                     </Button>
-                </footer>
+                </div>
+            ) : (
+                <span className="text-right text-sm text-muted-foreground">
+                    {review.moderatedAt ? formatDate(review.moderatedAt) : '-'}
+                </span>
             )}
         </article>
     );

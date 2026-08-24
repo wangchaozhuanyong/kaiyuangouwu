@@ -1,7 +1,17 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 
-import { StorefrontContentBlockType, StorefrontContentTargetType } from './constants';
+import {
+    StorefrontContentBlockType,
+    StorefrontContentLayoutVariant,
+    StorefrontContentTargetType,
+} from './constants';
+
+export type StorefrontContentSettingScalar = string | number | boolean | null;
+export type StorefrontContentSettingsValue = Record<
+    string,
+    StorefrontContentSettingScalar | StorefrontContentSettingScalar[]
+>;
 
 export interface StorefrontContentBlockTranslationInput {
     languageCode: LanguageCode;
@@ -21,29 +31,35 @@ export interface StorefrontContentItemInput {
     id?: ID | null;
     enabled?: boolean | null;
     position: number;
+    imageAssetId?: ID | null;
     imageUrl?: string | null;
     targetType?: StorefrontContentTargetType | null;
     targetValue?: string | null;
+    settings?: StorefrontContentSettingsValue | null;
     translations: StorefrontContentItemTranslationInput[];
 }
 
 export interface StorefrontContentBlockFieldsInput {
     code: string;
+    internalName?: string | null;
     type: StorefrontContentBlockType;
+    layoutVariant?: StorefrontContentLayoutVariant | null;
     enabled?: boolean | null;
     position: number;
     startsAt?: Date | null;
     endsAt?: Date | null;
+    imageAssetId?: ID | null;
     imageUrl?: string | null;
     backgroundColor?: string | null;
     textColor?: string | null;
     targetType?: StorefrontContentTargetType | null;
     targetValue?: string | null;
+    settings?: StorefrontContentSettingsValue | null;
     translations: StorefrontContentBlockTranslationInput[];
     items?: StorefrontContentItemInput[] | null;
 }
 
-export interface CreateStorefrontContentBlockInput extends StorefrontContentBlockFieldsInput {}
+export type CreateStorefrontContentBlockInput = StorefrontContentBlockFieldsInput;
 
 export interface UpdateStorefrontContentBlockInput extends Partial<
     Omit<StorefrontContentBlockFieldsInput, 'translations' | 'items'>

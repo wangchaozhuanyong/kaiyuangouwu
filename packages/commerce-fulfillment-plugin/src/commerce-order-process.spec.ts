@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { commerceOrderProcess } from './commerce-order-process';
 
 describe('commerceOrderProcess digital fulfillment', () => {
+    let hydratedOrder: any;
     const orderService = {
         createFulfillment: vi.fn(),
     };
@@ -16,6 +17,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
         getMany: vi.fn().mockResolvedValue([]),
     };
     const connection = {
+        getEntityOrThrow: vi.fn(),
         getRepository: vi.fn().mockReturnValue({
             createQueryBuilder: vi.fn().mockReturnValue(stockQueryBuilder),
         }),
@@ -39,12 +41,17 @@ describe('commerceOrderProcess digital fulfillment', () => {
     const globalSettingsService = {
         getSettings: vi.fn().mockResolvedValue({ trackInventory: true, outOfStockThreshold: 0 }),
     };
+    const autoCardService = {
+        availabilityError: vi.fn().mockResolvedValue(undefined),
+        allocateSettledOrder: vi.fn().mockResolvedValue([]),
+    };
 
     beforeEach(async () => {
         vi.clearAllMocks();
         orderService.createFulfillment.mockResolvedValue({ id: 'fulfillment-1' });
         productVariantService.getSaleableStockLevel.mockResolvedValue(10);
         stockQueryBuilder.getMany.mockResolvedValue([]);
+        connection.getEntityOrThrow.mockImplementation(() => Promise.resolve(hydratedOrder));
         const services = [
             orderService,
             productVariantService,
@@ -52,12 +59,16 @@ describe('commerceOrderProcess digital fulfillment', () => {
             connection,
             configService,
             globalSettingsService,
+            autoCardService,
         ];
         await commerceOrderProcess.init?.({ get: vi.fn(() => services.shift()) } as any);
+        hydratedOrder = undefined;
     });
 
     it('creates a pending digital fulfillment after payment settles', async () => {
         const order = {
+            state: 'PaymentSettled',
+            customer: { emailAddress: 'buyer@example.com' },
             lines: [
                 {
                     id: 'digital-line',
@@ -73,6 +84,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
                 },
             ],
         };
+        hydratedOrder = order;
 
         await commerceOrderProcess.onTransitionEnd?.('ArrangingPayment', 'PaymentSettled', {
             ctx: { channelId: 'channel-1' },

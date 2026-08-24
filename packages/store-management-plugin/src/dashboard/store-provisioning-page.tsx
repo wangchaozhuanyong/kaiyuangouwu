@@ -57,7 +57,7 @@ const emptyDraft: StoreDraft = {
 
 const zhCopy = {
     title: '开通网店',
-    description: '创建独立网店、商家后台账号、权限角色和库存地点。',
+    description: '创建独立网店、商家后台账号和权限角色，并套用经过平台确认的基础配置。',
     merchant: '商家与网店',
     merchantName: '商家名称',
     merchantPlaceholder: '例如：云桥贸易有限公司',
@@ -65,8 +65,11 @@ const zhCopy = {
     codePlaceholder: '例如：yunqiao-store',
     chineseName: '网站中文名称',
     englishName: '网站英文名称',
-    template: '配置模板',
-    selectTemplate: '选择 Channel 模板',
+    template: '开店配置模板',
+    selectTemplate: '选择已启用的模板',
+    templateHelp:
+        '创建时会复制语言、币种、税务和库存默认值，并共享模板现有的库存点、支付和配送方式；创建后不会自动同步基础字段。',
+    noTemplates: '暂时没有可用模板，请先在 Channel 设置中启用“可作为开店配置模板”。',
     administrator: '后台管理员',
     firstName: '名',
     lastName: '姓',
@@ -88,7 +91,7 @@ const zhCopy = {
 
 const enCopy: typeof zhCopy = {
     title: 'Provision store',
-    description: 'Create an isolated store, merchant administrator, role, and stock location.',
+    description: 'Create an isolated store and administrator from an approved baseline configuration.',
     merchant: 'Merchant and store',
     merchantName: 'Merchant name',
     merchantPlaceholder: 'Example: Yunqiao Trading Ltd',
@@ -96,8 +99,12 @@ const enCopy: typeof zhCopy = {
     codePlaceholder: 'Example: yunqiao-store',
     chineseName: 'Chinese storefront name',
     englishName: 'English storefront name',
-    template: 'Configuration template',
-    selectTemplate: 'Select a Channel template',
+    template: 'Store provisioning template',
+    selectTemplate: 'Select an enabled template',
+    templateHelp:
+        'Creation copies language, currency, tax, and inventory defaults and shares existing stock ' +
+        'locations, payment methods, and shipping methods. Copied fields do not stay synchronized.',
+    noTemplates: 'No templates are enabled. Enable “Use as store provisioning template” on a Channel first.',
     administrator: 'Store administrator',
     firstName: 'First name',
     lastName: 'Last name',
@@ -139,9 +146,9 @@ function StoreProvisioningPage() {
     const [result, setResult] = useState<ProvisionStoreResult['provisionStore'] | null>(null);
     const templatesQuery = useQuery({
         queryKey: ['store-provisioning-templates'],
-        queryFn: () => api.query(storeTemplatesQuery) as Promise<StoreTemplatesResult>,
+        queryFn: () => api.query<StoreTemplatesResult>(storeTemplatesQuery),
     });
-    const templates = templatesQuery.data?.channels.items ?? [];
+    const templates = templatesQuery.data?.storeProvisioningTemplates ?? [];
     const mutation = useMutation({
         mutationFn: (input: StoreDraft) =>
             api.mutate(provisionStoreMutation, {
@@ -304,24 +311,36 @@ function StoreProvisioningPage() {
                                             </AlertDescription>
                                         </Alert>
                                     ) : (
-                                        <Select
-                                            value={draft.templateChannelId}
-                                            onValueChange={value =>
-                                                value && setField('templateChannelId', value)
-                                            }
-                                        >
-                                            <SelectTrigger id="store-template" className="w-full">
-                                                <SelectValue placeholder={text.selectTemplate} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {templates.map(template => (
-                                                    <SelectItem key={template.id} value={template.id}>
-                                                        {template.code} · {template.defaultCurrencyCode} ·{' '}
-                                                        {template.defaultLanguageCode}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <div className="space-y-2">
+                                            {templates.length === 0 ? (
+                                                <Alert>
+                                                    <AlertDescription>{text.noTemplates}</AlertDescription>
+                                                </Alert>
+                                            ) : (
+                                                <Select
+                                                    value={draft.templateChannelId}
+                                                    onValueChange={value =>
+                                                        value && setField('templateChannelId', value)
+                                                    }
+                                                >
+                                                    <SelectTrigger id="store-template" className="w-full">
+                                                        <SelectValue placeholder={text.selectTemplate} />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {templates.map(template => (
+                                                            <SelectItem key={template.id} value={template.id}>
+                                                                {template.code} ·{' '}
+                                                                {template.defaultCurrencyCode} ·{' '}
+                                                                {template.defaultLanguageCode}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                            <p className="text-xs text-muted-foreground">
+                                                {text.templateHelp}
+                                            </p>
+                                        </div>
                                     )}
                                 </Field>
                             </div>

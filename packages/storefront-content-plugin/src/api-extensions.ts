@@ -7,9 +7,27 @@ const commonTypes = gql`
         QUICK_LINKS
         CATEGORY_AD
         FEATURED_COLLECTION
+        COUPONS
+        TRUST_BAR
+        CORE_CATEGORIES
+        FLASH_SALE
+        BEST_SELLERS
+        RECOMMENDATIONS
         STORY
         LEGAL
         SUPPORT
+        CUSTOM
+    }
+
+    enum StorefrontContentLayoutVariant {
+        AUTO
+        HERO_OVERLAY
+        TICKER
+        ICON_GRID
+        CARD_GRID
+        PRODUCT_GRID
+        RICH_TEXT
+        CUSTOM
     }
 
     enum StorefrontContentTargetType {
@@ -21,6 +39,7 @@ const commonTypes = gql`
         SEARCH
         PAGE
         SUPPORT
+        COUPON
     }
 
     type StorefrontContentItem implements Node {
@@ -29,9 +48,11 @@ const commonTypes = gql`
         updatedAt: DateTime!
         enabled: Boolean!
         position: Int!
+        imageAsset: Asset
         imageUrl: String
         targetType: StorefrontContentTargetType!
         targetValue: String
+        settings: JSON
         label: String!
         description: String!
     }
@@ -41,16 +62,20 @@ const commonTypes = gql`
         createdAt: DateTime!
         updatedAt: DateTime!
         code: String!
+        internalName: String!
         type: StorefrontContentBlockType!
+        layoutVariant: StorefrontContentLayoutVariant!
         enabled: Boolean!
         position: Int!
         startsAt: DateTime
         endsAt: DateTime
+        imageAsset: Asset
         imageUrl: String
         backgroundColor: String
         textColor: String
         targetType: StorefrontContentTargetType!
         targetValue: String
+        settings: JSON
         title: String!
         subtitle: String!
         body: String!
@@ -60,6 +85,7 @@ const commonTypes = gql`
 
     type StorefrontContentSettings {
         heroAutoplayIntervalSeconds: Int!
+        configuredBlockTypes: [StorefrontContentBlockType!]!
     }
 `;
 
@@ -117,24 +143,30 @@ export const adminApiExtensions = gql`
         id: ID
         enabled: Boolean
         position: Int!
+        imageAssetId: ID
         imageUrl: String
         targetType: StorefrontContentTargetType
         targetValue: String
+        settings: JSON
         translations: [StorefrontContentItemTranslationInput!]!
     }
 
     input CreateStorefrontContentBlockInput {
         code: String!
+        internalName: String
         type: StorefrontContentBlockType!
+        layoutVariant: StorefrontContentLayoutVariant
         enabled: Boolean
         position: Int!
         startsAt: DateTime
         endsAt: DateTime
+        imageAssetId: ID
         imageUrl: String
         backgroundColor: String
         textColor: String
         targetType: StorefrontContentTargetType
         targetValue: String
+        settings: JSON
         translations: [StorefrontContentBlockTranslationInput!]!
         items: [StorefrontContentItemInput!]
     }
@@ -142,16 +174,20 @@ export const adminApiExtensions = gql`
     input UpdateStorefrontContentBlockInput {
         id: ID!
         code: String
+        internalName: String
         type: StorefrontContentBlockType
+        layoutVariant: StorefrontContentLayoutVariant
         enabled: Boolean
         position: Int
         startsAt: DateTime
         endsAt: DateTime
+        imageAssetId: ID
         imageUrl: String
         backgroundColor: String
         textColor: String
         targetType: StorefrontContentTargetType
         targetValue: String
+        settings: JSON
         translations: [StorefrontContentBlockTranslationInput!]
         items: [StorefrontContentItemInput!]
     }

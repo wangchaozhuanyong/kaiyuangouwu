@@ -12,6 +12,7 @@ import {
 } from '@/vdb/components/ui/dialog.js';
 import { Form } from '@/vdb/components/ui/form.js';
 import { Input } from '@/vdb/components/ui/input.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/vdb/components/ui/select.js';
 import { api } from '@/vdb/graphql/api.js';
 import { graphql, ResultOf, VariablesOf } from '@/vdb/graphql/graphql.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
@@ -23,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createProductOptionDocument, createProductVariantsDocument } from '../products.graphql.js';
+import { getProductFulfillmentType } from './product-fulfillment-type.js';
 import { ProductOptionSelect } from './product-option-select.js';
 
 const getProductOptionGroupsDocument = graphql(`
@@ -44,6 +46,7 @@ const getProductOptionGroupsDocument = graphql(`
                 id
                 name
                 sku
+                customFields
                 options {
                     id
                     code
@@ -63,6 +66,7 @@ const createFormSchema = (t: Translate) =>
         sku: z.string().min(1, t`SKU is required`),
         price: z.string().min(1, t`Price is required`),
         stockOnHand: z.string().min(1, t`Stock level is required`),
+        fulfillmentType: z.enum(['physical', 'digital']),
         options: z.record(z.string(), z.string()),
     });
 
@@ -94,6 +98,7 @@ export function AddProductVariantDialog({
             sku: '',
             price: '0',
             stockOnHand: '0',
+            fulfillmentType: 'physical',
             options: {},
         },
     });
@@ -155,6 +160,10 @@ export function AddProductVariantDialog({
     useEffect(() => {
         if (open && productData?.product) {
             checkForDuplicateVariant(form.getValues());
+            const productType = getProductFulfillmentType(productData.product.variants);
+            if (productType !== 'mixed' && !form.formState.isDirty) {
+                form.setValue('fulfillmentType', productType);
+            }
         }
     }, [open, productData?.product, checkForDuplicateVariant, form]);
 
@@ -202,7 +211,12 @@ export function AddProductVariantDialog({
                         productId,
                         sku: values.sku,
                         price: Number(values.price),
-                        stockOnHand: Number(values.stockOnHand),
+                        stockOnHand: values.fulfillmentType === 'physical' ? Number(values.stockOnHand) : 0,
+                        trackInventory:
+                            values.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
+                        customFields: {
+                            fulfillmentType: values.fulfillmentType,
+                        },
                         optionIds: Object.values(values.options),
                         translations: [
                             {
@@ -214,7 +228,13 @@ export function AddProductVariantDialog({
                 ],
             });
         },
-        [createProductVariantMutation, productData?.product, duplicateVariantError, productId],
+        [
+            activeChannel?.defaultLanguageCode,
+            createProductVariantMutation,
+            productData?.product,
+            duplicateVariantError,
+            productId,
+        ],
     );
 
     // Don't show the "Add variant" button if there are no option groups
@@ -311,10 +331,48 @@ export function AddProductVariantDialog({
                         />
                         <FormFieldWrapper
                             control={form.control}
-                            name="stockOnHand"
-                            label={<Trans>Stock level</Trans>}
-                            render={({ field }) => <Input type="number" {...field} />}
+                            name="fulfillmentType"
+                            label={<Trans>Product type and delivery</Trans>}
+                            description={
+                                form.watch('fulfillmentType') === 'digital' ? (
+                                    <Trans>
+                                        Delivered to the checkout email after payment; no shipping or stock.
+                                    </Trans>
+                                ) : (
+                                    <Trans>Uses stock, shipping address and logistics fulfillment.</Trans>
+                                )
+                            }
+                            render={({ field }) => (
+                                <Select
+                                    items={{
+                                        physical: t`Physical product`,
+                                        digital: t`Digital product`,
+                                    }}
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="physical">
+                                            <Trans>Physical product</Trans>
+                                        </SelectItem>
+                                        <SelectItem value="digital">
+                                            <Trans>Digital product</Trans>
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
                         />
+                        {form.watch('fulfillmentType') === 'physical' && (
+                            <FormFieldWrapper
+                                control={form.control}
+                                name="stockOnHand"
+                                label={<Trans>Stock level</Trans>}
+                                render={({ field }) => <Input type="number" min="0" step="1" {...field} />}
+                            />
+                        )}
                         <DialogFooter className="flex flex-col items-end gap-2">
                             {duplicateVariantError && (
                                 <p className="text-sm text-destructive">{duplicateVariantError}</p>

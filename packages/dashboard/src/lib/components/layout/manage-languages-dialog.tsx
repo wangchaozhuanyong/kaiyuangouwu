@@ -19,6 +19,7 @@ import { schemaLanguageCodes as globalLanguageCodes } from '@/vdb/graphql/schema
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { usePermissions } from '@/vdb/hooks/use-permissions.js';
 import { useSortedLanguages } from '@/vdb/hooks/use-sorted-languages.js';
+import { supportedStorefrontLanguages } from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Lock } from 'lucide-react';
@@ -140,11 +141,20 @@ export function ManageLanguagesDialog({ open, onClose }: ManageLanguagesDialogPr
     // Initialize state when dialog opens
     useEffect(() => {
         if (open && globalSettingsData) {
-            setGlobalLanguages(globalSettingsData.globalSettings.availableLanguages || []);
+            setGlobalLanguages(
+                supportedStorefrontLanguages(globalSettingsData.globalSettings.availableLanguages),
+            );
         }
         if (open && displayChannel) {
-            setChannelLanguages(displayChannel.availableLanguageCodes || []);
-            setChannelDefaultLanguage(displayChannel.defaultLanguageCode || '');
+            const supportedChannelLanguages = supportedStorefrontLanguages(
+                displayChannel.availableLanguageCodes,
+            );
+            setChannelLanguages(supportedChannelLanguages);
+            setChannelDefaultLanguage(
+                supportedChannelLanguages.includes(displayChannel.defaultLanguageCode)
+                    ? displayChannel.defaultLanguageCode
+                    : supportedChannelLanguages[0] || '',
+            );
         }
     }, [open, globalSettingsData, displayChannel]);
 
@@ -288,7 +298,9 @@ export function ManageLanguagesDialog({ open, onClose }: ManageLanguagesDialogPr
                                         value={globalLanguages}
                                         onChange={handleGlobalLanguagesChange}
                                         multiple={true}
-                                        availableLanguageCodes={globalLanguageCodes}
+                                        availableLanguageCodes={supportedStorefrontLanguages(
+                                            globalLanguageCodes,
+                                        )}
                                     />
                                 </div>
                                 <p className="text-xs text-muted-foreground">

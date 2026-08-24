@@ -2,10 +2,12 @@ import { Money } from '@/vdb/components/data-display/money.js';
 import { FacetValueFacetedFilter } from '@/vdb/components/data-table/data-table-facet-value-faceted-filter.js';
 import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { StockLevelLabel } from '@/vdb/components/shared/stock-level-label.js';
+import { Badge } from '@/vdb/components/ui/badge.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute } from '@tanstack/react-router';
+import { getVariantFulfillmentType } from '../_products/components/product-fulfillment-type.js';
 import {
     AssignFacetValuesToProductVariantsBulkAction,
     AssignProductVariantsToChannelBulkAction,
@@ -34,6 +36,7 @@ function ProductListPage() {
                 priceWithTax: true,
                 enabled: true,
                 stockLevels: true,
+                fulfillmentType: true,
             }}
             bulkActions={[
                 [
@@ -41,9 +44,7 @@ function ProductListPage() {
                     { component: RemoveProductVariantsFromChannelBulkAction, order: 200 },
                     { component: AssignFacetValuesToProductVariantsBulkAction, order: 300 },
                 ],
-                [
-                    { component: DeleteProductVariantsBulkAction },
-                ],
+                [{ component: DeleteProductVariantsBulkAction }],
             ]}
             customizeColumns={{
                 name: {
@@ -71,6 +72,21 @@ function ProductListPage() {
                 },
             }}
             additionalColumns={{
+                fulfillmentType: {
+                    meta: { dependencies: ['customFields'] },
+                    header: () => <Trans>Product type</Trans>,
+                    cell: ({ row }) =>
+                        getVariantFulfillmentType(row.original) === 'digital' ? (
+                            <Badge variant="secondary">
+                                <Trans>Digital product</Trans>
+                            </Badge>
+                        ) : (
+                            <Badge variant="secondary">
+                                <Trans>Physical product</Trans>
+                            </Badge>
+                        ),
+                    enableSorting: false,
+                },
                 facetValueId: {
                     header: '',
                     cell: () => null,

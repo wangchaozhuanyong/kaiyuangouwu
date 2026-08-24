@@ -33,7 +33,17 @@ export class StorefrontBrandingShopResolver {
         });
 
         const customFields = ctx.channel.customFields as StorefrontChannelFields;
-        const name = customFields.storefrontNameZh || customFields.storefrontNameEn || ctx.channel.code;
+        const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
+        const name =
+            (isChinese ? customFields.storefrontNameZh : customFields.storefrontNameEn) ||
+            customFields.storefrontNameZh ||
+            customFields.storefrontNameEn ||
+            ctx.channel.code;
+        const description =
+            (isChinese ? profile?.descriptionZh : profile?.descriptionEn) ||
+            profile?.descriptionZh ||
+            profile?.descriptionEn ||
+            '';
 
         let logoUrl = null;
         if (profile?.logoAsset) {
@@ -43,6 +53,7 @@ export class StorefrontBrandingShopResolver {
         return {
             logoUrl,
             name,
+            description,
         };
     }
 

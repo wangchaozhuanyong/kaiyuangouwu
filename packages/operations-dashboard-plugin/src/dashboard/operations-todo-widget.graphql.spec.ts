@@ -13,14 +13,15 @@ describe('operations todo query', () => {
         expect(print(operationsTodoQuery)).toContain('pendingShipment: physicalFulfillmentTodoCount');
     });
 
-    it('counts active checkout orders which are still arranging payment', () => {
+    it('counts pending after-sales and review work', () => {
         const query = print(operationsTodoQuery);
-        const pendingPaymentSelection = query.slice(
-            query.indexOf('pendingPayment:'),
-            query.indexOf('pendingShipment:'),
-        );
 
-        expect(pendingPaymentSelection).toContain('ArrangingPayment');
-        expect(pendingPaymentSelection).not.toContain('active:');
+        expect(query).toContain('pendingAfterSales: afterSalesRequests');
+        expect(query).toContain('pendingReviews: storefrontReviews');
+        expect(query.match(/state: PENDING/g)).toHaveLength(2);
+        expect(query).toContain('autoCardTodoSummary');
+        expect(query).toContain('lowStockSkuCount');
+        expect(query).toContain('waitingStockDeliveryCount');
+        expect(query).toContain('manualReviewCount');
     });
 });

@@ -14,6 +14,7 @@
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
+        "@vendure/email-plugin": "3.7.2",
         "graphql-tag": "^2.12.6"
     },
     "devDependencies": {

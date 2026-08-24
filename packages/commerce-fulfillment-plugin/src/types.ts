@@ -6,8 +6,39 @@ import {
 } from '@vendure/core/dist/entity/custom-entity-fields';
 
 import { AfterSalesReason, AfterSalesState, AfterSalesType } from './after-sales.constants';
+import { AutoCardFieldDefinition } from './auto-card-format';
+import { AutoCardDeliveryState, AutoCardPoolItemState, DigitalDeliveryMode } from './auto-card.constants';
 
 export type FulfillmentType = 'physical' | 'digital';
+
+export interface UpdateAutoCardConfigInput {
+    productVariantId: ID;
+    enabled: boolean;
+    formatName: string;
+    delimiter: string;
+    fields: AutoCardFieldDefinition[];
+    instructions: string;
+    lowStockThreshold: number;
+}
+
+export interface AutoCardImportInput {
+    productVariantId: ID;
+    rawText: string;
+}
+
+export interface AutoCardPoolItemListOptions {
+    skip?: number | null;
+    take?: number | null;
+    state?: AutoCardPoolItemState | null;
+}
+
+export interface AutoCardDeliveryListOptions {
+    skip?: number | null;
+    take?: number | null;
+    state?: AutoCardDeliveryState | null;
+    productVariantId?: ID | null;
+    orderId?: ID | null;
+}
 
 export interface CreateAfterSalesItemInput {
     orderLineId: ID;
@@ -26,6 +57,7 @@ export interface AfterSalesRequestListOptions {
     skip?: number | null;
     take?: number | null;
     state?: AfterSalesState | null;
+    states?: AfterSalesState[] | null;
 }
 
 export interface TransitionAfterSalesRequestInput {
@@ -42,9 +74,11 @@ declare module '@vendure/core/dist/entity/custom-entity-fields' {
 
     interface CustomProductVariantFields {
         fulfillmentType: FulfillmentType;
+        digitalDeliveryMode: DigitalDeliveryMode;
     }
 
     interface CustomOrderLineFields {
         fulfillmentTypeSnapshot: FulfillmentType;
+        digitalDeliveryModeSnapshot: DigitalDeliveryMode;
     }
 }

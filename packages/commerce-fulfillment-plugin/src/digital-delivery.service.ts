@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Order, OrderLine, RequestContext, TransactionalConnection } from '@vendure/core';
 
-import { getOrderLineFulfillmentType } from './fulfillment-classification';
 import {
     DigitalDeliveryResource,
     DigitalDeliveryTokenPayload,
     DigitalDeliveryTokenService,
 } from './digital-delivery-token.service';
+import { getOrderLineFulfillmentType, isAutoCardOrderLine } from './fulfillment-classification';
 
 export type DigitalDeliveryStatus = 'READY' | 'PAYMENT_REQUIRED' | 'NOT_CONFIGURED' | 'FILE_MISSING';
 
@@ -36,7 +36,7 @@ export class DigitalDeliveryService {
             relations: ['lines', 'lines.productVariant', 'lines.productVariant.translations', 'payments'],
         });
         return order.lines
-            .filter(line => getOrderLineFulfillmentType(line) === 'digital')
+            .filter(line => getOrderLineFulfillmentType(line) === 'digital' && !isAutoCardOrderLine(line))
             .map(line => this.deliveryForLine(ctx, order, line));
     }
 
@@ -46,7 +46,7 @@ export class DigitalDeliveryService {
             return;
         }
         const order = await this.connection.rawConnection.getRepository(Order).findOne({
-            where: { id: payload.orderId as any },
+            where: { id: payload.orderId },
             relations: ['lines', 'lines.productVariant', 'payments'],
         });
         if (!order || !this.isPaid(order)) {
@@ -56,6 +56,7 @@ export class DigitalDeliveryService {
         if (
             !line ||
             getOrderLineFulfillmentType(line) !== 'digital' ||
+            isAutoCardOrderLine(line) ||
             line.productVariant.sku !== payload.sku
         ) {
             return;

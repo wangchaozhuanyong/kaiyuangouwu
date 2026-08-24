@@ -2,6 +2,7 @@ export type MarketCode = string;
 export type StorefrontLanguage = 'zh' | 'en';
 export type VendureLanguageCode = 'zh_Hans' | 'en';
 export type FulfillmentType = 'physical' | 'digital';
+export type DigitalDeliveryMode = 'file_download' | 'auto_card';
 
 export interface Asset {
     id: string;
@@ -28,7 +29,11 @@ export interface ProductVariant {
     stockLevel: 'IN_STOCK' | 'OUT_OF_STOCK';
     featuredAsset: Asset | null;
     product: { id: string; name: string; featuredAsset: Asset | null };
-    customFields: { fulfillmentType: FulfillmentType };
+    autoCardAvailableStock?: number | null;
+    customFields: {
+        fulfillmentType: FulfillmentType;
+        digitalDeliveryMode?: DigitalDeliveryMode | null;
+    };
 }
 
 export interface Product {
@@ -68,7 +73,10 @@ export interface OrderLine {
     linePriceWithTax: number;
     proratedUnitPriceWithTax: number;
     productVariant: ProductVariant;
-    customFields: { fulfillmentTypeSnapshot: FulfillmentType };
+    customFields: {
+        fulfillmentTypeSnapshot: FulfillmentType;
+        digitalDeliveryModeSnapshot?: DigitalDeliveryMode | null;
+    };
 }
 
 export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND';
@@ -205,6 +213,21 @@ export interface DigitalDelivery {
     expiresAt?: string | null;
 }
 
+export type AutoCardDeliveryState = 'WAITING_STOCK' | 'ALLOCATED' | 'RETRYING' | 'SENT' | 'MANUAL_REVIEW';
+
+export interface AutoCardOrderDelivery {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    state: AutoCardDeliveryState;
+    productName: string;
+    sku: string;
+    quantity: number;
+    attemptCount: number;
+    sentAt?: string | null;
+    orderLineId: string;
+}
+
 export interface OrderConfirmationToken {
     token: string;
     expiresAt: string;
@@ -248,6 +271,7 @@ export interface Order {
     };
     fulfillments?: OrderFulfillment[] | null;
     digitalDeliveries?: DigitalDelivery[] | null;
+    autoCardDeliveries?: AutoCardOrderDelivery[] | null;
     checkoutFulfillment?: CheckoutFulfillment;
     checkoutShipping?: CheckoutShipping | null;
 }
@@ -257,7 +281,10 @@ export interface OrderSummaryLine {
     quantity: number;
     linePriceWithTax: number;
     productVariant: ProductVariant;
-    customFields: { fulfillmentTypeSnapshot: FulfillmentType };
+    customFields: {
+        fulfillmentTypeSnapshot: FulfillmentType;
+        digitalDeliveryModeSnapshot?: DigitalDeliveryMode | null;
+    };
 }
 
 export interface OrderSummary {
@@ -413,6 +440,7 @@ export interface StorefrontConfig {
         name: string;
     }>;
     logoUrl?: string | null;
+    description?: string | null;
     customFields: {
         storefrontNameZh?: string | null;
         storefrontNameEn?: string | null;
@@ -420,10 +448,27 @@ export interface StorefrontConfig {
 }
 
 export type StorefrontContentBlockType =
-    'HERO' | 'NOTICE' | 'QUICK_LINKS' | 'CATEGORY_AD' | 'FEATURED_COLLECTION' | 'STORY' | 'LEGAL' | 'SUPPORT';
+    | 'HERO'
+    | 'NOTICE'
+    | 'QUICK_LINKS'
+    | 'CATEGORY_AD'
+    | 'FEATURED_COLLECTION'
+    | 'COUPONS'
+    | 'TRUST_BAR'
+    | 'CORE_CATEGORIES'
+    | 'FLASH_SALE'
+    | 'BEST_SELLERS'
+    | 'RECOMMENDATIONS'
+    | 'STORY'
+    | 'LEGAL'
+    | 'SUPPORT'
+    | 'CUSTOM';
+
+export type StorefrontContentLayoutVariant =
+    'AUTO' | 'HERO_OVERLAY' | 'TICKER' | 'ICON_GRID' | 'CARD_GRID' | 'PRODUCT_GRID' | 'RICH_TEXT' | 'CUSTOM';
 
 export type StorefrontContentTargetType =
-    'NONE' | 'URL' | 'PRODUCT' | 'COLLECTION' | 'CATEGORY' | 'SEARCH' | 'PAGE' | 'SUPPORT';
+    'NONE' | 'URL' | 'PRODUCT' | 'COLLECTION' | 'CATEGORY' | 'SEARCH' | 'PAGE' | 'SUPPORT' | 'COUPON';
 
 export interface StorefrontContentItem {
     id: string;
@@ -432,6 +477,7 @@ export interface StorefrontContentItem {
     imageUrl: string | null;
     targetType: StorefrontContentTargetType;
     targetValue: string | null;
+    settings?: Record<string, unknown> | null;
     label: string;
     description: string;
 }
@@ -439,7 +485,9 @@ export interface StorefrontContentItem {
 export interface StorefrontContentBlock {
     id: string;
     code: string;
+    internalName?: string;
     type: StorefrontContentBlockType;
+    layoutVariant?: StorefrontContentLayoutVariant;
     enabled: boolean;
     position: number;
     startsAt: string | null;
@@ -449,6 +497,7 @@ export interface StorefrontContentBlock {
     textColor: string | null;
     targetType: StorefrontContentTargetType;
     targetValue: string | null;
+    settings?: Record<string, unknown> | null;
     title: string;
     subtitle: string;
     body: string;
@@ -458,9 +507,56 @@ export interface StorefrontContentBlock {
 
 export interface StorefrontContentSettings {
     heroAutoplayIntervalSeconds: number;
+    configuredBlockTypes?: StorefrontContentBlockType[];
+}
+
+export type StorefrontCouponCampaignKind =
+    'ORDER_FIXED' | 'ORDER_PERCENTAGE' | 'COLLECTION_PERCENTAGE' | 'PRODUCT_PERCENTAGE';
+
+export interface StorefrontCouponCampaign {
+    id: string;
+    name: string;
+    couponCode: string;
+    kind: StorefrontCouponCampaignKind;
+    startsAt: string | null;
+    endsAt: string | null;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+}
+
+export interface StorefrontFlashSaleItem {
+    productId: string;
+    productVariantId: string;
+    productName: string;
+    variantName: string;
+    originalPrice: number;
+    salePrice: number;
+    currencyCode: string;
+    imageUrl: string | null;
+}
+
+export interface StorefrontFlashSale {
+    id: string;
+    name: string;
+    startsAt: string | null;
+    endsAt: string | null;
+    items: StorefrontFlashSaleItem[];
+}
+
+export interface StorefrontSystemAnnouncement {
+    id: string;
+    title: string;
+    content: string;
+    linkUrl: string | null;
+    startsAt: string | null;
+    endsAt: string | null;
 }
 
 export interface StorefrontContentResponse {
     blocks: StorefrontContentBlock[];
     settings: StorefrontContentSettings;
+    coupons: StorefrontCouponCampaign[];
+    flashSales: StorefrontFlashSale[];
+    systemAnnouncements: StorefrontSystemAnnouncement[];
 }

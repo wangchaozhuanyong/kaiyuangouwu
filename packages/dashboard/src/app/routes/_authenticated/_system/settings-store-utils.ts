@@ -8,8 +8,6 @@ interface TranslationRuntime {
 }
 
 const builtInSettingsStoreLabels: Record<string, MessageDescriptor> = {
-    'MyPlugin.globalVal': msg({ id: 'settingsStore.pluginGlobalValue', message: 'Plugin global setting' }),
-    'MyPlugin.userVal': msg({ id: 'settingsStore.pluginUserValue', message: 'Plugin user setting' }),
     'ReadonlyTest.buildVersion': msg({ id: 'settingsStore.buildVersion', message: 'System build version' }),
     'ReadonlyTest.buildMeta': msg({ id: 'settingsStore.buildMetadata', message: 'System build information' }),
     'vendure.dashboard.userSettings': msg({

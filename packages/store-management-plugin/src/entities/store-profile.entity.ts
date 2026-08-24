@@ -34,6 +34,9 @@ export class StoreProfile extends VendureEntity {
     @Column('text')
     descriptionEn: string;
 
+    @Column('text', { nullable: true })
+    internalNote: string | null;
+
     @ManyToOne(() => Asset, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'logoAssetId', foreignKeyConstraintName: 'FK_store_profile_logo_asset' })
     logoAsset: Asset | null;
@@ -46,4 +49,6 @@ export class StoreProfile extends VendureEntity {
     storefrontUrl?: string | null;
 
     activationReadiness?: StoreActivationReadiness;
+
+    isOperational?: boolean;
 }

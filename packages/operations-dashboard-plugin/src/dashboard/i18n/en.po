@@ -49,6 +49,11 @@ msgstr "Cancel"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.closed"
+msgstr "Closed"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.complete"
 msgstr "Mark completed"
 
@@ -70,7 +75,7 @@ msgstr "Customer description"
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.description"
-msgstr "Review refund and return requests for the active store. This records workflow only and does not call a payment refund."
+msgstr "Prioritize requests awaiting a decision. Approval and a completed payment refund are shown separately."
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -104,8 +109,28 @@ msgstr "Could not load after-sales requests"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.nextPage"
+msgstr "Next page"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.openOrder"
+msgstr "Open order for refund"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.order"
 msgstr "Order"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.page"
+msgstr "Page"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.previousPage"
+msgstr "Previous page"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -150,7 +175,7 @@ msgstr "Retry"
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.state.approved"
-msgstr "Approved"
+msgstr "In progress"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -185,7 +210,7 @@ msgstr "Timeline"
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.title"
-msgstr "After-sales"
+msgstr "After-sales management"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -218,6 +243,276 @@ msgid "operations.afterSales.updated"
 msgstr "After-sales status updated"
 
 #. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.viewDetails"
+msgstr "View details"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.action"
+msgstr "Actions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.addField"
+msgstr "Add field"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.assigned"
+msgstr "Assigned"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.attempts"
+msgstr "Attempts"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.available"
+msgstr "Available"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.configFirst"
+msgstr "Save the delivery format before importing credentials."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.content"
+msgstr "Masked content"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.delimiter"
+msgstr "Field separator"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.deliveries"
+msgstr "Delivery records"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.description"
+msgstr "Configure one-line credential formats, manage SKU pools and close delivery exceptions."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.disabled"
+msgstr "Disabled"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.enabled"
+msgstr "Enable automatic delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldKey"
+msgstr "Field key"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldLabel"
+msgstr "Email label"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fields"
+msgstr "Fields in one line"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.formatName"
+msgstr "Format name"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.formatPreset"
+msgstr "Format preset"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.import"
+msgstr "Add to pool"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.importDescription"
+msgstr "Paste one credential per line. Preview must pass before the pool can be updated."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.imported"
+msgstr "Credentials added to the pool"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.importTitle"
+msgstr "Paste credentials"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructions"
+msgstr "Product delivery instructions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsHint"
+msgstr "This text is appended to the delivery email for this SKU."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.invalidRows"
+msgstr "Invalid rows"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.inventory"
+msgstr "Credential inventory"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.loadError"
+msgstr "Could not load automatic delivery data"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.lowStock"
+msgstr "Low-stock warning"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.noDeliveries"
+msgstr "No delivery records for this SKU."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.noPool"
+msgstr "No credentials have been added yet."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.noSku"
+msgstr "Select a digital SKU to configure automatic delivery."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.order"
+msgstr "Order"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.pool"
+msgstr "Pool records"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.preview"
+msgstr "Preview parsing"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.recipient"
+msgstr "Delivery email"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.restore"
+msgstr "Restore"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.retry"
+msgstr "Resend same credentials"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.reveal"
+msgstr "Reveal"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.revealTitle"
+msgstr "Credential details"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.revealWarning"
+msgstr "Sensitive content is shown only for this record. Do not copy it into chat or logs."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.save"
+msgstr "Save delivery format"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.saved"
+msgstr "Automatic delivery settings saved"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.searchSku"
+msgstr "Search product name or SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.secret"
+msgstr "Secret"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.selectSku"
+msgstr "Select an SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.sequence"
+msgstr "Sequence"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.settings"
+msgstr "Delivery format"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.settingsDescription"
+msgstr "Each pasted line is one sellable credential. Field order controls parsing and email display."
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.status"
+msgstr "Status"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.stop"
+msgstr "Disable"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.title"
+msgstr "Automatic credential delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.validRows"
+msgstr "Valid rows"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.waiting"
+msgstr "Waiting for stock"
+
+#. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.accountsAndAccess"
 msgstr "Accounts & access"
@@ -241,6 +536,11 @@ msgstr "Marketing center"
 #: src/dashboard/index.tsx
 msgid "operations.nav.orderCenter"
 msgstr "Order center"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.orderManagement"
+msgstr "Order management"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -320,7 +620,7 @@ msgstr "Confirm"
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.description"
-msgstr "Moderate verified-purchase reviews for the active store. Only approved reviews appear publicly."
+msgstr "Prioritize pending verified-purchase reviews. Approve clean reviews in one click."
 
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
@@ -374,6 +674,11 @@ msgstr "A rejection reason of at least 3 characters is required"
 
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.replyAndApprove"
+msgstr "Reply and publish"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.response"
 msgstr "Store response / moderation note"
 
@@ -410,7 +715,7 @@ msgstr "Rejected"
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.title"
-msgstr "Review moderation"
+msgstr "Review management"
 
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
@@ -480,7 +785,7 @@ msgstr "Data unavailable"
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
 msgid "operations.todo.description"
-msgstr "Orders that need attention right now"
+msgstr "Orders, after-sales requests, and reviews that need attention right now"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
@@ -489,13 +794,13 @@ msgstr "Could not load order tasks"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.modifying"
-msgstr "Order changes in progress"
+#~ msgid "operations.todo.modifying"
+#~ msgstr "Order changes in progress"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.modifyingDescription"
-msgstr "Orders currently being adjusted"
+#~ msgid "operations.todo.modifyingDescription"
+#~ msgstr "Orders currently being adjusted"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
@@ -504,13 +809,43 @@ msgstr "Open order center"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.pendingPayment"
-msgstr "Awaiting payment"
+msgid "operations.todo.pendingAfterSales"
+msgstr "After-sales pending"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.pendingPaymentDescription"
-msgstr "Customers have not completed payment"
+msgid "operations.todo.pendingAfterSalesDescription"
+msgstr "Refund and return requests awaiting a decision"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingAutoCard"
+msgstr "Automatic delivery alerts"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingAutoCardDescription"
+msgstr "Low stock, waiting orders, or email failures"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+#~ msgid "operations.todo.pendingPayment"
+#~ msgstr "Awaiting payment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+#~ msgid "operations.todo.pendingPaymentDescription"
+#~ msgstr "Customers have not completed payment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingReviews"
+msgstr "Reviews pending"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingReviewsDescription"
+msgstr "Customer reviews awaiting publication"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx

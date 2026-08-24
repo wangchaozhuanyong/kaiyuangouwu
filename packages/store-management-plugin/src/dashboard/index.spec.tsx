@@ -14,6 +14,8 @@ vi.mock('./store-commerce-settings-page', () => ({ storeCommerceSettingsRoute: {
 vi.mock('./store-management-page', () => ({ storeManagementRoute: {} }));
 vi.mock('./store-provisioning-page', () => ({ storeProvisioningRoute: {} }));
 vi.mock('./storefront-promotion-page', () => ({ storefrontPromotionRoute: {} }));
+vi.mock('./store-promotion-campaign-page', () => ({ storePromotionCampaignRoute: {} }));
+vi.mock('./system-announcement-page', () => ({ systemAnnouncementRoute: {} }));
 
 describe('store management dashboard extension', () => {
     beforeEach(() => {

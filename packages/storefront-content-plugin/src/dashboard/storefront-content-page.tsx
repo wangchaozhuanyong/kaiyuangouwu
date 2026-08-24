@@ -10,6 +10,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
+    AssetPickerDialog,
     Badge,
     Button,
     DashboardRouteDefinition,
@@ -27,6 +28,7 @@ import {
     PageBlock,
     PageLayout,
     PageTitle,
+    ProductMultiSelectorDialog,
     Select,
     SelectContent,
     SelectItem,
@@ -49,6 +51,7 @@ import {
     Eye,
     EyeOff,
     Image as ImageIcon,
+    ImagePlus,
     LayoutTemplate,
     Pencil,
     Plus,
@@ -79,9 +82,16 @@ const blockTypes: ContentBlockType[] = [
     'QUICK_LINKS',
     'CATEGORY_AD',
     'FEATURED_COLLECTION',
+    'COUPONS',
+    'TRUST_BAR',
+    'CORE_CATEGORIES',
+    'FLASH_SALE',
+    'BEST_SELLERS',
+    'RECOMMENDATIONS',
     'STORY',
     'LEGAL',
     'SUPPORT',
+    'CUSTOM',
 ];
 const targetTypes: ContentTargetType[] = [
     'NONE',
@@ -92,6 +102,7 @@ const targetTypes: ContentTargetType[] = [
     'SEARCH',
     'PAGE',
     'SUPPORT',
+    'COUPON',
 ];
 
 const zhCopy = {
@@ -116,6 +127,11 @@ const zhCopy = {
     updateTitle: '编辑装修区块',
     editorDescription: '内容始终保存到当前 Channel，不会影响其他店铺。',
     basic: '区块设置',
+    simpleMode: '常用设置',
+    advancedMode: '高级自定义',
+    simpleModeHint: '常用模式只显示当前模块真正需要的设置；高级模式保留全部通用能力。',
+    internalName: '模块内部名称',
+    internalNameHint: '仅供管理后台识别，例如：首页第二屏快捷入口；不会展示给顾客。',
     code: '区块编码',
     codeHint: '小写字母、数字和短横线，例如 home-hero。',
     type: '区块类型',
@@ -124,13 +140,27 @@ const zhCopy = {
     statusHint: '关闭后 Shop API 不再返回此区块。',
     startsAt: '开始时间',
     endsAt: '结束时间',
-    imageUrl: '图片地址',
-    imageHint: '支持站内 /assets 路径或 HTTP(S) 地址。',
+    imageUrl: '兼容图片地址',
+    imageHint: '仅用于迁移旧数据；新图片请从素材库选择。',
+    imageAsset: '模块图片',
+    selectImage: '从素材库选择或上传',
+    replaceImage: '更换图片',
+    removeImage: '移除图片',
+    noImage: '暂未选择图片',
+    displaySettings: '显示设置',
+    displayCount: '显示商品数量',
+    displayCountHint: '客户端首屏显示 1 到 50 个商品。',
+    noticeInterval: '公告滚动间隔',
+    noticeIntervalHint: '有多条公告时，每 3 到 30 秒切换一条。',
+    selectProducts: '选择固定商品',
+    selectPinnedProducts: '选择置顶商品',
+    productsSelected: '个商品已选择',
+    productSelectionHint: '可按名称搜索，也可先按商品分类筛选。',
     backgroundColor: '背景色',
     textColor: '文字色',
     targetType: '跳转类型',
     targetValue: '跳转目标',
-    targetHint: '根据类型填写商品 ID、集合 ID、搜索词、页面路径或链接。',
+    targetHint: '根据类型填写商品 ID、集合 ID、优惠码、搜索词、页面路径或链接。',
     translations: '多语言内容',
     chinese: '中文',
     english: 'English',
@@ -152,7 +182,7 @@ const zhCopy = {
     updated: '装修区块已更新',
     deleted: '装修区块已删除',
     reordered: '区块顺序已更新',
-    validation: '请填写区块编码以及中英文标题',
+    validation: '请填写模块内部名称和至少一种语言的标题；每个条目也需要名称',
     activeChannel: '当前店铺',
     carouselSettings: '首页轮播设置',
     carouselSettingsDescription:
@@ -188,6 +218,11 @@ const enCopy: typeof zhCopy = {
     updateTitle: 'Edit content block',
     editorDescription: 'Content is saved only to the active Channel and never affects another store.',
     basic: 'Block settings',
+    simpleMode: 'Common settings',
+    advancedMode: 'Advanced custom',
+    simpleModeHint: 'Common mode shows only relevant fields. Advanced mode preserves every generic option.',
+    internalName: 'Internal module name',
+    internalNameHint: 'Visible only in the dashboard, for example Homepage second-row quick links.',
     code: 'Block code',
     codeHint: 'Lowercase letters, numbers and hyphens, for example home-hero.',
     type: 'Block type',
@@ -196,13 +231,27 @@ const enCopy: typeof zhCopy = {
     statusHint: 'When disabled, the Shop API no longer returns this block.',
     startsAt: 'Starts at',
     endsAt: 'Ends at',
-    imageUrl: 'Image URL',
-    imageHint: 'Use an internal /assets path or an HTTP(S) URL.',
+    imageUrl: 'Legacy image URL',
+    imageHint: 'Kept for migrated content. Select new images from the asset library.',
+    imageAsset: 'Module image',
+    selectImage: 'Select or upload asset',
+    replaceImage: 'Replace image',
+    removeImage: 'Remove image',
+    noImage: 'No image selected',
+    displaySettings: 'Display settings',
+    displayCount: 'Number of products',
+    displayCountHint: 'Show 1 to 50 products in this storefront section.',
+    noticeInterval: 'Notice rotation interval',
+    noticeIntervalHint: 'Rotate multiple notices every 3 to 30 seconds.',
+    selectProducts: 'Select fixed products',
+    selectPinnedProducts: 'Select pinned products',
+    productsSelected: 'products selected',
+    productSelectionHint: 'Search by name or filter the catalog by category first.',
     backgroundColor: 'Background',
     textColor: 'Text color',
     targetType: 'Target type',
     targetValue: 'Target value',
-    targetHint: 'Enter a product ID, collection ID, search term, page path or URL for the selected type.',
+    targetHint: 'Enter a product ID, collection ID, coupon code, search term, page path or URL.',
     translations: 'Localized content',
     chinese: '中文',
     english: 'English',
@@ -224,7 +273,7 @@ const enCopy: typeof zhCopy = {
     updated: 'Content block updated',
     deleted: 'Content block deleted',
     reordered: 'Block order updated',
-    validation: 'Enter a block code and both Chinese and English titles',
+    validation: 'Enter an internal name and at least one localized title; every item also needs a label',
     activeChannel: 'Active store',
     carouselSettings: 'Homepage carousel settings',
     carouselSettingsDescription:
@@ -242,9 +291,16 @@ const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
     QUICK_LINKS: { zh: '快捷入口', en: 'Quick links' },
     CATEGORY_AD: { zh: '分类广告', en: 'Category ad' },
     FEATURED_COLLECTION: { zh: '推荐集合', en: 'Featured collection' },
+    COUPONS: { zh: '优惠券专区', en: 'Coupons' },
+    TRUST_BAR: { zh: '服务保障栏', en: 'Trust bar' },
+    CORE_CATEGORIES: { zh: '核心品类双卡片', en: 'Core category cards' },
+    FLASH_SALE: { zh: '限时秒杀', en: 'Flash sale' },
+    BEST_SELLERS: { zh: '热门商品', en: 'Best sellers' },
+    RECOMMENDATIONS: { zh: '猜你喜欢', en: 'Recommendations' },
     STORY: { zh: '内容故事', en: 'Story' },
     LEGAL: { zh: '条款内容', en: 'Legal' },
     SUPPORT: { zh: '客服配置', en: 'Support' },
+    CUSTOM: { zh: '高级自定义模块', en: 'Custom block' },
 };
 
 const targetTypeLabels: Record<ContentTargetType, { zh: string; en: string }> = {
@@ -256,6 +312,7 @@ const targetTypeLabels: Record<ContentTargetType, { zh: string; en: string }> = 
     SEARCH: { zh: '搜索', en: 'Search' },
     PAGE: { zh: '客户端页面', en: 'Storefront page' },
     SUPPORT: { zh: '联系客服', en: 'Support action' },
+    COUPON: { zh: '优惠码', en: 'Coupon code' },
 };
 
 export const storefrontContentRoute: DashboardRouteDefinition = {
@@ -578,7 +635,7 @@ function BlockRow({
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-medium">
-                            {translation.title || block.code}
+                            {block.internalName || translation.title || block.code}
                         </span>
                         <Badge variant={block.enabled ? 'default' : 'secondary'}>
                             {block.enabled ? text.enabled : text.disabled}
@@ -588,9 +645,11 @@ function BlockRow({
                         )}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span>{block.code}</span>
+                        {translation.title && translation.title !== block.internalName ? (
+                            <span>{translation.title}</span>
+                        ) : null}
                         <span>{isZh ? blockTypeLabels[block.type].zh : blockTypeLabels[block.type].en}</span>
-                        <span>{block.items.length} items</span>
+                        <span>{isZh ? `${block.items.length} 个条目` : `${block.items.length} items`}</span>
                     </div>
                 </div>
             </div>
@@ -651,6 +710,95 @@ function IconButton({
     );
 }
 
+function ModuleSpecificSettings({
+    draft,
+    text,
+    onChange,
+}: Readonly<{
+    draft: ContentBlock;
+    text: typeof zhCopy;
+    onChange: (draft: ContentBlock) => void;
+}>) {
+    const [productPickerOpen, setProductPickerOpen] = useState(false);
+    const settings = draft.settings ?? {};
+    const productSettingKey =
+        draft.type === 'FEATURED_COLLECTION' || draft.type === 'CUSTOM'
+            ? 'selectedProductIds'
+            : draft.type === 'BEST_SELLERS'
+              ? 'pinnedProductIds'
+              : null;
+    const selectedProductIds = productSettingKey ? stringArraySetting(settings[productSettingKey]) : [];
+    const displayCount = numberSetting(settings.displayCount, 8);
+    const noticeIntervalSeconds = numberSetting(settings.scrollIntervalSeconds, 5);
+    const updateSettings = (patch: Record<string, unknown>) =>
+        onChange({ ...draft, settings: { ...settings, ...patch } });
+
+    return (
+        <section className="space-y-4">
+            <h3 className="text-sm font-medium">{text.displaySettings}</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+                {draft.type === 'NOTICE' ? (
+                    <Field label={text.noticeInterval} hint={text.noticeIntervalHint}>
+                        <Input
+                            type="number"
+                            min={3}
+                            max={30}
+                            value={noticeIntervalSeconds}
+                            onChange={event =>
+                                updateSettings({
+                                    scrollIntervalSeconds: Math.min(
+                                        30,
+                                        Math.max(3, Number(event.target.value) || 3),
+                                    ),
+                                })
+                            }
+                        />
+                    </Field>
+                ) : (
+                    <Field label={text.displayCount} hint={text.displayCountHint}>
+                        <Input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={displayCount}
+                            onChange={event =>
+                                updateSettings({
+                                    displayCount: Math.min(50, Math.max(1, Number(event.target.value) || 1)),
+                                })
+                            }
+                        />
+                    </Field>
+                )}
+                {productSettingKey ? (
+                    <Field
+                        label={
+                            draft.type === 'BEST_SELLERS' ? text.selectPinnedProducts : text.selectProducts
+                        }
+                        hint={text.productSelectionHint}
+                    >
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-start"
+                            onClick={() => setProductPickerOpen(true)}
+                        >
+                            <Plus className="size-4" aria-hidden="true" />
+                            {selectedProductIds.length} {text.productsSelected}
+                        </Button>
+                        <ProductMultiSelectorDialog
+                            mode="product"
+                            initialSelectionIds={selectedProductIds}
+                            onSelectionChange={ids => updateSettings({ [productSettingKey]: ids })}
+                            open={productPickerOpen}
+                            onOpenChange={setProductPickerOpen}
+                        />
+                    </Field>
+                ) : null}
+            </div>
+        </section>
+    );
+}
+
 function BlockEditor({
     draft,
     isZh,
@@ -668,11 +816,20 @@ function BlockEditor({
     onClose: () => void;
     onSave: (draft: ContentBlock) => void;
 }>) {
+    const [advancedMode, setAdvancedMode] = useState(false);
     const previewTranslation = useMemo(
         () => (draft ? preferredBlockTranslation(draft, isZh) : null),
         [draft, isZh],
     );
+    useEffect(() => {
+        setAdvancedMode(draft?.type === 'CUSTOM');
+    }, [draft?.id, draft?.type, draft == null]);
     if (!draft) return null;
+
+    const translationLanguages: Array<'zh_Hans' | 'en'> = advancedMode
+        ? ['zh_Hans', 'en']
+        : [isZh ? 'zh_Hans' : 'en'];
+    const visibleTextFields = simpleTextFieldsForType(draft.type);
 
     const update = <K extends keyof ContentBlock>(key: K, value: ContentBlock[K]) =>
         onChange({ ...draft, [key]: value });
@@ -688,28 +845,59 @@ function BlockEditor({
         <Dialog open onOpenChange={open => !open && onClose()}>
             <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1180px,96vw)]">
                 <DialogHeader className="shrink-0 border-b px-6 py-4">
-                    <DialogTitle>{draft.id ? text.updateTitle : text.createTitle}</DialogTitle>
-                    <DialogDescription>{text.editorDescription}</DialogDescription>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <DialogTitle>{draft.id ? text.updateTitle : text.createTitle}</DialogTitle>
+                            <DialogDescription className="mt-1">{text.editorDescription}</DialogDescription>
+                        </div>
+                        <div
+                            className="flex shrink-0 rounded-md border bg-muted/30 p-1"
+                            aria-label={text.simpleModeHint}
+                        >
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={advancedMode ? 'ghost' : 'secondary'}
+                                onClick={() => setAdvancedMode(false)}
+                            >
+                                {text.simpleMode}
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={advancedMode ? 'secondary' : 'ghost'}
+                                onClick={() => setAdvancedMode(true)}
+                            >
+                                {text.advancedMode}
+                            </Button>
+                        </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
                 </DialogHeader>
                 <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
                     <div className="min-w-0 space-y-7 px-6 py-5 lg:overflow-y-auto">
                         <section className="space-y-4">
                             <h3 className="text-sm font-medium">{text.basic}</h3>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <Field label={text.code} hint={text.codeHint}>
+                                <Field label={text.internalName} hint={text.internalNameHint}>
                                     <Input
-                                        value={draft.code}
-                                        autoCapitalize="none"
-                                        spellCheck={false}
-                                        onChange={event => update('code', event.target.value)}
+                                        value={draft.internalName}
+                                        onChange={event => update('internalName', event.target.value)}
                                     />
                                 </Field>
                                 <Field label={text.type}>
                                     <Select
                                         value={draft.type}
-                                        onValueChange={value =>
-                                            value && update('type', value)
-                                        }
+                                        onValueChange={value => {
+                                            if (!value) return;
+                                            const type = value;
+                                            onChange({
+                                                ...draft,
+                                                type,
+                                                layoutVariant: defaultLayoutForType(type),
+                                            });
+                                            if (type === 'CUSTOM') setAdvancedMode(true);
+                                        }}
                                     >
                                         <SelectTrigger className="w-full min-w-0">
                                             <SelectValue />
@@ -725,16 +913,28 @@ function BlockEditor({
                                         </SelectContent>
                                     </Select>
                                 </Field>
-                                <Field label={text.position}>
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        value={draft.position}
-                                        onChange={event =>
-                                            update('position', Number(event.target.value) || 0)
-                                        }
-                                    />
-                                </Field>
+                                {advancedMode ? (
+                                    <Field label={text.code} hint={text.codeHint}>
+                                        <Input
+                                            value={draft.code}
+                                            autoCapitalize="none"
+                                            spellCheck={false}
+                                            onChange={event => update('code', event.target.value)}
+                                        />
+                                    </Field>
+                                ) : null}
+                                {advancedMode ? (
+                                    <Field label={text.position}>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            value={draft.position}
+                                            onChange={event =>
+                                                update('position', Number(event.target.value) || 0)
+                                            }
+                                        />
+                                    </Field>
+                                ) : null}
                                 <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
                                     <div className="min-w-0">
                                         <Label>{text.status}</Label>
@@ -748,68 +948,117 @@ function BlockEditor({
                                         onCheckedChange={value => update('enabled', value)}
                                     />
                                 </div>
-                                <Field label={text.startsAt}>
-                                    <Input
-                                        type="datetime-local"
-                                        value={toLocalDateTime(draft.startsAt)}
-                                        onChange={event =>
-                                            update('startsAt', fromLocalDateTime(event.target.value))
+                                {advancedMode ? (
+                                    <>
+                                        <Field label={text.startsAt}>
+                                            <Input
+                                                type="datetime-local"
+                                                value={toLocalDateTime(draft.startsAt)}
+                                                onChange={event =>
+                                                    update('startsAt', fromLocalDateTime(event.target.value))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label={text.endsAt}>
+                                            <Input
+                                                type="datetime-local"
+                                                value={toLocalDateTime(draft.endsAt)}
+                                                onChange={event =>
+                                                    update('endsAt', fromLocalDateTime(event.target.value))
+                                                }
+                                            />
+                                        </Field>
+                                    </>
+                                ) : null}
+                                {advancedMode || previewUsesBlockImage(draft.type) ? (
+                                    <AssetSelectionField
+                                        className="sm:col-span-2"
+                                        label={text.imageAsset}
+                                        asset={draft.imageAsset}
+                                        fallbackUrl={draft.imageUrl}
+                                        text={text}
+                                        onChange={asset =>
+                                            onChange({
+                                                ...draft,
+                                                imageAsset: asset,
+                                                imageAssetId: asset?.id ?? null,
+                                                imageUrl: asset?.preview ?? null,
+                                            })
                                         }
                                     />
-                                </Field>
-                                <Field label={text.endsAt}>
-                                    <Input
-                                        type="datetime-local"
-                                        value={toLocalDateTime(draft.endsAt)}
-                                        onChange={event =>
-                                            update('endsAt', fromLocalDateTime(event.target.value))
-                                        }
-                                    />
-                                </Field>
-                                <Field label={text.imageUrl} hint={text.imageHint} className="sm:col-span-2">
-                                    <Input
-                                        inputMode="url"
-                                        value={draft.imageUrl ?? ''}
-                                        onChange={event => update('imageUrl', event.target.value || null)}
-                                    />
-                                </Field>
-                                <Field label={text.backgroundColor}>
-                                    <ColorInput
-                                        value={draft.backgroundColor}
-                                        onChange={value => update('backgroundColor', value)}
-                                    />
-                                </Field>
-                                <Field label={text.textColor}>
-                                    <ColorInput
-                                        value={draft.textColor}
-                                        onChange={value => update('textColor', value)}
-                                    />
-                                </Field>
-                                <Field label={text.targetType}>
-                                    <TargetSelect
-                                        value={draft.targetType}
-                                        isZh={isZh}
-                                        onChange={value => {
-                                            update('targetType', value);
-                                            if (value === 'NONE') update('targetValue', null);
-                                        }}
-                                    />
-                                </Field>
-                                <Field label={text.targetValue} hint={text.targetHint}>
-                                    <Input
-                                        disabled={draft.targetType === 'NONE'}
-                                        value={draft.targetValue ?? ''}
-                                        onChange={event => update('targetValue', event.target.value || null)}
-                                    />
-                                </Field>
+                                ) : null}
+                                {advancedMode ? (
+                                    <>
+                                        <Field
+                                            label={text.imageUrl}
+                                            hint={text.imageHint}
+                                            className="sm:col-span-2"
+                                        >
+                                            <Input
+                                                inputMode="url"
+                                                value={draft.imageUrl ?? ''}
+                                                onChange={event =>
+                                                    onChange({
+                                                        ...draft,
+                                                        imageAsset: null,
+                                                        imageAssetId: null,
+                                                        imageUrl: event.target.value || null,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label={text.backgroundColor}>
+                                            <ColorInput
+                                                value={draft.backgroundColor}
+                                                onChange={value => update('backgroundColor', value)}
+                                            />
+                                        </Field>
+                                        <Field label={text.textColor}>
+                                            <ColorInput
+                                                value={draft.textColor}
+                                                onChange={value => update('textColor', value)}
+                                            />
+                                        </Field>
+                                        <Field label={text.targetType}>
+                                            <TargetSelect
+                                                value={draft.targetType}
+                                                isZh={isZh}
+                                                onChange={value =>
+                                                    onChange({
+                                                        ...draft,
+                                                        targetType: value,
+                                                        targetValue:
+                                                            value === 'NONE' ? null : draft.targetValue,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label={text.targetValue} hint={text.targetHint}>
+                                            <Input
+                                                disabled={draft.targetType === 'NONE'}
+                                                value={draft.targetValue ?? ''}
+                                                onChange={event =>
+                                                    update('targetValue', event.target.value || null)
+                                                }
+                                            />
+                                        </Field>
+                                    </>
+                                ) : null}
                             </div>
                         </section>
+
+                        {!advancedMode && simpleModuleHasSettings(draft.type) ? (
+                            <>
+                                <Separator />
+                                <ModuleSpecificSettings draft={draft} text={text} onChange={onChange} />
+                            </>
+                        ) : null}
 
                         <Separator />
                         <section className="space-y-4">
                             <h3 className="text-sm font-medium">{text.translations}</h3>
                             <div className="grid gap-5 xl:grid-cols-2">
-                                {(['zh_Hans', 'en'] as const).map(languageCode => {
+                                {translationLanguages.map(languageCode => {
                                     const translation = getBlockTranslation(draft, languageCode);
                                     return (
                                         <div key={languageCode} className="space-y-3 border-l-2 pl-4">
@@ -826,83 +1075,100 @@ function BlockEditor({
                                                     }
                                                 />
                                             </Field>
-                                            <Field label={text.subtitle}>
-                                                <Input
-                                                    value={translation.subtitle}
-                                                    onChange={event =>
-                                                        updateTranslation(languageCode, {
-                                                            subtitle: event.target.value,
-                                                        })
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label={text.body}>
-                                                <Textarea
-                                                    rows={4}
-                                                    value={translation.body}
-                                                    onChange={event =>
-                                                        updateTranslation(languageCode, {
-                                                            body: event.target.value,
-                                                        })
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label={text.cta}>
-                                                <Input
-                                                    value={translation.ctaLabel}
-                                                    onChange={event =>
-                                                        updateTranslation(languageCode, {
-                                                            ctaLabel: event.target.value,
-                                                        })
-                                                    }
-                                                />
-                                            </Field>
+                                            {advancedMode || visibleTextFields.subtitle ? (
+                                                <Field label={text.subtitle}>
+                                                    <Input
+                                                        value={translation.subtitle}
+                                                        onChange={event =>
+                                                            updateTranslation(languageCode, {
+                                                                subtitle: event.target.value,
+                                                            })
+                                                        }
+                                                    />
+                                                </Field>
+                                            ) : null}
+                                            {advancedMode || visibleTextFields.body ? (
+                                                <Field label={text.body}>
+                                                    <Textarea
+                                                        rows={4}
+                                                        value={translation.body}
+                                                        onChange={event =>
+                                                            updateTranslation(languageCode, {
+                                                                body: event.target.value,
+                                                            })
+                                                        }
+                                                    />
+                                                </Field>
+                                            ) : null}
+                                            {advancedMode || visibleTextFields.cta ? (
+                                                <Field label={text.cta}>
+                                                    <Input
+                                                        value={translation.ctaLabel}
+                                                        onChange={event =>
+                                                            updateTranslation(languageCode, {
+                                                                ctaLabel: event.target.value,
+                                                            })
+                                                        }
+                                                    />
+                                                </Field>
+                                            ) : null}
                                         </div>
                                     );
                                 })}
                             </div>
                         </section>
 
-                        <Separator />
-                        <section className="space-y-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <h3 className="text-sm font-medium">{text.items}</h3>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                        update('items', [...draft.items, newItem(draft.items.length)])
-                                    }
-                                >
-                                    <Plus className="size-4" aria-hidden="true" />
-                                    {text.addItem}
-                                </Button>
-                            </div>
-                            {draft.items.map((item, index) => (
-                                <ItemEditor
-                                    key={item.id ?? `new-${index}`}
-                                    item={item}
-                                    index={index}
-                                    isZh={isZh}
-                                    text={text}
-                                    onChange={next =>
-                                        update(
-                                            'items',
-                                            draft.items.map((current, currentIndex) =>
-                                                currentIndex === index ? next : current,
-                                            ),
-                                        )
-                                    }
-                                    onRemove={() =>
-                                        update(
-                                            'items',
-                                            draft.items.filter((_, currentIndex) => currentIndex !== index),
-                                        )
-                                    }
-                                />
-                            ))}
-                        </section>
+                        {advancedMode || simpleModuleUsesItems(draft.type) ? (
+                            <>
+                                <Separator />
+                                <section className="space-y-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h3 className="text-sm font-medium">{text.items}</h3>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                                update('items', [
+                                                    ...draft.items,
+                                                    newItem(draft.items.length, draft.type),
+                                                ])
+                                            }
+                                        >
+                                            <Plus className="size-4" aria-hidden="true" />
+                                            {text.addItem}
+                                        </Button>
+                                    </div>
+                                    {draft.items.map((item, index) => (
+                                        <ItemEditor
+                                            key={item.id ?? `new-${index}`}
+                                            item={item}
+                                            index={index}
+                                            blockType={draft.type}
+                                            advancedMode={advancedMode}
+                                            isZh={isZh}
+                                            text={text}
+                                            onChange={next =>
+                                                update(
+                                                    'items',
+                                                    draft.items.map((current, currentIndex) =>
+                                                        currentIndex === index ? next : current,
+                                                    ),
+                                                )
+                                            }
+                                            onRemove={() =>
+                                                update(
+                                                    'items',
+                                                    draft.items.filter(
+                                                        (_, currentIndex) => currentIndex !== index,
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                    ))}
+                                </section>
+                            </>
+                        ) : null}
                     </div>
 
                     <aside className="min-w-0 border-t bg-muted/30 px-5 py-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
@@ -918,17 +1184,19 @@ function BlockEditor({
                                     color: draft.textColor || '#111827',
                                 }}
                             >
-                                {draft.imageUrl ? (
-                                    <img
-                                        className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
-                                        src={draft.imageUrl}
-                                        alt=""
-                                    />
-                                ) : (
-                                    <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
-                                        <ImageIcon className="size-5 opacity-50" aria-hidden="true" />
-                                    </div>
-                                )}
+                                {previewUsesBlockImage(draft.type) ? (
+                                    draft.imageUrl ? (
+                                        <img
+                                            className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
+                                            src={draft.imageUrl}
+                                            alt=""
+                                        />
+                                    ) : (
+                                        <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
+                                            <ImageIcon className="size-5 opacity-50" aria-hidden="true" />
+                                        </div>
+                                    )
+                                ) : null}
                                 {previewTranslation?.title ? (
                                     <>
                                         <h4 className="text-lg font-semibold">{previewTranslation.title}</h4>
@@ -959,6 +1227,13 @@ function BlockEditor({
                                                             key={item.id ?? index}
                                                             className="border border-current/15 p-2"
                                                         >
+                                                            {item.imageUrl ? (
+                                                                <img
+                                                                    className="mb-2 aspect-square w-full rounded object-cover"
+                                                                    src={item.imageUrl}
+                                                                    alt=""
+                                                                />
+                                                            ) : null}
                                                             <div className="text-xs font-medium">
                                                                 {itemTranslation.label ||
                                                                     `${text.item} ${index + 1}`}
@@ -997,6 +1272,8 @@ function BlockEditor({
 function ItemEditor({
     item,
     index,
+    blockType,
+    advancedMode,
     isZh,
     text,
     onChange,
@@ -1004,11 +1281,17 @@ function ItemEditor({
 }: Readonly<{
     item: ContentItem;
     index: number;
+    blockType: ContentBlockType;
+    advancedMode: boolean;
     isZh: boolean;
     text: typeof zhCopy;
     onChange: (item: ContentItem) => void;
     onRemove: () => void;
 }>) {
+    const translationLanguages: Array<'zh_Hans' | 'en'> = advancedMode
+        ? ['zh_Hans', 'en']
+        : [isZh ? 'zh_Hans' : 'en'];
+    const showTarget = advancedMode || simpleItemNeedsTarget(blockType);
     const update = <K extends keyof ContentItem>(key: K, value: ContentItem[K]) =>
         onChange({ ...item, [key]: value });
     const updateTranslation = (
@@ -1035,53 +1318,58 @@ function ItemEditor({
                 </IconButton>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-                <Field label={text.imageUrl}>
-                    <div className="flex items-center gap-2">
-                        {item.imageUrl ? (
-                            <img
-                                className="size-9 shrink-0 rounded-md object-cover border border-border"
-                                src={item.imageUrl}
-                                alt=""
-                                onError={e => {
-                                    (e.currentTarget as HTMLElement).style.display = 'none';
-                                }}
-                            />
-                        ) : null}
-                        <Input
-                            value={item.imageUrl ?? ''}
-                            onChange={event => update('imageUrl', event.target.value || null)}
-                        />
-                    </div>
-                </Field>
-                <Field label={text.position}>
-                    <Input
-                        type="number"
-                        min={0}
-                        value={item.position}
-                        onChange={event => update('position', Number(event.target.value) || 0)}
-                    />
-                </Field>
-                <Field label={text.targetType}>
-                    <TargetSelect
-                        value={item.targetType}
-                        isZh={isZh}
-                        onChange={value =>
+                {advancedMode || simpleItemUsesImage(blockType) ? (
+                    <AssetSelectionField
+                        className="sm:col-span-2"
+                        label={text.imageAsset}
+                        asset={item.imageAsset}
+                        fallbackUrl={item.imageUrl}
+                        text={text}
+                        onChange={asset =>
                             onChange({
                                 ...item,
-                                targetType: value,
-                                targetValue: value === 'NONE' ? null : item.targetValue,
+                                imageAsset: asset,
+                                imageAssetId: asset?.id ?? null,
+                                imageUrl: asset?.preview ?? null,
                             })
                         }
                     />
-                </Field>
-                <Field label={text.targetValue}>
-                    <Input
-                        disabled={item.targetType === 'NONE'}
-                        value={item.targetValue ?? ''}
-                        onChange={event => update('targetValue', event.target.value || null)}
-                    />
-                </Field>
-                {(['zh_Hans', 'en'] as const).map(languageCode => {
+                ) : null}
+                {advancedMode ? (
+                    <Field label={text.position}>
+                        <Input
+                            type="number"
+                            min={0}
+                            value={item.position}
+                            onChange={event => update('position', Number(event.target.value) || 0)}
+                        />
+                    </Field>
+                ) : null}
+                {showTarget ? (
+                    <>
+                        <Field label={text.targetType}>
+                            <TargetSelect
+                                value={item.targetType}
+                                isZh={isZh}
+                                onChange={value =>
+                                    onChange({
+                                        ...item,
+                                        targetType: value,
+                                        targetValue: value === 'NONE' ? null : item.targetValue,
+                                    })
+                                }
+                            />
+                        </Field>
+                        <Field label={text.targetValue} hint={text.targetHint}>
+                            <Input
+                                disabled={item.targetType === 'NONE'}
+                                value={item.targetValue ?? ''}
+                                onChange={event => update('targetValue', event.target.value || null)}
+                            />
+                        </Field>
+                    </>
+                ) : null}
+                {translationLanguages.map(languageCode => {
                     const translation = getItemTranslation(item, languageCode);
                     return (
                         <div key={languageCode} className="space-y-3 border-l-2 pl-4">
@@ -1110,6 +1398,60 @@ function ItemEditor({
                 })}
             </div>
         </div>
+    );
+}
+
+function AssetSelectionField({
+    label,
+    className,
+    asset,
+    fallbackUrl,
+    text,
+    onChange,
+}: Readonly<{
+    label: string;
+    className?: string;
+    asset: ContentBlock['imageAsset'];
+    fallbackUrl: string | null;
+    text: typeof zhCopy;
+    onChange: (asset: NonNullable<ContentBlock['imageAsset']> | null) => void;
+}>) {
+    const [open, setOpen] = useState(false);
+    const preview = asset?.preview ?? fallbackUrl;
+
+    return (
+        <Field label={label} className={className}>
+            <div className="flex min-w-0 items-center gap-3 rounded-md border p-3">
+                {preview ? (
+                    <img className="size-16 shrink-0 rounded-md border object-cover" src={preview} alt="" />
+                ) : (
+                    <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-dashed bg-muted/40">
+                        <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+                    </div>
+                )}
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{asset?.name ?? text.noImage}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
+                            <ImagePlus className="size-4" aria-hidden="true" />
+                            {preview ? text.replaceImage : text.selectImage}
+                        </Button>
+                        {preview ? (
+                            <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)}>
+                                {text.removeImage}
+                            </Button>
+                        ) : null}
+                    </div>
+                </div>
+            </div>
+            <AssetPickerDialog
+                open={open}
+                onClose={() => setOpen(false)}
+                onSelect={assets => onChange(assets[0] ?? null)}
+                initialSelectedAssets={asset ? [asset] : []}
+                title={text.selectImage}
+            />
+        </Field>
     );
 }
 
@@ -1172,31 +1514,110 @@ function TargetSelect({
     );
 }
 
+function defaultLayoutForType(type: ContentBlockType): ContentBlock['layoutVariant'] {
+    if (type === 'HERO') return 'HERO_OVERLAY';
+    if (type === 'NOTICE') return 'TICKER';
+    if (type === 'QUICK_LINKS' || type === 'TRUST_BAR') return 'ICON_GRID';
+    if (type === 'CORE_CATEGORIES' || type === 'CATEGORY_AD') return 'CARD_GRID';
+    if (type === 'FLASH_SALE' || type === 'BEST_SELLERS' || type === 'RECOMMENDATIONS') {
+        return 'PRODUCT_GRID';
+    }
+    if (type === 'STORY' || type === 'LEGAL' || type === 'SUPPORT') return 'RICH_TEXT';
+    if (type === 'CUSTOM') return 'CUSTOM';
+    return 'AUTO';
+}
+
+function simpleTextFieldsForType(type: ContentBlockType): {
+    subtitle: boolean;
+    body: boolean;
+    cta: boolean;
+} {
+    return {
+        subtitle: ['HERO', 'CATEGORY_AD', 'CORE_CATEGORIES', 'STORY'].includes(type),
+        body: ['NOTICE', 'STORY', 'LEGAL', 'SUPPORT'].includes(type),
+        cta: ['HERO', 'CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY'].includes(type),
+    };
+}
+
+function simpleItemNeedsTarget(type: ContentBlockType): boolean {
+    return ['HERO', 'QUICK_LINKS', 'CATEGORY_AD', 'CORE_CATEGORIES', 'COUPONS', 'CUSTOM'].includes(type);
+}
+
+function simpleItemUsesImage(type: ContentBlockType): boolean {
+    return [
+        'HERO',
+        'QUICK_LINKS',
+        'CATEGORY_AD',
+        'COUPONS',
+        'TRUST_BAR',
+        'CORE_CATEGORIES',
+        'CUSTOM',
+    ].includes(type);
+}
+
+function simpleModuleHasSettings(type: ContentBlockType): boolean {
+    return ['NOTICE', 'FEATURED_COLLECTION', 'FLASH_SALE', 'BEST_SELLERS', 'RECOMMENDATIONS'].includes(type);
+}
+
+function simpleModuleUsesItems(type: ContentBlockType): boolean {
+    return [
+        'HERO',
+        'NOTICE',
+        'QUICK_LINKS',
+        'CATEGORY_AD',
+        'COUPONS',
+        'TRUST_BAR',
+        'CORE_CATEGORIES',
+        'SUPPORT',
+        'CUSTOM',
+    ].includes(type);
+}
+
+function previewUsesBlockImage(type: ContentBlockType): boolean {
+    return ['HERO', 'CATEGORY_AD', 'STORY', 'CUSTOM'].includes(type);
+}
+
+function stringArraySetting(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function numberSetting(value: unknown, fallback: number): number {
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 function newBlock(position: number): ContentBlock {
     return {
-        code: '',
+        code: `home-block-${Date.now().toString(36)}-${position}`,
+        internalName: `首页模块 ${position + 1}`,
         type: 'HERO',
+        layoutVariant: 'HERO_OVERLAY',
         enabled: true,
         position,
         startsAt: null,
         endsAt: null,
+        imageAsset: null,
+        imageAssetId: null,
         imageUrl: null,
         backgroundColor: null,
         textColor: null,
         targetType: 'NONE',
         targetValue: null,
+        settings: null,
         translations: [emptyBlockTranslation('zh_Hans'), emptyBlockTranslation('en')],
         items: [],
     };
 }
 
-function newItem(position: number): ContentItem {
+function newItem(position: number, blockType?: ContentBlockType): ContentItem {
     return {
         enabled: true,
         position,
+        imageAsset: null,
+        imageAssetId: null,
         imageUrl: null,
-        targetType: 'NONE',
+        targetType: blockType === 'COUPONS' ? 'COUPON' : 'NONE',
         targetValue: null,
+        settings: null,
         translations: [
             { languageCode: 'zh_Hans', label: '', description: '' },
             { languageCode: 'en', label: '', description: '' },
@@ -1256,35 +1677,45 @@ function preferredItemTranslation(item: ContentItem, isZh: boolean) {
 function blockInput(block: ContentBlock) {
     return {
         code: block.code.trim(),
+        internalName: block.internalName.trim(),
         type: block.type,
+        layoutVariant: block.layoutVariant,
         enabled: block.enabled,
         position: block.position,
         startsAt: block.startsAt,
         endsAt: block.endsAt,
+        imageAssetId: block.imageAsset?.id ?? block.imageAssetId ?? null,
         imageUrl: block.imageUrl?.trim() || null,
         backgroundColor: block.backgroundColor?.trim() || null,
         textColor: block.textColor?.trim() || null,
         targetType: block.targetType,
         targetValue: block.targetType === 'NONE' ? null : block.targetValue?.trim() || null,
-        translations: block.translations.map(({ languageCode, title, subtitle, body, ctaLabel }) => ({
-            languageCode,
-            title: title.trim(),
-            subtitle: subtitle.trim(),
-            body: body.trim(),
-            ctaLabel: ctaLabel.trim(),
-        })),
+        settings: block.settings,
+        translations: block.translations
+            .map(({ languageCode, title, subtitle, body, ctaLabel }) => ({
+                languageCode,
+                title: title.trim(),
+                subtitle: subtitle.trim(),
+                body: body.trim(),
+                ctaLabel: ctaLabel.trim(),
+            }))
+            .filter(translation => Boolean(translation.title)),
         items: block.items.map((item, index) => ({
             ...(item.id ? { id: item.id } : {}),
             enabled: item.enabled,
             position: index,
+            imageAssetId: item.imageAsset?.id ?? item.imageAssetId ?? null,
             imageUrl: item.imageUrl?.trim() || null,
             targetType: item.targetType,
             targetValue: item.targetType === 'NONE' ? null : item.targetValue?.trim() || null,
-            translations: item.translations.map(({ languageCode, label, description }) => ({
-                languageCode,
-                label: label.trim(),
-                description: description.trim(),
-            })),
+            settings: item.settings,
+            translations: item.translations
+                .map(({ languageCode, label, description }) => ({
+                    languageCode,
+                    label: label.trim(),
+                    description: description.trim(),
+                }))
+                .filter(translation => Boolean(translation.label)),
         })),
     };
 }
@@ -1292,14 +1723,9 @@ function blockInput(block: ContentBlock) {
 function isValid(block: ContentBlock): boolean {
     return (
         Boolean(block.code.trim()) &&
-        (['zh_Hans', 'en'] as const).every(languageCode =>
-            Boolean(getBlockTranslation(block, languageCode).title.trim()),
-        ) &&
-        block.items.every(item =>
-            (['zh_Hans', 'en'] as const).every(languageCode =>
-                Boolean(getItemTranslation(item, languageCode).label.trim()),
-            ),
-        )
+        Boolean(block.internalName.trim()) &&
+        block.translations.some(translation => Boolean(translation.title.trim())) &&
+        block.items.every(item => item.translations.some(translation => Boolean(translation.label.trim())))
     );
 }
 

@@ -15,6 +15,8 @@ import { STOREFRONT_ENTRY_COOKIE, STOREFRONT_PROMOTION_OPTIONS } from '../consta
 import { StorefrontActivationService } from '../storefront-activation.service';
 import { StorefrontPromotionPluginOptions } from '../types';
 
+import { AccountEntryRoute, validateAccountEntryProof as validateProof } from './account-entry-proof';
+
 type SignedValueKind = 'entry-ticket' | 'entry-cookie';
 
 interface SignedValuePayload {
@@ -114,6 +116,21 @@ export class StorefrontPromotionAccessService {
     hasValidEntryCookie(req: Request, request: StorefrontPromotionRequest): boolean {
         const token = this.readCookie(req, STOREFRONT_ENTRY_COOKIE);
         return token ? this.validate(token, 'entry-cookie', request) : false;
+    }
+
+    validateAccountEntryProof(
+        proof: string,
+        route: AccountEntryRoute,
+        token: string,
+        request: StorefrontPromotionRequest,
+    ): boolean {
+        return validateProof({
+            proof,
+            route,
+            host: request.host,
+            token,
+            signingSecret: this.options.signingSecret,
+        });
     }
 
     private sign(payload: SignedValuePayload): string {

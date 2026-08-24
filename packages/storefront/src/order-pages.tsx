@@ -473,11 +473,11 @@ export function LogisticsPage({
                     </button>
                 </nav>
 
-                {/* 2. 物流官方服务保障微条 */}
+                {/* 2. 物流状态信息微条 */}
                 <div className="logistics-service-strip" aria-hidden="true">
                     <div className="service-strip-item">
                         <ShieldCheck size={13} />
-                        <span>{isZh ? '正品极速配送' : 'Fast Delivery'}</span>
+                        <span>{isZh ? '配送状态可查' : 'Delivery Status'}</span>
                     </div>
                     <div className="service-strip-item">
                         <Radio size={13} />
@@ -485,7 +485,7 @@ export function LogisticsPage({
                     </div>
                     <div className="service-strip-item">
                         <Sparkles size={13} />
-                        <span>{isZh ? '丢损必赔保障' : 'Guaranteed'}</span>
+                        <span>{isZh ? '售后入口可查' : 'After-sales'}</span>
                     </div>
                 </div>
             </div>
@@ -839,6 +839,7 @@ export function OrderDetailPage({
     const pending = ['AddingItems', 'ArrangingPayment'].includes(order.state);
     const fulfillments = order.fulfillments ?? [];
     const digitalDeliveries = order.digitalDeliveries ?? [];
+    const autoCardDeliveries = order.autoCardDeliveries ?? [];
     const readyDownloads = digitalDeliveries.filter(
         delivery => delivery.status === 'READY' && delivery.downloadUrl,
     );
@@ -850,9 +851,10 @@ export function OrderDetailPage({
                 line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
                 line.productVariant.customFields.fulfillmentType !== 'digital',
         );
-    const canRequestAfterSales = ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'].includes(
-        order.state,
-    );
+    const refundableLines = order.lines.filter(line => !isAutoCardLine(line));
+    const canRequestAfterSales =
+        refundableLines.length > 0 &&
+        ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'].includes(order.state);
     const statusHint = readyDownloads.length
         ? isZh
             ? '数字商品已可下载，链接为短效安全链接'
@@ -935,13 +937,17 @@ export function OrderDetailPage({
                             <strong>{line.productVariant.name}</strong>
                             <small>{line.productVariant.sku}</small>
                             <em>
-                                {line.productVariant.customFields.fulfillmentType === 'digital'
+                                {isAutoCardLine(line)
                                     ? isZh
-                                        ? '数字商品 · 自动交付'
-                                        : 'Digital · automatic delivery'
-                                    : isZh
-                                      ? '普通商品 · 售后支持'
-                                      : 'Physical · after-sales'}
+                                        ? '虚拟商品 · 邮箱自动发卡 · 不支持退款'
+                                        : 'Digital credentials · email delivery · non-refundable'
+                                    : line.productVariant.customFields.fulfillmentType === 'digital'
+                                      ? isZh
+                                          ? '数字商品 · 自动交付'
+                                          : 'Digital · automatic delivery'
+                                      : isZh
+                                        ? '普通商品 · 售后支持'
+                                        : 'Physical · after-sales'}
                             </em>
                         </div>
                         <span>
@@ -983,6 +989,39 @@ export function OrderDetailPage({
                                 ) : (
                                     <em>{digitalDeliveryStatus(delivery.status, language)}</em>
                                 )}
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
+            {!!autoCardDeliveries.length && (
+                <section
+                    className="digital-delivery-panel auto-card-delivery-panel"
+                    aria-labelledby="auto-card-delivery-title"
+                >
+                    <header>
+                        <div>
+                            <ShieldCheck aria-hidden="true" />
+                            <strong id="auto-card-delivery-title">
+                                {isZh ? '邮箱自动发卡' : 'Automatic email delivery'}
+                            </strong>
+                        </div>
+                        <small>
+                            {isZh
+                                ? '付款后系统按号池顺序取号并发送到下单邮箱；请检查垃圾邮件。'
+                                : 'Credentials are assigned in sequence and sent to the checkout email after payment.'}
+                        </small>
+                    </header>
+                    <div>
+                        {autoCardDeliveries.map(delivery => (
+                            <article key={delivery.id}>
+                                <span>
+                                    <strong>{delivery.productName}</strong>
+                                    <small>
+                                        {delivery.sku} × {delivery.quantity}
+                                    </small>
+                                </span>
+                                <em>{autoCardDeliveryStatus(delivery.state, language)}</em>
                             </article>
                         ))}
                     </div>
@@ -1100,7 +1139,8 @@ function AfterSalesRequestSheet({
     const submittingRef = useRef(submitting);
     const previousFocus = useRef<HTMLElement | null>(null);
     const titleId = useId();
-    const selectedLines = order.lines.filter(line => (quantities[line.id] ?? 0) > 0);
+    const eligibleLines = order.lines.filter(line => !isAutoCardLine(line));
+    const selectedLines = eligibleLines.filter(line => (quantities[line.id] ?? 0) > 0);
     const containsDigital = selectedLines.some(
         line => line.customFields.fulfillmentTypeSnapshot === 'digital',
     );
@@ -1221,7 +1261,7 @@ function AfterSalesRequestSheet({
                 <form onSubmit={event => void submit(event)}>
                     <fieldset className="after-sales-line-selection">
                         <legend>{isZh ? '选择商品和数量' : 'Select products and quantities'}</legend>
-                        {order.lines.map(line => {
+                        {eligibleLines.map(line => {
                             const selected = (quantities[line.id] ?? 0) > 0;
                             return (
                                 <div key={line.id}>
@@ -1267,6 +1307,13 @@ function AfterSalesRequestSheet({
                                 </div>
                             );
                         })}
+                        {eligibleLines.length < order.lines.length && (
+                            <div className="inline-notice" role="note">
+                                {isZh
+                                    ? '自动发卡商品发卡后不支持退款，发卡异常请联系客服。'
+                                    : 'Automatically delivered credentials are non-refundable. Contact support for delivery issues.'}
+                            </div>
+                        )}
                     </fieldset>
                     <label className="after-sales-field">
                         <span>{isZh ? '售后类型' : 'Request type'}</span>
@@ -1426,8 +1473,8 @@ function OrderCard({
                         </small>
                     ) : null}
                     <div className="order-product-tags">
-                        <span className="order-product-tag">{isZh ? '正品保障' : 'Authentic'}</span>
-                        <span className="order-product-tag">{isZh ? '售后无忧' : 'Worry-free'}</span>
+                        <span className="order-product-tag">{isZh ? '商品信息' : 'Product details'}</span>
+                        <span className="order-product-tag">{isZh ? '售后入口' : 'After-sales'}</span>
                     </div>
                 </div>
                 <div className="order-product-meta">
@@ -1983,6 +2030,30 @@ function logisticsStatusIcon(status: LogisticsStatus): ReactNode {
     if (status === 'delivered') return <CircleCheck aria-hidden="true" />;
     if (status === 'cancelled') return <CircleAlert aria-hidden="true" />;
     return <PackageCheck aria-hidden="true" />;
+}
+
+function isAutoCardLine(line: Order['lines'][number]): boolean {
+    const fulfillmentType =
+        line.customFields.fulfillmentTypeSnapshot ?? line.productVariant.customFields.fulfillmentType;
+    const deliveryMode =
+        line.customFields.digitalDeliveryModeSnapshot ??
+        line.productVariant.customFields.digitalDeliveryMode ??
+        'file_download';
+    return fulfillmentType === 'digital' && deliveryMode === 'auto_card';
+}
+
+function autoCardDeliveryStatus(
+    state: NonNullable<Order['autoCardDeliveries']>[number]['state'],
+    language: StorefrontLanguage,
+): string {
+    const labels = {
+        WAITING_STOCK: language === 'zh' ? '等待补货，商家已收到告警' : 'Waiting for stock',
+        ALLOCATED: language === 'zh' ? '已取号，准备发送' : 'Credentials allocated',
+        RETRYING: language === 'zh' ? '邮件发送重试中' : 'Email delivery retrying',
+        SENT: language === 'zh' ? '已发送到下单邮箱' : 'Sent to checkout email',
+        MANUAL_REVIEW: language === 'zh' ? '发送异常，已转人工处理' : 'Delivery needs manual review',
+    };
+    return labels[state];
 }
 
 function digitalDeliveryStatus(

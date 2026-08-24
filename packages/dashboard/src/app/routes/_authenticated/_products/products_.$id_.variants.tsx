@@ -1,3 +1,4 @@
+import { MoneyInput } from '@/vdb/components/data-input/money-input.js';
 import { ConfirmationDialog } from '@/vdb/components/shared/confirmation-dialog.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
@@ -7,8 +8,8 @@ import { Button } from '@/vdb/components/ui/button.js';
 import {
     Dialog,
     DialogContent,
-    DialogFooter,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
@@ -25,14 +26,19 @@ import { useRedirectToListOnNotFound } from '@/vdb/hooks/use-redirect-to-list-on
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
-import { Plus, Save, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { ExternalLink, KeyRound, Plus, Save, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
 import { AddProductVariantDialog } from './components/add-product-variant-dialog.js';
 import { ForceRemoveOptionGroupDialog } from './components/force-remove-option-group-dialog.js';
+import {
+    FulfillmentType,
+    getUpdatedFulfillmentCustomFields,
+    getVariantFulfillmentType,
+} from './components/product-fulfillment-type.js';
 import { useRemoveOptionGroup } from './hooks/use-remove-option-group.js';
 import {
     createProductOptionDocument,
@@ -71,6 +77,13 @@ const addOptionValueSchema = z.object({
 
 type AddOptionValueFormValues = z.infer<typeof addOptionValueSchema>;
 type Variant = NonNullable<ResultOf<typeof productDetailWithVariantsDocument>['product']>['variants'][0];
+
+interface VariantDraft {
+    sku: string;
+    price: number;
+    stockOnHand: number;
+    fulfillmentType: FulfillmentType;
+}
 
 function AddOptionValueDialog({
     groupId,
@@ -164,8 +177,13 @@ function ManageProductVariants() {
     const [optionsToAddToVariant, setOptionsToAddToVariant] = useState<
         Record<string, Record<string, string>>
     >({});
+    const [variantDrafts, setVariantDrafts] = useState<Record<string, VariantDraft>>({});
 
-    const { data: productData, refetch, isFetching } = useQuery({
+    const {
+        data: productData,
+        refetch,
+        isFetching,
+    } = useQuery({
         queryFn: () => api.query(productDetailWithVariantsDocument, { id }),
         queryKey: getQueryKey(id),
     });
@@ -180,7 +198,70 @@ function ManageProductVariants() {
             toast.success(t`Variant updated successfully`);
             refetch();
         },
+        onError: error => {
+            toast.error(t`Failed to update product variant`, {
+                description: error instanceof Error ? error.message : t`Unknown error`,
+            });
+        },
     });
+
+    useEffect(() => {
+        if (!productData?.product) return;
+        setVariantDrafts(
+            Object.fromEntries(
+                productData.product.variants.map(variant => [
+                    variant.id,
+                    {
+                        sku: variant.sku,
+                        price: variant.price,
+                        stockOnHand: variant.stockOnHand,
+                        fulfillmentType: getVariantFulfillmentType(variant),
+                    },
+                ]),
+            ),
+        );
+    }, [productData?.product]);
+
+    const updateVariantDraft = (variantId: string, patch: Partial<VariantDraft>) => {
+        setVariantDrafts(current => ({
+            ...current,
+            [variantId]: {
+                ...current[variantId],
+                ...patch,
+            },
+        }));
+    };
+
+    const saveVariant = (variant: Variant) => {
+        const draft = variantDrafts[variant.id];
+        if (!draft) return;
+        if (!draft.sku.trim()) {
+            toast.error(t`SKU is required`);
+            return;
+        }
+        if (!Number.isFinite(draft.price) || draft.price < 0) {
+            toast.error(t`Price must be a non-negative number`);
+            return;
+        }
+        if (
+            draft.fulfillmentType === 'physical' &&
+            (!Number.isInteger(draft.stockOnHand) || draft.stockOnHand < 0)
+        ) {
+            toast.error(t`Stock must be a non-negative integer`);
+            return;
+        }
+
+        updateVariantMutation.mutate({
+            input: {
+                id: variant.id,
+                sku: draft.sku.trim(),
+                price: draft.price,
+                stockOnHand: draft.fulfillmentType === 'physical' ? draft.stockOnHand : 0,
+                trackInventory: draft.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
+                customFields: getUpdatedFulfillmentCustomFields(variant.customFields, draft.fulfillmentType),
+            },
+        });
+    };
 
     const deleteVariantMutation = useMutation({
         mutationFn: api.mutate(deleteProductVariantDocument),
@@ -320,134 +401,272 @@ function ManageProductVariants() {
                 </PageBlock>
 
                 <PageBlock column="main" blockId="product-variants" title={<Trans>Variants</Trans>}>
-                    <div className="mb-4">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>
-                                        <Trans>Name</Trans>
-                                    </TableHead>
-                                    <TableHead>
-                                        <Trans>SKU</Trans>
-                                    </TableHead>
-                                    {productData.product.optionGroups.map(group => (
-                                        <TableHead key={group.id}>{group.name}</TableHead>
-                                    ))}
-                                    <TableHead>
-                                        <Trans>Delete</Trans>
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {productData.product.variants.map(variant => (
-                                    <TableRow key={variant.id}>
-                                        <TableCell>{variant.name}</TableCell>
-                                        <TableCell>{variant.sku}</TableCell>
-                                        {productData.product?.optionGroups.map(group => {
-                                            const option = getOption(variant, group.id);
-                                            return (
-                                                <TableCell key={group.id}>
-                                                    {option ? (
-                                                        <Badge variant="outline">{option.name}</Badge>
-                                                    ) : group.options.length === 1 ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <Badge variant="outline">
-                                                                {group.options[0].name}
-                                                            </Badge>
-                                                            <Button
-                                                                size="sm"
-                                                                disabled={updateVariantMutation.isPending}
-                                                                onClick={() =>
-                                                                    updateVariantMutation.mutate({
-                                                                        input: {
-                                                                            id: variant.id,
-                                                                            optionIds: [
-                                                                                ...variant.options.map(
-                                                                                    o => o.id,
-                                                                                ),
-                                                                                group.options[0].id,
-                                                                            ],
-                                                                        },
-                                                                    })
-                                                                }
-                                                            >
-                                                                <Save className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
+                    <div className="mb-4 space-y-3">
+                        <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                            <Trans>
+                                Edit SKU, price, stock and delivery type directly in the table. Digital SKUs
+                                are delivered to the checkout email after payment and do not use stock or
+                                shipping.
+                            </Trans>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>
+                                            <Trans>Name</Trans>
+                                        </TableHead>
+                                        <TableHead>
+                                            <Trans>SKU</Trans>
+                                        </TableHead>
+                                        <TableHead className="min-w-32">
+                                            <Trans>Price</Trans>
+                                        </TableHead>
+                                        <TableHead className="min-w-28">
+                                            <Trans>Stock on Hand</Trans>
+                                        </TableHead>
+                                        <TableHead className="min-w-44">
+                                            <Trans>Product type</Trans>
+                                        </TableHead>
+                                        {productData.product.optionGroups.map(group => (
+                                            <TableHead key={group.id}>{group.name}</TableHead>
+                                        ))}
+                                        <TableHead className="min-w-28 text-right">
+                                            <Trans>Actions</Trans>
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {productData.product.variants.map(variant => {
+                                        const draft = variantDrafts[variant.id];
+                                        if (!draft) return null;
+                                        return (
+                                            <TableRow key={variant.id}>
+                                                <TableCell>
+                                                    <Link
+                                                        to={`/product-variants/${variant.id}`}
+                                                        className="inline-flex items-center gap-1 font-medium hover:underline"
+                                                    >
+                                                        {variant.name}
+                                                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                                                    </Link>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input
+                                                        value={draft.sku}
+                                                        onChange={event =>
+                                                            updateVariantDraft(variant.id, {
+                                                                sku: event.target.value,
+                                                            })
+                                                        }
+                                                        className="min-w-32"
+                                                        aria-label={t`SKU for ${variant.name}`}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <MoneyInput
+                                                        ref={() => {}}
+                                                        onBlur={() => {}}
+                                                        name={`price-${variant.id}`}
+                                                        value={draft.price}
+                                                        onChange={price =>
+                                                            updateVariantDraft(variant.id, { price })
+                                                        }
+                                                        currency={variant.currencyCode}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    {draft.fulfillmentType === 'physical' ? (
+                                                        <Input
+                                                            value={draft.stockOnHand}
+                                                            onChange={event =>
+                                                                updateVariantDraft(variant.id, {
+                                                                    stockOnHand: Number(event.target.value),
+                                                                })
+                                                            }
+                                                            type="number"
+                                                            min="0"
+                                                            step="1"
+                                                            aria-label={t`Stock for ${variant.name}`}
+                                                        />
                                                     ) : (
-                                                        <div className="flex items-center gap-2">
-                                                            <Select
-                                                                items={Object.fromEntries(group.options.map(opt => [opt.id, opt.name]))}
-                                                                value={
-                                                                    optionsToAddToVariant[variant.id]?.[
-                                                                        group.id
-                                                                    ] || ''
-                                                                }
-                                                                onValueChange={value =>
-                                                                    setOptionToAddToVariant(
-                                                                        variant.id,
-                                                                        group.id,
-                                                                        value || undefined,
+                                                        <span className="text-sm text-muted-foreground">
+                                                            <Trans>Not tracked</Trans>
+                                                        </span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Select
+                                                        items={{
+                                                            physical: t`Physical product`,
+                                                            digital: t`Digital product`,
+                                                        }}
+                                                        value={draft.fulfillmentType}
+                                                        onValueChange={value =>
+                                                            updateVariantDraft(variant.id, {
+                                                                fulfillmentType: value as FulfillmentType,
+                                                            })
+                                                        }
+                                                    >
+                                                        <SelectTrigger
+                                                            aria-label={t`Product type for ${variant.name}`}
+                                                        >
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="physical">
+                                                                <Trans>Physical product</Trans>
+                                                            </SelectItem>
+                                                            <SelectItem value="digital">
+                                                                <Trans>Digital product</Trans>
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                                {productData.product?.optionGroups.map(group => {
+                                                    const option = getOption(variant, group.id);
+                                                    return (
+                                                        <TableCell key={group.id}>
+                                                            {option ? (
+                                                                <Badge variant="outline">{option.name}</Badge>
+                                                            ) : group.options.length === 1 ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <Badge variant="outline">
+                                                                        {group.options[0].name}
+                                                                    </Badge>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        disabled={
+                                                                            updateVariantMutation.isPending
+                                                                        }
+                                                                        onClick={() =>
+                                                                            updateVariantMutation.mutate({
+                                                                                input: {
+                                                                                    id: variant.id,
+                                                                                    optionIds: [
+                                                                                        ...variant.options.map(
+                                                                                            o => o.id,
+                                                                                        ),
+                                                                                        group.options[0].id,
+                                                                                    ],
+                                                                                },
+                                                                            })
+                                                                        }
+                                                                    >
+                                                                        <Save className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2">
+                                                                    <Select
+                                                                        items={Object.fromEntries(
+                                                                            group.options.map(opt => [
+                                                                                opt.id,
+                                                                                opt.name,
+                                                                            ]),
+                                                                        )}
+                                                                        value={
+                                                                            optionsToAddToVariant[
+                                                                                variant.id
+                                                                            ]?.[group.id] || ''
+                                                                        }
+                                                                        onValueChange={value =>
+                                                                            setOptionToAddToVariant(
+                                                                                variant.id,
+                                                                                group.id,
+                                                                                value || undefined,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <SelectTrigger className="w-32">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {group.options.map(opt => (
+                                                                                <SelectItem
+                                                                                    key={opt.id}
+                                                                                    value={opt.id}
+                                                                                >
+                                                                                    {opt.name}
+                                                                                </SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant={
+                                                                            optionsToAddToVariant[
+                                                                                variant.id
+                                                                            ]?.[group.id]
+                                                                                ? 'default'
+                                                                                : 'outline'
+                                                                        }
+                                                                        disabled={
+                                                                            !optionsToAddToVariant[
+                                                                                variant.id
+                                                                            ]?.[group.id]
+                                                                        }
+                                                                        onClick={() =>
+                                                                            addOptionToVariant(variant)
+                                                                        }
+                                                                    >
+                                                                        <Save className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                    );
+                                                })}
+                                                <TableCell>
+                                                    <div className="flex justify-end gap-1">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={() => saveVariant(variant)}
+                                                            disabled={updateVariantMutation.isPending}
+                                                            data-testid="variant-save-btn"
+                                                        >
+                                                            <Save className="mr-1 h-4 w-4" />
+                                                            <Trans>Save</Trans>
+                                                        </Button>
+                                                        {draft.fulfillmentType === 'digital' && (
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() =>
+                                                                    window.location.assign(
+                                                                        `/dashboard/auto-card?variantId=${variant.id}`,
                                                                     )
                                                                 }
                                                             >
-                                                                <SelectTrigger className="w-32">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    {group.options.map(opt => (
-                                                                        <SelectItem
-                                                                            key={opt.id}
-                                                                            value={opt.id}
-                                                                        >
-                                                                            {opt.name}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <Button
-                                                                size="sm"
-                                                                variant={
-                                                                    optionsToAddToVariant[variant.id]?.[
-                                                                        group.id
-                                                                    ]
-                                                                        ? 'default'
-                                                                        : 'outline'
-                                                                }
-                                                                disabled={
-                                                                    !optionsToAddToVariant[variant.id]?.[
-                                                                        group.id
-                                                                    ]
-                                                                }
-                                                                onClick={() => addOptionToVariant(variant)}
-                                                            >
-                                                                <Save className="h-4 w-4" />
+                                                                <KeyRound className="mr-1 h-4 w-4" />
+                                                                <Trans>Configure automatic delivery</Trans>
                                                             </Button>
-                                                        </div>
-                                                    )}
+                                                        )}
+                                                        <ConfirmationDialog
+                                                            title={t`Delete variant`}
+                                                            description={t`Are you sure you want to delete this variant?`}
+                                                            onConfirm={() => deleteVariant(variant.id)}
+                                                        >
+                                                            <Button
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                disabled={deleteVariantMutation.isPending}
+                                                                data-testid="variant-delete-btn"
+                                                                aria-label={t`Delete ${variant.name}`}
+                                                            >
+                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                            </Button>
+                                                        </ConfirmationDialog>
+                                                    </div>
                                                 </TableCell>
-                                            );
-                                        })}
-                                        <TableCell>
-                                            <ConfirmationDialog
-                                                title={t`Delete variant`}
-                                                description={t`Are you sure you want to delete this variant?`}
-                                                onConfirm={() => deleteVariant(variant.id)}
-                                            >
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    disabled={deleteVariantMutation.isPending}
-                                                    data-testid="variant-delete-btn"
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                            </ConfirmationDialog>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
                     </div>
 
                     {productData.product.optionGroups.length > 0 && (

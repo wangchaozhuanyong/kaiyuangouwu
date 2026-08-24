@@ -1,6 +1,7 @@
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { useLingui } from '@lingui/react/macro';
-import { X } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Edit2, X } from 'lucide-react';
 
 // Interface for facet value type
 interface FacetValue {
@@ -19,6 +20,7 @@ interface FacetValueChipProps {
     removable?: boolean;
     displayFacetName?: boolean;
     onRemove?: (id: string) => void;
+    showEditLink?: boolean;
 }
 
 /**
@@ -33,6 +35,7 @@ export function FacetValueChip({
     removable = true,
     onRemove,
     displayFacetName = true,
+    showEditLink = false,
 }: FacetValueChipProps) {
     const { t } = useLingui();
 
@@ -41,7 +44,7 @@ export function FacetValueChip({
             variant="secondary"
             className="flex items-center gap-2 py-0.5 pl-2 pr-1 h-6 max-w-full shrink hover:bg-secondary/80"
         >
-            <div className="flex items-center gap-1.5 min-w-0 truncate">
+            <div className="flex min-w-0 items-center gap-1.5 truncate">
                 <span className="font-medium truncate" title={facetValue.name}>
                     {facetValue.name}
                 </span>
@@ -49,6 +52,15 @@ export function FacetValueChip({
                     <span className="text-muted-foreground text-xs truncate" title={facetValue.facet.name}>
                         ({facetValue.facet.name})
                     </span>
+                )}
+                {showEditLink && (
+                    <Link
+                        to={`/facets/${facetValue.facet.id}/values/${facetValue.id}`}
+                        className="inline-flex shrink-0 items-center hover:text-primary"
+                        aria-label={t`Edit ${facetValue.name}`}
+                    >
+                        <Edit2 className="h-3 w-3" />
+                    </Link>
                 )}
             </div>
             {removable && (

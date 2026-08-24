@@ -15,7 +15,9 @@
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
-        "graphql-tag": "^2.12.6"
+        "graphql-tag": "^2.12.6",
+        "reflect-metadata": "^0.2.2",
+        "typeorm": "^0.3.21"
     },
     "devDependencies": {
         "@types/express": "^5.0.0",

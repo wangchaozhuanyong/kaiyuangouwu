@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    Asset,
     EntityNotFoundError,
     RequestContext,
     TransactionalConnection,
@@ -13,7 +14,9 @@ import {
     DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
     MAX_HERO_AUTOPLAY_INTERVAL_SECONDS,
     MIN_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    StorefrontContentBlockType,
     storefrontContentBlockTypes,
+    storefrontContentLayoutVariants,
     StorefrontContentTargetType,
     storefrontContentTargetTypes,
 } from './constants';
@@ -27,6 +30,7 @@ import {
     StorefrontContentBlockTranslationInput,
     StorefrontContentItemInput,
     StorefrontContentItemTranslationInput,
+    StorefrontContentSettingsValue,
     UpdateStorefrontContentBlockInput,
     UpdateStorefrontContentSettingsInput,
 } from './types';
@@ -41,7 +45,11 @@ export class StorefrontContentService {
     async findAllForAdmin(ctx: RequestContext): Promise<StorefrontContentBlock[]> {
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
             where: { channelId: ctx.channelId },
-            relations: { items: { translations: true }, translations: true },
+            relations: {
+                imageAsset: true,
+                items: { imageAsset: true, translations: true },
+                translations: true,
+            },
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
         return blocks.map(block => this.translateBlock(block, ctx, false));
@@ -56,7 +64,11 @@ export class StorefrontContentService {
         const now = new Date();
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
             where: { channelId: ctx.channelId, enabled: true },
-            relations: { items: { translations: true }, translations: true },
+            relations: {
+                imageAsset: true,
+                items: { imageAsset: true, translations: true },
+                translations: true,
+            },
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
         return blocks
@@ -66,20 +78,30 @@ export class StorefrontContentService {
             .map(block => this.translateBlock(block, ctx, true));
     }
 
-    async getSettings(ctx: RequestContext): Promise<{ heroAutoplayIntervalSeconds: number }> {
-        const settings = await this.connection.getRepository(ctx, StorefrontContentSettings).findOne({
-            where: { channelId: ctx.channelId },
-        });
+    async getSettings(ctx: RequestContext): Promise<{
+        heroAutoplayIntervalSeconds: number;
+        configuredBlockTypes: StorefrontContentBlockType[];
+    }> {
+        const [settings, blocks] = await Promise.all([
+            this.connection.getRepository(ctx, StorefrontContentSettings).findOne({
+                where: { channelId: ctx.channelId },
+            }),
+            this.connection.getRepository(ctx, StorefrontContentBlock).find({
+                where: { channelId: ctx.channelId },
+                select: { type: true },
+            }),
+        ]);
         return {
             heroAutoplayIntervalSeconds:
                 settings?.heroAutoplayIntervalSeconds ?? DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
+            configuredBlockTypes: Array.from(new Set(blocks.map(block => block.type))),
         };
     }
 
     async updateSettings(
         ctx: RequestContext,
         input: UpdateStorefrontContentSettingsInput,
-    ): Promise<{ heroAutoplayIntervalSeconds: number }> {
+    ): Promise<{ heroAutoplayIntervalSeconds: number; configuredBlockTypes: StorefrontContentBlockType[] }> {
         this.validateHeroAutoplayInterval(input.heroAutoplayIntervalSeconds);
         const repository = this.connection.getRepository(ctx, StorefrontContentSettings);
         const settings =
@@ -90,7 +112,16 @@ export class StorefrontContentService {
             });
         settings.heroAutoplayIntervalSeconds = input.heroAutoplayIntervalSeconds;
         const saved = await repository.save(settings);
-        return { heroAutoplayIntervalSeconds: saved.heroAutoplayIntervalSeconds };
+        const configuredBlockTypes = (
+            await this.connection.getRepository(ctx, StorefrontContentBlock).find({
+                where: { channelId: ctx.channelId },
+                select: { type: true },
+            })
+        ).map(block => block.type);
+        return {
+            heroAutoplayIntervalSeconds: saved.heroAutoplayIntervalSeconds,
+            configuredBlockTypes: Array.from(new Set(configuredBlockTypes)),
+        };
     }
 
     async create(
@@ -99,9 +130,13 @@ export class StorefrontContentService {
     ): Promise<StorefrontContentBlock> {
         const normalized = this.validateBlockInput(input);
         await this.assertUniqueCode(ctx, normalized.code);
+        const imageAsset = await this.findAsset(ctx, normalized.imageAssetId);
         const block = await this.connection.getRepository(ctx, StorefrontContentBlock).save(
             new StorefrontContentBlock({
                 ...normalized,
+                imageAsset,
+                imageAssetId: imageAsset?.id ?? null,
+                imageUrl: imageAsset?.preview ?? normalized.imageUrl,
                 channel: ctx.channel,
                 channelId: ctx.channelId,
                 translations: [],
@@ -120,17 +155,21 @@ export class StorefrontContentService {
         const block = await this.getOwnedBlockOrThrow(ctx, input.id);
         const next = this.validateBlockInput({
             code: input.code ?? block.code,
+            internalName: input.internalName ?? block.internalName,
             type: input.type ?? block.type,
+            layoutVariant: input.layoutVariant ?? block.layoutVariant,
             enabled: input.enabled ?? block.enabled,
             position: input.position ?? block.position,
             startsAt: input.startsAt === undefined ? block.startsAt : input.startsAt,
             endsAt: input.endsAt === undefined ? block.endsAt : input.endsAt,
+            imageAssetId: input.imageAssetId === undefined ? block.imageAssetId : input.imageAssetId,
             imageUrl: input.imageUrl === undefined ? block.imageUrl : input.imageUrl,
             backgroundColor:
                 input.backgroundColor === undefined ? block.backgroundColor : input.backgroundColor,
             textColor: input.textColor === undefined ? block.textColor : input.textColor,
             targetType: input.targetType ?? block.targetType,
             targetValue: input.targetValue === undefined ? block.targetValue : input.targetValue,
+            settings: input.settings === undefined ? block.settings : input.settings,
             translations:
                 input.translations ??
                 block.translations.map(translation => ({
@@ -143,18 +182,27 @@ export class StorefrontContentService {
             items: input.items,
         });
         await this.assertUniqueCode(ctx, next.code, block.id);
+        const imageAsset = await this.findAsset(ctx, next.imageAssetId);
+        const imageUrl =
+            imageAsset?.preview ??
+            (input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl);
         Object.assign(block, {
             code: next.code,
+            internalName: next.internalName,
             type: next.type,
+            layoutVariant: next.layoutVariant,
             enabled: next.enabled,
             position: next.position,
             startsAt: next.startsAt,
             endsAt: next.endsAt,
-            imageUrl: next.imageUrl,
+            imageAsset,
+            imageAssetId: imageAsset?.id ?? null,
+            imageUrl,
             backgroundColor: next.backgroundColor,
             textColor: next.textColor,
             targetType: next.targetType,
             targetValue: next.targetValue,
+            settings: next.settings,
         });
         await this.connection.getRepository(ctx, StorefrontContentBlock).save(block);
         if (input.translations) {
@@ -198,13 +246,13 @@ export class StorefrontContentService {
     ): Promise<void> {
         const existing = await this.connection.getRepository(ctx, StorefrontContentItem).find({
             where: { blockId: block.id },
-            relations: { translations: true },
+            relations: { imageAsset: true, translations: true },
         });
         const existingById = new Map(existing.map(item => [String(item.id), item]));
         const retained = new Set<string>();
 
         for (const input of inputs) {
-            this.validateItemInput(input);
+            this.validateItemInput(input, block.type);
             let item: StorefrontContentItem;
             if (input.id != null) {
                 item = existingById.get(String(input.id)) as StorefrontContentItem;
@@ -212,22 +260,39 @@ export class StorefrontContentService {
                     throw new UserInputError('装修条目不存在或不属于当前区块');
                 }
                 retained.add(String(item.id));
+                const imageAssetId =
+                    input.imageAssetId === undefined ? item.imageAssetId : input.imageAssetId;
+                const imageAsset = await this.findAsset(ctx, imageAssetId);
                 Object.assign(item, {
                     enabled: input.enabled ?? true,
                     position: input.position,
-                    imageUrl: this.optionalText(input.imageUrl),
+                    imageAsset,
+                    imageAssetId: imageAsset?.id ?? null,
+                    imageUrl:
+                        imageAsset?.preview ??
+                        (input.imageAssetId === null && input.imageUrl === undefined
+                            ? null
+                            : (this.optionalText(input.imageUrl) ?? item.imageUrl)),
                     targetType: input.targetType ?? 'NONE',
                     targetValue: this.normalizeTarget(input.targetType ?? 'NONE', input.targetValue),
+                    settings:
+                        input.settings === undefined
+                            ? item.settings
+                            : this.normalizeSettings(input.settings, '条目设置'),
                 });
             } else {
+                const imageAsset = await this.findAsset(ctx, input.imageAssetId);
                 item = new StorefrontContentItem({
                     block,
                     blockId: block.id,
                     enabled: input.enabled ?? true,
                     position: input.position,
-                    imageUrl: this.optionalText(input.imageUrl),
+                    imageAsset,
+                    imageAssetId: imageAsset?.id ?? null,
+                    imageUrl: imageAsset?.preview ?? this.optionalText(input.imageUrl),
                     targetType: input.targetType ?? 'NONE',
                     targetValue: this.normalizeTarget(input.targetType ?? 'NONE', input.targetValue),
+                    settings: this.normalizeSettings(input.settings, '条目设置'),
                     translations: [],
                 });
             }
@@ -292,8 +357,15 @@ export class StorefrontContentService {
         publishedOnly: boolean,
     ): StorefrontContentBlock {
         const translated = this.translator.translate(block, ctx, ['items']) as StorefrontContentBlock;
+        translated.internalName = translated.internalName?.trim() || translated.title || translated.code;
+        translated.layoutVariant = translated.layoutVariant || 'AUTO';
+        translated.imageUrl = translated.imageAsset?.preview ?? translated.imageUrl;
         translated.items = (translated.items ?? [])
             .filter(item => !publishedOnly || item.enabled)
+            .map(item => {
+                item.imageUrl = item.imageAsset?.preview ?? item.imageUrl;
+                return item;
+            })
             .sort((a, b) => a.position - b.position || Number(a.id) - Number(b.id));
         return translated;
     }
@@ -315,7 +387,11 @@ export class StorefrontContentService {
             where: { id, channelId: ctx.channelId },
             ...(withRelations
                 ? {
-                      relations: { items: { translations: true }, translations: true },
+                      relations: {
+                          imageAsset: true,
+                          items: { imageAsset: true, translations: true },
+                          translations: true,
+                      },
                       order: { items: { position: 'ASC' as const, createdAt: 'ASC' as const } },
                   }
                 : {}),
@@ -339,6 +415,20 @@ export class StorefrontContentService {
         if (!storefrontContentBlockTypes.includes(input.type)) {
             throw new UserInputError('不支持的装修区块类型');
         }
+        const internalName =
+            input.internalName?.trim() ||
+            input.translations
+                .find(translation => translation.languageCode === LanguageCode.zh_Hans)
+                ?.title?.trim() ||
+            input.translations[0]?.title?.trim() ||
+            code;
+        if (internalName.length > 128) {
+            throw new UserInputError('模块内部名称不能超过 128 个字符');
+        }
+        const layoutVariant = input.layoutVariant ?? 'AUTO';
+        if (!storefrontContentLayoutVariants.includes(layoutVariant)) {
+            throw new UserInputError('不支持的模块展示样式');
+        }
         if (!Number.isInteger(input.position) || input.position < 0) {
             throw new UserInputError('区块排序必须是非负整数');
         }
@@ -360,28 +450,39 @@ export class StorefrontContentService {
         const targetType = input.targetType ?? 'NONE';
         return {
             code,
+            internalName,
             type: input.type,
+            layoutVariant,
             enabled: input.enabled ?? true,
             position: input.position,
             startsAt,
             endsAt,
+            imageAssetId: input.imageAssetId ?? null,
             imageUrl: this.optionalText(input.imageUrl),
             backgroundColor: this.optionalText(input.backgroundColor),
             textColor: this.optionalText(input.textColor),
             targetType,
             targetValue: this.normalizeTarget(targetType, input.targetValue),
+            settings: this.normalizeSettings(input.settings, '模块设置'),
             translations: input.translations,
             items: input.items,
         };
     }
 
-    private validateItemInput(input: StorefrontContentItemInput): void {
+    private validateItemInput(
+        input: StorefrontContentItemInput,
+        blockType?: StorefrontContentBlockType,
+    ): void {
         if (!Number.isInteger(input.position) || input.position < 0) {
             throw new UserInputError('装修条目排序必须是非负整数');
         }
         this.validateTranslations(input.translations, 'label');
         this.validateUrl(input.imageUrl, '条目图片');
-        this.normalizeTarget(input.targetType ?? 'NONE', input.targetValue);
+        const targetType = input.targetType ?? 'NONE';
+        this.normalizeTarget(targetType, input.targetValue);
+        if (blockType === 'COUPONS' && targetType !== 'COUPON') {
+            throw new UserInputError('优惠券专区的每个条目都必须填写优惠码');
+        }
     }
 
     private validateTranslations<T extends { languageCode: LanguageCode }>(
@@ -456,6 +557,34 @@ export class StorefrontContentService {
                 `轮播自动切换间隔必须是 ${MIN_HERO_AUTOPLAY_INTERVAL_SECONDS} 到 ${MAX_HERO_AUTOPLAY_INTERVAL_SECONDS} 秒之间的整数`,
             );
         }
+    }
+
+    private async findAsset(ctx: RequestContext, id: ID | null | undefined): Promise<Asset | null> {
+        if (id == null) {
+            return null;
+        }
+        const asset = await this.connection.getRepository(ctx, Asset).findOne({ where: { id } });
+        if (!asset) {
+            throw new EntityNotFoundError(Asset.name, id);
+        }
+        return asset;
+    }
+
+    private normalizeSettings(
+        value: StorefrontContentSettingsValue | null | undefined,
+        label: string,
+    ): StorefrontContentSettingsValue | null {
+        if (value == null) {
+            return null;
+        }
+        if (typeof value !== 'object' || Array.isArray(value)) {
+            throw new UserInputError(`${label}格式不正确`);
+        }
+        const serialized = JSON.stringify(value);
+        if (serialized.length > 20_000) {
+            throw new UserInputError(`${label}内容不能超过 20000 个字符`);
+        }
+        return JSON.parse(serialized) as StorefrontContentSettingsValue;
     }
 
     private optionalText(value: string | null | undefined): string | null {

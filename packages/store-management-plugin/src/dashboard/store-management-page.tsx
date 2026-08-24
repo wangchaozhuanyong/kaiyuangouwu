@@ -59,10 +59,13 @@ interface ProfileDraft {
     id: string;
     storefrontNameZh: string;
     storefrontNameEn: string;
+    originalStorefrontNameZh: string;
+    originalStorefrontNameEn: string;
     status: StoreProfileStatus;
     sortOrder: string;
     descriptionZh: string;
     descriptionEn: string;
+    internalNote: string;
     logoAsset: Asset | null;
     activationReadiness: StoreProfileRecord['activationReadiness'];
 }
@@ -75,9 +78,10 @@ const zhCopy = {
     retry: '重试',
     empty: '暂时没有网店 Profile',
     stores: '家网店',
-    enabled: '正常运营',
+    enabled: '可正常访问',
     draft: '草稿',
-    active: '正常',
+    active: '已上线',
+    accessible: '可访问',
     suspended: '已停用',
     noDomain: '尚未验证主域名',
     order: '排序',
@@ -88,8 +92,11 @@ const zhCopy = {
     sortOrder: '管理顺序',
     storefrontNameZh: '中文店铺名称',
     storefrontNameEn: '英文店铺名称',
-    descriptionZh: '中文简介',
-    descriptionEn: '英文简介',
+    descriptionZh: '公开中文简介',
+    descriptionEn: '公开英文简介',
+    publicDescriptionHelp: '公开简介会显示在对应语言的商城首页，并用于搜索与分享摘要。',
+    internalNote: '内部备注（仅平台管理员可见）',
+    internalNoteHelp: '用于记录运营、联系或审核信息，不会发送给商家，也不会显示在商城。',
     logo: '网店 Logo',
     selectLogo: '选择 Logo',
     clearLogo: '移除 Logo',
@@ -112,9 +119,10 @@ const enCopy: typeof zhCopy = {
     retry: 'Retry',
     empty: 'No store profiles yet',
     stores: 'stores',
-    enabled: 'Active stores',
+    enabled: 'Accessible stores',
     draft: 'Draft',
     active: 'Active',
+    accessible: 'Accessible',
     suspended: 'Suspended',
     noDomain: 'No verified primary domain',
     order: 'Order',
@@ -125,8 +133,11 @@ const enCopy: typeof zhCopy = {
     sortOrder: 'Management order',
     storefrontNameZh: 'Chinese store name',
     storefrontNameEn: 'English store name',
-    descriptionZh: 'Chinese description',
-    descriptionEn: 'English description',
+    descriptionZh: 'Public Chinese description',
+    descriptionEn: 'Public English description',
+    publicDescriptionHelp: 'Public descriptions appear on the storefront and in search/share summaries.',
+    internalNote: 'Internal note (platform administrators only)',
+    internalNoteHelp: 'Operational notes are not exposed to merchants or storefront visitors.',
     logo: 'Store logo',
     selectLogo: 'Select logo',
     clearLogo: 'Remove logo',
@@ -163,23 +174,30 @@ function StoreManagementPage() {
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
     const profilesQuery = useQuery({
         queryKey: ['store-management-profiles'],
-        queryFn: () => api.query(storeProfilesQuery) as Promise<StoreProfilesResult>,
+        queryFn: () => api.query<StoreProfilesResult>(storeProfilesQuery),
     });
     const profiles = profilesQuery.data?.storeProfiles ?? [];
     const mutation = useMutation({
-        mutationFn: (input: ProfileDraft) =>
-            api.mutate(updateStoreProfileMutation, {
-                input: {
-                    id: input.id,
-                    storefrontNameZh: input.storefrontNameZh,
-                    storefrontNameEn: input.storefrontNameEn,
-                    status: input.status,
-                    sortOrder: Number(input.sortOrder),
-                    descriptionZh: input.descriptionZh,
-                    descriptionEn: input.descriptionEn,
-                    logoAssetId: input.logoAsset?.id ?? null,
-                },
-            }) as Promise<UpdateStoreProfileResult>,
+        mutationFn: (input: ProfileDraft) => {
+            const updateInput: Record<string, unknown> = {
+                id: input.id,
+                status: input.status,
+                sortOrder: Number(input.sortOrder),
+                descriptionZh: input.descriptionZh,
+                descriptionEn: input.descriptionEn,
+                internalNote: input.internalNote,
+                logoAssetId: input.logoAsset?.id ?? null,
+            };
+            if (input.storefrontNameZh !== input.originalStorefrontNameZh) {
+                updateInput.storefrontNameZh = input.storefrontNameZh;
+            }
+            if (input.storefrontNameEn !== input.originalStorefrontNameEn) {
+                updateInput.storefrontNameEn = input.storefrontNameEn;
+            }
+            return api.mutate(updateStoreProfileMutation, {
+                input: updateInput,
+            }) as Promise<UpdateStoreProfileResult>;
+        },
         onSuccess: async () => {
             toast.success(text.saved);
             setDraft(null);
@@ -191,12 +209,15 @@ function StoreManagementPage() {
     const openEditor = (profile: StoreProfileRecord) => {
         setDraft({
             id: profile.id,
-            storefrontNameZh: profile.channel.customFields.storefrontNameZh,
-            storefrontNameEn: profile.channel.customFields.storefrontNameEn,
+            storefrontNameZh: profile.channel.customFields.storefrontNameZh ?? '',
+            storefrontNameEn: profile.channel.customFields.storefrontNameEn ?? '',
+            originalStorefrontNameZh: profile.channel.customFields.storefrontNameZh ?? '',
+            originalStorefrontNameEn: profile.channel.customFields.storefrontNameEn ?? '',
             status: profile.status,
             sortOrder: String(profile.sortOrder),
             descriptionZh: profile.descriptionZh,
             descriptionEn: profile.descriptionEn,
+            internalNote: profile.internalNote ?? '',
             logoAsset: profile.logoAsset,
             activationReadiness: profile.activationReadiness,
         });
@@ -208,7 +229,12 @@ function StoreManagementPage() {
             toast.error(text.invalidOrder);
             return;
         }
-        if (!validStorefrontName(draft.storefrontNameZh) || !validStorefrontName(draft.storefrontNameEn)) {
+        if (
+            (draft.storefrontNameZh !== draft.originalStorefrontNameZh &&
+                !validStorefrontName(draft.storefrontNameZh)) ||
+            (draft.storefrontNameEn !== draft.originalStorefrontNameEn &&
+                !validStorefrontName(draft.storefrontNameEn))
+        ) {
             toast.error(text.invalidName);
             return;
         }
@@ -276,8 +302,7 @@ function StoreManagementPage() {
                         <>
                             <div className="pb-3 text-sm text-muted-foreground">
                                 {profiles.length} {text.stores} ·{' '}
-                                {profiles.filter(profile => profile.status === 'ACTIVE').length}{' '}
-                                {text.enabled}
+                                {profiles.filter(profile => profile.isOperational).length} {text.enabled}
                             </div>
                             <div className="divide-y">
                                 {profiles.map(profile => (
@@ -338,6 +363,9 @@ function StoreProfileRow({
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-medium">{name || profile.channel.code}</span>
                         <StatusBadge status={profile.status} text={text} />
+                        {profile.isOperational && profile.status !== 'ACTIVE' && (
+                            <Badge variant="secondary">{text.accessible}</Badge>
+                        )}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span>{profile.channel.seller?.name ?? profile.channel.code}</span>
@@ -466,6 +494,20 @@ function ProfileEditor({
                                 onChange={event => update('descriptionEn', event.target.value)}
                             />
                         </Field>
+                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                            {text.publicDescriptionHelp}
+                        </p>
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="profile-internal-note">{text.internalNote}</Label>
+                            <Textarea
+                                id="profile-internal-note"
+                                rows={4}
+                                maxLength={2000}
+                                value={draft.internalNote}
+                                onChange={event => update('internalNote', event.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">{text.internalNoteHelp}</p>
+                        </div>
                         <div className="space-y-3 border-t pt-4 sm:col-span-2">
                             <div>
                                 <Label>{text.readiness}</Label>

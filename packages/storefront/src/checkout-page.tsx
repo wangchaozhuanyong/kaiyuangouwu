@@ -737,8 +737,8 @@ export function CheckoutPage({
                         <CircleCheck />
                         {physicalLines.length
                             ? isZh
-                                ? '正品保障'
-                                : 'Authenticity'
+                                ? '下单信息'
+                                : 'Order details'
                             : isZh
                               ? '安全购买'
                               : 'Secure purchase'}
@@ -893,13 +893,17 @@ function CheckoutItemsGroup({
                             <strong>{line.productVariant.name}</strong>
                             <small>{line.productVariant.sku}</small>
                             <em>
-                                {line.productVariant.customFields.fulfillmentType === 'digital'
+                                {line.productVariant.customFields.digitalDeliveryMode === 'auto_card'
                                     ? isZh
-                                        ? '付款后发送至邮箱'
-                                        : 'Sent by email after payment'
-                                    : isZh
-                                      ? '售后支持 · 正品保障'
-                                      : 'After-sales support'}
+                                        ? `付款后邮箱自动发卡 · 不支持退款 · 可用 ${line.productVariant.autoCardAvailableStock ?? 0} 份`
+                                        : `Automatic email delivery · non-refundable · ${line.productVariant.autoCardAvailableStock ?? 0} available`
+                                    : line.productVariant.customFields.fulfillmentType === 'digital'
+                                      ? isZh
+                                          ? '付款后发送至邮箱'
+                                          : 'Sent by email after payment'
+                                      : isZh
+                                        ? '配送与售后信息以订单为准'
+                                        : 'After-sales support'}
                             </em>
                         </div>
                         <span className="checkout-line-meta">
@@ -927,7 +931,13 @@ function CheckoutItemsGroup({
                                     <small aria-live="polite">{line.quantity}</small>
                                     <button
                                         type="button"
-                                        disabled={quantityUpdatingVariantId === line.productVariant.id}
+                                        disabled={
+                                            quantityUpdatingVariantId === line.productVariant.id ||
+                                            (line.productVariant.customFields.digitalDeliveryMode ===
+                                                'auto_card' &&
+                                                line.quantity >=
+                                                    (line.productVariant.autoCardAvailableStock ?? 0))
+                                        }
                                         onClick={() =>
                                             onQuantity?.(line.productVariant.id, line.quantity + 1)
                                         }

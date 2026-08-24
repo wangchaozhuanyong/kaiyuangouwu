@@ -8,6 +8,7 @@ import {
     RequestContext,
     TransactionalConnection,
     UserInputError,
+    idsAreEqual,
     isGraphQlErrorResult,
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
@@ -15,6 +16,7 @@ import { In } from 'typeorm';
 
 import { StoreProfile } from './entities/store-profile.entity';
 import { StoreActivationReadinessService } from './store-activation-readiness.service';
+import { isOperationalStorefront } from './storefront-activation.service';
 import { StoreProfileStatus, UpdateMyStoreProfileInput, UpdateStoreProfileInput } from './types';
 
 interface StorefrontChannelFields {
@@ -46,6 +48,7 @@ export class StoreProfileService {
                 sortOrder: (last?.sortOrder ?? -1) + 1,
                 descriptionZh: '',
                 descriptionEn: '',
+                internalNote: '',
                 logoAsset: null,
                 logoAssetId: null,
             }),
@@ -95,6 +98,7 @@ export class StoreProfileService {
             profile.descriptionEn,
             '英文简介',
         );
+        profile.internalNote = this.normalizeInternalNote(input.internalNote, profile.internalNote);
         await this.updateStorefrontNames(ctx, profile, input.storefrontNameZh, input.storefrontNameEn);
 
         if (input.logoAssetId !== undefined) {
@@ -148,6 +152,17 @@ export class StoreProfileService {
         profiles: StoreProfile[],
     ): Promise<StoreProfile[]> {
         await this.attachDomains(ctx, profiles);
+        const defaultChannel = await this.channelService.getDefaultChannel(ctx);
+        for (const profile of profiles) {
+            profile.isOperational = isOperationalStorefront({
+                isDefaultChannel: idsAreEqual(profile.channelId, defaultChannel.id),
+                status: profile.status,
+                isPlatformOwned:
+                    Boolean(profile.channel.sellerId) &&
+                    idsAreEqual(profile.channel.sellerId, defaultChannel.sellerId),
+                hasVerifiedPrimaryDomain: Boolean(profile.primaryDomain),
+            });
+        }
         await Promise.all(
             profiles.map(async profile => {
                 profile.activationReadiness = await this.activationReadinessService.get(ctx, profile);
@@ -205,6 +220,17 @@ export class StoreProfileService {
         const normalized = value.trim();
         if (normalized.length > 800) {
             throw new UserInputError(`${label}不能超过 800 个字符`);
+        }
+        return normalized;
+    }
+
+    private normalizeInternalNote(value: string | null | undefined, current: string | null): string | null {
+        if (value == null) {
+            return current;
+        }
+        const normalized = value.trim();
+        if (normalized.length > 2_000) {
+            throw new UserInputError('内部备注不能超过 2000 个字符');
         }
         return normalized;
     }

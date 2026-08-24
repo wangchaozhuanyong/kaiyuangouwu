@@ -3,13 +3,11 @@ import { gql } from 'graphql-tag';
 
 export const storeTemplatesQuery = gql`
     query StoreProvisioningTemplates {
-        channels(options: { take: 100, sort: { code: ASC } }) {
-            items {
-                id
-                code
-                defaultLanguageCode
-                defaultCurrencyCode
-            }
+        storeProvisioningTemplates {
+            id
+            code
+            defaultLanguageCode
+            defaultCurrencyCode
         }
     }
 `;
@@ -37,9 +35,7 @@ export interface StoreTemplate {
 }
 
 export interface StoreTemplatesResult {
-    channels: {
-        items: StoreTemplate[];
-    };
+    storeProvisioningTemplates: StoreTemplate[];
 }
 
 export interface ProvisionStoreResult {
@@ -68,8 +64,10 @@ export interface StoreProfileRecord {
     sortOrder: number;
     descriptionZh: string;
     descriptionEn: string;
+    internalNote: string | null;
     primaryDomain: string | null;
     storefrontUrl: string | null;
+    isOperational: boolean;
     logoAsset: Asset | null;
     activationReadiness: StoreActivationReadiness;
     channel: {
@@ -98,8 +96,10 @@ const storeProfileFields = gql`
         sortOrder
         descriptionZh
         descriptionEn
+        internalNote
         primaryDomain
         storefrontUrl
+        isOperational
         activationReadiness {
             ready
             checks {

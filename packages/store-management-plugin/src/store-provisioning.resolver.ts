@@ -1,4 +1,4 @@
-import { Args, Mutation, Resolver } from '@nestjs/graphql';
+import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { StoreProvisioningService } from './store-provisioning.service';
@@ -7,6 +7,12 @@ import { ProvisionStoreInput } from './types';
 @Resolver()
 export class StoreProvisioningResolver {
     constructor(private readonly storeProvisioningService: StoreProvisioningService) {}
+
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    storeProvisioningTemplates(@Ctx() ctx: RequestContext) {
+        return this.storeProvisioningService.findTemplates(ctx);
+    }
 
     @Transaction()
     @Mutation()

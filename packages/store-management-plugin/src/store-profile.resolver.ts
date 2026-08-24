@@ -1,13 +1,18 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { storeProfilePermission } from './constants';
 import { StoreProfileService } from './store-profile.service';
 import { UpdateMyStoreProfileInput, UpdateStoreProfileInput } from './types';
 
-@Resolver()
+@Resolver('StoreProfile')
 export class StoreProfileAdminResolver {
     constructor(private readonly storeProfileService: StoreProfileService) {}
+
+    @ResolveField()
+    internalNote(@Ctx() ctx: RequestContext, @Parent() profile: { internalNote?: string | null }) {
+        return ctx.userHasPermissions([Permission.SuperAdmin]) ? (profile.internalNote ?? null) : null;
+    }
 
     @Query()
     @Allow(Permission.SuperAdmin)

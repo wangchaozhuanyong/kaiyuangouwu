@@ -3,6 +3,7 @@ import { defineDashboardExtension, NavMenuConfig, NavMenuItem, NavMenuSection } 
 import { Boxes, ShieldCheck } from 'lucide-react';
 
 import { afterSalesRoute } from './after-sales-page';
+import { autoCardRoute } from './auto-card-page';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { reviewModerationRoute } from './review-moderation-page';
 import { StoreOverviewWidget } from './store-overview-widget';
@@ -11,6 +12,7 @@ const navigationMessages = {
     workbench: msg({ id: 'operations.nav.workbench', message: 'Workspace' }),
     productCenter: msg({ id: 'operations.nav.productCenter', message: 'Product center' }),
     orderCenter: msg({ id: 'operations.nav.orderCenter', message: 'Order center' }),
+    orderManagement: msg({ id: 'operations.nav.orderManagement', message: 'Order management' }),
     customerCenter: msg({ id: 'operations.nav.customerCenter', message: 'Customer center' }),
     marketingCenter: msg({ id: 'operations.nav.marketingCenter', message: 'Marketing center' }),
     inventoryAndFulfillment: msg({
@@ -43,6 +45,7 @@ function updateItemTitle(item: NavMenuItem): NavMenuItem {
         'option-groups': navigationMessages.specificationTemplates.id,
         facets: navigationMessages.productAttributes.id,
         collections: navigationMessages.productGroups.id,
+        orders: navigationMessages.orderManagement.id,
         'stock-locations': navigationMessages.warehouses.id,
         channels: navigationMessages.stores.id,
     };
@@ -68,7 +71,7 @@ function takeItems(config: NavMenuConfig, ids: string[]): NavMenuItem[] {
 }
 
 defineDashboardExtension({
-    routes: [afterSalesRoute, reviewModerationRoute],
+    routes: [afterSalesRoute, autoCardRoute, reviewModerationRoute],
     widgets: [
         {
             id: 'store-overview-widget',

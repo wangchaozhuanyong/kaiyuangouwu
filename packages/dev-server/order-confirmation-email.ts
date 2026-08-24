@@ -6,18 +6,14 @@ export function normalizeDeliveryEmail(value: string | null | undefined): string
 }
 
 export function orderConfirmationRecipient(
-    isDigitalOrder: boolean,
+    containsDigitalProducts: boolean,
     deliveryEmail: string | null | undefined,
     customerEmail: string,
 ): string {
-    return (isDigitalOrder && normalizeDeliveryEmail(deliveryEmail)) || customerEmail;
+    return (containsDigitalProducts && normalizeDeliveryEmail(deliveryEmail)) || customerEmail;
 }
 
-export function buildOrderConfirmationUrl(
-    storefrontUrl: string,
-    orderCode: string,
-    token: string,
-): string {
+export function buildOrderConfirmationUrl(storefrontUrl: string, orderCode: string, token: string): string {
     const orderId = encodeURIComponent(orderCode);
     const confirmationToken = encodeURIComponent(token);
     return `${storefrontUrl}/#/order-confirmation?id=${orderId}&token=${confirmationToken}`;

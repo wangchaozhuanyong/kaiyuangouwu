@@ -14,7 +14,12 @@ beforeAll(async () => {
     await generator.onInit({ templateLoader } as never);
 });
 
-async function renderTemplate(type: string, languageCode: string, digitalOrder = false) {
+async function renderTemplate(
+    type: string,
+    languageCode: string,
+    digitalOrder = false,
+    containsDigitalProducts = digitalOrder,
+) {
     const template = await fs.readFile(path.join(templatePath, type, 'body.hbs'), 'utf8');
     const templateVars = {
         ...emailLanguageVariables(languageCode),
@@ -32,7 +37,8 @@ async function renderTemplate(type: string, languageCode: string, digitalOrder =
             'change+token',
         ),
         isDigitalOrder: digitalOrder,
-        digitalDeliveryActionUrl: digitalOrder
+        containsDigitalProducts,
+        digitalDeliveryActionUrl: containsDigitalProducts
             ? 'https://shop.example.com/#/order-confirmation?id=ORDER-1001&token=signed%2Btoken'
             : undefined,
         order: {
@@ -77,6 +83,49 @@ async function renderTemplate(type: string, languageCode: string, digitalOrder =
 
 describe('localized email templates', () => {
     it.each([
+        ['zh_Hans', true, '虚拟商品发货通知', '商品使用说明', '不支持自助退款'],
+        [
+            'en',
+            false,
+            'Digital credential delivery',
+            'Product instructions',
+            'not eligible for self-service refunds',
+        ],
+    ])(
+        'renders structured automatic credential delivery in %s',
+        async (languageCode, isChinese, heading, instructionsHeading, refundCopy) => {
+            const template = await fs.readFile(
+                path.join(templatePath, 'auto-card-delivery', 'body.hbs'),
+                'utf8',
+            );
+            const result = await generator.generate('store@example.com', 'Subject', template, {
+                ...emailLanguageVariables(languageCode),
+                isChinese,
+                orderCode: 'ORDER-2002',
+                productName: 'Google account',
+                sku: 'GOOGLE-001',
+                instructions: '首次登录后请修改密码',
+                credentials: [
+                    {
+                        number: 1,
+                        fields: [
+                            { key: 'account', label: '账号', value: 'buyer@example.com', secret: false },
+                            { key: 'password', label: '密码', value: 'example-secret', secret: true },
+                        ],
+                    },
+                ],
+            });
+
+            expect(result.body).toContain(heading);
+            expect(result.body).toContain(instructionsHeading);
+            expect(result.body).toContain(refundCopy);
+            expect(result.body).toContain('buyer@example.com');
+            expect(result.body).toContain('example-secret');
+            expect(result.body).toContain('首次登录后请修改密码');
+        },
+    );
+
+    it.each([
         ['email-verification', '感谢您注册', '验证电子邮箱'],
         ['password-reset', '重置您账户密码', '重置密码'],
         ['email-address-change', '更改为当前地址', '验证新的电子邮箱'],
@@ -113,6 +162,15 @@ describe('localized email templates', () => {
         expect(verification.body).toContain(`${ACCOUNT_TOKEN_EXPIRY_HOURS} hours`);
         expect(passwordReset.body).toContain('token&#x3D;reset%2Btoken');
         expect(passwordReset.body).toContain(`${ACCOUNT_TOKEN_EXPIRY_HOURS} 小时`);
+    });
+
+    it('includes secure digital delivery and a shipping address for a mixed order', async () => {
+        const result = await renderTemplate('order-confirmation', 'zh_Hans', false, true);
+
+        expect(result.body).toContain('数字内容已准备');
+        expect(result.body).toContain('查看订单并领取');
+        expect(result.body).toContain('收货地址');
+        expect(result.body).toContain('1 Market Street');
     });
 
     it.each([

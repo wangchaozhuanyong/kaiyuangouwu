@@ -7,11 +7,21 @@ import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constant
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreProfile } from './entities/store-profile.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
+import { SystemAnnouncement } from './entities/system-announcement.entity';
 import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.interceptor';
 import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import {
+    collectionPercentageDiscount,
+    flashSalePriceAction,
+} from './promotion/store-commerce-promotion-actions';
+import {
+    StorePromotionCampaignAdminResolver,
+    StorePromotionCampaignShopResolver,
+} from './promotion/store-promotion-campaign.resolver';
+import { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service';
 import { StorefrontEntryMiddleware } from './promotion/storefront-entry.middleware';
 import { StorefrontPromotionAccessService } from './promotion/storefront-promotion-access.service';
 import { StorefrontPromotionHtmlService } from './promotion/storefront-promotion-html.service';
@@ -28,11 +38,16 @@ import { StoreProvisioningService } from './store-provisioning.service';
 import { StorefrontActivationInterceptor } from './storefront-activation.interceptor';
 import { StorefrontActivationService } from './storefront-activation.service';
 import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
+import {
+    SystemAnnouncementAdminResolver,
+    SystemAnnouncementShopResolver,
+} from './system-announcement.resolver';
+import { SystemAnnouncementService } from './system-announcement.service';
 import { StorefrontPromotionPluginOptions } from './types';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
-    entities: [StoreAdministratorAccess, StoreProfile, StorefrontPromotionPage],
+    entities: [StoreAdministratorAccess, StoreProfile, StorefrontPromotionPage, SystemAnnouncement],
     controllers: [StorefrontPromotionController],
     providers: [
         MerchantCatalogAccessService,
@@ -46,6 +61,8 @@ import { StorefrontPromotionPluginOptions } from './types';
         StorefrontPromotionAccessService,
         StorefrontPromotionHtmlService,
         StorefrontPromotionService,
+        StorePromotionCampaignService,
+        SystemAnnouncementService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
@@ -65,6 +82,11 @@ import { StorefrontPromotionPluginOptions } from './types';
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(storeProfilePermission);
+        for (const action of [collectionPercentageDiscount, flashSalePriceAction]) {
+            if (!config.promotionOptions.promotionActions.some(candidate => candidate.code === action.code)) {
+                config.promotionOptions.promotionActions.push(action);
+            }
+        }
         return config;
     },
     adminApiExtensions: {
@@ -75,11 +97,17 @@ import { StorefrontPromotionPluginOptions } from './types';
             StoreProfileAdminResolver,
             StoreCommerceSettingsResolver,
             StorefrontPromotionAdminResolver,
+            StorePromotionCampaignAdminResolver,
+            SystemAnnouncementAdminResolver,
         ],
     },
     shopApiExtensions: {
         schema: shopApiExtensions,
-        resolvers: [StorefrontBrandingShopResolver],
+        resolvers: [
+            StorefrontBrandingShopResolver,
+            StorePromotionCampaignShopResolver,
+            SystemAnnouncementShopResolver,
+        ],
     },
     dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',

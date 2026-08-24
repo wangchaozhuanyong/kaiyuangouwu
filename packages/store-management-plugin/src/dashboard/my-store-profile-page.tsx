@@ -37,6 +37,8 @@ import {
 interface ProfileDraft {
     storefrontNameZh: string;
     storefrontNameEn: string;
+    originalStorefrontNameZh: string;
+    originalStorefrontNameEn: string;
     descriptionZh: string;
     descriptionEn: string;
     logoAsset: Asset | null;
@@ -53,8 +55,9 @@ const zhCopy = {
     basic: '基础资料',
     storefrontNameZh: '中文店铺名称',
     storefrontNameEn: '英文店铺名称',
-    descriptionZh: '中文简介',
-    descriptionEn: '英文简介',
+    descriptionZh: '公开中文简介',
+    descriptionEn: '公开英文简介',
+    descriptionHelp: '公开简介会显示在对应语言的商城首页，并用于搜索与分享摘要。',
     logo: '店铺 Logo',
     selectLogo: '选择 Logo',
     clearLogo: '移除 Logo',
@@ -63,8 +66,9 @@ const zhCopy = {
     code: '店铺编码',
     domain: '当前主域名',
     noDomain: '尚未验证主域名',
-    active: '正常',
-    draft: '待启用',
+    active: '已上线',
+    draft: '草稿',
+    accessible: '可访问',
     suspended: '已停用',
     invalidName: '中英文店铺名称都必须是 1 至 16 个显示单位',
     readiness: '上线检查',
@@ -83,8 +87,9 @@ const enCopy: typeof zhCopy = {
     basic: 'Store details',
     storefrontNameZh: 'Chinese store name',
     storefrontNameEn: 'English store name',
-    descriptionZh: 'Chinese description',
-    descriptionEn: 'English description',
+    descriptionZh: 'Public Chinese description',
+    descriptionEn: 'Public English description',
+    descriptionHelp: 'Public descriptions appear on the storefront and in search/share summaries.',
     logo: 'Store logo',
     selectLogo: 'Select logo',
     clearLogo: 'Remove logo',
@@ -94,7 +99,8 @@ const enCopy: typeof zhCopy = {
     domain: 'Primary domain',
     noDomain: 'No verified primary domain',
     active: 'Active',
-    draft: 'Pending',
+    draft: 'Draft',
+    accessible: 'Accessible',
     suspended: 'Suspended',
     invalidName: 'Both store names must use 1 to 16 display units',
     readiness: 'Launch checks',
@@ -126,7 +132,7 @@ function MyStoreProfilePage() {
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
     const profileQuery = useQuery({
         queryKey: ['my-store-profile', activeChannel?.id],
-        queryFn: () => api.query(myStoreProfileQuery) as Promise<MyStoreProfileResult>,
+        queryFn: () => api.query<MyStoreProfileResult>(myStoreProfileQuery),
         enabled: Boolean(activeChannel?.id),
     });
     const profile = profileQuery.data?.myStoreProfile;
@@ -137,16 +143,22 @@ function MyStoreProfilePage() {
     }, [profile]);
 
     const mutation = useMutation({
-        mutationFn: (input: ProfileDraft) =>
-            api.mutate(updateMyStoreProfileMutation, {
-                input: {
-                    storefrontNameZh: input.storefrontNameZh,
-                    storefrontNameEn: input.storefrontNameEn,
-                    descriptionZh: input.descriptionZh,
-                    descriptionEn: input.descriptionEn,
-                    logoAssetId: input.logoAsset?.id ?? null,
-                },
-            }) as Promise<UpdateMyStoreProfileResult>,
+        mutationFn: (input: ProfileDraft) => {
+            const updateInput: Record<string, unknown> = {
+                descriptionZh: input.descriptionZh,
+                descriptionEn: input.descriptionEn,
+                logoAssetId: input.logoAsset?.id ?? null,
+            };
+            if (input.storefrontNameZh !== input.originalStorefrontNameZh) {
+                updateInput.storefrontNameZh = input.storefrontNameZh;
+            }
+            if (input.storefrontNameEn !== input.originalStorefrontNameEn) {
+                updateInput.storefrontNameEn = input.storefrontNameEn;
+            }
+            return api.mutate(updateMyStoreProfileMutation, {
+                input: updateInput,
+            }) as Promise<UpdateMyStoreProfileResult>;
+        },
         onSuccess: result => {
             setDraft(toDraft(result.updateMyStoreProfile));
             toast.success(text.saved);
@@ -156,7 +168,12 @@ function MyStoreProfilePage() {
 
     const save = () => {
         if (!draft) return;
-        if (!validStorefrontName(draft.storefrontNameZh) || !validStorefrontName(draft.storefrontNameEn)) {
+        if (
+            (draft.storefrontNameZh !== draft.originalStorefrontNameZh &&
+                !validStorefrontName(draft.storefrontNameZh)) ||
+            (draft.storefrontNameEn !== draft.originalStorefrontNameEn &&
+                !validStorefrontName(draft.storefrontNameEn))
+        ) {
             toast.error(text.invalidName);
             return;
         }
@@ -198,7 +215,7 @@ function MyStoreProfilePage() {
                                     type="button"
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => profileQuery.refetch()}
+                                    onClick={() => void profileQuery.refetch()}
                                 >
                                     <RefreshCw className="size-4" aria-hidden="true" />
                                     {text.retry}
@@ -243,6 +260,9 @@ function MyStoreProfilePage() {
                                     onChange={event => update('descriptionEn', event.target.value)}
                                 />
                             </div>
+                            <p className="text-xs text-muted-foreground sm:col-span-2">
+                                {text.descriptionHelp}
+                            </p>
                             <div className="space-y-2 sm:col-span-2">
                                 <Label>{text.logo}</Label>
                                 <div className="flex flex-wrap items-center gap-3 border-t pt-3">
@@ -337,6 +357,9 @@ function StoreOperation({
                     <Badge variant={profile.status === 'SUSPENDED' ? 'destructive' : 'secondary'}>
                         {statusLabel}
                     </Badge>
+                    {profile.isOperational && profile.status !== 'ACTIVE' && (
+                        <Badge variant="secondary">{text.accessible}</Badge>
+                    )}
                 </dd>
             </div>
             <DataRow label={text.merchant} value={profile.channel.seller?.name ?? profile.channel.code} />
@@ -412,6 +435,8 @@ function toDraft(profile: MyStoreProfileRecord): ProfileDraft {
     return {
         storefrontNameZh: profile.channel.customFields.storefrontNameZh,
         storefrontNameEn: profile.channel.customFields.storefrontNameEn,
+        originalStorefrontNameZh: profile.channel.customFields.storefrontNameZh,
+        originalStorefrontNameEn: profile.channel.customFields.storefrontNameEn,
         descriptionZh: profile.descriptionZh,
         descriptionEn: profile.descriptionEn,
         logoAsset: profile.logoAsset,

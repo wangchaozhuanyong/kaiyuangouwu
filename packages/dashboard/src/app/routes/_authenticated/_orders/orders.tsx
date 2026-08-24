@@ -5,26 +5,76 @@ import {
     OrderStateCell,
 } from '@/vdb/components/shared/table-cell/order-table-cell-components.js';
 import { Button } from '@/vdb/components/ui/button.js';
+import { Tabs, TabsList, TabsTrigger } from '@/vdb/components/ui/tabs.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
+import { PageActionBarLeft } from '@/vdb/framework/layout-engine/page-layout.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { ResultOf } from '@/vdb/graphql/graphql.js';
-import { useServerConfig } from '@/vdb/hooks/use-server-config.js';
+import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
+import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { PlusIcon } from 'lucide-react';
 import { createDraftOrderDocument, orderListDocument } from './orders.graphql.js';
 
+const orderCenterMessages = {
+    all: msg({ id: 'orderCenter.status.all', message: 'All orders' }),
+    awaitingPayment: msg({ id: 'orderCenter.status.awaitingPayment', message: 'Awaiting payment' }),
+    awaitingShipment: msg({ id: 'orderCenter.status.awaitingShipment', message: 'Awaiting shipment' }),
+    fulfillNow: msg({ id: 'orderCenter.actions.fulfillNow', message: 'Fulfill now' }),
+    viewLogistics: msg({ id: 'orderCenter.actions.viewLogistics', message: 'View logistics' }),
+    viewOrder: msg({ id: 'orderCenter.actions.viewOrder', message: 'View order' }),
+};
+
+const orderListStatuses = [
+    'ALL',
+    'AWAITING_PAYMENT',
+    'AWAITING_SHIPMENT',
+    'SHIPPED',
+    'COMPLETED',
+    'CLOSED',
+] as const;
+
+type OrderListStatus = (typeof orderListStatuses)[number];
+
+const orderStatesByStatus: Record<OrderListStatus, string[]> = {
+    ALL: [],
+    AWAITING_PAYMENT: ['ArrangingPayment', 'ArrangingAdditionalPayment'],
+    AWAITING_SHIPMENT: ['PaymentAuthorized', 'PaymentSettled'],
+    SHIPPED: ['PartiallyShipped', 'Shipped', 'PartiallyDelivered'],
+    COMPLETED: ['Delivered'],
+    CLOSED: ['Cancelled'],
+};
+
+function isOrderListStatus(value: unknown): value is OrderListStatus {
+    return typeof value === 'string' && orderListStatuses.includes(value as OrderListStatus);
+}
+
 export const Route = createFileRoute('/_authenticated/_orders/orders')({
+    validateSearch: (search: Record<string, unknown>) => ({
+        ...search,
+        status: isOrderListStatus(search.status) ? search.status : 'ALL',
+    }),
     component: OrderListPage,
     loader: () => ({ breadcrumb: () => <Trans>Orders</Trans> }),
 });
 
 function OrderListPage() {
-    const serverConfig = useServerConfig();
     const navigate = useNavigate();
     const { t } = useLingui();
+    const { getTranslatedOrderState } = useDynamicTranslations();
+    const routeSearch = Route.useSearch();
+    const status: OrderListStatus = isOrderListStatus(routeSearch.status) ? routeSearch.status : 'ALL';
+    const statusLabels: Record<OrderListStatus, string> = {
+        ALL: t(orderCenterMessages.all),
+        AWAITING_PAYMENT: t(orderCenterMessages.awaitingPayment),
+        AWAITING_SHIPMENT: t(orderCenterMessages.awaitingShipment),
+        SHIPPED: getTranslatedOrderState('Shipped'),
+        COMPLETED: getTranslatedOrderState('Delivered'),
+        CLOSED: getTranslatedOrderState('Cancelled'),
+    };
     const { mutate: createDraftOrder } = useMutation({
         mutationFn: api.mutate(createDraftOrderDocument),
         onSuccess: (result: ResultOf<typeof createDraftOrderDocument>) => {
@@ -60,6 +110,18 @@ function OrderListPage() {
             defaultSort={[{ id: 'updatedAt', desc: true }]}
             listQuery={orderListDocument}
             route={Route}
+            transformVariables={variables => {
+                const states = orderStatesByStatus[status];
+                const filter = variables.options?.filter ?? {};
+                return {
+                    ...variables,
+                    options: {
+                        ...variables.options,
+                        filter: states.length ? { ...filter, state: { in: states } } : filter,
+                    },
+                };
+            }}
+            transformQueryKey={queryKey => [...queryKey, status]}
             customizeColumns={{
                 total: {
                     meta: { dependencies: ['currencyCode'] },
@@ -99,6 +161,7 @@ function OrderListPage() {
                 'totalWithTax',
                 'state',
                 'shippingLines',
+                'operation',
             ]}
             defaultVisibility={{
                 code: true,
@@ -107,20 +170,60 @@ function OrderListPage() {
                 totalWithTax: true,
                 state: true,
                 shippingLines: true,
+                operation: true,
             }}
-            facetedFilters={{
-                state: {
-                    title: t`Order status`,
-                    options:
-                        serverConfig?.orderProcess.map(state => {
-                            return {
-                                label: state.name,
-                                value: state.name,
-                            };
-                        }) ?? [],
+            additionalColumns={{
+                operation: {
+                    meta: { dependencies: ['id', 'state'] },
+                    header: () => <Trans>Actions</Trans>,
+                    cell: ({ row }) => {
+                        const order = row.original;
+                        const canFulfill = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
+                        const hasShipped = ['PartiallyShipped', 'Shipped', 'PartiallyDelivered'].includes(
+                            order.state,
+                        );
+                        return (
+                            <Button
+                                size="sm"
+                                variant={canFulfill ? 'default' : 'outline'}
+                                render={<Link to="/orders/$id" params={{ id: order.id }} />}
+                            >
+                                {canFulfill
+                                    ? t(orderCenterMessages.fulfillNow)
+                                    : hasShipped
+                                      ? t(orderCenterMessages.viewLogistics)
+                                      : t(orderCenterMessages.viewOrder)}
+                            </Button>
+                        );
+                    },
+                    enableSorting: false,
                 },
             }}
         >
+            <PageActionBarLeft>
+                <Tabs
+                    value={status}
+                    onValueChange={value => {
+                        if (!isOrderListStatus(value)) return;
+                        void navigate({
+                            to: '/orders',
+                            search: (previous: Record<string, unknown>) => ({
+                                ...previous,
+                                status: value,
+                                page: 1,
+                            }),
+                        });
+                    }}
+                >
+                    <TabsList className="h-auto flex-wrap justify-start">
+                        {orderListStatuses.map(item => (
+                            <TabsTrigger key={item} value={item}>
+                                {statusLabels[item]}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </Tabs>
+            </PageActionBarLeft>
             <ActionBarItem itemId="create-draft-button">
                 <Button onClick={() => createDraftOrder({})}>
                     <PlusIcon className="mr-2 h-4 w-4" />

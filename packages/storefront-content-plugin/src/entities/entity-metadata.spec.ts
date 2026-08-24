@@ -98,8 +98,10 @@ describe('storefront content entity metadata', () => {
         const joinColumns = getMetadataArgsStorage().joinColumns;
         const expected = [
             [StorefrontContentBlock, 'channel', 'FK_storefront_content_block_channel'],
+            [StorefrontContentBlock, 'imageAsset', 'FK_storefront_content_block_image_asset'],
             [StorefrontContentBlockTranslation, 'base', 'FK_storefront_content_block_translation_base'],
             [StorefrontContentItem, 'block', 'FK_storefront_content_item_block'],
+            [StorefrontContentItem, 'imageAsset', 'FK_storefront_content_item_image_asset'],
             [StorefrontContentItemTranslation, 'base', 'FK_storefront_content_item_translation_base'],
             [StorefrontContentSettings, 'channel', 'FK_storefront_content_settings_channel'],
         ] as const;

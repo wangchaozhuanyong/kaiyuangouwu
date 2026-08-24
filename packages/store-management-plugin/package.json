@@ -4,6 +4,16 @@
     "private": true,
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./account-entry-proof": {
+            "types": "./dist/promotion/account-entry-proof.d.ts",
+            "default": "./dist/promotion/account-entry-proof.js"
+        }
+    },
     "scripts": {
         "build": "tsc --project tsconfig.build.json",
         "check-types": "tsc --project tsconfig.json --noEmit",
@@ -11,6 +21,8 @@
     },
     "dependencies": {
         "@lingui/react": "^5.9.3",
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/core": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
@@ -19,10 +31,13 @@
         "cheerio": "1.0.0",
         "graphql-tag": "^2.12.6",
         "lucide-react": "^0.475.0",
-        "markdown-it": "14.3.0"
+        "markdown-it": "14.3.0",
+        "reflect-metadata": "^0.2.2",
+        "typeorm": "^0.3.21"
     },
     "devDependencies": {
         "@types/express": "^5.0.0",
+        "@types/react": "^19.2.14",
         "typescript": "5.8.2",
         "vitest": "^3.2.4"
     },

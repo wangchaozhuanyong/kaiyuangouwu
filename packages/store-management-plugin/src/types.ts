@@ -1,5 +1,30 @@
 import type { CurrencyCode, ID } from '@vendure/core';
 
+export interface CreateSystemAnnouncementInput {
+    enabled?: boolean | null;
+    priority?: number | null;
+    titleZh: string;
+    titleEn?: string | null;
+    contentZh: string;
+    contentEn?: string | null;
+    linkUrl?: string | null;
+    startsAt?: Date | null;
+    endsAt?: Date | null;
+}
+
+export interface UpdateSystemAnnouncementInput extends CreateSystemAnnouncementInput {
+    id: ID;
+}
+
+export interface SystemAnnouncementPublicView {
+    id: ID;
+    title: string;
+    content: string;
+    linkUrl: string | null;
+    startsAt: Date | null;
+    endsAt: Date | null;
+}
+
 export type StorefrontPromotionContentType = 'HTML' | 'MARKDOWN';
 
 export interface StorefrontPromotionPageView {
@@ -25,6 +50,75 @@ export interface StorefrontPromotionPluginOptions {
     secureCookie?: boolean;
     trustProxyHeaders?: boolean;
     bypassHosts?: string[];
+}
+
+export type StoreCouponCampaignKind =
+    'ORDER_FIXED' | 'ORDER_PERCENTAGE' | 'COLLECTION_PERCENTAGE' | 'PRODUCT_PERCENTAGE';
+
+export interface CreateStoreCouponCampaignInput {
+    name: string;
+    couponCode: string;
+    kind: StoreCouponCampaignKind;
+    minimumSpend?: number | null;
+    discountAmount?: number | null;
+    discountRate?: number | null;
+    collectionIds?: ID[] | null;
+    productIds?: ID[] | null;
+    startsAt?: Date | null;
+    endsAt?: Date | null;
+    usageLimit?: number | null;
+    perCustomerUsageLimit?: number | null;
+}
+
+export interface StoreCouponCampaignView {
+    id: ID;
+    name: string;
+    couponCode: string;
+    kind: StoreCouponCampaignKind;
+    enabled: boolean;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+    collectionIds: ID[];
+    productVariantIds: ID[];
+    usageLimit: number | null;
+    perCustomerUsageLimit: number | null;
+}
+
+export interface StoreFlashSaleVariantPriceInput {
+    productVariantId: ID;
+    salePrice: number;
+}
+
+export interface CreateStoreFlashSaleInput {
+    name: string;
+    productIds: ID[];
+    percentageOff: number;
+    variantPrices?: StoreFlashSaleVariantPriceInput[] | null;
+    startsAt: Date;
+    endsAt: Date;
+}
+
+export interface StoreFlashSaleItemView {
+    productId: ID;
+    productVariantId: ID;
+    productName: string;
+    variantName: string;
+    originalPrice: number;
+    salePrice: number;
+    currencyCode: CurrencyCode;
+    imageUrl: string | null;
+}
+
+export interface StoreFlashSaleView {
+    id: ID;
+    name: string;
+    enabled: boolean;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    items: StoreFlashSaleItemView[];
 }
 
 export interface ProvisionStoreAdministratorInput {
@@ -87,6 +181,7 @@ export interface UpdateStoreProfileInput {
     sortOrder?: number | null;
     descriptionZh?: string | null;
     descriptionEn?: string | null;
+    internalNote?: string | null;
     logoAssetId?: ID | null;
 }
 

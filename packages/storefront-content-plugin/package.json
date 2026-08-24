@@ -16,9 +16,12 @@
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0"
+        "lucide-react": "^0.475.0",
+        "reflect-metadata": "^0.2.2",
+        "typeorm": "^0.3.21"
     },
     "devDependencies": {
+        "@types/react": "^19.2.14",
         "typescript": "5.8.2",
         "vitest": "^3.2.4"
     },

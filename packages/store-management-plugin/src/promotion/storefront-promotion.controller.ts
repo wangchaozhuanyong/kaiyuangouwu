@@ -1,10 +1,9 @@
 import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
+import { isAccountEntryRoute } from './account-entry-proof';
 import { StorefrontPromotionAccessService } from './storefront-promotion-access.service';
 import { StorefrontPromotionService } from './storefront-promotion.service';
-
-const ACCOUNT_ROUTES = new Set(['verify-account', 'reset-password']);
 
 @Controller('promo')
 export class StorefrontPromotionController {
@@ -59,9 +58,18 @@ export class StorefrontPromotionController {
         @Res() res: Response,
         @Query('route') route?: string,
         @Query('token') token?: string,
+        @Query('proof') proof?: string,
     ): Promise<void> {
         const request = await this.accessService.resolveRequest(req);
-        if (!request || !route || !ACCOUNT_ROUTES.has(route) || !token || token.length < 16) {
+        if (
+            !request ||
+            !route ||
+            !isAccountEntryRoute(route) ||
+            !token ||
+            token.length < 16 ||
+            !proof ||
+            !this.accessService.validateAccountEntryProof(proof, route, token, request)
+        ) {
             res.status(400).type('text/plain').send('账号操作链接无效');
             return;
         }

@@ -346,11 +346,13 @@ export class AddMainlandChineseCatalogContent1786515300000 implements MigrationI
         await queryRunner.query(
             `
                 INSERT INTO "${table}" ("languageCode", "name", "baseId")
-                SELECT 'zh_Hans', ?, ?
-                WHERE NOT EXISTS (
+                SELECT 'zh_Hans', ?, source.baseId
+                FROM "${table}" source
+                WHERE source.baseId = ? AND source.languageCode = 'en'
+                  AND NOT EXISTS (
                     SELECT 1 FROM "${table}"
-                    WHERE baseId = ? AND languageCode = 'zh_Hans'
-                )
+                    WHERE baseId = source.baseId AND languageCode = 'zh_Hans'
+                  )
             `,
             [name, baseId, baseId],
         );

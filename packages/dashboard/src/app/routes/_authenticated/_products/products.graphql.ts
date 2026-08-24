@@ -21,6 +21,9 @@ export const productListDocument = graphql(`
                     code
                     token
                 }
+                variants {
+                    customFields
+                }
             }
             totalItems
         }
@@ -75,6 +78,11 @@ export const productDetailFragment = graphql(
                     code
                 }
             }
+            collections {
+                id
+                name
+                slug
+            }
             customFields
         }
     `,
@@ -118,6 +126,10 @@ export const productDetailDocument = graphql(
                 variantList {
                     totalItems
                 }
+                variants {
+                    id
+                    customFields
+                }
             }
         }
     `,
@@ -149,6 +161,9 @@ export const productDetailWithVariantsDocument = graphql(`
                 name
                 sku
                 price
+                stockOnHand
+                trackInventory
+                customFields
                 currencyCode
                 priceWithTax
                 createdAt
@@ -286,6 +301,16 @@ export const updateProductVariantDocument = graphql(`
                 name
                 groupId
             }
+        }
+    }
+`);
+
+export const updateProductVariantsDocument = graphql(`
+    mutation UpdateProductVariantsForProduct($input: [UpdateProductVariantInput!]!) {
+        updateProductVariants(input: $input) {
+            id
+            customFields
+            trackInventory
         }
     }
 `);

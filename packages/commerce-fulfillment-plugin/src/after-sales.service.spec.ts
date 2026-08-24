@@ -2,16 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AfterSalesService } from './after-sales.service';
 
-function orderLine(type: 'physical' | 'digital' = 'physical') {
+function orderLine(type: 'physical' | 'digital' = 'physical', digitalDeliveryMode = 'file_download') {
     return {
         id: 'line-1',
         quantity: 2,
         proratedUnitPriceWithTax: 4_900,
-        customFields: { fulfillmentTypeSnapshot: type },
+        customFields: { fulfillmentTypeSnapshot: type, digitalDeliveryModeSnapshot: digitalDeliveryMode },
         productVariant: {
             name: type === 'digital' ? 'Digital guide' : 'Physical product',
             sku: type === 'digital' ? 'DIGITAL-1' : 'PHYSICAL-1',
-            customFields: { fulfillmentType: type },
+            customFields: { fulfillmentType: type, digitalDeliveryMode },
         },
     } as any;
 }
@@ -152,6 +152,20 @@ describe('AfterSalesService', () => {
         ).rejects.toThrow('数字商品只能申请仅退款');
     });
 
+    it('rejects all refund requests for automatically delivered credentials', async () => {
+        const test = createHarness({ line: orderLine('digital', 'auto_card') });
+
+        await expect(
+            test.service.create(test.ctx, {
+                orderId: 'order-1',
+                type: 'REFUND_ONLY',
+                reason: 'DIGITAL_CONTENT_ISSUE',
+                description: 'The credential email has not arrived.',
+                items: [{ orderLineId: 'line-1', quantity: 1 }],
+            }),
+        ).rejects.toThrow('自动发卡商品不支持申请退款');
+    });
+
     it('prevents active requests from exceeding the order-line quantity', async () => {
         const test = createHarness({
             existingRequests: [
@@ -171,6 +185,24 @@ describe('AfterSalesService', () => {
                 items: [{ orderLineId: 'line-1', quantity: 1 }],
             }),
         ).rejects.toThrow('可申请售后的数量不足');
+    });
+
+    it('supports grouping rejected and cancelled requests as closed work', async () => {
+        const test = createHarness();
+        test.requestRepository.findAndCount.mockResolvedValue([[], 0]);
+
+        await test.service.findForAdmin(test.ctx, { states: ['REJECTED', 'CANCELLED'] });
+
+        expect(test.requestRepository.findAndCount).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    state: expect.objectContaining({
+                        _type: 'in',
+                        _value: ['REJECTED', 'CANCELLED'],
+                    }),
+                }),
+            }),
+        );
     });
 
     it('uses guarded state transitions and validates approved amounts', async () => {

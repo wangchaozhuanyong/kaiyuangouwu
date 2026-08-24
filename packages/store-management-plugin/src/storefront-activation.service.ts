@@ -10,6 +10,21 @@ import { StoreDomain } from '@vendure/store-domain-plugin';
 
 import { StoreProfile } from './entities/store-profile.entity';
 
+export interface OperationalStorefrontInput {
+    isDefaultChannel: boolean;
+    status: StoreProfile['status'] | null;
+    isPlatformOwned: boolean;
+    hasVerifiedPrimaryDomain: boolean;
+}
+
+export function isOperationalStorefront(input: OperationalStorefrontInput): boolean {
+    return (
+        input.isDefaultChannel ||
+        input.status === 'ACTIVE' ||
+        (input.status === 'DRAFT' && input.isPlatformOwned && input.hasVerifiedPrimaryDomain)
+    );
+}
+
 @Injectable()
 export class StorefrontActivationService {
     constructor(
@@ -23,7 +38,8 @@ export class StorefrontActivationService {
             this.channelService.findOne(ctx, ctx.channelId),
             this.channelService.getDefaultChannel(ctx),
         ]);
-        if (channel && idsAreEqual(channel.id, defaultChannel.id)) {
+        const isDefaultChannel = Boolean(channel && idsAreEqual(channel.id, defaultChannel.id));
+        if (isDefaultChannel) {
             return;
         }
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
@@ -34,10 +50,12 @@ export class StorefrontActivationService {
             return;
         }
 
-        const isVerifiedPlatformDraft =
+        const isPlatformOwnedDraft =
             profile?.status === 'DRAFT' &&
             Boolean(channel?.sellerId) &&
-            idsAreEqual(channel?.sellerId, defaultChannel.sellerId) &&
+            idsAreEqual(channel?.sellerId, defaultChannel.sellerId);
+        const hasVerifiedPrimaryDomain =
+            isPlatformOwnedDraft &&
             (await this.connection.getRepository(ctx, StoreDomain).exists({
                 where: {
                     channelId: ctx.channelId,
@@ -45,7 +63,16 @@ export class StorefrontActivationService {
                     status: 'ACTIVE',
                 },
             }));
-        if (isVerifiedPlatformDraft) return;
+        if (
+            isOperationalStorefront({
+                isDefaultChannel,
+                status: profile?.status ?? null,
+                isPlatformOwned: isPlatformOwnedDraft,
+                hasVerifiedPrimaryDomain,
+            })
+        ) {
+            return;
+        }
 
         // Merchant, suspended, unverified, and partially provisioned Channels
         // remain fail-closed. The narrow draft exception only preserves public

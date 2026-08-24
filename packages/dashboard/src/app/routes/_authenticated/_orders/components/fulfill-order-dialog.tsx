@@ -19,7 +19,7 @@ import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ConfigurableOperationInput as ConfigurableOperationInputType } from '@vendure/common/lib/generated-types';
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -29,6 +29,11 @@ import { Order } from '../utils/order-types.js';
 interface FulfillOrderDialogProps {
     order: Order;
     onSuccess?: () => void;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    hideTrigger?: boolean;
+    closeOnSuccess?: boolean;
+    descriptionPrefix?: ReactNode;
 }
 
 interface FormData {
@@ -40,11 +45,19 @@ interface FulfillmentQuantity {
     max: number;
 }
 
-export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDialogProps>) {
+export function FulfillOrderDialog({
+    order,
+    onSuccess,
+    open: controlledOpen,
+    onOpenChange,
+    hideTrigger = false,
+    closeOnSuccess = true,
+    descriptionPrefix,
+}: Readonly<FulfillOrderDialogProps>) {
     const { t } = useLingui();
     const { displayLanguage } = useUserSettings().settings;
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [open, setOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
     const [fulfillmentQuantities, setFulfillmentQuantities] = useState<{
         [lineId: string]: FulfillmentQuantity;
     }>({});
@@ -75,7 +88,7 @@ export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDi
 
     const fulfillOrderMutation = useMutation({
         mutationFn: api.mutate(fulfillOrderDocument),
-        onSuccess: (result: any) => {
+        onSuccess: result => {
             const { addFulfillmentToOrder } = result;
             if (addFulfillmentToOrder.__typename === 'Fulfillment') {
                 toast(t`Successfully fulfilled order`);
@@ -92,6 +105,14 @@ export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDi
             });
         },
     });
+
+    const open = controlledOpen ?? internalOpen;
+    const setOpen = (nextOpen: boolean) => {
+        if (controlledOpen === undefined) {
+            setInternalOpen(nextOpen);
+        }
+        onOpenChange?.(nextOpen);
+    };
 
     const form = useForm<FormData>({
         defaultValues: {
@@ -179,13 +200,18 @@ export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDi
                     quantity: fulfillCount,
                 }));
 
-            await fulfillOrderMutation.mutateAsync({
+            const result = await fulfillOrderMutation.mutateAsync({
                 input: {
                     lines,
                     handler: data.handler,
                 },
             });
-            setOpen(false);
+            if (result.addFulfillmentToOrder.__typename !== 'Fulfillment') {
+                return;
+            }
+            if (closeOnSuccess) {
+                setOpen(false);
+            }
             form.reset();
             setFulfillmentQuantities({});
         } catch (error) {
@@ -215,15 +241,17 @@ export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDi
 
     return (
         <>
-            <Button
-                onClick={e => {
-                    e.stopPropagation();
-                    setOpen(true);
-                }}
-                className="mr-2"
-            >
-                <Trans>Fulfill order</Trans>
-            </Button>
+            {!hideTrigger && (
+                <Button
+                    onClick={e => {
+                        e.stopPropagation();
+                        setOpen(true);
+                    }}
+                    className="mr-2"
+                >
+                    <Trans>Fulfill order</Trans>
+                </Button>
+            )}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
                     <DialogHeader>
@@ -231,7 +259,16 @@ export function FulfillOrderDialog({ order, onSuccess }: Readonly<FulfillOrderDi
                             <Trans>Fulfill order</Trans>
                         </DialogTitle>
                         <DialogDescription>
-                            <Trans>Select quantities to fulfill and configure the fulfillment handler</Trans>
+                            {descriptionPrefix && (
+                                <span className="mb-1 block font-medium text-foreground">
+                                    {descriptionPrefix}
+                                </span>
+                            )}
+                            <span className="block">
+                                <Trans>
+                                    Select quantities to fulfill and configure the fulfillment handler
+                                </Trans>
+                            </span>
                         </DialogDescription>
                     </DialogHeader>
                     <Form {...form}>

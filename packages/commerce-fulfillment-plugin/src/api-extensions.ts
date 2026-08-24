@@ -90,8 +90,201 @@ const afterSalesTypes = gql`
     }
 `;
 
+const autoCardAdminTypes = gql`
+    enum AutoCardPoolItemState {
+        AVAILABLE
+        ASSIGNED
+        DISABLED
+    }
+
+    enum AutoCardDeliveryState {
+        WAITING_STOCK
+        ALLOCATED
+        RETRYING
+        SENT
+        MANUAL_REVIEW
+    }
+
+    enum AutoCardDeliveryEventType {
+        WAITING_STOCK
+        ALLOCATED
+        EMAIL_QUEUED
+        EMAIL_FAILED
+        EMAIL_SENT
+        MANUAL_RETRY
+        MANUAL_REVIEW
+    }
+
+    type AutoCardFieldDefinition {
+        key: String!
+        label: String!
+        secret: Boolean!
+    }
+
+    type AutoCardField {
+        key: String!
+        label: String!
+        value: String!
+        secret: Boolean!
+    }
+
+    input AutoCardFieldInput {
+        key: String!
+        label: String!
+        secret: Boolean!
+    }
+
+    type AutoCardConfig implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        productVariant: ProductVariant!
+        enabled: Boolean!
+        formatName: String!
+        delimiter: String!
+        fields: [AutoCardFieldDefinition!]!
+        instructions: String!
+        lowStockThreshold: Int!
+        availableCount: Int!
+        assignedCount: Int!
+        disabledCount: Int!
+        waitingDeliveryCount: Int!
+    }
+
+    input UpdateAutoCardConfigInput {
+        productVariantId: ID!
+        enabled: Boolean!
+        formatName: String!
+        delimiter: String!
+        fields: [AutoCardFieldInput!]!
+        instructions: String!
+        lowStockThreshold: Int!
+    }
+
+    input AutoCardImportInput {
+        productVariantId: ID!
+        rawText: String!
+    }
+
+    type AutoCardImportError {
+        lineNumber: Int!
+        message: String!
+    }
+
+    type AutoCardImportPreviewRow {
+        lineNumber: Int!
+        fields: [AutoCardField!]!
+    }
+
+    type AutoCardImportPreview {
+        validCount: Int!
+        invalidCount: Int!
+        rows: [AutoCardImportPreviewRow!]!
+        errors: [AutoCardImportError!]!
+    }
+
+    type AutoCardImportResult {
+        importedCount: Int!
+        duplicateCount: Int!
+        availableCount: Int!
+    }
+
+    type AutoCardPoolItem implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        state: AutoCardPoolItemState!
+        sequence: Int!
+        assignedAt: DateTime
+        disabledReason: String
+        deliveryId: ID
+        maskedFields: [AutoCardField!]!
+    }
+
+    type AutoCardPoolItemList implements PaginatedList {
+        items: [AutoCardPoolItem!]!
+        totalItems: Int!
+    }
+
+    input AutoCardPoolItemListOptions {
+        skip: Int
+        take: Int
+        state: AutoCardPoolItemState
+    }
+
+    type AutoCardDeliveryEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        type: AutoCardDeliveryEventType!
+        actorType: String!
+        actorId: String
+        note: String!
+    }
+
+    type AutoCardDelivery implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        state: AutoCardDeliveryState!
+        recipientEmail: String!
+        productName: String!
+        sku: String!
+        quantity: Int!
+        attemptCount: Int!
+        lastError: String
+        lastDispatchedAt: DateTime
+        sentAt: DateTime
+        fulfillmentId: String
+        order: Order!
+        orderLineId: ID!
+        poolItems: [AutoCardPoolItem!]!
+        events: [AutoCardDeliveryEvent!]!
+    }
+
+    type AutoCardDeliveryList implements PaginatedList {
+        items: [AutoCardDelivery!]!
+        totalItems: Int!
+    }
+
+    type AutoCardTodoSummary {
+        lowStockSkuCount: Int!
+        waitingStockDeliveryCount: Int!
+        manualReviewCount: Int!
+    }
+
+    input AutoCardDeliveryListOptions {
+        skip: Int
+        take: Int
+        state: AutoCardDeliveryState
+        productVariantId: ID
+        orderId: ID
+    }
+`;
+
 export const shopApiExtensions = gql`
     ${afterSalesTypes}
+
+    enum AutoCardDeliveryState {
+        WAITING_STOCK
+        ALLOCATED
+        RETRYING
+        SENT
+        MANUAL_REVIEW
+    }
+
+    type AutoCardOrderDelivery implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        state: AutoCardDeliveryState!
+        productName: String!
+        sku: String!
+        quantity: Int!
+        attemptCount: Int!
+        sentAt: DateTime
+        orderLineId: ID!
+    }
 
     enum CheckoutFulfillmentType {
         PHYSICAL
@@ -142,6 +335,11 @@ export const shopApiExtensions = gql`
         checkoutFulfillment: CheckoutFulfillmentSummary!
         checkoutShipping: CheckoutShippingSummary
         digitalDeliveries: [DigitalDelivery!]!
+        autoCardDeliveries: [AutoCardOrderDelivery!]!
+    }
+
+    extend type ProductVariant {
+        autoCardAvailableStock: Int
     }
 
     extend type Mutation {
@@ -160,6 +358,7 @@ export const shopApiExtensions = gql`
 
 export const adminApiExtensions = gql`
     ${afterSalesTypes}
+    ${autoCardAdminTypes}
 
     extend type AfterSalesEvent {
         actorId: String
@@ -174,6 +373,7 @@ export const adminApiExtensions = gql`
         skip: Int
         take: Int
         state: AfterSalesState
+        states: [AfterSalesState!]
     }
 
     input TransitionAfterSalesRequestInput {
@@ -186,9 +386,19 @@ export const adminApiExtensions = gql`
     extend type Query {
         afterSalesRequests(options: AfterSalesRequestListOptions): AfterSalesRequestList!
         physicalFulfillmentTodoCount: Int!
+        autoCardConfig(productVariantId: ID!): AutoCardConfig
+        autoCardPoolItems(productVariantId: ID!, options: AutoCardPoolItemListOptions): AutoCardPoolItemList!
+        autoCardDeliveries(options: AutoCardDeliveryListOptions): AutoCardDeliveryList!
+        autoCardTodoSummary: AutoCardTodoSummary!
     }
 
     extend type Mutation {
         transitionAfterSalesRequest(input: TransitionAfterSalesRequestInput!): AfterSalesRequest!
+        updateAutoCardConfig(input: UpdateAutoCardConfigInput!): AutoCardConfig!
+        previewAutoCardPoolImport(input: AutoCardImportInput!): AutoCardImportPreview!
+        importAutoCardPoolItems(input: AutoCardImportInput!): AutoCardImportResult!
+        revealAutoCardPoolItem(id: ID!): [AutoCardField!]!
+        setAutoCardPoolItemEnabled(id: ID!, enabled: Boolean!, reason: String): AutoCardPoolItem!
+        retryAutoCardDelivery(id: ID!): AutoCardDelivery!
     }
 `;

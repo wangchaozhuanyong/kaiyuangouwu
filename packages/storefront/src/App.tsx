@@ -82,6 +82,11 @@ import {
     normalizeHeroAutoplayIntervalSeconds,
 } from './hero-carousel';
 import {
+    buildBestSellerProducts,
+    buildRecommendationProducts,
+    selectManagedProducts,
+} from './home-merchandising';
+import {
     enabledMarkets,
     languageCodeFor,
     localeFor,
@@ -105,6 +110,13 @@ import { productDescriptionText, sanitizeProductDescription } from './rich-text'
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
 import { SharePosterModal } from './share-poster-modal';
+import {
+    couponCardsFromBlock,
+    couponCardsFromCampaigns,
+    readClaimedCouponCodes,
+    storeClaimedCouponCodes,
+    StorefrontCouponCard,
+} from './storefront-coupons';
 import { cacheLogoUrl } from './StorefrontErrorBoundary';
 import {
     ActiveCustomer,
@@ -125,7 +137,11 @@ import {
     StorefrontContentBlock,
     StorefrontContentItem,
     StorefrontContentTargetType,
+    StorefrontCouponCampaign,
+    StorefrontFlashSale,
+    StorefrontFlashSaleItem,
     StorefrontLanguage,
+    StorefrontSystemAnnouncement,
 } from './types';
 
 type MainPage = 'home' | 'category' | 'cart' | 'account';
@@ -146,6 +162,8 @@ type RouteName =
     | 'history'
     | 'notifications'
     | 'coupons'
+    | 'flash-sale'
+    | 'recommendations'
     | 'support'
     | 'reviews'
     | 'login'
@@ -434,6 +452,8 @@ export function routeFromHash(hash: string): RouteState {
         'history',
         'notifications',
         'coupons',
+        'flash-sale',
+        'recommendations',
         'support',
         'reviews',
         'login',
@@ -529,6 +549,7 @@ export function App() {
         useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
     const [storefrontCode, setStorefrontCode] = useState('');
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [storefrontDescription, setStorefrontDescription] = useState('');
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
@@ -536,6 +557,7 @@ export function App() {
     const [cartError, setCartError] = useState<string | null>(null);
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
+    const [claimedCouponCodes, setClaimedCouponCodes] = useState<string[]>([]);
     const [online, setOnline] = useState(navigator.onLine);
     const [activeCollectionId, setActiveCollectionId] = useState(
         () => routeFromLocation().collectionId ?? 'all',
@@ -564,6 +586,7 @@ export function App() {
         maxPrice: maximumPrice || undefined,
     };
     const toastTimer = useRef<number | null>(null);
+    const couponApplicationAttempts = useRef(new Set<string>());
     const routeRef = useRef(route);
     const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
     const restoredInitialScroll = useRef(false);
@@ -617,14 +640,123 @@ export function App() {
     });
 
     const rawProducts = productsQuery.data ?? [];
-    const products = rawProducts.length ? rawProducts : fallbackDemoProducts(language, market.currencyCode);
-    const collections = collectionsQuery.data?.length ? collectionsQuery.data : fallbackCollections(isZh);
+    const products = rawProducts;
+    const collections = collectionsQuery.data ?? [];
     const contentBlocks = contentQuery.data?.blocks ?? [];
+    const activeCoupons = contentQuery.data?.coupons ?? [];
+    const activeFlashSales = contentQuery.data?.flashSales ?? [];
+    const systemAnnouncements = contentQuery.data?.systemAnnouncements ?? [];
+    const managedContentProductIds = Array.from(
+        new Set(
+            contentBlocks.flatMap(block => contentStringArraySetting(block.settings?.selectedProductIds)),
+        ),
+    );
+    const managedContentProductsQuery = useProductsByIdsQuery({
+        api,
+        productIds: managedContentProductIds,
+        market,
+        language,
+    });
+    const managedContentProducts = managedContentProductsQuery.data ?? [];
+    const activeFlashSaleItems = activeFlashSales
+        .flatMap(sale => sale.items)
+        .filter(
+            (item, index, items) =>
+                items.findIndex(candidate => candidate.productVariantId === item.productVariantId) === index,
+        );
     const heroAutoplayIntervalSeconds = normalizeHeroAutoplayIntervalSeconds(
         contentQuery.data?.settings?.heroAutoplayIntervalSeconds ?? 5,
     );
+    const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
     const cart = cartQuery.data ?? null;
     const customer = customerQuery.data ?? null;
+    const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
+    const recommendationsBlock = contentBlocks.find(block => block.type === 'RECOMMENDATIONS');
+    const pinnedBestSellerIds = contentStringArraySetting(bestSellersBlock?.settings?.pinnedProductIds);
+    const bestSellerDisplayCount = Math.min(
+        50,
+        Math.max(1, contentNumberSetting(bestSellersBlock?.settings?.displayCount, 4)),
+    );
+    const recommendationDisplayCount = Math.min(
+        50,
+        Math.max(1, contentNumberSetting(recommendationsBlock?.settings?.displayCount, 6)),
+    );
+    const showBestSellers = Boolean(bestSellersBlock) || !configuredBlockTypes.includes('BEST_SELLERS');
+    const showRecommendations =
+        Boolean(recommendationsBlock) || !configuredBlockTypes.includes('RECOMMENDATIONS');
+    const bestSellerCatalogQuery = useQuery({
+        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, {
+            purpose: 'home-best-sellers',
+            sort: 'sales',
+            take: 48,
+        }),
+        queryFn: ({ signal }) => api.catalog({ sort: 'sales', take: 48 }, signal),
+        enabled: showBestSellers,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const bestSellerCandidates = bestSellerCatalogQuery.data?.items ?? products;
+    const bestSellerSalesQuery = useQuery({
+        queryKey: [
+            ...storefrontQueryKeys.scope(market.code, vendureLanguageCode),
+            'home-best-seller-sales',
+            bestSellerCandidates.map(product => product.id),
+        ],
+        queryFn: () => api.productSales(bestSellerCandidates.map(product => product.id)),
+        enabled: showBestSellers && bestSellerCandidates.length > 0,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const pinnedBestSellerQuery = useProductsByIdsQuery({
+        api,
+        productIds: pinnedBestSellerIds,
+        market,
+        language,
+    });
+    const purchaseSourceIds = Array.from(
+        new Set(
+            (customer?.orders.items ?? []).flatMap(order =>
+                order.lines.map(line => line.productVariant.product.id),
+            ),
+        ),
+    );
+    const personalizationSourceIds = Array.from(new Set([...purchaseSourceIds, ...recentProductIds]));
+    const personalizationSourceQuery = useProductsByIdsQuery({
+        api,
+        productIds: personalizationSourceIds,
+        market,
+        language,
+    });
+    const recommendationCatalogQuery = useQuery({
+        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, {
+            purpose: 'home-recommendations',
+            sort: 'recommended',
+            take: 48,
+        }),
+        queryFn: ({ signal }) => api.catalog({ sort: 'recommended', take: 48 }, signal),
+        enabled: showRecommendations,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const recommendationCandidates = recommendationCatalogQuery.data?.items ?? products;
+    const bestSellerProducts = buildBestSellerProducts({
+        pinnedProducts: pinnedBestSellerQuery.data ?? [],
+        candidates: bestSellerCandidates,
+        salesByProductId: bestSellerSalesQuery.data ?? {},
+        count: bestSellerDisplayCount,
+        seed: `${market.code}:${new Date().toISOString().slice(0, 10)}:best-sellers`,
+    });
+    const recommendationProducts = buildRecommendationProducts({
+        candidates: recommendationCandidates,
+        sourceProducts: personalizationSourceQuery.data ?? [],
+        purchaseSourceIds,
+        recentProductIds,
+        count: recommendationDisplayCount,
+        seed: `${market.code}:${new Date().toISOString().slice(0, 10)}:recommendations`,
+    });
     const currentCheckoutOrder = cart?.checkoutOrder ?? checkoutOrder;
     const customerLoadState = resolveQueryLoadState({
         hasData: customerQuery.data !== undefined,
@@ -879,6 +1011,8 @@ export function App() {
             return;
         }
         setStorefrontCode(nextStorefrontCode);
+        setClaimedCouponCodes(readClaimedCouponCodes(nextStorefrontCode));
+        couponApplicationAttempts.current.clear();
         setFavoriteProductIds(
             readStoredStrings(
                 scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
@@ -896,6 +1030,7 @@ export function App() {
             en: normalizeStorefrontName(config.customFields.storefrontNameEn, DEFAULT_STOREFRONT_NAMES.en),
         });
         setLogoUrl(config.logoUrl ?? null);
+        setStorefrontDescription(config.description?.trim() ?? '');
     }, [configQuery.data, market]);
 
     useEffect(() => {
@@ -1127,6 +1262,9 @@ export function App() {
             try {
                 await api.applyCouponCode(couponCode);
                 await refreshCart();
+                setClaimedCouponCodes(current =>
+                    storeClaimedCouponCodes(storefrontCode || market.code, [...current, couponCode]),
+                );
                 notify(isZh ? '优惠码已应用' : 'Coupon applied');
                 return null;
             } catch (requestError) {
@@ -1135,7 +1273,27 @@ export function App() {
                 setCartLoading(false);
             }
         },
-        [api, isZh, notify, refreshCart, text.loadError],
+        [api, isZh, market.code, notify, refreshCart, storefrontCode, text.loadError],
+    );
+
+    const claimCoupon = useCallback(
+        async (couponCode: string): Promise<string | null> => {
+            const normalizedCode = couponCode.trim();
+            if (!normalizedCode) return isZh ? '优惠码无效' : 'Invalid coupon code';
+            if ((cart?.totalQuantity ?? 0) > 0) {
+                return applyCoupon(normalizedCode);
+            }
+            setClaimedCouponCodes(current =>
+                storeClaimedCouponCodes(storefrontCode || market.code, [...current, normalizedCode]),
+            );
+            notify(
+                isZh
+                    ? '优惠券已保存，加入商品后将自动应用'
+                    : 'Coupon saved and will be applied after you add an item',
+            );
+            return null;
+        },
+        [applyCoupon, cart?.totalQuantity, isZh, market.code, notify, storefrontCode],
     );
 
     const removeCoupon = useCallback(
@@ -1145,6 +1303,12 @@ export function App() {
             try {
                 await api.removeCouponCode(couponCode);
                 await refreshCart();
+                setClaimedCouponCodes(current =>
+                    storeClaimedCouponCodes(
+                        storefrontCode || market.code,
+                        current.filter(code => code !== couponCode),
+                    ),
+                );
                 notify(isZh ? '优惠码已移除' : 'Coupon removed');
                 return null;
             } catch (requestError) {
@@ -1153,8 +1317,45 @@ export function App() {
                 setCartLoading(false);
             }
         },
-        [api, isZh, notify, refreshCart, text.loadError],
+        [api, isZh, market.code, notify, refreshCart, storefrontCode, text.loadError],
     );
+
+    useEffect(() => {
+        if (!cart || cart.totalQuantity < 1 || claimedCouponCodes.length === 0) return;
+        const appliedCodes = new Set(cart.checkoutOrder?.couponCodes ?? []);
+        const pendingCodes = claimedCouponCodes.filter(code => {
+            const attemptKey = `${cart.id}:${code}`;
+            return !appliedCodes.has(code) && !couponApplicationAttempts.current.has(attemptKey);
+        });
+        if (!pendingCodes.length) return;
+
+        let cancelled = false;
+        const applyPendingCoupons = async () => {
+            for (const code of pendingCodes) {
+                if (cancelled) return;
+                const attemptKey = `${cart.id}:${code}`;
+                couponApplicationAttempts.current.add(attemptKey);
+                const nextError = await applyCoupon(code);
+                if (nextError && !cancelled) {
+                    setClaimedCouponCodes(current =>
+                        storeClaimedCouponCodes(
+                            storefrontCode || market.code,
+                            current.filter(currentCode => currentCode !== code),
+                        ),
+                    );
+                    notify(
+                        isZh
+                            ? `优惠券 ${code} 已失效，未应用到购物车`
+                            : `Coupon ${code} is no longer available`,
+                    );
+                }
+            }
+        };
+        void applyPendingCoupons();
+        return () => {
+            cancelled = true;
+        };
+    }, [applyCoupon, cart, claimedCouponCodes, isZh, market.code, notify, storefrontCode]);
 
     const reopenPendingOrder = useCallback(
         async (order: Order) => {
@@ -1334,9 +1535,10 @@ export function App() {
                       : 'Privacy notice',
             'not-found': isZh ? '页面未找到' : 'Page not found',
         };
-        const storefrontDescription = isZh
+        const defaultStorefrontDescription = isZh
             ? `在${storefrontName}浏览商品、管理购物车并在线完成订单。`
             : `Browse products, manage your cart and place orders with ${storefrontName}.`;
+        const storeSummary = trimText(storefrontDescription || defaultStorefrontDescription, 150);
         const productTitle = route.name === 'product' ? selectedProduct?.name : undefined;
         const routeTitle = productTitle ?? routeLabels[route.name];
         const title = routeTitle
@@ -1347,7 +1549,7 @@ export function App() {
         const description =
             route.name === 'product' && selectedProduct?.description.trim()
                 ? trimText(productDescriptionText(selectedProduct.description), 150)
-                : storefrontDescription;
+                : storeSummary;
         const imagePath =
             route.name === 'product' && selectedProduct
                 ? (productImage(selectedProduct) ?? '/storefront/default-hero.jpg')
@@ -1374,7 +1576,7 @@ export function App() {
         setMetaContent('meta[name="twitter:description"]', description);
         setMetaContent('meta[name="twitter:image"]', image);
         setMetaContent('meta[name="twitter:image:alt"]', imageAlt);
-    }, [isZh, route, selectedProduct, storefrontName]);
+    }, [isZh, route, selectedProduct, storefrontDescription, storefrontName]);
 
     useEffect(() => {
         cacheLogoUrl(logoUrl);
@@ -1510,7 +1712,14 @@ export function App() {
                         products={products}
                         collections={collections}
                         contentBlocks={contentBlocks}
+                        managedContentProducts={managedContentProducts}
                         heroAutoplayIntervalSeconds={heroAutoplayIntervalSeconds}
+                        configuredBlockTypes={configuredBlockTypes}
+                        coupons={activeCoupons}
+                        flashSales={activeFlashSales}
+                        systemAnnouncements={systemAnnouncements}
+                        bestSellerProducts={bestSellerProducts}
+                        recommendationProducts={recommendationProducts}
                         contentError={contentError}
                         loading={loading}
                         error={error}
@@ -1518,8 +1727,11 @@ export function App() {
                         locale={locale}
                         language={language}
                         storefrontName={storefrontName}
+                        storefrontDescription={storefrontDescription}
                         logoUrl={logoUrl}
                         addingVariantId={addingVariantId}
+                        claimedCouponCodes={claimedCouponCodes}
+                        couponLoading={cartLoading}
                         onNavigate={navigate}
                         onCategorySelect={collection => {
                             setActiveCollectionId(collection.id);
@@ -1534,6 +1746,7 @@ export function App() {
                         onToggleLanguage={toggleLanguage}
                         onNotifications={() => navigate({ name: 'notifications' })}
                         onToast={notify}
+                        onClaimCoupon={claimCoupon}
                         onContentTarget={openContentTarget}
                         onContentRetry={() => void contentQuery.refetch()}
                         onRetry={() => void refetchStorefront()}
@@ -1660,6 +1873,9 @@ export function App() {
                         language={language}
                         storefrontName={storefrontName}
                         logoUrl={logoUrl}
+                        flashSaleItems={activeFlashSaleItems.filter(
+                            item => item.productId === selectedProduct.id,
+                        )}
                         addingVariantId={addingVariantId}
                         favorite={favoriteProductIds.includes(selectedProduct.id)}
                         onBack={goBack}
@@ -1995,12 +2211,38 @@ export function App() {
                 return (
                     <CouponCenterPage
                         order={cart?.checkoutOrder ?? null}
+                        coupons={activeCoupons}
+                        currencyCode={market.currencyCode}
                         language={language}
                         loading={cartLoading}
                         onBack={goBack}
                         onNavigate={navigate}
                         onApply={applyCoupon}
                         onRemove={removeCoupon}
+                    />
+                );
+            case 'flash-sale':
+                return (
+                    <FlashSalePage
+                        sales={activeFlashSales}
+                        language={language}
+                        locale={locale}
+                        onBack={goBack}
+                        onProduct={productId => navigate({ name: 'product', id: productId })}
+                    />
+                );
+            case 'recommendations':
+                return (
+                    <RecommendationPage
+                        products={recommendationProducts}
+                        block={recommendationsBlock}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        addingVariantId={addingVariantId}
+                        onBack={goBack}
+                        onProduct={product => navigate({ name: 'product', id: product.id })}
+                        onAdd={variant => void addToCart(variant)}
                     />
                 );
             case 'reviews':
@@ -2164,95 +2406,35 @@ export function App() {
     );
 }
 
-interface HomepageCouponItem {
-    id: string;
-    type: 'DISCOUNT' | 'CASH' | 'CATEGORY' | 'PRODUCT';
-    value: string;
-    unit: string;
-    titleZh: string;
-    titleEn: string;
-    descZh: string;
-    descEn: string;
-    theme: 'gold' | 'rose' | 'blue' | 'emerald';
-    tagZh: string;
-    tagEn: string;
-}
-
-const HOMEPAGE_MOCK_COUPONS: HomepageCouponItem[] = [
-    {
-        id: 'coupon-disc-85',
-        type: 'DISCOUNT',
-        value: '8.5',
-        unit: '折',
-        titleZh: '新人全场通用券',
-        titleEn: 'Storewide 15% OFF',
-        descZh: '全场无门槛 · 结算立享85折',
-        descEn: 'No minimum · 15% off at checkout',
-        theme: 'gold',
-        tagZh: '全场通用',
-        tagEn: 'Storewide',
-    },
-    {
-        id: 'coupon-cash-100',
-        type: 'CASH',
-        value: '100',
-        unit: '¥',
-        titleZh: '桌面工作站立减券',
-        titleEn: 'Desk Setup Voucher',
-        descZh: '满 ¥1000 即可立减 ¥100',
-        descEn: '¥100 OFF on orders over ¥1000',
-        theme: 'rose',
-        tagZh: '硬件满减',
-        tagEn: 'Hardware',
-    },
-    {
-        id: 'coupon-cat-input',
-        type: 'CATEGORY',
-        value: '9',
-        unit: '折',
-        titleZh: '输入外设专享券',
-        titleEn: 'Input Gear Exclusive',
-        descZh: '适用于机械键盘与静音鼠标',
-        descEn: 'Valid for keyboards and mice',
-        theme: 'blue',
-        tagZh: '外设专享',
-        tagEn: 'Category',
-    },
-    {
-        id: 'coupon-prod-digital',
-        type: 'PRODUCT',
-        value: '30',
-        unit: '¥',
-        titleZh: 'AI数字资产立减津贴',
-        titleEn: 'AI & Digital Allowance',
-        descZh: '适用于 AI 效率课与提示词库',
-        descEn: 'Exclusive for AI courses & toolkits',
-        theme: 'emerald',
-        tagZh: '数字专享',
-        tagEn: 'Digital',
-    },
-];
-
 interface HomepageCouponHubProps {
+    block?: StorefrontContentBlock;
+    coupons: StorefrontCouponCard[];
     language: StorefrontLanguage;
+    claimedCouponCodes: string[];
+    loading: boolean;
     onNavigate: (route: RouteState) => void;
+    onClaim: (couponCode: string) => Promise<string | null>;
     onToast?: (message: string) => void;
 }
 
-function HomepageCouponHub({ language, onNavigate, onToast }: HomepageCouponHubProps) {
+function HomepageCouponHub({
+    block,
+    coupons,
+    language,
+    claimedCouponCodes,
+    loading,
+    onNavigate,
+    onClaim,
+    onToast,
+}: HomepageCouponHubProps) {
     const isZh = language === 'zh';
-    const [claimedIds, setClaimedIds] = useState<string[]>([]);
-
-    const handleClaim = (coupon: HomepageCouponItem) => {
-        if (claimedIds.includes(coupon.id)) return;
-        setClaimedIds(prev => [...prev, coupon.id]);
-        const title = isZh ? coupon.titleZh : coupon.titleEn;
-        const msg = isZh
-            ? `🎉 已成功领取「${title}」！结算时将自动为您抵扣`
-            : `🎉 Successfully claimed "${title}"! Applied at checkout.`;
-        if (onToast) {
-            onToast(msg);
-        }
+    const [claimingId, setClaimingId] = useState<string | null>(null);
+    const handleClaim = async (coupon: StorefrontCouponCard) => {
+        if (claimedCouponCodes.includes(coupon.code) || claimingId) return;
+        setClaimingId(coupon.id);
+        const error = await onClaim(coupon.code);
+        setClaimingId(null);
+        if (error && onToast) onToast(error);
     };
 
     return (
@@ -2262,7 +2444,9 @@ function HomepageCouponHub({ language, onNavigate, onToast }: HomepageCouponHubP
                     <span className="coupon-hub-icon-pill" aria-hidden="true">
                         <Tag size={13} />
                     </span>
-                    <h2 className="coupon-hub-title">{isZh ? '专享特惠专区' : 'Exclusive Coupons'}</h2>
+                    <h2 className="coupon-hub-title">
+                        {block?.title || (isZh ? '专享特惠专区' : 'Exclusive Coupons')}
+                    </h2>
                 </div>
                 <button
                     type="button"
@@ -2275,11 +2459,8 @@ function HomepageCouponHub({ language, onNavigate, onToast }: HomepageCouponHubP
             </div>
 
             <div className="coupon-hub-scroll" role="list">
-                {HOMEPAGE_MOCK_COUPONS.map(coupon => {
-                    const isClaimed = claimedIds.includes(coupon.id);
-                    const tag = isZh ? coupon.tagZh : coupon.tagEn;
-                    const desc = isZh ? coupon.descZh : coupon.descEn;
-                    const isDiscount = coupon.type === 'DISCOUNT' || coupon.type === 'CATEGORY';
+                {coupons.map(coupon => {
+                    const isClaimed = claimedCouponCodes.includes(coupon.code);
 
                     return (
                         <div
@@ -2289,22 +2470,24 @@ function HomepageCouponHub({ language, onNavigate, onToast }: HomepageCouponHubP
                         >
                             <div className="coupon-ticket-main">
                                 <div className="coupon-ticket-top">
-                                    <span className="coupon-ticket-tag">{tag}</span>
+                                    <span className="coupon-ticket-tag">{coupon.tag}</span>
                                 </div>
                                 <div className="coupon-ticket-value">
-                                    {isDiscount ? (
+                                    {coupon.unitBefore ? (
                                         <>
-                                            <strong className="coupon-num">{coupon.value}</strong>
                                             <small className="coupon-unit">{coupon.unit}</small>
+                                            <strong className="coupon-num">{coupon.value}</strong>
                                         </>
                                     ) : (
                                         <>
-                                            <small className="coupon-unit">{coupon.unit}</small>
                                             <strong className="coupon-num">{coupon.value}</strong>
+                                            {coupon.unit && (
+                                                <small className="coupon-unit">{coupon.unit}</small>
+                                            )}
                                         </>
                                     )}
                                 </div>
-                                <p className="coupon-ticket-desc">{desc}</p>
+                                <p className="coupon-ticket-desc">{coupon.description}</p>
                             </div>
 
                             <div className="coupon-ticket-divider" aria-hidden="true">
@@ -2317,16 +2500,16 @@ function HomepageCouponHub({ language, onNavigate, onToast }: HomepageCouponHubP
                                 <button
                                     type="button"
                                     className={`coupon-claim-btn ${isClaimed ? 'is-claimed' : ''}`}
-                                    onClick={() => handleClaim(coupon)}
-                                    disabled={isClaimed}
+                                    onClick={() => void handleClaim(coupon)}
+                                    disabled={isClaimed || loading || claimingId !== null}
                                     aria-label={
                                         isClaimed
                                             ? isZh
-                                                ? `已领取 ${coupon.titleZh}`
-                                                : `Claimed ${coupon.titleEn}`
+                                                ? `已领取 ${coupon.title}`
+                                                : `Claimed ${coupon.title}`
                                             : isZh
-                                              ? `领取 ${coupon.titleZh}`
-                                              : `Claim ${coupon.titleEn}`
+                                              ? `领取 ${coupon.title}`
+                                              : `Claim ${coupon.title}`
                                     }
                                 >
                                     {isClaimed ? (
@@ -2360,7 +2543,14 @@ interface HomePageProps {
     products: Product[];
     collections: CollectionSummary[];
     contentBlocks: StorefrontContentBlock[];
+    managedContentProducts: Product[];
     heroAutoplayIntervalSeconds: number;
+    configuredBlockTypes: Array<StorefrontContentBlock['type']>;
+    coupons: StorefrontCouponCampaign[];
+    flashSales: StorefrontFlashSale[];
+    systemAnnouncements: StorefrontSystemAnnouncement[];
+    bestSellerProducts: Product[];
+    recommendationProducts: Product[];
     contentError: string;
     loading: boolean;
     error: string | null;
@@ -2368,14 +2558,18 @@ interface HomePageProps {
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    storefrontDescription: string;
     logoUrl: string | null;
     addingVariantId: string | null;
+    claimedCouponCodes: string[];
+    couponLoading: boolean;
     onNavigate: (route: RouteState) => void;
     onCategorySelect: (collection: CollectionSummary) => void;
     onAdd: (variant: ProductVariant) => void;
     onToggleLanguage: () => void;
     onNotifications: () => void;
     onToast?: (message: string) => void;
+    onClaimCoupon: (couponCode: string) => Promise<string | null>;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onContentRetry: () => void;
     onRetry: () => void;
@@ -2386,7 +2580,14 @@ function HomePage(props: HomePageProps) {
         products,
         collections,
         contentBlocks,
+        managedContentProducts,
         heroAutoplayIntervalSeconds,
+        configuredBlockTypes,
+        coupons,
+        flashSales,
+        systemAnnouncements,
+        bestSellerProducts,
+        recommendationProducts,
         contentError,
         loading,
         error,
@@ -2394,14 +2595,18 @@ function HomePage(props: HomePageProps) {
         locale,
         language,
         storefrontName,
+        storefrontDescription,
         logoUrl,
         addingVariantId,
+        claimedCouponCodes,
+        couponLoading,
         onNavigate,
         onCategorySelect,
         onAdd,
         onToggleLanguage,
         onNotifications,
         onToast,
+        onClaimCoupon,
         onContentTarget,
         onContentRetry,
         onRetry,
@@ -2410,16 +2615,23 @@ function HomePage(props: HomePageProps) {
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = contentBlocks.filter(block => block.type === 'HERO');
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
+    const couponBlock = contentBlocks.find(block => block.type === 'COUPONS');
+    const flashSaleBlock = contentBlocks.find(block => block.type === 'FLASH_SALE');
+    const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
+    const recommendationsBlock = contentBlocks.find(block => block.type === 'RECOMMENDATIONS');
+    const trustBlock = contentBlocks.find(block => block.type === 'TRUST_BAR');
+    const coreCategoriesBlock = contentBlocks.find(block => block.type === 'CORE_CATEGORIES');
     const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
-    const noticeHasTarget = Boolean(
-        noticeBlock && noticeBlock.targetType !== 'NONE' && noticeBlock.targetValue?.trim(),
-    );
     const managedSections = contentBlocks.filter(block =>
-        ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'SUPPORT'].includes(block.type),
+        ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'SUPPORT', 'CUSTOM'].includes(block.type),
+    );
+    const managedContentProductPool = Array.from(
+        new Map([...products, ...managedContentProducts].map(product => [product.id, product])).values(),
     );
     const heroProducts = products.slice(0, 2);
     const [heroIndex, setHeroIndex] = useState(0);
     const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
+    const [noticeIndex, setNoticeIndex] = useState(0);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
     const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -2433,13 +2645,84 @@ function HomePage(props: HomePageProps) {
     const heroCount = managedHeroes.length || heroProducts.length;
     const managedHero = managedHeroes[heroIndex];
     const hero = heroProducts[heroIndex] ?? products[0];
-    const heroImage = managedHero?.imageUrl ?? productImage(hero) ?? '/storefront/default-hero.jpg';
+    const heroImage =
+        managedHero?.imageUrl ??
+        (heroIndex % 2 === 0 ? '/storefront/hero-01-gateway.jpg' : '/storefront/hero-02-vip.jpg');
     const managedHeroProduct =
         managedHero?.targetType === 'PRODUCT'
             ? products.find(product => product.id === managedHero.targetValue)
             : undefined;
     const heroFallbackImage = productImage(managedHeroProduct ?? hero) ?? '/storefront/default-hero.jpg';
-    const quickCollections = (collections.length ? collections : fallbackCollections(isZh)).slice(0, 5);
+    const quickCollections = collections.slice(0, 5);
+    const noticeItems: Array<{
+        id: string;
+        text: string;
+        targetType: StorefrontContentTargetType;
+        targetValue: string | null;
+        linkUrl: string | null;
+    }> = [
+        ...systemAnnouncements.map(announcement => ({
+            id: `system-${announcement.id}`,
+            text: [announcement.title, announcement.content].filter(Boolean).join(' · '),
+            targetType: 'NONE' as const,
+            targetValue: null,
+            linkUrl: announcement.linkUrl,
+        })),
+        ...(noticeBlock?.items ?? []).map(item => ({
+            id: item.id,
+            text: item.label || item.description,
+            targetType: item.targetType,
+            targetValue: item.targetValue,
+            linkUrl: null,
+        })),
+        ...(!noticeBlock?.items.length && noticeBlock?.title
+            ? [
+                  {
+                      id: noticeBlock.id,
+                      text: noticeBlock.title,
+                      targetType: noticeBlock.targetType,
+                      targetValue: noticeBlock.targetValue,
+                      linkUrl: null,
+                  },
+              ]
+            : []),
+    ];
+    const activeNoticeItem = noticeItems[noticeIndex % Math.max(1, noticeItems.length)];
+    const noticeText =
+        activeNoticeItem?.text ||
+        (isZh ? '现货商品配送时效以结算页为准' : 'Delivery timing is confirmed at checkout');
+    const noticeTargetType = activeNoticeItem?.targetType ?? 'NONE';
+    const noticeTargetValue = activeNoticeItem?.targetValue ?? null;
+    const noticeHasTarget =
+        Boolean(activeNoticeItem?.linkUrl) ||
+        (noticeTargetType !== 'NONE' && Boolean(noticeTargetValue?.trim()));
+    const showNotice = Boolean(noticeBlock) || !configuredBlockTypes.includes('NOTICE');
+    const showTrustBar = Boolean(trustBlock) || !configuredBlockTypes.includes('TRUST_BAR');
+    const showQuickLinks = Boolean(quickBlock) || !configuredBlockTypes.includes('QUICK_LINKS');
+    const showCoreCategories =
+        Boolean(coreCategoriesBlock) || !configuredBlockTypes.includes('CORE_CATEGORIES');
+    const showCoupons = Boolean(couponBlock) || !configuredBlockTypes.includes('COUPONS');
+    const showFlashSale = Boolean(flashSaleBlock) || !configuredBlockTypes.includes('FLASH_SALE');
+    const showBestSellers = Boolean(bestSellersBlock) || !configuredBlockTypes.includes('BEST_SELLERS');
+    const showRecommendations =
+        Boolean(recommendationsBlock) || !configuredBlockTypes.includes('RECOMMENDATIONS');
+    const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
+    const manualCouponCards = couponCardsFromBlock(couponBlock, language);
+    const campaignCouponCards = couponCardsFromCampaigns(coupons, language, market.currencyCode);
+    const couponCards = [...manualCouponCards, ...campaignCouponCards].filter(
+        (coupon, index, items) => items.findIndex(candidate => candidate.code === coupon.code) === index,
+    );
+    const flashSaleItems = flashSales
+        .flatMap(sale => sale.items)
+        .filter(
+            (item, index, items) =>
+                items.findIndex(candidate => candidate.productVariantId === item.productVariantId) === index,
+        )
+        .slice(0, Math.max(1, contentNumberSetting(flashSaleBlock?.settings?.displayCount, 4)));
+    const noticeIntervalSeconds = Math.min(
+        30,
+        Math.max(3, contentNumberSetting(noticeBlock?.settings?.scrollIntervalSeconds, 5)),
+    );
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -2455,6 +2738,21 @@ function HomePage(props: HomePageProps) {
         document.addEventListener('visibilitychange', updatePageVisibility);
         return () => document.removeEventListener('visibilitychange', updatePageVisibility);
     }, []);
+
+    useEffect(() => {
+        if (noticeItems.length < 2 || prefersReducedMotion || !pageVisible) {
+            return;
+        }
+        const timer = window.setInterval(
+            () => setNoticeIndex(index => (index + 1) % noticeItems.length),
+            noticeIntervalSeconds * 1000,
+        );
+        return () => window.clearInterval(timer);
+    }, [noticeIntervalSeconds, noticeItems.length, pageVisible, prefersReducedMotion]);
+
+    useEffect(() => {
+        if (noticeIndex >= noticeItems.length) setNoticeIndex(0);
+    }, [noticeIndex, noticeItems.length]);
 
     useEffect(() => {
         if (
@@ -2603,6 +2901,13 @@ function HomePage(props: HomePageProps) {
                   onClick: () => onNavigate({ name: 'orders', tab: 'all' }),
               },
           ].slice(0, 5);
+    const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
+    const defaultTrustLabels = isZh
+        ? ['订单进度可查', '价格结算确认', '账号安全保护', '售后渠道可查']
+        : ['Trackable orders', 'Checkout pricing', 'Account protection', 'Support channels'];
+    const trustItems = trustBlock?.items.length
+        ? trustBlock.items.slice(0, 4).map(item => item.label)
+        : defaultTrustLabels;
 
     return (
         <main className="page home-page">
@@ -2636,23 +2941,24 @@ function HomePage(props: HomePageProps) {
                 </div>
             </header>
 
-            <button
-                className="notice-strip"
-                type="button"
-                disabled={!noticeHasTarget}
-                onClick={() =>
-                    noticeHasTarget &&
-                    noticeBlock &&
-                    onContentTarget(noticeBlock.targetType, noticeBlock.targetValue)
-                }
-            >
-                <Bell aria-hidden="true" />
-                <span>
-                    {noticeBlock?.title ||
-                        (isZh ? '现货商品配送时效以结算页为准' : 'Delivery timing is confirmed at checkout')}
-                </span>
-                {noticeHasTarget && <ChevronRight aria-hidden="true" />}
-            </button>
+            {showNotice ? (
+                <button
+                    className="notice-strip"
+                    type="button"
+                    disabled={!noticeHasTarget}
+                    onClick={() => {
+                        if (!noticeHasTarget) return;
+                        if (activeNoticeItem?.linkUrl) window.location.assign(activeNoticeItem.linkUrl);
+                        else onContentTarget(noticeTargetType, noticeTargetValue);
+                    }}
+                >
+                    <Bell aria-hidden="true" />
+                    <span key={activeNoticeItem?.id ?? 'default'}>{noticeText}</span>
+                    {noticeHasTarget && <ChevronRight aria-hidden="true" />}
+                </button>
+            ) : null}
+
+            {storefrontDescription && <p className="storefront-description">{storefrontDescription}</p>}
 
             {contentError && (
                 <div className="content-warning" role="status">
@@ -2697,15 +3003,12 @@ function HomePage(props: HomePageProps) {
                             onDragStart={event => event.preventDefault()}
                         >
                             {/* Full-bleed Rich 3D High-End Visual Background with Fallback */}
-                            <img
-                                src={
-                                    managedHero?.imageUrl ||
-                                    (heroIndex % 2 === 0
-                                        ? '/storefront/hero-01-gateway.jpg'
-                                        : '/storefront/hero-02-vip.jpg')
-                                }
+                            <SafeImage
+                                src={heroImage}
+                                fallbackSrc={heroFallbackImage}
                                 alt={managedHero?.title || (isZh ? '云桥 AI 精选' : 'CloudBridge Featured')}
                                 className="hero-rich-backdrop"
+                                imageKind="hero"
                                 loading="eager"
                             />
                             <div className="hero-rich-overlay-shade" />
@@ -2713,45 +3016,43 @@ function HomePage(props: HomePageProps) {
                             {/* Dynamic Content Overlay with 3D Cyber Layout */}
                             {(() => {
                                 const isVipTheme = heroIndex % 2 !== 0;
-                                const defaultTitle = isZh
-                                    ? isVipTheme
-                                        ? 'AI 专属独立会员'
-                                        : '云桥 AI 聚合网关'
-                                    : isVipTheme
-                                      ? 'Exclusive VIP AI Pass'
-                                      : 'CloudBridge AI Gateway';
+                                const defaultTitle = hero?.name || storefrontName;
                                 const title =
                                     managedHero?.title && !/^首页(图片)?轮播/i.test(managedHero.title)
                                         ? managedHero.title
                                         : defaultTitle;
 
-                                const defaultSubtitle = isZh
-                                    ? isVipTheme
-                                        ? '本人账号独立开通 · 拒绝封号'
-                                        : '全模型极速直连 · 0.05x 费率起'
-                                    : isVipTheme
-                                      ? '100% Dedicated Account · Zero Ban'
-                                      : 'Ultra Fast AI API · From 0.05x';
+                                const defaultSubtitle = isZh ? '本店精选商品' : 'Selected by this store';
                                 const subtitle = managedHero?.subtitle || defaultSubtitle;
 
                                 const defaultDesc = isZh
-                                    ? isVipTheme
-                                        ? '官方正品本人邮箱直绑，独享满血算力与全额售后质保'
-                                        : '支持 GPT-4o / Claude / Gemini / Apple 全生态满血调用'
-                                    : isVipTheme
-                                      ? 'Direct bound to personal email with dedicated computing power'
-                                      : 'Enterprise grade OpenAI, Claude, Gemini & Apple model APIs';
+                                    ? '商品价格、库存和交付信息以详情页与结算页为准'
+                                    : 'See the product and checkout pages for current price, stock and delivery details';
                                 const body =
                                     managedHero?.body || trimText(hero?.description, 45) || defaultDesc;
 
-                                const defaultCta = isZh
-                                    ? isVipTheme
-                                        ? '查看 AI 会员'
-                                        : '立即接入'
-                                    : isVipTheme
-                                      ? 'Explore VIP Pass'
-                                      : 'Get API Key';
+                                const defaultCta = isZh ? '查看详情' : 'View details';
                                 const ctaLabel = managedHero?.ctaLabel || defaultCta;
+                                const defaultStats = [
+                                    {
+                                        value: String(products.length),
+                                        label: isZh ? '本页精选' : 'Featured now',
+                                    },
+                                    {
+                                        value: String(hero?.variants.length ?? 0),
+                                        label: isZh ? '可选规格' : 'Options',
+                                    },
+                                    {
+                                        value: isZh ? '实时' : 'Live',
+                                        label: isZh ? '价格库存' : 'Price & stock',
+                                    },
+                                ];
+                                const stats = managedHero?.items.length
+                                    ? managedHero.items.slice(0, 3).map(item => ({
+                                          value: item.label,
+                                          label: item.description,
+                                      }))
+                                    : defaultStats;
 
                                 return (
                                     <div className={`hero-rich-content ${isVipTheme ? 'is-vip' : ''}`}>
@@ -2766,49 +3067,17 @@ function HomePage(props: HomePageProps) {
                                         <h1 className="hero-rich-title">{title}</h1>
                                         <p className="hero-rich-desc">{body}</p>
 
-                                        {isVipTheme ? (
-                                            <div className="hero-rich-stats-row">
-                                                <div className="hero-stat-badge is-vip">
-                                                    <span className="stat-num">100%</span>
-                                                    <span className="stat-lbl">
-                                                        {isZh ? '本人独享' : 'Private'}
-                                                    </span>
+                                        <div className="hero-rich-stats-row">
+                                            {stats.map((stat, index) => (
+                                                <div
+                                                    className={`hero-stat-badge${isVipTheme ? ' is-vip' : ''}`}
+                                                    key={`${stat.value}-${index}`}
+                                                >
+                                                    <span className="stat-num">{stat.value}</span>
+                                                    <span className="stat-lbl">{stat.label}</span>
                                                 </div>
-                                                <div className="hero-stat-badge is-vip">
-                                                    <span className="stat-num">⚡ 满血</span>
-                                                    <span className="stat-lbl">
-                                                        {isZh ? '高算力' : 'Unlimited'}
-                                                    </span>
-                                                </div>
-                                                <div className="hero-stat-badge is-vip">
-                                                    <span className="stat-num">🛡️ 包赔</span>
-                                                    <span className="stat-lbl">
-                                                        {isZh ? '售后无忧' : 'Guaranteed'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="hero-rich-stats-row">
-                                                <div className="hero-stat-badge">
-                                                    <span className="stat-num">99.99%</span>
-                                                    <span className="stat-lbl">
-                                                        {isZh ? '高可用' : 'Uptime'}
-                                                    </span>
-                                                </div>
-                                                <div className="hero-stat-badge">
-                                                    <span className="stat-num">28ms</span>
-                                                    <span className="stat-lbl">
-                                                        {isZh ? '极速响应' : 'Latency'}
-                                                    </span>
-                                                </div>
-                                                <div className="hero-stat-badge">
-                                                    <span className="stat-num">0.05x</span>
-                                                    <span className="stat-lbl">
-                                                        {isZh ? '特惠费率' : 'Discount'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        )}
+                                            ))}
+                                        </div>
 
                                         <button
                                             type="button"
@@ -2869,123 +3138,414 @@ function HomePage(props: HomePageProps) {
                             </span>
                         </section>
 
-                        <div className="home-trust-bar" aria-label={isZh ? '服务保障' : 'Service Guarantees'}>
-                            <div className="home-trust-item">
-                                <ShieldCheck className="trust-icon" aria-hidden="true" />
-                                <span>{isZh ? '官方正品保证' : 'Authentic'}</span>
+                        {showTrustBar ? (
+                            <div
+                                className="home-trust-bar"
+                                aria-label={isZh ? '服务信息' : 'Service information'}
+                            >
+                                {trustItems.map((label, index) => {
+                                    const TrustIcon = trustIcons[index % trustIcons.length];
+                                    return (
+                                        <div className="home-trust-item" key={`${label}-${index}`}>
+                                            <TrustIcon className="trust-icon" aria-hidden="true" />
+                                            <span>{label}</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
-                            <div className="home-trust-item">
-                                <Zap className="trust-icon" aria-hidden="true" />
-                                <span>{isZh ? '全自动秒交付' : 'Instant Delivery'}</span>
-                            </div>
-                            <div className="home-trust-item">
-                                <Lock className="trust-icon" aria-hidden="true" />
-                                <span>{isZh ? '独立账号直绑' : 'Dedicated Account'}</span>
-                            </div>
-                            <div className="home-trust-item">
-                                <Headphones className="trust-icon" aria-hidden="true" />
-                                <span>{isZh ? '24H 质保售后' : '24/7 Support'}</span>
-                            </div>
-                        </div>
+                        ) : null}
 
-                        <nav
-                            className={`quick-grid quick-grid-${quickLinks.length}`}
-                            aria-label={isZh ? '快捷分类' : 'Quick categories'}
-                        >
-                            {quickLinks.map(item => (
-                                <button
-                                    type="button"
-                                    key={item.id}
-                                    onClick={item.onClick}
-                                    disabled={item.disabled}
-                                >
-                                    <span>{item.icon}</span>
-                                    <b>{item.label}</b>
-                                </button>
-                            ))}
-                        </nav>
+                        {showQuickLinks ? (
+                            <nav
+                                className={`quick-grid quick-grid-${quickLinks.length}`}
+                                aria-label={isZh ? '快捷分类' : 'Quick categories'}
+                            >
+                                {quickLinks.map(item => (
+                                    <button
+                                        type="button"
+                                        key={item.id}
+                                        onClick={item.onClick}
+                                        disabled={item.disabled}
+                                    >
+                                        <span>{item.icon}</span>
+                                        <b>{item.label}</b>
+                                    </button>
+                                ))}
+                            </nav>
+                        ) : null}
                     </div>
 
-                    <HomepageCouponHub language={language} onNavigate={onNavigate} onToast={onToast} />
+                    {showCoupons && couponCards.length > 0 && (
+                        <HomepageCouponHub
+                            block={couponBlock}
+                            coupons={couponCards}
+                            language={language}
+                            claimedCouponCodes={claimedCouponCodes}
+                            loading={couponLoading}
+                            onNavigate={onNavigate}
+                            onClaim={onClaimCoupon}
+                            onToast={onToast}
+                        />
+                    )}
 
-                    <HomeDualCategoryShowcase
-                        language={language}
-                        collections={collections}
-                        onNavigate={onNavigate}
-                        onCategorySelect={onCategorySelect}
-                    />
+                    {showCoreCategories ? (
+                        <HomeDualCategoryShowcase
+                            language={language}
+                            collections={collections}
+                            block={coreCategoriesBlock}
+                            onNavigate={onNavigate}
+                            onCategorySelect={onCategorySelect}
+                            onContentTarget={onContentTarget}
+                        />
+                    ) : null}
 
                     {managedSections.map(block => (
                         <ManagedContentSection
                             key={block.id}
                             block={block}
-                            products={products}
+                            products={managedContentProductPool}
                             onContentTarget={onContentTarget}
                         />
                     ))}
 
-                    <ProductSection
-                        title={isZh ? '限时精选' : 'Selected now'}
-                        action={isZh ? '更多' : 'More'}
-                        onAction={() => onNavigate({ name: 'category' })}
-                        products={products.slice(0, 4)}
-                        market={market}
-                        locale={locale}
-                        addingVariantId={addingVariantId}
-                        onProduct={product => onNavigate({ name: 'product', id: product.id })}
-                        onAdd={onAdd}
-                    />
+                    {!products.length && (
+                        <EmptyState
+                            icon={<ShoppingBag />}
+                            title={isZh ? '暂无在售商品' : 'No products are available'}
+                            detail={
+                                isZh
+                                    ? '商家在管理后台上架商品后会显示在这里'
+                                    : 'Products will appear here after the merchant publishes them'
+                            }
+                        />
+                    )}
 
-                    {products.length > 2 && (
+                    {showFlashSale && flashSaleItems.length ? (
+                        <FlashSaleSection
+                            title={flashSaleBlock?.title || (isZh ? '限时秒杀' : 'Flash sale')}
+                            subtitle={flashSaleBlock?.subtitle || flashSales[0]?.name}
+                            items={flashSaleItems}
+                            locale={locale}
+                            language={language}
+                            endsAt={flashSales[0]?.endsAt ?? null}
+                            onMore={() => onNavigate({ name: 'flash-sale' })}
+                            onProduct={productId => onNavigate({ name: 'product', id: productId })}
+                        />
+                    ) : null}
+
+                    {showBestSellers && bestSellerProducts.length ? (
                         <ProductSection
-                            title={isZh ? '热门商品' : 'Trending picks'}
+                            title={bestSellersBlock?.title || (isZh ? '热门商品' : 'Best sellers')}
+                            subtitle={bestSellersBlock?.subtitle}
                             action={isZh ? '更多' : 'More'}
-                            onAction={() => onNavigate({ name: 'category' })}
-                            products={products.slice(2, 6)}
+                            onAction={() => onNavigate({ name: 'category', sort: 'sales' })}
+                            products={bestSellerProducts}
                             market={market}
                             locale={locale}
                             addingVariantId={addingVariantId}
                             onProduct={product => onNavigate({ name: 'product', id: product.id })}
                             onAdd={onAdd}
                         />
-                    )}
+                    ) : null}
 
-                    <ProductSection
-                        title={isZh ? '猜你喜欢' : 'You may also like'}
-                        subtitle={isZh ? '继续发现合适的好物' : 'Keep discovering'}
-                        products={products.slice(4, 10).length ? products.slice(4, 10) : products.slice(0, 4)}
-                        market={market}
-                        locale={locale}
-                        addingVariantId={addingVariantId}
-                        onProduct={product => onNavigate({ name: 'product', id: product.id })}
-                        onAdd={onAdd}
-                    />
+                    {showRecommendations && recommendationProducts.length ? (
+                        <ProductSection
+                            title={recommendationsBlock?.title || (isZh ? '猜你喜欢' : 'You may also like')}
+                            subtitle={
+                                recommendationsBlock?.subtitle ||
+                                (isZh ? '继续发现合适的好物' : 'Keep discovering')
+                            }
+                            action={isZh ? '更多' : 'More'}
+                            onAction={() => onNavigate({ name: 'recommendations' })}
+                            products={recommendationProducts}
+                            market={market}
+                            locale={locale}
+                            addingVariantId={addingVariantId}
+                            onProduct={product => onNavigate({ name: 'product', id: product.id })}
+                            onAdd={onAdd}
+                        />
+                    ) : null}
 
                     <HomeTrustGuaranteeStrip language={language} />
 
-                    <LegalFooter
-                        storefrontName={storefrontName}
-                        content={legalBlock}
-                        onContentTarget={onContentTarget}
-                    />
+                    {showFooter ? (
+                        <LegalFooter
+                            storefrontName={storefrontName}
+                            content={legalBlock}
+                            onContentTarget={onContentTarget}
+                        />
+                    ) : null}
                 </>
             )}
         </main>
     );
 }
 
+function FlashSaleSection({
+    title,
+    subtitle,
+    items,
+    locale,
+    language,
+    endsAt,
+    onMore,
+    onProduct,
+}: {
+    title: string;
+    subtitle?: string;
+    items: StorefrontFlashSaleItem[];
+    locale: string;
+    language: StorefrontLanguage;
+    endsAt: string | null;
+    onMore?: () => void;
+    onProduct: (productId: string) => void;
+}) {
+    const isZh = language === 'zh';
+    const countdown = useFlashSaleCountdown(endsAt, language);
+    if (!items.length) return null;
+    return (
+        <section className="content-section flash-sale-section">
+            <SectionHeader
+                title={title}
+                subtitle={subtitle}
+                action={onMore ? (isZh ? '更多' : 'More') : undefined}
+                onAction={onMore}
+            />
+            {countdown ? (
+                <div className="flash-sale-countdown" role="timer">
+                    <Clock3 aria-hidden="true" />
+                    <span>{isZh ? '距结束' : 'Ends in'}</span>
+                    <strong>{countdown}</strong>
+                </div>
+            ) : null}
+            <div className="flash-sale-grid">
+                {items.map(item => (
+                    <button
+                        type="button"
+                        className="flash-sale-card"
+                        key={item.productVariantId}
+                        onClick={() => onProduct(item.productId)}
+                        aria-label={`${isZh ? '查看秒杀商品' : 'View flash-sale product'} ${item.productName}`}
+                    >
+                        <span className="flash-sale-image">
+                            {item.imageUrl ? (
+                                <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
+                            ) : (
+                                <span className="image-placeholder" aria-hidden="true">
+                                    <Package />
+                                </span>
+                            )}
+                            <em>{isZh ? '限时价' : 'Limited price'}</em>
+                        </span>
+                        <strong className="flash-sale-name">{item.productName}</strong>
+                        <small>{item.variantName}</small>
+                        <span className="flash-sale-price">
+                            <b>{formatMoney(item.salePrice, item.currencyCode, locale)}</b>
+                            <del>{formatMoney(item.originalPrice, item.currencyCode, locale)}</del>
+                        </span>
+                    </button>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function FlashSalePage({
+    sales,
+    language,
+    locale,
+    onBack,
+    onProduct,
+}: {
+    sales: StorefrontFlashSale[];
+    language: StorefrontLanguage;
+    locale: string;
+    onBack: () => void;
+    onProduct: (productId: string) => void;
+}) {
+    const isZh = language === 'zh';
+    const items = sales
+        .flatMap(sale => sale.items)
+        .filter(
+            (item, index, allItems) =>
+                allItems.findIndex(candidate => candidate.productVariantId === item.productVariantId) ===
+                index,
+        );
+    return (
+        <Subpage title={isZh ? '限时秒杀' : 'Flash sale'} language={language} onBack={onBack}>
+            {items.length ? (
+                <FlashSaleSection
+                    title={sales[0]?.name || (isZh ? '限时秒杀' : 'Flash sale')}
+                    subtitle={
+                        isZh
+                            ? '活动价格会在购物车和结算页自动生效'
+                            : 'Sale prices apply automatically in cart and checkout'
+                    }
+                    items={items}
+                    locale={locale}
+                    language={language}
+                    endsAt={sales[0]?.endsAt ?? null}
+                    onProduct={onProduct}
+                />
+            ) : (
+                <EmptyState
+                    icon={<Flame />}
+                    title={isZh ? '暂无进行中的秒杀' : 'No active flash sale'}
+                    detail={
+                        isZh
+                            ? '请留意首页和店铺公告中的下次活动'
+                            : 'Check the home page and store announcements for the next event'
+                    }
+                />
+            )}
+        </Subpage>
+    );
+}
+
+function RecommendationPage({
+    products,
+    block,
+    market,
+    locale,
+    language,
+    addingVariantId,
+    onBack,
+    onProduct,
+    onAdd,
+}: {
+    products: Product[];
+    block?: StorefrontContentBlock;
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    addingVariantId: string | null;
+    onBack: () => void;
+    onProduct: (product: Product) => void;
+    onAdd: (variant: ProductVariant) => void;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <Subpage
+            title={block?.title || (isZh ? '猜你喜欢' : 'You may also like')}
+            language={language}
+            onBack={onBack}
+        >
+            {products.length ? (
+                <ProductSection
+                    subtitle={
+                        block?.subtitle ||
+                        (isZh
+                            ? '结合你的购买品类和浏览记录推荐'
+                            : 'Based on your purchase categories and browsing history')
+                    }
+                    products={products}
+                    market={market}
+                    locale={locale}
+                    addingVariantId={addingVariantId}
+                    onProduct={onProduct}
+                    onAdd={onAdd}
+                />
+            ) : (
+                <EmptyState
+                    icon={<Sparkles />}
+                    title={isZh ? '暂无推荐商品' : 'No recommendations yet'}
+                    detail={
+                        isZh
+                            ? '浏览或购买商品后，这里会显示更符合你喜好的内容'
+                            : 'Browse or purchase products to improve these recommendations'
+                    }
+                />
+            )}
+        </Subpage>
+    );
+}
+
+function useFlashSaleCountdown(endsAt: string | null, language: StorefrontLanguage): string {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        if (!endsAt) return;
+        const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+        return () => window.clearInterval(timer);
+    }, [endsAt]);
+    if (!endsAt) return '';
+    const remainingSeconds = Math.max(0, Math.floor((Date.parse(endsAt) - now) / 1_000));
+    if (remainingSeconds <= 0) return language === 'zh' ? '已结束' : 'Ended';
+    const days = Math.floor(remainingSeconds / 86_400);
+    const hours = Math.floor((remainingSeconds % 86_400) / 3_600);
+    const minutes = Math.floor((remainingSeconds % 3_600) / 60);
+    const seconds = remainingSeconds % 60;
+    return [days ? `${days}${language === 'zh' ? '天' : 'd'}` : '', hours, minutes, seconds]
+        .filter(value => value !== '')
+        .map((value, index) =>
+            typeof value === 'number' && index > 0 ? String(value).padStart(2, '0') : value,
+        )
+        .join(' : ');
+}
+
 function HomeDualCategoryShowcase({
     language,
     collections,
+    block,
     onNavigate,
     onCategorySelect,
+    onContentTarget,
 }: {
     language: StorefrontLanguage;
     collections: CollectionSummary[];
+    block?: StorefrontContentBlock;
     onNavigate: (route: RouteState) => void;
     onCategorySelect: (collection: CollectionSummary) => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
+    if (block?.items.length) {
+        return (
+            <section
+                className="home-dual-showcase"
+                aria-label={block.title || (isZh ? '核心品类精选' : 'Core Categories')}
+            >
+                {block.items.map((item, index) => {
+                    const disabled = item.targetType === 'NONE' || !item.targetValue;
+                    const digitalStyle = index % 2 === 1;
+                    return (
+                        <button
+                            key={item.id}
+                            type="button"
+                            className={`showcase-card ${digitalStyle ? 'is-digital' : 'is-hardware'}${item.imageUrl ? ' has-managed-image' : ''}`}
+                            disabled={disabled}
+                            style={
+                                item.imageUrl
+                                    ? {
+                                          backgroundImage: [
+                                              'linear-gradient(145deg, rgba(12, 25, 41, 0.88), rgba(15, 23, 42, 0.78))',
+                                              `url(${JSON.stringify(item.imageUrl)})`,
+                                          ].join(', '),
+                                          backgroundPosition: 'center',
+                                          backgroundSize: 'cover',
+                                      }
+                                    : undefined
+                            }
+                            onClick={() => onContentTarget(item.targetType, item.targetValue)}
+                        >
+                            <div className="showcase-content">
+                                <span className={`showcase-badge${digitalStyle ? ' is-digital-badge' : ''}`}>
+                                    {block.subtitle || (isZh ? '核心品类' : 'Core category')}
+                                </span>
+                                <h3>{item.label}</h3>
+                                {item.description ? <p>{item.description}</p> : null}
+                                {!disabled ? (
+                                    <span className="showcase-link">
+                                        {block.ctaLabel || (isZh ? '查看分类' : 'View category')}{' '}
+                                        <ChevronRight aria-hidden="true" />
+                                    </span>
+                                ) : null}
+                            </div>
+                        </button>
+                    );
+                })}
+            </section>
+        );
+    }
     return (
         <section className="home-dual-showcase" aria-label={isZh ? '核心品类精选' : 'Core Categories'}>
             <button
@@ -3045,14 +3605,14 @@ function HomeDualCategoryShowcase({
 function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage }) {
     const isZh = language === 'zh';
     return (
-        <section className="home-trust-strip" aria-label={isZh ? '服务保障' : 'Service Guarantees'}>
+        <section className="home-trust-strip" aria-label={isZh ? '购物信息' : 'Shopping information'}>
             <div className="trust-item item-genuine">
                 <div className="trust-icon-box">
                     <CircleCheck aria-hidden="true" />
                 </div>
                 <div className="trust-text">
-                    <strong>{isZh ? '官方正品' : 'Authentic'}</strong>
-                    <small>{isZh ? '严选硬件品质保证' : '100% genuine products'}</small>
+                    <strong>{isZh ? '商品信息' : 'Product details'}</strong>
+                    <small>{isZh ? '价格库存以详情为准' : 'Current price and stock'}</small>
                 </div>
             </div>
             <div className="trust-item item-delivery">
@@ -3060,8 +3620,8 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
                     <Download aria-hidden="true" />
                 </div>
                 <div className="trust-text">
-                    <strong>{isZh ? '即时交付' : 'Instant Access'}</strong>
-                    <small>{isZh ? '数字内容付款即享' : 'Direct digital download'}</small>
+                    <strong>{isZh ? '订单交付' : 'Order delivery'}</strong>
+                    <small>{isZh ? '数字交付状态订单内可查' : 'Digital status appears in orders'}</small>
                 </div>
             </div>
             <div className="trust-item item-shipping">
@@ -3069,8 +3629,8 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
                     <Truck aria-hidden="true" />
                 </div>
                 <div className="trust-text">
-                    <strong>{isZh ? '极速配送' : 'Fast Shipping'}</strong>
-                    <small>{isZh ? '实物全程轨迹追踪' : 'Tracked express delivery'}</small>
+                    <strong>{isZh ? '配送跟踪' : 'Delivery tracking'}</strong>
+                    <small>{isZh ? '发货后查看物流轨迹' : 'Track physical shipments'}</small>
                 </div>
             </div>
             <div className="trust-item item-support">
@@ -3078,8 +3638,8 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
                     <RotateCcw aria-hidden="true" />
                 </div>
                 <div className="trust-text">
-                    <strong>{isZh ? '安心售后' : 'Support'}</strong>
-                    <small>{isZh ? '专业团队答疑解惑' : 'Dedicated assistance'}</small>
+                    <strong>{isZh ? '售后入口' : 'After-sales'}</strong>
+                    <small>{isZh ? '可在订单内提交申请' : 'Request support from an order'}</small>
                 </div>
             </div>
         </section>
@@ -3096,6 +3656,19 @@ function ManagedContentSection({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const displayCount = Math.min(50, Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)));
+    const selectedProductIds = contentStringArraySetting(block.settings?.selectedProductIds);
+    const selectedProducts = selectManagedProducts({
+        productIds: selectedProductIds,
+        products,
+        count: displayCount,
+    });
+    const itemProductIds = new Set(
+        block.items.flatMap(item =>
+            item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
+        ),
+    );
+    const additionalSelectedProducts = selectedProducts.filter(product => !itemProductIds.has(product.id));
     const blockTargetProduct =
         block.targetType === 'PRODUCT'
             ? products.find(product => product.id === block.targetValue)
@@ -3117,7 +3690,7 @@ function ManagedContentSection({
                 }
             />
             {block.body && <p className="managed-content-body">{block.body}</p>}
-            {block.imageUrl && !block.items.length && (
+            {block.imageUrl && !block.items.length && !additionalSelectedProducts.length && (
                 <button
                     className="managed-content-banner"
                     type="button"
@@ -3133,7 +3706,7 @@ function ManagedContentSection({
                     />
                 </button>
             )}
-            {!!block.items.length && (
+            {!!(block.items.length || additionalSelectedProducts.length) && (
                 <div className="managed-content-grid">
                     {block.items.map(item => (
                         <ManagedContentItemButton
@@ -3143,9 +3716,50 @@ function ManagedContentSection({
                             onContentTarget={onContentTarget}
                         />
                     ))}
+                    {additionalSelectedProducts.map(product => (
+                        <ManagedSelectedProductButton
+                            key={product.id}
+                            product={product}
+                            onContentTarget={onContentTarget}
+                        />
+                    ))}
                 </div>
             )}
         </section>
+    );
+}
+
+function ManagedSelectedProductButton({
+    product,
+    onContentTarget,
+}: {
+    product: Product;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const imageUrl = productImage(product);
+    return (
+        <button
+            className="managed-content-card is-product-media"
+            type="button"
+            onClick={() => onContentTarget('PRODUCT', product.id)}
+        >
+            <span className="managed-content-media" aria-hidden="true">
+                {imageUrl ? (
+                    <SafeImage src={imageUrl} alt="" imageKind="card" loading="lazy" />
+                ) : (
+                    <span className="managed-content-placeholder">
+                        <LayoutGrid aria-hidden="true" />
+                    </span>
+                )}
+            </span>
+            <span className="managed-content-copy">
+                <span>
+                    <strong>{product.name}</strong>
+                    {product.description ? <small>{trimText(product.description, 72)}</small> : null}
+                </span>
+                <ChevronRight aria-hidden="true" />
+            </span>
+        </button>
     );
 }
 
@@ -3161,6 +3775,7 @@ function ManagedContentItemButton({
     const disabled = item.targetType === 'NONE' || !item.targetValue;
     const targetProduct =
         item.targetType === 'PRODUCT' ? products.find(product => product.id === item.targetValue) : undefined;
+    const targetProductImage = productImage(targetProduct);
     return (
         <button
             className={`managed-content-card${targetProduct ? ' is-product-media' : ''}`}
@@ -3172,11 +3787,13 @@ function ManagedContentItemButton({
                 {item.imageUrl ? (
                     <SafeImage
                         src={item.imageUrl}
-                        fallbackSrc={productImage(targetProduct) ?? undefined}
+                        fallbackSrc={targetProductImage ?? undefined}
                         alt=""
                         imageKind="card"
                         loading="lazy"
                     />
+                ) : targetProductImage ? (
+                    <SafeImage src={targetProductImage} alt="" imageKind="card" loading="lazy" />
                 ) : (
                     <span className="managed-content-placeholder">
                         <LayoutGrid aria-hidden="true" />
@@ -3262,7 +3879,7 @@ function CategoryPage(props: CategoryPageProps) {
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
     const [draftMaximumPrice, setDraftMaximumPrice] = useState(maximumPriceInput);
     const subcatScrollerRef = useRef<HTMLDivElement>(null);
-    const primaryCollections = collections.length ? collections : fallbackCollections(isZh);
+    const primaryCollections = collections;
     const primary = primaryCollections.find(item => item.id === activeCollectionId) ?? primaryCollections[0];
     const primaryCollectionImage = (collection: CollectionSummary) =>
         collectionImage(collection) ??
@@ -4943,6 +5560,8 @@ function SupportPage({
 
 function CouponCenterPage({
     order,
+    coupons,
+    currencyCode,
     language,
     loading,
     onBack,
@@ -4951,6 +5570,8 @@ function CouponCenterPage({
     onRemove,
 }: {
     order: Order | null;
+    coupons: StorefrontCouponCampaign[];
+    currencyCode: string;
     language: StorefrontLanguage;
     loading: boolean;
     onBack: () => void;
@@ -4962,16 +5583,21 @@ function CouponCenterPage({
     const [couponCode, setCouponCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const availableCoupons = couponCardsFromCampaigns(coupons, language, currencyCode);
+    const applyCode = async (code: string) => {
+        if (!code.trim() || submitting || !order) return false;
+        setSubmitting(true);
+        setError('');
+        const nextError = await onApply(code.trim());
+        setSubmitting(false);
+        if (nextError) setError(nextError);
+        return !nextError;
+    };
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const normalizedCode = couponCode.trim();
-        if (!normalizedCode || submitting) return;
-        setSubmitting(true);
-        setError('');
-        const nextError = await onApply(normalizedCode);
-        setSubmitting(false);
-        if (nextError) setError(nextError);
-        else setCouponCode('');
+        if (!normalizedCode || submitting || !order) return;
+        if (await applyCode(normalizedCode)) setCouponCode('');
     };
     const remove = async (code: string) => {
         if (submitting) return;
@@ -4983,6 +5609,42 @@ function CouponCenterPage({
     };
     return (
         <Subpage title={isZh ? '优惠券' : 'Coupons'} language={language} onBack={onBack}>
+            {availableCoupons.length ? (
+                <section
+                    className="coupon-center-available"
+                    aria-label={isZh ? '可领优惠券' : 'Available coupons'}
+                >
+                    <header>
+                        <strong>{isZh ? '当前可用优惠' : 'Available offers'}</strong>
+                        <small>
+                            {isZh ? '点击即可应用到当前订单' : 'Apply an offer to the active order'}
+                        </small>
+                    </header>
+                    <div>
+                        {availableCoupons.map(coupon => {
+                            const applied = Boolean(order?.couponCodes.includes(coupon.code));
+                            return (
+                                <button
+                                    type="button"
+                                    key={coupon.id}
+                                    disabled={!order || loading || submitting || applied}
+                                    onClick={() => void applyCode(coupon.code)}
+                                >
+                                    <span>
+                                        <b>
+                                            {coupon.unitBefore ? coupon.unit : ''}
+                                            {coupon.value}
+                                            {!coupon.unitBefore ? coupon.unit : ''}
+                                        </b>
+                                        <small>{coupon.description}</small>
+                                    </span>
+                                    <em>{applied ? (isZh ? '已使用' : 'Applied') : coupon.code}</em>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+            ) : null}
             {!order ? (
                 <EmptyState
                     icon={<TicketPercent />}
@@ -5285,6 +5947,7 @@ function ProductDetailPage({
     language,
     storefrontName,
     logoUrl,
+    flashSaleItems,
     addingVariantId,
     favorite,
     onBack,
@@ -5303,6 +5966,7 @@ function ProductDetailPage({
     language: StorefrontLanguage;
     storefrontName: string;
     logoUrl: string | null;
+    flashSaleItems: StorefrontFlashSaleItem[];
     addingVariantId: string | null;
     favorite: boolean;
     onBack: () => void;
@@ -5317,15 +5981,18 @@ function ProductDetailPage({
     const [activeImage, setActiveImage] = useState(0);
     const [headerScrolled, setHeaderScrolled] = useState(false);
     const variant = product.variants.find(item => item.id === variantId) ?? product.variants[0];
+    const activeFlashItem = flashSaleItems.find(item => item.productVariantId === variant?.id);
     const assets = product.assets.length
         ? product.assets
         : product.featuredAsset
           ? [product.featuredAsset]
           : [];
+    const isDigital = variant?.customFields.fulfillmentType === 'digital';
+    const isAutoCard = isDigital && variant?.customFields.digitalDeliveryMode === 'auto_card';
     const unavailable =
         !variant ||
-        (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK');
-    const isDigital = variant?.customFields.fulfillmentType === 'digital';
+        (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
+        (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
     const descriptionText = productDescriptionText(product.description);
     const descriptionHtml = sanitizeProductDescription(product.description);
@@ -5407,35 +6074,68 @@ function ProductDetailPage({
             </section>
             <section className="detail-summary">
                 <div className="detail-price-line">
-                    <p className="detail-price">
-                        {variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : '--'}
+                    <p className={`detail-price${activeFlashItem ? ' is-flash-sale' : ''}`}>
+                        <strong>
+                            {activeFlashItem
+                                ? formatMoney(activeFlashItem.salePrice, activeFlashItem.currencyCode, locale)
+                                : variant
+                                  ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                                  : '--'}
+                        </strong>
+                        {activeFlashItem ? (
+                            <del>
+                                {formatMoney(
+                                    activeFlashItem.originalPrice,
+                                    activeFlashItem.currencyCode,
+                                    locale,
+                                )}
+                            </del>
+                        ) : null}
                     </p>
                     <span>
                         {unavailable
                             ? isZh
                                 ? '暂时无法购买'
                                 : 'Unavailable'
-                            : isDigital
+                            : isAutoCard
                               ? isZh
-                                  ? '可在线购买'
-                                  : 'Available online'
-                              : isZh
-                                ? '库存充足'
-                                : 'In stock'}
+                                  ? `可用 ${variant?.autoCardAvailableStock ?? 0} 份`
+                                  : `${variant?.autoCardAvailableStock ?? 0} available`
+                              : isDigital
+                                ? isZh
+                                    ? '可在线购买'
+                                    : 'Available online'
+                                : isZh
+                                  ? '库存充足'
+                                  : 'In stock'}
                     </span>
                 </div>
                 <div className="detail-tags">
                     <span>
-                        {isDigital ? (isZh ? '数字商品' : 'Digital') : isZh ? '现货商品' : 'Physical'}
+                        {isAutoCard
+                            ? isZh
+                                ? '虚拟商品 · 自动发卡'
+                                : 'Digital · automatic credentials'
+                            : isDigital
+                              ? isZh
+                                  ? '数字商品'
+                                  : 'Digital'
+                              : isZh
+                                ? '现货商品'
+                                : 'Physical'}
                     </span>
                     <span>
-                        {isDigital
+                        {isAutoCard
                             ? isZh
-                                ? '支付后交付'
-                                : 'Delivered after payment'
-                            : isZh
-                              ? '运费结算页计算'
-                              : 'Shipping at checkout'}
+                                ? '付款成功后发送到下单邮箱'
+                                : 'Emailed automatically after payment'
+                            : isDigital
+                              ? isZh
+                                  ? '支付后交付'
+                                  : 'Delivered after payment'
+                              : isZh
+                                ? '运费结算页计算'
+                                : 'Shipping at checkout'}
                     </span>
                 </div>
                 <h1>{product.name}</h1>
@@ -5452,7 +6152,13 @@ function ProductDetailPage({
                 <div>
                     <span>{isZh ? '活动' : 'Activity'}</span>
                     <strong>
-                        {isZh ? '店铺活动以结算页展示为准' : 'Store promotions are confirmed at checkout'}
+                        {activeFlashItem
+                            ? isZh
+                                ? '限时秒杀价已生效，结算时自动核对'
+                                : 'Flash-sale price is active and verified at checkout'
+                            : isZh
+                              ? '店铺活动以结算页展示为准'
+                              : 'Store promotions are confirmed at checkout'}
                     </strong>
                 </div>
             </section>
@@ -5477,19 +6183,33 @@ function ProductDetailPage({
             <div className="detail-info-row">
                 <span>{isDigital ? (isZh ? '获取方式' : 'Access') : isZh ? '送至' : 'Deliver to'}</span>
                 <strong>
-                    {isDigital
+                    {isAutoCard
                         ? isZh
-                            ? '付款后自动添加到订单'
-                            : 'Access details are added to your order after payment'
-                        : isZh
-                          ? '结算页选择收货地址并确认时效'
-                          : 'Choose an address and confirm timing at checkout'}
+                            ? '付款后系统按号池顺序发送到下单邮箱'
+                            : 'Credentials are assigned in sequence and emailed after payment'
+                        : isDigital
+                          ? isZh
+                              ? '付款后自动添加到订单'
+                              : 'Access details are added to your order after payment'
+                          : isZh
+                            ? '结算页选择收货地址并确认时效'
+                            : 'Choose an address and confirm timing at checkout'}
                 </strong>
             </div>
             <section className="detail-service-bar">
                 <span>
                     <CircleCheck />
-                    {isDigital ? (isZh ? '安全购买' : 'Secure purchase') : isZh ? '正品保障' : 'Authenticity'}
+                    {isAutoCard
+                        ? isZh
+                            ? '邮箱自动发卡'
+                            : 'Automatic email delivery'
+                        : isDigital
+                          ? isZh
+                              ? '数字订单'
+                              : 'Digital order'
+                          : isZh
+                            ? '下单信息'
+                            : 'Order details'}
                 </span>
                 <span>
                     <Truck />
@@ -5503,7 +6223,13 @@ function ProductDetailPage({
                 </span>
                 <span>
                     <RotateCcw />
-                    {isZh ? '售后支持' : 'After-sales support'}
+                    {isAutoCard
+                        ? isZh
+                            ? '发卡后不支持退款'
+                            : 'Non-refundable after delivery'
+                        : isZh
+                          ? '售后支持'
+                          : 'After-sales support'}
                 </span>
             </section>
             <ProductReviewsSection api={api} productId={product.id} market={market} language={language} />
@@ -5531,7 +6257,17 @@ function ProductDetailPage({
                     <div>
                         <dt>{isZh ? '类型' : 'Type'}</dt>
                         <dd>
-                            {isDigital ? (isZh ? '数字商品' : 'Digital') : isZh ? '普通商品' : 'Physical'}
+                            {isAutoCard
+                                ? isZh
+                                    ? '虚拟自动发卡商品'
+                                    : 'Automatic credential product'
+                                : isDigital
+                                  ? isZh
+                                      ? '数字商品'
+                                      : 'Digital'
+                                  : isZh
+                                    ? '普通商品'
+                                    : 'Physical'}
                         </dd>
                     </div>
                     <div>
@@ -5553,7 +6289,17 @@ function ProductDetailPage({
                     <div>
                         <dt>{isZh ? '交付' : 'Delivery'}</dt>
                         <dd>
-                            {isDigital ? (isZh ? '自动交付' : 'Automatic') : isZh ? '快递配送' : 'Shipping'}
+                            {isAutoCard
+                                ? isZh
+                                    ? '付款后邮箱发卡'
+                                    : 'Email after payment'
+                                : isDigital
+                                  ? isZh
+                                      ? '自动交付'
+                                      : 'Automatic'
+                                  : isZh
+                                    ? '快递配送'
+                                    : 'Shipping'}
                         </dd>
                     </div>
                 </dl>
@@ -5662,7 +6408,11 @@ function ProductDetailPage({
                     logoUrl={logoUrl}
                     language={language}
                     formattedPrice={
-                        variant ? formatMoney(variant.priceWithTax, variant.currencyCode, locale) : '--'
+                        activeFlashItem
+                            ? formatMoney(activeFlashItem.salePrice, activeFlashItem.currencyCode, locale)
+                            : variant
+                              ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                              : '--'
                     }
                     onClose={() => setPosterOpen(false)}
                     onNotify={onNotify}
@@ -6292,8 +7042,10 @@ function ProductCard({
     const isZh = locale.startsWith('zh');
     const variant = product.variants[0];
     const isDigital = variant?.customFields?.fulfillmentType === 'digital';
+    const isAutoCard = isDigital && variant?.customFields?.digitalDeliveryMode === 'auto_card';
     const isOutOfStock =
-        variant?.customFields?.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK';
+        (variant?.customFields?.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
+        (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
 
     return (
         <article
@@ -6312,7 +7064,13 @@ function ProductCard({
                 {isDigital ? (
                     <span className="product-card-badge is-digital-badge">
                         <Download aria-hidden="true" />
-                        {isZh ? '数字即时交付' : 'Digital'}
+                        {isAutoCard
+                            ? isZh
+                                ? '邮箱自动发卡'
+                                : 'Automatic email delivery'
+                            : isZh
+                              ? '数字即时交付'
+                              : 'Digital'}
                     </span>
                 ) : isOutOfStock ? (
                     <span className="product-card-badge is-out-badge">
@@ -6390,6 +7148,12 @@ function ProductRow({
 }) {
     const isZh = language === 'zh';
     const variant = product.variants[0];
+    const isAutoCard =
+        variant?.customFields.fulfillmentType === 'digital' &&
+        variant.customFields.digitalDeliveryMode === 'auto_card';
+    const isOutOfStock =
+        (variant?.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
+        (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
     return (
         <article
             className="product-row"
@@ -6413,17 +7177,21 @@ function ProductRow({
                         {trimText(product.description, 32) || variant?.sku}
                     </span>
                     <span className="product-row-badge">
-                        {variant?.customFields.fulfillmentType === 'digital'
+                        {isAutoCard
                             ? isZh
-                                ? '⚡ 自动发货 · 极速交付'
-                                : 'Instant Delivery'
-                            : variant?.stockLevel === 'OUT_OF_STOCK'
+                                ? '⚡ 付款后邮箱自动发卡'
+                                : 'Automatic email delivery'
+                            : variant?.customFields.fulfillmentType === 'digital'
                               ? isZh
-                                  ? '暂时缺货'
-                                  : 'Out of stock'
-                              : isZh
-                                ? '现货正品'
-                                : 'In stock'}
+                                  ? '⚡ 自动发货 · 极速交付'
+                                  : 'Instant Delivery'
+                              : variant?.stockLevel === 'OUT_OF_STOCK'
+                                ? isZh
+                                    ? '暂时缺货'
+                                    : 'Out of stock'
+                                : isZh
+                                  ? '现货在售'
+                                  : 'In stock'}
                     </span>
                 </div>
                 <div className="product-row-bottom">
@@ -6438,12 +7206,7 @@ function ProductRow({
                         className="row-add"
                         type="button"
                         onClick={onAdd}
-                        disabled={
-                            !variant ||
-                            adding ||
-                            (variant.customFields.fulfillmentType === 'physical' &&
-                                variant.stockLevel === 'OUT_OF_STOCK')
-                        }
+                        disabled={!variant || adding || isOutOfStock}
                         aria-label={`${isZh ? '加入购物车' : 'Add to cart'} ${product.name}`}
                     >
                         <Plus />
@@ -7228,7 +7991,7 @@ function parseAiProductInfo(name: string, description?: string) {
 
     let brand: 'chatgpt' | 'claude' | 'midjourney' | 'cursor' | 'deepseek' | 'gemini' | 'generic' = 'generic';
     let brandName = 'AI 助手';
-    let companyName = 'OFFICIAL';
+    let companyName = 'DIGITAL';
     let brandTheme = 'is-chatgpt';
 
     if (
@@ -7289,24 +8052,24 @@ function parseAiProductInfo(name: string, description?: string) {
     const hasR1 = /r1/i.test(name);
     const hasV3 = /v3/i.test(name);
 
-    if (hasPro && has20x) tier = 'PRO 20x 极速';
+    if (hasPro && has20x) tier = 'PRO 20x';
     else if (hasPlus && has20x) tier = 'PLUS 20x';
-    else if (hasPro && has10x) tier = 'PRO 10x 满血';
+    else if (hasPro && has10x) tier = 'PRO 10x';
     else if (hasPlus && has10x) tier = 'PLUS 10x';
-    else if (has20x) tier = '20x 专属独享';
-    else if (has10x) tier = '10x 专属独享';
-    else if (has5x) tier = '5x 共享专线';
-    else if (hasPlus) tier = 'PLUS 官方版';
-    else if (hasPro) tier = 'PRO 尊享版';
-    else if (hasTeam) tier = 'TEAM 团队版';
-    else if (has4o) tier = 'GPT-4o 旗舰';
-    else if (hasO1) tier = 'o1 推理模型';
+    else if (has20x) tier = '20x';
+    else if (has10x) tier = '10x';
+    else if (has5x) tier = '5x';
+    else if (hasPlus) tier = 'PLUS';
+    else if (hasPro) tier = 'PRO';
+    else if (hasTeam) tier = 'TEAM';
+    else if (has4o) tier = 'GPT-4o';
+    else if (hasO1) tier = 'o1 / o3';
     else if (hasSonnet) tier = 'SONNET 3.5';
-    else if (hasR1) tier = 'R1 满血版';
-    else if (hasV3) tier = 'V3 专业版';
-    else if (/api/i.test(name)) tier = '官方 API 接口';
-    else if (/独享/i.test(name)) tier = '独立专享号';
-    else tier = 'OFFICIAL 正版';
+    else if (hasR1) tier = 'R1';
+    else if (hasV3) tier = 'V3';
+    else if (/api/i.test(name)) tier = 'API';
+    else if (/独享/i.test(name)) tier = '独享';
+    else tier = '数字商品';
 
     return { brand, brandName, companyName, brandTheme, tier };
 }
@@ -7328,7 +8091,7 @@ function AiProductCover({
             <div className="ai-cover-glow" />
             <div className="ai-cover-header-meta">
                 <span className="ai-cover-company">⚡ {companyName}</span>
-                <span className="ai-cover-status">正品</span>
+                <span className="ai-cover-status">商品</span>
             </div>
             <div className="ai-cover-logo-hero">
                 <div className="ai-cover-logo-prism">
@@ -7351,10 +8114,16 @@ function AiProductCover({
 
 function ProductImage({ product }: { product: Product }) {
     const image = productImage(product);
-    const { brand } = parseAiProductInfo(product.name, product.description);
 
-    if (brand !== 'generic' || !image || image.includes('placeholder') || image.includes('default-hero')) {
-        return <AiProductCover name={product.name} description={product.description} />;
+    if (!image || image.includes('placeholder') || image.includes('default-hero')) {
+        const { brand } = parseAiProductInfo(product.name, product.description);
+        return brand === 'generic' ? (
+            <div className="image-placeholder" aria-hidden="true">
+                <Package />
+            </div>
+        ) : (
+            <AiProductCover name={product.name} description={product.description} />
+        );
     }
 
     return <SafeImage src={image} alt={product.name} imageKind="card" loading="lazy" />;
@@ -7399,10 +8168,16 @@ function prefetchProductAsset(product: Product): void {
 function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: string }) {
     const image = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
     const displayName = variant.name ? `${variant.product.name} ${variant.name}` : variant.product.name;
-    const { brand } = parseAiProductInfo(displayName);
 
-    if (brand !== 'generic' || !image || image.includes('placeholder') || image.includes('default-hero')) {
-        return <AiProductCover name={displayName} />;
+    if (!image || image.includes('placeholder') || image.includes('default-hero')) {
+        const { brand } = parseAiProductInfo(displayName);
+        return brand === 'generic' ? (
+            <div className="image-placeholder" aria-hidden="true">
+                <Package />
+            </div>
+        ) : (
+            <AiProductCover name={displayName} />
+        );
     }
 
     return image ? (
@@ -7857,6 +8632,16 @@ function trimText(value: string | undefined, length: number): string {
         .trim();
     return clean.length > length ? `${clean.slice(0, length)}…` : clean;
 }
+function contentNumberSetting(value: unknown, fallback: number): number {
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+function contentStringArraySetting(value: unknown): string[] {
+    return Array.isArray(value)
+        ? Array.from(
+              new Set(value.flatMap(item => (typeof item === 'string' && item.trim() ? [item.trim()] : []))),
+          )
+        : [];
+}
 function formatMoney(value: number, currency: string, locale: string): string {
     return new Intl.NumberFormat(locale, {
         style: 'currency',
@@ -7950,346 +8735,6 @@ function orderStatesForTab(tab: OrderTab): string[] | undefined {
     if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
     if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
     return undefined;
-}
-function fallbackCollections(isZh: boolean): CollectionSummary[] {
-    return [
-        {
-            id: '3',
-            name: isZh ? '桌面工作站' : 'Workstations',
-            slug: 'cn-workstations',
-            description: isZh ? '办公平板、4K显示器与极简主机' : 'Tablets, 4K displays & mini desktops',
-            position: 0,
-            parentId: '',
-            featuredAsset: { id: '8', preview: '/storefront/categories/category-workstations.jpg' },
-            children: [
-                {
-                    id: '30',
-                    name: isZh ? '全部工作站' : 'All',
-                    slug: 'all-workstations',
-                    description: '',
-                    position: 0,
-                    parentId: '3',
-                    featuredAsset: null,
-                },
-                {
-                    id: '31',
-                    name: isZh ? '便携平板' : 'Tablets',
-                    slug: 'tablets',
-                    description: '',
-                    position: 1,
-                    parentId: '3',
-                    featuredAsset: null,
-                },
-                {
-                    id: '32',
-                    name: isZh ? '4K显示器' : '4K Displays',
-                    slug: 'displays',
-                    description: '',
-                    position: 2,
-                    parentId: '3',
-                    featuredAsset: null,
-                },
-                {
-                    id: '33',
-                    name: isZh ? '迷你主机' : 'Mini PCs',
-                    slug: 'mini-pcs',
-                    description: '',
-                    position: 3,
-                    parentId: '3',
-                    featuredAsset: null,
-                },
-                {
-                    id: '34',
-                    name: isZh ? '升降桌搭配' : 'Desk Units',
-                    slug: 'desk-units',
-                    description: '',
-                    position: 4,
-                    parentId: '3',
-                    featuredAsset: null,
-                },
-            ],
-        },
-        {
-            id: '4',
-            name: isZh ? '办公外设' : 'Office Input',
-            slug: 'cn-office-input',
-            description: isZh ? '机械键盘、静音鼠标与手托' : 'Mechanical keyboards & quiet mice',
-            position: 1,
-            parentId: '',
-            featuredAsset: { id: '9', preview: '/storefront/categories/category-office-input.jpg' },
-            children: [
-                {
-                    id: '40',
-                    name: isZh ? '全部外设' : 'All Input',
-                    slug: 'all-input',
-                    description: '',
-                    position: 0,
-                    parentId: '4',
-                    featuredAsset: null,
-                },
-                {
-                    id: '41',
-                    name: isZh ? '机械键盘' : 'Keyboards',
-                    slug: 'keyboards',
-                    description: '',
-                    position: 1,
-                    parentId: '4',
-                    featuredAsset: null,
-                },
-                {
-                    id: '42',
-                    name: isZh ? '静音鼠标' : 'Quiet Mice',
-                    slug: 'mice',
-                    description: '',
-                    position: 2,
-                    parentId: '4',
-                    featuredAsset: null,
-                },
-                {
-                    id: '43',
-                    name: isZh ? '工学手托' : 'Wrist Rests',
-                    slug: 'wrist-rests',
-                    description: '',
-                    position: 3,
-                    parentId: '4',
-                    featuredAsset: null,
-                },
-                {
-                    id: '44',
-                    name: isZh ? '数位绘图板' : 'Draw Pads',
-                    slug: 'draw-pads',
-                    description: '',
-                    position: 4,
-                    parentId: '4',
-                    featuredAsset: null,
-                },
-            ],
-        },
-        {
-            id: '5',
-            name: isZh ? '人体工学' : 'Ergonomics',
-            slug: 'cn-ergonomics',
-            description: isZh ? '人体工学椅与显示器支架' : 'Chairs & monitor arms',
-            position: 2,
-            parentId: '',
-            featuredAsset: { id: '10', preview: '/storefront/categories/category-mobile-computing.jpg' },
-            children: [
-                {
-                    id: '50',
-                    name: isZh ? '全部工学' : 'All Ergo',
-                    slug: 'all-ergo',
-                    description: '',
-                    position: 0,
-                    parentId: '5',
-                    featuredAsset: null,
-                },
-                {
-                    id: '51',
-                    name: isZh ? '人体工学椅' : 'Chairs',
-                    slug: 'chairs',
-                    description: '',
-                    position: 1,
-                    parentId: '5',
-                    featuredAsset: null,
-                },
-                {
-                    id: '52',
-                    name: isZh ? '显示器支架' : 'Monitor Arms',
-                    slug: 'monitor-arms',
-                    description: '',
-                    position: 2,
-                    parentId: '5',
-                    featuredAsset: null,
-                },
-                {
-                    id: '53',
-                    name: isZh ? '桌下脚踏板' : 'Footrests',
-                    slug: 'footrests',
-                    description: '',
-                    position: 3,
-                    parentId: '5',
-                    featuredAsset: null,
-                },
-                {
-                    id: '54',
-                    name: isZh ? '桌面理线' : 'Cable Racks',
-                    slug: 'cable-racks',
-                    description: '',
-                    position: 4,
-                    parentId: '5',
-                    featuredAsset: null,
-                },
-            ],
-        },
-        {
-            id: '6',
-            name: isZh ? '数字资产' : 'Digital Assets',
-            slug: 'cn-digital-assets',
-            description: isZh ? 'AI 效率课、提示词库与文案素材' : 'AI courses, prompts & toolkits',
-            position: 3,
-            parentId: '',
-            featuredAsset: { id: '12', preview: '/storefront/categories/category-digital-library.jpg' },
-            children: [
-                {
-                    id: '60',
-                    name: isZh ? '全部数字库' : 'All Digital',
-                    slug: 'all-digital',
-                    description: '',
-                    position: 0,
-                    parentId: '6',
-                    featuredAsset: null,
-                },
-                {
-                    id: '61',
-                    name: isZh ? 'AI实战课' : 'AI Courses',
-                    slug: 'ai-courses',
-                    description: '',
-                    position: 1,
-                    parentId: '6',
-                    featuredAsset: null,
-                },
-                {
-                    id: '62',
-                    name: isZh ? '提示词库' : 'Prompts',
-                    slug: 'prompts',
-                    description: '',
-                    position: 2,
-                    parentId: '6',
-                    featuredAsset: null,
-                },
-                {
-                    id: '63',
-                    name: isZh ? '电商文案包' : 'Copy Packs',
-                    slug: 'copy-packs',
-                    description: '',
-                    position: 3,
-                    parentId: '6',
-                    featuredAsset: null,
-                },
-                {
-                    id: '64',
-                    name: isZh ? '短视频脚本' : 'Video Scripts',
-                    slug: 'video-scripts',
-                    description: '',
-                    position: 4,
-                    parentId: '6',
-                    featuredAsset: null,
-                },
-            ],
-        },
-        {
-            id: '7',
-            name: isZh ? '影音数码' : 'Audio & Media',
-            slug: 'cn-audio-media',
-            description: isZh ? '降噪耳机、桌面音箱与麦克风' : 'Headphones, speakers & mics',
-            position: 4,
-            parentId: '',
-            featuredAsset: { id: '11', preview: '/storefront/categories/category-desk-setup.jpg' },
-            children: [
-                {
-                    id: '70',
-                    name: isZh ? '全部影音' : 'All Audio',
-                    slug: 'all-audio',
-                    description: '',
-                    position: 0,
-                    parentId: '7',
-                    featuredAsset: null,
-                },
-                {
-                    id: '71',
-                    name: isZh ? '降噪耳机' : 'Headphones',
-                    slug: 'headphones',
-                    description: '',
-                    position: 1,
-                    parentId: '7',
-                    featuredAsset: null,
-                },
-                {
-                    id: '72',
-                    name: isZh ? '桌面音箱' : 'Speakers',
-                    slug: 'speakers',
-                    description: '',
-                    position: 2,
-                    parentId: '7',
-                    featuredAsset: null,
-                },
-                {
-                    id: '73',
-                    name: isZh ? '4K摄像头' : 'Webcams',
-                    slug: 'webcams',
-                    description: '',
-                    position: 3,
-                    parentId: '7',
-                    featuredAsset: null,
-                },
-                {
-                    id: '74',
-                    name: isZh ? '专业麦克风' : 'Microphones',
-                    slug: 'microphones',
-                    description: '',
-                    position: 4,
-                    parentId: '7',
-                    featuredAsset: null,
-                },
-            ],
-        },
-        {
-            id: '8',
-            name: isZh ? '扩展与电源' : 'Hubs & Power',
-            slug: 'cn-hubs-power',
-            description: isZh ? 'Type-C 拓展坞、快充头与雷电线' : 'USB-C hubs, GaN chargers & cables',
-            position: 5,
-            parentId: '',
-            featuredAsset: { id: '10', preview: '/storefront/categories/category-mobile-computing.jpg' },
-            children: [
-                {
-                    id: '80',
-                    name: isZh ? '全部配件' : 'All Power',
-                    slug: 'all-power',
-                    description: '',
-                    position: 0,
-                    parentId: '8',
-                    featuredAsset: null,
-                },
-                {
-                    id: '81',
-                    name: isZh ? 'Type-C拓展坞' : 'USB-C Hubs',
-                    slug: 'usbc-hubs',
-                    description: '',
-                    position: 1,
-                    parentId: '8',
-                    featuredAsset: null,
-                },
-                {
-                    id: '82',
-                    name: isZh ? '氮化镓快充' : 'GaN Power',
-                    slug: 'gan-power',
-                    description: '',
-                    position: 2,
-                    parentId: '8',
-                    featuredAsset: null,
-                },
-                {
-                    id: '83',
-                    name: isZh ? '雷电4数据线' : 'Thunderbolt',
-                    slug: 'thunderbolt',
-                    description: '',
-                    position: 3,
-                    parentId: '8',
-                    featuredAsset: null,
-                },
-                {
-                    id: '84',
-                    name: isZh ? '桌面排插' : 'Power Strips',
-                    slug: 'power-strips',
-                    description: '',
-                    position: 4,
-                    parentId: '8',
-                    featuredAsset: null,
-                },
-            ],
-        },
-    ];
 }
 function renderColorfulQuickIcon(label: string, index: number, imageUrl?: string | null): ReactNode {
     const cleanLabel = (label || '').toLowerCase();
@@ -8422,303 +8867,4 @@ function renderColorfulQuickIcon(label: string, index: number, imageUrl?: string
         </span>,
     ];
     return fallbacks[index % fallbacks.length];
-}
-
-function fallbackDemoProducts(language: StorefrontLanguage, currencyCode: string): Product[] {
-    const isZh = language === 'zh';
-    return [
-        {
-            id: '1',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? 'Slate 11 便携工作平板' : 'Slate 11 Portable Tablet',
-            slug: 'slate-11-portable-tablet',
-            description: isZh
-                ? '11 英寸便携平板，配备 2.8K 原色全面屏，适合阅读、记录与日常桌面工作。'
-                : 'An 11-inch tablet for reading, note-taking and focused desk work.',
-            featuredAsset: { id: 'a1', preview: '/assets/preview/kelly-sikkema-685291-unsplash.jpg' },
-            assets: [{ id: 'a1', preview: '/assets/preview/kelly-sikkema-685291-unsplash.jpg' }],
-            collections: [
-                {
-                    id: '3',
-                    name: isZh ? '桌面工作站' : 'Workstations',
-                    slug: 'cn-workstations',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v1',
-                    name: isZh ? '128 GB · Wi-Fi · 石墨灰' : '128 GB · Wi-Fi · Graphite',
-                    sku: 'DEMO-TABLET-128',
-                    priceWithTax: currencyCode === 'MYR' ? 209900 : 329900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '1',
-                        name: isZh ? 'Slate 11 便携工作平板' : 'Slate 11 Portable Tablet',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'physical' },
-                },
-            ],
-        },
-        {
-            id: '2',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? 'ViewLine 27 英寸 4K 显示器' : 'ViewLine 27 4K Monitor',
-            slug: 'viewline-27-4k-monitor',
-            description: isZh
-                ? '27 英寸 4K 专业级超清显示器，配备多功能升降旋转支架与 Type-C 90W 供电。'
-                : 'A 27-inch 4K display with an adjustable stand for detailed everyday work.',
-            featuredAsset: { id: 'a2', preview: '/assets/preview/daniel-korpai-1302051-unsplash.jpg' },
-            assets: [{ id: 'a2', preview: '/assets/preview/daniel-korpai-1302051-unsplash.jpg' }],
-            collections: [
-                {
-                    id: '3',
-                    name: isZh ? '桌面工作站' : 'Workstations',
-                    slug: 'cn-workstations',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v2',
-                    name: isZh ? '27 英寸 · 4K · 可调节支架' : '27 inch · 4K · Adjustable stand',
-                    sku: 'DEMO-MONITOR-27-4K',
-                    priceWithTax: currencyCode === 'MYR' ? 129900 : 209900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '2',
-                        name: isZh ? 'ViewLine 27 英寸 4K 显示器' : 'ViewLine 27 4K Monitor',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'physical' },
-                },
-            ],
-        },
-        {
-            id: '3',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? 'Keyline 75 机械键盘' : 'Keyline 75 Mechanical Keyboard',
-            slug: 'keyline-75-mechanical-keyboard',
-            description: isZh
-                ? '紧凑 75% 配列机械键盘，客制化段落轴体，全键热插拔与三模无线连接。'
-                : 'A compact mechanical keyboard with a tactile layout for daily writing.',
-            featuredAsset: { id: 'a3', preview: '/assets/preview/juan-gomez-674574-unsplash.jpg' },
-            assets: [{ id: 'a3', preview: '/assets/preview/juan-gomez-674574-unsplash.jpg' }],
-            collections: [
-                {
-                    id: '4',
-                    name: isZh ? '办公输入设备' : 'Office Input',
-                    slug: 'cn-office-input',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v3',
-                    name: isZh ? '75% 配列 · 段落轴 · 曜石黑' : '75% layout · Tactile switch',
-                    sku: 'DEMO-KEYBOARD-75',
-                    priceWithTax: currencyCode === 'MYR' ? 35900 : 54900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '3',
-                        name: isZh ? 'Keyline 75 机械键盘' : 'Keyline 75 Mechanical Keyboard',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'physical' },
-                },
-            ],
-        },
-        {
-            id: '4',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? 'Arc Mini 静音无线鼠标' : 'Arc Mini Wireless Mouse',
-            slug: 'arc-mini-wireless-mouse',
-            description: isZh
-                ? '轻巧便携的静音微动无线鼠标，人体工学贴合手型，长续航双模蓝牙连接。'
-                : 'A compact wireless mouse with quiet clicks for shared workspaces.',
-            featuredAsset: {
-                id: 'a4',
-                preview: '/assets/preview/oscar-ivan-esquivel-arteaga-687447-unsplash.jpg',
-            },
-            assets: [
-                { id: 'a4', preview: '/assets/preview/oscar-ivan-esquivel-arteaga-687447-unsplash.jpg' },
-            ],
-            collections: [
-                {
-                    id: '4',
-                    name: isZh ? '办公输入设备' : 'Office Input',
-                    slug: 'cn-office-input',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v4',
-                    name: isZh ? '石墨灰 · 静音按键' : 'Graphite · Quiet click',
-                    sku: 'DEMO-MOUSE-SILENT',
-                    priceWithTax: currencyCode === 'MYR' ? 12900 : 19900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '4',
-                        name: isZh ? 'Arc Mini 静音无线鼠标' : 'Arc Mini Wireless Mouse',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'physical' },
-                },
-            ],
-        },
-        {
-            id: '5',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? 'AI 工作效率入门课' : 'AI Workflow Starter Course',
-            slug: 'ai-workflow-starter-course',
-            description: isZh
-                ? '覆盖大模型调研、写作、代码辅助与自动化复盘的实战 AI 工作流体系课。'
-                : 'A concise starter course covering practical research, writing, planning and review workflows.',
-            featuredAsset: { id: 'a5', preview: '/assets/preview/florian-olivo-1166419-unsplash.jpg' },
-            assets: [{ id: 'a5', preview: '/assets/preview/florian-olivo-1166419-unsplash.jpg' }],
-            collections: [
-                {
-                    id: '7',
-                    name: isZh ? '数字内容库' : 'Digital Library',
-                    slug: 'cn-digital-library',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v5',
-                    name: isZh ? '数字下载 · 完整体系版' : 'Digital download · Starter edition',
-                    sku: 'DEMO-DIGITAL-AI-STARTER',
-                    priceWithTax: currencyCode === 'MYR' ? 5900 : 9900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '5',
-                        name: isZh ? 'AI 工作效率入门课' : 'AI Workflow Starter Course',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'digital' },
-                },
-            ],
-        },
-        {
-            id: '6',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? '商务提示词模板库' : 'Business Prompt Template Library',
-            slug: 'business-prompt-template-library',
-            description: isZh
-                ? '精选 500+ 高频商务场景提示词模板，包含方案写作、竞品分析与报告生成。'
-                : 'Structured prompt templates for common business writing and analysis tasks.',
-            featuredAsset: { id: 'a6', preview: '/assets/preview/brandi-redd-104140-unsplash.jpg' },
-            assets: [{ id: 'a6', preview: '/assets/preview/brandi-redd-104140-unsplash.jpg' }],
-            collections: [
-                {
-                    id: '7',
-                    name: isZh ? '数字内容库' : 'Digital Library',
-                    slug: 'cn-digital-library',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v6',
-                    name: isZh ? '数字下载 · 500+ 提示词包' : 'Digital download · Template pack',
-                    sku: 'DEMO-DIGITAL-PROMPTS',
-                    priceWithTax: currencyCode === 'MYR' ? 2900 : 4900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '6',
-                        name: isZh ? '商务提示词模板库' : 'Business Prompt Template Library',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'digital' },
-                },
-            ],
-        },
-        {
-            id: '7',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? '电商文案工具包' : 'E-commerce Copywriting Toolkit',
-            slug: 'ecommerce-copywriting-toolkit',
-            description: isZh
-                ? '可直接复用的爆款详情页排版、卖点提炼与高转化文案框架结构库。'
-                : 'A reusable product-page structure and evidence checklist for e-commerce operations.',
-            featuredAsset: { id: 'a7', preview: '/assets/preview/kari-shea-398668-unsplash.jpg' },
-            assets: [{ id: 'a7', preview: '/assets/preview/kari-shea-398668-unsplash.jpg' }],
-            collections: [
-                {
-                    id: '7',
-                    name: isZh ? '数字内容库' : 'Digital Library',
-                    slug: 'cn-digital-library',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v7',
-                    name: isZh ? '数字下载 · 全套工具包' : 'Digital download · Toolkit',
-                    sku: 'DEMO-DIGITAL-ECOMMERCE',
-                    priceWithTax: currencyCode === 'MYR' ? 9900 : 15900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '7',
-                        name: isZh ? '电商文案工具包' : 'E-commerce Copywriting Toolkit',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'digital' },
-                },
-            ],
-        },
-        {
-            id: '8',
-            createdAt: '2026-08-20T00:00:00.000Z',
-            name: isZh ? '短视频脚本素材包' : 'Short Video Script Pack',
-            slug: 'short-video-script-pack',
-            description: isZh
-                ? '包含 100+ 短视频开头黄金前三秒话术、分镜结构与实操拍摄检查清单。'
-                : 'A concise script framework and production checklist for short-form video.',
-            featuredAsset: { id: 'a8', preview: '/assets/preview/jakob-owens-274337-unsplash.jpg' },
-            assets: [{ id: 'a8', preview: '/assets/preview/jakob-owens-274337-unsplash.jpg' }],
-            collections: [
-                {
-                    id: '7',
-                    name: isZh ? '数字内容库' : 'Digital Library',
-                    slug: 'cn-digital-library',
-                    parentId: '',
-                },
-            ],
-            variants: [
-                {
-                    id: 'v8',
-                    name: isZh ? '数字下载 · 脚本包' : 'Digital download · Script pack',
-                    sku: 'DEMO-DIGITAL-VIDEO',
-                    priceWithTax: currencyCode === 'MYR' ? 4900 : 7900,
-                    currencyCode,
-                    stockLevel: 'IN_STOCK',
-                    featuredAsset: null,
-                    product: {
-                        id: '8',
-                        name: isZh ? '短视频脚本素材包' : 'Short Video Script Pack',
-                        featuredAsset: null,
-                    },
-                    customFields: { fulfillmentType: 'digital' },
-                },
-            ],
-        },
-    ];
 }

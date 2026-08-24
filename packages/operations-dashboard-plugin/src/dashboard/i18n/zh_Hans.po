@@ -49,6 +49,11 @@ msgstr "取消"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.closed"
+msgstr "已关闭"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.complete"
 msgstr "标记完成"
 
@@ -70,7 +75,7 @@ msgstr "客户说明"
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.description"
-msgstr "审核当前店铺的退款与退货申请。这里记录业务处理结果，不会调用真实支付退款。"
+msgstr "优先处理待审核的退款与退货申请，审核通过与实际退款完成分开显示。"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -104,8 +109,28 @@ msgstr "售后申请加载失败"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.nextPage"
+msgstr "下一页"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.openOrder"
+msgstr "去订单处理退款"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.order"
 msgstr "订单"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.page"
+msgstr "页"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.previousPage"
+msgstr "上一页"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -150,7 +175,7 @@ msgstr "重试"
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.state.approved"
-msgstr "已通过"
+msgstr "处理中（待退款）"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -185,7 +210,7 @@ msgstr "处理时间线"
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.title"
-msgstr "售后处理"
+msgstr "售后管理"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
@@ -218,6 +243,276 @@ msgid "operations.afterSales.updated"
 msgstr "售后状态已更新"
 
 #. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.viewDetails"
+msgstr "查看详情"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.action"
+msgstr "操作"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.addField"
+msgstr "添加字段"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.assigned"
+msgstr "已分配"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.attempts"
+msgstr "发送次数"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.available"
+msgstr "可用"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.configFirst"
+msgstr "请先保存发卡格式，再导入号池。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.content"
+msgstr "脱敏内容"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.delimiter"
+msgstr "字段分隔符"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.deliveries"
+msgstr "发卡记录"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.description"
+msgstr "配置逐行卡密格式、管理 SKU 号池并处理发货异常。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.disabled"
+msgstr "已停用"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.enabled"
+msgstr "启用自动发卡"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldKey"
+msgstr "字段标识"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fieldLabel"
+msgstr "邮件显示名称"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.fields"
+msgstr "每行包含字段"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.formatName"
+msgstr "格式名称"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.formatPreset"
+msgstr "格式模板"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.import"
+msgstr "加入号池"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.importDescription"
+msgstr "一行一份卡密。预检通过后才能导入号池。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.imported"
+msgstr "卡密已加入号池"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.importTitle"
+msgstr "粘贴卡密"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructions"
+msgstr "商品发卡说明"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.instructionsHint"
+msgstr "这段说明会随该 SKU 的卡密一起发送到客户邮箱。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.invalidRows"
+msgstr "错误行"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.inventory"
+msgstr "号池库存"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.loadError"
+msgstr "自动发卡数据加载失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.lowStock"
+msgstr "低库存预警值"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.noDeliveries"
+msgstr "该 SKU 暂无发卡记录。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.noPool"
+msgstr "号池中暂无卡密。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.noSku"
+msgstr "请选择一个需要配置自动发卡的数字 SKU。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.order"
+msgstr "订单"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.pool"
+msgstr "号池明细"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.preview"
+msgstr "预检解析"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.recipient"
+msgstr "收件邮箱"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.refresh"
+msgstr "刷新"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.restore"
+msgstr "恢复"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.retry"
+msgstr "重发原卡密"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.reveal"
+msgstr "查看原文"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.revealTitle"
+msgstr "卡密详情"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.revealWarning"
+msgstr "此处仅显示当前卡密。请勿将敏感信息复制到聊天或日志。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.save"
+msgstr "保存发卡格式"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.saved"
+msgstr "自动发卡设置已保存"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.searchSku"
+msgstr "搜索商品名称或 SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.secret"
+msgstr "敏感字段"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.selectSku"
+msgstr "选择 SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.sequence"
+msgstr "发卡顺序"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.settings"
+msgstr "发卡格式"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.settingsDescription"
+msgstr "每一行代表一份可销售卡密，字段顺序同时决定解析与邮件展示顺序。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.status"
+msgstr "状态"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.stop"
+msgstr "停用"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.title"
+msgstr "自动发卡"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.validRows"
+msgstr "有效行"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.waiting"
+msgstr "等待补货"
+
+#. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.accountsAndAccess"
 msgstr "账号与权限"
@@ -241,6 +536,11 @@ msgstr "营销中心"
 #: src/dashboard/index.tsx
 msgid "operations.nav.orderCenter"
 msgstr "订单中心"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.orderManagement"
+msgstr "订单管理"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -320,7 +620,7 @@ msgstr "确认处理"
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.description"
-msgstr "审核当前店铺的已购商品评价。只有通过后才会在商品页公开展示。"
+msgstr "优先处理待审核的已购评价，内容无问题可一键发布。"
 
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
@@ -374,6 +674,11 @@ msgstr "驳回原因至少需要 3 个字符"
 
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
+msgid "operations.reviews.replyAndApprove"
+msgstr "回复并发布"
+
+#. js-lingui-explicit-id
+#: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.response"
 msgstr "商家回复 / 处理说明"
 
@@ -410,7 +715,7 @@ msgstr "已驳回"
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.title"
-msgstr "评价审核"
+msgstr "评价管理"
 
 #. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
@@ -480,7 +785,7 @@ msgstr "数据暂不可用"
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
 msgid "operations.todo.description"
-msgstr "当前需要优先处理的订单"
+msgstr "当前需要优先处理的订单、售后与评价"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
@@ -489,13 +794,13 @@ msgstr "订单待办加载失败"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.modifying"
-msgstr "改单处理中"
+#~ msgid "operations.todo.modifying"
+#~ msgstr "改单处理中"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.modifyingDescription"
-msgstr "正在人工调整的订单"
+#~ msgid "operations.todo.modifyingDescription"
+#~ msgstr "正在人工调整的订单"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
@@ -504,13 +809,43 @@ msgstr "进入订单中心"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.pendingPayment"
-msgstr "待付款"
+msgid "operations.todo.pendingAfterSales"
+msgstr "售后待处理"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx
-msgid "operations.todo.pendingPaymentDescription"
-msgstr "客户尚未完成付款"
+msgid "operations.todo.pendingAfterSalesDescription"
+msgstr "退款和退货申请等待处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingAutoCard"
+msgstr "自动发卡预警"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingAutoCardDescription"
+msgstr "低库存、等待补货订单或邮件发送失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+#~ msgid "operations.todo.pendingPayment"
+#~ msgstr "待付款"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+#~ msgid "operations.todo.pendingPaymentDescription"
+#~ msgstr "客户尚未完成付款"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingReviews"
+msgstr "评价待审核"
+
+#. js-lingui-explicit-id
+#: src/dashboard/operations-todo-widget.tsx
+msgid "operations.todo.pendingReviewsDescription"
+msgstr "客户评价等待发布"
 
 #. js-lingui-explicit-id
 #: src/dashboard/operations-todo-widget.tsx

@@ -103,6 +103,22 @@ test.describe('product variant generation', () => {
         await expect(skuInputs).toHaveCount(3);
     });
 
+    test('should choose physical shipping or digital email delivery before creating SKUs', async ({
+        page,
+    }) => {
+        await page.goto(`/products/${productId}`);
+        await expect(page.getByText('Product type and delivery', { exact: true })).toBeVisible();
+
+        await page.getByLabel('Digital product', { exact: true }).click();
+        await expect(page.getByTestId('variant-stock-input')).toHaveCount(0);
+        await expect(
+            page.getByText('Delivered to the checkout email after payment; no shipping or stock.'),
+        ).toBeVisible();
+
+        await page.getByLabel('Physical product', { exact: true }).click();
+        await expect(page.getByTestId('variant-stock-input')).toHaveCount(3);
+    });
+
     // #4608 — unchecked variant rows should not trigger validation errors
     test('should not validate unchecked variant rows', async ({ page }) => {
         await page.goto(`/products/${productId}`);
@@ -237,6 +253,39 @@ test.describe('manage product variants', () => {
         await expect(table).toBeVisible();
         const rows = table.locator('tbody tr');
         await expect(rows.first()).toBeVisible();
+        await expect(table.getByRole('columnheader', { name: 'Price' })).toBeVisible();
+        await expect(table.getByRole('columnheader', { name: 'Stock on Hand' })).toBeVisible();
+        await expect(table.getByRole('columnheader', { name: 'Product type' })).toBeVisible();
+        await expect(page.getByTestId('variant-save-btn').first()).toBeVisible();
+    });
+
+    test('should switch an SKU between digital email delivery and physical shipping', async ({ page }) => {
+        await page.goto(`/products/${laptopId}/variants`);
+        await expect(page.getByRole('heading', { name: /Manage SKUs/i })).toBeVisible();
+
+        const firstRow = page.locator('table tbody tr').first();
+        const typeSelect = firstRow.getByRole('combobox').first();
+        await typeSelect.click();
+        await page.getByRole('option', { name: 'Digital product' }).click();
+        await expect(firstRow.getByText('Not tracked')).toBeVisible();
+        await firstRow.getByTestId('variant-save-btn').click();
+        await expect(
+            page
+                .locator('[data-sonner-toast]')
+                .filter({ hasText: /updated/i })
+                .first(),
+        ).toBeVisible({ timeout: 10_000 });
+
+        await firstRow.getByRole('combobox').first().click();
+        await page.getByRole('option', { name: 'Physical product' }).click();
+        await expect(firstRow.getByRole('spinbutton')).toBeVisible();
+        await firstRow.getByTestId('variant-save-btn').click();
+        await expect(
+            page
+                .locator('[data-sonner-toast]')
+                .filter({ hasText: /updated/i })
+                .first(),
+        ).toBeVisible({ timeout: 10_000 });
     });
 
     test('should delete a variant using the confirmation dialog', async ({ page }) => {

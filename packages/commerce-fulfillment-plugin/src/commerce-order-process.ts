@@ -3,6 +3,7 @@ import {
     ConfigService,
     GlobalSettingsService,
     isGraphQlErrorResult,
+    Order,
     OrderProcess,
     OrderService,
     ProductVariantService,
@@ -12,10 +13,12 @@ import {
 } from '@vendure/core';
 import { LockNotSupportedOnGivenDriverError } from 'typeorm';
 
+import { AutoCardService } from './auto-card.service';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import {
     getOrderLineFulfillmentType,
     hasCompleteShippingAddress,
+    isAutoCardOrderLine,
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
 
@@ -25,6 +28,7 @@ let stockMovementService: StockMovementService;
 let connection: TransactionalConnection;
 let configService: ConfigService;
 let globalSettingsService: GlobalSettingsService;
+let autoCardService: AutoCardService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
     init(injector) {
@@ -34,6 +38,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
         connection = injector.get(TransactionalConnection);
         configService = injector.get(ConfigService);
         globalSettingsService = injector.get(GlobalSettingsService);
+        autoCardService = injector.get(AutoCardService);
     },
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
@@ -46,6 +51,12 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
 
         const summary = summarizeOrderFulfillment(order);
+        if (entersPayment) {
+            const autoCardError = await autoCardService.availabilityError(ctx, order);
+            if (autoCardError) {
+                return autoCardError;
+            }
+        }
         if (!summary.containsPhysicalProducts) {
             return;
         }
@@ -114,7 +125,14 @@ export const commerceOrderProcess: OrderProcess<string> = {
             return;
         }
 
-        const digitalLines = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'digital');
+        const settledOrder = await connection.getEntityOrThrow(ctx, Order, order.id, {
+            relations: ['customer', 'lines', 'lines.productVariant'],
+        });
+        await autoCardService.allocateSettledOrder(ctx, settledOrder);
+
+        const digitalLines = settledOrder.lines.filter(
+            line => getOrderLineFulfillmentType(line) === 'digital' && !isAutoCardOrderLine(line),
+        );
         if (digitalLines.length) {
             const fulfillment = await orderService.createFulfillment(ctx, {
                 lines: digitalLines.map(line => ({ orderLineId: line.id, quantity: line.quantity })),

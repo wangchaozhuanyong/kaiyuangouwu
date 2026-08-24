@@ -26,6 +26,10 @@ import { AlignSearchStockDefaults1787328000000 } from './1787328000000-align-sea
 import { NormalizeSearchStockMysqlColumns1787331600000 } from './1787331600000-normalize-search-stock-mysql-columns';
 import { AddStorefrontContentSettings1787335200000 } from './1787335200000-add-storefront-content-settings';
 import { AddStorefrontPromotionPages1787338800000 } from './1787338800000-add-storefront-promotion-pages';
+import { AddStoreProfileNotesAndTemplates1787500800000 } from './1787500800000-add-store-profile-notes-and-templates';
+import { UpgradeStorefrontContentEditor1787551200000 } from './1787551200000-upgrade-storefront-content-editor';
+import { AddSystemAnnouncements1787554800000 } from './1787554800000-add-system-announcements';
+import { AddAutoCardDelivery1787594400000 } from './1787594400000-add-auto-card-delivery';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -56,4 +60,8 @@ export const devServerMigrations = [
     NormalizeSearchStockMysqlColumns1787331600000,
     AddStorefrontContentSettings1787335200000,
     AddStorefrontPromotionPages1787338800000,
+    AddStoreProfileNotesAndTemplates1787500800000,
+    UpgradeStorefrontContentEditor1787551200000,
+    AddSystemAnnouncements1787554800000,
+    AddAutoCardDelivery1787594400000,
 ];

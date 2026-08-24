@@ -74,7 +74,10 @@ describe('ShopApi storefront mutations', () => {
 
         await expect(new ShopApi(market, 'en').storefrontContent()).resolves.toEqual({
             blocks: [],
-            settings: { heroAutoplayIntervalSeconds: 8 },
+            coupons: [],
+            flashSales: [],
+            systemAnnouncements: [],
+            settings: { heroAutoplayIntervalSeconds: 8, configuredBlockTypes: [] },
         });
 
         expect(fetchMock).toHaveBeenCalledWith(
@@ -84,6 +87,9 @@ describe('ShopApi storefront mutations', () => {
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('storefrontContent');
         expect(request.query).toContain('storefrontContentSettings');
+        expect(request.query).toContain('activeStorefrontCoupons');
+        expect(request.query).toContain('activeStorefrontFlashSales');
+        expect(request.query).toContain('activeSystemAnnouncements');
         expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
             'vendure-token': 'cn-mainland',
         });
@@ -94,7 +100,10 @@ describe('ShopApi storefront mutations', () => {
 
         await expect(new ShopApi(market).storefrontContent()).resolves.toEqual({
             blocks: [],
-            settings: { heroAutoplayIntervalSeconds: 5 },
+            coupons: [],
+            flashSales: [],
+            systemAnnouncements: [],
+            settings: { heroAutoplayIntervalSeconds: 5, configuredBlockTypes: [] },
         });
     });
 

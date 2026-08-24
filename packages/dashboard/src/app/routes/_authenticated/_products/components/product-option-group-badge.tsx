@@ -1,7 +1,7 @@
 import { ConfirmationDialog } from '@/vdb/components/shared/confirmation-dialog.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
-import { useLingui } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from '@tanstack/react-router';
 import { Edit2, Trash2 } from 'lucide-react';
 
@@ -36,13 +36,17 @@ export function ProductOptionGroupBadge({
     return (
         <>
             <Badge variant="secondary" className="text-xs">
-                <span>{name}</span>
                 <Link
                     to={`/option-groups/${id}`}
                     search={{ from: 'product', productId }}
-                    className="ml-1.5 inline-flex"
+                    className="inline-flex items-center gap-1 hover:underline"
+                    aria-label={t`Edit ${name}`}
                 >
+                    <span>{name}</span>
                     <Edit2 className="h-3 w-3" />
+                    <span className="font-normal text-muted-foreground">
+                        <Trans>Edit</Trans>
+                    </span>
                 </Link>
                 {onRemoved && (
                     <PermissionGuard requires={['UpdateProduct', 'UpdateCatalog']}>

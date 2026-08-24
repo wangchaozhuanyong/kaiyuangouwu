@@ -2,12 +2,17 @@ import { graphql } from '@vendure/dashboard';
 
 export const operationsTodoQuery = graphql(`
     query OperationsTodoCounts {
-        pendingPayment: orders(options: { filter: { state: { eq: "ArrangingPayment" } } }) {
+        pendingShipment: physicalFulfillmentTodoCount
+        pendingAfterSales: afterSalesRequests(options: { state: PENDING, take: 1 }) {
             totalItems
         }
-        pendingShipment: physicalFulfillmentTodoCount
-        modifying: orders(options: { filter: { active: { eq: false }, state: { eq: "Modifying" } } }) {
+        pendingReviews: storefrontReviews(options: { state: PENDING, take: 1 }) {
             totalItems
+        }
+        autoCardTodoSummary {
+            lowStockSkuCount
+            waitingStockDeliveryCount
+            manualReviewCount
         }
     }
 `);

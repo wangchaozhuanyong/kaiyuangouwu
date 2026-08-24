@@ -22,7 +22,7 @@ import {
 import { AfterSalesEvent } from './entities/after-sales-event.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
-import { getOrderLineFulfillmentType } from './fulfillment-classification';
+import { getOrderLineFulfillmentType, isAutoCardOrderLine } from './fulfillment-classification';
 import {
     AfterSalesRequestListOptions,
     CreateAfterSalesRequestInput,
@@ -75,10 +75,18 @@ export class AfterSalesService {
         if (options.state && !afterSalesStates.includes(options.state)) {
             throw new UserInputError('售后状态筛选条件无效');
         }
+        if (options.states?.some(state => !afterSalesStates.includes(state))) {
+            throw new UserInputError('售后状态筛选条件无效');
+        }
+        const selectedStates = options.states?.length
+            ? [...new Set(options.states)]
+            : options.state
+              ? [options.state]
+              : [];
         const [items, totalItems] = await this.connection.getRepository(ctx, AfterSalesRequest).findAndCount({
             where: {
                 channelId: ctx.channelId,
-                ...(options.state ? { state: options.state } : {}),
+                ...(selectedStates.length ? { state: In(selectedStates) } : {}),
             },
             relations: { items: true, events: true, order: true },
             order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
@@ -120,8 +128,16 @@ export class AfterSalesService {
             if (!line) {
                 throw new UserInputError('售后商品不属于当前订单');
             }
-            return { input: item, line, fulfillmentType: getOrderLineFulfillmentType(line) };
+            return {
+                input: item,
+                line,
+                fulfillmentType: getOrderLineFulfillmentType(line),
+                autoCard: isAutoCardOrderLine(line),
+            };
         });
+        if (selectedLines.some(item => item.autoCard)) {
+            throw new UserInputError('自动发卡商品不支持申请退款，发卡异常请联系客服');
+        }
         if (
             input.type === 'RETURN_AND_REFUND' &&
             selectedLines.some(item => item.fulfillmentType === 'digital')

@@ -42,10 +42,29 @@ describe('StorefrontContentService input validation', () => {
 
         expect(result).toMatchObject({
             code: 'homepage-hero',
+            internalName: '首页主图',
+            layoutVariant: 'AUTO',
             targetValue: '#/category',
             imageUrl: '/assets/hero.jpg',
             backgroundColor: '#ffffff',
         });
+    });
+
+    it('stores an explicit internal name, layout, and flat module settings', () => {
+        const result = validate(
+            createInput({
+                internalName: ' 首页顶部轮播 ',
+                layoutVariant: 'HERO_OVERLAY',
+                settings: { displayCount: 6, showMore: true, pinnedProductIds: ['1', '2'] },
+            }),
+        );
+
+        expect(result).toMatchObject({
+            internalName: '首页顶部轮播',
+            layoutVariant: 'HERO_OVERLAY',
+            settings: { displayCount: 6, showMore: true, pinnedProductIds: ['1', '2'] },
+        });
+        expect(() => validate(createInput({ settings: [] as never }))).toThrow(/模块设置格式/);
     });
 
     it('rejects invalid schedules and colors', () => {
@@ -75,6 +94,24 @@ describe('StorefrontContentService input validation', () => {
             validate(createInput({ targetType: 'URL', targetValue: 'javascript:alert(1)' })),
         ).toThrow(/HTTP\(S\)/);
     });
+
+    it('requires coupon blocks to point to real promotion codes', () => {
+        const service = new StorefrontContentService({} as never, {} as never);
+        const couponItem = {
+            position: 0,
+            targetType: 'COUPON' as const,
+            targetValue: 'WELCOME15',
+            translations: [{ languageCode: LanguageCode.zh_Hans, label: '8.5折' }],
+        };
+
+        expect(() => (service as any).validateItemInput(couponItem, 'COUPONS')).not.toThrow();
+        expect(() =>
+            (service as any).validateItemInput(
+                { ...couponItem, targetType: 'URL', targetValue: 'https://example.com' },
+                'COUPONS',
+            ),
+        ).toThrow(/必须填写优惠码/);
+    });
 });
 
 describe('StorefrontContentService Channel isolation', () => {
@@ -98,16 +135,17 @@ describe('StorefrontContentService Channel isolation', () => {
             }),
         ];
         const repository = {
-            find: vi.fn(async ({ where }) =>
-                blocks.filter(block => String(block.channelId) === String(where.channelId)),
+            find: vi.fn(({ where }) =>
+                Promise.resolve(blocks.filter(block => String(block.channelId) === String(where.channelId))),
             ),
-            findOne: vi.fn(
-                async ({ where }) =>
+            findOne: vi.fn(({ where }) =>
+                Promise.resolve(
                     blocks.find(
                         block =>
                             String(block.id) === String(where.id) &&
                             String(block.channelId) === String(where.channelId),
                     ) ?? null,
+                ),
             ),
         };
         const connection = { getRepository: vi.fn().mockReturnValue(repository) };
@@ -128,12 +166,18 @@ describe('StorefrontContentService Channel isolation', () => {
 
 describe('StorefrontContentService carousel settings', () => {
     it('returns the five-second default without creating a settings record', async () => {
-        const repository = { findOne: vi.fn(async () => null) };
-        const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+        const repository = { findOne: vi.fn(() => Promise.resolve(null)) };
+        const blockRepository = { find: vi.fn(() => Promise.resolve([])) };
+        const connection = {
+            getRepository: vi.fn((_ctx, entity) =>
+                entity === StorefrontContentBlock ? blockRepository : repository,
+            ),
+        };
         const service = new StorefrontContentService(connection as any, {} as any);
 
         await expect(service.getSettings({ channelId: 'store-a' } as any)).resolves.toEqual({
             heroAutoplayIntervalSeconds: 5,
+            configuredBlockTypes: [],
         });
         expect(repository.findOne).toHaveBeenCalledWith({ where: { channelId: 'store-a' } });
     });
@@ -141,26 +185,34 @@ describe('StorefrontContentService carousel settings', () => {
     it('creates and updates settings only for the active Channel', async () => {
         const records: StorefrontContentSettings[] = [];
         const repository = {
-            findOne: vi.fn(async ({ where }) =>
-                records.find(item => String(item.channelId) === String(where.channelId)),
+            findOne: vi.fn(({ where }) =>
+                Promise.resolve(records.find(item => String(item.channelId) === String(where.channelId))),
             ),
-            save: vi.fn(async (settings: StorefrontContentSettings) => {
+            save: vi.fn((settings: StorefrontContentSettings) => {
                 if (!records.includes(settings)) records.push(settings);
-                return settings;
+                return Promise.resolve(settings);
             }),
         };
-        const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+        const blockRepository = { find: vi.fn(() => Promise.resolve([])) };
+        const connection = {
+            getRepository: vi.fn((_ctx, entity) =>
+                entity === StorefrontContentBlock ? blockRepository : repository,
+            ),
+        };
         const service = new StorefrontContentService(connection as any, {} as any);
         const context = { channelId: 'store-a', channel: { id: 'store-a' } } as any;
 
         await expect(service.updateSettings(context, { heroAutoplayIntervalSeconds: 9 })).resolves.toEqual({
             heroAutoplayIntervalSeconds: 9,
+            configuredBlockTypes: [],
         });
         await expect(service.getSettings(context)).resolves.toEqual({
             heroAutoplayIntervalSeconds: 9,
+            configuredBlockTypes: [],
         });
         await expect(service.getSettings({ channelId: 'store-b' } as any)).resolves.toEqual({
             heroAutoplayIntervalSeconds: 5,
+            configuredBlockTypes: [],
         });
         expect(records).toEqual([
             expect.objectContaining({ channelId: 'store-a', heroAutoplayIntervalSeconds: 9 }),
