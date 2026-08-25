@@ -23,6 +23,7 @@ const RUNTIME_PACKAGE_ASSETS = Object.freeze({
     'asset-server-plugin': ['lib'],
     'commerce-fulfillment-plugin': ['dist'],
     common: ['lib'],
+    'content-translation-plugin': ['dist'],
     core: ['dist'],
     dashboard: ['dist'],
     'dev-server': ['dist', 'email-templates'],
@@ -43,6 +44,7 @@ const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/dev-server/dist/run-migrations.js',
     'packages/dev-server/dist/dashboard/index.html',
     'packages/dev-server/email-templates/order-confirmation/body.hbs',
+    'packages/content-translation-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
 ]);
 

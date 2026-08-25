@@ -12,6 +12,7 @@ import {
     runtimeArtifactsRoot,
 } from './production-runtime-artifact.mjs';
 import {
+    assertVendureWorkspaceSymlinksResolve,
     collectArtifactEntries,
     collectPackageInventory,
     DENIED_RUNTIME_PACKAGES,
@@ -19,6 +20,31 @@ import {
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
+
+void test('runtime verification rejects missing Vendure workspace packages', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-workspace-link-'));
+    try {
+        const vendureModules = path.join(fixtureRoot, 'node_modules', '@vendure');
+        await mkdir(vendureModules, { recursive: true });
+        await symlink(
+            '../../packages/content-translation-plugin',
+            path.join(vendureModules, 'content-translation-plugin'),
+        );
+        const entries = await collectArtifactEntries(fixtureRoot);
+
+        await assert.rejects(
+            () => assertVendureWorkspaceSymlinksResolve(fixtureRoot, entries),
+            /workspace package symlink is broken/u,
+        );
+
+        await mkdir(path.join(fixtureRoot, 'packages', 'content-translation-plugin'), {
+            recursive: true,
+        });
+        await assertVendureWorkspaceSymlinksResolve(fixtureRoot, entries);
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
 
 void test('runtime artifact root is readable and traversable by the web server', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-permissions-'));

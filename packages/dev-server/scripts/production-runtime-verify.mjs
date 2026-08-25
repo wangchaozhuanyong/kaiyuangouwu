@@ -197,6 +197,36 @@ export async function collectArtifactEntries(root) {
     return walkDirectory(resolvedRoot);
 }
 
+/**
+ * @param {string} root
+ * @param {ArtifactEntry[]} [entries]
+ */
+export async function assertVendureWorkspaceSymlinksResolve(root, entries) {
+    const artifactEntries = entries ?? (await collectArtifactEntries(root));
+    const workspacePackageSymlinks = artifactEntries.filter(
+        entry =>
+            entry.type === 'symlink' &&
+            /^node_modules\/@vendure\/[^/]+$/u.test(entry.path) &&
+            entry.target.startsWith('../../packages/'),
+    );
+
+    for (const entry of workspacePackageSymlinks) {
+        const symlinkPath = path.join(root, entry.path);
+        const targetPath = path.resolve(path.dirname(symlinkPath), entry.target);
+        if (!isPathInside(root, targetPath)) {
+            throw new Error(`Runtime workspace package symlink escapes the artifact: ${entry.path}`);
+        }
+        try {
+            const targetStats = await lstat(targetPath);
+            if (!targetStats.isDirectory()) {
+                throw new Error('target is not a directory');
+            }
+        } catch {
+            throw new Error(`Runtime workspace package symlink is broken: ${entry.path}`);
+        }
+    }
+}
+
 /** @param {string} relativePath */
 function isInstalledPackageManifest(relativePath) {
     const segments = relativePath.split('/');
@@ -400,6 +430,7 @@ export async function verifyRuntimeArtifact(
     }
 
     const entries = await collectArtifactEntries(resolvedRoot);
+    await assertVendureWorkspaceSymlinksResolve(resolvedRoot, entries);
     await verifyIntegrity(resolvedRoot, entries);
     const actualPackages = await collectPackageInventory(resolvedRoot, entries);
     const expectedPackages = parsePackageInventory(
