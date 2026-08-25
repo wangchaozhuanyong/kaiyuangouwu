@@ -23,7 +23,7 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useLingui } from '@lingui/react';
+import { useLingui } from '@lingui/react/macro';
 
 interface SortableItemProps {
     id: string;
@@ -36,6 +36,7 @@ interface SortableItemProps {
 }
 
 function SortableItem({ id, item, isDisabled, isEditing, onRemove, onEdit, onSave }: SortableItemProps) {
+    const { t } = useLingui();
     const [editValue, setEditValue] = useState(item);
     const inputRef = useRef<HTMLInputElement>(null);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -101,7 +102,7 @@ function SortableItem({ id, item, isDisabled, isEditing, onRemove, onEdit, onSav
                     )}
                     {...attributes}
                     {...listeners}
-                    aria-label={`Drag ${item}`}
+                    aria-label={t`Drag ${item}`}
                 >
                     <GripVertical className="h-3 w-3" />
                 </button>
@@ -137,7 +138,7 @@ function SortableItem({ id, item, isDisabled, isEditing, onRemove, onEdit, onSav
                         'ml-1 rounded-full outline-none ring-offset-background text-muted-foreground',
                         'hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2',
                     )}
-                    aria-label={`Remove ${item}`}
+                    aria-label={t`Remove ${item}`}
                 >
                     <X className="h-3 w-3" />
                 </button>

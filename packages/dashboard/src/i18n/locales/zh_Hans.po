@@ -222,6 +222,7 @@ msgstr "选择国家或地区"
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
+#: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Select {0}"
 msgstr "选择 {0}"
 
@@ -340,6 +341,10 @@ msgstr "履约处理器"
 #: src/app/routes/_authenticated/_orders/utils/order-detail-loaders.tsx
 msgid "Orders"
 msgstr "订单"
+
+#: src/lib/components/data-input/string-list-input.tsx
+msgid "Remove {item}"
+msgstr "移除 {item}"
 
 #: src/app/routes/_authenticated/_api-keys/api-keys_.$id.tsx
 msgid "Select roles"
@@ -1717,6 +1722,7 @@ msgstr "店铺内容语言"
 msgid "Failed to create option group"
 msgstr "创建规格组失败"
 
+#: src/lib/components/data-table/data-table-filter-badge.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 msgid "True"
@@ -1730,6 +1736,7 @@ msgstr "选择客户"
 msgid "Order transitioned"
 msgstr "订单已转换"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
 #: src/lib/components/data-input/product-multi-selector-input.tsx
 msgid "Select products"
 msgstr "选择商品"
@@ -2548,6 +2555,11 @@ msgstr "任务状态"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.administrator"
+msgstr "后台用户"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.attempts"
 msgstr "尝试次数"
 
@@ -2683,6 +2695,11 @@ msgstr "错误"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.facetValues"
+msgstr "筛选属性值"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.featuredAsset"
 msgstr "主图"
 
@@ -2698,6 +2715,11 @@ msgstr "履约方式"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.groups"
+msgstr "客户组"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.id"
 msgstr "ID"
 
@@ -2710,6 +2732,11 @@ msgstr "默认"
 #: src/i18n/common-strings.ts
 msgid "fieldName.isPrivate"
 msgstr "私有"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.isPublic"
+msgstr "公开"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
@@ -2768,6 +2795,11 @@ msgstr "权限"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.phoneNumber"
+msgstr "电话号码"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.position"
 msgstr "位置"
 
@@ -2785,6 +2817,21 @@ msgstr "价格含税"
 #: src/i18n/common-strings.ts
 msgid "fieldName.priceWithTax"
 msgstr "含税价格"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.productCount"
+msgstr "商品数"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.productId"
+msgstr "商品 ID"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.productVariantCount"
+msgstr "商品 SKU 数"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
@@ -2920,6 +2967,11 @@ msgstr "值"
 #: src/i18n/common-strings.ts
 msgid "fieldName.valueList"
 msgstr "可选值"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.variants"
+msgstr "商品 SKU"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
@@ -3179,8 +3231,11 @@ msgstr "建议操作顺序"
 msgid "Customer verified"
 msgstr "客户已验证"
 
+#. placeholder {0}: channel.code
 #. placeholder {0}: facetValue.name
+#. placeholder {1}: channel.token
 #. placeholder {1}: facetValue.facet.name
+#: src/lib/components/shared/channel-chip.tsx
 #: src/lib/components/shared/facet-value-chip.tsx
 msgid "Remove {0} from {1}"
 msgstr "从 {1} 中移除 {0}"
@@ -3836,6 +3891,10 @@ msgstr "切换标题列"
 msgid "New Promotion"
 msgstr "新建促销活动"
 
+#: src/lib/components/data-input/string-list-input.tsx
+msgid "Drag {item}"
+msgstr "拖动 {item}"
+
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Option value name"
 msgstr "选项值名称"
@@ -4414,6 +4473,10 @@ msgstr "标题 1"
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "Select Available Languages"
 msgstr "选择可用语言"
+
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "Change selected products"
+msgstr "更改已选商品"
 
 #. placeholder {0}: addedLines.length
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
@@ -5094,6 +5157,7 @@ msgstr "按标签筛选"
 msgid "Sign in to access the admin dashboard"
 msgstr "登录以访问管理仪表板"
 
+#: src/lib/components/data-table/data-table-filter-badge.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 msgid "False"
@@ -5849,6 +5913,10 @@ msgstr "已成功更新商品分组"
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
 msgid "Successfully updated payment method"
 msgstr "已成功更新支付方式"
+
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "Change selected variants"
+msgstr "更改已选商品 SKU"
 
 #: src/app/routes/_authenticated/_customers/customers.tsx
 msgid "Account status"
@@ -7540,6 +7608,7 @@ msgstr "正在加载商品分组..."
 msgid "Successfully updated facet value"
 msgstr "已成功更新筛选属性值"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
 #: src/lib/components/data-input/product-multi-selector-input.tsx
 msgid "Select variants"
 msgstr "选择商品 SKU"

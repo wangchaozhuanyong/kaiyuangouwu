@@ -772,6 +772,7 @@ function AssetListView({
     toggleAssetSelection,
     showDetailLinks,
 }: Readonly<AssetViewProps>) {
+    const { t } = useLingui();
     const { formatDate } = useLocalFormat();
 
     if (isLoading) {
@@ -831,7 +832,7 @@ function AssetListView({
                                             e.stopPropagation();
                                             toggleAssetSelection(asset);
                                         }}
-                                        aria-label={`Select ${asset.name}`}
+                                        aria-label={t`Select ${asset.name}`}
                                     />
                                 </TableCell>
                             )}

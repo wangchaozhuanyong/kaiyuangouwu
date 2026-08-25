@@ -1010,12 +1010,14 @@ function BlockEditor({
                                         <Field label={text.backgroundColor}>
                                             <ColorInput
                                                 value={draft.backgroundColor}
+                                                ariaLabel={text.backgroundColor}
                                                 onChange={value => update('backgroundColor', value)}
                                             />
                                         </Field>
                                         <Field label={text.textColor}>
                                             <ColorInput
                                                 value={draft.textColor}
+                                                ariaLabel={text.textColor}
                                                 onChange={value => update('textColor', value)}
                                             />
                                         </Field>
@@ -1472,15 +1474,16 @@ function Field({
 
 function ColorInput({
     value,
+    ariaLabel,
     onChange,
-}: Readonly<{ value: string | null; onChange: (value: string | null) => void }>) {
+}: Readonly<{ value: string | null; ariaLabel: string; onChange: (value: string | null) => void }>) {
     return (
         <div className="flex min-w-0 items-center gap-2">
             <input
                 className="size-9 shrink-0 cursor-pointer rounded border bg-transparent p-1"
                 type="color"
                 value={value || '#ffffff'}
-                aria-label="Color"
+                aria-label={ariaLabel}
                 onChange={event => onChange(event.target.value)}
             />
             <Input

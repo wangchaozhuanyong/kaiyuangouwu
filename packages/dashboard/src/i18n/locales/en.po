@@ -222,6 +222,7 @@ msgstr "Select a country or region"
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
+#: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Select {0}"
 msgstr "Select {0}"
 
@@ -340,6 +341,10 @@ msgstr "Fulfillment handler"
 #: src/app/routes/_authenticated/_orders/utils/order-detail-loaders.tsx
 msgid "Orders"
 msgstr "Orders"
+
+#: src/lib/components/data-input/string-list-input.tsx
+msgid "Remove {item}"
+msgstr "Remove {item}"
 
 #: src/app/routes/_authenticated/_api-keys/api-keys_.$id.tsx
 msgid "Select roles"
@@ -1717,6 +1722,7 @@ msgstr "Sales channel Languages"
 msgid "Failed to create option group"
 msgstr "Failed to create option group"
 
+#: src/lib/components/data-table/data-table-filter-badge.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 msgid "True"
@@ -1730,6 +1736,7 @@ msgstr "Select customer"
 msgid "Order transitioned"
 msgstr "Order transitioned"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
 #: src/lib/components/data-input/product-multi-selector-input.tsx
 msgid "Select products"
 msgstr "Select products"
@@ -2548,6 +2555,11 @@ msgstr "Task status"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.administrator"
+msgstr "Administrator"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.attempts"
 msgstr "Attempts"
 
@@ -2683,6 +2695,11 @@ msgstr "Error"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.facetValues"
+msgstr "Filter attribute values"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.featuredAsset"
 msgstr "Primary asset"
 
@@ -2698,6 +2715,11 @@ msgstr "Fulfilment method"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.groups"
+msgstr "Customer groups"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.id"
 msgstr "ID"
 
@@ -2710,6 +2732,11 @@ msgstr "Default"
 #: src/i18n/common-strings.ts
 msgid "fieldName.isPrivate"
 msgstr "Private"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.isPublic"
+msgstr "Public"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
@@ -2768,6 +2795,11 @@ msgstr "Permissions"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
+msgid "fieldName.phoneNumber"
+msgstr "Phone number"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
 msgid "fieldName.position"
 msgstr "Position"
 
@@ -2785,6 +2817,21 @@ msgstr "Prices include tax"
 #: src/i18n/common-strings.ts
 msgid "fieldName.priceWithTax"
 msgstr "Price including tax"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.productCount"
+msgstr "Products"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.productId"
+msgstr "Product ID"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.productVariantCount"
+msgstr "Product SKU count"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
@@ -2920,6 +2967,11 @@ msgstr "Value"
 #: src/i18n/common-strings.ts
 msgid "fieldName.valueList"
 msgstr "Values"
+
+#. js-lingui-explicit-id
+#: src/i18n/common-strings.ts
+msgid "fieldName.variants"
+msgstr "Product SKUs"
 
 #. js-lingui-explicit-id
 #: src/i18n/common-strings.ts
@@ -3179,8 +3231,11 @@ msgstr "Recommended workflow"
 msgid "Customer verified"
 msgstr "Customer verified"
 
+#. placeholder {0}: channel.code
 #. placeholder {0}: facetValue.name
+#. placeholder {1}: channel.token
 #. placeholder {1}: facetValue.facet.name
+#: src/lib/components/shared/channel-chip.tsx
 #: src/lib/components/shared/facet-value-chip.tsx
 msgid "Remove {0} from {1}"
 msgstr "Remove {0} from {1}"
@@ -3836,6 +3891,10 @@ msgstr "Toggle header column"
 msgid "New Promotion"
 msgstr "New Promotion"
 
+#: src/lib/components/data-input/string-list-input.tsx
+msgid "Drag {item}"
+msgstr "Drag {item}"
+
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Option value name"
 msgstr "Option value name"
@@ -4414,6 +4473,10 @@ msgstr "Heading 1"
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "Select Available Languages"
 msgstr "Select Available Languages"
+
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "Change selected products"
+msgstr "Change selected products"
 
 #. placeholder {0}: addedLines.length
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
@@ -5094,6 +5157,7 @@ msgstr "Filter by tags"
 msgid "Sign in to access the admin dashboard"
 msgstr "Sign in to access the admin dashboard"
 
+#: src/lib/components/data-table/data-table-filter-badge.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
 msgid "False"
@@ -5849,6 +5913,10 @@ msgstr "Successfully updated product group"
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
 msgid "Successfully updated payment method"
 msgstr "Successfully updated payment method"
+
+#: src/lib/components/data-input/product-multi-selector-input.tsx
+msgid "Change selected variants"
+msgstr "Change selected SKUs"
 
 #: src/app/routes/_authenticated/_customers/customers.tsx
 msgid "Account status"
@@ -7540,6 +7608,7 @@ msgstr "Loading product groups..."
 msgid "Successfully updated facet value"
 msgstr "Successfully updated filter attribute value"
 
+#: src/lib/components/data-input/product-multi-selector-input.tsx
 #: src/lib/components/data-input/product-multi-selector-input.tsx
 msgid "Select variants"
 msgstr "Select SKUs"

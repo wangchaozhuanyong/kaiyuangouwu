@@ -1,6 +1,7 @@
 import { Badge } from '@/vdb/components/ui/badge.js';
-import { X } from 'lucide-react';
 import type { SimpleChannel } from '@/vdb/providers/channel-provider.js';
+import { useLingui } from '@lingui/react/macro';
+import { X } from 'lucide-react';
 
 interface ChannelChipProps {
     channel: SimpleChannel;
@@ -15,11 +16,9 @@ interface ChannelChipProps {
  * @docsCategory components
  * @since 3.5.2
  */
-export function ChannelChip({
-    channel,
-    removable = true,
-    onRemove,
-}: Readonly<ChannelChipProps>) {
+export function ChannelChip({ channel, removable = true, onRemove }: Readonly<ChannelChipProps>) {
+    const { t } = useLingui();
+
     return (
         <Badge
             variant="secondary"
@@ -33,7 +32,7 @@ export function ChannelChip({
                     type="button"
                     className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted/30 hover:cursor-pointer"
                     onClick={() => onRemove?.(channel.id)}
-                    aria-label={`Remove ${channel.code} from ${channel.token}`}
+                    aria-label={t`Remove ${channel.code} from ${channel.token}`}
                 >
                     <X className="h-3 w-3" />
                 </button>

@@ -10,10 +10,19 @@ import ts from 'typescript';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dashboardRoot = path.resolve(__dirname, '../..');
 const workspaceRoot = path.resolve(dashboardRoot, '../..');
+const packagesRoot = path.join(workspaceRoot, 'packages');
+const pluginDashboardRoots = fs
+    .readdirSync(packagesRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => path.join(packagesRoot, entry.name, 'src', 'dashboard'))
+    .filter(root => fs.existsSync(root));
 const sourceRoots = [
     path.join(dashboardRoot, 'src'),
-    path.join(workspaceRoot, 'packages/operations-dashboard-plugin/src/dashboard'),
+    ...pluginDashboardRoots,
 ];
+const manualBilingualRoots = pluginDashboardRoots.filter(
+    root => !root.includes(`${path.sep}operations-dashboard-plugin${path.sep}`),
+);
 const ignoredPathParts = ['/graphql/', '/generated/', '/__generated__/', '/node_modules/', '/dist/'];
 const ignoredFilePatterns = [/\.(spec|test|stories)\.[cm]?[jt]sx?$/u, /\.d\.ts$/u];
 const visibleAttributes = new Set(['aria-label', 'alt', 'placeholder', 'title']);
@@ -24,10 +33,12 @@ const technicalLiterals = new Set([
     'ID',
     'ID:',
     'JSON',
+    'Logo',
     'SKU',
     'SKU:',
     'URL',
     'Vendure',
+    'ZH',
     'auto',
     'blockId',
     'column',
@@ -90,11 +101,35 @@ function isInsideTranslation(node) {
     return false;
 }
 
+function isInsideManualBilingualCopy(node) {
+    for (let current = node; current; current = current.parent) {
+        if (
+            ts.isVariableDeclaration(current) &&
+            ts.isIdentifier(current.name) &&
+            ['zhCopy', 'enCopy'].includes(current.name.text)
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isManualBilingualFile(filePath) {
+    return manualBilingualRoots.some(root => filePath.startsWith(`${root}${path.sep}`));
+}
+
+function shouldAuditVisibleText(filePath, value) {
+    return !(isManualBilingualFile(filePath) && /[\u4e00-\u9fff]/u.test(value));
+}
+
 function isMeaningfulText(value) {
     const normalized = value.replace(/\s+/gu, ' ').trim();
     if (!normalized || !/[A-Za-z\u4e00-\u9fff]/u.test(normalized)) return false;
     if (technicalLiterals.has(normalized)) return false;
     if (/^(?:https?:\/\/|mailto:|tel:)/u.test(normalized)) return false;
+    if (/^#[\da-f]{3,8}$/iu.test(normalized)) return false;
+    if (/^\d+\s*x\s*\d+$/iu.test(normalized)) return false;
+    if (/^\/?\s*\d+\s*bytes$/iu.test(normalized)) return false;
     return true;
 }
 
@@ -143,28 +178,122 @@ function inspectFile(filePath) {
     const scriptKind = filePath.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
     const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
     const findings = [];
+    const variableInitializers = new Map();
+
+    function collectVariableInitializers(node) {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+            const existing = variableInitializers.get(node.name.text) ?? [];
+            existing.push(node.initializer);
+            variableInitializers.set(node.name.text, existing);
+        }
+        ts.forEachChild(node, collectVariableInitializers);
+    }
+
+    collectVariableInitializers(sourceFile);
+
+    function getRenderedStaticText(node, seenIdentifiers = new Set()) {
+        if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+            return [node.text];
+        }
+        if (ts.isTemplateExpression(node)) {
+            return [node.head.text, ...node.templateSpans.map(span => span.literal.text)];
+        }
+        if (ts.isConditionalExpression(node)) {
+            if (/\b(?:isZh|locale|language)\b/u.test(node.condition.getText(sourceFile))) {
+                return [];
+            }
+            return [
+                ...getRenderedStaticText(node.whenTrue, seenIdentifiers),
+                ...getRenderedStaticText(node.whenFalse, seenIdentifiers),
+            ];
+        }
+        if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+            return [
+                ...getRenderedStaticText(node.left, seenIdentifiers),
+                ...getRenderedStaticText(node.right, seenIdentifiers),
+            ];
+        }
+        if (
+            ts.isParenthesizedExpression(node) ||
+            ts.isAsExpression(node) ||
+            ts.isTypeAssertionExpression(node) ||
+            ts.isSatisfiesExpression(node) ||
+            ts.isNonNullExpression(node)
+        ) {
+            return getRenderedStaticText(node.expression, seenIdentifiers);
+        }
+        if (ts.isIdentifier(node) && !seenIdentifiers.has(node.text)) {
+            const declarations = variableInitializers.get(node.text) ?? [];
+            if (declarations.length === 1) {
+                const nextSeen = new Set(seenIdentifiers);
+                nextSeen.add(node.text);
+                return getRenderedStaticText(declarations[0], nextSeen);
+            }
+        }
+        return [];
+    }
+
+    function inspectRenderedExpression(node) {
+        if (!node || isInsideTranslation(node)) return;
+        if (
+            ts.isJsxExpression(node.parent) &&
+            ts.isJsxElement(node.parent.parent) &&
+            tagName(node.parent.parent.openingElement.tagName) === 'style'
+        ) {
+            return;
+        }
+        const visibleText = getRenderedStaticText(node).find(
+            value => isMeaningfulText(value) && shouldAuditVisibleText(filePath, value),
+        );
+        if (visibleText) {
+            addFinding(findings, sourceFile, node, 'UNTRANSLATED_RENDERED_EXPRESSION', visibleText);
+        }
+    }
 
     function visit(node) {
-        if (ts.isJsxText(node) && isMeaningfulText(node.text) && !isInsideTranslation(node)) {
+        if (
+            ts.isJsxText(node) &&
+            isMeaningfulText(node.text) &&
+            shouldAuditVisibleText(filePath, node.text) &&
+            !isInsideTranslation(node)
+        ) {
             addFinding(findings, sourceFile, node, 'UNTRANSLATED_JSX_TEXT', node.text);
         }
 
         if (ts.isJsxAttribute(node) && visibleAttributes.has(node.name.text)) {
             if (node.initializer && ts.isStringLiteral(node.initializer)) {
                 const value = node.initializer.text;
-                if (isMeaningfulText(value)) {
+                if (isMeaningfulText(value) && shouldAuditVisibleText(filePath, value)) {
                     addFinding(findings, sourceFile, node, 'UNTRANSLATED_JSX_ATTRIBUTE', value);
                 }
+            } else if (node.initializer && ts.isJsxExpression(node.initializer)) {
+                inspectRenderedExpression(node.initializer.expression);
             }
         }
 
-        if (ts.isPropertyAssignment(node) && visibleProperties.has(propertyName(node))) {
+        if (
+            ts.isJsxExpression(node) &&
+            node.expression &&
+            (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))
+        ) {
+            inspectRenderedExpression(node.expression);
+        }
+
+        if (
+            ts.isPropertyAssignment(node) &&
+            visibleProperties.has(propertyName(node)) &&
+            !isInsideManualBilingualCopy(node)
+        ) {
             if (
                 ts.isStringLiteral(node.initializer) ||
                 ts.isNoSubstitutionTemplateLiteral(node.initializer)
             ) {
                 const value = node.initializer.text;
-                if (isMeaningfulText(value) && !isInsideTranslation(node.initializer)) {
+                if (
+                    isMeaningfulText(value) &&
+                    shouldAuditVisibleText(filePath, value) &&
+                    !isInsideTranslation(node.initializer)
+                ) {
                     addFinding(findings, sourceFile, node, 'UNTRANSLATED_VISIBLE_PROPERTY', value);
                 }
             }
@@ -188,6 +317,7 @@ function inspectFile(filePath) {
 
         if (
             !isPairedHelpTranslation(filePath, node) &&
+            !isManualBilingualFile(filePath) &&
             (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
             /[\u4e00-\u9fff]/u.test(node.text) &&
             !isInsideTranslation(node)

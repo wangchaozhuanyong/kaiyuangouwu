@@ -104,7 +104,7 @@ function FilterValue({
         );
     }
     if (typeof value === 'boolean') {
-        return <div>{value ? 'true' : 'false'}</div>;
+        return <div>{value ? <Trans>True</Trans> : <Trans>False</Trans>}</div>;
     }
     if (typeof value === 'number' && dataType === 'Money') {
         return <div>{formatCurrency(value, currencyCode)}</div>;

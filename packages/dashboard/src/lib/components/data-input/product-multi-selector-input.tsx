@@ -530,6 +530,7 @@ export function ProductMultiSelectorDialog({
 }
 
 export const ProductMultiInput: DashboardFormComponent = ({ value, onChange, disabled, ...props }) => {
+    const { t } = useLingui();
     const [open, setOpen] = useState(false);
     const mode = props.fieldDef?.ui?.selectionMode === 'variant' ? 'variant' : 'product';
     const selectedIds = value || [];
@@ -540,8 +541,14 @@ export const ProductMultiInput: DashboardFormComponent = ({ value, onChange, dis
         },
         [onChange],
     );
-    const itemType = mode === 'product' ? 'products' : 'variants';
-    const buttonText = selectedIds.length > 0 ? `Change selected ${itemType}` : `Select ${itemType}`;
+    const buttonText =
+        mode === 'product'
+            ? selectedIds.length > 0
+                ? t`Change selected products`
+                : t`Select products`
+            : selectedIds.length > 0
+              ? t`Change selected variants`
+              : t`Select variants`;
     return (
         <>
             <div className="space-y-2">

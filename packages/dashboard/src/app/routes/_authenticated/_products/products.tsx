@@ -72,6 +72,10 @@ function ProductListPage() {
                         </div>
                     ),
                 },
+                variants: {
+                    // Loaded only as a dependency of the product-type column; the raw JSON is not useful here.
+                    meta: { disabled: true },
+                },
             }}
             onSearchTermChange={searchTerm => {
                 return searchTerm
