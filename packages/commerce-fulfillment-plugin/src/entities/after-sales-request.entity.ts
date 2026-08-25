@@ -1,9 +1,10 @@
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { Channel, Customer, EntityId, Money, Order, VendureEntity } from '@vendure/core';
+import { Channel, Customer, EntityId, Money, Order, Refund, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 
 import { AfterSalesReason, AfterSalesState, AfterSalesType } from '../after-sales.constants';
+
 import { AfterSalesEvent } from './after-sales-event.entity';
 import { AfterSalesItem } from './after-sales-item.entity';
 
@@ -12,6 +13,7 @@ import { AfterSalesItem } from './after-sales-item.entity';
 @Index('IDX_after_sales_request_channel_state_created', ['channelId', 'state', 'createdAt'])
 @Index('IDX_after_sales_request_customer_created', ['customerId', 'createdAt'])
 @Index('IDX_after_sales_request_order', ['orderId'])
+@Index('IDX_after_sales_request_refund', ['refundId'], { unique: true })
 export class AfterSalesRequest extends VendureEntity {
     constructor(input?: DeepPartial<AfterSalesRequest>) {
         super(input);
@@ -44,6 +46,12 @@ export class AfterSalesRequest extends VendureEntity {
     @Column({ type: 'text', nullable: true })
     resolution: string | null;
 
+    @Column({ type: 'text', nullable: true })
+    resolutionZh: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    resolutionEn: string | null;
+
     @Column({ type: 'varchar', length: 200 })
     customerName: string;
 
@@ -58,6 +66,9 @@ export class AfterSalesRequest extends VendureEntity {
 
     @Column({ type: Date, nullable: true })
     cancelledAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    refundedAt: Date | null;
 
     @OneToMany(() => AfterSalesItem, item => item.request)
     items: AfterSalesItem[];
@@ -85,4 +96,11 @@ export class AfterSalesRequest extends VendureEntity {
 
     @EntityId()
     orderId: ID;
+
+    @ManyToOne(() => Refund, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'refundId', foreignKeyConstraintName: 'FK_after_sales_request_refund' })
+    refund: Refund | null;
+
+    @EntityId({ nullable: true })
+    refundId: ID | null;
 }

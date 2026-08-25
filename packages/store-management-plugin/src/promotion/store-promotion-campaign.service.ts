@@ -9,6 +9,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import type { ProductVariant } from '@vendure/core';
 import {
     Collection,
+    CustomerService,
     idsAreEqual,
     isGraphQlErrorResult,
     ProductVariantService,
@@ -18,7 +19,12 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { randomUUID } from 'node:crypto';
+import { In } from 'typeorm';
 
+import { CouponOrderAllocation } from '../entities/coupon-order-allocation.entity';
+import { CustomerCoupon } from '../entities/customer-coupon.entity';
+import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
 import {
     CreateStoreCouponCampaignInput,
     CreateStoreFlashSaleInput,
@@ -36,13 +42,67 @@ export class StorePromotionCampaignService {
         private readonly connection: TransactionalConnection,
         private readonly promotionService: PromotionService,
         private readonly productVariantService: ProductVariantService,
+        private readonly customerService: CustomerService,
     ) {}
 
     async findCoupons(ctx: RequestContext): Promise<StoreCouponCampaignView[]> {
         const promotions = await this.findPromotions(ctx);
-        return promotions.flatMap(promotion => {
+        const couponPromotions = promotions.flatMap(promotion => {
             const view = this.toCouponView(promotion);
-            return view ? [view] : [];
+            return view ? [{ promotion, view }] : [];
+        });
+        if (!couponPromotions.length) return [];
+
+        const promotionIds = couponPromotions.map(({ promotion }) => promotion.id);
+        const [configs, statusRows, allocationRows, activeCustomer] = await Promise.all([
+            this.connection.getRepository(ctx, StoreCouponCampaignConfig).find({
+                where: { channelId: ctx.channelId, promotionId: In(promotionIds) },
+            }),
+            this.couponStatusRows(ctx, promotionIds),
+            this.couponAllocationRows(ctx, promotionIds),
+            ctx.activeUserId ? this.customerService.findOneByUserId(ctx, ctx.activeUserId) : undefined,
+        ]);
+        const customerRows = activeCustomer
+            ? await this.connection
+                  .getRepository(ctx, CustomerCoupon)
+                  .createQueryBuilder('coupon')
+                  .select('coupon.promotionId', 'promotionId')
+                  .addSelect('COUNT(coupon.id)', 'count')
+                  .where('coupon.channelId = :channelId', { channelId: ctx.channelId })
+                  .andWhere('coupon.customerId = :customerId', { customerId: activeCustomer.id })
+                  .andWhere('coupon.promotionId IN (:...promotionIds)', { promotionIds })
+                  .groupBy('coupon.promotionId')
+                  .getRawMany<{ promotionId: string; count: string }>()
+            : [];
+        const configsByPromotion = new Map(configs.map(config => [String(config.promotionId), config]));
+        const customerCounts = new Map(customerRows.map(row => [String(row.promotionId), Number(row.count)]));
+        const statsByPromotion = this.campaignStats(statusRows, allocationRows);
+
+        return couponPromotions.map(({ promotion, view }) => {
+            const config = configsByPromotion.get(String(promotion.id));
+            const stats = statsByPromotion.get(String(promotion.id)) ?? emptyCampaignStats();
+            const issueLimit = config?.issueLimit ?? promotion.usageLimit ?? null;
+            const remainingIssueCount =
+                issueLimit == null ? null : Math.max(0, issueLimit - stats.claimedCount);
+            const perCustomerClaimLimit = config?.perCustomerClaimLimit ?? 1;
+            const customerClaimedCount = customerCounts.get(String(promotion.id)) ?? 0;
+            return {
+                ...view,
+                ...stats,
+                claimStartsAt: config?.claimStartsAt ?? promotion.startsAt,
+                claimEndsAt: config?.claimEndsAt ?? promotion.endsAt,
+                validityDays: config?.validityDays ?? null,
+                issueLimit,
+                perCustomerClaimLimit,
+                stackPolicy: config?.stackPolicy ?? 'EXCLUSIVE',
+                returnOnCancellation: config?.returnOnCancellation ?? true,
+                returnOnFullRefund: config?.returnOnFullRefund ?? true,
+                remainingIssueCount,
+                claimed: customerClaimedCount > 0,
+                claimable:
+                    customerClaimedCount < perCustomerClaimLimit &&
+                    (remainingIssueCount == null || remainingIssueCount > 0),
+            };
         });
     }
 
@@ -53,7 +113,10 @@ export class StorePromotionCampaignService {
                 coupon =>
                     coupon.enabled &&
                     (!coupon.startsAt || coupon.startsAt <= now) &&
-                    (!coupon.endsAt || coupon.endsAt > now),
+                    (!coupon.endsAt || coupon.endsAt > now) &&
+                    (!coupon.claimStartsAt || coupon.claimStartsAt <= now) &&
+                    (!coupon.claimEndsAt || coupon.claimEndsAt > now) &&
+                    (coupon.claimed || coupon.remainingIssueCount == null || coupon.remainingIssueCount > 0),
             )
             .slice(0, 50);
     }
@@ -71,7 +134,44 @@ export class StorePromotionCampaignService {
         if (!view) {
             throw new UserInputError('优惠券创建后无法识别，请检查优惠动作配置');
         }
-        return view;
+        const config = await this.connection.getRepository(ctx, StoreCouponCampaignConfig).save(
+            new StoreCouponCampaignConfig({
+                channelId: ctx.channelId,
+                promotionId: result.id,
+                claimStartsAt: input.claimStartsAt
+                    ? this.validDate(input.claimStartsAt, '领取开始时间')
+                    : (result.startsAt ?? null),
+                claimEndsAt: input.claimEndsAt
+                    ? this.validDate(input.claimEndsAt, '领取结束时间')
+                    : (result.endsAt ?? null),
+                validityDays: this.optionalPositiveInteger(input.validityDays, '领取后有效天数'),
+                issueLimit:
+                    this.optionalPositiveInteger(input.issueLimit, '发放数量') ?? result.usageLimit ?? null,
+                perCustomerClaimLimit:
+                    this.optionalPositiveInteger(input.perCustomerClaimLimit, '每位客户领取次数') ?? 1,
+                stackPolicy: input.stackPolicy ?? 'EXCLUSIVE',
+                returnOnCancellation: input.returnOnCancellation ?? true,
+                returnOnFullRefund: input.returnOnFullRefund ?? true,
+            }),
+        );
+        if (config.claimStartsAt && config.claimEndsAt && config.claimStartsAt >= config.claimEndsAt) {
+            throw new UserInputError('领取结束时间必须晚于领取开始时间');
+        }
+        return {
+            ...view,
+            ...emptyCampaignStats(),
+            claimStartsAt: config.claimStartsAt,
+            claimEndsAt: config.claimEndsAt,
+            validityDays: config.validityDays,
+            issueLimit: config.issueLimit,
+            perCustomerClaimLimit: config.perCustomerClaimLimit,
+            stackPolicy: config.stackPolicy,
+            returnOnCancellation: config.returnOnCancellation,
+            returnOnFullRefund: config.returnOnFullRefund,
+            remainingIssueCount: config.issueLimit,
+            claimed: false,
+            claimable: true,
+        };
     }
 
     async findFlashSales(ctx: RequestContext, activeOnly = false): Promise<StoreFlashSaleView[]> {
@@ -188,17 +288,15 @@ export class StorePromotionCampaignService {
         input: CreateStoreCouponCampaignInput,
     ): Promise<CreatePromotionInput> {
         const name = this.requiredText(input.name, '优惠券名称', 120);
-        const couponCode = this.requiredText(input.couponCode, '优惠码', 64).toUpperCase();
-        if (!/^[A-Z0-9][A-Z0-9_-]*$/.test(couponCode)) {
-            throw new UserInputError('优惠码只能使用字母、数字、短横线和下划线');
-        }
+        const couponCode = createInternalCouponCode();
         const minimumSpend = input.minimumSpend ?? 0;
         if (!Number.isInteger(minimumSpend) || minimumSpend < 0) {
             throw new UserInputError('最低消费金额必须是大于或等于 0 的金额');
         }
-        const conditions = minimumSpend
-            ? [operation('minimum_order_amount', { amount: minimumSpend, taxInclusive: true })]
-            : [];
+        const conditions = [operation('store_customer_coupon_entitlement', {})];
+        if (minimumSpend) {
+            conditions.push(operation('minimum_order_amount', { amount: minimumSpend, taxInclusive: true }));
+        }
         const actions: ConfigurableOperationInput[] = [];
         if (input.kind === 'ORDER_FIXED') {
             const amount = input.discountAmount ?? 0;
@@ -289,7 +387,92 @@ export class StorePromotionCampaignService {
             productVariantIds: idListArg(action, 'productVariantIds'),
             usageLimit: promotion.usageLimit,
             perCustomerUsageLimit: promotion.perCustomerUsageLimit,
+            ...emptyCampaignStats(),
+            claimStartsAt: promotion.startsAt,
+            claimEndsAt: promotion.endsAt,
+            validityDays: null,
+            issueLimit: promotion.usageLimit,
+            perCustomerClaimLimit: 1,
+            stackPolicy: 'EXCLUSIVE',
+            returnOnCancellation: true,
+            returnOnFullRefund: true,
+            remainingIssueCount: promotion.usageLimit,
+            claimed: false,
+            claimable: true,
         };
+    }
+
+    private couponStatusRows(ctx: RequestContext, promotionIds: ID[]) {
+        return this.connection
+            .getRepository(ctx, CustomerCoupon)
+            .createQueryBuilder('coupon')
+            .select('coupon.promotionId', 'promotionId')
+            .addSelect('coupon.status', 'status')
+            .addSelect('COUNT(coupon.id)', 'count')
+            .where('coupon.channelId = :channelId', { channelId: ctx.channelId })
+            .andWhere('coupon.promotionId IN (:...promotionIds)', { promotionIds })
+            .groupBy('coupon.promotionId')
+            .addGroupBy('coupon.status')
+            .getRawMany<{ promotionId: string; status: string; count: string }>();
+    }
+
+    private couponAllocationRows(ctx: RequestContext, promotionIds: ID[]) {
+        return this.connection
+            .getRepository(ctx, CouponOrderAllocation)
+            .createQueryBuilder('allocation')
+            .select('allocation.promotionId', 'promotionId')
+            .addSelect('COUNT(allocation.id)', 'redeemedOrderCount')
+            .addSelect(
+                `SUM(CASE WHEN allocation.status = 'REFUNDED' THEN 1 ELSE 0 END)`,
+                'refundedOrderCount',
+            )
+            .addSelect('COALESCE(SUM(allocation.discountAmountWithTax), 0)', 'discountAmountTotal')
+            .addSelect('COALESCE(SUM(allocation.orderTotalWithTax), 0)', 'assistedRevenueTotal')
+            .where('allocation.channelId = :channelId', { channelId: ctx.channelId })
+            .andWhere('allocation.promotionId IN (:...promotionIds)', { promotionIds })
+            .andWhere("allocation.status IN ('USED', 'REFUNDED')")
+            .groupBy('allocation.promotionId')
+            .getRawMany<{
+                promotionId: string;
+                redeemedOrderCount: string;
+                refundedOrderCount: string;
+                discountAmountTotal: string;
+                assistedRevenueTotal: string;
+            }>();
+    }
+
+    private campaignStats(
+        statusRows: Array<{ promotionId: string; status: string; count: string }>,
+        allocationRows: Array<{
+            promotionId: string;
+            redeemedOrderCount: string;
+            refundedOrderCount: string;
+            discountAmountTotal: string;
+            assistedRevenueTotal: string;
+        }>,
+    ) {
+        const result = new Map<string, ReturnType<typeof emptyCampaignStats>>();
+        for (const row of statusRows) {
+            const stats = result.get(String(row.promotionId)) ?? emptyCampaignStats();
+            const count = Number(row.count);
+            stats.claimedCount += count;
+            if (row.status === 'AVAILABLE') stats.availableCount += count;
+            if (row.status === 'LOCKED') stats.lockedCount += count;
+            if (row.status === 'USED') stats.usedCount += count;
+            if (row.status === 'RETURNED') stats.returnedCount += count;
+            if (row.status === 'EXPIRED') stats.expiredCount += count;
+            if (row.status === 'REVOKED') stats.revokedCount += count;
+            result.set(String(row.promotionId), stats);
+        }
+        for (const row of allocationRows) {
+            const stats = result.get(String(row.promotionId)) ?? emptyCampaignStats();
+            stats.redeemedOrderCount = Number(row.redeemedOrderCount);
+            stats.refundedOrderCount = Number(row.refundedOrderCount);
+            stats.discountAmountTotal = Number(row.discountAmountTotal);
+            stats.assistedRevenueTotal = Number(row.assistedRevenueTotal);
+            result.set(String(row.promotionId), stats);
+        }
+        return result;
     }
 
     private async toFlashSaleView(
@@ -408,6 +591,10 @@ export class StorePromotionCampaignService {
     }
 }
 
+function createInternalCouponCode(): string {
+    return `CPN_${randomUUID().replace(/-/g, '').toUpperCase()}`;
+}
+
 function operation(
     code: string,
     args: Record<string, string | number | boolean | string[]>,
@@ -484,4 +671,20 @@ function dateRangesOverlap(
     const secondStartTime = secondStart?.getTime() ?? Number.NEGATIVE_INFINITY;
     const secondEndTime = secondEnd?.getTime() ?? Number.POSITIVE_INFINITY;
     return firstStartTime < secondEndTime && secondStartTime < firstEndTime;
+}
+
+function emptyCampaignStats() {
+    return {
+        claimedCount: 0,
+        availableCount: 0,
+        lockedCount: 0,
+        usedCount: 0,
+        returnedCount: 0,
+        expiredCount: 0,
+        revokedCount: 0,
+        redeemedOrderCount: 0,
+        refundedOrderCount: 0,
+        discountAmountTotal: 0,
+        assistedRevenueTotal: 0,
+    };
 }

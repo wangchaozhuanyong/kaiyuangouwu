@@ -17,6 +17,7 @@ import {
     ProductSearchSort,
     RegisterCustomerInput,
     ShippingMethod,
+    StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCatalogInput,
     StorefrontCheckoutSession,
@@ -161,6 +162,28 @@ const orderFields = `
         freeShippingThreshold
         freeShippingApplied
     }
+`;
+
+const customerCouponFields = `
+    id
+    campaignId
+    campaignName
+    campaignKind
+    status
+    minimumSpend
+    discountAmount
+    discountRate
+    claimedAt
+    validFrom
+    validUntil
+    lockedAt
+    usedAt
+    returnedAt
+    expiredAt
+    lockedOrderId
+    usedOrderId
+    returnCount
+    usable
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order
@@ -456,13 +479,17 @@ export class ShopApi {
                 activeStorefrontCoupons {
                     id
                     name
-                    couponCode
                     kind
                     startsAt
                     endsAt
+                    claimStartsAt
+                    claimEndsAt
                     minimumSpend
                     discountAmount
                     discountRate
+                    remainingIssueCount
+                    claimed
+                    claimable
                 }
                 activeStorefrontFlashSales {
                     id
@@ -1420,6 +1447,55 @@ export class ShopApi {
             { expectedRevision },
         );
         return this.assertCart(result.reopenStorefrontCart);
+    }
+
+    async myCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {
+        const result = await this.request<{ myStorefrontCoupons: StoreCustomerCoupon[] }>(
+            `
+                query MyStorefrontCoupons {
+                    myStorefrontCoupons { ${customerCouponFields} }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myStorefrontCoupons;
+    }
+
+    async claimCoupon(campaignId: string): Promise<StoreCustomerCoupon> {
+        const result = await this.request<{ claimStorefrontCoupon: StoreCustomerCoupon }>(
+            `
+                mutation ClaimStorefrontCoupon($campaignId: ID!) {
+                    claimStorefrontCoupon(campaignId: $campaignId) { ${customerCouponFields} }
+                }
+            `,
+            { campaignId },
+        );
+        return result.claimStorefrontCoupon;
+    }
+
+    async applyCustomerCoupon(id: string): Promise<StoreCustomerCoupon> {
+        const result = await this.request<{ applyStorefrontCoupon: StoreCustomerCoupon }>(
+            `
+                mutation ApplyOwnedStorefrontCoupon($id: ID!) {
+                    applyStorefrontCoupon(id: $id) { ${customerCouponFields} }
+                }
+            `,
+            { id },
+        );
+        return result.applyStorefrontCoupon;
+    }
+
+    async removeCustomerCoupon(id: string): Promise<StoreCustomerCoupon> {
+        const result = await this.request<{ removeStorefrontCoupon: StoreCustomerCoupon }>(
+            `
+                mutation RemoveOwnedStorefrontCoupon($id: ID!) {
+                    removeStorefrontCoupon(id: $id) { ${customerCouponFields} }
+                }
+            `,
+            { id },
+        );
+        return result.removeStorefrontCoupon;
     }
 
     async applyCouponCode(couponCode: string): Promise<Order> {

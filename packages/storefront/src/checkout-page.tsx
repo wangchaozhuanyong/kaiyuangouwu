@@ -28,6 +28,7 @@ import {
     Order,
     ProductVariant,
     ShippingMethod,
+    StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCheckoutSession,
     StorefrontConfig,
@@ -53,6 +54,7 @@ export function CheckoutPage({
     onCartChange,
     onNavigate,
     onNotify,
+    coupons,
     onApplyCoupon,
     onRemoveCoupon,
 }: {
@@ -70,8 +72,9 @@ export function CheckoutPage({
     onCartChange: (cart: StorefrontCart) => void;
     onNavigate: (route: CheckoutRoute, replace?: boolean) => void;
     onNotify: (message: string) => void;
-    onApplyCoupon: (couponCode: string) => Promise<string | null>;
-    onRemoveCoupon: (couponCode: string) => Promise<string | null>;
+    coupons: StoreCustomerCoupon[];
+    onApplyCoupon: (customerCouponId: string) => Promise<string | null>;
+    onRemoveCoupon: (customerCouponId: string) => Promise<string | null>;
 }) {
     const isZh = language === 'zh';
     const directPurchase = mode === 'purchase';
@@ -710,13 +713,13 @@ export function CheckoutPage({
                     <button type="button" onClick={() => setCouponOpen(true)}>
                         <span>{isZh ? '优惠券' : 'Coupon'}</span>
                         <small>
-                            {order.couponCodes.length
+                            {coupons.some(coupon => coupon.lockedOrderId === order.id)
                                 ? isZh
-                                    ? `已使用 ${order.couponCodes.length} 个优惠码`
-                                    : `${order.couponCodes.length} applied`
+                                    ? '已使用优惠券'
+                                    : 'Coupon applied'
                                 : isZh
-                                  ? '输入优惠码'
-                                  : 'Enter coupon code'}
+                                  ? '选择已领取优惠券'
+                                  : 'Choose a claimed coupon'}
                             <ChevronRight />
                         </small>
                     </button>
@@ -803,7 +806,8 @@ export function CheckoutPage({
             </form>
             {couponOpen && (
                 <CouponSheet
-                    couponCodes={order.couponCodes}
+                    coupons={coupons}
+                    orderId={order.id}
                     language={language}
                     loading={submitting}
                     onApply={onApplyCoupon}
@@ -1031,78 +1035,61 @@ function shippingMethodDetails(
     return details.join(' · ');
 }
 function CouponSheet({
-    couponCodes,
+    coupons,
+    orderId,
     language,
     loading,
     onApply,
     onRemove,
     onClose,
 }: {
-    couponCodes: string[];
+    coupons: StoreCustomerCoupon[];
+    orderId: string;
     language: StorefrontLanguage;
     loading: boolean;
-    onApply: (couponCode: string) => Promise<string | null>;
-    onRemove: (couponCode: string) => Promise<string | null>;
+    onApply: (customerCouponId: string) => Promise<string | null>;
+    onRemove: (customerCouponId: string) => Promise<string | null>;
     onClose: () => void;
 }) {
     const isZh = language === 'zh';
-    const [couponCode, setCouponCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    const apply = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const code = couponCode.trim();
-        if (!code) return;
+    const choose = async (coupon: StoreCustomerCoupon) => {
         setSubmitting(true);
         setError('');
-        const nextError = await onApply(code);
-        setSubmitting(false);
-        if (nextError) setError(nextError);
-        else setCouponCode('');
-    };
-    const remove = async (code: string) => {
-        setSubmitting(true);
-        setError('');
-        const nextError = await onRemove(code);
+        const applied = coupon.lockedOrderId === orderId;
+        const nextError = await (applied ? onRemove(coupon.id) : onApply(coupon.id));
         setSubmitting(false);
         if (nextError) setError(nextError);
     };
+    const selectableCoupons = coupons.filter(coupon => coupon.usable || coupon.lockedOrderId === orderId);
     return (
-        <Sheet title={isZh ? '优惠码' : 'Coupon code'} language={language} onClose={onClose}>
+        <Sheet title={isZh ? '选择优惠券' : 'Choose a coupon'} language={language} onClose={onClose}>
             <div className="coupon-sheet-content">
-                <form className="coupon-code-form" onSubmit={event => void apply(event)}>
-                    <label>
-                        <span>{isZh ? '输入优惠码' : 'Enter coupon code'}</span>
-                        <input
-                            value={couponCode}
-                            onChange={event => setCouponCode(event.target.value)}
-                            autoComplete="off"
-                            placeholder={isZh ? '例如 SAVE10' : 'For example, SAVE10'}
-                        />
-                    </label>
-                    <button type="submit" disabled={loading || submitting || !couponCode.trim()}>
-                        {submitting ? (isZh ? '处理中' : 'Applying') : isZh ? '应用' : 'Apply'}
-                    </button>
-                </form>
-                {!!couponCodes.length && (
+                {selectableCoupons.length ? (
                     <section className="applied-coupons">
-                        <strong>{isZh ? '已使用' : 'Applied'}</strong>
-                        {couponCodes.map(code => (
-                            <div key={code}>
-                                <span>
-                                    <TicketPercent />
-                                    {code}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => void remove(code)}
-                                    disabled={loading || submitting}
-                                >
-                                    {isZh ? '移除' : 'Remove'}
-                                </button>
-                            </div>
-                        ))}
+                        <strong>{isZh ? '我的可用优惠券' : 'My available coupons'}</strong>
+                        {selectableCoupons.map(coupon => {
+                            const applied = coupon.lockedOrderId === orderId;
+                            return (
+                                <div key={coupon.id}>
+                                    <span>
+                                        <TicketPercent />
+                                        {coupon.campaignName}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => void choose(coupon)}
+                                        disabled={loading || submitting}
+                                    >
+                                        {applied ? (isZh ? '移除' : 'Remove') : isZh ? '使用' : 'Apply'}
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </section>
+                ) : (
+                    <p>{isZh ? '暂无可用优惠券，请先到领券中心领取' : 'No coupons available yet.'}</p>
                 )}
                 {error && <small className="form-error">{error}</small>}
             </div>

@@ -71,6 +71,8 @@ const afterSalesTypes = gql`
         respondedAt: DateTime
         completedAt: DateTime
         cancelledAt: DateTime
+        refundedAt: DateTime
+        refund: Refund
         order: Order!
         items: [AfterSalesItem!]!
         events: [AfterSalesEvent!]!
@@ -388,6 +390,7 @@ export const adminApiExtensions = gql`
         state: AfterSalesState!
         resolution: String!
         approvedAmount: Money
+        refundId: ID
     }
 
     extend type Query {

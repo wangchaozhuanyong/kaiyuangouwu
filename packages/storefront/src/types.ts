@@ -516,13 +516,41 @@ export type StorefrontCouponCampaignKind =
 export interface StorefrontCouponCampaign {
     id: string;
     name: string;
-    couponCode: string;
     kind: StorefrontCouponCampaignKind;
     startsAt: string | null;
     endsAt: string | null;
+    claimStartsAt: string | null;
+    claimEndsAt: string | null;
     minimumSpend: number;
     discountAmount: number | null;
     discountRate: number | null;
+    remainingIssueCount: number | null;
+    claimed: boolean;
+    claimable: boolean;
+}
+
+export type StoreCustomerCouponStatus = 'AVAILABLE' | 'LOCKED' | 'USED' | 'RETURNED' | 'EXPIRED' | 'REVOKED';
+
+export interface StoreCustomerCoupon {
+    id: string;
+    campaignId: string;
+    campaignName: string;
+    campaignKind: StorefrontCouponCampaignKind;
+    status: StoreCustomerCouponStatus;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+    claimedAt: string;
+    validFrom: string;
+    validUntil: string | null;
+    lockedAt: string | null;
+    usedAt: string | null;
+    returnedAt: string | null;
+    expiredAt: string | null;
+    lockedOrderId: string | null;
+    usedOrderId: string | null;
+    returnCount: number;
+    usable: boolean;
 }
 
 export interface StorefrontFlashSaleItem {

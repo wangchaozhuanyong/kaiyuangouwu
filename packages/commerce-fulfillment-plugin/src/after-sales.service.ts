@@ -5,6 +5,7 @@ import {
     CustomerService,
     EntityNotFoundError,
     Order,
+    Refund,
     RequestContext,
     TransactionalConnection,
     UserInputError,
@@ -50,7 +51,7 @@ export class AfterSalesService {
         const customer = await this.activeCustomerOrThrow(ctx);
         const requests = await this.connection.getRepository(ctx, AfterSalesRequest).find({
             where: { channelId: ctx.channelId, customerId: customer.id },
-            relations: { items: true, events: true, order: true },
+            relations: { items: true, events: true, order: true, refund: true },
             order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
         });
         return requests.map(request => this.normalizeRelations(request));
@@ -60,7 +61,7 @@ export class AfterSalesService {
         const customer = await this.activeCustomerOrThrow(ctx);
         const request = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
             where: { id, channelId: ctx.channelId, customerId: customer.id },
-            relations: { items: true, events: true, order: true },
+            relations: { items: true, events: true, order: true, refund: true },
             order: { events: { createdAt: 'ASC' } },
         });
         return request ? this.normalizeRelations(request) : undefined;
@@ -88,7 +89,7 @@ export class AfterSalesService {
                 channelId: ctx.channelId,
                 ...(selectedStates.length ? { state: In(selectedStates) } : {}),
             },
-            relations: { items: true, events: true, order: true },
+            relations: { items: true, events: true, order: true, refund: true },
             order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
             skip,
             take,
@@ -185,6 +186,8 @@ export class AfterSalesService {
                 respondedAt: null,
                 completedAt: null,
                 cancelledAt: null,
+                refundedAt: null,
+                refundId: null,
                 channel: ctx.channel,
                 channelId: ctx.channelId,
                 customer,
@@ -281,8 +284,31 @@ export class AfterSalesService {
         ) {
             throw new UserInputError('通过金额必须是 0 到申请金额之间的整数金额');
         }
+        let linkedRefund: Refund | null = null;
         if (input.state === 'COMPLETED' && approvedAmount > 0) {
-            throw new UserInputError('尚未关联已成功的实际退款，不能将售后申请标记为已完成');
+            if (!input.refundId) {
+                throw new UserInputError('尚未关联已成功的实际退款，请先选择退款记录');
+            }
+            linkedRefund = await this.connection.getRepository(ctx, Refund).findOne({
+                where: {
+                    id: input.refundId,
+                    state: 'Settled',
+                    payment: { order: { id: request.orderId } },
+                },
+                relations: { payment: { order: true } },
+            });
+            if (!linkedRefund) {
+                throw new UserInputError('退款不存在、尚未成功或不属于当前售后订单');
+            }
+            if (linkedRefund.total < approvedAmount) {
+                throw new UserInputError('所选成功退款金额小于售后通过金额');
+            }
+            const alreadyLinked = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
+                where: { refundId: linkedRefund.id },
+            });
+            if (alreadyLinked && String(alreadyLinked.id) !== String(request.id)) {
+                throw new UserInputError('这笔退款已经关联到其他售后申请');
+            }
         }
 
         const now = new Date();
@@ -294,6 +320,7 @@ export class AfterSalesService {
                 approvedAmount,
                 ...(request.state === 'PENDING' ? { respondedAt: now } : {}),
                 ...(input.state === 'COMPLETED' ? { completedAt: now } : {}),
+                ...(linkedRefund ? { refundId: linkedRefund.id, refundedAt: now } : {}),
             },
         );
         if (result.affected !== 1) {
@@ -360,7 +387,7 @@ export class AfterSalesService {
     ): Promise<AfterSalesRequest> {
         const request = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
             where: { id, channelId: ctx.channelId, customerId },
-            relations: { items: true, events: true, order: true },
+            relations: { items: true, events: true, order: true, refund: true },
             order: { events: { createdAt: 'ASC' } },
         });
         if (!request) {
@@ -372,7 +399,7 @@ export class AfterSalesService {
     private async getRequestForAdminOrThrow(ctx: RequestContext, id: ID): Promise<AfterSalesRequest> {
         const request = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
             where: { id, channelId: ctx.channelId },
-            relations: { items: true, events: true, order: true },
+            relations: { items: true, events: true, order: true, refund: true },
             order: { events: { createdAt: 'ASC' } },
         });
         if (!request) {

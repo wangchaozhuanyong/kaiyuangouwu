@@ -4,7 +4,7 @@ export type StorefrontCouponTheme = 'gold' | 'rose' | 'blue' | 'emerald';
 
 export interface StorefrontCouponCard {
     id: string;
-    code: string;
+    campaignId: string;
     value: string;
     unit: string;
     unitBefore: boolean;
@@ -14,8 +14,6 @@ export interface StorefrontCouponCard {
     theme: StorefrontCouponTheme;
 }
 
-const COUPON_STORAGE_LIMIT = 20;
-const COUPON_STORAGE_PREFIX = 'vendure-storefront-claimed-coupons';
 const NON_PRODUCTION_COUPON_PATTERN =
     /(?:^|[-_\s])(audit|crud|demo|dummy|qa|sample|staging|test)(?:$|[-_\s])|测试|临时演示/iu;
 const couponThemes: StorefrontCouponTheme[] = ['gold', 'rose', 'blue', 'emerald'];
@@ -32,7 +30,7 @@ export function couponCardsFromBlock(
             const display = parseCouponDisplay(item.label);
             return {
                 id: item.id,
-                code: item.targetValue?.trim() ?? '',
+                campaignId: item.targetValue?.trim() ?? '',
                 value: display.value,
                 unit: display.unit,
                 unitBefore: display.unitBefore,
@@ -66,7 +64,7 @@ export function couponCardsFromCampaigns(
               : 'No minimum';
         return {
             id: coupon.id,
-            code: coupon.couponCode,
+            campaignId: coupon.id,
             value,
             unit: isFixed ? currencyUnit : isZh ? '折' : 'x',
             unitBefore: isFixed,
@@ -79,11 +77,7 @@ export function couponCardsFromCampaigns(
 }
 
 function isDisplayableCampaign(coupon: StorefrontCouponCampaign): boolean {
-    const couponCode = coupon.couponCode.trim();
-    if (
-        !/^[A-Z0-9][A-Z0-9_-]*$/u.test(couponCode) ||
-        NON_PRODUCTION_COUPON_PATTERN.test(`${couponCode} ${coupon.name}`)
-    ) {
+    if (NON_PRODUCTION_COUPON_PATTERN.test(`${coupon.id} ${coupon.name}`)) {
         return false;
     }
     if (coupon.minimumSpend < 0) return false;
@@ -91,28 +85,6 @@ function isDisplayableCampaign(coupon: StorefrontCouponCampaign): boolean {
         return coupon.discountAmount != null && coupon.discountAmount > 0;
     }
     return coupon.discountRate != null && coupon.discountRate > 0 && coupon.discountRate < 10;
-}
-
-export function readClaimedCouponCodes(scope: string): string[] {
-    if (!scope) return [];
-    try {
-        const parsed = JSON.parse(localStorage.getItem(couponStorageKey(scope)) ?? '[]');
-        if (!Array.isArray(parsed)) return [];
-        return normalizeCouponCodes(parsed.filter((value): value is string => typeof value === 'string'));
-    } catch {
-        return [];
-    }
-}
-
-export function storeClaimedCouponCodes(scope: string, codes: string[]): string[] {
-    const normalized = normalizeCouponCodes(codes);
-    if (!scope) return normalized;
-    try {
-        localStorage.setItem(couponStorageKey(scope), JSON.stringify(normalized));
-    } catch {
-        // Coupon application still works when storage is unavailable.
-    }
-    return normalized;
 }
 
 function parseCouponDisplay(label: string): { value: string; unit: string; unitBefore: boolean } {
@@ -130,10 +102,6 @@ function parseCouponDisplay(label: string): { value: string; unit: string; unitB
         return { value: suffix[1], unit: suffix[2], unitBefore: false };
     }
     return { value: normalized, unit: '', unitBefore: false };
-}
-
-function normalizeCouponCodes(codes: string[]): string[] {
-    return [...new Set(codes.map(code => code.trim()).filter(Boolean))].slice(-COUPON_STORAGE_LIMIT);
 }
 
 function campaignKindLabel(kind: StorefrontCouponCampaign['kind'], language: StorefrontLanguage) {
@@ -177,8 +145,4 @@ function formatMinorAmount(value: number, language: StorefrontLanguage): string 
 
 function formatDiscountRate(value: number | null): string {
     return value == null ? '-' : String(Math.round(value * 100) / 100);
-}
-
-function couponStorageKey(scope: string): string {
-    return `${COUPON_STORAGE_PREFIX}:${scope}`;
 }

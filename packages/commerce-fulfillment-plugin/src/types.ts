@@ -67,6 +67,7 @@ export interface TransitionAfterSalesRequestInput {
     state: Extract<AfterSalesState, 'APPROVED' | 'REJECTED' | 'COMPLETED'>;
     resolution: string;
     approvedAmount?: number | null;
+    refundId?: ID | null;
 }
 
 declare module '@vendure/core/dist/entity/custom-entity-fields' {

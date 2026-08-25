@@ -1,12 +1,21 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
+import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
+import { Allow, Ctx, ID, Order, Permission, RequestContext, Transaction } from '@vendure/core';
 
-import { CreateStoreCouponCampaignInput, CreateStoreFlashSaleInput } from '../types';
+import {
+    CreateStoreCouponCampaignInput,
+    CreateStoreFlashSaleInput,
+    StoreCouponLedgerListOptions,
+} from '../types';
+
+import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
 import { StorePromotionCampaignService } from './store-promotion-campaign.service';
 
 @Resolver()
 export class StorePromotionCampaignAdminResolver {
-    constructor(private readonly campaignService: StorePromotionCampaignService) {}
+    constructor(
+        private readonly campaignService: StorePromotionCampaignService,
+        private readonly lifecycleService: StoreCouponLifecycleService,
+    ) {}
 
     @Query()
     @Allow(Permission.ReadPromotion)
@@ -18,6 +27,12 @@ export class StorePromotionCampaignAdminResolver {
     @Allow(Permission.ReadPromotion)
     storeFlashSales(@Ctx() ctx: RequestContext) {
         return this.campaignService.findFlashSales(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.ReadPromotion)
+    storeCouponLedger(@Ctx() ctx: RequestContext, @Args('options') options?: StoreCouponLedgerListOptions) {
+        return this.lifecycleService.findLedger(ctx, options);
     }
 
     @Transaction()
@@ -54,11 +69,36 @@ export class StorePromotionCampaignAdminResolver {
     deleteStorePromotion(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.campaignService.delete(ctx, id);
     }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    grantStoreCoupon(
+        @Ctx() ctx: RequestContext,
+        @Args('campaignId') campaignId: ID,
+        @Args('customerId') customerId: ID,
+    ) {
+        return this.lifecycleService.grant(ctx, campaignId, customerId);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    revokeStoreCustomerCoupon(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('reason') reason?: string,
+    ) {
+        return this.lifecycleService.revoke(ctx, id, reason);
+    }
 }
 
 @Resolver()
 export class StorePromotionCampaignShopResolver {
-    constructor(private readonly campaignService: StorePromotionCampaignService) {}
+    constructor(
+        private readonly campaignService: StorePromotionCampaignService,
+        private readonly lifecycleService: StoreCouponLifecycleService,
+    ) {}
 
     @Query()
     @Allow(Permission.Public)
@@ -70,5 +110,43 @@ export class StorePromotionCampaignShopResolver {
     @Allow(Permission.Public)
     activeStorefrontFlashSales(@Ctx() ctx: RequestContext) {
         return this.campaignService.findFlashSales(ctx, true);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
+    myStorefrontCoupons(@Ctx() ctx: RequestContext) {
+        return this.lifecycleService.findMine(ctx);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.Authenticated)
+    claimStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('campaignId') campaignId: ID) {
+        return this.lifecycleService.claim(ctx, campaignId);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.Authenticated)
+    applyStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.lifecycleService.apply(ctx, id);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.Authenticated)
+    removeStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.lifecycleService.remove(ctx, id);
+    }
+}
+
+@Resolver('Order')
+export class StoreCouponOrderResolver {
+    constructor(private readonly lifecycleService: StoreCouponLifecycleService) {}
+
+    @ResolveField()
+    @Allow(Permission.ReadOrder)
+    storeCouponAllocations(@Ctx() ctx: RequestContext, @Parent() order: Order) {
+        return this.lifecycleService.findOrderAllocations(ctx, order.id);
     }
 }

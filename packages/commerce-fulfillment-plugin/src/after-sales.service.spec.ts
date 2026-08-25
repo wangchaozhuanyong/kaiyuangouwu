@@ -80,6 +80,14 @@ function createHarness(
     const orderRepository = {
         createQueryBuilder: vi.fn().mockReturnValue(orderQueryBuilder),
     };
+    const refundRepository = {
+        findOne: vi.fn().mockResolvedValue({
+            id: 'refund-1',
+            state: 'Settled',
+            total: 4_900,
+            payment: { order },
+        }),
+    };
     const connection = {
         getEntityOrThrow: vi.fn().mockResolvedValue(order),
         getRepository: vi.fn((_ctx: any, entity: any) => {
@@ -87,6 +95,7 @@ function createHarness(
             if (entity.name === 'AfterSalesItem') return itemRepository;
             if (entity.name === 'AfterSalesEvent') return eventRepository;
             if (entity.name === 'Order') return orderRepository;
+            if (entity.name === 'Refund') return refundRepository;
             throw new Error(`Unexpected entity ${String(entity.name)}`);
         }),
     };
@@ -105,6 +114,7 @@ function createHarness(
         savedItems,
         savedEvents,
         requestRepository,
+        refundRepository,
         eventRepository,
         orderQueryBuilder,
     };
@@ -252,5 +262,50 @@ describe('AfterSalesService', () => {
             }),
         ).rejects.toThrow('尚未关联已成功的实际退款');
         expect(test.requestRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('links a settled refund from the same order before completing paid after-sales', async () => {
+        const test = createHarness({ requestState: 'APPROVED', requestApprovedAmount: 4_900 });
+        test.requestRepository.findOne
+            .mockResolvedValueOnce({
+                id: 'request-1',
+                state: 'APPROVED',
+                approvedAmount: 4_900,
+                requestedAmount: 4_900,
+                orderId: 'order-1',
+                order: test.order,
+                items: [],
+                events: [],
+                refundId: null,
+            })
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({
+                id: 'request-1',
+                state: 'COMPLETED',
+                approvedAmount: 4_900,
+                requestedAmount: 4_900,
+                orderId: 'order-1',
+                order: test.order,
+                items: [],
+                events: [],
+                refundId: 'refund-1',
+            });
+
+        await test.service.transitionForAdmin(test.ctx, {
+            id: 'request-1',
+            state: 'COMPLETED',
+            resolution: 'Refund completed.',
+            refundId: 'refund-1',
+        });
+
+        expect(test.refundRepository.findOne).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ id: 'refund-1', state: 'Settled' }),
+            }),
+        );
+        expect(test.requestRepository.update).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'request-1', state: 'APPROVED' }),
+            expect.objectContaining({ state: 'COMPLETED', refundId: 'refund-1' }),
+        );
     });
 });

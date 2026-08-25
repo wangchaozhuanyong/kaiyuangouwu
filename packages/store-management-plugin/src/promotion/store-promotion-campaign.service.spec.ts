@@ -14,7 +14,6 @@ describe('StorePromotionCampaignService', () => {
 
         const coupon = await harness.service.createCoupon(ctx, {
             name: '新客满减',
-            couponCode: 'new-20',
             kind: 'ORDER_FIXED',
             minimumSpend: 10_000,
             discountAmount: 2_000,
@@ -24,9 +23,10 @@ describe('StorePromotionCampaignService', () => {
         expect(harness.createPromotion).toHaveBeenCalledWith(
             ctx,
             expect.objectContaining({
-                couponCode: 'NEW-20',
+                couponCode: expect.stringMatching(/^CPN_[A-F0-9]{32}$/),
                 enabled: true,
                 conditions: [
+                    operationInput('store_customer_coupon_entitlement', {}),
                     operationInput('minimum_order_amount', {
                         amount: '10000',
                         taxInclusive: 'true',
@@ -38,7 +38,7 @@ describe('StorePromotionCampaignService', () => {
         );
         expect(coupon).toEqual(
             expect.objectContaining({
-                couponCode: 'NEW-20',
+                couponCode: expect.stringMatching(/^CPN_[A-F0-9]{32}$/),
                 kind: 'ORDER_FIXED',
                 minimumSpend: 10_000,
                 discountAmount: 2_000,
@@ -188,6 +188,13 @@ function createHarness({ variants = [], promotions = [] }: { variants?: any[]; p
     };
     const connection = {
         findByIdsInChannel: vi.fn(() => []),
+        getRepository: vi.fn(() => ({
+            save: vi.fn((entity: unknown) => entity),
+            find: vi.fn(() => []),
+        })),
+    };
+    const customerService = {
+        findOneByUserId: vi.fn(),
     };
     return {
         createPromotion,
@@ -197,6 +204,7 @@ function createHarness({ variants = [], promotions = [] }: { variants?: any[]; p
             connection as any,
             promotionService as any,
             productVariantService as any,
+            customerService as any,
         ),
     };
 }

@@ -18,7 +18,23 @@ export interface AfterSalesRequestRecord {
     resolution: string | null;
     customerName: string;
     customerEmail: string;
-    order: { id: string; code: string; state: string };
+    order: {
+        id: string;
+        code: string;
+        state: string;
+        payments: Array<{
+            id: string;
+            refunds: Array<{
+                id: string;
+                createdAt: string;
+                state: string;
+                total: number;
+                transactionId: string | null;
+            }>;
+        }>;
+    };
+    refund: { id: string; state: string; total: number; transactionId: string | null } | null;
+    refundedAt: string | null;
     items: Array<{
         id: string;
         quantity: number;
@@ -68,7 +84,24 @@ export const afterSalesRequestsQuery = gql`
                     id
                     code
                     state
+                    payments {
+                        id
+                        refunds {
+                            id
+                            createdAt
+                            state
+                            total
+                            transactionId
+                        }
+                    }
                 }
+                refund {
+                    id
+                    state
+                    total
+                    transactionId
+                }
+                refundedAt
                 items {
                     id
                     quantity

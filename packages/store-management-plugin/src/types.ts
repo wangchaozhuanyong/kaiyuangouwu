@@ -55,9 +55,15 @@ export interface StorefrontPromotionPluginOptions {
 export type StoreCouponCampaignKind =
     'ORDER_FIXED' | 'ORDER_PERCENTAGE' | 'COLLECTION_PERCENTAGE' | 'PRODUCT_PERCENTAGE';
 
+export type StoreCouponStackPolicy = 'EXCLUSIVE' | 'STACKABLE';
+
+export type StoreCustomerCouponStatus = 'AVAILABLE' | 'LOCKED' | 'USED' | 'RETURNED' | 'EXPIRED' | 'REVOKED';
+
+export type StoreCouponLedgerEventType =
+    'CLAIMED' | 'LOCKED' | 'RELEASED' | 'REDEEMED' | 'RETURNED' | 'EXPIRED' | 'REVOKED' | 'REFUND_SETTLED';
+
 export interface CreateStoreCouponCampaignInput {
     name: string;
-    couponCode: string;
     kind: StoreCouponCampaignKind;
     minimumSpend?: number | null;
     discountAmount?: number | null;
@@ -68,12 +74,34 @@ export interface CreateStoreCouponCampaignInput {
     endsAt?: Date | null;
     usageLimit?: number | null;
     perCustomerUsageLimit?: number | null;
+    claimStartsAt?: Date | null;
+    claimEndsAt?: Date | null;
+    validityDays?: number | null;
+    issueLimit?: number | null;
+    perCustomerClaimLimit?: number | null;
+    stackPolicy?: StoreCouponStackPolicy | null;
+    returnOnCancellation?: boolean | null;
+    returnOnFullRefund?: boolean | null;
 }
 
-export interface StoreCouponCampaignView {
+export interface StoreCouponCampaignStats {
+    claimedCount: number;
+    availableCount: number;
+    lockedCount: number;
+    usedCount: number;
+    returnedCount: number;
+    expiredCount: number;
+    revokedCount: number;
+    redeemedOrderCount: number;
+    refundedOrderCount: number;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
+}
+
+export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
     id: ID;
     name: string;
-    couponCode: string;
+    couponCode?: string;
     kind: StoreCouponCampaignKind;
     enabled: boolean;
     startsAt: Date | null;
@@ -85,6 +113,88 @@ export interface StoreCouponCampaignView {
     productVariantIds: ID[];
     usageLimit: number | null;
     perCustomerUsageLimit: number | null;
+    claimStartsAt: Date | null;
+    claimEndsAt: Date | null;
+    validityDays: number | null;
+    issueLimit: number | null;
+    perCustomerClaimLimit: number;
+    stackPolicy: StoreCouponStackPolicy;
+    returnOnCancellation: boolean;
+    returnOnFullRefund: boolean;
+    remainingIssueCount: number | null;
+    claimed: boolean;
+    claimable: boolean;
+}
+
+export interface StoreCustomerCouponView {
+    id: ID;
+    campaignId: ID;
+    campaignName: string;
+    campaignKind: StoreCouponCampaignKind;
+    status: StoreCustomerCouponStatus;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+    claimedAt: Date;
+    validFrom: Date;
+    validUntil: Date | null;
+    lockedAt: Date | null;
+    usedAt: Date | null;
+    returnedAt: Date | null;
+    expiredAt: Date | null;
+    lockedOrderId: ID | null;
+    usedOrderId: ID | null;
+    returnCount: number;
+    usable: boolean;
+}
+
+export interface StoreCouponLedgerListOptions {
+    skip?: number | null;
+    take?: number | null;
+    campaignId?: ID | null;
+    customerId?: ID | null;
+    orderId?: ID | null;
+    eventType?: StoreCouponLedgerEventType | null;
+}
+
+export interface StoreCouponLedgerEntryView {
+    id: ID;
+    createdAt: Date;
+    eventType: StoreCouponLedgerEventType;
+    actorType: string;
+    campaignId: ID;
+    campaignName: string;
+    customerCouponId: ID;
+    customerId: ID;
+    customerName: string;
+    customerEmail: string;
+    orderId: ID | null;
+    orderCode: string | null;
+    refundId: ID | null;
+    discountAmount: number | null;
+    note: string | null;
+}
+
+export interface StoreCouponLedgerEntryList {
+    items: StoreCouponLedgerEntryView[];
+    totalItems: number;
+}
+
+export interface StoreCouponOrderAllocationView {
+    id: ID;
+    customerCouponId: ID;
+    campaignId: ID;
+    campaignName: string;
+    status: string;
+    currencyCode: CurrencyCode;
+    discountAmount: number;
+    discountAmountWithTax: number;
+    refundedAmount: number;
+    appliedAt: Date;
+    usedAt: Date | null;
+    releasedAt: Date | null;
+    refundedAt: Date | null;
+    refundId: ID | null;
 }
 
 export interface StoreFlashSaleVariantPriceInput {

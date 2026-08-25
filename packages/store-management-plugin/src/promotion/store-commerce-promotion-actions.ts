@@ -3,12 +3,46 @@ import { ID } from '@vendure/common/lib/shared-types';
 import {
     idsAreEqual,
     ProductVariant,
+    PromotionCondition,
     PromotionItemAction,
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
 
 let connection: TransactionalConnection;
+
+export const customerCouponEntitlement = new PromotionCondition({
+    code: 'store_customer_coupon_entitlement',
+    description: [
+        { languageCode: LanguageCode.zh_Hans, value: '客户已领取且当前订单锁定了这张优惠券' },
+        { languageCode: LanguageCode.en, value: 'Customer owns a coupon locked to this order' },
+    ],
+    args: {},
+    init(injector) {
+        connection = injector.get(TransactionalConnection);
+    },
+    async check(ctx, order, _args, promotion) {
+        if (!order.customerId) return false;
+        const now = new Date();
+        const row = await connection.rawConnection
+            .createQueryBuilder()
+            .select('coupon.id', 'id')
+            .from('customer_coupon', 'coupon')
+            .where('coupon.channelId = :channelId', { channelId: ctx.channelId })
+            .andWhere('coupon.customerId = :customerId', { customerId: order.customerId })
+            .andWhere('coupon.promotionId = :promotionId', { promotionId: promotion.id })
+            .andWhere(
+                "((coupon.status = 'LOCKED' AND coupon.lockedOrderId = :orderId) OR " +
+                    "(coupon.status = 'USED' AND coupon.usedOrderId = :orderId))",
+                { orderId: order.id },
+            )
+            .andWhere('coupon.validFrom <= :now', { now })
+            .andWhere('(coupon.validUntil IS NULL OR coupon.validUntil > :now)', { now })
+            .limit(1)
+            .getRawOne<{ id: string }>();
+        return Boolean(row);
+    },
+});
 
 interface FlashSaleVariantRule {
     variantId: string;

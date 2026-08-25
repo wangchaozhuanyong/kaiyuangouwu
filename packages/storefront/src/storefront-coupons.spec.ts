@@ -1,11 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-    couponCardsFromBlock,
-    couponCardsFromCampaigns,
-    readClaimedCouponCodes,
-    storeClaimedCouponCodes,
-} from './storefront-coupons';
+import { couponCardsFromBlock, couponCardsFromCampaigns } from './storefront-coupons';
 import { StorefrontContentBlock } from './types';
 
 function couponBlock(): StorefrontContentBlock {
@@ -52,34 +47,17 @@ function couponBlock(): StorefrontContentBlock {
 }
 
 describe('storefront coupons', () => {
-    afterEach(() => vi.unstubAllGlobals());
-
     it('maps only coupon targets into the existing ticket design', () => {
         expect(couponCardsFromBlock(couponBlock(), 'zh')).toEqual([
             expect.objectContaining({
                 id: 'coupon-1',
-                code: 'WELCOME15',
+                campaignId: 'WELCOME15',
                 value: '8.5',
                 unit: '折',
                 unitBefore: false,
                 tag: '新人专享',
             }),
         ]);
-    });
-
-    it('stores normalized claimed codes per storefront', () => {
-        const storage = new Map<string, string>();
-        vi.stubGlobal('localStorage', {
-            getItem: (key: string) => storage.get(key) ?? null,
-            setItem: (key: string, value: string) => storage.set(key, value),
-        });
-
-        expect(storeClaimedCouponCodes('store-a', [' SAVE10 ', 'SAVE10', 'VIP20'])).toEqual([
-            'SAVE10',
-            'VIP20',
-        ]);
-        expect(readClaimedCouponCodes('store-a')).toEqual(['SAVE10', 'VIP20']);
-        expect(readClaimedCouponCodes('store-b')).toEqual([]);
     });
 
     it('maps real promotion campaigns into the same coupon ticket design', () => {
@@ -89,24 +67,32 @@ describe('storefront coupons', () => {
                     {
                         id: 'campaign-1',
                         name: '新客满减',
-                        couponCode: 'NEW20',
                         kind: 'ORDER_FIXED',
                         startsAt: null,
                         endsAt: null,
+                        claimStartsAt: null,
+                        claimEndsAt: null,
                         minimumSpend: 10_000,
                         discountAmount: 2_000,
                         discountRate: null,
+                        remainingIssueCount: null,
+                        claimed: false,
+                        claimable: true,
                     },
                     {
                         id: 'campaign-2',
                         name: '数码专享',
-                        couponCode: 'DIGITAL85',
                         kind: 'COLLECTION_PERCENTAGE',
                         startsAt: null,
                         endsAt: null,
+                        claimStartsAt: null,
+                        claimEndsAt: null,
                         minimumSpend: 0,
                         discountAmount: null,
                         discountRate: 8.5,
+                        remainingIssueCount: null,
+                        claimed: false,
+                        claimable: true,
                     },
                 ],
                 'zh',
@@ -114,14 +100,14 @@ describe('storefront coupons', () => {
             ),
         ).toEqual([
             expect.objectContaining({
-                code: 'NEW20',
+                campaignId: 'campaign-1',
                 value: '20',
                 unit: '¥',
                 unitBefore: true,
                 description: '满 ¥100 可用',
             }),
             expect.objectContaining({
-                code: 'DIGITAL85',
+                campaignId: 'campaign-2',
                 value: '8.5',
                 unit: '折',
                 tag: '分类折扣券',
@@ -134,24 +120,32 @@ describe('storefront coupons', () => {
             {
                 id: 'audit-campaign',
                 name: '订单九折',
-                couponCode: 'AUDIT-20260820',
                 kind: 'ORDER_PERCENTAGE' as const,
                 startsAt: null,
                 endsAt: null,
+                claimStartsAt: null,
+                claimEndsAt: null,
                 minimumSpend: 0,
                 discountAmount: null,
                 discountRate: 9,
+                remainingIssueCount: null,
+                claimed: false,
+                claimable: true,
             },
             {
                 id: 'no-op-campaign',
                 name: '无效折扣',
-                couponCode: 'INVALID10',
                 kind: 'ORDER_PERCENTAGE' as const,
                 startsAt: null,
                 endsAt: null,
+                claimStartsAt: null,
+                claimEndsAt: null,
                 minimumSpend: 0,
                 discountAmount: null,
                 discountRate: 10,
+                remainingIssueCount: null,
+                claimed: false,
+                claimable: true,
             },
         ];
 

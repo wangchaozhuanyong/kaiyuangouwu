@@ -131,6 +131,8 @@ export const storefrontQueryKeys = {
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'cart'] as const,
     customer: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer'] as const,
+    customerCoupons: (marketCode: string, languageCode: string, customerId: string) =>
+        [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'coupons'] as const,
     customerScope: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer', customerId] as const,
     customerOrderCounts: (marketCode: string, languageCode: string, customerId: string) =>

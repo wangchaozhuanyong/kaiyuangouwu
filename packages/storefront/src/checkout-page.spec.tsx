@@ -4,14 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
 import { CheckoutPage } from './checkout-page';
-import {
-    ActiveCustomer,
-    MarketConfig,
-    Order,
-    OrderLine,
-    ProductVariant,
-    StorefrontCart,
-} from './types';
+import { ActiveCustomer, MarketConfig, Order, OrderLine, ProductVariant, StorefrontCart } from './types';
 
 const market: MarketConfig = {
     code: 'my-malaysia',
@@ -125,6 +118,7 @@ function renderCheckout(order: Order, customer: ActiveCustomer | null = null): s
             onCartChange: vi.fn(),
             onNavigate: vi.fn(),
             onNotify: vi.fn(),
+            coupons: [],
             onApplyCoupon: vi.fn().mockResolvedValue(null),
             onRemoveCoupon: vi.fn().mockResolvedValue(null),
         }),

@@ -57,7 +57,6 @@ import {
 } from 'lucide-react';
 import {
     Activity,
-    FormEvent,
     ImgHTMLAttributes,
     lazy,
     ReactNode,
@@ -111,13 +110,7 @@ import { ProductReviewsSection, ReviewCenterPage } from './review-pages';
 import { productDescriptionText, sanitizeProductDescription } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
-import {
-    couponCardsFromBlock,
-    couponCardsFromCampaigns,
-    readClaimedCouponCodes,
-    storeClaimedCouponCodes,
-    StorefrontCouponCard,
-} from './storefront-coupons';
+import { couponCardsFromCampaigns, StorefrontCouponCard } from './storefront-coupons';
 import { cacheLogoUrl } from './StorefrontErrorBoundary';
 import {
     ActiveCustomer,
@@ -133,6 +126,7 @@ import {
     Product,
     ProductSearchSort,
     ProductVariant,
+    StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCheckoutSession,
     StorefrontConfig,
@@ -569,7 +563,6 @@ export function App() {
     const [cartError, setCartError] = useState<string | null>(null);
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
-    const [claimedCouponCodes, setClaimedCouponCodes] = useState<string[]>([]);
     const [online, setOnline] = useState(navigator.onLine);
     const [activeCollectionId, setActiveCollectionId] = useState(
         () => routeFromLocation().collectionId ?? 'all',
@@ -637,6 +630,7 @@ export function App() {
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
+        refetchInterval: 60_000,
     });
     const cartQueryKey = storefrontQueryKeys.cart(market.code, vendureLanguageCode);
     const customerQueryKey = storefrontQueryKeys.customer(market.code, vendureLanguageCode);
@@ -682,6 +676,20 @@ export function App() {
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
     const cart = cartQuery.data ?? null;
     const customer = customerQuery.data ?? null;
+    const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
+        market.code,
+        vendureLanguageCode,
+        customer?.id ?? '',
+    );
+    const customerCouponsQuery = useQuery({
+        queryKey: customerCouponQueryKey,
+        queryFn: ({ signal }) => api.myCoupons(signal),
+        enabled: Boolean(customer),
+        staleTime: 0,
+        refetchInterval: customer ? 60_000 : false,
+    });
+    const myCoupons = customerCouponsQuery.data ?? [];
+    const claimedCampaignIds = Array.from(new Set(myCoupons.map(coupon => coupon.campaignId)));
     const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
     const recommendationsBlock = contentBlocks.find(block => block.type === 'RECOMMENDATIONS');
     const pinnedBestSellerIds = contentStringArraySetting(bestSellersBlock?.settings?.pinnedProductIds);
@@ -1023,7 +1031,6 @@ export function App() {
             return;
         }
         setStorefrontCode(nextStorefrontCode);
-        setClaimedCouponCodes(readClaimedCouponCodes(nextStorefrontCode));
         couponApplicationAttempts.current.clear();
         setFavoriteProductIds(
             readStoredStrings(
@@ -1263,16 +1270,16 @@ export function App() {
     );
 
     const applyCoupon = useCallback(
-        async (couponCode: string): Promise<string | null> => {
+        async (customerCouponId: string): Promise<string | null> => {
             setCartLoading(true);
             setCartError(null);
             try {
-                await api.applyCouponCode(couponCode);
-                await refreshCart();
-                setClaimedCouponCodes(current =>
-                    storeClaimedCouponCodes(storefrontCode || market.code, [...current, couponCode]),
-                );
-                notify(isZh ? '优惠码已应用' : 'Coupon applied');
+                await api.applyCustomerCoupon(customerCouponId);
+                await Promise.all([
+                    refreshCart(),
+                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
+                ]);
+                notify(isZh ? '优惠券已使用' : 'Coupon applied');
                 return null;
             } catch (requestError) {
                 return requestError instanceof Error ? requestError.message : text.loadError;
@@ -1280,43 +1287,38 @@ export function App() {
                 setCartLoading(false);
             }
         },
-        [api, isZh, market.code, notify, refreshCart, storefrontCode, text.loadError],
+        [api, customerCouponQueryKey, isZh, notify, queryClient, refreshCart, text.loadError],
     );
 
     const claimCoupon = useCallback(
-        async (couponCode: string): Promise<string | null> => {
-            const normalizedCode = couponCode.trim();
-            if (!normalizedCode) return isZh ? '优惠码无效' : 'Invalid coupon code';
-            if ((cart?.totalQuantity ?? 0) > 0) {
-                return applyCoupon(normalizedCode);
+        async (campaignId: string): Promise<string | null> => {
+            if (!customer) {
+                navigate({ name: 'login' });
+                return isZh ? '请先登录后领取优惠券' : 'Sign in to claim coupons';
             }
-            setClaimedCouponCodes(current =>
-                storeClaimedCouponCodes(storefrontCode || market.code, [...current, normalizedCode]),
-            );
-            notify(
-                isZh
-                    ? '优惠券已保存，加入商品后将自动应用'
-                    : 'Coupon saved and will be applied after you add an item',
-            );
-            return null;
-        },
-        [applyCoupon, cart?.totalQuantity, isZh, market.code, notify, storefrontCode],
-    );
-
-    const removeCoupon = useCallback(
-        async (couponCode: string): Promise<string | null> => {
             setCartLoading(true);
             setCartError(null);
             try {
-                await api.removeCouponCode(couponCode);
-                await refreshCart();
-                setClaimedCouponCodes(current =>
-                    storeClaimedCouponCodes(
-                        storefrontCode || market.code,
-                        current.filter(code => code !== couponCode),
-                    ),
-                );
-                notify(isZh ? '优惠码已移除' : 'Coupon removed');
+                const claimedCoupon = await api.claimCoupon(campaignId);
+                queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, current => [
+                    claimedCoupon,
+                    ...(current ?? []).filter(coupon => coupon.id !== claimedCoupon.id),
+                ]);
+                await queryClient.invalidateQueries({
+                    queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
+                });
+                if ((cart?.totalQuantity ?? 0) > 0) {
+                    await api.applyCustomerCoupon(claimedCoupon.id);
+                    await refreshCart();
+                    await queryClient.invalidateQueries({ queryKey: customerCouponQueryKey });
+                    notify(isZh ? '优惠券已领取并使用' : 'Coupon claimed and applied');
+                } else {
+                    notify(
+                        isZh
+                            ? '优惠券已领取，加入商品后可在结算页使用'
+                            : 'Coupon claimed. Use it after adding an item.',
+                    );
+                }
                 return null;
             } catch (requestError) {
                 return requestError instanceof Error ? requestError.message : text.loadError;
@@ -1324,45 +1326,72 @@ export function App() {
                 setCartLoading(false);
             }
         },
-        [api, isZh, market.code, notify, refreshCart, storefrontCode, text.loadError],
+        [
+            api,
+            cart?.totalQuantity,
+            customer,
+            customerCouponQueryKey,
+            isZh,
+            market.code,
+            navigate,
+            notify,
+            queryClient,
+            refreshCart,
+            text.loadError,
+            vendureLanguageCode,
+        ],
+    );
+
+    const removeCoupon = useCallback(
+        async (customerCouponId: string): Promise<string | null> => {
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                await api.removeCustomerCoupon(customerCouponId);
+                await Promise.all([
+                    refreshCart(),
+                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
+                ]);
+                notify(isZh ? '优惠券已移除' : 'Coupon removed');
+                return null;
+            } catch (requestError) {
+                return requestError instanceof Error ? requestError.message : text.loadError;
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [api, customerCouponQueryKey, isZh, notify, queryClient, refreshCart, text.loadError],
     );
 
     useEffect(() => {
-        if (!cart || cart.totalQuantity < 1 || claimedCouponCodes.length === 0) return;
-        const appliedCodes = new Set(cart.checkoutOrder?.couponCodes ?? []);
-        const pendingCodes = claimedCouponCodes.filter(code => {
-            const attemptKey = `${cart.id}:${code}`;
-            return !appliedCodes.has(code) && !couponApplicationAttempts.current.has(attemptKey);
+        if (!cart || cart.totalQuantity < 1) return;
+        const autoAttemptKey = `${cart.id}:auto`;
+        if (couponApplicationAttempts.current.has(autoAttemptKey)) return;
+        const pendingCoupon = myCoupons.find(coupon => {
+            const attemptKey = `${cart.id}:${coupon.id}`;
+            return coupon.usable && !couponApplicationAttempts.current.has(attemptKey);
         });
-        if (!pendingCodes.length) return;
+        if (!pendingCoupon) return;
 
         let cancelled = false;
-        const applyPendingCoupons = async () => {
-            for (const code of pendingCodes) {
-                if (cancelled) return;
-                const attemptKey = `${cart.id}:${code}`;
-                couponApplicationAttempts.current.add(attemptKey);
-                const nextError = await applyCoupon(code);
-                if (nextError && !cancelled) {
-                    setClaimedCouponCodes(current =>
-                        storeClaimedCouponCodes(
-                            storefrontCode || market.code,
-                            current.filter(currentCode => currentCode !== code),
-                        ),
-                    );
-                    notify(
-                        isZh
-                            ? `优惠券 ${code} 已失效，未应用到购物车`
-                            : `Coupon ${code} is no longer available`,
-                    );
-                }
+        const applyPendingCoupon = async () => {
+            const attemptKey = `${cart.id}:${pendingCoupon.id}`;
+            couponApplicationAttempts.current.add(autoAttemptKey);
+            couponApplicationAttempts.current.add(attemptKey);
+            const nextError = await applyCoupon(pendingCoupon.id);
+            if (nextError && !cancelled) {
+                notify(
+                    isZh
+                        ? `“${pendingCoupon.campaignName}”暂不满足使用条件`
+                        : `“${pendingCoupon.campaignName}” is not eligible for this cart`,
+                );
             }
         };
-        void applyPendingCoupons();
+        void applyPendingCoupon();
         return () => {
             cancelled = true;
         };
-    }, [applyCoupon, cart, claimedCouponCodes, isZh, market.code, notify, storefrontCode]);
+    }, [applyCoupon, cart, isZh, myCoupons, notify]);
 
     const reopenPendingOrder = useCallback(
         async (order: Order) => {
@@ -1738,7 +1767,7 @@ export function App() {
                         storefrontDescription={storefrontDescription}
                         logoUrl={logoUrl}
                         addingVariantId={addingVariantId}
-                        claimedCouponCodes={claimedCouponCodes}
+                        claimedCampaignIds={claimedCampaignIds}
                         couponLoading={cartLoading}
                         onNavigate={navigate}
                         onCategorySelect={collection => {
@@ -1812,6 +1841,7 @@ export function App() {
                         error={cartError ?? cartQueryError}
                         addingVariantId={addingVariantId}
                         favoriteProductIds={favoriteProductIds}
+                        coupons={myCoupons}
                         onToggleAll={() =>
                             void mutateCart(revision =>
                                 api.setAllLinesSelected(cart?.selectionState !== 'ALL', revision),
@@ -1851,7 +1881,7 @@ export function App() {
                         logoUrl={logoUrl}
                         favoriteProductCount={favoriteProductIds.length}
                         recentProductCount={recentProductIds.length}
-                        couponCount={cart?.checkoutOrder?.couponCodes.length ?? 0}
+                        couponCount={myCoupons.filter(coupon => coupon.usable).length}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
                         onContentTarget={openContentTarget}
@@ -1949,6 +1979,7 @@ export function App() {
                             }}
                             onNavigate={navigate}
                             onNotify={notify}
+                            coupons={myCoupons}
                             onApplyCoupon={applyCoupon}
                             onRemoveCoupon={removeCoupon}
                         />
@@ -1977,6 +2008,7 @@ export function App() {
                             }}
                             onNavigate={navigate}
                             onNotify={notify}
+                            coupons={myCoupons}
                             onApplyCoupon={applyCoupon}
                             onRemoveCoupon={removeCoupon}
                         />
@@ -2221,11 +2253,13 @@ export function App() {
                     <CouponCenterPage
                         order={cart?.checkoutOrder ?? null}
                         coupons={activeCoupons}
+                        myCoupons={myCoupons}
                         currencyCode={market.currencyCode}
                         language={language}
                         loading={cartLoading}
                         onBack={goBack}
                         onNavigate={navigate}
+                        onClaim={claimCoupon}
                         onApply={applyCoupon}
                         onRemove={removeCoupon}
                     />
@@ -2419,10 +2453,10 @@ interface HomepageCouponHubProps {
     block?: StorefrontContentBlock;
     coupons: StorefrontCouponCard[];
     language: StorefrontLanguage;
-    claimedCouponCodes: string[];
+    claimedCampaignIds: string[];
     loading: boolean;
     onNavigate: (route: RouteState) => void;
-    onClaim: (couponCode: string) => Promise<string | null>;
+    onClaim: (campaignId: string) => Promise<string | null>;
     onToast?: (message: string) => void;
 }
 
@@ -2430,7 +2464,7 @@ function HomepageCouponHub({
     block,
     coupons,
     language,
-    claimedCouponCodes,
+    claimedCampaignIds,
     loading,
     onNavigate,
     onClaim,
@@ -2439,9 +2473,9 @@ function HomepageCouponHub({
     const isZh = language === 'zh';
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const handleClaim = async (coupon: StorefrontCouponCard) => {
-        if (claimedCouponCodes.includes(coupon.code) || claimingId) return;
+        if (claimedCampaignIds.includes(coupon.campaignId) || claimingId) return;
         setClaimingId(coupon.id);
-        const error = await onClaim(coupon.code);
+        const error = await onClaim(coupon.campaignId);
         setClaimingId(null);
         if (error && onToast) onToast(error);
     };
@@ -2469,7 +2503,7 @@ function HomepageCouponHub({
 
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
-                    const isClaimed = claimedCouponCodes.includes(coupon.code);
+                    const isClaimed = claimedCampaignIds.includes(coupon.campaignId);
 
                     return (
                         <div
@@ -2570,7 +2604,7 @@ interface HomePageProps {
     storefrontDescription: string;
     logoUrl: string | null;
     addingVariantId: string | null;
-    claimedCouponCodes: string[];
+    claimedCampaignIds: string[];
     couponLoading: boolean;
     onNavigate: (route: RouteState) => void;
     onCategorySelect: (collection: CollectionSummary) => void;
@@ -2578,7 +2612,7 @@ interface HomePageProps {
     onToggleLanguage: () => void;
     onNotifications: () => void;
     onToast?: (message: string) => void;
-    onClaimCoupon: (couponCode: string) => Promise<string | null>;
+    onClaimCoupon: (campaignId: string) => Promise<string | null>;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onContentRetry: () => void;
     onRetry: () => void;
@@ -2607,7 +2641,7 @@ function HomePage(props: HomePageProps) {
         storefrontDescription,
         logoUrl,
         addingVariantId,
-        claimedCouponCodes,
+        claimedCampaignIds,
         couponLoading,
         onNavigate,
         onCategorySelect,
@@ -2720,10 +2754,10 @@ function HomePage(props: HomePageProps) {
     const showRecommendations =
         Boolean(recommendationsBlock) || !configuredBlockTypes.includes('RECOMMENDATIONS');
     const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
-    const manualCouponCards = couponCardsFromBlock(couponBlock, language);
     const campaignCouponCards = couponCardsFromCampaigns(coupons, language, market.currencyCode);
-    const couponCards = [...manualCouponCards, ...campaignCouponCards].filter(
-        (coupon, index, items) => items.findIndex(candidate => candidate.code === coupon.code) === index,
+    const couponCards = campaignCouponCards.filter(
+        (coupon, index, items) =>
+            items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
     );
     const flashSaleItems = flashSales
         .flatMap(sale => sale.items)
@@ -3193,7 +3227,7 @@ function HomePage(props: HomePageProps) {
                             block={couponBlock}
                             coupons={couponCards}
                             language={language}
-                            claimedCouponCodes={claimedCouponCodes}
+                            claimedCampaignIds={claimedCampaignIds}
                             loading={couponLoading}
                             onNavigate={onNavigate}
                             onClaim={onClaimCoupon}
@@ -4462,6 +4496,7 @@ interface CartPageProps {
     error: string | null;
     addingVariantId: string | null;
     favoriteProductIds: string[];
+    coupons: StoreCustomerCoupon[];
     onToggleAll: () => void;
     onSelect: (lineId: string, selected: boolean) => void;
     onSelectGroup: (lineIds: string[], selected: boolean) => void;
@@ -4474,8 +4509,8 @@ interface CartPageProps {
     onAdd: (variant: ProductVariant) => void;
     onNotify: (message: string) => void;
     onRetry: () => void;
-    onApplyCoupon: (couponCode: string) => Promise<string | null>;
-    onRemoveCoupon: (couponCode: string) => Promise<string | null>;
+    onApplyCoupon: (customerCouponId: string) => Promise<string | null>;
+    onRemoveCoupon: (customerCouponId: string) => Promise<string | null>;
 }
 
 export function CartPage(props: CartPageProps) {
@@ -4491,6 +4526,7 @@ export function CartPage(props: CartPageProps) {
         error,
         addingVariantId,
         favoriteProductIds,
+        coupons,
         onToggleAll,
         onSelect,
         onSelectGroup,
@@ -4772,8 +4808,8 @@ export function CartPage(props: CartPageProps) {
                                         ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
                                         : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
                                     : isZh
-                                      ? '输入优惠码'
-                                      : 'Enter coupon code'}
+                                      ? '选择已领取优惠券'
+                                      : 'Choose a claimed coupon'}
                             </small>
                             <ChevronRight />
                         </span>
@@ -4900,7 +4936,8 @@ export function CartPage(props: CartPageProps) {
             )}
             {couponOpen && order && (
                 <CouponSheet
-                    couponCodes={order.couponCodes}
+                    coupons={coupons}
+                    orderId={order.id}
                     language={language}
                     loading={loading}
                     onApply={onApplyCoupon}
@@ -5564,49 +5601,41 @@ function SupportPage({
 function CouponCenterPage({
     order,
     coupons,
+    myCoupons,
     currencyCode,
     language,
     loading,
     onBack,
     onNavigate,
+    onClaim,
     onApply,
     onRemove,
 }: {
     order: Order | null;
     coupons: StorefrontCouponCampaign[];
+    myCoupons: StoreCustomerCoupon[];
     currencyCode: string;
     language: StorefrontLanguage;
     loading: boolean;
     onBack: () => void;
     onNavigate: (route: RouteState) => void;
-    onApply: (couponCode: string) => Promise<string | null>;
-    onRemove: (couponCode: string) => Promise<string | null>;
+    onClaim: (campaignId: string) => Promise<string | null>;
+    onApply: (customerCouponId: string) => Promise<string | null>;
+    onRemove: (customerCouponId: string) => Promise<string | null>;
 }) {
     const isZh = language === 'zh';
-    const [couponCode, setCouponCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const availableCoupons = couponCardsFromCampaigns(coupons, language, currencyCode);
-    const applyCode = async (code: string) => {
-        if (!code.trim() || submitting || !order) return false;
-        setSubmitting(true);
-        setError('');
-        const nextError = await onApply(code.trim());
-        setSubmitting(false);
-        if (nextError) setError(nextError);
-        return !nextError;
-    };
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const normalizedCode = couponCode.trim();
-        if (!normalizedCode || submitting || !order) return;
-        if (await applyCode(normalizedCode)) setCouponCode('');
-    };
-    const remove = async (code: string) => {
+    const runCouponAction = async (action: 'CLAIM' | 'APPLY' | 'REMOVE', id: string) => {
         if (submitting) return;
         setSubmitting(true);
         setError('');
-        const nextError = await onRemove(code);
+        const nextError = await (action === 'CLAIM'
+            ? onClaim(id)
+            : action === 'APPLY'
+              ? onApply(id)
+              : onRemove(id));
         setSubmitting(false);
         if (nextError) setError(nextError);
     };
@@ -5620,98 +5649,127 @@ function CouponCenterPage({
                     <header>
                         <strong>{isZh ? '当前可用优惠' : 'Available offers'}</strong>
                         <small>
-                            {isZh ? '点击即可应用到当前订单' : 'Apply an offer to the active order'}
+                            {isZh
+                                ? '点击领取，购物车有商品时会自动使用'
+                                : 'Claim now and apply automatically when the cart has items'}
                         </small>
                     </header>
                     <div>
-                        {availableCoupons.map(coupon => {
-                            const applied = Boolean(order?.couponCodes.includes(coupon.code));
+                        {availableCoupons.map(couponCard => {
+                            const campaign = coupons.find(item => item.id === couponCard.campaignId);
+                            const owned = myCoupons.filter(item => item.campaignId === couponCard.campaignId);
+                            const appliedCoupon = owned.find(item => item.lockedOrderId === order?.id);
+                            const usableCoupon = owned.find(item => item.usable);
+                            const canClaim = campaign?.claimable ?? false;
+                            const action = appliedCoupon
+                                ? 'REMOVE'
+                                : usableCoupon && order
+                                  ? 'APPLY'
+                                  : canClaim
+                                    ? 'CLAIM'
+                                    : null;
+                            const actionId =
+                                action === 'CLAIM'
+                                    ? couponCard.campaignId
+                                    : ((appliedCoupon ?? usableCoupon)?.id ?? '');
                             return (
                                 <button
                                     type="button"
-                                    key={coupon.id}
-                                    disabled={!order || loading || submitting || applied}
-                                    onClick={() => void applyCode(coupon.code)}
+                                    key={couponCard.id}
+                                    disabled={loading || submitting || !action}
+                                    onClick={() => action && void runCouponAction(action, actionId)}
                                 >
                                     <span>
                                         <b>
-                                            {coupon.unitBefore ? coupon.unit : ''}
-                                            {coupon.value}
-                                            {!coupon.unitBefore ? coupon.unit : ''}
+                                            {couponCard.unitBefore ? couponCard.unit : ''}
+                                            {couponCard.value}
+                                            {!couponCard.unitBefore ? couponCard.unit : ''}
                                         </b>
-                                        <small>{coupon.description}</small>
+                                        <small>{couponCard.description}</small>
                                     </span>
-                                    <em>{applied ? (isZh ? '已使用' : 'Applied') : coupon.code}</em>
+                                    <em>
+                                        {appliedCoupon
+                                            ? isZh
+                                                ? '移除'
+                                                : 'Remove'
+                                            : usableCoupon && order
+                                              ? isZh
+                                                  ? '使用'
+                                                  : 'Apply'
+                                              : canClaim
+                                                ? isZh
+                                                    ? owned.length
+                                                        ? '再领一张'
+                                                        : '领取'
+                                                    : owned.length
+                                                      ? 'Claim another'
+                                                      : 'Claim'
+                                                : isZh
+                                                  ? '已领取'
+                                                  : 'Claimed'}
+                                    </em>
                                 </button>
                             );
                         })}
                     </div>
                 </section>
             ) : null}
-            {!order ? (
+            {!order && !myCoupons.length ? (
                 <EmptyState
                     icon={<TicketPercent />}
-                    title={isZh ? '还没有可使用优惠码的订单' : 'No active order for coupons'}
+                    title={isZh ? '还没有可使用优惠券的订单' : 'No active order for coupons'}
                     detail={
                         isZh
-                            ? '将商品加入购物车后，可在这里录入商家发放的优惠码'
-                            : 'Add an item to cart, then enter a coupon code issued by the store here'
+                            ? '可以先领取上方优惠券，加入商品后系统会自动使用'
+                            : 'Claim an offer above now and it will be applied after you add an item'
                     }
                     action={isZh ? '去选购' : 'Shop now'}
                     onAction={() => onNavigate({ name: 'category' })}
                 />
-            ) : (
+            ) : myCoupons.length ? (
                 <section className="coupon-center" aria-busy={loading || submitting}>
                     <div className="coupon-center-intro">
                         <TicketPercent aria-hidden="true" />
                         <span>
-                            <strong>{isZh ? '使用商家优惠码' : 'Use a store coupon code'}</strong>
+                            <strong>{isZh ? '我的优惠券' : 'My coupons'}</strong>
                             <small>
                                 {isZh
-                                    ? '优惠码由商家活动发放，应用后会自动重新计算当前订单优惠'
-                                    : 'Codes are issued by store campaigns and recalculate the active order automatically'}
+                                    ? '优惠券状态与有效期由服务器实时管理'
+                                    : 'Coupon status and validity are managed by the server'}
                             </small>
                         </span>
                     </div>
-                    <form
-                        className="coupon-code-form coupon-center-form"
-                        onSubmit={event => void submit(event)}
-                    >
-                        <label>
-                            <span>{isZh ? '输入优惠码' : 'Enter coupon code'}</span>
-                            <input
-                                value={couponCode}
-                                onChange={event => setCouponCode(event.target.value)}
-                                autoComplete="off"
-                                placeholder={isZh ? '例如 SAVE10' : 'For example, SAVE10'}
-                                disabled={loading || submitting}
-                            />
-                        </label>
-                        <button type="submit" disabled={loading || submitting || !couponCode.trim()}>
-                            {submitting ? (isZh ? '处理中' : 'Applying') : isZh ? '应用' : 'Apply'}
-                        </button>
-                    </form>
                     <section className="applied-coupons coupon-center-applied">
-                        <strong>{isZh ? '当前订单已使用' : 'Applied to the active order'}</strong>
-                        {order.couponCodes.length ? (
-                            order.couponCodes.map(code => (
-                                <div key={code}>
+                        <strong>{isZh ? '领取与使用记录' : 'Claim and usage history'}</strong>
+                        {myCoupons.map(coupon => {
+                            const applied = coupon.lockedOrderId === order?.id;
+                            return (
+                                <div key={coupon.id}>
                                     <span>
                                         <TicketPercent aria-hidden="true" />
-                                        {code}
+                                        {coupon.campaignName} ·{' '}
+                                        {customerCouponStatusLabel(coupon.status, language)}
+                                        {coupon.validUntil
+                                            ? ` · ${isZh ? '有效至' : 'Valid until'} ${new Intl.DateTimeFormat(
+                                                  isZh ? 'zh-CN' : 'en-US',
+                                                  { dateStyle: 'medium' },
+                                              ).format(new Date(coupon.validUntil))}`
+                                            : ''}
                                     </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => void remove(code)}
-                                        disabled={loading || submitting}
-                                    >
-                                        {isZh ? '移除' : 'Remove'}
-                                    </button>
+                                    {(applied || (coupon.usable && order)) && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                void runCouponAction(applied ? 'REMOVE' : 'APPLY', coupon.id)
+                                            }
+                                            disabled={loading || submitting}
+                                        >
+                                            {applied ? (isZh ? '移除' : 'Remove') : isZh ? '使用' : 'Apply'}
+                                        </button>
+                                    )}
                                 </div>
-                            ))
-                        ) : (
-                            <p>{isZh ? '暂未应用优惠码' : 'No coupon code applied yet'}</p>
-                        )}
+                            );
+                        })}
                     </section>
                     {error && (
                         <small className="form-error" role="alert">
@@ -5727,9 +5785,31 @@ function CouponCenterPage({
                         <ChevronRight aria-hidden="true" />
                     </button>
                 </section>
-            )}
+            ) : null}
         </Subpage>
     );
+}
+
+function customerCouponStatusLabel(status: StoreCustomerCoupon['status'], language: StorefrontLanguage) {
+    const labels =
+        language === 'zh'
+            ? {
+                  AVAILABLE: '可使用',
+                  LOCKED: '已用于当前订单',
+                  USED: '已核销',
+                  RETURNED: '退款已返还',
+                  EXPIRED: '已过期',
+                  REVOKED: '已撤销',
+              }
+            : {
+                  AVAILABLE: 'Available',
+                  LOCKED: 'Applied',
+                  USED: 'Used',
+                  RETURNED: 'Returned',
+                  EXPIRED: 'Expired',
+                  REVOKED: 'Revoked',
+              };
+    return labels[status];
 }
 
 function NotificationsPage({
@@ -8455,78 +8535,61 @@ function ListSkeleton({ label = 'Loading' }: { label?: string }) {
 }
 
 function CouponSheet({
-    couponCodes,
+    coupons,
+    orderId,
     language,
     loading,
     onApply,
     onRemove,
     onClose,
 }: {
-    couponCodes: string[];
+    coupons: StoreCustomerCoupon[];
+    orderId: string;
     language: StorefrontLanguage;
     loading: boolean;
-    onApply: (couponCode: string) => Promise<string | null>;
-    onRemove: (couponCode: string) => Promise<string | null>;
+    onApply: (customerCouponId: string) => Promise<string | null>;
+    onRemove: (customerCouponId: string) => Promise<string | null>;
     onClose: () => void;
 }) {
     const isZh = language === 'zh';
-    const [couponCode, setCouponCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    const apply = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const normalizedCode = couponCode.trim();
-        if (!normalizedCode) return;
+    const choose = async (coupon: StoreCustomerCoupon) => {
         setSubmitting(true);
         setError('');
-        const nextError = await onApply(normalizedCode);
-        setSubmitting(false);
-        if (nextError) setError(nextError);
-        else setCouponCode('');
-    };
-    const remove = async (code: string) => {
-        setSubmitting(true);
-        setError('');
-        const nextError = await onRemove(code);
+        const applied = coupon.lockedOrderId === orderId;
+        const nextError = await (applied ? onRemove(coupon.id) : onApply(coupon.id));
         setSubmitting(false);
         if (nextError) setError(nextError);
     };
+    const selectableCoupons = coupons.filter(coupon => coupon.usable || coupon.lockedOrderId === orderId);
     return (
-        <Sheet title={isZh ? '优惠码' : 'Coupon code'} language={language} onClose={onClose}>
+        <Sheet title={isZh ? '选择优惠券' : 'Choose a coupon'} language={language} onClose={onClose}>
             <div className="coupon-sheet-content">
-                <form className="coupon-code-form" onSubmit={event => void apply(event)}>
-                    <label>
-                        <span>{isZh ? '输入优惠码' : 'Enter coupon code'}</span>
-                        <input
-                            value={couponCode}
-                            onChange={event => setCouponCode(event.target.value)}
-                            autoComplete="off"
-                            placeholder={isZh ? '例如 SAVE10' : 'For example, SAVE10'}
-                        />
-                    </label>
-                    <button type="submit" disabled={loading || submitting || !couponCode.trim()}>
-                        {submitting ? (isZh ? '处理中' : 'Applying') : isZh ? '应用' : 'Apply'}
-                    </button>
-                </form>
-                {!!couponCodes.length && (
+                {selectableCoupons.length ? (
                     <section className="applied-coupons">
-                        <strong>{isZh ? '已使用' : 'Applied'}</strong>
-                        {couponCodes.map(code => (
-                            <div key={code}>
-                                <span>
-                                    <TicketPercent />
-                                    {code}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => void remove(code)}
-                                    disabled={loading || submitting}
-                                >
-                                    {isZh ? '移除' : 'Remove'}
-                                </button>
-                            </div>
-                        ))}
+                        <strong>{isZh ? '我的可用优惠券' : 'My available coupons'}</strong>
+                        {selectableCoupons.map(coupon => {
+                            const applied = coupon.lockedOrderId === orderId;
+                            return (
+                                <div key={coupon.id}>
+                                    <span>
+                                        <TicketPercent />
+                                        {coupon.campaignName}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => void choose(coupon)}
+                                        disabled={loading || submitting}
+                                    >
+                                        {applied ? (isZh ? '移除' : 'Remove') : isZh ? '使用' : 'Apply'}
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </section>
+                ) : (
+                    <p>{isZh ? '暂无可用优惠券，请先到领券中心领取' : 'No coupons available yet.'}</p>
                 )}
                 {error && <small className="form-error">{error}</small>}
             </div>

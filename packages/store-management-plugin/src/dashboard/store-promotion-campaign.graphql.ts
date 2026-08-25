@@ -5,7 +5,6 @@ export const storePromotionCampaignsQuery = gql`
         storeCouponCampaigns {
             id
             name
-            couponCode
             kind
             enabled
             startsAt
@@ -17,6 +16,46 @@ export const storePromotionCampaignsQuery = gql`
             productVariantIds
             usageLimit
             perCustomerUsageLimit
+            claimStartsAt
+            claimEndsAt
+            validityDays
+            issueLimit
+            perCustomerClaimLimit
+            stackPolicy
+            returnOnCancellation
+            returnOnFullRefund
+            remainingIssueCount
+            claimedCount
+            availableCount
+            lockedCount
+            usedCount
+            returnedCount
+            expiredCount
+            revokedCount
+            redeemedOrderCount
+            refundedOrderCount
+            discountAmountTotal
+            assistedRevenueTotal
+        }
+        storeCouponLedger(options: { take: 50 }) {
+            totalItems
+            items {
+                id
+                createdAt
+                eventType
+                actorType
+                campaignId
+                campaignName
+                customerCouponId
+                customerId
+                customerName
+                customerEmail
+                orderId
+                orderCode
+                refundId
+                discountAmount
+                note
+            }
         }
         storeFlashSales {
             id
@@ -100,7 +139,6 @@ export type StoreCouponKind =
 export interface StoreCouponRecord {
     id: string;
     name: string;
-    couponCode: string;
     kind: StoreCouponKind;
     enabled: boolean;
     startsAt: string | null;
@@ -112,6 +150,52 @@ export interface StoreCouponRecord {
     productVariantIds: string[];
     usageLimit: number | null;
     perCustomerUsageLimit: number | null;
+    claimStartsAt: string | null;
+    claimEndsAt: string | null;
+    validityDays: number | null;
+    issueLimit: number | null;
+    perCustomerClaimLimit: number;
+    stackPolicy: 'EXCLUSIVE' | 'STACKABLE';
+    returnOnCancellation: boolean;
+    returnOnFullRefund: boolean;
+    remainingIssueCount: number | null;
+    claimedCount: number;
+    availableCount: number;
+    lockedCount: number;
+    usedCount: number;
+    returnedCount: number;
+    expiredCount: number;
+    revokedCount: number;
+    redeemedOrderCount: number;
+    refundedOrderCount: number;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
+}
+
+export interface StoreCouponLedgerRecord {
+    id: string;
+    createdAt: string;
+    eventType:
+        | 'CLAIMED'
+        | 'LOCKED'
+        | 'RELEASED'
+        | 'REDEEMED'
+        | 'RETURNED'
+        | 'EXPIRED'
+        | 'REVOKED'
+        | 'REFUND_SETTLED';
+    actorType: string;
+    campaignId: string;
+    campaignName: string;
+    customerCouponId: string;
+    customerId: string;
+    customerName: string;
+    customerEmail: string;
+    orderId: string | null;
+    orderCode: string | null;
+    refundId: string | null;
+    discountAmount: number | null;
+    note: string | null;
 }
 
 export interface StoreFlashSaleRecord {
@@ -133,6 +217,7 @@ export interface StoreFlashSaleRecord {
 
 export interface StorePromotionCampaignsResult {
     storeCouponCampaigns: StoreCouponRecord[];
+    storeCouponLedger: { items: StoreCouponLedgerRecord[]; totalItems: number };
     storeFlashSales: StoreFlashSaleRecord[];
     collections: { items: Array<{ id: string; name: string }> };
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await -- QueryRunner mocks preserve async database APIs. */
 import { Permission } from '@vendure/common/lib/generated-types';
 import { QueryRunner, Table, TableColumn } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
@@ -19,6 +20,7 @@ import { AddStoreProfileNotesAndTemplates1787500800000 } from './1787500800000-a
 import { UpgradeStorefrontContentEditor1787551200000 } from './1787551200000-upgrade-storefront-content-editor';
 import { AddSystemAnnouncements1787554800000 } from './1787554800000-add-system-announcements';
 import { AddAutoCardDelivery1787594400000 } from './1787594400000-add-auto-card-delivery';
+import { AddCouponLifecycle1787677200000 } from './1787677200000-add-coupon-lifecycle';
 
 function mysqlQueryRunner(existingTables: string[] = []) {
     const createdTables: Table[] = [];
@@ -36,6 +38,57 @@ function mysqlQueryRunner(existingTables: string[] = []) {
 }
 
 describe('production migration compatibility', () => {
+    it.each(['mysql', 'postgres', 'sqlite'] as const)(
+        'creates portable coupon lifecycle storage on %s',
+        async databaseType => {
+            const createdTables: Table[] = [];
+            const addedColumns: Array<{ table: string; column: TableColumn }> = [];
+            const afterSalesTable = new Table({
+                name: 'after_sales_request',
+                columns: [{ name: 'id', type: databaseType === 'mysql' ? 'int' : 'integer' }],
+            });
+            const queryRunner = {
+                connection: { options: { type: databaseType } },
+                hasTable: vi.fn(async (name: string) => name === 'after_sales_request'),
+                getTable: vi.fn(async () => afterSalesTable),
+                createTable: vi.fn(async (table: Table) => createdTables.push(table)),
+                addColumn: vi.fn(async (table: string, column: TableColumn) => {
+                    addedColumns.push({ table, column });
+                }),
+                createIndex: vi.fn(async () => undefined),
+                createForeignKey: vi.fn(async () => undefined),
+            } as unknown as QueryRunner;
+
+            await new AddCouponLifecycle1787677200000().up(queryRunner);
+
+            expect(createdTables.map(table => table.name)).toEqual([
+                'store_coupon_campaign_config',
+                'customer_coupon',
+                'coupon_ledger_entry',
+                'coupon_order_allocation',
+            ]);
+            const config = createdTables[0];
+            const coupon = createdTables[1];
+            expect(config.findColumnByName('id')?.type).toBe(databaseType === 'mysql' ? 'int' : 'integer');
+            expect(config.findColumnByName('returnOnCancellation')?.type).toBe(
+                databaseType === 'mysql' ? 'tinyint' : 'boolean',
+            );
+            expect(coupon.findColumnByName('discountRate')?.type).toBe(
+                databaseType === 'postgres' ? 'double precision' : 'float',
+            );
+            expect(coupon.findColumnByName('version')?.default).toBeUndefined();
+            expect(config.indices).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'IDX_store_coupon_campaign_config_promotion',
+                        isUnique: true,
+                    }),
+                ]),
+            );
+            expect(addedColumns.map(item => item.column.name)).toEqual(['refundId', 'refundedAt']);
+        },
+    );
+
     it.each(['mysql', 'postgres', 'sqlite'] as const)(
         'creates portable automatic credential delivery storage on %s',
         async databaseType => {

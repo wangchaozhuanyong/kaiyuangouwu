@@ -18,6 +18,42 @@ const commonTypes = gql`
         COLLECTION_PERCENTAGE
         PRODUCT_PERCENTAGE
     }
+
+    enum StoreCouponStackPolicy {
+        EXCLUSIVE
+        STACKABLE
+    }
+
+    enum StoreCustomerCouponStatus {
+        AVAILABLE
+        LOCKED
+        USED
+        RETURNED
+        EXPIRED
+        REVOKED
+    }
+
+    type StoreCustomerCoupon {
+        id: ID!
+        campaignId: ID!
+        campaignName: String!
+        campaignKind: StoreCouponCampaignKind!
+        status: StoreCustomerCouponStatus!
+        minimumSpend: Money!
+        discountAmount: Money
+        discountRate: Float
+        claimedAt: DateTime!
+        validFrom: DateTime!
+        validUntil: DateTime
+        lockedAt: DateTime
+        usedAt: DateTime
+        returnedAt: DateTime
+        expiredAt: DateTime
+        lockedOrderId: ID
+        usedOrderId: ID
+        returnCount: Int!
+        usable: Boolean!
+    }
 `;
 
 export const adminApiExtensions = gql`
@@ -217,11 +253,30 @@ export const adminApiExtensions = gql`
         productVariantIds: [ID!]!
         usageLimit: Int
         perCustomerUsageLimit: Int
+        claimStartsAt: DateTime
+        claimEndsAt: DateTime
+        validityDays: Int
+        issueLimit: Int
+        perCustomerClaimLimit: Int!
+        stackPolicy: StoreCouponStackPolicy!
+        returnOnCancellation: Boolean!
+        returnOnFullRefund: Boolean!
+        remainingIssueCount: Int
+        claimedCount: Int!
+        availableCount: Int!
+        lockedCount: Int!
+        usedCount: Int!
+        returnedCount: Int!
+        expiredCount: Int!
+        revokedCount: Int!
+        redeemedOrderCount: Int!
+        refundedOrderCount: Int!
+        discountAmountTotal: Money!
+        assistedRevenueTotal: Money!
     }
 
     input CreateStoreCouponCampaignInput {
         name: String!
-        couponCode: String!
         kind: StoreCouponCampaignKind!
         minimumSpend: Money
         discountAmount: Money
@@ -232,6 +287,74 @@ export const adminApiExtensions = gql`
         endsAt: DateTime
         usageLimit: Int
         perCustomerUsageLimit: Int
+        claimStartsAt: DateTime
+        claimEndsAt: DateTime
+        validityDays: Int
+        issueLimit: Int
+        perCustomerClaimLimit: Int
+        stackPolicy: StoreCouponStackPolicy
+        returnOnCancellation: Boolean
+        returnOnFullRefund: Boolean
+    }
+
+    enum StoreCouponLedgerEventType {
+        CLAIMED
+        LOCKED
+        RELEASED
+        REDEEMED
+        RETURNED
+        EXPIRED
+        REVOKED
+        REFUND_SETTLED
+    }
+
+    type StoreCouponLedgerEntry {
+        id: ID!
+        createdAt: DateTime!
+        eventType: StoreCouponLedgerEventType!
+        actorType: String!
+        campaignId: ID!
+        campaignName: String!
+        customerCouponId: ID!
+        customerId: ID!
+        customerName: String!
+        customerEmail: String!
+        orderId: ID
+        orderCode: String
+        refundId: ID
+        discountAmount: Money
+        note: String
+    }
+
+    type StoreCouponLedgerEntryList implements PaginatedList {
+        items: [StoreCouponLedgerEntry!]!
+        totalItems: Int!
+    }
+
+    input StoreCouponLedgerListOptions {
+        skip: Int
+        take: Int
+        campaignId: ID
+        customerId: ID
+        orderId: ID
+        eventType: StoreCouponLedgerEventType
+    }
+
+    type StoreCouponOrderAllocation {
+        id: ID!
+        customerCouponId: ID!
+        campaignId: ID!
+        campaignName: String!
+        status: String!
+        currencyCode: CurrencyCode!
+        discountAmount: Money!
+        discountAmountWithTax: Money!
+        refundedAmount: Money!
+        appliedAt: DateTime!
+        usedAt: DateTime
+        releasedAt: DateTime
+        refundedAt: DateTime
+        refundId: ID
     }
 
     input StoreFlashSaleVariantPriceInput {
@@ -281,6 +404,7 @@ export const adminApiExtensions = gql`
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
+        storeCouponLedger(options: StoreCouponLedgerListOptions): StoreCouponLedgerEntryList!
         storeFlashSales: [StoreFlashSale!]!
         systemAnnouncements: [SystemAnnouncement!]!
     }
@@ -301,9 +425,15 @@ export const adminApiExtensions = gql`
         createStoreFlashSale(input: CreateStoreFlashSaleInput!): StoreFlashSale!
         setStorePromotionEnabled(id: ID!, enabled: Boolean!): StorePromotionToggleResult!
         deleteStorePromotion(id: ID!): DeletionResponse!
+        grantStoreCoupon(campaignId: ID!, customerId: ID!): StoreCustomerCoupon!
+        revokeStoreCustomerCoupon(id: ID!, reason: String): StoreCustomerCoupon!
         createSystemAnnouncement(input: CreateSystemAnnouncementInput!): SystemAnnouncement!
         updateSystemAnnouncement(input: UpdateSystemAnnouncementInput!): SystemAnnouncement!
         deleteSystemAnnouncement(id: ID!): DeletionResponse!
+    }
+
+    extend type Order {
+        storeCouponAllocations: [StoreCouponOrderAllocation!]!
     }
 `;
 
@@ -339,13 +469,17 @@ export const shopApiExtensions = gql`
     type StorefrontCoupon {
         id: ID!
         name: String!
-        couponCode: String!
         kind: StoreCouponCampaignKind!
         startsAt: DateTime
         endsAt: DateTime
         minimumSpend: Money!
         discountAmount: Money
         discountRate: Float
+        claimStartsAt: DateTime
+        claimEndsAt: DateTime
+        remainingIssueCount: Int
+        claimed: Boolean!
+        claimable: Boolean!
     }
 
     type StorefrontSystemAnnouncement {
@@ -360,7 +494,14 @@ export const shopApiExtensions = gql`
     extend type Query {
         storefrontBranding: StorefrontBranding!
         activeStorefrontCoupons: [StorefrontCoupon!]!
+        myStorefrontCoupons: [StoreCustomerCoupon!]!
         activeStorefrontFlashSales: [StoreFlashSale!]!
         activeSystemAnnouncements: [StorefrontSystemAnnouncement!]!
+    }
+
+    extend type Mutation {
+        claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
+        applyStorefrontCoupon(id: ID!): StoreCustomerCoupon!
+        removeStorefrontCoupon(id: ID!): StoreCustomerCoupon!
     }
 `;

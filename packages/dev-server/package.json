@@ -22,6 +22,7 @@
         "dev:instrumented": "concurrently npm:dev:server:instrumented npm:dev:worker:instrumented",
         "dashboard:dev": "node ../cli/dist/cli.js dev dashboard",
         "test:dev-workflow": "node --test ./scripts/*.spec.mjs",
+        "test:migrations": "vitest run --config vitest.config.mts",
         "seed:storefront-demo": "node ./scripts/seed-storefront-demo.mjs --apply",
         "audit:storefront-readiness": "node ./scripts/storefront-readiness.mjs",
         "audit:production-env": "node ./scripts/production-env-readiness.mjs",

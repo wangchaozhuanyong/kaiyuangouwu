@@ -260,6 +260,71 @@ describe('ShopApi storefront mutations', () => {
         );
     });
 
+    it('claims and applies an owned coupon by server IDs without exposing an internal code', async () => {
+        const customerCoupon = {
+            id: 'customer-coupon-1',
+            campaignId: 'campaign-1',
+            campaignName: '新客满减',
+            campaignKind: 'ORDER_FIXED',
+            status: 'AVAILABLE',
+            minimumSpend: 10_000,
+            discountAmount: 2_000,
+            discountRate: null,
+            claimedAt: '2026-08-25T00:00:00.000Z',
+            validFrom: '2026-08-25T00:00:00.000Z',
+            validUntil: '2026-09-01T00:00:00.000Z',
+            lockedAt: null,
+            usedAt: null,
+            returnedAt: null,
+            expiredAt: null,
+            lockedOrderId: null,
+            usedOrderId: null,
+            returnCount: 0,
+            usable: true,
+        };
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: { claimStorefrontCoupon: customerCoupon } }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                }),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            applyStorefrontCoupon: {
+                                ...customerCoupon,
+                                status: 'LOCKED',
+                                lockedOrderId: 'order-1',
+                            },
+                        },
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        const api = new ShopApi(market);
+
+        await expect(api.claimCoupon('campaign-1')).resolves.toMatchObject({ id: 'customer-coupon-1' });
+        await expect(api.applyCustomerCoupon('customer-coupon-1')).resolves.toMatchObject({
+            status: 'LOCKED',
+        });
+
+        const claimRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        const applyRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(claimRequest.variables).toEqual({ campaignId: 'campaign-1' });
+        expect(applyRequest.variables).toEqual({ id: 'customer-coupon-1' });
+        expect(`${claimRequest.query}${applyRequest.query}`).not.toContain('couponCode');
+    });
+
     it('loads eligible payment methods for the active order', async () => {
         const fetchMock = mockGraphQlResponse({
             eligiblePaymentMethods: [

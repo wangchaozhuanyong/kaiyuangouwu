@@ -5,6 +5,7 @@ import {
     AlertDescription,
     Badge,
     Button,
+    ChannelCodeLabel,
     DashboardRouteDefinition,
     Dialog,
     DialogContent,
@@ -21,6 +22,11 @@ import {
     PageBlock,
     PageLayout,
     PageTitle,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     Sheet,
     SheetContent,
     SheetDescription,
@@ -57,6 +63,7 @@ interface TransitionDraft {
     state: TransitionTarget;
     resolution: string;
     approvedAmount: string;
+    refundId: string;
 }
 
 const messages = {
@@ -128,6 +135,19 @@ const messages = {
         id: 'operations.afterSales.refundReminder',
         message:
             'Process the payment refund in the order first. After confirming the refund result, return here and mark this request completed.',
+    }),
+    refundRecord: msg({
+        id: 'operations.afterSales.refundRecord',
+        message: 'Successful refund record',
+    }),
+    refundRecordHint: msg({
+        id: 'operations.afterSales.refundRecordHint',
+        message: 'Only settled refunds from this order can complete a paid after-sales request.',
+    }),
+    selectRefund: msg({ id: 'operations.afterSales.selectRefund', message: 'Select a settled refund' }),
+    missingRefund: msg({
+        id: 'operations.afterSales.missingRefund',
+        message: 'Select the settled refund that completed this request',
     }),
     updated: msg({ id: 'operations.afterSales.updated', message: 'After-sales status updated' }),
     activeChannel: msg({ id: 'operations.afterSales.activeStore', message: 'Active store' }),
@@ -208,6 +228,7 @@ function AfterSalesPage() {
                     state: input.state,
                     resolution: input.resolution.trim(),
                     ...(approvedAmount == null ? {} : { approvedAmount }),
+                    ...(input.state === 'COMPLETED' && input.refundId ? { refundId: input.refundId } : {}),
                 },
             });
         },
@@ -226,6 +247,7 @@ function AfterSalesPage() {
             state: target,
             resolution: request.resolution ?? '',
             approvedAmount: formatMajorAmount(request.approvedAmount ?? request.requestedAmount),
+            refundId: defaultSettledRefund(request)?.id ?? '',
         });
     };
     const submit = () => {
@@ -240,6 +262,10 @@ function AfterSalesPage() {
                 toast.error(text.invalidAmount);
                 return;
             }
+        }
+        if (draft.state === 'COMPLETED' && (draft.request.approvedAmount ?? 0) > 0 && !draft.refundId) {
+            toast.error(text.missingRefund);
+            return;
         }
         transition.mutate(draft);
     };
@@ -282,7 +308,9 @@ function AfterSalesPage() {
                         </Tabs>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span>{text.activeChannel}</span>
-                            <Badge variant="outline">{activeChannel?.code ?? '-'}</Badge>
+                            <Badge variant="outline">
+                                {activeChannel ? <ChannelCodeLabel code={activeChannel.code} /> : '-'}
+                            </Badge>
                             <Badge variant="secondary">{totalItems}</Badge>
                         </div>
                     </div>
@@ -611,6 +639,29 @@ function TransitionDialog({
                             <p className="text-xs text-muted-foreground">{text.amountHint}</p>
                         </div>
                     )}
+                    {draft.state === 'COMPLETED' && (draft.request.approvedAmount ?? 0) > 0 && (
+                        <div className="space-y-1.5">
+                            <Label>{text.refundRecord}</Label>
+                            <Select
+                                value={draft.refundId}
+                                onValueChange={value => value && onChange({ ...draft, refundId: value })}
+                                disabled={pending}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder={text.selectRefund} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {settledRefunds(draft.request).map(refund => (
+                                        <SelectItem key={refund.id} value={refund.id}>
+                                            {formatMoney(refund.total, draft.request.currencyCode)} ·{' '}
+                                            {formatDate(refund.createdAt)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">{text.refundRecordHint}</p>
+                        </div>
+                    )}
                     <div className="space-y-1.5">
                         <Label htmlFor="after-sales-resolution">{text.resolution}</Label>
                         <Textarea
@@ -697,4 +748,15 @@ function formatDate(value: string): string {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function settledRefunds(request: AfterSalesRequestRecord) {
+    return request.order.payments
+        .flatMap(payment => payment.refunds)
+        .filter(refund => refund.state === 'Settled');
+}
+
+function defaultSettledRefund(request: AfterSalesRequestRecord) {
+    const approvedAmount = request.approvedAmount ?? 0;
+    return settledRefunds(request).find(refund => refund.total >= approvedAmount) ?? null;
 }

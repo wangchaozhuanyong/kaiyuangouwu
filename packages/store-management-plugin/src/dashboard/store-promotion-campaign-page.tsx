@@ -51,7 +51,6 @@ import {
 
 interface CouponDraft {
     name: string;
-    couponCode: string;
     kind: StoreCouponKind;
     minimumSpend: string;
     discountAmount: string;
@@ -62,6 +61,14 @@ interface CouponDraft {
     endsAt: string;
     usageLimit: string;
     perCustomerUsageLimit: string;
+    claimStartsAt: string;
+    claimEndsAt: string;
+    validityDays: string;
+    issueLimit: string;
+    perCustomerClaimLimit: string;
+    stackPolicy: 'EXCLUSIVE' | 'STACKABLE';
+    returnOnCancellation: boolean;
+    returnOnFullRefund: boolean;
 }
 
 interface FlashSaleDraft {
@@ -79,6 +86,26 @@ const couponKindLabels: Record<StoreCouponKind, string> = {
     COLLECTION_PERCENTAGE: '分类折扣券',
     PRODUCT_PERCENTAGE: '单品折扣券',
 };
+
+const couponLedgerEventLabels = {
+    CLAIMED: '领取',
+    LOCKED: '订单锁定',
+    RELEASED: '释放',
+    REDEEMED: '核销',
+    RETURNED: '返还',
+    EXPIRED: '过期',
+    REVOKED: '撤销',
+    REFUND_SETTLED: '退款完成',
+} as const;
+
+function CampaignMetric({ label, value }: { label: string; value: string | number }) {
+    return (
+        <div>
+            <span className="block text-muted-foreground">{label}</span>
+            <strong className="mt-1 block text-sm">{value}</strong>
+        </div>
+    );
+}
 
 export const storePromotionCampaignRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -142,7 +169,7 @@ function StorePromotionCampaignPage() {
                     column="full"
                     blockId="store-coupon-campaigns"
                     title="优惠券"
-                    description="创建满减、消费折扣、分类折扣和单品折扣券；结算时由真实 Promotion 规则计算。"
+                    description="创建满减、消费折扣、分类折扣和单品折扣券；客户在前台领取，结算时由真实 Promotion 规则计算。"
                 >
                     <CampaignState query={query} onRetry={() => void query.refetch()}>
                         <div className="grid gap-3 lg:grid-cols-2">
@@ -159,9 +186,12 @@ function StorePromotionCampaignPage() {
                                                     {coupon.enabled ? '启用' : '停用'}
                                                 </Badge>
                                             </div>
-                                            <p className="mt-2 font-mono text-sm">{coupon.couponCode}</p>
                                             <p className="mt-1 text-xs text-muted-foreground">
                                                 {couponSummary(coupon)}
+                                            </p>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                领取 {coupon.claimedCount} · 已用 {coupon.usedCount} · 返还{' '}
+                                                {coupon.returnedCount} · 过期 {coupon.expiredCount}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -174,7 +204,7 @@ function StorePromotionCampaignPage() {
                                             />
                                             <ConfirmationDialog
                                                 title="删除这张优惠券？"
-                                                description="删除后客户将不能再使用该优惠码。"
+                                                description="删除后客户将不能再领取或使用该优惠券。"
                                                 confirmText="确认删除"
                                                 cancelText="取消"
                                                 onConfirm={() => deleteMutation.mutate(coupon.id)}
@@ -191,10 +221,92 @@ function StorePromotionCampaignPage() {
                                             </ConfirmationDialog>
                                         </div>
                                     </div>
+                                    <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs sm:grid-cols-4">
+                                        <CampaignMetric label="可用券" value={coupon.availableCount} />
+                                        <CampaignMetric label="核销订单" value={coupon.redeemedOrderCount} />
+                                        <CampaignMetric
+                                            label="优惠金额"
+                                            value={formatMoney(
+                                                coupon.discountAmountTotal,
+                                                activeChannel?.defaultCurrencyCode ?? 'CNY',
+                                            )}
+                                        />
+                                        <CampaignMetric
+                                            label="带动成交"
+                                            value={formatMoney(
+                                                coupon.assistedRevenueTotal,
+                                                activeChannel?.defaultCurrencyCode ?? 'CNY',
+                                            )}
+                                        />
+                                    </div>
                                 </div>
                             ))}
                             {!query.data?.storeCouponCampaigns.length ? (
                                 <p className="text-sm text-muted-foreground">还没有优惠券。</p>
+                            ) : null}
+                        </div>
+                    </CampaignState>
+                </PageBlock>
+
+                <PageBlock
+                    column="full"
+                    blockId="store-coupon-ledger"
+                    title="优惠券使用流水"
+                    description={`记录领取、锁定、核销、返还、过期和退款事件，共 ${query.data?.storeCouponLedger.totalItems ?? 0} 条。`}
+                >
+                    <CampaignState query={query} onRetry={() => void query.refetch()}>
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[760px] text-left text-sm">
+                                <thead className="border-b text-xs text-muted-foreground">
+                                    <tr>
+                                        <th className="px-2 py-2 font-medium">时间</th>
+                                        <th className="px-2 py-2 font-medium">事件</th>
+                                        <th className="px-2 py-2 font-medium">优惠券</th>
+                                        <th className="px-2 py-2 font-medium">客户</th>
+                                        <th className="px-2 py-2 font-medium">订单</th>
+                                        <th className="px-2 py-2 text-right font-medium">优惠金额</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {query.data?.storeCouponLedger.items.map(entry => (
+                                        <tr key={entry.id} className="border-b last:border-0">
+                                            <td className="px-2 py-3 text-xs">
+                                                {new Date(entry.createdAt).toLocaleString()}
+                                            </td>
+                                            <td className="px-2 py-3">
+                                                <Badge variant="outline">
+                                                    {couponLedgerEventLabels[entry.eventType]}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-2 py-3">{entry.campaignName}</td>
+                                            <td className="px-2 py-3">
+                                                <div>{entry.customerName}</div>
+                                                <small className="text-muted-foreground">
+                                                    {entry.customerEmail}
+                                                </small>
+                                            </td>
+                                            <td className="px-2 py-3">
+                                                {entry.orderCode ?? '—'}
+                                                {entry.refundId ? (
+                                                    <small className="block text-muted-foreground">
+                                                        退款 #{entry.refundId}
+                                                    </small>
+                                                ) : null}
+                                            </td>
+                                            <td className="px-2 py-3 text-right">
+                                                {entry.discountAmount == null
+                                                    ? '—'
+                                                    : formatMoney(
+                                                          entry.discountAmount,
+                                                          activeChannel?.defaultCurrencyCode ?? 'CNY',
+                                                      )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {!query.data?.storeCouponLedger.items.length ? (
+                                <p className="py-4 text-sm text-muted-foreground">暂无优惠券流水。</p>
                             ) : null}
                         </div>
                     </CampaignState>
@@ -327,19 +439,12 @@ function CouponEditor({
                 <DialogHeader>
                     <DialogTitle>新建优惠券</DialogTitle>
                     <DialogDescription>
-                        只填写当前类型需要的字段，系统自动生成真实优惠规则。
+                        设置优惠规则后，客户可在商城客户端领取；系统会自动生成内部识别码。
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <FormField label="优惠券名称">
                         <Input value={draft.name} onChange={event => update('name', event.target.value)} />
-                    </FormField>
-                    <FormField label="优惠码">
-                        <Input
-                            value={draft.couponCode}
-                            autoCapitalize="characters"
-                            onChange={event => update('couponCode', event.target.value.toUpperCase())}
-                        />
                     </FormField>
                     <FormField label="优惠券类型">
                         <Select value={draft.kind} onValueChange={value => value && update('kind', value)}>
@@ -426,14 +531,14 @@ function CouponEditor({
                             />
                         </FormField>
                     ) : null}
-                    <FormField label="开始时间">
+                    <FormField label="优惠可用开始时间">
                         <Input
                             type="datetime-local"
                             value={draft.startsAt}
                             onChange={event => update('startsAt', event.target.value)}
                         />
                     </FormField>
-                    <FormField label="结束时间">
+                    <FormField label="优惠可用结束时间">
                         <Input
                             type="datetime-local"
                             value={draft.endsAt}
@@ -455,6 +560,76 @@ function CouponEditor({
                             value={draft.perCustomerUsageLimit}
                             onChange={event => update('perCustomerUsageLimit', event.target.value)}
                         />
+                    </FormField>
+                    <FormField label="领取开始时间">
+                        <Input
+                            type="datetime-local"
+                            value={draft.claimStartsAt}
+                            onChange={event => update('claimStartsAt', event.target.value)}
+                        />
+                    </FormField>
+                    <FormField label="领取结束时间">
+                        <Input
+                            type="datetime-local"
+                            value={draft.claimEndsAt}
+                            onChange={event => update('claimEndsAt', event.target.value)}
+                        />
+                    </FormField>
+                    <FormField label="领取后有效天数" hint="留空则有效至活动结束。">
+                        <Input
+                            type="number"
+                            min={1}
+                            value={draft.validityDays}
+                            onChange={event => update('validityDays', event.target.value)}
+                        />
+                    </FormField>
+                    <FormField label="发放总量" hint="留空表示不限制领取数量。">
+                        <Input
+                            type="number"
+                            min={1}
+                            value={draft.issueLimit}
+                            onChange={event => update('issueLimit', event.target.value)}
+                        />
+                    </FormField>
+                    <FormField label="每位客户可领取张数">
+                        <Input
+                            type="number"
+                            min={1}
+                            value={draft.perCustomerClaimLimit}
+                            onChange={event => update('perCustomerClaimLimit', event.target.value)}
+                        />
+                    </FormField>
+                    <FormField label="叠加规则">
+                        <Select
+                            value={draft.stackPolicy}
+                            onValueChange={value => value && update('stackPolicy', value)}
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="EXCLUSIVE">不可与其他优惠券叠加</SelectItem>
+                                <SelectItem value="STACKABLE">允许叠加</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </FormField>
+                    <FormField label="取消订单返券">
+                        <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                            <span className="text-sm">订单取消后恢复可用</span>
+                            <Switch
+                                checked={draft.returnOnCancellation}
+                                onCheckedChange={value => update('returnOnCancellation', value)}
+                            />
+                        </div>
+                    </FormField>
+                    <FormField label="全额退款返券">
+                        <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                            <span className="text-sm">退款结算后恢复可用</span>
+                            <Switch
+                                checked={draft.returnOnFullRefund}
+                                onCheckedChange={value => update('returnOnFullRefund', value)}
+                            />
+                        </div>
                     </FormField>
                 </div>
                 <DialogFooter>
@@ -666,7 +841,6 @@ function newCouponDraft(): CouponDraft {
     const range = defaultDateRange();
     return {
         name: '',
-        couponCode: '',
         kind: 'ORDER_FIXED',
         minimumSpend: '0',
         discountAmount: '',
@@ -677,14 +851,19 @@ function newCouponDraft(): CouponDraft {
         endsAt: range.endsAt,
         usageLimit: '',
         perCustomerUsageLimit: '1',
+        claimStartsAt: range.startsAt,
+        claimEndsAt: range.endsAt,
+        validityDays: '',
+        issueLimit: '',
+        perCustomerClaimLimit: '1',
+        stackPolicy: 'EXCLUSIVE',
+        returnOnCancellation: true,
+        returnOnFullRefund: true,
     };
 }
 
 function couponDraftError(draft: CouponDraft): string | null {
     if (!draft.name.trim()) return '请填写优惠券名称';
-    if (!/^[A-Z0-9][A-Z0-9_-]*$/.test(draft.couponCode.trim())) {
-        return '优惠码只能使用字母、数字、短横线和下划线';
-    }
     if (Number(draft.minimumSpend) < 0) return '最低消费金额不能小于 0';
     if (draft.kind === 'ORDER_FIXED' && Number(draft.discountAmount) <= 0) {
         return '请填写大于 0 的减免金额';
@@ -702,6 +881,16 @@ function couponDraftError(draft: CouponDraft): string | null {
     if (draft.startsAt && draft.endsAt && Date.parse(draft.startsAt) >= Date.parse(draft.endsAt)) {
         return '结束时间必须晚于开始时间';
     }
+    if (
+        draft.claimStartsAt &&
+        draft.claimEndsAt &&
+        Date.parse(draft.claimStartsAt) >= Date.parse(draft.claimEndsAt)
+    ) {
+        return '领取结束时间必须晚于领取开始时间';
+    }
+    if (draft.validityDays && Number(draft.validityDays) < 1) return '领取后有效天数必须大于 0';
+    if (draft.issueLimit && Number(draft.issueLimit) < 1) return '发放总量必须大于 0';
+    if (Number(draft.perCustomerClaimLimit) < 1) return '每位客户领取张数必须大于 0';
     return null;
 }
 
@@ -742,7 +931,6 @@ function defaultDateRange() {
 function couponInput(draft: CouponDraft) {
     return {
         name: draft.name,
-        couponCode: draft.couponCode,
         kind: draft.kind,
         minimumSpend: moneyInput(draft.minimumSpend),
         discountAmount: draft.kind === 'ORDER_FIXED' ? moneyInput(draft.discountAmount) : null,
@@ -753,6 +941,14 @@ function couponInput(draft: CouponDraft) {
         endsAt: dateInput(draft.endsAt),
         usageLimit: integerInput(draft.usageLimit),
         perCustomerUsageLimit: integerInput(draft.perCustomerUsageLimit),
+        claimStartsAt: dateInput(draft.claimStartsAt),
+        claimEndsAt: dateInput(draft.claimEndsAt),
+        validityDays: integerInput(draft.validityDays),
+        issueLimit: integerInput(draft.issueLimit),
+        perCustomerClaimLimit: integerInput(draft.perCustomerClaimLimit),
+        stackPolicy: draft.stackPolicy,
+        returnOnCancellation: draft.returnOnCancellation,
+        returnOnFullRefund: draft.returnOnFullRefund,
     };
 }
 

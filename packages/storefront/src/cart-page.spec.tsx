@@ -79,6 +79,7 @@ function renderCart(value: StorefrontCart | null) {
             error: null,
             addingVariantId: null,
             favoriteProductIds: [],
+            coupons: [],
             ...callbacks,
         }),
     );

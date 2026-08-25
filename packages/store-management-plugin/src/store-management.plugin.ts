@@ -4,7 +4,11 @@ import { ConfigService, PluginCommonModule, VendurePlugin } from '@vendure/core'
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constants';
+import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
+import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
+import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
+import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 import { StoreProfile } from './entities/store-profile.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
 import { SystemAnnouncement } from './entities/system-announcement.entity';
@@ -15,9 +19,13 @@ import { MerchantInitialPasswordResolver } from './merchant-initial-password.res
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import {
     collectionPercentageDiscount,
+    customerCouponEntitlement,
     flashSalePriceAction,
 } from './promotion/store-commerce-promotion-actions';
+import { StoreCouponLifecycleService } from './promotion/store-coupon-lifecycle.service';
+import { reconcileStoreCouponsTask } from './promotion/store-coupon-tasks';
 import {
+    StoreCouponOrderResolver,
     StorePromotionCampaignAdminResolver,
     StorePromotionCampaignShopResolver,
 } from './promotion/store-promotion-campaign.resolver';
@@ -47,7 +55,16 @@ import { StorefrontPromotionPluginOptions } from './types';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
-    entities: [StoreAdministratorAccess, StoreProfile, StorefrontPromotionPage, SystemAnnouncement],
+    entities: [
+        StoreAdministratorAccess,
+        StoreProfile,
+        StorefrontPromotionPage,
+        SystemAnnouncement,
+        StoreCouponCampaignConfig,
+        CustomerCoupon,
+        CouponLedgerEntry,
+        CouponOrderAllocation,
+    ],
     controllers: [StorefrontPromotionController],
     providers: [
         MerchantCatalogAccessService,
@@ -62,6 +79,7 @@ import { StorefrontPromotionPluginOptions } from './types';
         StorefrontPromotionHtmlService,
         StorefrontPromotionService,
         StorePromotionCampaignService,
+        StoreCouponLifecycleService,
         SystemAnnouncementService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
@@ -82,11 +100,19 @@ import { StorefrontPromotionPluginOptions } from './types';
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(storeProfilePermission);
+        if (
+            !config.promotionOptions.promotionConditions.some(
+                candidate => candidate.code === customerCouponEntitlement.code,
+            )
+        ) {
+            config.promotionOptions.promotionConditions.push(customerCouponEntitlement);
+        }
         for (const action of [collectionPercentageDiscount, flashSalePriceAction]) {
             if (!config.promotionOptions.promotionActions.some(candidate => candidate.code === action.code)) {
                 config.promotionOptions.promotionActions.push(action);
             }
         }
+        config.schedulerOptions.tasks.push(reconcileStoreCouponsTask);
         return config;
     },
     adminApiExtensions: {
@@ -98,6 +124,7 @@ import { StorefrontPromotionPluginOptions } from './types';
             StoreCommerceSettingsResolver,
             StorefrontPromotionAdminResolver,
             StorePromotionCampaignAdminResolver,
+            StoreCouponOrderResolver,
             SystemAnnouncementAdminResolver,
         ],
     },
