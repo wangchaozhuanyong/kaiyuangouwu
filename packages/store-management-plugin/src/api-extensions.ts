@@ -308,7 +308,7 @@ export const adminApiExtensions = gql`
         REFUND_SETTLED
     }
 
-    type StoreCouponLedgerEntry {
+    type StoreCouponLedgerEntry implements Node {
         id: ID!
         createdAt: DateTime!
         eventType: StoreCouponLedgerEventType!
