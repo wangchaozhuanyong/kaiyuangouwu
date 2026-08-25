@@ -75,7 +75,7 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
         // The expand button is inside the Name cell (not the drag-handle cell)
         const parentRow = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
         const nameCell = parentRow.locator('td').filter({ hasText: PARENT_NAME });
-        const expandButton = nameCell.getByLabel(/Expand|Collapse/);
+        const expandButton = nameCell.getByRole('button', { name: /^(Expand|Collapse)$/ });
         await expect(expandButton).toBeEnabled({ timeout: 10_000 });
         await expandButton.click();
 
@@ -100,7 +100,7 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
         // Navigate directly to the collection detail — no expansion beforehand,
         // so no ?expanded= param will be in the URL when we return
         const parentRow = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
-        await parentRow.getByRole('button', { name: PARENT_NAME }).click();
+        await parentRow.getByRole('button', { name: PARENT_NAME, exact: true }).click();
         await page.waitForURL(`/collections/${parentId}`, { timeout: 10_000 });
 
         // Navigate back — URL has no ?expanded= param
@@ -111,7 +111,7 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
         // The expand button should be enabled and clicking it should show children
         const parentRowAfterBack = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
         const nameCell = parentRowAfterBack.locator('td').filter({ hasText: PARENT_NAME });
-        const expandButton = nameCell.getByLabel(/Expand|Collapse/);
+        const expandButton = nameCell.getByRole('button', { name: /^(Expand|Collapse)$/ });
         await expect(expandButton).toBeEnabled({ timeout: 10_000 });
         await expandButton.click();
         await expect(page.getByText(CHILD_NAME, { exact: true })).toBeVisible({ timeout: 5_000 });
@@ -126,11 +126,11 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
         // Expand the parent collection
         const parentRow = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
         const nameCell = parentRow.locator('td').filter({ hasText: PARENT_NAME });
-        await nameCell.getByLabel(/Expand|Collapse/).click();
+        await nameCell.getByRole('button', { name: /^(Expand|Collapse)$/ }).click();
         await expect(page.getByText(CHILD_NAME, { exact: true })).toBeVisible({ timeout: 5_000 });
 
         // Navigate to the parent collection's detail page
-        await parentRow.getByRole('button', { name: PARENT_NAME }).click();
+        await parentRow.getByRole('button', { name: PARENT_NAME, exact: true }).click();
         await page.waitForURL(`/collections/${parentId}`, { timeout: 10_000 });
         await expect(page.getByRole('heading', { name: PARENT_NAME })).toBeVisible({ timeout: 10_000 });
 
@@ -143,14 +143,93 @@ test.describe('Issue #4388: Collection tree expanded state persists in URL', () 
     });
 });
 
+test.describe('Product group hierarchy workflow', () => {
+    test.describe.configure({ mode: 'serial' });
+
+    let parentId: string;
+    const PARENT_NAME = 'E2E Hierarchy Parent';
+    const CHILD_NAME = 'E2E Hierarchy Child';
+
+    test.beforeAll(async ({ browser }) => {
+        const page = await browser.newPage();
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const { createCollection } = await client.gql(
+            `mutation ($input: CreateCollectionInput!) {
+                createCollection(input: $input) { id }
+            }`,
+            {
+                input: {
+                    filters: [],
+                    translations: [
+                        {
+                            languageCode: 'en',
+                            name: PARENT_NAME,
+                            slug: 'e2e-hierarchy-parent',
+                            description: '',
+                        },
+                    ],
+                },
+            },
+        );
+        parentId = createCollection.id as string;
+        await page.close();
+    });
+
+    test.afterAll(async ({ browser }) => {
+        if (!parentId) return;
+        const page = await browser.newPage();
+        const client = new VendureAdminClient(page);
+        await client.login();
+        await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+            id: parentId,
+        });
+        await page.close();
+    });
+
+    test('creates a child product group from its parent row', async ({ page }) => {
+        await page.goto('/collections');
+        const parentRow = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
+
+        await parentRow
+            .getByRole('button', { name: `Add a child product group under ${PARENT_NAME}` })
+            .click();
+
+        await expect(page).toHaveURL(new RegExp(`/collections/new\\?parentId=${parentId}`));
+        await expect(page.getByRole('heading', { name: 'New child product group' })).toBeVisible();
+        await expect(page.getByText(PARENT_NAME, { exact: true }).first()).toBeVisible();
+
+        const detail = new BaseDetailPage(page, {
+            newPath: '/collections/new',
+            pathPrefix: '/collections/',
+            newTitle: 'New child product group',
+        });
+        await detail.fillInput('Product group name', CHILD_NAME);
+        await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', {
+            timeout: 5_000,
+        });
+        await page.getByRole('button', { name: 'Create child product group' }).click();
+        await detail.expectNavigatedToExisting();
+
+        const childId = new URL(page.url()).pathname.split('/').pop() ?? '';
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const { collection } = await client.gql(
+            `query ($id: ID!) { collection(id: $id) { id parent { id } } }`,
+            { id: childId },
+        );
+        expect(collection.parent.id).toBe(parentId);
+    });
+});
+
 createCrudTestSuite({
     entityName: 'collection',
     entityNamePlural: 'collections',
     listPath: '/collections',
     listTitle: 'Product groups',
-    newButtonLabel: 'New product group',
+    newButtonLabel: 'New top-level product group',
     newPageTitle: 'New product group',
-    createFields: [{ label: 'Name', value: 'E2E Test Collection' }],
+    createFields: [{ label: 'Product group name', value: 'E2E Test Collection' }],
     afterFillCreate: async (_page, detail) => {
         await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
     },
@@ -251,7 +330,7 @@ test.describe('Issue #4389: Collection form dirty state with filters', () => {
         await expect(dp.updateButton).toBeDisabled();
 
         // Edit the name
-        await dp.fillInput('Name', 'E2E Filter Test Updated');
+        await dp.fillInput('Product group name', 'E2E Filter Test Updated');
 
         // Update button should now be enabled
         await expect(dp.updateButton).toBeEnabled({ timeout: 5_000 });
@@ -270,7 +349,7 @@ test.describe('Issue #4389: Collection form dirty state with filters', () => {
         await page.keyboard.type('A test description');
 
         // Click elsewhere to blur and trigger change detection
-        await page.getByText('Filters').first().click();
+        await page.getByText('Product assignment').first().click();
 
         await expect(dp.updateButton).toBeEnabled({ timeout: 5_000 });
     });
@@ -282,7 +361,7 @@ test.describe('Issue #4389: Collection form dirty state with filters', () => {
         await expect(dp.updateButton).toBeDisabled();
 
         // Edit the name
-        await dp.fillInput('Name', 'E2E Filter Test Saved');
+        await dp.fillInput('Product group name', 'E2E Filter Test Saved');
         await expect(dp.updateButton).toBeEnabled({ timeout: 5_000 });
 
         // Save
@@ -294,7 +373,9 @@ test.describe('Issue #4389: Collection form dirty state with filters', () => {
         await expect(page.getByText('Filter product SKUs by attribute values')).toBeVisible({
             timeout: 10_000,
         });
-        await expect(dp.formItem('Name').getByRole('textbox')).toHaveValue('E2E Filter Test Saved');
+        await expect(dp.formItem('Product group name').getByRole('textbox')).toHaveValue(
+            'E2E Filter Test Saved',
+        );
     });
 });
 
@@ -336,10 +417,10 @@ test.describe('Issue #3548: Collection facet filter boolean args', () => {
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        await dp.fillInput('Name', 'E2E Boolean Arg Filter');
+        await dp.fillInput('Product group name', 'E2E Boolean Arg Filter');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
 
-        await page.getByRole('button', { name: /Add product group filter/i }).click();
+        await page.getByRole('button', { name: /Add automatic condition/i }).click();
         await page.getByRole('menuitem', { name: /Filter product SKUs by attribute values/i }).click();
         await page.getByRole('button', { name: /Add filter attribute values/i }).click();
         await page.getByPlaceholder('Search filter attribute values...').fill(facetValueName);
@@ -408,10 +489,10 @@ test.describe('Issue #4987: String list filter args preserve numeric values', ()
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        await dp.fillInput('Name', 'E2E String List Filter');
+        await dp.fillInput('Product group name', 'E2E String List Filter');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
 
-        await page.getByRole('button', { name: /Add product group filter/i }).click();
+        await page.getByRole('button', { name: /Add automatic condition/i }).click();
         await page.getByRole('menuitem', { name: /Filter by external IDs/i }).click();
 
         const listInput = page.getByPlaceholder('Type and press Enter or comma to add...');

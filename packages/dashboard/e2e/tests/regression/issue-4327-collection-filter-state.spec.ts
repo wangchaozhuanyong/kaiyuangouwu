@@ -21,11 +21,11 @@ test.describe('Issue #4327: Collection filters with same type share state', () =
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        await dp.fillInput('Name', 'Filter State Test Collection');
+        await dp.fillInput('Product group name', 'Filter State Test Collection');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
 
         // Add first "Filter by product variant name" filter
-        await page.getByRole('button', { name: /Add product group filter/i }).click();
+        await page.getByRole('button', { name: /Add automatic condition/i }).click();
         await page.getByRole('menuitem', { name: /Filter by product SKU name/i }).click();
 
         // Fill the first filter's term input (identified by input name attribute,
@@ -34,7 +34,7 @@ test.describe('Issue #4327: Collection filters with same type share state', () =
         await termInputs.first().fill('shirt');
 
         // Add second "Filter by product variant name" filter
-        await page.getByRole('button', { name: /Add product group filter/i }).click();
+        await page.getByRole('button', { name: /Add automatic condition/i }).click();
         await page.getByRole('menuitem', { name: /Filter by product SKU name/i }).click();
 
         // Fill the second filter's term with a DIFFERENT value

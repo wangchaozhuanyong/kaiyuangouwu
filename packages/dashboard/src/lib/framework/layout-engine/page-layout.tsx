@@ -194,6 +194,8 @@ export function PageContentWithOptionalForm({
 export type PageLayoutProps = {
     children: React.ReactNode;
     className?: string;
+    /** Places the narrow side column before or after the main column on desktop. */
+    sidePosition?: 'left' | 'right';
 };
 
 function isPageBlock(child: unknown): child is React.ReactElement<PageBlockProps> {
@@ -229,7 +231,7 @@ function getBlockColumn(child: React.ReactElement<PageBlockProps>): 'main' | 'si
  * @docsWeight 0
  * @since 3.3.0
  */
-export function PageLayout({ children, className }: Readonly<PageLayoutProps>) {
+export function PageLayout({ children, className, sidePosition = 'right' }: Readonly<PageLayoutProps>) {
     const page = usePage();
     const isMobile = useIsMobile();
     // Separate blocks into categories
@@ -349,8 +351,13 @@ export function PageLayout({ children, className }: Readonly<PageLayoutProps>) {
                     {fullWidthBlocks.length > 0 && (
                         <div className="@md/layout:col-span-5 space-y-4">{fullWidthBlocks}</div>
                     )}
+                    {sidePosition === 'left' && (
+                        <div className="@3xl/layout:col-span-1 space-y-4">{sideBlocks}</div>
+                    )}
                     <div className="@3xl/layout:col-span-3 space-y-4">{mainBlocks}</div>
-                    <div className="@3xl/layout:col-span-1 space-y-4">{sideBlocks}</div>
+                    {sidePosition === 'right' && (
+                        <div className="@3xl/layout:col-span-1 space-y-4">{sideBlocks}</div>
+                    )}
                 </div>
             )}
         </div>

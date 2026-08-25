@@ -112,10 +112,13 @@ export function CollectionContentsPreviewTable({
                         }}
                         customizeColumns={{
                             name: {
-                                header: 'Variant name',
+                                header: () => <Trans>Product SKU name</Trans>,
                                 cell: ({ row }) => {
                                     return (
-                                        <Button render={<Link to={`../../product-variants/${row.original.id}`} />} variant="ghost">
+                                        <Button
+                                            render={<Link to={`../../product-variants/${row.original.id}`} />}
+                                            variant="ghost"
+                                        >
                                             {row.original.name}{' '}
                                         </Button>
                                     );

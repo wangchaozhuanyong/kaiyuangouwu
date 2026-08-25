@@ -25,6 +25,8 @@ interface DeleteBulkActionProps {
     selection: any[];
     /** The table instance */
     table: any;
+    /** Optional entity-specific confirmation content. */
+    confirmationText?: React.ReactNode;
 }
 
 /**
@@ -79,6 +81,7 @@ export function DeleteBulkAction({
     invalidateQueries = [],
     selection,
     table,
+    confirmationText,
 }: Readonly<DeleteBulkActionProps>) {
     const { refetchPaginatedList } = usePaginatedList();
     const { i18n, t } = useLingui();
@@ -148,9 +151,11 @@ export function DeleteBulkAction({
             onClick={() => mutate({ ids: selection.map(s => s.id) })}
             label={<Trans>Delete</Trans>}
             confirmationText={
-                <Trans>
-                    Are you sure you want to delete {selection.length} {entityName}?
-                </Trans>
+                confirmationText ?? (
+                    <Trans>
+                        Are you sure you want to delete {selection.length} {entityName}?
+                    </Trans>
+                )
             }
             icon={TrashIcon}
         />

@@ -80,6 +80,8 @@ export const DuplicateCollectionsBulkAction: BulkActionComponent<any> = ({ selec
 };
 
 export const DeleteCollectionsBulkAction: BulkActionComponent<any> = ({ selection, table }) => {
+    const containsParentCollection = selection.some(collection => collection.children?.length > 0);
+
     return (
         <DeleteBulkAction
             mutationDocument={deleteCollectionsDocument}
@@ -88,6 +90,16 @@ export const DeleteCollectionsBulkAction: BulkActionComponent<any> = ({ selectio
             invalidateQueries={['childCollections']}
             selection={selection}
             table={table}
+            confirmationText={
+                containsParentCollection ? (
+                    <Trans>
+                        Deleting a parent product group also permanently deletes all of its child product
+                        groups. Are you sure you want to continue?
+                    </Trans>
+                ) : (
+                    <Trans>Are you sure you want to delete the selected product groups?</Trans>
+                )
+            }
         />
     );
 };

@@ -6,7 +6,7 @@ import { ProductVariant } from '../../entity/product-variant/product-variant.ent
 
 import { CollectionFilter } from './collection-filter';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const { customAlphabet } = require('nanoid');
 
 /**
@@ -279,7 +279,7 @@ export const variantIdCollectionFilter = new CollectionFilter({
             ],
             description: [
                 { languageCode: LanguageCode.en, value: 'Select the product SKUs included in this group.' },
-                { languageCode: LanguageCode.zh_Hans, value: '选择需要加入该商品分组的商品 SKU。' },
+                { languageCode: LanguageCode.zh_Hans, value: '选择需要加入该商品分类的商品 SKU。' },
             ],
             ui: {
                 component: 'product-multi-form-input',
@@ -323,7 +323,7 @@ export const productIdCollectionFilter = new CollectionFilter({
             ],
             description: [
                 { languageCode: LanguageCode.en, value: 'Select the products included in this group.' },
-                { languageCode: LanguageCode.zh_Hans, value: '选择需要加入该商品分组的商品。' },
+                { languageCode: LanguageCode.zh_Hans, value: '选择需要加入该商品分类的商品。' },
             ],
             ui: {
                 component: 'product-multi-form-input',

@@ -396,7 +396,26 @@ function CollectionListPage() {
                                 >
                                     {isExpanded ? <FolderOpen /> : <Folder />}
                                 </Button>
-                                <DetailPageButton id={original.id} label={original.name} />
+                                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                    <DetailPageButton id={original.id} label={original.name} />
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                                        render={
+                                            <Link
+                                                to="./new"
+                                                search={{ parentId: original.id }}
+                                                aria-label={t`Add a child product group under ${original.name}`}
+                                            />
+                                        }
+                                    >
+                                        <PlusIcon className="h-4 w-4" />
+                                        <span className="hidden @xl:inline">
+                                            <Trans>Add child</Trans>
+                                        </span>
+                                    </Button>
+                                </div>
                             </div>
                         );
                     },
@@ -540,9 +559,9 @@ function CollectionListPage() {
             disableDragAndDrop={!!searchTerm}
         >
             <ActionBarItem itemId="create-button" requiresPermission={['CreateCollection', 'CreateCatalog']}>
-                <Button render={<Link to="./new" />}>
+                <Button render={<Link to="./new" search={{}} />}>
                     <PlusIcon className="mr-2 h-4 w-4" />
-                    <Trans>New Collection</Trans>
+                    <Trans>New top-level product group</Trans>
                 </Button>
             </ActionBarItem>
         </ListPage>

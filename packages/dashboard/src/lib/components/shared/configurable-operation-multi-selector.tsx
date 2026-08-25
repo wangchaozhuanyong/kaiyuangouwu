@@ -51,6 +51,8 @@ export interface ConfigurableOperationMultiSelectorProps {
     showEnhancedDropdown?: boolean;
     /** Callback when validity of required args changes (all operations must be valid) */
     onValidityChange?: (isValid: boolean) => void;
+    /** Optional predicate used to limit which operation definitions are shown in the add menu. */
+    operationFilter?: (operation: ConfigurableOperationDefFragment) => boolean;
 }
 
 type QueryData = {
@@ -111,6 +113,7 @@ export function ConfigurableOperationMultiSelector({
     emptyText,
     showEnhancedDropdown = true,
     onValidityChange,
+    operationFilter,
 }: Readonly<ConfigurableOperationMultiSelectorProps>) {
     const { t } = useLingui();
     const { displayLanguage } = useUserSettings().settings;
@@ -169,6 +172,7 @@ export function ConfigurableOperationMultiSelector({
         }
         return undefined;
     }, data) as ConfigurableOperationDefFragment[] | undefined;
+    const availableOperations = operationFilter ? operations?.filter(operationFilter) : operations;
 
     const onOperationSelected = (operation: ConfigurableOperationDefFragment) => {
         const operationDef = operations?.find(
@@ -281,8 +285,8 @@ export function ConfigurableOperationMultiSelector({
                                 {dropdownTitle}
                             </div>
                         )}
-                        {operations?.length ? (
-                            operations.map((operation: ConfigurableOperationDefFragment) => (
+                        {availableOperations?.length ? (
+                            availableOperations.map((operation: ConfigurableOperationDefFragment) => (
                                 <DropdownMenuItem
                                     key={operation.code}
                                     onClick={() => onOperationSelected(operation)}

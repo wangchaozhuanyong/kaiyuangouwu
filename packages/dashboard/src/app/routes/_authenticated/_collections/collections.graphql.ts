@@ -184,6 +184,7 @@ export const collectionListForMoveDocument = graphql(`
                 position
                 isPrivate
                 parentId
+                productVariantCount
             }
             totalItems
         }

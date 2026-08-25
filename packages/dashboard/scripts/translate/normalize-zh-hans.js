@@ -29,7 +29,7 @@ const exactTranslations = new Map([
     ['Recommended workflow', '建议操作顺序'],
     ['Run pending updates', '执行待处理更新'],
     ['Running pending search index updates', '正在执行待处理的搜索索引更新'],
-    ['Search collections...', '搜索商品分组...'],
+    ['Search collections...', '搜索商品分类...'],
     ['Search coupon codes...', '搜索优惠码...'],
     ['Strikethrough', '删除线'],
     ['Table', '表格'],
@@ -209,7 +209,7 @@ const exactTranslations = new Map([
         'When enabled, prices entered for this store already include tax for the default tax region.',
         '开启后，该店铺录入的商品价格已包含默认税务区域的税费。',
     ],
-    ['Collections', '商品分组'],
+    ['Collections', '商品分类'],
     ['Completed', '已完成'],
     ['Commerce Admin', '电商管理后台'],
     ['Custom', '自定义'],
@@ -234,8 +234,8 @@ const exactTranslations = new Map([
     ['New asset', '新建素材'],
     ['New channel', '新建店铺'],
     ['New Channel', '新建店铺'],
-    ['New Collection', '新建商品分组'],
-    ['New collection', '新建商品分组'],
+    ['New Collection', '新建商品分类'],
+    ['New collection', '新建商品分类'],
     ['Payment handler', '支付处理器'],
     ['Pending', '等待执行'],
     ['Retrying', '正在重试'],
@@ -397,7 +397,7 @@ const exactTranslations = new Map([
     ['nav.assets', '素材库'],
     ['nav.catalog', '商品管理'],
     ['nav.channels', '店铺'],
-    ['nav.collections', '商品分组'],
+    ['nav.collections', '商品分类'],
     ['nav.countries', '国家或地区'],
     ['nav.customerGroups', '客户分组'],
     ['nav.customers', '客户'],
@@ -429,8 +429,8 @@ const exactTranslations = new Map([
 
 const explicitIdTranslations = new Map([
     ['entity.facetValues', '筛选属性值'],
-    ['jobQueue.applyCollectionFilters', '更新商品分组匹配'],
-    ['jobQueue.applyCollectionFilters.description', '根据筛选规则重新计算商品分组内容'],
+    ['jobQueue.applyCollectionFilters', '更新商品分类匹配'],
+    ['jobQueue.applyCollectionFilters.description', '根据筛选规则重新计算商品分类内容'],
     ['jobQueue.cleanSessions', '清理过期登录会话'],
     ['jobQueue.cleanSessions.description', '移除已过期的后台用户和客户登录会话'],
     ['jobQueue.custom', '自定义后台任务'],
@@ -487,7 +487,7 @@ function normalizeTranslation(entry) {
             .replaceAll('API key', 'API 密钥');
     }
     if (/collection/i.test(entry.msgid)) {
-        value = value.replaceAll('集合', '商品分组');
+        value = value.replaceAll('集合', '商品分类');
     }
     if (/facet/i.test(entry.msgid)) {
         value = value

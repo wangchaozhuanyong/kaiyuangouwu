@@ -68,7 +68,13 @@ function registerActionBarItem(id: string, position?: ActionBarItemPosition, pag
     });
 }
 
-function renderPageLayout(children: React.ReactNode, { isDesktop = true } = {}) {
+function renderPageLayout(
+    children: React.ReactNode,
+    {
+        isDesktop = true,
+        sidePosition = 'right',
+    }: { isDesktop?: boolean; sidePosition?: 'left' | 'right' } = {},
+) {
     useIsMobileMock.mockReturnValue(!isDesktop);
     const noop = () => undefined;
     const contextValue = {
@@ -100,7 +106,7 @@ function renderPageLayout(children: React.ReactNode, { isDesktop = true } = {}) 
     return renderToStaticMarkup(
         <UserSettingsContext.Provider value={contextValue}>
             <PageContext.Provider value={{ pageId: 'customer-list' }}>
-                <PageLayout>{children}</PageLayout>
+                <PageLayout sidePosition={sidePosition}>{children}</PageLayout>
             </PageContext.Provider>
         </UserSettingsContext.Provider>,
     );
@@ -246,6 +252,22 @@ describe('PageLayout', () => {
         );
 
         expect(getRenderedBlockIds(markup)).toEqual(['page-block-full']);
+    });
+
+    it('can place the side column before the main column on desktop', () => {
+        const markup = renderPageLayout(
+            <>
+                <PageBlock column="main" blockId="main-block">
+                    <div data-testid="page-block-main">main</div>
+                </PageBlock>
+                <PageBlock column="side" blockId="side-block">
+                    <div data-testid="page-block-side">side</div>
+                </PageBlock>
+            </>,
+            { isDesktop: true, sidePosition: 'left' },
+        );
+
+        expect(getRenderedBlockIds(markup)).toEqual(['page-block-side', 'page-block-main']);
     });
 
     it("won't render blocks without required permissions", () => {
