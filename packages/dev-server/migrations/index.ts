@@ -36,6 +36,7 @@ import { AddAutoCardBilingualInstructions1787608800000 } from './1787608800000-a
 import { CompleteBilingualServiceCatalog1787612400000 } from './1787612400000-complete-bilingual-service-catalog';
 import { AddManualDigitalServiceMode1787616000000 } from './1787616000000-add-manual-digital-service-mode';
 import { AddCouponLifecycle1787677200000 } from './1787677200000-add-coupon-lifecycle';
+import { AlignAfterSalesAutoCardSchema1787680800000 } from './1787680800000-align-after-sales-auto-card-schema';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -76,4 +77,5 @@ export const devServerMigrations = [
     CompleteBilingualServiceCatalog1787612400000,
     AddManualDigitalServiceMode1787616000000,
     AddCouponLifecycle1787677200000,
+    AlignAfterSalesAutoCardSchema1787680800000,
 ];
