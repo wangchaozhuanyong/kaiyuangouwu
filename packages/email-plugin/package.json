@@ -34,6 +34,8 @@
         "nodemailer": "^9.0.1"
     },
     "devDependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/testing": "^11.0.12",
         "@types/dateformat": "^3.0.1",
         "@types/express": "^5.0.1",
         "@types/fs-extra": "^11.0.4",

@@ -1,3 +1,21 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Bun's hoisted linker can install multiple physical copies of the same Nest
+ * version for different peer contexts. Tests that combine a workspace plugin
+ * with `@vendure/core` must use Core's Nest instance so injection tokens such
+ * as `ModuleRef` keep object identity.
+ */
+export const nestTestAliases = {
+    '@nestjs/common': path.join(repoRoot, 'packages/core/node_modules/@nestjs/common'),
+    '@nestjs/core': path.join(repoRoot, 'packages/core/node_modules/@nestjs/core'),
+    '@nestjs/testing': path.join(repoRoot, 'packages/core/node_modules/@nestjs/testing'),
+    '@nestjs/typeorm': path.join(repoRoot, 'packages/core/node_modules/@nestjs/typeorm'),
+};
+
 /**
  * Shared settings for package unit-test suites.
  *

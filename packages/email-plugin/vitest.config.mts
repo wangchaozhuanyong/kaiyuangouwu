@@ -2,9 +2,12 @@ import path from 'path';
 import swc from 'unplugin-swc';
 import { defineConfig } from 'vitest/config';
 
-import { sharedTestConfig } from '../../vitest.shared.mjs';
+import { nestTestAliases, sharedTestConfig } from '../../vitest.shared.mjs';
 
 export default defineConfig({
+    resolve: {
+        alias: nestTestAliases,
+    },
     test: {
         ...sharedTestConfig,
         // Type-level tests (`*.spec-d.ts`) are run via `vitest --typecheck`.

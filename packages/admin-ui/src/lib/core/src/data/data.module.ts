@@ -4,7 +4,7 @@ import { ApolloClient, ApolloLink, InMemoryCache } from '@apollo/client/core';
 import { setContext } from '@apollo/client/link/context';
 import { LocalState } from '@apollo/client/local-state';
 import { provideApollo } from 'apollo-angular';
-import createUploadLink from 'apollo-upload-client/createUploadLink.mjs';
+import UploadHttpLink from 'apollo-upload-client/UploadHttpLink.mjs';
 
 import { getAppConfig } from '../app.config';
 import { introspectionResult } from '../common/introspection-result-wrapper';
@@ -76,7 +76,7 @@ export function createApollo(): ApolloClient.Options {
                 headers['Apollo-Require-Preflight'] = 'true';
                 return { headers };
             }),
-            createUploadLink({
+            new UploadHttpLink({
                 uri: `${serverLocation}/${adminApiPath}`,
                 fetch: fetchAdapter.fetch,
             }),
