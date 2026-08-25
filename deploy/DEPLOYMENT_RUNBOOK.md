@@ -81,6 +81,7 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 6. **代码只做快进更新**：服务器仓库只允许 `git merge --ff-only origin/main`，正常发布禁止 `reset --hard`、强制切分支或覆盖式同步。数据库、`.env`、上传资产和数字交付文件不参与代码同步。
 7. **先记录、后原子切换**：先记录 `kaiyuangouwu-current` 指向的上一个已验证产物，再在同一文件系统中原子替换该符号链接。禁止直接向正在服务的 `dist` 或 `node_modules` 增量复制。
 8. **验证成功才登记版本**：PM2 重启及前台、后台、API、静态资源检查全部通过后，才原子更新 `/var/www/kaiyuangouwu-releases/current-sha`。最终必须同时满足服务器 `git rev-parse HEAD == TARGET_SHA`、版本标记等于 `TARGET_SHA`、线上健康检查成功。
+9. **禁止生产数据填充命令**：生产机不得执行 `packages/dev-server` 的 `populate`、`seed:storefront-demo` 或任何调用 `clearAllTables()` 的开发命令。`populate` 会先清空全部业务表；代码门禁只允许它在 `NODE_ENV=development|test` 且数据库名不含生产标识时运行。
 
 显式回滚不走正常发布通道。只有在记录回滚原因、指定完整 `ROLLBACK_SHA` 并人工确认后才允许回到旧版本；不得把 `origin/main` 强制回退。回滚完成后同样要验证 Git SHA、构建产物清单和线上健康状态。
 

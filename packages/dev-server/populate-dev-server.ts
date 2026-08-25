@@ -7,15 +7,16 @@ import path from 'path';
 
 import { initialData } from '../core/mock-data/data-sources/initial-data';
 
-import { devConfig } from './dev-config';
+import { assertSafeDevPopulateEnvironment } from './populate-safety';
 
 /* eslint-disable no-console */
 
 /**
  * A CLI script which populates the dev database with deterministic random data.
  */
-if (require.main === module) {
-    // Running from command line
+async function populateDevDatabase(): Promise<void> {
+    assertSafeDevPopulateEnvironment();
+    const { devConfig } = await import('./dev-config');
     const populateConfig = mergeConfig(
         defaultConfig,
         mergeConfig(devConfig, {
@@ -29,28 +30,28 @@ if (require.main === module) {
             customFields: {},
         }),
     );
-    clearAllTables(populateConfig, true)
-        .then(() =>
-            populate(
-                () =>
-                    bootstrap(populateConfig).then(async app => {
-                        await app.get(JobQueueService).start();
-                        return app;
-                    }),
-                initialData,
-                path.join(__dirname, '../create/assets/products.csv'),
-            ),
-        )
-        .then(async app => {
-            console.log('populating customers...');
-            await populateCustomers(app, 10, message => Logger.error(message));
-            return app.close();
-        })
-        .then(
-            () => process.exit(0),
-            err => {
-                console.log(err);
-                process.exit(1);
-            },
-        );
+    await clearAllTables(populateConfig, true);
+    const app = await populate(
+        () =>
+            bootstrap(populateConfig).then(async bootstrappedApp => {
+                await bootstrappedApp.get(JobQueueService).start();
+                return bootstrappedApp;
+            }),
+        initialData,
+        path.join(__dirname, '../create/assets/products.csv'),
+    );
+    console.log('populating customers...');
+    await populateCustomers(app, 10, message => Logger.error(message));
+    await app.close();
+}
+
+if (require.main === module) {
+    // Running from command line
+    populateDevDatabase().then(
+        () => process.exit(0),
+        err => {
+            console.log(err);
+            process.exit(1);
+        },
+    );
 }
