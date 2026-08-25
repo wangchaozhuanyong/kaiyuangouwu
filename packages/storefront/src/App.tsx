@@ -2714,8 +2714,6 @@ function HomePage(props: HomePageProps) {
     const showNotice = Boolean(noticeBlock) || !configuredBlockTypes.includes('NOTICE');
     const showTrustBar = Boolean(trustBlock) || !configuredBlockTypes.includes('TRUST_BAR');
     const showQuickLinks = Boolean(quickBlock) || !configuredBlockTypes.includes('QUICK_LINKS');
-    const showCoreCategories =
-        Boolean(coreCategoriesBlock) || !configuredBlockTypes.includes('CORE_CATEGORIES');
     const showCoupons = Boolean(couponBlock) || !configuredBlockTypes.includes('COUPONS');
     const showFlashSale = Boolean(flashSaleBlock) || !configuredBlockTypes.includes('FLASH_SALE');
     const showBestSellers = Boolean(bestSellersBlock) || !configuredBlockTypes.includes('BEST_SELLERS');
@@ -3203,13 +3201,10 @@ function HomePage(props: HomePageProps) {
                         />
                     )}
 
-                    {showCoreCategories ? (
+                    {coreCategoriesBlock ? (
                         <HomeDualCategoryShowcase
                             language={language}
-                            collections={collections}
                             block={coreCategoriesBlock}
-                            onNavigate={onNavigate}
-                            onCategorySelect={onCategorySelect}
                             onContentTarget={onContentTarget}
                         />
                     ) : null}
@@ -3498,124 +3493,106 @@ function useFlashSaleCountdown(endsAt: string | null, language: StorefrontLangua
         .join(' : ');
 }
 
-function HomeDualCategoryShowcase({
+const dualCardTemplateIds = [
+    'tech-duo',
+    'ocean-cobalt',
+    'forest-amber',
+    'graphite-lime',
+    'berry-slate',
+] as const;
+
+type DualCardTemplateId = (typeof dualCardTemplateIds)[number];
+
+export function HomeDualCategoryShowcase({
     language,
-    collections,
     block,
-    onNavigate,
-    onCategorySelect,
     onContentTarget,
 }: {
     language: StorefrontLanguage;
-    collections: CollectionSummary[];
-    block?: StorefrontContentBlock;
-    onNavigate: (route: RouteState) => void;
-    onCategorySelect: (collection: CollectionSummary) => void;
+    block: StorefrontContentBlock;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
-    if (block?.items.length) {
-        return (
-            <section
-                className="home-dual-showcase"
-                aria-label={block.title || (isZh ? '核心品类精选' : 'Core Categories')}
-            >
-                {block.items.map((item, index) => {
-                    const disabled = item.targetType === 'NONE' || !item.targetValue;
-                    const digitalStyle = index % 2 === 1;
-                    return (
-                        <button
-                            key={item.id}
-                            type="button"
-                            className={`showcase-card ${digitalStyle ? 'is-digital' : 'is-hardware'}${item.imageUrl ? ' has-managed-image' : ''}`}
-                            disabled={disabled}
-                            style={
-                                item.imageUrl
-                                    ? {
-                                          backgroundImage: [
-                                              'linear-gradient(145deg, rgba(12, 25, 41, 0.88), rgba(15, 23, 42, 0.78))',
-                                              `url(${JSON.stringify(storefrontWebpUrl(item.imageUrl, 'card'))})`,
-                                          ].join(', '),
-                                          backgroundPosition: 'center',
-                                          backgroundSize: 'cover',
-                                      }
-                                    : undefined
-                            }
-                            onClick={() => onContentTarget(item.targetType, item.targetValue)}
-                        >
-                            <div className="showcase-content">
-                                <span className={`showcase-badge${digitalStyle ? ' is-digital-badge' : ''}`}>
-                                    {block.subtitle || (isZh ? '核心品类' : 'Core category')}
-                                </span>
-                                <h3>{item.label}</h3>
-                                {item.description ? <p>{item.description}</p> : null}
-                                {!disabled ? (
-                                    <span className="showcase-link">
-                                        {block.ctaLabel || (isZh ? '查看分类' : 'View category')}{' '}
-                                        <ChevronRight aria-hidden="true" />
-                                    </span>
-                                ) : null}
-                            </div>
-                        </button>
-                    );
-                })}
-            </section>
-        );
-    }
+    if (!block.items.length) return null;
+    const template = dualCardTemplateSetting(block.settings);
+
     return (
-        <section className="home-dual-showcase" aria-label={isZh ? '核心品类精选' : 'Core Categories'}>
-            <button
-                type="button"
-                className="showcase-card is-hardware"
-                onClick={() => {
-                    const hardwareCol = collections.find(
-                        c =>
-                            c.slug.includes('workstation') ||
-                            c.slug.includes('computing') ||
-                            c.slug.includes('setup') ||
-                            c.slug.includes('input'),
-                    );
-                    if (hardwareCol) {
-                        onCategorySelect(hardwareCol);
-                    } else {
-                        onNavigate({ name: 'category' });
-                    }
-                }}
-            >
-                <div className="showcase-content">
-                    <span className="showcase-badge">{isZh ? '桌面数码' : 'Desk Gear'}</span>
-                    <h3>{isZh ? '极简办公工作站' : 'Minimal Workstation'}</h3>
-                    <p>{isZh ? '精选平板、4K显示器与机械键盘' : 'Tablets, 4K displays & keyboards'}</p>
-                    <span className="showcase-link">
-                        {isZh ? '探索硬件' : 'Explore gear'} <ChevronRight aria-hidden="true" />
-                    </span>
-                </div>
-            </button>
-            <button
-                type="button"
-                className="showcase-card is-digital"
-                onClick={() => {
-                    const digitalCol = collections.find(c => c.slug.includes('digital'));
-                    if (digitalCol) {
-                        onCategorySelect(digitalCol);
-                    } else {
-                        onNavigate({ name: 'category' });
-                    }
-                }}
-            >
-                <div className="showcase-content">
-                    <span className="showcase-badge is-digital-badge">
-                        {isZh ? '数字生产力' : 'AI & Digital'}
-                    </span>
-                    <h3>{isZh ? 'AI 效率与知识资产' : 'AI & Knowledge Tools'}</h3>
-                    <p>{isZh ? '提示词库、实战课与文案工具' : 'Prompts, toolkits & templates'}</p>
-                    <span className="showcase-link">
-                        {isZh ? '即刻获取' : 'Instant access'} <ChevronRight aria-hidden="true" />
-                    </span>
-                </div>
-            </button>
+        <section
+            className="home-dual-showcase"
+            data-card-template={template}
+            aria-label={block.title || (isZh ? '核心品类精选' : 'Core Categories')}
+        >
+            {block.items.slice(0, 2).map(item => {
+                const disabled = item.targetType === 'NONE' || !item.targetValue;
+                const badgeLabel = localizedDualCardItemSetting(
+                    item.settings,
+                    'badgeLabel',
+                    language,
+                    block.subtitle || (isZh ? '核心品类' : 'Core category'),
+                );
+                const ctaLabel = localizedDualCardItemSetting(
+                    item.settings,
+                    'ctaLabel',
+                    language,
+                    block.ctaLabel || (isZh ? '查看分类' : 'View category'),
+                );
+                return (
+                    <button
+                        key={item.id}
+                        type="button"
+                        className={`showcase-card${item.imageUrl ? ' has-managed-image' : ''}`}
+                        disabled={disabled}
+                        style={
+                            item.imageUrl
+                                ? {
+                                      backgroundImage: [
+                                          'linear-gradient(145deg, rgba(12, 25, 41, 0.88), rgba(15, 23, 42, 0.78))',
+                                          `url(${JSON.stringify(storefrontWebpUrl(item.imageUrl, 'card'))})`,
+                                      ].join(', '),
+                                      backgroundPosition: 'center',
+                                      backgroundSize: 'cover',
+                                  }
+                                : undefined
+                        }
+                        onClick={() => onContentTarget(item.targetType, item.targetValue)}
+                    >
+                        <div className="showcase-content">
+                            {badgeLabel ? <span className="showcase-badge">{badgeLabel}</span> : null}
+                            <h3>{item.label}</h3>
+                            {item.description ? <p>{item.description}</p> : null}
+                            {!disabled && ctaLabel ? (
+                                <span className="showcase-link">
+                                    {ctaLabel} <ChevronRight aria-hidden="true" />
+                                </span>
+                            ) : null}
+                        </div>
+                    </button>
+                );
+            })}
         </section>
     );
+}
+
+function dualCardTemplateSetting(settings: Record<string, unknown> | null | undefined): DualCardTemplateId {
+    const value = settings?.dualCardTemplate;
+    return dualCardTemplateIds.includes(value as DualCardTemplateId)
+        ? (value as DualCardTemplateId)
+        : 'tech-duo';
+}
+
+function localizedDualCardItemSetting(
+    settings: Record<string, unknown> | null | undefined,
+    field: 'badgeLabel' | 'ctaLabel',
+    language: StorefrontLanguage,
+    fallback: string,
+): string {
+    const preferredKey = `${field}${language === 'zh' ? 'Zh' : 'En'}`;
+    const sourceKey = `${field}Zh`;
+    const preferred = settings?.[preferredKey];
+    const source = settings?.[sourceKey];
+    if (typeof preferred === 'string' && preferred.trim()) return preferred.trim();
+    if (typeof source === 'string' && source.trim()) return source.trim();
+    return fallback;
 }
 
 function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage }) {

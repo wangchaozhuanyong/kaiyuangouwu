@@ -620,7 +620,9 @@ img {
 
 @media (prefers-reduced-motion: reduce) {
     .safe-image,
-    .notice-strip span {
+    .notice-strip span,
+    .showcase-card,
+    .showcase-card::after {
         transition: none;
         animation: none;
     }
@@ -1807,16 +1809,29 @@ img.fatal-error-mark {
 }
 
 .showcase-card {
+    --showcase-accent-rgb: 34 211 238;
+    --showcase-accent-text: #67e8f9;
+    --showcase-card-background: linear-gradient(145deg, #0c1929, #111d2e 52%, #0e2a3d);
+    --showcase-muted-text: #b4c1d1;
+
     min-height: 142px;
     padding: 14px 12px 12px;
     border-radius: 14px;
+    border: 1px solid rgb(var(--showcase-accent-rgb) / 0.24);
     position: relative;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    background: var(--showcase-card-background);
+    box-shadow:
+        0 4px 14px -3px rgb(15 23 42 / 0.42),
+        inset 0 1px 0 rgb(var(--showcase-accent-rgb) / 0.09);
     text-align: left;
-    transition: all 280ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+        transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+        border-color 220ms ease,
+        box-shadow 220ms ease;
     cursor: pointer;
 }
 
@@ -1825,7 +1840,7 @@ img.fatal-error-mark {
     position: absolute;
     inset: 0;
     border-radius: 14px;
-    opacity: 0.12;
+    opacity: 0.62;
     pointer-events: none;
     z-index: 0;
 }
@@ -1837,7 +1852,8 @@ img.fatal-error-mark {
     height: 90px;
     border-radius: 50%;
     filter: blur(35px);
-    opacity: 0.25;
+    background: rgb(var(--showcase-accent-rgb));
+    opacity: 0.22;
     pointer-events: none;
     z-index: 0;
     transition: opacity 280ms ease;
@@ -1845,6 +1861,19 @@ img.fatal-error-mark {
 
 .showcase-card:hover {
     transform: translateY(-2px);
+    border-color: rgb(var(--showcase-accent-rgb) / 0.48);
+    box-shadow:
+        0 7px 24px -4px rgb(var(--showcase-accent-rgb) / 0.2),
+        inset 0 1px 0 rgb(var(--showcase-accent-rgb) / 0.14);
+}
+
+.showcase-card:active {
+    transform: translateY(0) scale(0.985);
+}
+
+.showcase-card:focus-visible {
+    outline: 2px solid var(--showcase-accent-text);
+    outline-offset: 2px;
 }
 
 .showcase-card:disabled {
@@ -1853,87 +1882,109 @@ img.fatal-error-mark {
 
 .showcase-card:disabled:hover {
     transform: none;
+    border-color: rgb(var(--showcase-accent-rgb) / 0.24);
+    box-shadow:
+        0 4px 14px -3px rgb(15 23 42 / 0.42),
+        inset 0 1px 0 rgb(var(--showcase-accent-rgb) / 0.09);
 }
 
 .showcase-card:hover::after {
     opacity: 0.4;
 }
 
-/* Hardware card — deep navy with cyan circuit glow */
-.showcase-card.is-hardware {
-    background: linear-gradient(145deg, #0c1929 0%, #111d2e 50%, #0e2a3d 100%);
-    border: 1px solid rgba(34, 211, 238, 0.2);
-    box-shadow:
-        0 4px 14px -3px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(34, 211, 238, 0.08);
-}
-
-.showcase-card.is-hardware::before {
+.showcase-card:nth-child(odd)::before {
     background:
         linear-gradient(
             90deg,
             transparent 48%,
-            rgba(34, 211, 238, 0.07) 49%,
-            rgba(34, 211, 238, 0.07) 51%,
+            rgb(var(--showcase-accent-rgb) / 0.12) 49%,
+            rgb(var(--showcase-accent-rgb) / 0.12) 51%,
             transparent 52%
         ),
         linear-gradient(
             0deg,
             transparent 48%,
-            rgba(34, 211, 238, 0.07) 49%,
-            rgba(34, 211, 238, 0.07) 51%,
+            rgb(var(--showcase-accent-rgb) / 0.12) 49%,
+            rgb(var(--showcase-accent-rgb) / 0.12) 51%,
             transparent 52%
         );
     background-size: 22px 22px;
 }
 
-.showcase-card.is-hardware::after {
-    background: #22d3ee;
-    right: -20px;
-    top: -20px;
-}
-
-.showcase-card.is-hardware:hover {
-    border-color: rgba(34, 211, 238, 0.45);
-    box-shadow:
-        0 6px 24px -2px rgba(34, 211, 238, 0.15),
-        0 0 0 1px rgba(34, 211, 238, 0.08),
-        inset 0 1px 0 rgba(34, 211, 238, 0.12);
-}
-
-/* Digital card — deep purple with violet neural glow */
-.showcase-card.is-digital {
-    background: linear-gradient(145deg, #1a1035 0%, #150d2e 50%, #0f172a 100%);
-    border: 1px solid rgba(167, 139, 250, 0.2);
-    box-shadow:
-        0 4px 14px -3px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(167, 139, 250, 0.08);
-}
-
-.showcase-card.is-digital::before {
+.showcase-card:nth-child(even)::before {
     background:
-        radial-gradient(circle 1.5px at 50% 50%, rgba(167, 139, 250, 0.18) 0%, transparent 100%),
-        radial-gradient(circle 1px at 25% 75%, rgba(167, 139, 250, 0.1) 0%, transparent 100%),
-        radial-gradient(circle 1px at 80% 30%, rgba(167, 139, 250, 0.1) 0%, transparent 100%);
+        radial-gradient(circle 1.5px at 50% 50%, rgb(var(--showcase-accent-rgb) / 0.28) 0%, transparent 100%),
+        radial-gradient(circle 1px at 25% 75%, rgb(var(--showcase-accent-rgb) / 0.18) 0%, transparent 100%),
+        radial-gradient(circle 1px at 80% 30%, rgb(var(--showcase-accent-rgb) / 0.18) 0%, transparent 100%);
     background-size:
         28px 28px,
         35px 35px,
         42px 42px;
-    opacity: 0.6;
 }
 
-.showcase-card.is-digital::after {
-    background: #a78bfa;
+.showcase-card::after {
     right: -20px;
     top: -20px;
 }
 
-.showcase-card.is-digital:hover {
-    border-color: rgba(167, 139, 250, 0.45);
-    box-shadow:
-        0 6px 24px -2px rgba(139, 92, 246, 0.15),
-        0 0 0 1px rgba(167, 139, 250, 0.08),
-        inset 0 1px 0 rgba(167, 139, 250, 0.12);
+.home-dual-showcase[data-card-template='tech-duo'] .showcase-card:nth-child(odd) {
+    --showcase-accent-rgb: 34 211 238;
+    --showcase-accent-text: #67e8f9;
+    --showcase-card-background: linear-gradient(145deg, #0c1929, #111d2e 52%, #0e2a3d);
+}
+
+.home-dual-showcase[data-card-template='tech-duo'] .showcase-card:nth-child(even) {
+    --showcase-accent-rgb: 167 139 250;
+    --showcase-accent-text: #c4b5fd;
+    --showcase-card-background: linear-gradient(145deg, #1a1035, #150d2e 52%, #0f172a);
+}
+
+.home-dual-showcase[data-card-template='ocean-cobalt'] .showcase-card:nth-child(odd) {
+    --showcase-accent-rgb: 125 211 252;
+    --showcase-accent-text: #bae6fd;
+    --showcase-card-background: linear-gradient(145deg, #071d3b, #0b2e59 52%, #0b446f);
+}
+
+.home-dual-showcase[data-card-template='ocean-cobalt'] .showcase-card:nth-child(even) {
+    --showcase-accent-rgb: 147 197 253;
+    --showcase-accent-text: #bfdbfe;
+    --showcase-card-background: linear-gradient(145deg, #111b4d, #192b71 52%, #243c8a);
+}
+
+.home-dual-showcase[data-card-template='forest-amber'] .showcase-card:nth-child(odd) {
+    --showcase-accent-rgb: 110 231 183;
+    --showcase-accent-text: #a7f3d0;
+    --showcase-card-background: linear-gradient(145deg, #102a24, #14362d 52%, #1b4638);
+}
+
+.home-dual-showcase[data-card-template='forest-amber'] .showcase-card:nth-child(even) {
+    --showcase-accent-rgb: 252 211 77;
+    --showcase-accent-text: #fde68a;
+    --showcase-card-background: linear-gradient(145deg, #342213, #432d18 52%, #2a1c14);
+}
+
+.home-dual-showcase[data-card-template='graphite-lime'] .showcase-card:nth-child(odd) {
+    --showcase-accent-rgb: 190 242 100;
+    --showcase-accent-text: #d9f99d;
+    --showcase-card-background: linear-gradient(145deg, #181b20, #22262d 52%, #2c313a);
+}
+
+.home-dual-showcase[data-card-template='graphite-lime'] .showcase-card:nth-child(even) {
+    --showcase-accent-rgb: 94 234 212;
+    --showcase-accent-text: #99f6e4;
+    --showcase-card-background: linear-gradient(145deg, #111f20, #1d2b2a 52%, #263735);
+}
+
+.home-dual-showcase[data-card-template='berry-slate'] .showcase-card:nth-child(odd) {
+    --showcase-accent-rgb: 253 164 175;
+    --showcase-accent-text: #fecdd3;
+    --showcase-card-background: linear-gradient(145deg, #31151e, #421b27 52%, #2c1722);
+}
+
+.home-dual-showcase[data-card-template='berry-slate'] .showcase-card:nth-child(even) {
+    --showcase-accent-rgb: 147 197 253;
+    --showcase-accent-text: #bfdbfe;
+    --showcase-card-background: linear-gradient(145deg, #18212f, #222d3e 52%, #26354a);
 }
 
 .showcase-content {
@@ -1947,20 +1998,16 @@ img.fatal-error-mark {
     align-self: flex-start;
     padding: 2.5px 8px;
     border-radius: 6px;
-    background: rgba(34, 211, 238, 0.12);
-    color: #67e8f9;
-    border: 1px solid rgba(34, 211, 238, 0.3);
+    max-width: 100%;
+    overflow: hidden;
+    background: rgb(var(--showcase-accent-rgb) / 0.13);
+    color: var(--showcase-accent-text);
+    border: 1px solid rgb(var(--showcase-accent-rgb) / 0.34);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.04em;
-    text-shadow: 0 0 8px rgba(34, 211, 238, 0.3);
-}
-
-.showcase-badge.is-digital-badge {
-    background: rgba(167, 139, 250, 0.12);
-    color: #c4b5fd;
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    text-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .showcase-card h3 {
@@ -1975,7 +2022,7 @@ img.fatal-error-mark {
     margin: 0;
     font-size: 11.5px;
     line-height: 1.4;
-    color: #94a3b8;
+    color: var(--showcase-muted-text);
     font-weight: 500;
 }
 
@@ -1986,16 +2033,8 @@ img.fatal-error-mark {
     gap: 3px;
     font-size: 12px;
     font-weight: 700;
-}
-
-.showcase-card.is-hardware .showcase-link {
-    color: #22d3ee;
-    text-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
-}
-
-.showcase-card.is-digital .showcase-link {
-    color: #a78bfa;
-    text-shadow: 0 0 10px rgba(167, 139, 250, 0.3);
+    color: var(--showcase-accent-text);
+    white-space: nowrap;
 }
 
 .showcase-link svg {

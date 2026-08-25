@@ -61,6 +61,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { applyCoreCategoryDefaults, dualCardTemplateId, dualCardTemplates } from './dual-card-templates';
 import {
     ContentBlock,
     ContentBlockTranslation,
@@ -109,6 +110,7 @@ const zhCopy = {
     title: '店铺装修',
     description: '管理当前店铺的首页内容、条款和客服信息。切换店铺后会自动读取对应 Channel。',
     add: '新建区块',
+    configureDualCards: '配置双卡片',
     empty: '当前店铺还没有装修内容',
     emptyHint: '新建第一个区块后，客户端会按启用状态和生效时间自动展示。',
     loadError: '装修内容加载失败',
@@ -148,6 +150,9 @@ const zhCopy = {
     removeImage: '移除图片',
     noImage: '暂未选择图片',
     displaySettings: '显示设置',
+    dualCardTemplate: '双卡片颜色模板',
+    dualCardTemplateHint: '模板已包含背景、边框、强调色与纹理；切换模板不会改变文字和跳转目标。',
+    dualCardDefault: '默认',
     displayCount: '显示商品数量',
     displayCountHint: '客户端首屏显示 1 到 50 个商品。',
     noticeInterval: '公告滚动间隔',
@@ -171,8 +176,10 @@ const zhCopy = {
     items: '区块条目',
     addItem: '添加条目',
     item: '条目',
+    itemBadge: '顶部标签',
     itemLabel: '名称',
     itemDescription: '说明',
+    itemCta: '按钮文字',
     removeItem: '移除条目',
     preview: '移动端预览',
     previewEmpty: '填写标题后预览会显示在这里',
@@ -199,6 +206,7 @@ const enCopy: typeof zhCopy = {
     description:
         'Manage homepage content, legal text and support details for the active store. Switching stores loads its Channel content.',
     add: 'New block',
+    configureDualCards: 'Configure dual cards',
     empty: 'This store has no content blocks',
     emptyHint: 'Create the first block. The storefront respects its status and schedule automatically.',
     loadError: 'Could not load storefront content',
@@ -239,6 +247,10 @@ const enCopy: typeof zhCopy = {
     removeImage: 'Remove image',
     noImage: 'No image selected',
     displaySettings: 'Display settings',
+    dualCardTemplate: 'Dual-card color template',
+    dualCardTemplateHint:
+        'Templates include backgrounds, borders, accents and textures. Changing templates keeps your copy and targets.',
+    dualCardDefault: 'Default',
     displayCount: 'Number of products',
     displayCountHint: 'Show 1 to 50 products in this storefront section.',
     noticeInterval: 'Notice rotation interval',
@@ -262,8 +274,10 @@ const enCopy: typeof zhCopy = {
     items: 'Block items',
     addItem: 'Add item',
     item: 'Item',
+    itemBadge: 'Top label',
     itemLabel: 'Label',
     itemDescription: 'Description',
+    itemCta: 'Button label',
     removeItem: 'Remove item',
     preview: 'Mobile preview',
     previewEmpty: 'Enter a title to see the preview',
@@ -345,6 +359,7 @@ function StorefrontContentPage() {
         enabled: Boolean(activeChannel?.id),
     });
     const blocks = contentQuery.data?.storefrontContentBlocks ?? [];
+    const coreCategoriesBlock = blocks.find(block => block.type === 'CORE_CATEGORIES');
     const refresh = () => queryClient.invalidateQueries({ queryKey });
     const heroAutoplayIntervalSeconds = Number(heroAutoplayIntervalInput);
     const heroAutoplayIntervalValid =
@@ -420,6 +435,19 @@ function StorefrontContentPage() {
             <PageTitle>{text.title}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
+                    <Button
+                        variant="outline"
+                        onClick={() =>
+                            setDraft(
+                                coreCategoriesBlock
+                                    ? applyCoreCategoryDefaults(cloneBlock(coreCategoriesBlock))
+                                    : newCoreCategoriesBlock(blocks.length),
+                            )
+                        }
+                    >
+                        <LayoutTemplate className="size-4" aria-hidden="true" />
+                        {text.configureDualCards}
+                    </Button>
                     <Button onClick={() => setDraft(newBlock(blocks.length))}>
                         <Plus className="size-4" aria-hidden="true" />
                         {text.add}
@@ -712,10 +740,12 @@ function IconButton({
 
 function ModuleSpecificSettings({
     draft,
+    isZh,
     text,
     onChange,
 }: Readonly<{
     draft: ContentBlock;
+    isZh: boolean;
     text: typeof zhCopy;
     onChange: (draft: ContentBlock) => void;
 }>) {
@@ -732,6 +762,17 @@ function ModuleSpecificSettings({
     const noticeIntervalSeconds = numberSetting(settings.scrollIntervalSeconds, 5);
     const updateSettings = (patch: Record<string, unknown>) =>
         onChange({ ...draft, settings: { ...settings, ...patch } });
+
+    if (draft.type === 'CORE_CATEGORIES') {
+        return (
+            <DualCardTemplatePicker
+                value={dualCardTemplateId(draft.settings)}
+                isZh={isZh}
+                text={text}
+                onChange={value => updateSettings({ dualCardTemplate: value })}
+            />
+        );
+    }
 
     return (
         <section className="space-y-4">
@@ -794,6 +835,90 @@ function ModuleSpecificSettings({
                         />
                     </Field>
                 ) : null}
+            </div>
+        </section>
+    );
+}
+
+function DualCardTemplatePicker({
+    value,
+    isZh,
+    text,
+    onChange,
+}: Readonly<{
+    value: string;
+    isZh: boolean;
+    text: typeof zhCopy;
+    onChange: (value: string) => void;
+}>) {
+    return (
+        <section className="space-y-3">
+            <div>
+                <h3 className="text-sm font-medium">{text.dualCardTemplate}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{text.dualCardTemplateHint}</p>
+            </div>
+            <div
+                className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+                role="radiogroup"
+                aria-label={text.dualCardTemplate}
+            >
+                {dualCardTemplates.map(template => {
+                    const selected = template.id === value;
+                    return (
+                        <button
+                            key={template.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            className={`min-w-0 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none
+                                focus-visible:ring-2 focus-visible:ring-ring ${
+                                    selected
+                                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                        : 'hover:border-foreground/25 hover:bg-muted/40'
+                                }`}
+                            onClick={() => onChange(template.id)}
+                        >
+                            <span className="grid grid-cols-2 gap-1.5" aria-hidden="true">
+                                {template.cards.map((card, index) => (
+                                    <span
+                                        key={index}
+                                        className="flex h-16 flex-col justify-between rounded-md border p-2 shadow-sm"
+                                        style={{
+                                            background: card.background,
+                                            borderColor: card.border,
+                                            color: card.accent,
+                                        }}
+                                    >
+                                        <span
+                                            className="h-2 w-8 rounded-sm border"
+                                            style={{ borderColor: card.accent }}
+                                        />
+                                        <span className="space-y-1">
+                                            <span className="block h-1.5 w-3/4 rounded-sm bg-white/85" />
+                                            <span
+                                                className="block h-1 w-1/2 rounded-sm"
+                                                style={{ backgroundColor: card.accent }}
+                                            />
+                                        </span>
+                                    </span>
+                                ))}
+                            </span>
+                            <span className="mt-3 flex items-center justify-between gap-2">
+                                <span className="truncate text-sm font-medium">
+                                    {isZh ? template.labelZh : template.labelEn}
+                                </span>
+                                {template.id === 'tech-duo' ? (
+                                    <Badge variant="secondary" className="shrink-0">
+                                        {text.dualCardDefault}
+                                    </Badge>
+                                ) : null}
+                            </span>
+                            <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                                {isZh ? template.descriptionZh : template.descriptionEn}
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
         </section>
     );
@@ -891,11 +1016,16 @@ function BlockEditor({
                                         onValueChange={value => {
                                             if (!value) return;
                                             const type = value;
-                                            onChange({
+                                            const nextDraft = {
                                                 ...draft,
                                                 type,
                                                 layoutVariant: defaultLayoutForType(type),
-                                            });
+                                            };
+                                            onChange(
+                                                type === 'CORE_CATEGORIES'
+                                                    ? applyCoreCategoryDefaults(nextDraft)
+                                                    : nextDraft,
+                                            );
                                             if (type === 'CUSTOM') setAdvancedMode(true);
                                         }}
                                     >
@@ -1007,20 +1137,24 @@ function BlockEditor({
                                                 }
                                             />
                                         </Field>
-                                        <Field label={text.backgroundColor}>
-                                            <ColorInput
-                                                value={draft.backgroundColor}
-                                                ariaLabel={text.backgroundColor}
-                                                onChange={value => update('backgroundColor', value)}
-                                            />
-                                        </Field>
-                                        <Field label={text.textColor}>
-                                            <ColorInput
-                                                value={draft.textColor}
-                                                ariaLabel={text.textColor}
-                                                onChange={value => update('textColor', value)}
-                                            />
-                                        </Field>
+                                        {draft.type !== 'CORE_CATEGORIES' ? (
+                                            <>
+                                                <Field label={text.backgroundColor}>
+                                                    <ColorInput
+                                                        value={draft.backgroundColor}
+                                                        ariaLabel={text.backgroundColor}
+                                                        onChange={value => update('backgroundColor', value)}
+                                                    />
+                                                </Field>
+                                                <Field label={text.textColor}>
+                                                    <ColorInput
+                                                        value={draft.textColor}
+                                                        ariaLabel={text.textColor}
+                                                        onChange={value => update('textColor', value)}
+                                                    />
+                                                </Field>
+                                            </>
+                                        ) : null}
                                         <Field label={text.targetType}>
                                             <TargetSelect
                                                 value={draft.targetType}
@@ -1049,10 +1183,16 @@ function BlockEditor({
                             </div>
                         </section>
 
-                        {!advancedMode && simpleModuleHasSettings(draft.type) ? (
+                        {(!advancedMode || draft.type === 'CORE_CATEGORIES') &&
+                        simpleModuleHasSettings(draft.type) ? (
                             <>
                                 <Separator />
-                                <ModuleSpecificSettings draft={draft} text={text} onChange={onChange} />
+                                <ModuleSpecificSettings
+                                    draft={draft}
+                                    isZh={isZh}
+                                    text={text}
+                                    onChange={onChange}
+                                />
                             </>
                         ) : null}
 
@@ -1126,20 +1266,22 @@ function BlockEditor({
                                 <section className="space-y-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <h3 className="text-sm font-medium">{text.items}</h3>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() =>
-                                                update('items', [
-                                                    ...draft.items,
-                                                    newItem(draft.items.length, draft.type),
-                                                ])
-                                            }
-                                        >
-                                            <Plus className="size-4" aria-hidden="true" />
-                                            {text.addItem}
-                                        </Button>
+                                        {draft.type !== 'CORE_CATEGORIES' || draft.items.length < 2 ? (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                    update('items', [
+                                                        ...draft.items,
+                                                        newItem(draft.items.length, draft.type),
+                                                    ])
+                                                }
+                                            >
+                                                <Plus className="size-4" aria-hidden="true" />
+                                                {text.addItem}
+                                            </Button>
+                                        ) : null}
                                     </div>
                                     {draft.items.map((item, index) => (
                                         <ItemEditor
@@ -1296,6 +1438,20 @@ function ItemEditor({
     const showTarget = advancedMode || simpleItemNeedsTarget(blockType);
     const update = <K extends keyof ContentItem>(key: K, value: ContentItem[K]) =>
         onChange({ ...item, [key]: value });
+    const updateLocalizedSetting = (
+        field: 'badgeLabel' | 'ctaLabel',
+        languageCode: 'zh_Hans' | 'en',
+        value: string,
+    ) => {
+        const settings = {
+            ...(item.settings ?? {}),
+            [localizedItemSettingKey(field, languageCode)]: value,
+        };
+        if (!advancedMode && languageCode === 'zh_Hans') {
+            delete settings[localizedItemSettingKey(field, 'en')];
+        }
+        update('settings', settings);
+    };
     const updateTranslation = (
         languageCode: 'zh_Hans' | 'en',
         patch: Partial<ContentItem['translations'][number]>,
@@ -1378,6 +1534,24 @@ function ItemEditor({
                             <h4 className="text-xs font-medium text-muted-foreground">
                                 {languageCode === 'zh_Hans' ? text.chinese : text.english}
                             </h4>
+                            {blockType === 'CORE_CATEGORIES' ? (
+                                <Field label={text.itemBadge}>
+                                    <Input
+                                        value={stringSetting(
+                                            item.settings?.[
+                                                localizedItemSettingKey('badgeLabel', languageCode)
+                                            ],
+                                        )}
+                                        onChange={event =>
+                                            updateLocalizedSetting(
+                                                'badgeLabel',
+                                                languageCode,
+                                                event.target.value,
+                                            )
+                                        }
+                                    />
+                                </Field>
+                            ) : null}
                             <Field label={text.itemLabel}>
                                 <Input
                                     value={translation.label}
@@ -1395,6 +1569,24 @@ function ItemEditor({
                                     }
                                 />
                             </Field>
+                            {blockType === 'CORE_CATEGORIES' ? (
+                                <Field label={text.itemCta}>
+                                    <Input
+                                        value={stringSetting(
+                                            item.settings?.[
+                                                localizedItemSettingKey('ctaLabel', languageCode)
+                                            ],
+                                        )}
+                                        onChange={event =>
+                                            updateLocalizedSetting(
+                                                'ctaLabel',
+                                                languageCode,
+                                                event.target.value,
+                                            )
+                                        }
+                                    />
+                                </Field>
+                            ) : null}
                         </div>
                     );
                 })}
@@ -1536,7 +1728,7 @@ function simpleTextFieldsForType(type: ContentBlockType): {
     cta: boolean;
 } {
     return {
-        subtitle: ['HERO', 'CATEGORY_AD', 'CORE_CATEGORIES', 'STORY'].includes(type),
+        subtitle: ['HERO', 'CATEGORY_AD', 'STORY'].includes(type),
         body: ['NOTICE', 'STORY', 'LEGAL', 'SUPPORT'].includes(type),
         cta: ['HERO', 'CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY'].includes(type),
     };
@@ -1559,7 +1751,14 @@ function simpleItemUsesImage(type: ContentBlockType): boolean {
 }
 
 function simpleModuleHasSettings(type: ContentBlockType): boolean {
-    return ['NOTICE', 'FEATURED_COLLECTION', 'FLASH_SALE', 'BEST_SELLERS', 'RECOMMENDATIONS'].includes(type);
+    return [
+        'NOTICE',
+        'CORE_CATEGORIES',
+        'FEATURED_COLLECTION',
+        'FLASH_SALE',
+        'BEST_SELLERS',
+        'RECOMMENDATIONS',
+    ].includes(type);
 }
 
 function simpleModuleUsesItems(type: ContentBlockType): boolean {
@@ -1582,6 +1781,14 @@ function previewUsesBlockImage(type: ContentBlockType): boolean {
 
 function stringArraySetting(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function stringSetting(value: unknown, fallback = ''): string {
+    return typeof value === 'string' ? value : fallback;
+}
+
+function localizedItemSettingKey(field: 'badgeLabel' | 'ctaLabel', languageCode: 'zh_Hans' | 'en'): string {
+    return `${field}${languageCode === 'zh_Hans' ? 'Zh' : 'En'}`;
 }
 
 function numberSetting(value: unknown, fallback: number): number {
@@ -1609,6 +1816,15 @@ function newBlock(position: number): ContentBlock {
         translations: [emptyBlockTranslation('zh_Hans'), emptyBlockTranslation('en')],
         items: [],
     };
+}
+
+function newCoreCategoriesBlock(position: number): ContentBlock {
+    return applyCoreCategoryDefaults({
+        ...newBlock(position),
+        type: 'CORE_CATEGORIES',
+        layoutVariant: 'CARD_GRID',
+        internalName: '首页核心品类双卡片',
+    });
 }
 
 function newItem(position: number, blockType?: ContentBlockType): ContentItem {
