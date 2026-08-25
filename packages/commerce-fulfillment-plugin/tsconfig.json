@@ -2,7 +2,10 @@
     "extends": "../../tsconfig.json",
     "compilerOptions": {
         "noEmit": true,
-        "types": ["node", "vitest/globals"]
+        "types": ["node", "vitest/globals"],
+        "paths": {
+            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"]
+        }
     },
     "include": ["src/**/*.ts"]
 }

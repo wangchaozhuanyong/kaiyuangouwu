@@ -50,7 +50,7 @@ export function AddOptionGroupDialog({
     const form = useForm<OptionGroup>({
         resolver: zodResolver(optionGroupSchema),
         defaultValues: {
-            name: '',
+            nameZh: '',
             values: [],
         },
         mode: 'onChange',
@@ -83,23 +83,21 @@ export function AddOptionGroupDialog({
 
     const handleCreateNew = form.handleSubmit(async formValue => {
         try {
-            // TODO: use the active language code from the UI language context
-            // instead of hardcoding 'en'
             const createResult = await createOptionGroupMutation.mutateAsync({
                 input: {
-                    code: formValue.name.toLowerCase().replace(/\s+/g, '-'),
+                    code: `option-group-${Date.now().toString(36)}`,
                     translations: [
                         {
-                            languageCode: 'en',
-                            name: formValue.name,
+                            languageCode: 'zh_Hans',
+                            name: formValue.nameZh,
                         },
                     ],
-                    options: formValue.values.map(value => ({
-                        code: value.value.toLowerCase().replace(/\s+/g, '-'),
+                    options: formValue.values.map((value, index) => ({
+                        code: `option-${Date.now().toString(36)}-${index + 1}`,
                         translations: [
                             {
-                                languageCode: 'en',
-                                name: value.value,
+                                languageCode: 'zh_Hans',
+                                name: value.valueZh,
                             },
                         ],
                     })),

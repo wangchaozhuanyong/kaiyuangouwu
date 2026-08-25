@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import {
+    ContentTranslationService,
+    LocalizedContentFieldInput,
+    PreparedLocalizedContentField,
+} from '@vendure/content-translation-plugin';
+import {
     Asset,
     Channel,
     ChannelService,
@@ -30,6 +35,7 @@ export class StoreProfileService {
         private readonly connection: TransactionalConnection,
         private readonly channelService: ChannelService,
         private readonly activationReadinessService: StoreActivationReadinessService,
+        private readonly translations: ContentTranslationService,
     ) {}
 
     async createDraft(ctx: RequestContext, channel: Channel): Promise<StoreProfile> {
@@ -88,18 +94,25 @@ export class StoreProfileService {
         profile.status = status;
         profile.isPublished = false;
         profile.sortOrder = input.sortOrder ?? profile.sortOrder;
+        const prepared = await this.prepareProfileTranslations(input, profile);
+        const localized = new Map(prepared.map(field => [field.path, field.translatedText]));
         profile.descriptionZh = this.normalizeDescription(
             input.descriptionZh,
             profile.descriptionZh,
             '中文简介',
         );
         profile.descriptionEn = this.normalizeDescription(
-            input.descriptionEn,
+            localized.get('description') ?? input.descriptionEn,
             profile.descriptionEn,
             '英文简介',
         );
         profile.internalNote = this.normalizeInternalNote(input.internalNote, profile.internalNote);
-        await this.updateStorefrontNames(ctx, profile, input.storefrontNameZh, input.storefrontNameEn);
+        await this.updateStorefrontNames(
+            ctx,
+            profile,
+            input.storefrontNameZh,
+            localized.get('storefrontName') ?? input.storefrontNameEn,
+        );
 
         if (input.logoAssetId !== undefined) {
             const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
@@ -119,19 +132,22 @@ export class StoreProfileService {
         }
 
         const saved = await repository.save(profile);
+        await this.recordProfileTranslationState(ctx, saved, prepared);
         return (await this.attachOperationalState(ctx, [saved]))[0];
     }
 
     async updateForMerchant(ctx: RequestContext, input: UpdateMyStoreProfileInput): Promise<StoreProfile> {
         const repository = this.connection.getRepository(ctx, StoreProfile);
         const profile = await this.findByChannel(ctx, ctx.channelId);
+        const prepared = await this.prepareProfileTranslations(input, profile);
+        const localized = new Map(prepared.map(field => [field.path, field.translatedText]));
         profile.descriptionZh = this.normalizeDescription(
             input.descriptionZh,
             profile.descriptionZh,
             '中文简介',
         );
         profile.descriptionEn = this.normalizeDescription(
-            input.descriptionEn,
+            localized.get('description') ?? input.descriptionEn,
             profile.descriptionEn,
             '英文简介',
         );
@@ -141,10 +157,64 @@ export class StoreProfileService {
             profile.logoAssetId = asset?.id ?? null;
         }
 
-        await this.updateStorefrontNames(ctx, profile, input.storefrontNameZh, input.storefrontNameEn);
+        await this.updateStorefrontNames(
+            ctx,
+            profile,
+            input.storefrontNameZh,
+            localized.get('storefrontName') ?? input.storefrontNameEn,
+        );
 
         const saved = await repository.save(profile);
+        await this.recordProfileTranslationState(ctx, saved, prepared);
         return (await this.attachOperationalState(ctx, [saved]))[0];
+    }
+
+    private async prepareProfileTranslations(
+        input: UpdateStoreProfileInput | UpdateMyStoreProfileInput,
+        profile: StoreProfile,
+    ): Promise<PreparedLocalizedContentField[]> {
+        const fields: LocalizedContentFieldInput[] = [];
+        const customFields = profile.channel.customFields as StorefrontChannelFields;
+        if (input.storefrontNameZh != null || input.storefrontNameEn != null) {
+            fields.push({
+                path: 'storefrontName',
+                sourceText: this.normalizeStorefrontName(
+                    input.storefrontNameZh,
+                    customFields.storefrontNameZh,
+                    '中文店铺名称',
+                ),
+                targetText: input.storefrontNameEn,
+                existingSourceText: customFields.storefrontNameZh,
+                existingTargetText: customFields.storefrontNameEn,
+                required: true,
+            });
+        }
+        if (input.descriptionZh != null || input.descriptionEn != null) {
+            fields.push({
+                path: 'description',
+                sourceText: this.normalizeDescription(input.descriptionZh, profile.descriptionZh, '中文简介'),
+                targetText: input.descriptionEn,
+                existingSourceText: profile.descriptionZh,
+                existingTargetText: profile.descriptionEn,
+            });
+        }
+        return this.translations.prepareLocalizedFields(fields);
+    }
+
+    private recordProfileTranslationState(
+        ctx: RequestContext,
+        profile: StoreProfile,
+        prepared: PreparedLocalizedContentField[],
+    ): Promise<void> {
+        return this.translations.recordPreparedFields(
+            ctx,
+            {
+                channelId: profile.channelId,
+                entityType: StoreProfile.name,
+                entityId: profile.id,
+            },
+            prepared,
+        );
     }
 
     private async attachOperationalState(

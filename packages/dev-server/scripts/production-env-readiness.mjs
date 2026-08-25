@@ -221,6 +221,14 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
             ? 'configured'
             : 'missing, short, or placeholder',
     });
+    pushCheck(checks, {
+        id: 'content-translation-provider',
+        title: '客户内容自动翻译服务',
+        passed: isConfiguredSecret(env.VENDURE_GOOGLE_TRANSLATION_API_KEY, 16),
+        detail: isConfiguredSecret(env.VENDURE_GOOGLE_TRANSLATION_API_KEY, 16)
+            ? 'configured'
+            : 'VENDURE_GOOGLE_TRANSLATION_API_KEY is missing, short, or a placeholder',
+    });
     const orderEmailTokenTtl = Number(env.ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS);
     const orderConfirmationTokensReady =
         isConfiguredSecret(env.ORDER_CONFIRMATION_TOKEN_SECRET, 32) &&

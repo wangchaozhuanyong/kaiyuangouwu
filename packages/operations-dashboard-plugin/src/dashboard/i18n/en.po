@@ -114,6 +114,11 @@ msgstr "Could not load after-sales requests"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.missingRefund"
+msgstr "Select the settled refund that completed this request"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.nextPage"
 msgstr "Next page"
 
@@ -149,6 +154,16 @@ msgstr "Refresh"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refundRecord"
+msgstr "Successful refund record"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refundRecordHint"
+msgstr "Only settled refunds from this order can complete a paid after-sales request."
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.refundReminder"
 msgstr "Process the payment refund in the order first. After confirming the refund result, return here and mark this request completed."
 
@@ -181,6 +196,11 @@ msgstr "The customer can see this note in the request timeline."
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.retry"
 msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.selectRefund"
+msgstr "Select a settled refund"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx

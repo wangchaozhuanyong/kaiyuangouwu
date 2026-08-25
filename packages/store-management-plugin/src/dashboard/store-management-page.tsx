@@ -30,6 +30,7 @@ import {
     Textarea,
     api,
     toast,
+    useChannelDisplayName,
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
@@ -348,6 +349,7 @@ function StoreProfileRow({
     const name = isZh
         ? profile.channel.customFields.storefrontNameZh
         : profile.channel.customFields.storefrontNameEn;
+    const channelDisplayName = useChannelDisplayName(profile.channel.code);
     const description = isZh ? profile.descriptionZh : profile.descriptionEn;
     return (
         <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
@@ -361,14 +363,14 @@ function StoreProfileRow({
                 </div>
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium">{name || profile.channel.code}</span>
+                        <span className="truncate text-sm font-medium">{name || channelDisplayName}</span>
                         <StatusBadge status={profile.status} text={text} />
                         {profile.isOperational && profile.status !== 'ACTIVE' && (
                             <Badge variant="secondary">{text.accessible}</Badge>
                         )}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span>{profile.channel.seller?.name ?? profile.channel.code}</span>
+                        <span>{profile.channel.seller?.name ?? channelDisplayName}</span>
                         <span>{profile.channel.code}</span>
                         <span>
                             {text.order}: {profile.sortOrder}

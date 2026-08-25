@@ -64,7 +64,7 @@ const zhCopy = {
     code: '网店编码',
     codePlaceholder: '例如：yunqiao-store',
     chineseName: '网站中文名称',
-    englishName: '网站英文名称',
+    englishName: '网站英文名称（可选，留空自动翻译）',
     template: '开店配置模板',
     selectTemplate: '选择已启用的模板',
     templateHelp:
@@ -78,7 +78,7 @@ const zhCopy = {
     submitting: '正在创建',
     loadError: '模板 Channel 加载失败',
     retry: '重试',
-    required: '请完整填写所有字段',
+    required: '请完整填写所有必填字段',
     created: '网店已创建',
     credentialTitle: '管理员临时凭据',
     credentialDescription: '临时密码只显示这一次，请通过安全渠道交给管理员，并在首次登录后立即修改。',
@@ -98,7 +98,7 @@ const enCopy: typeof zhCopy = {
     code: 'Store code',
     codePlaceholder: 'Example: yunqiao-store',
     chineseName: 'Chinese storefront name',
-    englishName: 'English storefront name',
+    englishName: 'English storefront name (optional; auto-translated when blank)',
     template: 'Store provisioning template',
     selectTemplate: 'Select an enabled template',
     templateHelp:
@@ -113,7 +113,7 @@ const enCopy: typeof zhCopy = {
     submitting: 'Creating',
     loadError: 'Could not load template Channels',
     retry: 'Retry',
-    required: 'Complete every field before continuing',
+    required: 'Complete every required field before continuing',
     created: 'Store created',
     credentialTitle: 'Temporary administrator credential',
     credentialDescription:
@@ -156,7 +156,7 @@ function StoreProvisioningPage() {
                     code: input.code,
                     name: input.name,
                     storefrontNameZh: input.storefrontNameZh,
-                    storefrontNameEn: input.storefrontNameEn,
+                    storefrontNameEn: input.storefrontNameEn || null,
                     templateChannelId: input.templateChannelId,
                     administrator: {
                         firstName: input.firstName,
@@ -176,7 +176,17 @@ function StoreProvisioningPage() {
         setDraft(current => ({ ...current, [field]: value }));
     const submit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (Object.values(draft).some(value => !value.trim())) {
+        if (
+            [
+                draft.code,
+                draft.name,
+                draft.storefrontNameZh,
+                draft.templateChannelId,
+                draft.firstName,
+                draft.lastName,
+                draft.emailAddress,
+            ].some(value => !value.trim())
+        ) {
             toast.error(text.required);
             return;
         }
@@ -288,7 +298,6 @@ function StoreProvisioningPage() {
                                         id="store-name-en"
                                         form="store-provisioning-form"
                                         value={draft.storefrontNameEn}
-                                        required
                                         onChange={event => setField('storefrontNameEn', event.target.value)}
                                     />
                                 </Field>

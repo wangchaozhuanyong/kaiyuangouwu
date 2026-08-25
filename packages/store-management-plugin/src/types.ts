@@ -241,7 +241,7 @@ export interface ProvisionStoreInput {
     code: string;
     name: string;
     storefrontNameZh: string;
-    storefrontNameEn: string;
+    storefrontNameEn?: string | null;
     templateChannelId: ID;
     administrator: ProvisionStoreAdministratorInput;
 }

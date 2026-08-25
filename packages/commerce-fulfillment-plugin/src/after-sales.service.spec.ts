@@ -100,7 +100,20 @@ function createHarness(
         }),
     };
     const customerService = { findOneByUserId: vi.fn().mockResolvedValue(customer) };
-    const service = new AfterSalesService(connection as any, customerService as any);
+    const translations = {
+        prepareLocalizedFields: vi.fn(async fields =>
+            fields.map((field: any) => ({
+                path: field.path,
+                sourceText: field.sourceText,
+                translatedText: `translated-${field.path}`,
+                status: 'AUTO_TRANSLATED',
+                origin: 'AUTO',
+                locked: false,
+            })),
+        ),
+        recordPreparedFields: vi.fn(async () => undefined),
+    };
+    const service = new AfterSalesService(connection as any, customerService as any, translations as any);
     const ctx = {
         activeUserId: 'user-1',
         channelId: 'channel-1',
@@ -307,5 +320,20 @@ describe('AfterSalesService', () => {
             expect.objectContaining({ id: 'request-1', state: 'APPROVED' }),
             expect.objectContaining({ state: 'COMPLETED', refundId: 'refund-1' }),
         );
+    });
+
+    it('does not expose a legacy Chinese resolution to an English client', () => {
+        const test = createHarness();
+        const request = {
+            items: [],
+            events: [],
+            resolution: '旧中文处理说明',
+            resolutionZh: '旧中文处理说明',
+            resolutionEn: null,
+        };
+
+        expect(
+            (test.service as any).normalizeRelations(request, { languageCode: 'en' }).resolution,
+        ).toBeNull();
     });
 });

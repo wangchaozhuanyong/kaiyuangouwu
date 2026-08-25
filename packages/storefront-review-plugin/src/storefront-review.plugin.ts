@@ -1,3 +1,4 @@
+import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
@@ -6,7 +7,7 @@ import { StorefrontReviewAdminResolver, StorefrontReviewShopResolver } from './s
 import { StorefrontReviewService } from './storefront-review.service';
 
 @VendurePlugin({
-    imports: [PluginCommonModule],
+    imports: [PluginCommonModule, ContentTranslationPlugin],
     entities: [StorefrontReview],
     providers: [StorefrontReviewService],
     shopApiExtensions: {

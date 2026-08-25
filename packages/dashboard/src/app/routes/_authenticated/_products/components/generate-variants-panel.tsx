@@ -25,10 +25,18 @@ interface OptionGroup {
     id: string;
     code: string;
     name: string;
+    translations: Array<{
+        languageCode: string;
+        name: string;
+    }>;
     options: Array<{
         id: string;
         code: string;
         name: string;
+        translations: Array<{
+            languageCode: string;
+            name: string;
+        }>;
     }>;
 }
 
@@ -37,6 +45,7 @@ interface GeneratedVariant {
     name: string;
     optionIds: string[];
     optionNames: string[];
+    optionNamesZh: string[];
 }
 
 type Translate = ReturnType<typeof useLingui>['t'];
@@ -86,16 +95,32 @@ function createVariantFormSchema(t: Translate) {
 
 type VariantFormValues = z.infer<ReturnType<typeof createVariantFormSchema>>;
 
+function translatedName(
+    translations: Array<{ languageCode: string; name: string }>,
+    languageCode: 'zh_Hans' | 'en',
+    fallback: string,
+): string {
+    return translations.find(translation => translation.languageCode === languageCode)?.name || fallback;
+}
+
 function generateVariantCombinations(optionGroups: OptionGroup[]): GeneratedVariant[] {
     const validGroups = optionGroups.filter(g => g.options.length > 0);
     if (validGroups.length === 0) {
-        return [{ id: 'default', name: '', optionIds: [], optionNames: [] }];
+        return [
+            {
+                id: 'default',
+                name: '',
+                optionIds: [],
+                optionNames: [],
+                optionNamesZh: [],
+            },
+        ];
     }
 
     const combine = (
         groups: OptionGroup[],
         index: number,
-        current: Array<{ id: string; name: string }>,
+        current: Array<{ id: string; name: string; nameZh: string }>,
     ): GeneratedVariant[] => {
         if (index === groups.length) {
             return [
@@ -104,12 +129,22 @@ function generateVariantCombinations(optionGroups: OptionGroup[]): GeneratedVari
                     name: current.map(c => c.name).join(' '),
                     optionIds: current.map(c => c.id),
                     optionNames: current.map(c => c.name),
+                    optionNamesZh: current.map(c => c.nameZh),
                 },
             ];
         }
         const results: GeneratedVariant[] = [];
         for (const option of groups[index].options) {
-            results.push(...combine(groups, index + 1, [...current, { id: option.id, name: option.name }]));
+            results.push(
+                ...combine(groups, index + 1, [
+                    ...current,
+                    {
+                        id: option.id,
+                        name: option.name,
+                        nameZh: translatedName(option.translations, 'zh_Hans', option.name),
+                    },
+                ]),
+            );
         }
         return results;
     };
@@ -120,12 +155,14 @@ function generateVariantCombinations(optionGroups: OptionGroup[]): GeneratedVari
 export function GenerateVariantsPanel({
     productId,
     productName,
+    productTranslations,
     optionGroups,
     onSuccess,
     onBack,
 }: Readonly<{
     productId: string;
     productName: string;
+    productTranslations: Array<{ languageCode: string; name: string }>;
     optionGroups: OptionGroup[];
     onSuccess?: () => void;
     onBack?: {
@@ -164,14 +201,15 @@ export function GenerateVariantsPanel({
     });
 
     const handleCreateVariants = form.handleSubmit(async formValues => {
-        if (!activeChannel?.defaultLanguageCode) return;
+        const productNameZh = translatedName(productTranslations, 'zh_Hans', productName);
 
         const variantsToCreate = variants
             .filter(v => formValues.variants[v.id]?.enabled)
             .map(v => {
                 const data = formValues.variants[v.id];
-                const name = v.optionNames.length ? `${productName} ${v.optionNames.join(' ')}` : productName;
-
+                const nameZh = v.optionNamesZh.length
+                    ? `${productNameZh} ${v.optionNamesZh.join(' ')}`
+                    : productNameZh;
                 return {
                     productId,
                     sku: data.sku,
@@ -188,8 +226,8 @@ export function GenerateVariantsPanel({
                     optionIds: v.optionIds,
                     translations: [
                         {
-                            languageCode: activeChannel.defaultLanguageCode,
-                            name,
+                            languageCode: 'zh_Hans' as const,
+                            name: nameZh,
                         },
                     ],
                 };

@@ -48,8 +48,23 @@ function createService() {
         create: vi.fn().mockResolvedValue({ id: 'store-role-1' }),
     };
     const administratorService = { create: vi.fn().mockResolvedValue({ id: 'administrator-1' }) };
-    const storeProfileService = { createDraft: vi.fn().mockResolvedValue({ id: 'profile-1' }) };
+    const storeProfileService = {
+        createDraft: vi.fn().mockResolvedValue({ id: 'profile-1', channelId: 'store-1' }),
+    };
     const merchantInitialPasswordService = { requirePasswordChange: vi.fn().mockResolvedValue(undefined) };
+    const contentTranslations = {
+        prepareLocalizedFields: vi.fn(async (fields: any[]) =>
+            fields.map(field => ({
+                path: field.path,
+                sourceText: field.sourceText,
+                translatedText: field.targetText?.trim() || 'Alpha Shop',
+                status: field.targetText?.trim() ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                origin: field.targetText?.trim() ? 'MANUAL' : 'AUTO',
+                locked: Boolean(field.targetText?.trim()),
+            })),
+        ),
+        recordPreparedFields: vi.fn().mockResolvedValue(undefined),
+    };
     const service = new StoreProvisioningService(
         connection as any,
         sellerService as any,
@@ -58,6 +73,7 @@ function createService() {
         administratorService as any,
         storeProfileService as any,
         merchantInitialPasswordService as any,
+        contentTranslations as any,
     );
     return {
         administratorService,
@@ -70,6 +86,7 @@ function createService() {
         service,
         storeProfileService,
         merchantInitialPasswordService,
+        contentTranslations,
         repository,
     };
 }
@@ -78,7 +95,7 @@ const input = {
     code: ' Alpha-Store ',
     name: ' Alpha Limited ',
     storefrontNameZh: ' 阿尔法商城 ',
-    storefrontNameEn: ' Alpha Shop ',
+    storefrontNameEn: '',
     templateChannelId: 'template-1',
     administrator: {
         firstName: ' Alice ',
@@ -99,6 +116,7 @@ describe('StoreProvisioningService', () => {
             shippingMethodRepository,
             storeProfileService,
             merchantInitialPasswordService,
+            contentTranslations,
         } = createService();
         const ctx = {
             channelId: 'template-1',
@@ -178,6 +196,14 @@ describe('StoreProvisioningService', () => {
         );
         expect(channelService.assignToChannels).toHaveBeenCalledTimes(4);
         expect(storeProfileService.createDraft).toHaveBeenCalledWith(ctx, channel);
+        expect(contentTranslations.prepareLocalizedFields).toHaveBeenCalledWith([
+            expect.objectContaining({ sourceText: '阿尔法商城', targetText: '', required: true }),
+        ]);
+        expect(contentTranslations.recordPreparedFields).toHaveBeenCalledWith(
+            ctx,
+            expect.objectContaining({ channelId: 'store-1', entityType: 'StoreProfile' }),
+            [expect.objectContaining({ translatedText: 'Alpha Shop', origin: 'AUTO' })],
+        );
         expect(ctx.session.user.channelPermissions).toEqual([
             {
                 id: 'store-1',

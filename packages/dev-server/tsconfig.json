@@ -7,6 +7,7 @@
         "paths": {
             "@vendure/admin-ui/*": ["../admin-ui/package/*"],
             "@vendure/commerce-fulfillment-plugin": ["../commerce-fulfillment-plugin/src/index.ts"],
+            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"],
             "@vendure/operations-dashboard-plugin": ["../operations-dashboard-plugin/src/index.ts"],
             "@vendure/store-management-plugin": ["../store-management-plugin/src/index.ts"],
             "@vendure/storefront-cart-plugin": ["../storefront-cart-plugin/src/index.ts"],

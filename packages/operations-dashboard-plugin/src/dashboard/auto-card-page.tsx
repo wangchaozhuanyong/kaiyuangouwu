@@ -116,16 +116,19 @@ const messages = {
     }),
     instructionsEn: msg({
         id: 'operations.autoCard.instructionsEn',
-        message: 'English delivery instructions',
+        message: 'English delivery instructions (optional)',
     }),
     instructionsEnHint: msg({
         id: 'operations.autoCard.instructionsEnHint',
-        message: 'Shown in the delivery email when the customer uses English.',
+        message: 'Leave blank to generate it from the Chinese instructions on save.',
     }),
     fields: msg({ id: 'operations.autoCard.fields', message: 'Fields in one line' }),
     fieldKey: msg({ id: 'operations.autoCard.fieldKey', message: 'Field key' }),
     fieldLabelZh: msg({ id: 'operations.autoCard.fieldLabelZh', message: 'Chinese email label' }),
-    fieldLabelEn: msg({ id: 'operations.autoCard.fieldLabelEn', message: 'English email label' }),
+    fieldLabelEn: msg({
+        id: 'operations.autoCard.fieldLabelEn',
+        message: 'English email label (optional)',
+    }),
     field: msg({ id: 'operations.autoCard.field', message: 'Field' }),
     fieldAccount: msg({ id: 'operations.autoCard.field.account', message: 'Account' }),
     fieldPassword: msg({ id: 'operations.autoCard.field.password', message: 'Password' }),
@@ -744,7 +747,7 @@ function ConfigEditor({
                                     {
                                         key: `field${draft.fields.length + 1}`,
                                         label: `字段 ${draft.fields.length + 1}`,
-                                        labelEn: `Field ${draft.fields.length + 1}`,
+                                        labelEn: '',
                                         secret: false,
                                     },
                                 ],

@@ -136,6 +136,7 @@ function defaultBlockTranslation(
           }
         : {
               languageCode,
+              // i18n-audit-ignore -- stored English counterpart selected by languageCode
               title: 'Core Categories',
               subtitle: '',
               body: '',

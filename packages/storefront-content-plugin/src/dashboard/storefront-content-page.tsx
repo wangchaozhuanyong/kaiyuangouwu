@@ -127,11 +127,11 @@ const zhCopy = {
     cancel: '取消',
     createTitle: '新建装修区块',
     updateTitle: '编辑装修区块',
-    editorDescription: '内容始终保存到当前 Channel，不会影响其他店铺。',
+    editorDescription: '中文为原文，保存时自动生成英文；可在高级模式手动修改英文。内容只保存到当前 Channel。',
     basic: '区块设置',
     simpleMode: '常用设置',
     advancedMode: '高级自定义',
-    simpleModeHint: '常用模式只显示当前模块真正需要的设置；高级模式保留全部通用能力。',
+    simpleModeHint: '常用模式填写中文即可；高级模式可校对英文并保留全部通用能力。',
     internalName: '模块内部名称',
     internalNameHint: '仅供管理后台识别，例如：首页第二屏快捷入口；不会展示给顾客。',
     code: '区块编码',
@@ -189,7 +189,7 @@ const zhCopy = {
     updated: '装修区块已更新',
     deleted: '装修区块已删除',
     reordered: '区块顺序已更新',
-    validation: '请填写模块内部名称和至少一种语言的标题；每个条目也需要名称',
+    validation: '请填写模块内部名称和中文标题；每个条目也需要中文名称',
     activeChannel: '当前店铺',
     carouselSettings: '首页轮播设置',
     carouselSettingsDescription:
@@ -224,11 +224,13 @@ const enCopy: typeof zhCopy = {
     cancel: 'Cancel',
     createTitle: 'New content block',
     updateTitle: 'Edit content block',
-    editorDescription: 'Content is saved only to the active Channel and never affects another store.',
+    editorDescription:
+        'Chinese is the source. English is generated on save and can be edited in Advanced mode. Content stays in the active Channel.',
     basic: 'Block settings',
     simpleMode: 'Common settings',
     advancedMode: 'Advanced custom',
-    simpleModeHint: 'Common mode shows only relevant fields. Advanced mode preserves every generic option.',
+    simpleModeHint:
+        'Common mode only requires Chinese. Advanced mode lets you review English and preserves every generic option.',
     internalName: 'Internal module name',
     internalNameHint: 'Visible only in the dashboard, for example Homepage second-row quick links.',
     code: 'Block code',
@@ -287,7 +289,7 @@ const enCopy: typeof zhCopy = {
     updated: 'Content block updated',
     deleted: 'Content block deleted',
     reordered: 'Block order updated',
-    validation: 'Enter an internal name and at least one localized title; every item also needs a label',
+    validation: 'Enter an internal name, a Chinese title, and a Chinese label for every item',
     activeChannel: 'Active store',
     carouselSettings: 'Homepage carousel settings',
     carouselSettingsDescription:
@@ -951,9 +953,7 @@ function BlockEditor({
     }, [draft?.id, draft?.type, draft == null]);
     if (!draft) return null;
 
-    const translationLanguages: Array<'zh_Hans' | 'en'> = advancedMode
-        ? ['zh_Hans', 'en']
-        : [isZh ? 'zh_Hans' : 'en'];
+    const translationLanguages: Array<'zh_Hans' | 'en'> = advancedMode ? ['zh_Hans', 'en'] : ['zh_Hans'];
     const visibleTextFields = simpleTextFieldsForType(draft.type);
 
     const update = <K extends keyof ContentBlock>(key: K, value: ContentBlock[K]) =>
@@ -1432,9 +1432,7 @@ function ItemEditor({
     onChange: (item: ContentItem) => void;
     onRemove: () => void;
 }>) {
-    const translationLanguages: Array<'zh_Hans' | 'en'> = advancedMode
-        ? ['zh_Hans', 'en']
-        : [isZh ? 'zh_Hans' : 'en'];
+    const translationLanguages: Array<'zh_Hans' | 'en'> = advancedMode ? ['zh_Hans', 'en'] : ['zh_Hans'];
     const showTarget = advancedMode || simpleItemNeedsTarget(blockType);
     const update = <K extends keyof ContentItem>(key: K, value: ContentItem[K]) =>
         onChange({ ...item, [key]: value });
@@ -1943,9 +1941,17 @@ function isValid(block: ContentBlock): boolean {
     return (
         Boolean(block.code.trim()) &&
         Boolean(block.internalName.trim()) &&
-        block.translations.some(translation => Boolean(translation.title.trim())) &&
-        block.items.every(item => item.translations.some(translation => Boolean(translation.label.trim())))
+        blockHasChineseSource(block.translations) &&
+        block.items.every(item => itemHasChineseSource(item.translations))
     );
+}
+
+function blockHasChineseSource(translations: ContentBlockTranslation[]): boolean {
+    return Boolean(translations.find(translation => translation.languageCode === 'zh_Hans')?.title.trim());
+}
+
+function itemHasChineseSource(translations: ContentItem['translations']): boolean {
+    return Boolean(translations.find(translation => translation.languageCode === 'zh_Hans')?.label.trim());
 }
 
 function toLocalDateTime(value: string | null): string {

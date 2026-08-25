@@ -74,9 +74,9 @@ const zhCopy = {
     shipping: '标准配送',
     shippingDescription: '实物商品使用的运费、范围和预计时效。',
     nameZh: '中文配送名称',
-    nameEn: '英文配送名称',
+    nameEn: '英文配送名称（可选，留空自动翻译）',
     descriptionZh: '中文配送说明',
-    descriptionEn: '英文配送说明',
+    descriptionEn: '英文配送说明（可选）',
     baseRate: '基础运费',
     freeThreshold: '免邮门槛',
     shippingTaxRate: '运费税率（%）',
@@ -115,9 +115,9 @@ const enCopy: typeof zhCopy = {
     shipping: 'Standard delivery',
     shippingDescription: 'Rates, coverage, and estimates for physical products.',
     nameZh: 'Chinese delivery name',
-    nameEn: 'English delivery name',
+    nameEn: 'English delivery name (optional)',
     descriptionZh: 'Chinese delivery description',
-    descriptionEn: 'English delivery description',
+    descriptionEn: 'English delivery description (optional)',
     baseRate: 'Base shipping rate',
     freeThreshold: 'Free shipping threshold',
     shippingTaxRate: 'Shipping tax rate (%)',
@@ -582,7 +582,6 @@ function validDraft(draft: CommerceDraft): boolean {
     return (
         /^[A-Z]{2}$/u.test(draft.countryCode) &&
         draft.shippingMethodNameZh.trim().length > 0 &&
-        draft.shippingMethodNameEn.trim().length > 0 &&
         inRange(draft.taxRate, 0, 100) &&
         inRange(draft.shippingTaxRate, 0, 100) &&
         inRange(draft.baseRate, 0, Number.MAX_SAFE_INTEGER) &&

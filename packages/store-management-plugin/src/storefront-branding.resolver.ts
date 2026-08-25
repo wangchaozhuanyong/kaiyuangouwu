@@ -34,16 +34,12 @@ export class StorefrontBrandingShopResolver {
 
         const customFields = ctx.channel.customFields as StorefrontChannelFields;
         const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
-        const name =
-            (isChinese ? customFields.storefrontNameZh : customFields.storefrontNameEn) ||
-            customFields.storefrontNameZh ||
-            customFields.storefrontNameEn ||
-            ctx.channel.code;
-        const description =
-            (isChinese ? profile?.descriptionZh : profile?.descriptionEn) ||
-            profile?.descriptionZh ||
-            profile?.descriptionEn ||
-            '';
+        const name = isChinese
+            ? customFields.storefrontNameZh || customFields.storefrontNameEn || ctx.channel.code
+            : customFields.storefrontNameEn || ctx.channel.code;
+        const description = isChinese
+            ? profile?.descriptionZh || profile?.descriptionEn || ''
+            : profile?.descriptionEn || '';
 
         let logoUrl = null;
         if (profile?.logoAsset) {

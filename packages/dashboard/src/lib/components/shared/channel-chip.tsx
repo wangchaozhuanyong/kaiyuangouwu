@@ -3,6 +3,8 @@ import type { SimpleChannel } from '@/vdb/providers/channel-provider.js';
 import { useLingui } from '@lingui/react/macro';
 import { X } from 'lucide-react';
 
+import { useChannelDisplayName } from './channel-code-label.js';
+
 interface ChannelChipProps {
     channel: SimpleChannel;
     removable?: boolean;
@@ -18,6 +20,7 @@ interface ChannelChipProps {
  */
 export function ChannelChip({ channel, removable = true, onRemove }: Readonly<ChannelChipProps>) {
     const { t } = useLingui();
+    const channelDisplayName = useChannelDisplayName(channel.code);
 
     return (
         <Badge
@@ -25,14 +28,14 @@ export function ChannelChip({ channel, removable = true, onRemove }: Readonly<Ch
             className="flex items-center gap-2 py-0.5 pl-2 pr-1 h-6 hover:bg-secondary/80"
         >
             <div className="flex items-center gap-1.5">
-                <span className="font-medium">{channel.code}</span>
+                <span className="font-medium">{channelDisplayName}</span>
             </div>
             {removable && (
                 <button
                     type="button"
                     className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted/30 hover:cursor-pointer"
                     onClick={() => onRemove?.(channel.id)}
-                    aria-label={t`Remove ${channel.code} from ${channel.token}`}
+                    aria-label={t`Remove ${channelDisplayName}`}
                 >
                     <X className="h-3 w-3" />
                 </button>

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     EventBus,
     isGraphQlErrorResult,
@@ -95,6 +96,7 @@ export class AutoCardService {
         private readonly productVariantService: ProductVariantService,
         private readonly orderService: OrderService,
         private readonly requestContextService: RequestContextService,
+        private readonly contentTranslations: ContentTranslationService,
     ) {}
 
     async configForVariant(ctx: RequestContext, productVariantId: ID): Promise<AutoCardConfigView | null> {
@@ -134,11 +136,45 @@ export class AutoCardService {
         if (!variant) {
             throw new UserInputError('商品 SKU 不存在或不属于当前店铺');
         }
-        const fields = validateAutoCardFields(input.fields);
+        const repository = this.connection.getRepository(ctx, AutoCardConfig);
+        let config = await repository.findOne({
+            where: { channelId: ctx.channelId, productVariantId: input.productVariantId },
+        });
+        const existingFields = config ? parseAutoCardFieldsJson(config.fieldsJson) : [];
+        const sourceInstructions = (input.instructionsZh ?? input.instructions ?? '').trim();
+        const existingInstructionsZh = config?.instructionsZh ?? config?.instructions ?? '';
+        const prepared = await this.contentTranslations.prepareLocalizedFields([
+            ...input.fields.map(field => {
+                const existingField = existingFields.find(candidate => candidate.key === field.key);
+                return {
+                    path: `fields.${field.key}.label`,
+                    sourceText: field.label,
+                    targetText: field.labelEn,
+                    existingSourceText: existingField?.label,
+                    existingTargetText: existingField?.labelEn,
+                    required: true,
+                };
+            }),
+            {
+                path: 'instructions',
+                sourceText: sourceInstructions,
+                targetText: input.instructionsEn,
+                existingSourceText: existingInstructionsZh,
+                existingTargetText: config?.instructionsEn,
+                format: 'HTML' as const,
+            },
+        ]);
+        const english = new Map(prepared.map(field => [field.path, field.translatedText]));
+        const fields = validateAutoCardFields(
+            input.fields.map(field => ({
+                ...field,
+                labelEn: english.get(`fields.${field.key}.label`) ?? '',
+            })),
+        );
         const delimiter = normalizeAutoCardDelimiter(input.delimiter);
         const formatName = input.formatName.trim();
-        const instructionsZh = (input.instructionsZh ?? input.instructions ?? '').trim();
-        const instructionsEn = (input.instructionsEn ?? '').trim();
+        const instructionsZh = sourceInstructions;
+        const instructionsEn = english.get('instructions') ?? '';
         const instructions = instructionsZh || instructionsEn;
         if (!formatName || formatName.length > 80) {
             throw new UserInputError('发卡格式名称不能为空且不能超过 80 个字符');
@@ -160,10 +196,6 @@ export class AutoCardService {
             throw new UserInputError('低库存预警数量必须为 0 至 1000000 的整数');
         }
 
-        const repository = this.connection.getRepository(ctx, AutoCardConfig);
-        let config = await repository.findOne({
-            where: { channelId: ctx.channelId, productVariantId: input.productVariantId },
-        });
         const values = {
             enabled: input.enabled,
             formatName,
@@ -179,6 +211,15 @@ export class AutoCardService {
             productVariantId: variant.id,
         };
         config = await repository.save(config ? Object.assign(config, values) : new AutoCardConfig(values));
+        await this.contentTranslations.recordPreparedFields(
+            ctx,
+            {
+                channelId: ctx.channelId,
+                entityType: AutoCardConfig.name,
+                entityId: config.id,
+            },
+            prepared,
+        );
 
         await this.productVariantService.update(ctx, [
             {

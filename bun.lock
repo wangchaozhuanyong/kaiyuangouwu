@@ -221,6 +221,7 @@
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
+        "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "@vendure/email-plugin": "3.7.2",
         "graphql-tag": "^2.12.6",
@@ -236,6 +237,23 @@
       "devDependencies": {
         "rimraf": "^5.0.5",
         "typescript": "5.8.2",
+      },
+    },
+    "packages/content-translation-plugin": {
+      "name": "@vendure/content-translation-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "reflect-metadata": "^0.2.2",
+        "typeorm": "^0.3.21",
+      },
+      "devDependencies": {
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4",
       },
     },
     "packages/core": {
@@ -451,6 +469,7 @@
         "@vendure/asset-server-plugin": "3.7.2",
         "@vendure/commerce-fulfillment-plugin": "0.1.0",
         "@vendure/common": "3.7.2",
+        "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "@vendure/dashboard": "3.7.2",
         "@vendure/email-plugin": "3.7.2",
@@ -615,6 +634,7 @@
         "@nestjs/core": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
+        "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "@vendure/store-domain-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
@@ -696,6 +716,7 @@
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
+        "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",
         "lucide-react": "^0.475.0",
@@ -719,6 +740,7 @@
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
+        "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",
         "typeorm": "^0.3.21",
@@ -2949,6 +2971,8 @@
     "@vendure/commerce-fulfillment-plugin": ["@vendure/commerce-fulfillment-plugin@workspace:packages/commerce-fulfillment-plugin"],
 
     "@vendure/common": ["@vendure/common@workspace:packages/common"],
+
+    "@vendure/content-translation-plugin": ["@vendure/content-translation-plugin@workspace:packages/content-translation-plugin"],
 
     "@vendure/core": ["@vendure/core@workspace:packages/core"],
 
@@ -6447,6 +6471,8 @@
     "@vendure/commerce-fulfillment-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 
     "@vendure/common/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
+
+    "@vendure/content-translation-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 
     "@vendure/core/@types/node": ["@types/node@18.19.130", "", { "dependencies": { "undici-types": "~5.26.4" } }, "sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg=="],
 

@@ -114,6 +114,11 @@ msgstr "售后申请加载失败"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.missingRefund"
+msgstr "请选择实际完成本次售后的已结算退款记录"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.nextPage"
 msgstr "下一页"
 
@@ -149,6 +154,16 @@ msgstr "刷新"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refundRecord"
+msgstr "成功退款记录"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.refundRecordHint"
+msgstr "只有当前订单中已结算的退款记录才能完成需要退款的售后申请。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.refundReminder"
 msgstr "请先在订单中处理支付退款。确认退款结果后，返回此处将申请标记为完成。"
 
@@ -181,6 +196,11 @@ msgstr "客户可以在售后时间线中看到这段说明。"
 #: src/dashboard/after-sales-page.tsx
 msgid "operations.afterSales.retry"
 msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/dashboard/after-sales-page.tsx
+msgid "operations.afterSales.selectRefund"
+msgstr "选择已结算退款"
 
 #. js-lingui-explicit-id
 #: src/dashboard/after-sales-page.tsx

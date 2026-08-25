@@ -519,6 +519,10 @@ msgstr "新角色"
 msgid "Products must also match the conditions of the parent product group."
 msgstr "商品还必须符合上级分类的归类条件。"
 
+#: src/lib/components/shared/channel-chip.tsx
+msgid "Remove {channelDisplayName}"
+msgstr "移除 {channelDisplayName}"
+
 #: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
 msgid "Failed to delete assets: {message}"
 msgstr "删除素材失败：{message}"
@@ -1006,7 +1010,6 @@ msgstr "完成草稿"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$groupId.options_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
-#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 #: src/app/routes/_authenticated/_sellers/sellers_.$id.tsx
@@ -1082,6 +1085,10 @@ msgstr "显示密码"
 #: src/lib/components/shared/history-timeline/history-note-entry.tsx
 msgid "Public"
 msgstr "公开"
+
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+msgid "Name (Simplified Chinese)"
+msgstr "名称（简体中文）"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 msgid "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
@@ -1221,6 +1228,10 @@ msgstr "订单已设置配送地址"
 #: src/lib/components/shared/asset/asset-preview.tsx
 msgid "Focal Point"
 msgstr "焦点"
+
+#: src/app/routes/_authenticated/_products/components/product-option-select.tsx
+msgid "No option values found. Add both language versions first."
+msgstr "未找到规格值，请先添加中英文版本。"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Single variant, no options"
@@ -1545,6 +1556,10 @@ msgstr "新建店铺"
 msgid "Regenerate slug from source field"
 msgstr "从源字段重新生成 URL 标识"
 
+#: src/lib/components/layout/channel-switcher.tsx
+msgid "Current store: {displayChannelName}"
+msgstr "当前店铺：{displayChannelName}"
+
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Inherit from global settings"
@@ -1745,6 +1760,10 @@ msgstr "{productCount, plural, one {此规格组被另一个商品使用。更�
 msgid "My Saved Views"
 msgstr "我的保存视图"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Option value (Simplified Chinese)"
+msgstr "规格值（简体中文）"
+
 #: src/app/routes/_authenticated/_sellers/sellers_.$id.tsx
 msgid "Failed to create seller"
 msgstr "创建商家失败"
@@ -1908,7 +1927,6 @@ msgstr "大小"
 msgid "No translation found for {0}"
 msgstr "未找到 {0} 的翻译"
 
-#: src/app/routes/_authenticated/_products/components/option-value-input.tsx
 #: src/lib/components/shared/option-value-input.tsx
 msgid "Enter a value and press Enter"
 msgstr "输入规格值后按回车键"
@@ -3325,11 +3343,8 @@ msgstr "客户已验证"
 msgid "Search the product catalog and choose the products for this category."
 msgstr "从商品库中搜索并选择要加入此分类的商品。"
 
-#. placeholder {0}: channel.code
 #. placeholder {0}: facetValue.name
-#. placeholder {1}: channel.token
 #. placeholder {1}: facetValue.facet.name
-#: src/lib/components/shared/channel-chip.tsx
 #: src/lib/components/shared/facet-value-chip.tsx
 msgid "Remove {0} from {1}"
 msgstr "从 {1} 中移除 {0}"
@@ -3744,6 +3759,10 @@ msgctxt "date-range"
 msgid "Yesterday"
 msgstr "昨天"
 
+#: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
+msgid "Option group name (Simplified Chinese)"
+msgstr "规格组名称（简体中文）"
+
 #. placeholder {0}: addedSurcharges.length
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
 msgid "Adding {0} surcharge(s)"
@@ -4002,8 +4021,8 @@ msgid "Drag {item}"
 msgstr "拖动 {item}"
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-msgid "Option value name"
-msgstr "选项值名称"
+#~ msgid "Option value name"
+#~ msgstr "选项值名称"
 
 #: src/app/routes/_authenticated/_api-keys/api-keys_.$id.tsx
 #: src/app/routes/_authenticated/_api-keys/api-keys.tsx
@@ -4058,10 +4077,9 @@ msgstr "设置 {columnId} 列的筛选条件"
 msgid "Country"
 msgstr "国家"
 
-#. placeholder {0}: displayChannel?.code ?? ''
 #: src/lib/components/layout/channel-switcher.tsx
-msgid "Current store: {0}"
-msgstr "当前店铺：{0}"
+#~ msgid "Current store: {0}"
+#~ msgstr "当前店铺：{0}"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Simple product"
@@ -4758,8 +4776,8 @@ msgid "Search filter attribute values..."
 msgstr "搜索筛选属性值..."
 
 #: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
-msgid "Option Group Name"
-msgstr "规格组名称"
+#~ msgid "Option Group Name"
+#~ msgstr "规格组名称"
 
 #: src/lib/components/data-input/combination-mode-input.tsx
 msgid "AND"
@@ -5982,7 +6000,7 @@ msgstr "新建商家"
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "e.g., Red, Large, Cotton"
-msgstr "例如：红色、大号、棉质"
+msgstr "例如：红色、大号、棉"
 
 #: src/app/routes/_authenticated/_profile/profile.tsx
 msgid "Failed to update profile"
@@ -6024,6 +6042,10 @@ msgstr "设置默认服务区域，以及商品价格的含税方式。"
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Drop files here to upload"
 msgstr "将文件拖放到此处上传"
+
+#: src/app/routes/_authenticated/_products/components/option-value-input.tsx
+msgid "Simplified Chinese value"
+msgstr "简体中文规格值"
 
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Toggle all visible variants"
@@ -6884,8 +6906,8 @@ msgid "Collection position updated"
 msgstr "商品分组位置已更新"
 
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
-msgid "Add \"{newOptionInput}\""
-msgstr "添加「{newOptionInput}」"
+#~ msgid "Add \"{newOptionInput}\""
+#~ msgstr "添加「{newOptionInput}」"
 
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Complete the required information before creating the store."
@@ -7106,6 +7128,10 @@ msgstr "新配送方式"
 msgid "Every 10 seconds"
 msgstr "每 10 秒"
 
+#: src/app/routes/_authenticated/_products/components/option-value-input.tsx
+msgid "This option value already exists"
+msgstr "该规格值已存在"
+
 #: src/app/routes/_authenticated/_shipping-methods/components/price-display.tsx
 msgid "ex. tax:"
 msgstr "不含税："
@@ -7304,8 +7330,8 @@ msgid "New Payment Method"
 msgstr "新支付方式"
 
 #: src/app/routes/_authenticated/_products/components/option-value-input.tsx
-msgid "Duplicate value \"{trimmed}\" already exists"
-msgstr "重复值\"{trimmed}\"已存在"
+#~ msgid "Duplicate value \"{trimmed}\" already exists"
+#~ msgstr "重复值\"{trimmed}\"已存在"
 
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx

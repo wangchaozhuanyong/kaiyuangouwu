@@ -19,7 +19,10 @@ import {
 } from '@/vdb/framework/layout-engine/page-layout.js';
 import { getDetailQueryOptions, useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { schemaLanguageCodes as globalLanguageCodes } from '@/vdb/graphql/schema-enums.js';
-import { supportedStorefrontLanguages } from '@/vdb/utils/supported-storefront-languages.js';
+import {
+    supportedStorefrontLanguageCodes,
+    supportedStorefrontLanguages,
+} from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
@@ -61,12 +64,16 @@ function GlobalSettingsPage() {
         setValuesForUpdate: entity => {
             return {
                 id: entity.id,
-                availableLanguages: supportedStorefrontLanguages(entity.availableLanguages),
+                availableLanguages: [...supportedStorefrontLanguageCodes],
                 trackInventory: entity.trackInventory,
                 outOfStockThreshold: entity.outOfStockThreshold,
                 customFields: entity.customFields,
             };
         },
+        transformUpdateInput: input => ({
+            ...input,
+            availableLanguages: [...supportedStorefrontLanguageCodes],
+        }),
         params: { id: 'undefined' },
         onSuccess: async data => {
             if (data.__typename === 'GlobalSettings') {
@@ -123,10 +130,11 @@ function GlobalSettingsPage() {
                             }
                             render={({ field }) => (
                                 <LanguageSelector
-                                    value={supportedStorefrontLanguages(field.value)}
+                                    value={[...supportedStorefrontLanguageCodes]}
                                     onChange={field.onChange}
                                     availableLanguageCodes={supportedStorefrontLanguages(globalLanguageCodes)}
                                     multiple={true}
+                                    disabled={true}
                                 />
                             )}
                         />

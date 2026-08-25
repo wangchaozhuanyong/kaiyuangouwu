@@ -31,7 +31,7 @@ describe('StorefrontBrandingShopResolver', () => {
         });
     });
 
-    it('falls back to the available public language without exposing an internal note', async () => {
+    it('does not leak untranslated Chinese content into an English response', async () => {
         const resolver = createResolver({
             descriptionZh: '唯一公开简介',
             descriptionEn: '',
@@ -44,7 +44,7 @@ describe('StorefrontBrandingShopResolver', () => {
             channel: { code: 'store', customFields: { storefrontNameZh: '商城', storefrontNameEn: '' } },
         } as any);
 
-        expect(result).toMatchObject({ name: '商城', description: '唯一公开简介' });
+        expect(result).toMatchObject({ name: 'store', description: '' });
         expect(result).not.toHaveProperty('internalNote');
     });
 

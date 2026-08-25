@@ -19,7 +19,10 @@ import { schemaLanguageCodes as globalLanguageCodes } from '@/vdb/graphql/schema
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { usePermissions } from '@/vdb/hooks/use-permissions.js';
 import { useSortedLanguages } from '@/vdb/hooks/use-sorted-languages.js';
-import { supportedStorefrontLanguages } from '@/vdb/utils/supported-storefront-languages.js';
+import {
+    supportedStorefrontLanguageCodes,
+    supportedStorefrontLanguages,
+} from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Lock } from 'lucide-react';
@@ -141,14 +144,10 @@ export function ManageLanguagesDialog({ open, onClose }: ManageLanguagesDialogPr
     // Initialize state when dialog opens
     useEffect(() => {
         if (open && globalSettingsData) {
-            setGlobalLanguages(
-                supportedStorefrontLanguages(globalSettingsData.globalSettings.availableLanguages),
-            );
+            setGlobalLanguages([...supportedStorefrontLanguageCodes]);
         }
         if (open && displayChannel) {
-            const supportedChannelLanguages = supportedStorefrontLanguages(
-                displayChannel.availableLanguageCodes,
-            );
+            const supportedChannelLanguages: string[] = [...supportedStorefrontLanguageCodes];
             setChannelLanguages(supportedChannelLanguages);
             setChannelDefaultLanguage(
                 supportedChannelLanguages.includes(displayChannel.defaultLanguageCode)
@@ -301,6 +300,7 @@ export function ManageLanguagesDialog({ open, onClose }: ManageLanguagesDialogPr
                                         availableLanguageCodes={supportedStorefrontLanguages(
                                             globalLanguageCodes,
                                         )}
+                                        disabled={true}
                                     />
                                 </div>
                                 <p className="text-xs text-muted-foreground">
@@ -343,6 +343,7 @@ export function ManageLanguagesDialog({ open, onClose }: ManageLanguagesDialogPr
                                             onChange={handleChannelLanguagesChange}
                                             multiple={true}
                                             availableLanguageCodes={globalLanguages}
+                                            disabled={true}
                                         />
                                     </div>
                                     {globalLanguages.length === 0 ? (

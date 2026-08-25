@@ -123,6 +123,7 @@ describe('StoreCommerceSettingsService', () => {
             zoneService as any,
             {} as any,
             shippingMethodService as any,
+            {} as any,
         );
 
         const result = await service.get({ channelId: channel.id } as any);
@@ -193,6 +194,19 @@ describe('StoreCommerceSettingsService', () => {
                 .mockResolvedValueOnce({ items: [...placeholders, configuredMethod], totalItems: 3 }),
             create: vi.fn().mockResolvedValue(configuredMethod),
         };
+        const translations = {
+            prepareLocalizedFields: vi.fn(async fields =>
+                fields.map((field: any) => ({
+                    path: field.path,
+                    sourceText: field.sourceText,
+                    translatedText: field.targetText,
+                    status: 'MANUAL_LOCKED',
+                    origin: 'MANUAL',
+                    locked: true,
+                })),
+            ),
+            recordPreparedFields: vi.fn(async () => undefined),
+        };
         const service = new StoreCommerceSettingsService(
             connection as any,
             channelService as any,
@@ -200,6 +214,7 @@ describe('StoreCommerceSettingsService', () => {
             zoneService as any,
             taxRateService as any,
             shippingMethodService as any,
+            translations as any,
         );
         const result = { channelId: channel.id, ready: true } as any;
         vi.spyOn(service, 'get').mockResolvedValue(result);

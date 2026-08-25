@@ -5,6 +5,7 @@ import {
     AlertDescription,
     Badge,
     Button,
+    ChannelCodeLabel,
     DashboardRouteDefinition,
     Dialog,
     DialogContent,
@@ -212,7 +213,9 @@ function ReviewModerationPage() {
                         </Tabs>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span>{text.activeChannel}</span>
-                            <Badge variant="outline">{activeChannel?.code ?? '-'}</Badge>
+                            <Badge variant="outline">
+                                {activeChannel ? <ChannelCodeLabel code={activeChannel.code} /> : '-'}
+                            </Badge>
                             <Badge variant="secondary">{totalItems}</Badge>
                         </div>
                     </div>

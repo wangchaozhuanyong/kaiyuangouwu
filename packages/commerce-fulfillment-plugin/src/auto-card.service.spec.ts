@@ -81,6 +81,7 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
     );
     const ctx = {
         channelId: 'channel-1',

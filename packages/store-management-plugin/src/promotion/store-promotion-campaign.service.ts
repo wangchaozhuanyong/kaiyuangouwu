@@ -608,9 +608,8 @@ function operation(
     };
 }
 
-function promotionTranslations(ctx: RequestContext, name: string, description: string) {
-    const languageCode = ctx.languageCode ?? LanguageCode.zh_Hans;
-    return [{ languageCode, name, description }];
+function promotionTranslations(_ctx: RequestContext, name: string, description: string) {
+    return [{ languageCode: LanguageCode.zh_Hans, name, description }];
 }
 
 function discountRateToPercentageOff(value: number | null | undefined): number {

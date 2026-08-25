@@ -173,16 +173,13 @@ export class StorefrontPromotionService {
         ]);
         const fields = ctx.channel.customFields as StorefrontChannelFields;
         const isEnglish = String(ctx.languageCode).toLowerCase().startsWith('en');
-        const name =
-            (isEnglish ? fields.storefrontNameEn : fields.storefrontNameZh)?.trim() ||
-            fields.storefrontNameZh?.trim() ||
-            fields.storefrontNameEn?.trim() ||
-            ctx.channel.code;
+        const name = isEnglish
+            ? fields.storefrontNameEn?.trim() || ctx.channel.code
+            : fields.storefrontNameZh?.trim() || fields.storefrontNameEn?.trim() || ctx.channel.code;
         const description = this.truncate(
-            (isEnglish ? profile?.descriptionEn : profile?.descriptionZh)?.trim() ||
-                profile?.descriptionZh?.trim() ||
-                profile?.descriptionEn?.trim() ||
-                '',
+            isEnglish
+                ? profile?.descriptionEn?.trim() || ''
+                : profile?.descriptionZh?.trim() || profile?.descriptionEn?.trim() || '',
             220,
         );
         const logoUrl = profile?.logoAsset

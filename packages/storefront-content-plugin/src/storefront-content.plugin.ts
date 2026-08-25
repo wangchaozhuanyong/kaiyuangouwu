@@ -1,3 +1,4 @@
+import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
@@ -12,7 +13,7 @@ import { StorefrontContentService } from './storefront-content.service';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
 
 @VendurePlugin({
-    imports: [PluginCommonModule],
+    imports: [PluginCommonModule, ContentTranslationPlugin],
     entities: [
         StorefrontContentBlock,
         StorefrontContentBlockTranslation,

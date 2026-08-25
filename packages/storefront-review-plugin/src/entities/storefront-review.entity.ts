@@ -51,6 +51,12 @@ export class StorefrontReview extends VendureEntity {
     @Column({ type: 'text', nullable: true })
     merchantResponse: string | null;
 
+    @Column({ type: 'text', nullable: true })
+    merchantResponseZh: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    merchantResponseEn: string | null;
+
     @Column({ type: Date, nullable: true })
     moderatedAt: Date | null;
 

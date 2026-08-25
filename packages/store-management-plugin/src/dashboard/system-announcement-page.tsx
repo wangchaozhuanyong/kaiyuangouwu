@@ -242,7 +242,9 @@ function AnnouncementEditor({
             <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>{draft?.id ? '编辑系统公告' : '新建系统公告'}</DialogTitle>
-                    <DialogDescription>中文必填，英文留空时英文客户端会回退显示中文。</DialogDescription>
+                    <DialogDescription>
+                        中文为原文；英文留空会在保存时自动生成，也可以手动修改。
+                    </DialogDescription>
                 </DialogHeader>
                 {localDraft ? (
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -253,7 +255,7 @@ function AnnouncementEditor({
                                 onChange={event => update('titleZh', event.target.value)}
                             />
                         </Field>
-                        <Field label="英文标题">
+                        <Field label="英文标题（可选，留空自动翻译）">
                             <Input
                                 value={localDraft.titleEn}
                                 maxLength={120}
@@ -268,7 +270,7 @@ function AnnouncementEditor({
                                 onChange={event => update('contentZh', event.target.value)}
                             />
                         </Field>
-                        <Field label="英文内容" className="sm:col-span-2">
+                        <Field label="英文内容（可选，留空自动翻译）" className="sm:col-span-2">
                             <Textarea
                                 rows={3}
                                 value={localDraft.contentEn}
@@ -387,9 +389,9 @@ function announcementInput(value: AnnouncementDraft, includeId: boolean) {
         enabled: value.enabled,
         priority: Number(value.priority),
         titleZh: value.titleZh,
-        titleEn: value.titleEn || null,
+        titleEn: value.titleEn,
         contentZh: value.contentZh,
-        contentEn: value.contentEn || null,
+        contentEn: value.contentEn,
         linkUrl: value.linkUrl || null,
         startsAt: isoDate(value.startsAt),
         endsAt: isoDate(value.endsAt),

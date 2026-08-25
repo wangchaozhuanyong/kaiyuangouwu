@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { ConfigService, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
@@ -54,7 +55,7 @@ import { SystemAnnouncementService } from './system-announcement.service';
 import { StorefrontPromotionPluginOptions } from './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule],
+    imports: [PluginCommonModule, ContentTranslationPlugin],
     entities: [
         StoreAdministratorAccess,
         StoreProfile,

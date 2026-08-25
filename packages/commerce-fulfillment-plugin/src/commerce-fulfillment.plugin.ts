@@ -1,3 +1,4 @@
+import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.resolver';
@@ -45,7 +46,7 @@ import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-alloc
 import './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule],
+    imports: [PluginCommonModule, ContentTranslationPlugin],
     entities: [
         AfterSalesRequest,
         AfterSalesItem,

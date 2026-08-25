@@ -5,6 +5,7 @@
         "lib": ["es2019", "esnext.asynciterable", "dom", "dom.iterable"],
         "types": ["node", "vitest/globals"],
         "paths": {
+            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"],
             "@/vdb/*": ["../dashboard/src/lib/*"]
         }
     },

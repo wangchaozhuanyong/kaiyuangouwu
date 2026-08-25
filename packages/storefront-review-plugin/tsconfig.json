@@ -1,5 +1,9 @@
 {
     "extends": "../../tsconfig.json",
-    "compilerOptions": {},
+    "compilerOptions": {
+        "paths": {
+            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"]
+        }
+    },
     "include": ["src/**/*.ts"]
 }

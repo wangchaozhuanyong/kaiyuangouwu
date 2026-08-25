@@ -19,6 +19,7 @@ export interface LanguageSelectorProps<T extends boolean> {
     onChange: (value: T extends true ? string[] : string) => void;
     multiple?: T;
     availableLanguageCodes?: string[];
+    disabled?: boolean;
 }
 
 export function LanguageSelector<T extends boolean>(props: LanguageSelectorProps<T>) {
@@ -27,7 +28,7 @@ export function LanguageSelector<T extends boolean>(props: LanguageSelectorProps
         queryFn: () => api.query(availableGlobalLanguages),
         staleTime: 1000 * 60 * 5, // 5 minutes
     });
-    const { value, onChange, multiple, availableLanguageCodes } = props;
+    const { value, onChange, multiple, availableLanguageCodes, disabled } = props;
     const { t } = useLingui();
 
     const sortedLanguages = useSortedLanguages(
@@ -49,6 +50,7 @@ export function LanguageSelector<T extends boolean>(props: LanguageSelectorProps
             onChange={onChange}
             multiple={multiple}
             items={items}
+            disabled={disabled}
             placeholder={t`Select a language`}
             searchPlaceholder={t`Search languages...`}
         />

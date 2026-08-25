@@ -10,6 +10,10 @@ import {
 } from '@vendure/commerce-fulfillment-plugin';
 import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/shared-constants';
 import {
+    ContentTranslationPlugin,
+    GoogleCloudTranslationProvider,
+} from '@vendure/content-translation-plugin';
+import {
     DefaultJobQueuePlugin,
     DefaultLogger,
     DefaultPasswordValidationStrategy,
@@ -74,6 +78,9 @@ import { StorefrontNativeAuthenticationStrategy } from './storefront-native-auth
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const IS_INSTRUMENTED = process.env.IS_INSTRUMENTED === 'true';
 const BOOTSTRAP_BASE_SCHEMA = process.env.VENDURE_BOOTSTRAP_BASE_SCHEMA === 'true';
+const contentTranslationApiKey = BOOTSTRAP_BASE_SCHEMA
+    ? ''
+    : configuredValue('VENDURE_GOOGLE_TRANSLATION_API_KEY', '');
 const SERVE_GRAPHIQL =
     process.env.VENDURE_SERVE_GRAPHIQL != null
         ? process.env.VENDURE_SERVE_GRAPHIQL === 'true'
@@ -660,6 +667,17 @@ export const devConfig: VendureConfig = {
         OperationsDashboardPlugin,
         ...(!BOOTSTRAP_BASE_SCHEMA
             ? [
+                  ContentTranslationPlugin.init({
+                      provider: new GoogleCloudTranslationProvider({
+                          apiKey: contentTranslationApiKey,
+                      }),
+                      glossary: {
+                          大马通: 'Damatong',
+                          'ChatGPT- plus': 'ChatGPT Plus',
+                          ChatGPT: 'ChatGPT',
+                          Codex: 'Codex',
+                      },
+                  }),
                   CommerceFulfillmentPlugin,
                   StoreManagementPlugin.init({
                       enabled: storefrontPromotionGateEnabled,

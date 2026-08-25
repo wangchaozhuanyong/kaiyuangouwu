@@ -13,12 +13,12 @@ type Translate = ReturnType<typeof useLingui>['t'];
 
 export const createOptionGroupSchema = (t: Translate) => {
     const optionValueSchema = z.object({
-        value: z.string().min(1, { message: t`Value cannot be empty` }),
+        valueZh: z.string().min(1, { message: t`Simplified Chinese value is required` }),
         id: z.string().min(1, { message: t`Value cannot be empty` }),
     });
 
     return z.object({
-        name: z.string().min(1, { message: t`Option name is required` }),
+        nameZh: z.string().min(1, { message: t`Simplified Chinese option name is required` }),
         values: z.array(optionValueSchema).min(1, { message: t`At least one value is required` }),
     });
 };
@@ -27,9 +27,9 @@ export type OptionGroup = z.infer<ReturnType<typeof createOptionGroupSchema>>;
 export type MultiGroupForm = { optionGroups: OptionGroup[] };
 
 export interface SingleOptionGroup {
-    name: string;
+    nameZh: string;
     values: Array<{
-        value: string;
+        valueZh: string;
         id: string;
     }>;
 }
@@ -57,16 +57,15 @@ export function SingleOptionGroupEditor({
 
     return (
         <div className="space-y-4">
-            <div className="grid grid-cols-[1fr_2fr] gap-4 items-start">
+            <div className="grid gap-4 items-start lg:grid-cols-[1fr_2fr]">
                 <div>
                     <FormFieldWrapper
                         control={control}
-                        name={fieldArrayPath ? `${fieldArrayPath}.name` : 'name'}
-                        label={<Trans>Option Group Name</Trans>}
+                        name={fieldArrayPath ? `${fieldArrayPath}.nameZh` : 'nameZh'}
+                        label={<Trans>Option group name (Simplified Chinese)</Trans>}
                         render={({ field }) => <Input placeholder={t`For example: Size`} {...field} />}
                     />
                 </div>
-
                 <div>
                     <FormFieldWrapper
                         control={control}
@@ -127,11 +126,11 @@ export function OptionGroupsEditor({ onChange, initialGroups = [] }: Readonly<Op
                 const allOptionGroups: SingleOptionGroup[] = value.optionGroups
                     .filter((g): g is NonNullable<typeof g> => !!g)
                     .map(g => ({
-                        name: g.name ?? '',
+                        nameZh: g.nameZh ?? '',
                         values: (g.values ?? [])
                             .filter((v): v is NonNullable<typeof v> => !!v)
-                            .filter(v => typeof v.value === 'string' && typeof v.id === 'string')
-                            .map(v => ({ value: v.value!, id: v.id! })),
+                            .filter(v => typeof v.valueZh === 'string' && typeof v.id === 'string')
+                            .map(v => ({ valueZh: v.valueZh!, id: v.id! })),
                     }));
 
                 onChange?.({ optionGroups: allOptionGroups });
@@ -142,7 +141,7 @@ export function OptionGroupsEditor({ onChange, initialGroups = [] }: Readonly<Op
     }, [form, onChange]);
 
     const handleAddOptionGroup = () => {
-        appendOptionGroup({ name: '', values: [] });
+        appendOptionGroup({ nameZh: '', values: [] });
     };
 
     return (

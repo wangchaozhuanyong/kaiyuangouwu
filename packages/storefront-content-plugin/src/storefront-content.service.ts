@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Asset,
     EntityNotFoundError,
@@ -47,6 +48,7 @@ export class StorefrontContentService {
         private readonly connection: TransactionalConnection,
         private readonly translator: TranslatorService,
         private readonly externalImageService: StorefrontExternalImageService,
+        private readonly contentTranslations: ContentTranslationService,
     ) {}
 
     async findAllForAdmin(ctx: RequestContext): Promise<StorefrontContentBlock[]> {
@@ -82,6 +84,7 @@ export class StorefrontContentService {
             .filter(
                 block => (!block.startsAt || block.startsAt <= now) && (!block.endsAt || block.endsAt > now),
             )
+            .filter(block => this.hasCompletePublishedTranslations(block))
             .map(block => this.translateBlock(block, ctx, true));
     }
 
@@ -325,9 +328,58 @@ export class StorefrontContentService {
     ): Promise<void> {
         this.validateTranslations(inputs, 'title');
         const repository = this.connection.getRepository(ctx, StorefrontContentBlockTranslation);
+        const existing = await repository.find({ where: { base: { id: block.id } } });
+        const source = inputs.find(input => input.languageCode === LanguageCode.zh_Hans);
+        if (!source) throw new UserInputError('必须填写简体中文内容');
+        const target = inputs.find(input => input.languageCode === LanguageCode.en);
+        const existingSource = existing.find(input => input.languageCode === LanguageCode.zh_Hans);
+        const existingTarget = existing.find(input => input.languageCode === LanguageCode.en);
+        const prepared = await this.contentTranslations.prepareLocalizedFields([
+            {
+                path: 'title',
+                sourceText: source.title,
+                targetText: target?.title,
+                existingSourceText: existingSource?.title,
+                existingTargetText: existingTarget?.title,
+                required: true,
+            },
+            {
+                path: 'subtitle',
+                sourceText: source.subtitle ?? '',
+                targetText: target?.subtitle,
+                existingSourceText: existingSource?.subtitle,
+                existingTargetText: existingTarget?.subtitle,
+            },
+            {
+                path: 'body',
+                sourceText: source.body ?? '',
+                targetText: target?.body,
+                existingSourceText: existingSource?.body,
+                existingTargetText: existingTarget?.body,
+                format: 'HTML',
+            },
+            {
+                path: 'ctaLabel',
+                sourceText: source.ctaLabel ?? '',
+                targetText: target?.ctaLabel,
+                existingSourceText: existingSource?.ctaLabel,
+                existingTargetText: existingTarget?.ctaLabel,
+            },
+        ]);
+        const english = new Map(prepared.map(field => [field.path, field.translatedText]));
+        const normalizedInputs: StorefrontContentBlockTranslationInput[] = [
+            source,
+            {
+                languageCode: LanguageCode.en,
+                title: english.get('title') ?? '',
+                subtitle: english.get('subtitle') ?? '',
+                body: english.get('body') ?? '',
+                ctaLabel: english.get('ctaLabel') ?? '',
+            },
+        ];
         await repository.delete({ base: { id: block.id } });
         await repository.save(
-            inputs.map(
+            normalizedInputs.map(
                 input =>
                     new StorefrontContentBlockTranslation({
                         base: block,
@@ -339,6 +391,15 @@ export class StorefrontContentService {
                     }),
             ),
         );
+        await this.contentTranslations.recordPreparedFields(
+            ctx,
+            {
+                channelId: ctx.channelId,
+                entityType: StorefrontContentBlock.name,
+                entityId: block.id,
+            },
+            prepared,
+        );
     }
 
     private async replaceItemTranslations(
@@ -348,9 +409,41 @@ export class StorefrontContentService {
     ): Promise<void> {
         this.validateTranslations(inputs, 'label');
         const repository = this.connection.getRepository(ctx, StorefrontContentItemTranslation);
+        const existing = await repository.find({ where: { base: { id: item.id } } });
+        const source = inputs.find(input => input.languageCode === LanguageCode.zh_Hans);
+        if (!source) throw new UserInputError('必须填写简体中文内容');
+        const target = inputs.find(input => input.languageCode === LanguageCode.en);
+        const existingSource = existing.find(input => input.languageCode === LanguageCode.zh_Hans);
+        const existingTarget = existing.find(input => input.languageCode === LanguageCode.en);
+        const prepared = await this.contentTranslations.prepareLocalizedFields([
+            {
+                path: 'label',
+                sourceText: source.label,
+                targetText: target?.label,
+                existingSourceText: existingSource?.label,
+                existingTargetText: existingTarget?.label,
+                required: true,
+            },
+            {
+                path: 'description',
+                sourceText: source.description ?? '',
+                targetText: target?.description,
+                existingSourceText: existingSource?.description,
+                existingTargetText: existingTarget?.description,
+            },
+        ]);
+        const english = new Map(prepared.map(field => [field.path, field.translatedText]));
+        const normalizedInputs: StorefrontContentItemTranslationInput[] = [
+            source,
+            {
+                languageCode: LanguageCode.en,
+                label: english.get('label') ?? '',
+                description: english.get('description') ?? '',
+            },
+        ];
         await repository.delete({ base: { id: item.id } });
         await repository.save(
-            inputs.map(
+            normalizedInputs.map(
                 input =>
                     new StorefrontContentItemTranslation({
                         base: item,
@@ -359,6 +452,15 @@ export class StorefrontContentService {
                         description: input.description?.trim() ?? '',
                     }),
             ),
+        );
+        await this.contentTranslations.recordPreparedFields(
+            ctx,
+            {
+                channelId: ctx.channelId,
+                entityType: StorefrontContentItem.name,
+                entityId: item.id,
+            },
+            prepared,
         );
     }
 
@@ -383,6 +485,33 @@ export class StorefrontContentService {
             })
             .sort((a, b) => a.position - b.position || Number(a.id) - Number(b.id));
         return translated;
+    }
+
+    private hasCompletePublishedTranslations(block: StorefrontContentBlock): boolean {
+        const source = block.translations?.find(
+            translation => translation.languageCode === LanguageCode.zh_Hans,
+        );
+        const target = block.translations?.find(translation => translation.languageCode === LanguageCode.en);
+        if (!source?.title.trim() || !target?.title.trim()) return false;
+        const blockFields = ['subtitle', 'body', 'ctaLabel'] as const;
+        if (blockFields.some(field => Boolean(source[field].trim()) !== Boolean(target[field].trim()))) {
+            return false;
+        }
+        return (block.items ?? [])
+            .filter(item => item.enabled)
+            .every(item => {
+                const itemSource = item.translations?.find(
+                    translation => translation.languageCode === LanguageCode.zh_Hans,
+                );
+                const itemTarget = item.translations?.find(
+                    translation => translation.languageCode === LanguageCode.en,
+                );
+                return (
+                    Boolean(itemSource?.label.trim()) &&
+                    Boolean(itemTarget?.label.trim()) &&
+                    Boolean(itemSource?.description.trim()) === Boolean(itemTarget?.description.trim())
+                );
+            });
     }
 
     private async getOwnedBlockOrThrow(ctx: RequestContext, id: ID): Promise<StorefrontContentBlock> {
@@ -505,7 +634,7 @@ export class StorefrontContentService {
         requiredKey: 'title' | 'label',
     ): void {
         if (!inputs.length) {
-            throw new UserInputError('至少需要一种语言的内容');
+            throw new UserInputError('必须填写简体中文内容');
         }
         const languageCodes = new Set<string>();
         for (const input of inputs) {
@@ -517,6 +646,12 @@ export class StorefrontContentService {
             if (typeof requiredValue !== 'string' || !requiredValue.trim()) {
                 throw new UserInputError(requiredKey === 'title' ? '区块标题不能为空' : '条目名称不能为空');
             }
+        }
+        if (!languageCodes.has(LanguageCode.zh_Hans)) {
+            throw new UserInputError('必须填写简体中文内容');
+        }
+        if ([...languageCodes].some(code => code !== 'zh_Hans' && code !== 'en')) {
+            throw new UserInputError('当前仅支持简体中文和英语');
         }
     }
 

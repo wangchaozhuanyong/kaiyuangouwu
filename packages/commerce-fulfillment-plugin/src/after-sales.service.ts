@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Customer,
     CustomerService,
@@ -45,6 +46,7 @@ export class AfterSalesService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
+        private readonly translations: ContentTranslationService,
     ) {}
 
     async findForCustomer(ctx: RequestContext): Promise<AfterSalesRequest[]> {
@@ -54,7 +56,7 @@ export class AfterSalesService {
             relations: { items: true, events: true, order: true, refund: true },
             order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
         });
-        return requests.map(request => this.normalizeRelations(request));
+        return requests.map(request => this.normalizeRelations(request, ctx));
     }
 
     async findOneForCustomer(ctx: RequestContext, id: ID): Promise<AfterSalesRequest | undefined> {
@@ -64,7 +66,7 @@ export class AfterSalesService {
             relations: { items: true, events: true, order: true, refund: true },
             order: { events: { createdAt: 'ASC' } },
         });
-        return request ? this.normalizeRelations(request) : undefined;
+        return request ? this.normalizeRelations(request, ctx) : undefined;
     }
 
     async findForAdmin(
@@ -94,7 +96,7 @@ export class AfterSalesService {
             skip,
             take,
         });
-        return { items: items.map(item => this.normalizeRelations(item)), totalItems };
+        return { items: items.map(item => this.normalizeRelations(item, ctx)), totalItems };
     }
 
     async create(ctx: RequestContext, input: CreateAfterSalesRequestInput): Promise<AfterSalesRequest> {
@@ -181,6 +183,8 @@ export class AfterSalesService {
                 requestedAmount,
                 approvedAmount: null,
                 resolution: null,
+                resolutionZh: null,
+                resolutionEn: null,
                 customerName: customerName || customer.emailAddress,
                 customerEmail: customer.emailAddress,
                 respondedAt: null,
@@ -311,12 +315,25 @@ export class AfterSalesService {
             }
         }
 
+        const prepared = await this.translations.prepareLocalizedFields([
+            {
+                path: 'resolution',
+                sourceText: resolution,
+                existingSourceText: request.resolutionZh ?? request.resolution,
+                existingTargetText: request.resolutionEn,
+                required: true,
+            },
+        ]);
+        const resolutionEn = prepared[0].translatedText;
+
         const now = new Date();
         const result = await this.connection.getRepository(ctx, AfterSalesRequest).update(
             { id: request.id, channelId: ctx.channelId, state: request.state },
             {
                 state: input.state,
                 resolution,
+                resolutionZh: resolution,
+                resolutionEn,
                 approvedAmount,
                 ...(request.state === 'PENDING' ? { respondedAt: now } : {}),
                 ...(input.state === 'COMPLETED' ? { completedAt: now } : {}),
@@ -326,6 +343,15 @@ export class AfterSalesService {
         if (result.affected !== 1) {
             throw new UserInputError('售后状态已更新，请刷新后重试');
         }
+        await this.translations.recordPreparedFields(
+            ctx,
+            {
+                channelId: ctx.channelId,
+                entityType: AfterSalesRequest.name,
+                entityId: request.id,
+            },
+            prepared,
+        );
         await this.addEvent(
             ctx,
             request,
@@ -393,7 +419,7 @@ export class AfterSalesService {
         if (!request) {
             throw new EntityNotFoundError(AfterSalesRequest.name, id);
         }
-        return this.normalizeRelations(request);
+        return this.normalizeRelations(request, ctx);
     }
 
     private async getRequestForAdminOrThrow(ctx: RequestContext, id: ID): Promise<AfterSalesRequest> {
@@ -405,7 +431,7 @@ export class AfterSalesService {
         if (!request) {
             throw new EntityNotFoundError(AfterSalesRequest.name, id);
         }
-        return this.normalizeRelations(request);
+        return this.normalizeRelations(request, ctx);
     }
 
     private addEvent(
@@ -430,11 +456,15 @@ export class AfterSalesService {
         );
     }
 
-    private normalizeRelations(request: AfterSalesRequest): AfterSalesRequest {
+    private normalizeRelations(request: AfterSalesRequest, ctx: RequestContext): AfterSalesRequest {
         request.items = [...(request.items ?? [])].sort((left, right) => Number(left.id) - Number(right.id));
         request.events = [...(request.events ?? [])].sort(
             (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
         );
+        const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
+        request.resolution = isChinese
+            ? request.resolutionZh || request.resolutionEn || request.resolution
+            : request.resolutionEn || null;
         return request;
     }
 

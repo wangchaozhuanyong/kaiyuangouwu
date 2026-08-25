@@ -21,7 +21,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Page, PageBlock, PageLayout, PageTitle } from '@/vdb/framework/layout-engine/page-layout.js';
 import { api } from '@/vdb/graphql/api.js';
 import { ResultOf } from '@/vdb/graphql/graphql.js';
-import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { useRedirectToListOnNotFound } from '@/vdb/hooks/use-redirect-to-list-on-not-found.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -78,7 +77,7 @@ export const Route = createFileRoute('/_authenticated/_products/products_/$id_/v
 });
 
 const addOptionValueSchema = z.object({
-    name: z.string().min(1, 'Option value name is required'),
+    nameZh: z.string().min(1, 'Simplified Chinese option value is required'),
 });
 
 type AddOptionValueFormValues = z.infer<typeof addOptionValueSchema>;
@@ -103,12 +102,11 @@ function AddOptionValueDialog({
 }>) {
     const [open, setOpen] = useState(false);
     const { t } = useLingui();
-    const { activeChannel } = useChannel();
 
     const form = useForm<AddOptionValueFormValues>({
         resolver: zodResolver(addOptionValueSchema),
         defaultValues: {
-            name: '',
+            nameZh: '',
         },
     });
 
@@ -131,11 +129,11 @@ function AddOptionValueDialog({
         createOptionMutation.mutate({
             input: {
                 productOptionGroupId: groupId,
-                code: values.name.toLowerCase().replace(/\s+/g, '-'),
+                code: `option-${Date.now().toString(36)}`,
                 translations: [
                     {
-                        languageCode: activeChannel?.defaultLanguageCode ?? 'en',
-                        name: values.name,
+                        languageCode: 'zh_Hans',
+                        name: values.nameZh,
                     },
                 ],
             },
@@ -160,8 +158,8 @@ function AddOptionValueDialog({
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <FormFieldWrapper
                             control={form.control}
-                            name="name"
-                            label={<Trans>Option value name</Trans>}
+                            name="nameZh"
+                            label={<Trans>Option value (Simplified Chinese)</Trans>}
                             render={({ field }) => (
                                 <Input {...field} placeholder={t`e.g., Red, Large, Cotton`} />
                             )}

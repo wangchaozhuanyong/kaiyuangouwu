@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Customer,
     CustomerService,
@@ -37,6 +38,7 @@ export class StorefrontReviewService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
+        private readonly translations: ContentTranslationService,
     ) {}
 
     async findApprovedForProduct(
@@ -57,15 +59,20 @@ export class StorefrontReviewService {
             }),
             repository.average('rating', where),
         ]);
-        return { items, totalItems, averageRating: averageRating ?? 0 };
+        return {
+            items: items.map(item => this.localizeMerchantResponse(item, ctx)),
+            totalItems,
+            averageRating: averageRating ?? 0,
+        };
     }
 
     async findMine(ctx: RequestContext): Promise<StorefrontReview[]> {
         const customer = await this.activeCustomerOrThrow(ctx);
-        return this.connection.getRepository(ctx, StorefrontReview).find({
+        const reviews = await this.connection.getRepository(ctx, StorefrontReview).find({
             where: { channelId: ctx.channelId, customerId: customer.id },
             order: { createdAt: 'DESC' },
         });
+        return reviews.map(review => this.localizeMerchantResponse(review, ctx));
     }
 
     async findCandidates(ctx: RequestContext): Promise<StorefrontReviewCandidate[]> {
@@ -141,7 +148,11 @@ export class StorefrontReviewService {
             }),
             repository.average('rating', where),
         ]);
-        return { items, totalItems, averageRating: averageRating ?? 0 };
+        return {
+            items: items.map(item => this.localizeMerchantResponse(item, ctx)),
+            totalItems,
+            averageRating: averageRating ?? 0,
+        };
     }
 
     async submit(ctx: RequestContext, input: SubmitStorefrontReviewInput): Promise<StorefrontReview> {
@@ -194,6 +205,8 @@ export class StorefrontReviewService {
                 productName: variant.product?.name || variant.name,
                 sku: variant.sku,
                 merchantResponse: null,
+                merchantResponseZh: null,
+                merchantResponseEn: null,
                 moderatedAt: null,
                 channel: ctx.channel,
                 channelId: ctx.channelId,
@@ -232,14 +245,39 @@ export class StorefrontReviewService {
         if (review.state !== 'PENDING') {
             throw new UserInputError('只有待审核的评价可以处理');
         }
-        const result = await this.connection
-            .getRepository(ctx, StorefrontReview)
-            .update(
-                { id: review.id, channelId: ctx.channelId, state: 'PENDING' },
-                { state: input.state, merchantResponse: response, moderatedAt: new Date() },
-            );
+        const prepared = response
+            ? await this.translations.prepareLocalizedFields([
+                  {
+                      path: 'merchantResponse',
+                      sourceText: response,
+                      required: true,
+                  },
+              ])
+            : [];
+        const responseEn = prepared[0]?.translatedText ?? null;
+        const result = await this.connection.getRepository(ctx, StorefrontReview).update(
+            { id: review.id, channelId: ctx.channelId, state: 'PENDING' },
+            {
+                state: input.state,
+                merchantResponse: response,
+                merchantResponseZh: response,
+                merchantResponseEn: responseEn,
+                moderatedAt: new Date(),
+            },
+        );
         if (result.affected !== 1) {
             throw new UserInputError('评价状态已更新，请刷新后重试');
+        }
+        if (prepared.length) {
+            await this.translations.recordPreparedFields(
+                ctx,
+                {
+                    channelId: ctx.channelId,
+                    entityType: StorefrontReview.name,
+                    entityId: review.id,
+                },
+                prepared,
+            );
         }
         return this.getAdminOrThrow(ctx, review.id);
     }
@@ -291,7 +329,7 @@ export class StorefrontReviewService {
         if (!review) {
             throw new EntityNotFoundError(StorefrontReview.name, id);
         }
-        return review;
+        return this.localizeMerchantResponse(review, ctx);
     }
 
     private async getAdminOrThrow(ctx: RequestContext, id: ID): Promise<StorefrontReview> {
@@ -301,6 +339,14 @@ export class StorefrontReviewService {
         if (!review) {
             throw new EntityNotFoundError(StorefrontReview.name, id);
         }
+        return this.localizeMerchantResponse(review, ctx);
+    }
+
+    private localizeMerchantResponse(review: StorefrontReview, ctx: RequestContext): StorefrontReview {
+        const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
+        review.merchantResponse = isChinese
+            ? review.merchantResponseZh || review.merchantResponseEn || review.merchantResponse
+            : review.merchantResponseEn || null;
         return review;
     }
 

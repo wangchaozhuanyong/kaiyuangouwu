@@ -25,6 +25,7 @@ import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-lo
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { z } from '@/vdb/lib/zod.js';
+import { supportedStorefrontLanguageCodes } from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { CheckCircle2, Circle, ClipboardCopy, Globe2, Store } from 'lucide-react';
@@ -33,31 +34,6 @@ import { uiConfig } from 'virtual:vendure-ui-config';
 import { channelDetailDocument, createChannelDocument, updateChannelDocument } from './channels.graphql.js';
 
 const pageId = 'channel-detail';
-
-/**
- * The available language codes sent to the server, or `undefined` when the user selected none.
- *
- * Omitting an empty list lets ChannelService.create derive it from the default
- * (`input.availableLanguageCodes ?? [defaultLanguageCode]`) — as opposed to `[]`, which would be
- * saved as a channel with no available languages at all. `defaultLanguageCode` is pre-filled from
- * the active channel, so an empty list here is the normal state of an untouched create form.
- *
- * A non-empty list must contain the default: neither `create` nor `update` checks that it does for
- * languages, so a default outside the list would be saved as an unusable channel.
- *
- * Currencies need none of this: the default currency can only be picked from the available
- * currencies, and that pair is validated below, so the list is always non-empty and always
- * contains the default by the time it is submitted.
- */
-function withDefaultLanguage<T extends string>(
-    available: readonly T[] | null | undefined,
-    defaultCode: T | null | undefined,
-): T[] | undefined {
-    if (!available?.length) {
-        return undefined;
-    }
-    return [...new Set(defaultCode ? [...available, defaultCode] : available)];
-}
 
 export const Route = createFileRoute('/_authenticated/_channels/channels_/$id')({
     component: ChannelDetailPage,
@@ -93,7 +69,7 @@ function ChannelDetailPage() {
                 token: entity.token,
                 pricesIncludeTax: entity.pricesIncludeTax,
                 availableCurrencyCodes: entity.availableCurrencyCodes,
-                availableLanguageCodes: entity.availableLanguageCodes,
+                availableLanguageCodes: [...supportedStorefrontLanguageCodes],
                 defaultCurrencyCode: entity.defaultCurrencyCode,
                 defaultLanguageCode: entity.defaultLanguageCode,
                 defaultShippingZoneId: entity.defaultShippingZone?.id,
@@ -106,19 +82,13 @@ function ChannelDetailPage() {
             return {
                 ...input,
                 currencyCode: undefined,
-                availableLanguageCodes: withDefaultLanguage(
-                    input.availableLanguageCodes,
-                    input.defaultLanguageCode,
-                ),
+                availableLanguageCodes: [...supportedStorefrontLanguageCodes],
             };
         },
         transformUpdateInput: input => {
             return {
                 ...input,
-                availableLanguageCodes: withDefaultLanguage(
-                    input.availableLanguageCodes,
-                    input.defaultLanguageCode,
-                ),
+                availableLanguageCodes: [...supportedStorefrontLanguageCodes],
             };
         },
         // The generated schema is derived from the GraphQL input type, which only tells us about
@@ -199,7 +169,6 @@ function ChannelDetailPage() {
     });
 
     const availableCurrencyCodes = form.watch('availableCurrencyCodes');
-    const availableLanguageCodes = form.watch('availableLanguageCodes');
     const storeCode = form.watch('code');
     const storeToken = form.watch('token');
     const defaultCurrencyCode = form.watch('defaultCurrencyCode');
@@ -302,9 +271,10 @@ function ChannelDetailPage() {
                             }
                             render={({ field }) => (
                                 <LanguageSelector
-                                    value={field.value ?? []}
+                                    value={[...supportedStorefrontLanguageCodes]}
                                     onChange={field.onChange}
                                     multiple={true}
+                                    disabled={true}
                                 />
                             )}
                         />
@@ -349,10 +319,7 @@ function ChannelDetailPage() {
                                     // leave a required field showing a value its own selector no
                                     // longer offers. The current value is always included for the
                                     // same reason — it is submitted as available regardless.
-                                    availableLanguageCodes={withDefaultLanguage(
-                                        availableLanguageCodes,
-                                        field.value,
-                                    )}
+                                    availableLanguageCodes={[...supportedStorefrontLanguageCodes]}
                                 />
                             )}
                         />

@@ -14,7 +14,7 @@ import { Form } from '@/vdb/components/ui/form.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/vdb/components/ui/select.js';
 import { api } from '@/vdb/graphql/api.js';
-import { graphql, ResultOf, VariablesOf } from '@/vdb/graphql/graphql.js';
+import { graphql } from '@/vdb/graphql/graphql.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -23,11 +23,7 @@ import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import {
-    createProductOptionDocument,
-    createProductVariantsDocument,
-    withProductVariantCustomFields,
-} from '../products.graphql.js';
+import { createProductVariantsDocument, withProductVariantCustomFields } from '../products.graphql.js';
 import { getProductFulfillmentType } from './product-fulfillment-type.js';
 import { ProductOptionSelect } from './product-option-select.js';
 
@@ -43,14 +39,26 @@ const getProductOptionGroupsDocument = graphql(
             product(id: $productId) {
                 id
                 name
+                translations {
+                    languageCode
+                    name
+                }
                 optionGroups {
                     id
                     code
                     name
+                    translations {
+                        languageCode
+                        name
+                    }
                     options {
                         id
                         code
                         name
+                        translations {
+                            languageCode
+                            name
+                        }
                     }
                 }
                 variants {
@@ -75,7 +83,7 @@ type Translate = ReturnType<typeof useLingui>['t'];
 
 const createFormSchema = (t: Translate) =>
     z.object({
-        name: z.string().min(1, t`Name is required`),
+        nameZh: z.string().min(1, t`Simplified Chinese name is required`),
         sku: z.string().min(1, t`SKU is required`),
         price: z.string().min(1, t`Price is required`),
         stockOnHand: z.string().min(1, t`Stock level is required`),
@@ -84,6 +92,14 @@ const createFormSchema = (t: Translate) =>
     });
 
 type FormValues = z.infer<ReturnType<typeof createFormSchema>>;
+
+function translatedName(
+    translations: Array<{ languageCode: string; name: string }>,
+    languageCode: 'zh_Hans' | 'en',
+    fallback: string,
+): string {
+    return translations.find(translation => translation.languageCode === languageCode)?.name || fallback;
+}
 
 export function AddProductVariantDialog({
     productId,
@@ -99,7 +115,7 @@ export function AddProductVariantDialog({
     const [duplicateVariantError, setDuplicateVariantError] = useState<string | null>(null);
     const [nameTouched, setNameTouched] = useState(false);
 
-    const { data: productData, refetch } = useQuery({
+    const { data: productData } = useQuery({
         queryKey: ['productOptionGroups', productId],
         queryFn: () =>
             api.query(withProductVariantCustomFields(getProductOptionGroupsDocument), { productId }),
@@ -108,7 +124,7 @@ export function AddProductVariantDialog({
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            name: '',
+            nameZh: '',
             sku: '',
             price: '0',
             stockOnHand: '0',
@@ -150,14 +166,23 @@ export function AddProductVariantDialog({
             const selectedOptions = Object.entries(values.options)
                 .map(([groupId, optionId]) => {
                     const group = productData.product?.optionGroups.find(g => g.id === groupId);
-                    const option = group?.options.find(o => o.id === optionId);
-                    return option?.name;
+                    return group?.options.find(o => o.id === optionId);
                 })
-                .filter(Boolean);
+                .filter((option): option is NonNullable<typeof option> => option != null);
 
             if (selectedOptions.length === productData.product.optionGroups.length) {
-                const newName = `${productData.product.name} ${selectedOptions.join(' ')}`;
-                form.setValue('name', newName, { shouldDirty: true });
+                const productNameZh = translatedName(
+                    productData.product.translations,
+                    'zh_Hans',
+                    productData.product.name,
+                );
+                form.setValue(
+                    'nameZh',
+                    `${productNameZh} ${selectedOptions
+                        .map(option => translatedName(option.translations, 'zh_Hans', option.name))
+                        .join(' ')}`,
+                    { shouldDirty: true },
+                );
             }
         },
         [productData?.product, nameTouched, form],
@@ -195,25 +220,6 @@ export function AddProductVariantDialog({
         },
     });
 
-    const createProductOptionMutation = useMutation({
-        mutationFn: api.mutate(createProductOptionDocument),
-        onSuccess: (
-            result: ResultOf<typeof createProductOptionDocument>,
-            variables: VariablesOf<typeof createProductOptionDocument>,
-        ) => {
-            if (result?.createProductOption) {
-                // Update the form with the new option
-                const currentOptions = form.getValues('options');
-                form.setValue('options', {
-                    ...currentOptions,
-                    [variables.input.productOptionGroupId]: result.createProductOption.id,
-                });
-                // Refetch product data to get the new option
-                refetch();
-            }
-        },
-    });
-
     const onSubmit = useCallback(
         (values: FormValues) => {
             if (!productData?.product) return;
@@ -237,21 +243,15 @@ export function AddProductVariantDialog({
                         optionIds: Object.values(values.options),
                         translations: [
                             {
-                                languageCode: activeChannel?.defaultLanguageCode ?? 'en',
-                                name: values.name,
+                                languageCode: 'zh_Hans',
+                                name: values.nameZh,
                             },
                         ],
                     },
                 ],
             });
         },
-        [
-            activeChannel?.defaultLanguageCode,
-            createProductVariantMutation,
-            productData?.product,
-            duplicateVariantError,
-            productId,
-        ],
+        [createProductVariantMutation, productData?.product, duplicateVariantError, productId],
     );
 
     // Don't show the "Add variant" button if there are no option groups
@@ -303,28 +303,13 @@ export function AddProductVariantDialog({
                                             shouldValidate: true,
                                         });
                                     }}
-                                    onCreateOption={name => {
-                                        createProductOptionMutation.mutate({
-                                            input: {
-                                                productOptionGroupId: group.id,
-                                                code: name.toLowerCase().replace(/\s+/g, '-'),
-                                                translations: [
-                                                    {
-                                                        languageCode:
-                                                            activeChannel?.defaultLanguageCode ?? 'en',
-                                                        name,
-                                                    },
-                                                ],
-                                            },
-                                        });
-                                    }}
                                 />
                             ))}
                         </div>
                         <FormFieldWrapper
                             control={form.control}
-                            name="name"
-                            label={<Trans>Name</Trans>}
+                            name="nameZh"
+                            label={<Trans>Name (Simplified Chinese)</Trans>}
                             render={({ field }) => <Input {...field} onFocus={() => setNameTouched(true)} />}
                         />
                         <FormFieldWrapper

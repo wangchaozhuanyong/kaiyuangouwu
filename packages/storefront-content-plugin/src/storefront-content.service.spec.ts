@@ -24,7 +24,7 @@ function createInput(
 }
 
 function validate(input: CreateStorefrontContentBlockInput) {
-    const service = new StorefrontContentService({} as never, {} as never, {} as never);
+    const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
     return (service as any).validateBlockInput(input);
 }
 
@@ -103,7 +103,7 @@ describe('StorefrontContentService input validation', () => {
     });
 
     it('requires coupon blocks to point to real promotion codes', () => {
-        const service = new StorefrontContentService({} as never, {} as never, {} as never);
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
         const couponItem = {
             position: 0,
             targetType: 'COUPON' as const,
@@ -121,6 +121,23 @@ describe('StorefrontContentService input validation', () => {
     });
 });
 
+describe('StorefrontContentService publication guard', () => {
+    it('requires matching Chinese and English customer-visible fields', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const block = new StorefrontContentBlock({
+            translations: [
+                { languageCode: LanguageCode.zh_Hans, title: '首页', subtitle: '', body: '', ctaLabel: '' },
+                { languageCode: LanguageCode.en, title: '', subtitle: '', body: '', ctaLabel: '' },
+            ],
+            items: [],
+        });
+
+        expect((service as any).hasCompletePublishedTranslations(block)).toBe(false);
+        block.translations[1].title = 'Home';
+        expect((service as any).hasCompletePublishedTranslations(block)).toBe(true);
+    });
+});
+
 describe('StorefrontContentService image ownership', () => {
     it('imports an external URL and replaces it with the resulting Asset preview', async () => {
         const asset = { id: 'asset-1', preview: '/assets/preview/imported.png' };
@@ -135,6 +152,7 @@ describe('StorefrontContentService image ownership', () => {
             connection as any,
             {} as any,
             externalImageService as any,
+            {} as any,
         );
 
         await expect(
@@ -152,7 +170,7 @@ describe('StorefrontContentService image ownership', () => {
     });
 
     it('does not expose unmigrated third-party URLs through the Shop API', () => {
-        const service = new StorefrontContentService({} as any, {} as any, {} as any);
+        const service = new StorefrontContentService({} as any, {} as any, {} as any, {} as any);
 
         expect((service as any).publishedLegacyImageUrl('/assets/preview/hero.png')).toBe(
             '/assets/preview/hero.png',
@@ -197,7 +215,12 @@ describe('StorefrontContentService Channel isolation', () => {
         };
         const connection = { getRepository: vi.fn().mockReturnValue(repository) };
         const translator = { translate: vi.fn(block => block) };
-        const service = new StorefrontContentService(connection as any, translator as any, {} as any);
+        const service = new StorefrontContentService(
+            connection as any,
+            translator as any,
+            {} as any,
+            {} as any,
+        );
 
         await expect(service.findAllForAdmin({ channelId: 'store-a' } as any)).resolves.toEqual([
             expect.objectContaining({ id: 'block-a' }),
@@ -220,7 +243,7 @@ describe('StorefrontContentService carousel settings', () => {
                 entity === StorefrontContentBlock ? blockRepository : repository,
             ),
         };
-        const service = new StorefrontContentService(connection as any, {} as any, {} as any);
+        const service = new StorefrontContentService(connection as any, {} as any, {} as any, {} as any);
 
         await expect(service.getSettings({ channelId: 'store-a' } as any)).resolves.toEqual({
             heroAutoplayIntervalSeconds: 5,
@@ -246,7 +269,7 @@ describe('StorefrontContentService carousel settings', () => {
                 entity === StorefrontContentBlock ? blockRepository : repository,
             ),
         };
-        const service = new StorefrontContentService(connection as any, {} as any, {} as any);
+        const service = new StorefrontContentService(connection as any, {} as any, {} as any, {} as any);
         const context = { channelId: 'store-a', channel: { id: 'store-a' } } as any;
 
         await expect(service.updateSettings(context, { heroAutoplayIntervalSeconds: 9 })).resolves.toEqual({
@@ -267,7 +290,7 @@ describe('StorefrontContentService carousel settings', () => {
     });
 
     it('rejects non-integer or out-of-range intervals', async () => {
-        const service = new StorefrontContentService({} as any, {} as any, {} as any);
+        const service = new StorefrontContentService({} as any, {} as any, {} as any, {} as any);
         const context = { channelId: 'store-a' } as any;
 
         await expect(service.updateSettings(context, { heroAutoplayIntervalSeconds: 2 })).rejects.toThrow(

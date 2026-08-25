@@ -1,6 +1,4 @@
-import { Check, ChevronsUpDown, Languages, Plus, Store } from 'lucide-react';
-
-import { ChannelCodeLabel } from '@/vdb/components/shared/channel-code-label.js';
+import { ChannelCodeLabel, useChannelDisplayName } from '@/vdb/components/shared/channel-code-label.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
 import {
     DropdownMenu,
@@ -24,7 +22,9 @@ import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { cn } from '@/vdb/lib/utils.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from '@tanstack/react-router';
+import { Check, ChevronsUpDown, Languages, Plus, Store } from 'lucide-react';
 import { useEffect, useState } from 'react';
+
 import { ManageLanguagesDialog } from './manage-languages-dialog.js';
 
 /**
@@ -59,6 +59,7 @@ export function ChannelSwitcher() {
     } = useUserSettings();
     const [showManageLanguagesDialog, setShowManageLanguagesDialog] = useState(false);
     const displayChannel = activeChannel;
+    const displayChannelName = useChannelDisplayName(displayChannel?.code);
 
     // Get available languages from server config
     const availableLanguages = serverConfig?.availableLanguages || [];
@@ -128,7 +129,7 @@ export function ChannelSwitcher() {
                             render={
                                 <SidebarMenuButton
                                     size="lg"
-                                    tooltip={t`Current store: ${displayChannel?.code ?? ''}`}
+                                    tooltip={t`Current store: ${displayChannelName}`}
                                     className="border border-sidebar-border/70 bg-sidebar-accent/40 data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
                                 />
                             }

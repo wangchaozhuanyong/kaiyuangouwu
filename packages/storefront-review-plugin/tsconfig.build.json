@@ -4,7 +4,10 @@
         "declaration": true,
         "noEmit": false,
         "outDir": "./dist",
-        "rootDir": "./src"
+        "rootDir": "./src",
+        "paths": {
+            "@vendure/content-translation-plugin": ["../content-translation-plugin/dist/index.d.ts"]
+        }
     },
     "files": ["./src/index.ts"]
 }

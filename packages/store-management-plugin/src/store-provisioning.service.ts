@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Permission } from '@vendure/common/lib/generated-types';
 import {
+    ContentTranslationService,
+    PreparedLocalizedContentField,
+} from '@vendure/content-translation-plugin';
+import {
     AdministratorService,
     Channel,
     ChannelService,
@@ -23,6 +27,7 @@ import { randomBytes } from 'node:crypto';
 import { IsNull } from 'typeorm';
 
 import { storeProfilePermission } from './constants';
+import { StoreProfile } from './entities/store-profile.entity';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
@@ -88,6 +93,7 @@ export class StoreProvisioningService {
         private readonly administratorService: AdministratorService,
         private readonly storeProfileService: StoreProfileService,
         private readonly merchantInitialPasswordService: MerchantInitialPasswordService,
+        private readonly contentTranslations: ContentTranslationService,
     ) {}
 
     async findTemplates(ctx: RequestContext): Promise<Channel[]> {
@@ -132,6 +138,19 @@ export class StoreProvisioningService {
             throw new UserInputError('网店模板没有可共享的库存点');
         }
         await this.assertUnique(ctx, normalized.code, normalized.administrator.emailAddress);
+
+        const [preparedStorefrontName] = await this.contentTranslations.prepareLocalizedFields([
+            {
+                path: 'storefrontName',
+                sourceText: normalized.storefrontNameZh,
+                targetText: normalized.storefrontNameEn,
+                required: true,
+            },
+        ]);
+        normalized.storefrontNameEn = preparedStorefrontName.translatedText;
+        if (!this.validStorefrontName(normalized.storefrontNameEn)) {
+            throw new UserInputError('自动生成的英文网站名称必须是 1 至 16 个显示单位，请手动调整');
+        }
 
         const seller = await this.sellerService.create(ctx, { name: normalized.name });
         const channel = await this.channelService.create(ctx, {
@@ -188,6 +207,7 @@ export class StoreProvisioningService {
             await this.channelService.assignToChannels(ctx, ShippingMethod, shippingMethod.id, [channel.id]);
         }
         const profile = await this.storeProfileService.createDraft(ctx, channel);
+        await this.recordStorefrontNameTranslation(ctx, profile, preparedStorefrontName);
 
         return {
             sellerId: seller.id,
@@ -205,7 +225,7 @@ export class StoreProvisioningService {
         const code = input.code.trim().toLowerCase();
         const name = input.name.trim();
         const storefrontNameZh = input.storefrontNameZh.trim();
-        const storefrontNameEn = input.storefrontNameEn.trim();
+        const storefrontNameEn = input.storefrontNameEn?.trim() ?? '';
         const firstName = input.administrator.firstName.trim();
         const lastName = input.administrator.lastName.trim();
         const emailAddress = input.administrator.emailAddress.trim().toLowerCase();
@@ -216,8 +236,11 @@ export class StoreProvisioningService {
         if (name.length < 2 || name.length > 80) {
             throw new UserInputError('商家名称必须是 2 至 80 个字符');
         }
-        if (!this.validStorefrontName(storefrontNameZh) || !this.validStorefrontName(storefrontNameEn)) {
-            throw new UserInputError('中英文网站名称必须是 1 至 16 个显示单位');
+        if (!this.validStorefrontName(storefrontNameZh)) {
+            throw new UserInputError('中文网站名称必须是 1 至 16 个显示单位');
+        }
+        if (storefrontNameEn && !this.validStorefrontName(storefrontNameEn)) {
+            throw new UserInputError('英文网站名称必须是 1 至 16 个显示单位');
         }
         if (!firstName || firstName.length > 50 || !lastName || lastName.length > 50) {
             throw new UserInputError('管理员姓名不能为空且每项不能超过 50 个字符');
@@ -256,6 +279,22 @@ export class StoreProvisioningService {
         if (user) {
             throw new UserInputError('管理员邮箱已被使用');
         }
+    }
+
+    private recordStorefrontNameTranslation(
+        ctx: RequestContext,
+        profile: StoreProfile,
+        field: PreparedLocalizedContentField,
+    ): Promise<void> {
+        return this.contentTranslations.recordPreparedFields(
+            ctx,
+            {
+                channelId: profile.channelId,
+                entityType: StoreProfile.name,
+                entityId: profile.id,
+            },
+            [field],
+        );
     }
 
     private extendSuperAdminContext(ctx: RequestContext, channel: Channel, permissions: Permission[]): void {

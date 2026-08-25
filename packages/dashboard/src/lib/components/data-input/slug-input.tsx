@@ -197,17 +197,13 @@ export function SlugInput({
         enabled,
     });
 
-    useEffect(() => {
-        if (shouldAutoGenerate && generatedSlug && generatedSlug !== value) {
-            onChange?.(generatedSlug);
-        }
-    }, [generatedSlug, shouldAutoGenerate, value, onChange]);
+    const hasFreshGeneratedSlug = debouncedWatchedValue === watchedValue && !!generatedSlug;
 
     useEffect(() => {
-        if (shouldAutoGenerate && watchedValue && debouncedWatchedValue !== watchedValue && value) {
-            onChange?.('');
+        if (shouldAutoGenerate && hasFreshGeneratedSlug && generatedSlug !== value) {
+            onChange?.(generatedSlug);
         }
-    }, [debouncedWatchedValue, onChange, shouldAutoGenerate, value, watchedValue]);
+    }, [generatedSlug, hasFreshGeneratedSlug, shouldAutoGenerate, value, onChange]);
 
     const toggleReadonly = () => {
         if (!isFormReadonly) {
@@ -228,8 +224,9 @@ export function SlugInput({
         onChange?.(newValue);
     };
 
-    const hasFreshGeneratedSlug = debouncedWatchedValue === watchedValue && !!generatedSlug;
-    const displayValue = shouldAutoGenerate ? (hasFreshGeneratedSlug ? generatedSlug : '') : value || '';
+    // Keep the last valid slug visible while the next value is being generated. Clearing the field here
+    // makes the form invalid and causes the refresh action and validation layout to repeatedly disappear.
+    const displayValue = shouldAutoGenerate ? generatedSlug || value || '' : value || '';
     const showLoading = isLoading && shouldAutoGenerate;
 
     return (
@@ -263,7 +260,7 @@ export function SlugInput({
 
             {!isFormReadonly && (
                 <>
-                    {isManuallyReadonly && value && (
+                    {isManuallyReadonly && (
                         <Button
                             type="button"
                             variant="outline"
@@ -272,7 +269,7 @@ export function SlugInput({
                             className="shrink-0"
                             title={t`Regenerate slug from source field`}
                             aria-label={t`Regenerate slug from source field`}
-                            disabled={!watchedValue || isLoading}
+                            disabled={!watchedValue || !value || isLoading}
                         >
                             <RefreshCw className="h-4 w-4" />
                         </Button>

@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 interface OptionValue {
-    value: string;
+    valueZh: string;
     id: string;
 }
 
@@ -24,19 +24,19 @@ export function OptionValueInput({
     onRemove,
     disabled = false,
 }: Readonly<OptionValueInputProps>) {
-    const [newValue, setNewValue] = useState('');
+    const [newValueZh, setNewValueZh] = useState('');
     const { t } = useLingui();
 
     const handleAddValue = () => {
-        const trimmed = newValue.trim();
-        if (!trimmed) return;
-        const normalized = trimmed.toLowerCase().normalize();
-        if (fields.some(f => f.value.toLowerCase().normalize() === normalized)) {
-            toast.error(t`Duplicate value "${trimmed}" already exists`);
+        const valueZh = newValueZh.trim();
+        if (!valueZh) return;
+        const normalizedZh = valueZh.toLowerCase().normalize();
+        if (fields.some(field => field.valueZh.toLowerCase().normalize() === normalizedZh)) {
+            toast.error(t`This option value already exists`);
             return;
         }
-        onAdd({ value: trimmed, id: Date.now().toString() });
-        setNewValue('');
+        onAdd({ valueZh, id: Date.now().toString() });
+        setNewValueZh('');
     };
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -50,19 +50,18 @@ export function OptionValueInput({
         <div className="space-y-2">
             <div className="flex items-center gap-2">
                 <Input
-                    value={newValue}
-                    onChange={e => setNewValue(e.target.value)}
+                    value={newValueZh}
+                    onChange={event => setNewValueZh(event.target.value)}
                     onKeyDown={handleKeyPress}
-                    placeholder={t`Enter a value and press Enter`}
+                    placeholder={t`Simplified Chinese value`}
                     disabled={disabled}
-                    className="flex-1"
                 />
             </div>
 
             <div className="flex flex-wrap gap-2">
                 {fields.map((field, index) => (
                     <Badge key={field.id} variant="secondary" className="flex items-center gap-1 py-1 px-2">
-                        {field.value}
+                        {field.valueZh}
                         <Button
                             type="button"
                             variant="ghost"

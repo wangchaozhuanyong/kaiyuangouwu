@@ -72,7 +72,24 @@ function createHarness(
         }),
     };
     const customerService = { findOneByUserId: vi.fn().mockResolvedValue(customer) };
-    const service = new StorefrontReviewService(connection as any, customerService as any);
+    const translations = {
+        prepareLocalizedFields: vi.fn(async fields =>
+            fields.map((field: any) => ({
+                path: field.path,
+                sourceText: field.sourceText,
+                translatedText: `translated-${field.path}`,
+                status: 'AUTO_TRANSLATED',
+                origin: 'AUTO',
+                locked: false,
+            })),
+        ),
+        recordPreparedFields: vi.fn(async () => undefined),
+    };
+    const service = new StorefrontReviewService(
+        connection as any,
+        customerService as any,
+        translations as any,
+    );
     const ctx = {
         activeUserId: 'user-1',
         channelId: 'channel-1',
@@ -167,5 +184,20 @@ describe('StorefrontReviewService', () => {
             expect.objectContaining({ id: 'review-1', state: 'PENDING' }),
             expect.objectContaining({ state: 'APPROVED', merchantResponse: '感谢您的真实反馈。' }),
         );
+    });
+
+    it('does not expose a legacy Chinese merchant response to an English client', () => {
+        const test = createHarness();
+        const review = {
+            merchantResponse: '旧中文回复',
+            merchantResponseZh: '旧中文回复',
+            merchantResponseEn: null,
+        };
+
+        expect(
+            (test.service as any).localizeMerchantResponse(review, {
+                languageCode: 'en',
+            }).merchantResponse,
+        ).toBeNull();
     });
 });

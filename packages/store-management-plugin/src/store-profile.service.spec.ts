@@ -57,6 +57,20 @@ function createService(
         update: vi.fn(async (_ctx, input) => ({ ...channel(), ...input })),
     };
     const activationReadinessService = { get: vi.fn().mockResolvedValue(readiness) };
+    const translations = {
+        prepareLocalizedFields: vi.fn(async fields =>
+            fields.map((field: any) => ({
+                path: field.path,
+                sourceText: field.sourceText,
+                translatedText:
+                    field.targetText?.trim() || field.existingTargetText || `translated-${field.path}`,
+                status: 'AUTO_TRANSLATED',
+                origin: 'AUTO',
+                locked: false,
+            })),
+        ),
+        recordPreparedFields: vi.fn(async () => undefined),
+    };
     return {
         activationReadinessService,
         channelService,
@@ -64,6 +78,7 @@ function createService(
             connection as any,
             channelService as any,
             activationReadinessService as any,
+            translations as any,
         ),
     };
 }

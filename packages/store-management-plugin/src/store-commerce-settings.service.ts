@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { ConfigArg, ConfigurableOperationInput } from '@vendure/common/lib/generated-types';
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Channel,
     ChannelService,
@@ -43,6 +44,7 @@ export class StoreCommerceSettingsService {
         private readonly zoneService: ZoneService,
         private readonly taxRateService: TaxRateService,
         private readonly shippingMethodService: ShippingMethodService,
+        private readonly translations: ContentTranslationService,
     ) {}
 
     async get(ctx: RequestContext): Promise<StoreCommerceConfiguration> {
@@ -127,6 +129,27 @@ export class StoreCommerceSettingsService {
         input: UpdateMyStoreCommerceConfigurationInput,
     ): Promise<StoreCommerceConfiguration> {
         const normalized = normalizeStoreCommerceInput(input);
+        const existing = await this.get(ctx);
+        const prepared = await this.translations.prepareLocalizedFields([
+            {
+                path: 'name',
+                sourceText: normalized.shippingMethodNameZh,
+                targetText: normalized.shippingMethodNameEn,
+                existingSourceText: existing.shippingMethodNameZh,
+                existingTargetText: existing.shippingMethodNameEn,
+                required: true,
+            },
+            {
+                path: 'description',
+                sourceText: normalized.shippingDescriptionZh,
+                targetText: normalized.shippingDescriptionEn,
+                existingSourceText: existing.shippingDescriptionZh,
+                existingTargetText: existing.shippingDescriptionEn,
+            },
+        ]);
+        const english = new Map(prepared.map(field => [field.path, field.translatedText]));
+        normalized.shippingMethodNameEn = english.get('name') ?? '';
+        normalized.shippingDescriptionEn = english.get('description') ?? '';
         const channel = await this.getActiveChannel(ctx);
         const country = await this.countryService.findOneByCode(ctx, normalized.countryCode);
         if (!country.enabled) {
@@ -148,6 +171,15 @@ export class StoreCommerceSettingsService {
 
         await this.ensureDefaultTaxRate(ctx, updatedChannel, taxZone, normalized.taxRate);
         const shippingMethod = await this.ensureShippingMethod(ctx, updatedChannel, normalized);
+        await this.translations.recordPreparedFields(
+            ctx,
+            {
+                channelId: ctx.channelId,
+                entityType: ShippingMethod.name,
+                entityId: shippingMethod.id,
+            },
+            prepared,
+        );
         await this.detachPlaceholderShippingMethods(ctx, updatedChannel, shippingMethod.id);
 
         return this.get(ctx);
@@ -297,7 +329,7 @@ export function normalizeStoreCommerceInput(
         throw new UserInputError('配送国家代码无效');
     }
     const shippingMethodNameZh = requiredText(input.shippingMethodNameZh, '中文配送名称', 80);
-    const shippingMethodNameEn = requiredText(input.shippingMethodNameEn, '英文配送名称', 80);
+    const shippingMethodNameEn = optionalText(input.shippingMethodNameEn, '英文配送名称', 80);
     const shippingDescriptionZh = optionalText(input.shippingDescriptionZh, '中文配送说明', 500);
     const shippingDescriptionEn = optionalText(input.shippingDescriptionEn, '英文配送说明', 500);
     const taxRate = percentage(input.taxRate, '商品税率');

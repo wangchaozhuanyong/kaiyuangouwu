@@ -23,8 +23,8 @@ describe('SystemAnnouncementService', () => {
             expect.objectContaining({
                 titleZh: '系统维护',
                 contentZh: '周日凌晨维护',
-                titleEn: '',
-                contentEn: '',
+                titleEn: 'translated-title',
+                contentEn: 'translated-content',
                 priority: 10,
                 linkUrl: '/maintenance',
             }),
@@ -32,7 +32,7 @@ describe('SystemAnnouncementService', () => {
         expect(repository.save).toHaveBeenCalled();
     });
 
-    it('returns only repository-selected active announcements with language fallback', async () => {
+    it('does not publish an announcement with incomplete English content', async () => {
         const repository = repositoryHarness([
             {
                 id: '1',
@@ -47,9 +47,7 @@ describe('SystemAnnouncementService', () => {
         ]);
         const service = serviceWith(repository);
 
-        await expect(service.findActive({ languageCode: 'en' } as any)).resolves.toEqual([
-            expect.objectContaining({ title: '中文标题', content: '中文内容' }),
-        ]);
+        await expect(service.findActive({ languageCode: 'en' } as any)).resolves.toEqual([]);
         expect(repository.queryBuilder.where).toHaveBeenCalledWith('announcement.enabled = :enabled', {
             enabled: true,
         });
@@ -68,7 +66,20 @@ describe('SystemAnnouncementService', () => {
 });
 
 function serviceWith(repository: ReturnType<typeof repositoryHarness>) {
-    return new SystemAnnouncementService({ getRepository: () => repository } as any);
+    const translations = {
+        prepareLocalizedFields: vi.fn(async fields =>
+            fields.map((field: any) => ({
+                path: field.path,
+                sourceText: field.sourceText,
+                translatedText: field.targetText?.trim() || `translated-${field.path}`,
+                status: field.targetText?.trim() ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                origin: field.targetText?.trim() ? 'MANUAL' : 'AUTO',
+                locked: Boolean(field.targetText?.trim()),
+            })),
+        ),
+        recordPreparedFields: vi.fn(async () => undefined),
+    };
+    return new SystemAnnouncementService({ getRepository: () => repository } as any, translations as any);
 }
 
 function repositoryHarness(activeAnnouncements: any[] = []) {

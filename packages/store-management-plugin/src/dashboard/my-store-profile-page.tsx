@@ -20,6 +20,7 @@ import {
     api,
     toast,
     useChannel,
+    useChannelDisplayName,
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
@@ -343,6 +344,7 @@ function StoreOperation({
     text,
     isZh,
 }: Readonly<{ profile: MyStoreProfileRecord; text: typeof zhCopy; isZh: boolean }>) {
+    const channelDisplayName = useChannelDisplayName(profile.channel.code);
     const statusLabel =
         profile.status === 'ACTIVE'
             ? text.active
@@ -362,7 +364,7 @@ function StoreOperation({
                     )}
                 </dd>
             </div>
-            <DataRow label={text.merchant} value={profile.channel.seller?.name ?? profile.channel.code} />
+            <DataRow label={text.merchant} value={profile.channel.seller?.name ?? channelDisplayName} />
             <DataRow label={text.code} value={profile.channel.code} />
             <div className="py-3 last:pb-0">
                 <dt className="text-muted-foreground">{text.domain}</dt>

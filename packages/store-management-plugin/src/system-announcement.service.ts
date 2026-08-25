@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
+import {
+    ContentTranslationService,
+    PreparedLocalizedContentField,
+} from '@vendure/content-translation-plugin';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 
 import { SystemAnnouncement } from './entities/system-announcement.entity';
@@ -11,7 +15,10 @@ import {
 
 @Injectable()
 export class SystemAnnouncementService {
-    constructor(private readonly connection: TransactionalConnection) {}
+    constructor(
+        private readonly connection: TransactionalConnection,
+        private readonly translations: ContentTranslationService,
+    ) {}
 
     findAll(ctx: RequestContext): Promise<SystemAnnouncement[]> {
         return this.connection.getRepository(ctx, SystemAnnouncement).find({
@@ -32,7 +39,7 @@ export class SystemAnnouncementService {
             .take(20)
             .getMany();
         const isZh = String(ctx.languageCode).toLowerCase().startsWith('zh');
-        return announcements.map(announcement => ({
+        return announcements.filter(hasCompleteAnnouncementTranslation).map(announcement => ({
             id: announcement.id,
             title: localizedText(announcement.titleZh, announcement.titleEn, isZh),
             content: localizedText(announcement.contentZh, announcement.contentEn, isZh),
@@ -43,17 +50,22 @@ export class SystemAnnouncementService {
     }
 
     async create(ctx: RequestContext, input: CreateSystemAnnouncementInput): Promise<SystemAnnouncement> {
-        const values = this.normalize(input);
+        const { values, prepared } = await this.normalize(input);
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
-        return repository.save(repository.create(values));
+        const saved = await repository.save(repository.create(values));
+        await this.recordTranslationState(ctx, saved, prepared);
+        return saved;
     }
 
     async update(ctx: RequestContext, input: UpdateSystemAnnouncementInput): Promise<SystemAnnouncement> {
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
         const announcement = await repository.findOne({ where: { id: input.id } });
         if (!announcement) throw new UserInputError('找不到该系统公告');
-        Object.assign(announcement, this.normalize(input));
-        return repository.save(announcement);
+        const { values, prepared } = await this.normalize(input, announcement);
+        Object.assign(announcement, values);
+        const saved = await repository.save(announcement);
+        await this.recordTranslationState(ctx, saved, prepared);
+        return saved;
     }
 
     async delete(ctx: RequestContext, id: ID) {
@@ -64,11 +76,31 @@ export class SystemAnnouncementService {
         return { result: 'DELETED' };
     }
 
-    private normalize(input: CreateSystemAnnouncementInput | UpdateSystemAnnouncementInput) {
+    private async normalize(
+        input: CreateSystemAnnouncementInput | UpdateSystemAnnouncementInput,
+        existing?: SystemAnnouncement,
+    ) {
         const titleZh = requiredText(input.titleZh, '中文标题', 120);
         const contentZh = requiredText(input.contentZh, '中文内容', 2_000);
-        const titleEn = optionalText(input.titleEn, 120);
-        const contentEn = optionalText(input.contentEn, 2_000);
+        const prepared = await this.translations.prepareLocalizedFields([
+            {
+                path: 'title',
+                sourceText: titleZh,
+                targetText: optionalText(input.titleEn, 120),
+                existingSourceText: existing?.titleZh,
+                existingTargetText: existing?.titleEn,
+                required: true,
+            },
+            {
+                path: 'content',
+                sourceText: contentZh,
+                targetText: optionalText(input.contentEn, 2_000),
+                existingSourceText: existing?.contentZh,
+                existingTargetText: existing?.contentEn,
+                required: true,
+            },
+        ]);
+        const english = new Map(prepared.map(field => [field.path, field.translatedText]));
         const priority = Number(input.priority ?? 0);
         if (!Number.isInteger(priority) || priority < 0 || priority > 999) {
             throw new UserInputError('优先级必须是 0 到 999 的整数');
@@ -83,16 +115,35 @@ export class SystemAnnouncementService {
             throw new UserInputError('跳转链接只能使用 HTTPS、HTTP 或站内相对路径');
         }
         return {
-            enabled: input.enabled !== false,
-            priority,
-            titleZh,
-            titleEn,
-            contentZh,
-            contentEn,
-            linkUrl,
-            startsAt,
-            endsAt,
+            prepared,
+            values: {
+                enabled: input.enabled !== false,
+                priority,
+                titleZh,
+                titleEn: english.get('title') ?? '',
+                contentZh,
+                contentEn: english.get('content') ?? '',
+                linkUrl,
+                startsAt,
+                endsAt,
+            },
         };
+    }
+
+    private recordTranslationState(
+        ctx: RequestContext,
+        announcement: SystemAnnouncement,
+        prepared: PreparedLocalizedContentField[],
+    ): Promise<void> {
+        return this.translations.recordPreparedFields(
+            ctx,
+            {
+                channelId: null,
+                entityType: SystemAnnouncement.name,
+                entityId: announcement.id,
+            },
+            prepared,
+        );
     }
 }
 
@@ -122,4 +173,10 @@ function isSafeAnnouncementLink(value: string): boolean {
 
 function localizedText(zh: string, en: string, isZh: boolean): string {
     return (isZh ? zh || en : en || zh).trim();
+}
+
+function hasCompleteAnnouncementTranslation(announcement: SystemAnnouncement): boolean {
+    return [announcement.titleZh, announcement.titleEn, announcement.contentZh, announcement.contentEn].every(
+        value => value.trim().length > 0,
+    );
 }

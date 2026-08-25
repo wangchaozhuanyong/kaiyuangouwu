@@ -44,6 +44,28 @@ const defaultSettings: UserSettings = {
     tableSettings: {},
 };
 
+function normalizeAvailableLanguages(value: Partial<UserSettings>): UserSettings {
+    const merged = { ...defaultSettings, ...value };
+    const displayLanguage = uiConfig.i18n.availableLanguages.includes(
+        merged.displayLanguage as (typeof uiConfig.i18n.availableLanguages)[number],
+    )
+        ? merged.displayLanguage
+        : defaultSettings.displayLanguage;
+    const contentLanguage = uiConfig.i18n.availableLanguages.includes(
+        merged.contentLanguage as (typeof uiConfig.i18n.availableLanguages)[number],
+    )
+        ? merged.contentLanguage
+        : defaultSettings.contentLanguage;
+    const preferredLocale = displayLanguage.startsWith('zh') ? 'CN' : 'MY';
+    const displayLocale =
+        merged.displayLocale && uiConfig.i18n.availableLocales.includes(merged.displayLocale)
+            ? merged.displayLocale
+            : uiConfig.i18n.availableLocales.includes(preferredLocale)
+              ? preferredLocale
+              : defaultSettings.displayLocale;
+    return { ...merged, displayLanguage, contentLanguage, displayLocale };
+}
+
 export interface UserSettingsContextType {
     /**
      * @description
@@ -84,7 +106,7 @@ export const UserSettingsProvider: React.FC<UserSettingsProviderProps> = ({ quer
         try {
             const storedSettings = localStorage.getItem(LS_KEY_USER_SETTINGS);
             if (storedSettings) {
-                return { ...defaultSettings, ...JSON.parse(storedSettings) };
+                return normalizeAvailableLanguages(JSON.parse(storedSettings));
             }
         } catch (e) {
             console.error('Failed to load user settings from localStorage', e);
@@ -152,7 +174,7 @@ export const UserSettingsProvider: React.FC<UserSettingsProviderProps> = ({ quer
                     serverSettingsResponse?.getSettingsStoreValue as UserSettings | null;
                 if (serverSettingsData) {
                     // Server has settings, use them
-                    const mergedSettings = { ...defaultSettings, ...serverSettingsData };
+                    const mergedSettings = normalizeAvailableLanguages(serverSettingsData);
                     setSettings(mergedSettings);
                     setServerSettings(mergedSettings);
                     setIsReady(true);

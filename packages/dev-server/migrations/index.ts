@@ -35,8 +35,13 @@ import { BackfillMissingStoreProfiles1787605200000 } from './1787605200000-backf
 import { AddAutoCardBilingualInstructions1787608800000 } from './1787608800000-add-auto-card-bilingual-instructions';
 import { CompleteBilingualServiceCatalog1787612400000 } from './1787612400000-complete-bilingual-service-catalog';
 import { AddManualDigitalServiceMode1787616000000 } from './1787616000000-add-manual-digital-service-mode';
+import { RestrictContentLanguages1787662800000 } from './1787662800000-restrict-content-languages';
+import { AddContentTranslationState1787666400000 } from './1787666400000-add-content-translation-state';
+import { LocalizeCustomerServiceContent1787670000000 } from './1787670000000-localize-customer-service-content';
 import { AddCouponLifecycle1787677200000 } from './1787677200000-add-coupon-lifecycle';
 import { AlignAfterSalesAutoCardSchema1787680800000 } from './1787680800000-align-after-sales-auto-card-schema';
+import { AlignProductionMysqlSchema1787682600000 } from './1787682600000-align-production-mysql-schema';
+import { SeedSimplifiedChineseSourceTranslations1787684400000 } from './1787684400000-seed-simplified-chinese-source-translations';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -76,6 +81,11 @@ export const devServerMigrations = [
     AddAutoCardBilingualInstructions1787608800000,
     CompleteBilingualServiceCatalog1787612400000,
     AddManualDigitalServiceMode1787616000000,
+    RestrictContentLanguages1787662800000,
+    AddContentTranslationState1787666400000,
+    LocalizeCustomerServiceContent1787670000000,
     AddCouponLifecycle1787677200000,
     AlignAfterSalesAutoCardSchema1787680800000,
+    AlignProductionMysqlSchema1787682600000,
+    SeedSimplifiedChineseSourceTranslations1787684400000,
 ];

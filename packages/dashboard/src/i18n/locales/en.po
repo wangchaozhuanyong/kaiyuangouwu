@@ -519,6 +519,10 @@ msgstr "New Role"
 msgid "Products must also match the conditions of the parent product group."
 msgstr "Products must also match the conditions of the parent product group."
 
+#: src/lib/components/shared/channel-chip.tsx
+msgid "Remove {channelDisplayName}"
+msgstr "Remove {channelDisplayName}"
+
 #: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
 msgid "Failed to delete assets: {message}"
 msgstr "Failed to delete assets: {message}"
@@ -1006,7 +1010,6 @@ msgstr "Complete draft"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$groupId.options_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
-#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 #: src/app/routes/_authenticated/_sellers/sellers_.$id.tsx
@@ -1082,6 +1085,10 @@ msgstr "Show password"
 #: src/lib/components/shared/history-timeline/history-note-entry.tsx
 msgid "Public"
 msgstr "Public"
+
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+msgid "Name (Simplified Chinese)"
+msgstr "Name (Simplified Chinese)"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 msgid "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
@@ -1221,6 +1228,10 @@ msgstr "Shipping address set for order"
 #: src/lib/components/shared/asset/asset-preview.tsx
 msgid "Focal Point"
 msgstr "Focal Point"
+
+#: src/app/routes/_authenticated/_products/components/product-option-select.tsx
+msgid "No option values found. Add both language versions first."
+msgstr "No option values found. Add both language versions first."
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Single variant, no options"
@@ -1545,6 +1556,10 @@ msgstr "Create store"
 msgid "Regenerate slug from source field"
 msgstr "Regenerate slug from source field"
 
+#: src/lib/components/layout/channel-switcher.tsx
+msgid "Current store: {displayChannelName}"
+msgstr "Current store: {displayChannelName}"
+
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Inherit from global settings"
@@ -1745,6 +1760,10 @@ msgstr "{productCount, plural, one {This option group is used by one other produ
 msgid "My Saved Views"
 msgstr "My Saved Views"
 
+#: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
+msgid "Option value (Simplified Chinese)"
+msgstr "Option value (Simplified Chinese)"
+
 #: src/app/routes/_authenticated/_sellers/sellers_.$id.tsx
 msgid "Failed to create seller"
 msgstr "Failed to create merchant"
@@ -1908,7 +1927,6 @@ msgstr "Size"
 msgid "No translation found for {0}"
 msgstr "No translation found for {0}"
 
-#: src/app/routes/_authenticated/_products/components/option-value-input.tsx
 #: src/lib/components/shared/option-value-input.tsx
 msgid "Enter a value and press Enter"
 msgstr "Enter a value and press Enter"
@@ -3325,11 +3343,8 @@ msgstr "Customer verified"
 msgid "Search the product catalog and choose the products for this category."
 msgstr "Search the product catalog and choose the products for this category."
 
-#. placeholder {0}: channel.code
 #. placeholder {0}: facetValue.name
-#. placeholder {1}: channel.token
 #. placeholder {1}: facetValue.facet.name
-#: src/lib/components/shared/channel-chip.tsx
 #: src/lib/components/shared/facet-value-chip.tsx
 msgid "Remove {0} from {1}"
 msgstr "Remove {0} from {1}"
@@ -3744,6 +3759,10 @@ msgctxt "date-range"
 msgid "Yesterday"
 msgstr "Yesterday"
 
+#: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
+msgid "Option group name (Simplified Chinese)"
+msgstr "Option group name (Simplified Chinese)"
+
 #. placeholder {0}: addedSurcharges.length
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
 msgid "Adding {0} surcharge(s)"
@@ -4002,8 +4021,8 @@ msgid "Drag {item}"
 msgstr "Drag {item}"
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-msgid "Option value name"
-msgstr "Option value name"
+#~ msgid "Option value name"
+#~ msgstr "Option value name"
 
 #: src/app/routes/_authenticated/_api-keys/api-keys_.$id.tsx
 #: src/app/routes/_authenticated/_api-keys/api-keys.tsx
@@ -4058,10 +4077,9 @@ msgstr "Set filter criteria for the {columnId} column"
 msgid "Country"
 msgstr "Country"
 
-#. placeholder {0}: displayChannel?.code ?? ''
 #: src/lib/components/layout/channel-switcher.tsx
-msgid "Current store: {0}"
-msgstr "Current store: {0}"
+#~ msgid "Current store: {0}"
+#~ msgstr "Current store: {0}"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Simple product"
@@ -4758,8 +4776,8 @@ msgid "Search filter attribute values..."
 msgstr "Search filter attribute values..."
 
 #: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
-msgid "Option Group Name"
-msgstr "Option Group Name"
+#~ msgid "Option Group Name"
+#~ msgstr "Option Group Name"
 
 #: src/lib/components/data-input/combination-mode-input.tsx
 msgid "AND"
@@ -6025,6 +6043,10 @@ msgstr "Set the default service regions and how catalog prices handle tax."
 msgid "Drop files here to upload"
 msgstr "Drop files here to upload"
 
+#: src/app/routes/_authenticated/_products/components/option-value-input.tsx
+msgid "Simplified Chinese value"
+msgstr "Simplified Chinese value"
+
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Toggle all visible variants"
 msgstr "Toggle all visible SKUs"
@@ -6884,8 +6906,8 @@ msgid "Collection position updated"
 msgstr "Product group position updated"
 
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
-msgid "Add \"{newOptionInput}\""
-msgstr "Add \"{newOptionInput}\""
+#~ msgid "Add \"{newOptionInput}\""
+#~ msgstr "Add \"{newOptionInput}\""
 
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Complete the required information before creating the store."
@@ -7106,6 +7128,10 @@ msgstr "New shipping method"
 msgid "Every 10 seconds"
 msgstr "Every 10 seconds"
 
+#: src/app/routes/_authenticated/_products/components/option-value-input.tsx
+msgid "This option value already exists"
+msgstr "This option value already exists"
+
 #: src/app/routes/_authenticated/_shipping-methods/components/price-display.tsx
 msgid "ex. tax:"
 msgstr "ex. tax:"
@@ -7304,8 +7330,8 @@ msgid "New Payment Method"
 msgstr "New Payment Method"
 
 #: src/app/routes/_authenticated/_products/components/option-value-input.tsx
-msgid "Duplicate value \"{trimmed}\" already exists"
-msgstr "Duplicate value \"{trimmed}\" already exists"
+#~ msgid "Duplicate value \"{trimmed}\" already exists"
+#~ msgstr "Duplicate value \"{trimmed}\" already exists"
 
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx

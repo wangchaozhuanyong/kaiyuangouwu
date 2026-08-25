@@ -66,11 +66,13 @@ export const Route = createFileRoute('/_authenticated/_products/products_/$id')(
 function NoVariantsPrompt({
     productId,
     productName,
+    productTranslations,
     onOptionGroupCreated,
     onVariantCreated,
 }: Readonly<{
     productId: string;
     productName: string;
+    productTranslations: Array<{ languageCode: string; name: string }>;
     onOptionGroupCreated: () => void;
     onVariantCreated: () => void;
 }>) {
@@ -81,6 +83,7 @@ function NoVariantsPrompt({
             <GenerateVariantsPanel
                 productId={productId}
                 productName={productName}
+                productTranslations={productTranslations}
                 optionGroups={[]}
                 onSuccess={onVariantCreated}
                 onBack={{ handler: () => setMode('choose') }}
@@ -322,6 +325,7 @@ function ProductDetailPage() {
                             <NoVariantsPrompt
                                 productId={entity.id}
                                 productName={entity.name}
+                                productTranslations={entity.translations}
                                 onOptionGroupCreated={() => refreshEntity()}
                                 onVariantCreated={() => refreshEntity()}
                             />
@@ -329,6 +333,7 @@ function ProductDetailPage() {
                             <GenerateVariantsPanel
                                 productId={entity.id}
                                 productName={entity.name}
+                                productTranslations={entity.translations}
                                 optionGroups={entity.optionGroups}
                                 onSuccess={() => refreshEntity()}
                                 onBack={{

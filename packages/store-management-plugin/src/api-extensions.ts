@@ -69,7 +69,7 @@ export const adminApiExtensions = gql`
         code: String!
         name: String!
         storefrontNameZh: String!
-        storefrontNameEn: String!
+        storefrontNameEn: String
         templateChannelId: ID!
         administrator: ProvisionStoreAdministratorInput!
     }
