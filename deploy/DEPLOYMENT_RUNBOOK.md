@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-22
+最后核对：2026-08-25
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -21,7 +21,8 @@
 - 实例：`i-041a146558e432cbf`（`yunqiao-vendure-prod`）
 - 安全组：`sg-013cf38df187011ca`（`yunqiao-vendure-web`）
 - SSH 用户：`ubuntu`
-- 本机访问：优先使用 AWS Systems Manager Session Manager；SSH 私钥仅保存在仓库外，发布时只允许当前管理员公网地址的 `/32`
+- 本机生产 SSH 私钥（仅记录路径）：`/Users/wangchao/Desktop/yamaxunmiyao2/yunqiao-vendure-prod-key.pem`
+- 本机访问：正常发布直接使用上述仓库外私钥与 EC2 公网 IPv4，命令必须带 `-i <上述路径> -o IdentitiesOnly=yes`；无需每次登录 AWS 控制台。私钥权限必须保持 `0600`，发布时 `22/tcp` 只允许当前管理员公网地址的 `/32`。私钥不可读取、打印、复制、上传或提交；SSH 不可用时才回退到 AWS Systems Manager Session Manager
 - 服务器源码与加密环境文件目录：`/var/www/kaiyuangouwu`
 - 不可变运行产物/回滚目录：`/var/www/kaiyuangouwu-releases`
 - 当前运行产物指针：`/var/www/kaiyuangouwu-current`（只能指向上述发布目录中已验证的候选目录）
@@ -39,7 +40,7 @@ Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源
 
 Nginx 会按 Cloudflare 官方 IPv4/IPv6 网段恢复 `CF-Connecting-IP`，按真实访客 IP 限流，并拒绝非 Cloudflare 来源直接访问 HTTPS 源站（仅放行本机回环健康检查）。每次发布 Nginx 配置前，必须对照 `https://www.cloudflare.com/ips-v4` 与 `https://www.cloudflare.com/ips-v6` 更新 `deploy/nginx/damatong.conf`，执行 `nginx -t` 后再 reload。AWS 安全组仍应把 `443/tcp` 限制到相同 Cloudflare 网段，形成网络层和 Nginx 双重限制。
 
-当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。优先使用 Session Manager 维护；只有需要传输发布产物时才使用仓库外私钥，并将 `22/tcp` 临时限制为当前管理员公网地址的 `/32`。发布完成后立即撤销临时规则，不要上传或提交私钥。
+当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。正常发布使用上文固定的仓库外私钥；若 SSH 端口或密钥不可用，再回退到 Session Manager。任何临时新增的 `22/tcp` 规则都必须只允许当前管理员公网地址的 `/32`，并在发布完成后立即撤销。不要读取、上传或提交私钥。
 
 ## 发布门禁
 

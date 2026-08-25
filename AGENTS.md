@@ -56,9 +56,9 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 - Production storefront: `https://damatong.net` (also `www.damatong.net`).
 - Production dashboard: `https://console.damatong.net/dashboard/`.
 - AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-041a146558e432cbf`; security group: `sg-013cf38df187011ca`.
-- Current public IPv4 snapshot: `52.196.65.143`; SSH user: `ubuntu`. No current-instance private key is configured locally; use the access procedure in the deployment runbook.
+- Current public IPv4 snapshot: `52.196.65.143`; SSH user: `ubuntu`. The production SSH private key is stored outside the repository at `/Users/wangchao/Desktop/yamaxunmiyao2/yunqiao-vendure-prod-key.pem`; use this exact path with `-i` and `-o IdentitiesOnly=yes` for production SSH/rsync access unless the instance or key is explicitly replaced.
 - Server repository: `/var/www/kaiyuangouwu`; branch: `main`; Vendure upstream: `127.0.0.1:3002`.
 - PM2 processes: `vendure-api` and `vendure-worker`.
 - Nginx storefront root: `/var/www/kaiyuangouwu-current/packages/storefront/dist`; the dashboard is served from `/var/www/kaiyuangouwu-current/packages/dev-server/dist/dashboard` by Vendure. The stable pointer must reference a verified immutable release under `/var/www/kaiyuangouwu-releases`.
-- Never commit the SSH private key or credentials. If port 22 is closed, temporarily allow only the current public CIDR in the production security group, deploy, verify, and remove that temporary rule immediately.
+- Never read, print, copy into the repository, upload, or commit the SSH private key or credentials. Reference the external key by path only. If port 22 is closed, temporarily allow only the current public CIDR in the production security group, deploy, verify, and remove that temporary rule immediately.
 - Deploy only an isolated committed release. Build from a clean checkout of that commit, upload to a versioned candidate directory, verify checksums/health, atomically switch directories with a rollback directory, then confirm the public health endpoint and deployed Git SHA.
