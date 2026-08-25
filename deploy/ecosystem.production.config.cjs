@@ -14,6 +14,9 @@ const sharedEnvironment = {
     NODE_ENV: 'production',
     RUN_JOB_QUEUE: '0',
     RUN_MIGRATIONS: 'false',
+    // Vendure's telemetry fallback writes .vendure/.installation-id below cwd,
+    // which would mutate the verified immutable runtime directory.
+    VENDURE_DISABLE_TELEMETRY: 'true',
 };
 
 module.exports = {

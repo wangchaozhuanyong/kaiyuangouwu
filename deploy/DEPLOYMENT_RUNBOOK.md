@@ -28,6 +28,7 @@
 - 当前运行产物指针：`/var/www/kaiyuangouwu-current`（只能指向上述发布目录中已验证的候选目录）
 - Vendure 上游：`127.0.0.1:3002`
 - PM2 进程：`vendure-api`、`vendure-worker`
+- PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
 - Storefront 静态目录：`/var/www/kaiyuangouwu-current/packages/storefront/dist`
 - Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/dev-server/dist/dashboard`（由 Vendure API 插件提供）
 - Nginx 配置基线：`deploy/nginx/damatong.conf`

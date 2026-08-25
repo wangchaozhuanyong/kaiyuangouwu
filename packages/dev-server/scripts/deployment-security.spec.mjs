@@ -38,6 +38,7 @@ void test('production PM2 config starts compiled runtime entries without the dev
     assert.match(config, /VENDURE_RUNTIME_DIR/u);
     assert.match(config, /packages\/dev-server\/dist\/index-worker\.js/u);
     assert.match(config, /packages\/dev-server\/dist\/index\.js/u);
+    assert.match(config, /VENDURE_DISABLE_TELEMETRY:\s*'true'/u);
     assert.doesNotMatch(config, /cli\.js/u);
 });
 
