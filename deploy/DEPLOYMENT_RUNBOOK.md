@@ -37,6 +37,8 @@
 
 Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源。2026-08-21 核对的 EC2 公网 IPv4 是 `52.196.65.143`；不要把该 IP 当成永久地址。发布前必须重新核对。
 
+Nginx 会按 Cloudflare 官方 IPv4/IPv6 网段恢复 `CF-Connecting-IP`，按真实访客 IP 限流，并拒绝非 Cloudflare 来源直接访问 HTTPS 源站（仅放行本机回环健康检查）。每次发布 Nginx 配置前，必须对照 `https://www.cloudflare.com/ips-v4` 与 `https://www.cloudflare.com/ips-v6` 更新 `deploy/nginx/damatong.conf`，执行 `nginx -t` 后再 reload。AWS 安全组仍应把 `443/tcp` 限制到相同 Cloudflare 网段，形成网络层和 Nginx 双重限制。
+
 当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。优先使用 Session Manager 维护；只有需要传输发布产物时才使用仓库外私钥，并将 `22/tcp` 临时限制为当前管理员公网地址的 `/32`。发布完成后立即撤销临时规则，不要上传或提交私钥。
 
 ## 发布门禁

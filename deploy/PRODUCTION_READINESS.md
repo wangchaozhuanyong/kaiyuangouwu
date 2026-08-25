@@ -270,6 +270,9 @@ node packages/dev-server/dist/index.js
 - 公共域名禁止 `/admin-api`。
 - `/digital-delivery/` 安全代理到 Vendure；
 - Shop API 与 Admin API 按 IP 限流；
+- 仅信任 Cloudflare 官方网段传入的 `CF-Connecting-IP`，按真实访客 IP 限流；
+- HTTPS 源站仅接受 Cloudflare 官方网段和本机回环请求，阻断公网绕过 CDN 直连；
+- 源站仅启用 TLS 1.2/1.3、关闭 TLS session tickets，并全局隐藏 Nginx 版本；
 - HSTS、CSP、Permissions Policy、禁止嵌入和 MIME 防嗅探响应头。
 
 仍需在每次接入真实支付、CDN 或外部资源时确认：
@@ -278,7 +281,7 @@ node packages/dev-server/dist/index.js
 - 站点静态资源是本机目录还是由 CDN 分发；
 - 正式 API 监听端口是否为 `3002`；
 - TLS 证书是否覆盖全部前台与管理域名；
-- 是否需要 CDN、WAF 和真实客户端 IP 传递；
+- Cloudflare 官方 IPv4/IPv6 网段是否仍与 Nginx 和 AWS 安全组白名单一致；
 - CSP 是否需放行支付服务商的脚本、连接、iframe 或图片域名；
 - 新域名加入前不可直接复用现有证书路径与跳转规则。
 

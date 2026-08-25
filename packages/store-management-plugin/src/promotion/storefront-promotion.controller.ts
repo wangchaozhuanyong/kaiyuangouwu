@@ -80,9 +80,32 @@ export class StorefrontPromotionController {
     }
 
     @Get('robots')
-    robots(@Res() res: Response): void {
+    async robots(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const request = await this.accessService.resolveRequest(req);
+        if (!request) {
+            res.status(404).type('text/plain').send('Storefront not found');
+            return;
+        }
         res.setHeader('Cache-Control', 'public, max-age=300');
-        res.type('text/plain').send('User-agent: *\nAllow: /promo$\nDisallow: /promo/\nDisallow: /\n');
+        res.type('text/plain').send(
+            `User-agent: *\nAllow: /promo$\nDisallow: /promo/\nDisallow: /\nSitemap: https://${request.host}/sitemap.xml\n`,
+        );
+    }
+
+    @Get('sitemap')
+    async sitemap(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const request = await this.accessService.resolveRequest(req);
+        if (!request) {
+            res.status(404).type('text/plain').send('Storefront not found');
+            return;
+        }
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.type('application/xml').send(
+            `<?xml version="1.0" encoding="UTF-8"?>\n` +
+                `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+                `  <url><loc>https://${request.host}/promo</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n` +
+                `</urlset>\n`,
+        );
     }
 
     private setPromotionHeaders(res: Response): void {

@@ -6,9 +6,9 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { getConnectionToken } from '@nestjs/typeorm';
 import { DEFAULT_COOKIE_NAME } from '@vendure/common/lib/shared-constants';
 import { Type } from '@vendure/common/lib/shared-types';
+import cookieSession from 'cookie-session';
 import { satisfies } from 'semver';
 import { Connection, DataSourceOptions, EntitySubscriberInterface } from 'typeorm';
-import cookieSession = require('cookie-session');
 
 import { InternalServerError } from './common/error/errors';
 import { getConfig, setConfig } from './config/config-helpers';
@@ -211,6 +211,7 @@ export async function bootstrap(
     });
     DefaultLogger.restoreOriginalLogLevel();
     app.useLogger(new Logger());
+    app.disable('x-powered-by');
     app.set('trust proxy', trustProxy);
     const { tokenMethod } = config.authOptions;
     const usingCookie =
@@ -487,36 +488,31 @@ function disableSynchronize(userConfig: Readonly<RuntimeVendureConfig>): Readonl
  */
 async function validateDbTablesForWorker(worker: INestApplicationContext) {
     const connection: Connection = worker.get(getConnectionToken());
-    await new Promise<void>(async (resolve, reject) => {
-        const checkForTables = async (): Promise<boolean> => {
-            try {
-                const adminCount = await connection.getRepository(Administrator).count();
-                return 0 < adminCount;
-            } catch (e: any) {
-                return false;
-            }
-        };
+    const checkForTables = async (): Promise<boolean> => {
+        try {
+            const adminCount = await connection.getRepository(Administrator).count();
+            return 0 < adminCount;
+        } catch {
+            return false;
+        }
+    };
 
-        const pollIntervalMs = 5000;
-        let attempts = 0;
-        const maxAttempts = 10;
-        let validTableStructure = false;
-        Logger.verbose('Checking for expected DB table structure...');
-        while (!validTableStructure && attempts < maxAttempts) {
-            attempts++;
-            validTableStructure = await checkForTables();
-            if (validTableStructure) {
-                Logger.verbose('Table structure verified');
-                resolve();
-                return;
-            }
+    const pollIntervalMs = 5000;
+    const maxAttempts = 10;
+    Logger.verbose('Checking for expected DB table structure...');
+    for (let attempts = 1; attempts <= maxAttempts; attempts++) {
+        if (await checkForTables()) {
+            Logger.verbose('Table structure verified');
+            return;
+        }
+        if (attempts < maxAttempts) {
             Logger.verbose(
                 `Table structure could not be verified, trying again after ${pollIntervalMs}ms (attempt ${attempts} of ${maxAttempts})`,
             );
-            await new Promise(resolve1 => setTimeout(resolve1, pollIntervalMs));
+            await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
         }
-        reject('Could not validate DB table structure. Aborting bootstrap.');
-    });
+    }
+    throw new Error('Could not validate DB table structure. Aborting bootstrap.');
 }
 
 export function configureSessionCookies(

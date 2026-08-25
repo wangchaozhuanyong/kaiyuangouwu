@@ -2,6 +2,12 @@ import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { Card } from '@vendure/admin-ui/react';
 import React, { useEffect } from 'react';
 
+declare global {
+    interface Window {
+        vendureGoogleMapsApiKey?: string;
+    }
+}
+
 const containerStyle = {
     width: '100%',
     height: '400px',
@@ -13,34 +19,44 @@ const center = {
 };
 
 export function LocationMap() {
+    const googleMapsApiKey = window.vendureGoogleMapsApiKey?.trim() ?? '';
+
+    if (!googleMapsApiKey) {
+        return <Card>Set window.vendureGoogleMapsApiKey to enable this experimental map.</Card>;
+    }
+
+    return <LoadedLocationMap googleMapsApiKey={googleMapsApiKey} />;
+}
+
+function LoadedLocationMap({ googleMapsApiKey }: { googleMapsApiKey: string }) {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
-        googleMapsApiKey: 'AIzaSyCKxhBHUymQG7L57NeRhJRdzlvO4kcymXU',
+        googleMapsApiKey,
     });
 
-    const [map, setMap] = React.useState(null);
+    const [googleMap, setGoogleMap] = React.useState(null);
 
-    const onLoad = React.useCallback(function callback(map) {
+    const onLoad = React.useCallback(function callback(loadedMap) {
         // This is just an example of getting and using the map instance!!! don't just blindly copy!
 
         const bounds = new window.google.maps.LatLngBounds(center);
-        map.fitBounds(bounds);
-        setMap(map);
+        loadedMap.fitBounds(bounds);
+        setGoogleMap(loadedMap);
         new window.google.maps.Marker({
             position: center,
-            map,
+            map: loadedMap,
             title: 'Hello World!',
         });
     }, []);
 
     useEffect(() => {
         setTimeout(() => {
-            (map as any)?.setZoom(9);
+            (googleMap as any)?.setZoom(9);
         }, 1000);
-    }, [map]);
+    }, [googleMap]);
 
-    const onUnmount = React.useCallback(function callback(map) {
-        setMap(null);
+    const onUnmount = React.useCallback(function callback() {
+        setGoogleMap(null);
     }, []);
 
     return isLoaded ? (

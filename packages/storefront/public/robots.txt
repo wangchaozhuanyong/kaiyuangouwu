@@ -2,3 +2,4 @@ User-agent: *
 Allow: /promo$
 Disallow: /promo/
 Disallow: /
+Sitemap: https://damatong.net/sitemap.xml

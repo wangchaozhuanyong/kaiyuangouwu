@@ -95,4 +95,25 @@ describe('StorefrontPromotionController', () => {
             '/#/reset-password?token=reset-token-with-enough-entropy',
         );
     });
+
+    it('publishes a crawlable promotion sitemap without exposing the gated storefront', async () => {
+        const request = { host: 'shop.example.com' };
+        const accessService = {
+            resolveRequest: vi.fn(() => Promise.resolve(request)),
+        };
+        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const robotsResponse = responseMock();
+        const sitemapResponse = responseMock();
+
+        await controller.robots({} as Request, robotsResponse as unknown as Response);
+        await controller.sitemap({} as Request, sitemapResponse as unknown as Response);
+
+        expect(robotsResponse.send).toHaveBeenCalledWith(
+            expect.stringContaining('Sitemap: https://shop.example.com/sitemap.xml'),
+        );
+        expect(sitemapResponse.type).toHaveBeenCalledWith('application/xml');
+        expect(sitemapResponse.send).toHaveBeenCalledWith(
+            expect.stringContaining('<loc>https://shop.example.com/promo</loc>'),
+        );
+    });
 });
