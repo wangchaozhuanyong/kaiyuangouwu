@@ -32,7 +32,7 @@
 - Storefront 静态目录：`/var/www/kaiyuangouwu-current/packages/storefront/dist`
 - Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/dev-server/dist/dashboard`（由 Vendure API 插件提供）
 - Nginx 配置基线：`deploy/nginx/damatong.conf`
-- TLS 协议只在生产机 `/etc/nginx/nginx.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；不要在 `deploy/nginx/damatong.conf` 重复声明，否则会产生重复协议警告。
+- TLS 协议只在 `deploy/nginx/damatong.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；生产机 `/etc/nginx/nginx.conf` 不得保留发行版默认的重复 `ssl_protocols` 声明。
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
 - 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问该前缀；存储桶已启用版本控制、SSE-S3 默认加密、阻止全部公网访问与 Bucket owner enforced。本地备份保留 14 天；S3 当前不自动删除，设置生命周期前必须单独确认保留期限。
 
