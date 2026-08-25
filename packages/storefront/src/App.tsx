@@ -6286,21 +6286,6 @@ function ProductDetailPage({
                 </span>
             </section>
             <ProductReviewsSection api={api} productId={product.id} market={market} language={language} />
-            <section className="detail-block detail-shop-block">
-                <header>
-                    <strong>{isZh ? '店铺信息' : 'Store'}</strong>
-                </header>
-                <div>
-                    <BrandLogo url={logoUrl} name={storefrontName} className="shop-mark" />
-                    <span>
-                        <strong>{storefrontName}</strong>
-                        <small>{isZh ? '品质商品 · 安心售后' : 'Quality products · Reliable support'}</small>
-                    </span>
-                    <button type="button" onClick={() => onNavigate({ name: 'home' })}>
-                        {isZh ? '进店逛逛' : 'Visit store'}
-                    </button>
-                </div>
-            </section>
             <section className="detail-block detail-params">
                 <header>
                     <strong>{isZh ? '商品参数' : 'Product details'}</strong>
