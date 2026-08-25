@@ -92,6 +92,7 @@ jobs:
                   VENDURE_ASSET_UPLOAD_DIR: /tmp/vendure-build-assets
                   DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
                   DIGITAL_DELIVERY_SIGNING_SECRET: build-check-digital-secret-000000000000000000000000
+                  VENDURE_GOOGLE_TRANSLATION_API_KEY: build-check-google-translation-api-key
                   STORE_DOMAIN_CNAME_TARGET: stores.build.test
                   STORE_DOMAIN_ROUTING_MODE: require-domain
                   STORE_DOMAIN_BYPASS_HOSTS: ''
