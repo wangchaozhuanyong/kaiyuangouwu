@@ -129,10 +129,7 @@ function protectText(value: string, glossary: Record<string, string>): Protected
         restore: translated => {
             let restored = translated;
             for (const replacement of replacements) {
-                const tokenPattern = new RegExp(
-                    replacement.token.replace(/./g, character => `${character}\\s*`),
-                    'giu',
-                );
+                const tokenPattern = new RegExp([...replacement.token].map(escapeRegExp).join('\\s*'), 'giu');
                 restored = restored.replace(tokenPattern, replacement.value);
             }
             if (/ZXQ\s*TERM/iu.test(restored)) {
@@ -141,6 +138,10 @@ function protectText(value: string, glossary: Record<string, string>): Protected
             return restored;
         },
     };
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function decodeHtmlEntities(value: string): string {

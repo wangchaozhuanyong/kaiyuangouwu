@@ -21,6 +21,17 @@ describe('GoogleCloudTranslationProvider', () => {
         );
     });
 
+    it('preserves the separator after a protected glossary term', () => {
+        const protectedValue = googleTranslationInternals.protectText('ChatGPT', {
+            ChatGPT: 'ChatGPT',
+        });
+        const tokenWithInsertedSpaces = [...protectedValue.text].join(' ');
+
+        expect(protectedValue.restore(`${tokenWithInsertedSpaces} Subscription`)).toBe(
+            'ChatGPT Subscription',
+        );
+    });
+
     it('translates text and HTML in separate batches', async () => {
         const fetchMock = vi
             .fn()
