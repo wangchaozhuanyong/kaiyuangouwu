@@ -128,4 +128,33 @@ describe('storefront coupons', () => {
             }),
         ]);
     });
+
+    it('hides test campaigns and invalid no-op discounts', () => {
+        const campaigns = [
+            {
+                id: 'audit-campaign',
+                name: '订单九折',
+                couponCode: 'AUDIT-20260820',
+                kind: 'ORDER_PERCENTAGE' as const,
+                startsAt: null,
+                endsAt: null,
+                minimumSpend: 0,
+                discountAmount: null,
+                discountRate: 9,
+            },
+            {
+                id: 'no-op-campaign',
+                name: '无效折扣',
+                couponCode: 'INVALID10',
+                kind: 'ORDER_PERCENTAGE' as const,
+                startsAt: null,
+                endsAt: null,
+                minimumSpend: 0,
+                discountAmount: null,
+                discountRate: 10,
+            },
+        ];
+
+        expect(couponCardsFromCampaigns(campaigns, 'zh', 'CNY')).toEqual([]);
+    });
 });

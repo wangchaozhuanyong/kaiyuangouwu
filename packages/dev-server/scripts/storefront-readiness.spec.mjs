@@ -101,6 +101,7 @@ function channel(code, overrides = {}) {
                 items: [],
             },
         ],
+        couponCampaigns: [],
         ...overrides,
     };
 }
@@ -197,6 +198,56 @@ void test('blocks demo-tagged assets only when the live catalog references them'
     const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
 
     assert.equal(report.checks.find(check => check.id === 'products-real-my-malaysia')?.status, 'blocker');
+});
+
+void test('blocks enabled test coupons, no-op rates and discount labels that disagree with configuration', () => {
+    const invalidCampaigns = [
+        {
+            name: '订单九折',
+            couponCode: 'AUDIT-20260820',
+            kind: 'ORDER_PERCENTAGE',
+            enabled: true,
+            startsAt: null,
+            endsAt: null,
+            minimumSpend: 0,
+            discountAmount: null,
+            discountRate: 9,
+        },
+        {
+            name: '无效折扣',
+            couponCode: 'LIVE10',
+            kind: 'ORDER_PERCENTAGE',
+            enabled: true,
+            startsAt: null,
+            endsAt: null,
+            minimumSpend: 0,
+            discountAmount: null,
+            discountRate: 10,
+        },
+        {
+            name: '订单九折',
+            couponCode: 'LIVE80',
+            kind: 'ORDER_PERCENTAGE',
+            enabled: true,
+            startsAt: null,
+            endsAt: null,
+            minimumSpend: 0,
+            discountAmount: null,
+            discountRate: 8,
+        },
+    ];
+
+    for (const campaign of invalidCampaigns) {
+        const snapshot = readySnapshot();
+        snapshot.channels[0].couponCampaigns = [campaign];
+        const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
+
+        assert.equal(
+            report.checks.find(check => check.id === 'coupon-campaigns-my-malaysia')?.status,
+            'blocker',
+            campaign.couponCode,
+        );
+    }
 });
 
 void test('keeps tax mode approval as an explicit manual gate', () => {

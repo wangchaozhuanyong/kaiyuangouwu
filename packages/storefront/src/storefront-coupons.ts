@@ -16,6 +16,8 @@ export interface StorefrontCouponCard {
 
 const COUPON_STORAGE_LIMIT = 20;
 const COUPON_STORAGE_PREFIX = 'vendure-storefront-claimed-coupons';
+const NON_PRODUCTION_COUPON_PATTERN =
+    /(?:^|[-_\s])(audit|crud|demo|dummy|qa|sample|staging|test)(?:$|[-_\s])|测试|临时演示/iu;
 const couponThemes: StorefrontCouponTheme[] = ['gold', 'rose', 'blue', 'emerald'];
 
 export function couponCardsFromBlock(
@@ -49,7 +51,7 @@ export function couponCardsFromCampaigns(
 ): StorefrontCouponCard[] {
     const isZh = language === 'zh';
     const currencyUnit = currencySymbol(currencyCode, language);
-    return campaigns.map((coupon, index) => {
+    return campaigns.filter(isDisplayableCampaign).map((coupon, index) => {
         const isFixed = coupon.kind === 'ORDER_FIXED';
         const minimum = formatMinorAmount(coupon.minimumSpend, language);
         const value = isFixed
@@ -74,6 +76,21 @@ export function couponCardsFromCampaigns(
             theme: couponThemes[index % couponThemes.length],
         };
     });
+}
+
+function isDisplayableCampaign(coupon: StorefrontCouponCampaign): boolean {
+    const couponCode = coupon.couponCode.trim();
+    if (
+        !/^[A-Z0-9][A-Z0-9_-]*$/u.test(couponCode) ||
+        NON_PRODUCTION_COUPON_PATTERN.test(`${couponCode} ${coupon.name}`)
+    ) {
+        return false;
+    }
+    if (coupon.minimumSpend < 0) return false;
+    if (coupon.kind === 'ORDER_FIXED') {
+        return coupon.discountAmount != null && coupon.discountAmount > 0;
+    }
+    return coupon.discountRate != null && coupon.discountRate > 0 && coupon.discountRate < 10;
 }
 
 export function readClaimedCouponCodes(scope: string): string[] {

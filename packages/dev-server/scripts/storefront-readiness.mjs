@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const testContentPattern = /(?:^|[-_\s])(demo|dummy|test|crud)(?:$|[-_\s])|测试|临时演示/iu;
+const testContentPattern =
+    /(?:^|[-_\s])(audit|demo|dummy|test|crud|sample|staging|qa)(?:$|[-_\s])|测试|临时演示/iu;
 const placeholderShippingLabels = new Set([
     'standard-shipping',
     'standard shipping',
@@ -145,6 +146,44 @@ function demoContentBlocks(blocks) {
             (item.translations ?? []).flatMap(translation => [translation.label, translation.description]),
         );
         return testContentPattern.test(normalizedText([block.code, ...translationText, ...itemText]));
+    });
+}
+
+function claimedDiscountRate(name) {
+    const numeric = String(name ?? '').match(/(\d+(?:\.\d+)?)\s*折/u);
+    if (numeric) return Number(numeric[1]);
+    const chineseDigits = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+    const chinese = String(name ?? '').match(/([一二三四五六七八九])\s*折/u);
+    return chinese ? chineseDigits[chinese[1]] : null;
+}
+
+function invalidCouponCampaigns(campaigns) {
+    return campaigns.filter(campaign => {
+        if (!campaign.enabled) return false;
+        const text = normalizedText([campaign.name, campaign.couponCode]);
+        if (testContentPattern.test(text) || !/^[A-Z0-9][A-Z0-9_-]*$/u.test(campaign.couponCode ?? '')) {
+            return true;
+        }
+        if (!Number.isFinite(campaign.minimumSpend) || campaign.minimumSpend < 0) return true;
+        if (
+            campaign.startsAt &&
+            campaign.endsAt &&
+            Date.parse(campaign.startsAt) >= Date.parse(campaign.endsAt)
+        ) {
+            return true;
+        }
+        if (campaign.kind === 'ORDER_FIXED') {
+            return !Number.isFinite(campaign.discountAmount) || campaign.discountAmount <= 0;
+        }
+        if (
+            !Number.isFinite(campaign.discountRate) ||
+            campaign.discountRate <= 0 ||
+            campaign.discountRate >= 10
+        ) {
+            return true;
+        }
+        const claimedRate = claimedDiscountRate(campaign.name);
+        return claimedRate != null && Math.abs(claimedRate - campaign.discountRate) > 0.001;
     });
 }
 
@@ -407,6 +446,17 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             detail: temporaryBlocks.length
                 ? `demo blocks: ${String(temporaryBlocks.map(block => String(block.code)).join(', '))}`
                 : `${String((channel.contentBlocks ?? []).length)} content blocks`,
+        });
+
+        const invalidCoupons = invalidCouponCampaigns(channel.couponCampaigns ?? []);
+        pushCheck(checks, {
+            id: `coupon-campaigns-${channelCode}`,
+            scope: channelCode,
+            title: '优惠券为正式有效配置',
+            passed: invalidCoupons.length === 0,
+            detail: invalidCoupons.length
+                ? `invalid campaigns: ${invalidCoupons.map(campaign => String(campaign.couponCode)).join(', ')}`
+                : `${String((channel.couponCampaigns ?? []).length)} campaigns checked`,
         });
 
         const availableCountryCodes = new Set(channel.availableCountryCodes ?? []);
@@ -752,6 +802,17 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                             }
                         }
                     }
+                    storeCouponCampaigns {
+                        name
+                        couponCode
+                        kind
+                        enabled
+                        startsAt
+                        endsAt
+                        minimumSpend
+                        discountAmount
+                        discountRate
+                    }
                     storeDomains(channelId: $channelId) {
                         domain
                         isPrimary
@@ -774,6 +835,7 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
             shippingMethods: result.data.shippingMethods.items,
             taxRates: result.data.taxRates.items,
             contentBlocks: result.data.storefrontContentBlocks,
+            couponCampaigns: result.data.storeCouponCampaigns,
             availableCountryCodes: result.data.countries.items.map(country => country.code),
             products: await fetchProducts(fetchImpl, normalizedOrigin, authToken, loginChannel.token),
         });
