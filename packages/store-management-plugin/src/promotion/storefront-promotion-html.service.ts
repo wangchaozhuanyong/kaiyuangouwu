@@ -116,9 +116,13 @@ export class StorefrontPromotionHtmlService {
                 : input.source;
         const withTokens = this.replaceTokens(source, input.bindings);
         const $ = load(withTokens, { xml: false });
+        const trustedImageUrls = new Set(
+            [input.bindings['store.logoUrl'], input.bindings['store.heroImageUrl']].filter(Boolean),
+        );
 
-        this.sanitizeDocument($);
+        this.sanitizeDocument($, trustedImageUrls);
         this.applyBindings($, input.bindings);
+        this.normalizeImages($, trustedImageUrls);
         this.normalizeEntryForm($, input.entryTicket);
         this.normalizeHead($, input.bindings, input.canonicalUrl);
 
@@ -126,7 +130,7 @@ export class StorefrontPromotionHtmlService {
         return `<!doctype html>\n${document}`;
     }
 
-    private sanitizeDocument($: ReturnType<typeof load>): void {
+    private sanitizeDocument($: ReturnType<typeof load>, trustedImageUrls: ReadonlySet<string>): void {
         $('script, iframe, object, embed, base, noscript, template, svg, math').remove();
         $('link[rel="stylesheet"], link[rel="preload"], link[rel="modulepreload"]').remove();
         $('meta[http-equiv]').each((_index, element) => {
@@ -153,7 +157,7 @@ export class StorefrontPromotionHtmlService {
                     continue;
                 }
                 if (normalizedName === 'style') {
-                    node.attr(name, this.sanitizeCss(value));
+                    node.attr(name, this.sanitizeCss(value, trustedImageUrls));
                     continue;
                 }
                 if (['href', 'src', 'poster', 'background', 'action'].includes(normalizedName)) {
@@ -165,7 +169,7 @@ export class StorefrontPromotionHtmlService {
         });
 
         $('style').each((_index, element) => {
-            $(element).text(this.sanitizeCss($(element).html() ?? ''));
+            $(element).text(this.sanitizeCss($(element).html() ?? '', trustedImageUrls));
         });
         $('input, textarea, select').remove();
 
@@ -233,6 +237,21 @@ export class StorefrontPromotionHtmlService {
         });
     }
 
+    private normalizeImages($: ReturnType<typeof load>, trustedImageUrls: ReadonlySet<string>): void {
+        $('img').each((_index, element) => {
+            const image = $(element);
+            const source = image.attr('src');
+            if (!source) return;
+            const safeSource = this.storefrontImageUrl(source, trustedImageUrls.has(source));
+            if (!safeSource) {
+                image.remove();
+                return;
+            }
+            image.attr('src', safeSource);
+            image.removeAttr('srcset');
+        });
+    }
+
     private normalizeHead(
         $: ReturnType<typeof load>,
         bindings: StorefrontPromotionBindings,
@@ -254,8 +273,8 @@ export class StorefrontPromotionHtmlService {
         if ($('title').length === 0) {
             $('head').append(`<title>${this.escapeHtml(bindings['store.name'])}</title>`);
         }
-        const logoUrl = bindings['store.logoUrl'];
-        if (logoUrl && this.isSafeUrl(logoUrl, true)) {
+        const logoUrl = this.storefrontImageUrl(bindings['store.logoUrl'], true);
+        if (logoUrl) {
             $('link[rel~="icon"], link[rel="apple-touch-icon"]').remove();
             const escapedLogoUrl = this.escapeHtml(logoUrl);
             $('head').append(`<link rel="icon" href="${escapedLogoUrl}">`);
@@ -274,13 +293,54 @@ export class StorefrontPromotionHtmlService {
         );
     }
 
-    private sanitizeCss(value: string): string {
+    private sanitizeCss(value: string, trustedImageUrls: ReadonlySet<string> = new Set()): string {
         return value
             .replace(/@import\s+[^;]+;?/gi, '')
             .replace(/expression\s*\([^)]*\)/gi, '')
             .replace(/(?:javascript|vbscript)\s*:/gi, '')
             .replace(/data\s*:\s*text\/html/gi, '')
-            .replace(/(?:behavior|-moz-binding)\s*:[^;}]+[;}]?/gi, '');
+            .replace(/(?:behavior|-moz-binding)\s*:[^;}]+[;}]?/gi, '')
+            .replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (_match, _quote: string, source: string) => {
+                const safeSource = this.storefrontImageUrl(source, trustedImageUrls.has(source));
+                return safeSource ? `url("${safeSource.replace(/["\\]/g, '')}")` : 'none';
+            });
+    }
+
+    private storefrontImageUrl(value: string, allowAbsoluteAsset = false): string | null {
+        const normalized = value.trim();
+        if (!normalized) return null;
+        if (/^(?:https?:)?\/\//i.test(normalized)) {
+            if (!allowAbsoluteAsset) return null;
+            try {
+                const absoluteUrl = new URL(normalized);
+                if (!absoluteUrl.pathname.includes('/assets/')) return null;
+            } catch {
+                return null;
+            }
+        }
+        let url: URL;
+        try {
+            url = new URL(normalized, 'https://storefront.invalid');
+        } catch {
+            return null;
+        }
+        if (url.pathname.includes('/assets/')) {
+            if (url.pathname.toLowerCase().endsWith('.svg')) {
+                const isAbsoluteSvg = /^[a-z][a-z\d+.-]*:/i.test(normalized) || normalized.startsWith('//');
+                return isAbsoluteSvg ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
+            }
+            if (!url.searchParams.has('preset')) {
+                url.searchParams.set('preset', 'storefront-original-preview');
+            }
+            url.searchParams.set('format', 'webp');
+            url.searchParams.set('q', '75');
+            const isAbsoluteAsset = /^[a-z][a-z\d+.-]*:/i.test(normalized) || normalized.startsWith('//');
+            return isAbsoluteAsset ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
+        }
+        if (!/^(?:https?:)?\/\//i.test(normalized) && /\.(?:svg|webp)$/i.test(url.pathname)) {
+            return `${url.pathname}${url.search}${url.hash}`;
+        }
+        return null;
     }
 
     private isSafeUrl(value: string, allowDataImage: boolean): boolean {

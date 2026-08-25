@@ -698,8 +698,8 @@ export const devConfig: VendureConfig = {
             ],
             imageTransformStrategy: new PresetOnlyStrategy({
                 defaultPreset: 'storefront-original-preview',
-                permittedQuality: [55, 75],
-                permittedFormats: ['jpg', 'webp', 'avif'],
+                permittedQuality: [75],
+                permittedFormats: ['webp'],
             }),
         }),
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),

@@ -1323,7 +1323,6 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
     const source = responsiveImageSources(src, 'thumbnail');
     return source ? (
         <picture className="responsive-picture safe-image-frame">
-            <source type="image/avif" srcSet={source.avifSrcSet} sizes={source.sizes} />
             <source type="image/webp" srcSet={source.webpSrcSet} sizes={source.sizes} />
             <img
                 className="safe-image is-loaded"

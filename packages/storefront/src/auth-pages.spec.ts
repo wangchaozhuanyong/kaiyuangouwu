@@ -104,7 +104,7 @@ describe('auth password visibility controls', () => {
         const markup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
 
         expect(markup).toContain('/storefront/auth-ai-bridge-hero.webp');
-        expect(markup).toContain('/storefront/auth-ai-bridge-hero.jpg');
+        expect(markup).not.toContain('/storefront/auth-ai-bridge-hero.jpg');
         expect(markup).toContain('智联云端 · 桥接未来');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
         expect(markup).toMatch(/name="fullName"/);

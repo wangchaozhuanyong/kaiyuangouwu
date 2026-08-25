@@ -185,8 +185,13 @@ export class StorefrontPromotionService {
                 '',
             220,
         );
-        const logoUrl = profile?.logoAsset ? this.assetUrl(ctx.req, profile.logoAsset) : '';
-        const heroImageUrl = this.mediaUrl(ctx.req, hero?.imageUrl ?? '') || logoUrl;
+        const logoUrl = profile?.logoAsset
+            ? this.webpMediaUrl(this.assetUrl(ctx.req, profile.logoAsset), 'storefront-thumbnail-320')
+            : '';
+        const heroSource = hero?.imageAsset
+            ? this.assetUrl(ctx.req, hero.imageAsset)
+            : this.legacyAssetUrl(ctx.req, hero?.imageUrl);
+        const heroImageUrl = this.webpMediaUrl(heroSource, 'storefront-hero-1440') || logoUrl;
         return {
             'store.name': name,
             'store.description': description,
@@ -200,6 +205,7 @@ export class StorefrontPromotionService {
     private async findActiveHero(ctx: RequestContext): Promise<StorefrontContentBlock | null> {
         const heroes = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
             where: { channelId: ctx.channelId, type: 'HERO', enabled: true },
+            relations: { imageAsset: true },
             order: { position: 'ASC', createdAt: 'ASC' },
         });
         const now = Date.now();
@@ -207,7 +213,9 @@ export class StorefrontPromotionService {
             heroes.find(hero => {
                 const started = !hero.startsAt || hero.startsAt.getTime() <= now;
                 const notEnded = !hero.endsAt || hero.endsAt.getTime() > now;
-                return started && notEnded && Boolean(hero.imageUrl);
+                return (
+                    started && notEnded && Boolean(hero.imageAsset || this.isLegacyAssetUrl(hero.imageUrl))
+                );
             }) ?? null
         );
     }
@@ -228,7 +236,10 @@ export class StorefrontPromotionService {
     }
 
     private assetUrl(req: Request | undefined, asset: Asset): string {
-        return this.mediaUrl(req, asset.preview || asset.source);
+        return this.mediaUrl(
+            req,
+            asset.mimeType === 'image/svg+xml' ? asset.source : asset.preview || asset.source,
+        );
     }
 
     private mediaUrl(req: Request | undefined, identifier: string): string {
@@ -240,6 +251,32 @@ export class StorefrontPromotionService {
             return storageStrategy.toAbsoluteUrl(req, normalized.replace(/^\/assets\//, ''));
         }
         return normalized.startsWith('/') ? normalized : `/assets/${normalized}`;
+    }
+
+    private webpMediaUrl(identifier: string, preset: string): string {
+        if (!identifier) return '';
+        let url: URL;
+        try {
+            url = new URL(identifier, 'https://storefront.invalid');
+        } catch {
+            return '';
+        }
+        if (!url.pathname.includes('/assets/')) return '';
+        if (url.pathname.toLowerCase().endsWith('.svg')) return identifier;
+
+        url.searchParams.set('preset', preset);
+        url.searchParams.set('format', 'webp');
+        url.searchParams.set('q', '75');
+        const isAbsolute = /^[a-z][a-z\d+.-]*:/i.test(identifier) || identifier.startsWith('//');
+        return isAbsolute ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
+    }
+
+    private legacyAssetUrl(req: Request | undefined, identifier: string | null | undefined): string {
+        return this.isLegacyAssetUrl(identifier) ? this.mediaUrl(req, identifier as string) : '';
+    }
+
+    private isLegacyAssetUrl(identifier: string | null | undefined): boolean {
+        return Boolean(identifier?.trim().startsWith('/assets/'));
     }
 
     private truncate(value: string, maxLength: number): string {

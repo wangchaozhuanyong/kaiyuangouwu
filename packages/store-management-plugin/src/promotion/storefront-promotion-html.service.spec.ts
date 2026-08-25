@@ -8,8 +8,8 @@ import {
 const bindings: StorefrontPromotionBindings = {
     'store.name': '测试商店 <b>',
     'store.description': '店铺简介',
-    'store.logoUrl': 'https://cdn.example.com/logo.png',
-    'store.heroImageUrl': 'https://cdn.example.com/hero.jpg',
+    'store.logoUrl': 'https://shop.example.com/assets/preview/logo.png?format=webp',
+    'store.heroImageUrl': 'https://shop.example.com/assets/preview/hero.jpg?format=webp',
     'store.currentYear': '2026',
     'store.language': 'zh-CN',
 };
@@ -95,7 +95,30 @@ describe('StorefrontPromotionHtmlService', () => {
         });
 
         expect(html).not.toContain('old.example');
-        expect(html).toContain('<link rel="icon" href="https://cdn.example.com/logo.png">');
-        expect(html).toContain('<link rel="apple-touch-icon" href="https://cdn.example.com/logo.png">');
+        expect(html).toContain(
+            '<link rel="icon" href="https://shop.example.com/assets/preview/logo.png?format=webp&amp;preset=storefront-original-preview&amp;q=75">',
+        );
+        expect(html).toContain(
+            '<link rel="apple-touch-icon" href="https://shop.example.com/assets/preview/logo.png?format=webp&amp;preset=storefront-original-preview&amp;q=75">',
+        );
+    });
+
+    it('removes third-party images and rewrites managed assets to WebP', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: `<!doctype html><html><body>
+                <img src="https://images.example.com/hero.jpg" alt="external">
+                <img src="https://images.example.com/assets/fake.png" alt="fake asset">
+                <img src="/assets/preview/hero.png" alt="managed">
+                <form data-store-entry><button type="submit">进入</button></form>
+            </body></html>`,
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html).not.toContain('images.example.com');
+        expect(html).toContain(
+            'src="/assets/preview/hero.png?preset=storefront-original-preview&amp;format=webp&amp;q=75"',
+        );
     });
 });

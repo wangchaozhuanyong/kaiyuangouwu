@@ -106,7 +106,7 @@ import {
     ROUTE_QUERY_STALE_TIME,
     storefrontQueryKeys,
 } from './query-client';
-import { responsiveImageSources, StorefrontImageKind } from './responsive-image';
+import { responsiveImageSources, StorefrontImageKind, storefrontWebpUrl } from './responsive-image';
 import { ProductReviewsSection, ReviewCenterPage } from './review-pages';
 import { productDescriptionText, sanitizeProductDescription } from './rich-text';
 import { PageSkeleton } from './route-loading';
@@ -391,7 +391,7 @@ function useAutoMattedLogo(url: string | null): string | null {
 
 /** Renders the store logo image if available, otherwise falls back to the newly crafted high-def vector logo. */
 function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
-    const effectiveUrl = url || '/storefront/logo.svg';
+    const effectiveUrl = url ? storefrontWebpUrl(url, 'thumbnail') : '/storefront/logo.svg';
     return <img className={className} src={effectiveUrl} alt={name} />;
 }
 
@@ -2662,7 +2662,7 @@ function HomePage(props: HomePageProps) {
     const hero = heroProducts[heroIndex] ?? products[0];
     const heroImage =
         managedHero?.imageUrl ??
-        (heroIndex % 2 === 0 ? '/storefront/hero-01-gateway.jpg' : '/storefront/hero-02-vip.jpg');
+        (heroIndex % 2 === 0 ? '/storefront/hero-01-gateway.webp' : '/storefront/hero-02-vip.webp');
     const managedHeroProduct =
         managedHero?.targetType === 'PRODUCT'
             ? products.find(product => product.id === managedHero.targetValue)
@@ -3534,7 +3534,7 @@ function HomeDualCategoryShowcase({
                                     ? {
                                           backgroundImage: [
                                               'linear-gradient(145deg, rgba(12, 25, 41, 0.88), rgba(15, 23, 42, 0.78))',
-                                              `url(${JSON.stringify(item.imageUrl)})`,
+                                              `url(${JSON.stringify(storefrontWebpUrl(item.imageUrl, 'card'))})`,
                                           ].join(', '),
                                           backgroundPosition: 'center',
                                           backgroundSize: 'cover',
@@ -8263,7 +8263,7 @@ function prefetchStorefrontImage(src: string, imageKind: StorefrontImageKind): v
     const responsiveSource = responsiveImageSources(src, imageKind);
     const image = new Image();
     if (responsiveSource) {
-        image.srcset = responsiveSource.avifSrcSet;
+        image.srcset = responsiveSource.webpSrcSet;
         image.sizes = responsiveSource.sizes;
         image.src = responsiveSource.fallbackSrc;
     } else {
@@ -8390,9 +8390,12 @@ function SafeImage({
     return responsiveSource ? (
         <picture
             className={`responsive-picture safe-image-frame${loaded ? ' is-loaded' : ''}`}
-            style={placeholderSrc ? { backgroundImage: `url("${placeholderSrc}")` } : undefined}
+            style={
+                placeholderSrc
+                    ? { backgroundImage: `url("${storefrontWebpUrl(placeholderSrc, 'thumbnail')}")` }
+                    : undefined
+            }
         >
-            <source type="image/avif" srcSet={responsiveSource.avifSrcSet} sizes={responsiveSource.sizes} />
             <source type="image/webp" srcSet={responsiveSource.webpSrcSet} sizes={responsiveSource.sizes} />
             {image}
         </picture>

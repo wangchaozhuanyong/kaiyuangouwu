@@ -24,7 +24,7 @@ function createInput(
 }
 
 function validate(input: CreateStorefrontContentBlockInput) {
-    const service = new StorefrontContentService({} as never, {} as never);
+    const service = new StorefrontContentService({} as never, {} as never, {} as never);
     return (service as any).validateBlockInput(input);
 }
 
@@ -95,8 +95,15 @@ describe('StorefrontContentService input validation', () => {
         ).toThrow(/HTTP\(S\)/);
     });
 
+    it('accepts importable external images and rejects unmanaged local image paths', () => {
+        expect(() =>
+            validate(createInput({ imageUrl: 'https://images.example.com/storefront/hero.png' })),
+        ).not.toThrow();
+        expect(() => validate(createInput({ imageUrl: '/legacy/hero.png' }))).toThrow(/素材库/);
+    });
+
     it('requires coupon blocks to point to real promotion codes', () => {
-        const service = new StorefrontContentService({} as never, {} as never);
+        const service = new StorefrontContentService({} as never, {} as never, {} as never);
         const couponItem = {
             position: 0,
             targetType: 'COUPON' as const,
@@ -111,6 +118,46 @@ describe('StorefrontContentService input validation', () => {
                 'COUPONS',
             ),
         ).toThrow(/必须填写优惠码/);
+    });
+});
+
+describe('StorefrontContentService image ownership', () => {
+    it('imports an external URL and replaces it with the resulting Asset preview', async () => {
+        const asset = { id: 'asset-1', preview: '/assets/preview/imported.png' };
+        const connection = {
+            getRepository: vi.fn().mockReturnValue({ findOne: vi.fn().mockResolvedValue(null) }),
+        };
+        const externalImageService = {
+            import: vi.fn().mockResolvedValue(asset),
+            storefrontUrl: vi.fn().mockReturnValue('/assets/preview/imported.png'),
+        };
+        const service = new StorefrontContentService(
+            connection as any,
+            {} as any,
+            externalImageService as any,
+        );
+
+        await expect(
+            (service as any).resolveImage(
+                { channelId: 'default-channel' },
+                null,
+                'https://images.example.com/hero.png',
+                '区块图片',
+            ),
+        ).resolves.toEqual({ asset, imageUrl: '/assets/preview/imported.png' });
+        expect(externalImageService.import).toHaveBeenCalledWith(
+            expect.objectContaining({ channelId: 'default-channel' }),
+            'https://images.example.com/hero.png',
+        );
+    });
+
+    it('does not expose unmigrated third-party URLs through the Shop API', () => {
+        const service = new StorefrontContentService({} as any, {} as any, {} as any);
+
+        expect((service as any).publishedLegacyImageUrl('/assets/preview/hero.png')).toBe(
+            '/assets/preview/hero.png',
+        );
+        expect((service as any).publishedLegacyImageUrl('https://images.example.com/hero.png')).toBeNull();
     });
 });
 
@@ -150,7 +197,7 @@ describe('StorefrontContentService Channel isolation', () => {
         };
         const connection = { getRepository: vi.fn().mockReturnValue(repository) };
         const translator = { translate: vi.fn(block => block) };
-        const service = new StorefrontContentService(connection as any, translator as any);
+        const service = new StorefrontContentService(connection as any, translator as any, {} as any);
 
         await expect(service.findAllForAdmin({ channelId: 'store-a' } as any)).resolves.toEqual([
             expect.objectContaining({ id: 'block-a' }),
@@ -173,7 +220,7 @@ describe('StorefrontContentService carousel settings', () => {
                 entity === StorefrontContentBlock ? blockRepository : repository,
             ),
         };
-        const service = new StorefrontContentService(connection as any, {} as any);
+        const service = new StorefrontContentService(connection as any, {} as any, {} as any);
 
         await expect(service.getSettings({ channelId: 'store-a' } as any)).resolves.toEqual({
             heroAutoplayIntervalSeconds: 5,
@@ -199,7 +246,7 @@ describe('StorefrontContentService carousel settings', () => {
                 entity === StorefrontContentBlock ? blockRepository : repository,
             ),
         };
-        const service = new StorefrontContentService(connection as any, {} as any);
+        const service = new StorefrontContentService(connection as any, {} as any, {} as any);
         const context = { channelId: 'store-a', channel: { id: 'store-a' } } as any;
 
         await expect(service.updateSettings(context, { heroAutoplayIntervalSeconds: 9 })).resolves.toEqual({
@@ -220,7 +267,7 @@ describe('StorefrontContentService carousel settings', () => {
     });
 
     it('rejects non-integer or out-of-range intervals', async () => {
-        const service = new StorefrontContentService({} as any, {} as any);
+        const service = new StorefrontContentService({} as any, {} as any, {} as any);
         const context = { channelId: 'store-a' } as any;
 
         await expect(service.updateSettings(context, { heroAutoplayIntervalSeconds: 2 })).rejects.toThrow(

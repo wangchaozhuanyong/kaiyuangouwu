@@ -13,7 +13,6 @@ interface ImagePresetGroup {
 }
 
 export interface ResponsiveImageSources {
-    avifSrcSet: string;
     fallbackSrc: string;
     fallbackSrcSet: string;
     height: number;
@@ -63,15 +62,10 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
 };
 
 function isTransformableAsset(url: URL): boolean {
-    return url.pathname.includes('/assets/');
+    return url.pathname.includes('/assets/') && !url.pathname.toLowerCase().endsWith('.svg');
 }
 
-function imageUrl(
-    source: string,
-    preset: string,
-    format: 'avif' | 'jpg' | 'webp',
-    quality: 55 | 75,
-): string | null {
+function imageUrl(source: string, preset: string, quality: 75): string | null {
     let url: URL;
     try {
         url = new URL(source, 'https://storefront.invalid');
@@ -81,7 +75,7 @@ function imageUrl(
     if (!isTransformableAsset(url)) return null;
 
     url.searchParams.set('preset', preset);
-    url.searchParams.set('format', format);
+    url.searchParams.set('format', 'webp');
     url.searchParams.set('q', String(quality));
 
     const isAbsolute = /^[a-z][a-z\d+.-]*:/i.test(source) || source.startsWith('//');
@@ -93,42 +87,40 @@ export function responsiveImageSources(
     kind: StorefrontImageKind,
 ): ResponsiveImageSources | null {
     if (kind === 'hero' && /\/storefront\/default-hero\.jpg(?:[?#]|$)/.test(source)) {
-        const jpg = source;
-        const avif = source.replace(/\.jpg(?=([?#]|$))/, '.avif');
         const webp = source.replace(/\.jpg(?=([?#]|$))/, '.webp');
         return {
-            avifSrcSet: `${avif} 800w`,
             webpSrcSet: `${webp} 800w`,
-            fallbackSrc: jpg,
-            fallbackSrcSet: `${jpg} 800w`,
+            fallbackSrc: webp,
+            fallbackSrcSet: `${webp} 800w`,
             height: 496,
             sizes: IMAGE_PRESETS.hero.sizes,
             width: 800,
         };
     }
     const group = IMAGE_PRESETS[kind];
-    const buildSrcSet = (format: 'avif' | 'jpg' | 'webp', quality: 55 | 75) =>
+    const buildSrcSet = () =>
         group.presets
             .map(preset => {
-                const url = imageUrl(source, preset.name, format, quality);
+                const url = imageUrl(source, preset.name, 75);
                 return url ? `${url} ${preset.width}w` : null;
             })
             .filter((value): value is string => Boolean(value))
             .join(', ');
 
-    const avifSrcSet = buildSrcSet('avif', 55);
-    const webpSrcSet = buildSrcSet('webp', 75);
-    const fallbackSrcSet = buildSrcSet('jpg', 75);
-    const fallbackSrc = imageUrl(source, group.presets.at(-1)?.name ?? '', 'jpg', 75);
-    if (!avifSrcSet || !webpSrcSet || !fallbackSrcSet || !fallbackSrc) return null;
+    const webpSrcSet = buildSrcSet();
+    const fallbackSrc = imageUrl(source, group.presets.at(-1)?.name ?? '', 75);
+    if (!webpSrcSet || !fallbackSrc) return null;
 
     return {
-        avifSrcSet,
         fallbackSrc,
-        fallbackSrcSet,
+        fallbackSrcSet: webpSrcSet,
         height: group.height,
         sizes: group.sizes,
         webpSrcSet,
         width: group.width,
     };
+}
+
+export function storefrontWebpUrl(source: string, kind: StorefrontImageKind): string {
+    return responsiveImageSources(source, kind)?.fallbackSrc ?? source;
 }

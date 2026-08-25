@@ -9,6 +9,7 @@ import { StorefrontContentItem } from './entities/storefront-content-item.entity
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { StorefrontContentAdminResolver, StorefrontContentShopResolver } from './storefront-content.resolver';
 import { StorefrontContentService } from './storefront-content.service';
+import { StorefrontExternalImageService } from './storefront-external-image.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
@@ -19,7 +20,7 @@ import { StorefrontContentService } from './storefront-content.service';
         StorefrontContentItemTranslation,
         StorefrontContentSettings,
     ],
-    providers: [StorefrontContentService],
+    providers: [StorefrontContentService, StorefrontExternalImageService],
     configuration: config => {
         config.authOptions.customPermissions.push(storefrontContentPermission);
         return config;

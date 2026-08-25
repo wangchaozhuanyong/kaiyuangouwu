@@ -1624,7 +1624,6 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
     if (!responsive) return <img src={source} alt={alt} loading="lazy" decoding="async" />;
     return (
         <picture className="responsive-picture safe-image-frame">
-            <source type="image/avif" srcSet={responsive.avifSrcSet} sizes={responsive.sizes} />
             <source type="image/webp" srcSet={responsive.webpSrcSet} sizes={responsive.sizes} />
             <img
                 className="safe-image is-loaded"

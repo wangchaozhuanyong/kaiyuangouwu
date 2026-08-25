@@ -2,7 +2,19 @@ import { Check, Copy, Download, Sparkles, X } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 
+import { storefrontWebpUrl } from './responsive-image';
 import { Product, StorefrontLanguage } from './types';
+
+export async function createQrCodeSvgDataUrl(value: string): Promise<string> {
+    const svg = await QRCode.toString(value, {
+        type: 'svg',
+        width: 240,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#0f172a', light: '#ffffff' },
+    });
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
 
 export function SharePosterModal({
     product,
@@ -28,17 +40,14 @@ export function SharePosterModal({
     const [qrCodeUrl, setQrCodeUrl] = useState('');
 
     const productUrl = typeof window !== 'undefined' ? window.location.href : '';
-    const mainImage = product.featuredAsset?.preview ?? product.assets[0]?.preview ?? '';
+    const mainImageSource = product.featuredAsset?.preview ?? product.assets[0]?.preview ?? '';
+    const mainImage = mainImageSource ? storefrontWebpUrl(mainImageSource, 'detail') : '';
+    const storefrontLogo = logoUrl ? storefrontWebpUrl(logoUrl, 'thumbnail') : '';
 
     useEffect(() => {
         if (!productUrl) return;
         let cancelled = false;
-        void QRCode.toDataURL(productUrl, {
-            width: 240,
-            margin: 2,
-            errorCorrectionLevel: 'M',
-            color: { dark: '#0f172a', light: '#ffffff' },
-        })
+        void createQrCodeSvgDataUrl(productUrl)
             .then(url => {
                 if (!cancelled) setQrCodeUrl(url);
             })
@@ -151,9 +160,9 @@ export function SharePosterModal({
             ctx.fillText('探索更多优质好物', 24, 476);
 
             // 触发下载
-            const dataUrl = canvas.toDataURL('image/png');
+            const dataUrl = canvas.toDataURL('image/webp', 0.92);
             const link = document.createElement('a');
-            link.download = `${product.name}-海报.png`;
+            link.download = `${product.name}-海报.webp`;
             link.href = dataUrl;
             link.click();
 
@@ -179,8 +188,8 @@ export function SharePosterModal({
 
                 <div className="poster-preview-wrapper" ref={posterRef}>
                     <div className="poster-brand-row">
-                        {logoUrl ? (
-                            <img className="poster-brand-logo" src={logoUrl} alt={storefrontName} />
+                        {storefrontLogo ? (
+                            <img className="poster-brand-logo" src={storefrontLogo} alt={storefrontName} />
                         ) : null}
                         <div className="poster-brand-info">
                             <span className="poster-brand-name">{storefrontName}</span>

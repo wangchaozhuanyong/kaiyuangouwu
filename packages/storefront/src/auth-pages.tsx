@@ -17,6 +17,7 @@ import {
     ACCOUNT_PASSWORD_MIN_LENGTH,
     validateAccountPassword,
 } from './auth-validation';
+import { storefrontWebpUrl } from './responsive-image';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
 
 type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
@@ -809,17 +810,14 @@ function AuthLayout({
     return (
         <main className="page subpage auth-page" aria-label={title}>
             <section className="auth-hero">
-                <picture>
-                    <source srcSet="/storefront/auth-ai-bridge-hero.webp" type="image/webp" />
-                    <img
-                        src="/storefront/auth-ai-bridge-hero.jpg"
-                        width={1659}
-                        height={948}
-                        alt=""
-                        decoding="async"
-                        fetchPriority="high"
-                    />
-                </picture>
+                <img
+                    src="/storefront/auth-ai-bridge-hero.webp"
+                    width={1659}
+                    height={948}
+                    alt=""
+                    decoding="async"
+                    fetchPriority="high"
+                />
                 <button
                     className="auth-back-button"
                     type="button"
@@ -831,7 +829,11 @@ function AuthLayout({
                 <div className="auth-brand-lockup">
                     <div className="auth-brand-main">
                         {logoUrl ? (
-                            <img className="auth-brand-mark" src={logoUrl} alt={storefrontName} />
+                            <img
+                                className="auth-brand-mark"
+                                src={storefrontWebpUrl(logoUrl, 'thumbnail')}
+                                alt={storefrontName}
+                            />
                         ) : (
                             <span className="auth-brand-mark" aria-hidden="true">
                                 桥

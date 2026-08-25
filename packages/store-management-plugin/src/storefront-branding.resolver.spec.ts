@@ -47,4 +47,24 @@ describe('StorefrontBrandingShopResolver', () => {
         expect(result).toMatchObject({ name: '商城', description: '唯一公开简介' });
         expect(result).not.toHaveProperty('internalNote');
     });
+
+    it('keeps an uploaded SVG logo as a vector asset', async () => {
+        const resolver = createResolver({
+            descriptionZh: '',
+            descriptionEn: '',
+            logoAsset: {
+                mimeType: 'image/svg+xml',
+                source: 'source/logo.svg',
+                preview: 'preview/logo.png',
+            },
+        });
+
+        await expect(
+            resolver.storefrontBranding({
+                channelId: 'channel-1',
+                languageCode: 'zh_Hans',
+                channel: { code: 'store', customFields: {} },
+            } as any),
+        ).resolves.toMatchObject({ logoUrl: '/assets/source/logo.svg' });
+    });
 });

@@ -23,6 +23,16 @@ export interface ImageDialogProps {
     onClose: () => void;
 }
 
+export function normalizeRichTextAssetSource(source: string, origin: string): string {
+    try {
+        const url = new URL(source, origin);
+        if (url.origin !== new URL(origin).origin) return '';
+        return url.pathname.includes('/assets/') ? `${url.pathname}${url.search}${url.hash}` : '';
+    } catch {
+        return '';
+    }
+}
+
 export function ImageDialog({ editor, isOpen, onClose }: Readonly<ImageDialogProps>) {
     const { t } = useLingui();
     const [src, setSrc] = useState('');
@@ -90,7 +100,7 @@ export function ImageDialog({ editor, isOpen, onClose }: Readonly<ImageDialogPro
     const handleAssetSelect = (assets: Asset[]) => {
         if (assets.length > 0) {
             const asset = assets[0];
-            setSrc(asset.source);
+            setSrc(normalizeRichTextAssetSource(asset.source, window.location.origin));
             setPreviewUrl(asset.preview);
             // Set width and height from asset if available
             if (asset.width) {
@@ -146,22 +156,6 @@ export function ImageDialog({ editor, isOpen, onClose }: Readonly<ImageDialogPro
                                 <PaperclipIcon className="w-4 h-4 mr-2" />
                                 <Trans>Add asset</Trans>
                             </Button>
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="image-source">
-                                <Trans>Source</Trans>
-                            </Label>
-                            <Input
-                                id="image-source"
-                                value={src}
-                                onChange={e => {
-                                    setSrc(e.target.value);
-                                    setPreviewUrl(e.target.value);
-                                }}
-                                placeholder="https://example.com/image.jpg"
-                                autoFocus
-                            />
                         </div>
 
                         <div className="grid gap-2">

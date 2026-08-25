@@ -58,7 +58,10 @@ export class StorefrontBrandingShopResolver {
     }
 
     private assetUrl(req: Request | undefined, asset: Asset): string {
-        return this.mediaUrl(req, asset.preview || asset.source);
+        return this.mediaUrl(
+            req,
+            asset.mimeType === 'image/svg+xml' ? asset.source : asset.preview || asset.source,
+        );
     }
 
     private mediaUrl(req: Request | undefined, identifier: string): string {

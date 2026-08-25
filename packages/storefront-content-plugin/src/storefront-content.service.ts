@@ -25,6 +25,7 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
+import { StorefrontExternalImageService } from './storefront-external-image.service';
 import {
     CreateStorefrontContentBlockInput,
     StorefrontContentBlockTranslationInput,
@@ -35,11 +36,17 @@ import {
     UpdateStorefrontContentSettingsInput,
 } from './types';
 
+interface ResolvedStorefrontImage {
+    asset: Asset | null;
+    imageUrl: string | null;
+}
+
 @Injectable()
 export class StorefrontContentService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly translator: TranslatorService,
+        private readonly externalImageService: StorefrontExternalImageService,
     ) {}
 
     async findAllForAdmin(ctx: RequestContext): Promise<StorefrontContentBlock[]> {
@@ -130,13 +137,13 @@ export class StorefrontContentService {
     ): Promise<StorefrontContentBlock> {
         const normalized = this.validateBlockInput(input);
         await this.assertUniqueCode(ctx, normalized.code);
-        const imageAsset = await this.findAsset(ctx, normalized.imageAssetId);
+        const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         const block = await this.connection.getRepository(ctx, StorefrontContentBlock).save(
             new StorefrontContentBlock({
                 ...normalized,
-                imageAsset,
-                imageAssetId: imageAsset?.id ?? null,
-                imageUrl: imageAsset?.preview ?? normalized.imageUrl,
+                imageAsset: image.asset,
+                imageAssetId: image.asset?.id ?? null,
+                imageUrl: image.imageUrl,
                 channel: ctx.channel,
                 channelId: ctx.channelId,
                 translations: [],
@@ -182,10 +189,9 @@ export class StorefrontContentService {
             items: input.items,
         });
         await this.assertUniqueCode(ctx, next.code, block.id);
-        const imageAsset = await this.findAsset(ctx, next.imageAssetId);
-        const imageUrl =
-            imageAsset?.preview ??
-            (input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl);
+        const requestedImageUrl =
+            input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
+        const image = await this.resolveImage(ctx, next.imageAssetId, requestedImageUrl, '区块图片');
         Object.assign(block, {
             code: next.code,
             internalName: next.internalName,
@@ -195,9 +201,9 @@ export class StorefrontContentService {
             position: next.position,
             startsAt: next.startsAt,
             endsAt: next.endsAt,
-            imageAsset,
-            imageAssetId: imageAsset?.id ?? null,
-            imageUrl,
+            imageAsset: image.asset,
+            imageAssetId: image.asset?.id ?? null,
+            imageUrl: image.imageUrl,
             backgroundColor: next.backgroundColor,
             textColor: next.textColor,
             targetType: next.targetType,
@@ -262,17 +268,17 @@ export class StorefrontContentService {
                 retained.add(String(item.id));
                 const imageAssetId =
                     input.imageAssetId === undefined ? item.imageAssetId : input.imageAssetId;
-                const imageAsset = await this.findAsset(ctx, imageAssetId);
+                const requestedImageUrl =
+                    input.imageAssetId === null && input.imageUrl === undefined
+                        ? null
+                        : (this.optionalText(input.imageUrl) ?? item.imageUrl);
+                const image = await this.resolveImage(ctx, imageAssetId, requestedImageUrl, '条目图片');
                 Object.assign(item, {
                     enabled: input.enabled ?? true,
                     position: input.position,
-                    imageAsset,
-                    imageAssetId: imageAsset?.id ?? null,
-                    imageUrl:
-                        imageAsset?.preview ??
-                        (input.imageAssetId === null && input.imageUrl === undefined
-                            ? null
-                            : (this.optionalText(input.imageUrl) ?? item.imageUrl)),
+                    imageAsset: image.asset,
+                    imageAssetId: image.asset?.id ?? null,
+                    imageUrl: image.imageUrl,
                     targetType: input.targetType ?? 'NONE',
                     targetValue: this.normalizeTarget(input.targetType ?? 'NONE', input.targetValue),
                     settings:
@@ -281,15 +287,20 @@ export class StorefrontContentService {
                             : this.normalizeSettings(input.settings, '条目设置'),
                 });
             } else {
-                const imageAsset = await this.findAsset(ctx, input.imageAssetId);
+                const image = await this.resolveImage(
+                    ctx,
+                    input.imageAssetId,
+                    this.optionalText(input.imageUrl),
+                    '条目图片',
+                );
                 item = new StorefrontContentItem({
                     block,
                     blockId: block.id,
                     enabled: input.enabled ?? true,
                     position: input.position,
-                    imageAsset,
-                    imageAssetId: imageAsset?.id ?? null,
-                    imageUrl: imageAsset?.preview ?? this.optionalText(input.imageUrl),
+                    imageAsset: image.asset,
+                    imageAssetId: image.asset?.id ?? null,
+                    imageUrl: image.imageUrl,
                     targetType: input.targetType ?? 'NONE',
                     targetValue: this.normalizeTarget(input.targetType ?? 'NONE', input.targetValue),
                     settings: this.normalizeSettings(input.settings, '条目设置'),
@@ -359,11 +370,15 @@ export class StorefrontContentService {
         const translated = this.translator.translate(block, ctx, ['items']) as StorefrontContentBlock;
         translated.internalName = translated.internalName?.trim() || translated.title || translated.code;
         translated.layoutVariant = translated.layoutVariant || 'AUTO';
-        translated.imageUrl = translated.imageAsset?.preview ?? translated.imageUrl;
+        translated.imageUrl =
+            (translated.imageAsset ? this.externalImageService.storefrontUrl(translated.imageAsset) : null) ??
+            (publishedOnly ? this.publishedLegacyImageUrl(translated.imageUrl) : translated.imageUrl);
         translated.items = (translated.items ?? [])
             .filter(item => !publishedOnly || item.enabled)
             .map(item => {
-                item.imageUrl = item.imageAsset?.preview ?? item.imageUrl;
+                item.imageUrl =
+                    (item.imageAsset ? this.externalImageService.storefrontUrl(item.imageAsset) : null) ??
+                    (publishedOnly ? this.publishedLegacyImageUrl(item.imageUrl) : item.imageUrl);
                 return item;
             })
             .sort((a, b) => a.position - b.position || Number(a.id) - Number(b.id));
@@ -444,7 +459,7 @@ export class StorefrontContentService {
             throw new UserInputError('区块结束时间必须晚于开始时间');
         }
         this.validateTranslations(input.translations, 'title');
-        this.validateUrl(input.imageUrl, '区块图片');
+        this.validateImageUrl(input.imageUrl, '区块图片');
         this.validateColor(input.backgroundColor, '背景颜色');
         this.validateColor(input.textColor, '文字颜色');
         const targetType = input.targetType ?? 'NONE';
@@ -477,7 +492,7 @@ export class StorefrontContentService {
             throw new UserInputError('装修条目排序必须是非负整数');
         }
         this.validateTranslations(input.translations, 'label');
-        this.validateUrl(input.imageUrl, '条目图片');
+        this.validateImageUrl(input.imageUrl, '条目图片');
         const targetType = input.targetType ?? 'NONE';
         this.normalizeTarget(targetType, input.targetValue);
         if (blockType === 'COUPONS' && targetType !== 'COUPON') {
@@ -540,6 +555,19 @@ export class StorefrontContentService {
         }
     }
 
+    private validateImageUrl(value: string | null | undefined, label: string): void {
+        const normalized = this.optionalText(value);
+        if (!normalized) return;
+        if (normalized.startsWith('/assets/')) return;
+        try {
+            const url = new URL(normalized);
+            if (url.protocol === 'https:' || url.protocol === 'http:') return;
+        } catch {
+            // Fall through to the image-specific error below.
+        }
+        throw new UserInputError(`${label}必须从素材库选择，或填写可公开访问的 HTTP(S) 图片地址`);
+    }
+
     private validateColor(value: string | null | undefined, label: string): void {
         const normalized = this.optionalText(value);
         if (normalized && !/^#[0-9a-f]{6}$/i.test(normalized)) {
@@ -568,6 +596,39 @@ export class StorefrontContentService {
             throw new EntityNotFoundError(Asset.name, id);
         }
         return asset;
+    }
+
+    private async resolveImage(
+        ctx: RequestContext,
+        imageAssetId: ID | null | undefined,
+        imageUrl: string | null | undefined,
+        label: string,
+    ): Promise<ResolvedStorefrontImage> {
+        const asset = await this.findAsset(ctx, imageAssetId);
+        if (asset) {
+            return { asset, imageUrl: this.externalImageService.storefrontUrl(asset) };
+        }
+        const normalizedUrl = this.optionalText(imageUrl);
+        if (!normalizedUrl) {
+            return { asset: null, imageUrl: null };
+        }
+        if (normalizedUrl.startsWith('/assets/')) {
+            return { asset: null, imageUrl: normalizedUrl };
+        }
+        try {
+            const importedAsset = await this.externalImageService.import(ctx, normalizedUrl);
+            return {
+                asset: importedAsset,
+                imageUrl: this.externalImageService.storefrontUrl(importedAsset),
+            };
+        } catch (error) {
+            if (error instanceof UserInputError) throw error;
+            throw new UserInputError(`${label}导入失败，请改为上传到素材库`);
+        }
+    }
+
+    private publishedLegacyImageUrl(imageUrl: string | null): string | null {
+        return imageUrl?.trim().startsWith('/assets/') ? imageUrl.trim() : null;
     }
 
     private normalizeSettings(

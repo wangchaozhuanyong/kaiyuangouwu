@@ -2356,7 +2356,7 @@ img.fatal-error-mark {
     min-height: 70px;
     margin: 0;
     padding: 0;
-    background-image: url('/storefront/account-recommendation-crest.png');
+    background-image: url('/storefront/account-recommendation-crest.webp');
     background-position: center;
     background-repeat: no-repeat;
     background-size: min(100%, 330px) auto;

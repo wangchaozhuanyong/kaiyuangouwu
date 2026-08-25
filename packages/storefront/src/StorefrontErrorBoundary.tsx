@@ -1,12 +1,14 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 
+import { storefrontWebpUrl } from './responsive-image';
+
 const LOGO_URL_CACHE_KEY = '__storefront_logo_url__';
 
 /** Cache the logo URL so the error boundary can display it even after a render crash. */
 export function cacheLogoUrl(url: string | null): void {
     try {
         if (url) {
-            sessionStorage.setItem(LOGO_URL_CACHE_KEY, url);
+            sessionStorage.setItem(LOGO_URL_CACHE_KEY, storefrontWebpUrl(url, 'thumbnail'));
         } else {
             sessionStorage.removeItem(LOGO_URL_CACHE_KEY);
         }

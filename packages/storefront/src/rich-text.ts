@@ -1,5 +1,7 @@
 import { filterXSS, IFilterXSSOptions, IWhiteList } from 'xss';
 
+import { storefrontWebpUrl } from './responsive-image';
+
 const PRODUCT_DESCRIPTION_ALLOW_LIST: IWhiteList = {
     a: ['href', 'title'],
     b: [],
@@ -53,10 +55,36 @@ const PLAIN_TEXT_OPTIONS: IFilterXSSOptions = {
 
 const BLOCK_BOUNDARY_PATTERN =
     /<(?:br\s*\/?>|\/(?:blockquote|figcaption|figure|h[1-6]|li|p|pre|t[dh]|tr))>/gi;
+const IMAGE_TAG_PATTERN = /<img\b[^>]*>/gi;
+const IMAGE_SOURCE_PATTERN = /(\bsrc=)(["'])(.*?)\2/i;
 
 export function sanitizeProductDescription(value: string | null | undefined): string {
     if (!value?.trim()) return '';
-    return filterXSS(value.trim(), PRODUCT_DESCRIPTION_OPTIONS);
+    const sanitized = filterXSS(value.trim(), PRODUCT_DESCRIPTION_OPTIONS);
+    return sanitized.replace(IMAGE_TAG_PATTERN, imageTag => {
+        const sourceMatch = imageTag.match(IMAGE_SOURCE_PATTERN);
+        if (!sourceMatch) return '';
+        const [, prefix, quote, source] = sourceMatch;
+        const decodedSource = source.replace(/&amp;/gi, '&');
+        const webpSource = safeRichTextImageUrl(decodedSource);
+        if (!webpSource) return '';
+        const escapedSource = webpSource
+            .replace(/&/g, '&amp;')
+            .replace(quote === '"' ? /"/g : /'/g, quote === '"' ? '&quot;' : '&#39;');
+        return imageTag.replace(IMAGE_SOURCE_PATTERN, `${prefix}${quote}${escapedSource}${quote}`);
+    });
+}
+
+function safeRichTextImageUrl(source: string): string | null {
+    if (/^(?:https?:)?\/\//i.test(source)) return null;
+    const webpSource = storefrontWebpUrl(source, 'detail');
+    if (webpSource !== source) return webpSource;
+    try {
+        const url = new URL(source, 'https://storefront.invalid');
+        return /\.(?:svg|webp)$/i.test(url.pathname) ? `${url.pathname}${url.search}${url.hash}` : null;
+    } catch {
+        return null;
+    }
 }
 
 export function productDescriptionText(value: string | null | undefined): string {

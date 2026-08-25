@@ -22,6 +22,32 @@ describe('product description rich text', () => {
         expect(result).toContain('<p>安全内容</p>');
     });
 
+    it('rewrites uploaded rich-text images to WebP detail presets', () => {
+        const result = sanitizeProductDescription(
+            '<p><img src="/assets/preview/detail.png?token=public" alt="详情图" loading="lazy"></p>',
+        );
+
+        expect(result).toContain('preset=storefront-detail-1200');
+        expect(result).toContain('format=webp');
+        expect(result).toContain('q=75');
+        expect(result).toContain('token=public');
+    });
+
+    it('removes third-party bitmap URLs instead of loading them directly', () => {
+        const result = sanitizeProductDescription(
+            '<p>商品说明<img src="https://images.example.com/detail.jpg" alt="外链图片"></p>',
+        );
+
+        expect(result).toBe('<p>商品说明</p>');
+        expect(result).not.toContain('images.example.com');
+    });
+
+    it('keeps same-origin SVG illustrations as the vector exception', () => {
+        expect(sanitizeProductDescription('<img src="/storefront/guide.svg" alt="说明">')).toBe(
+            '<img src="/storefront/guide.svg" alt="说明">',
+        );
+    });
+
     it('creates readable plain text for summaries and sharing', () => {
         expect(productDescriptionText('<p>ChatGPT &amp; AI</p><p>支付后交付</p>')).toBe(
             'ChatGPT & AI 支付后交付',
