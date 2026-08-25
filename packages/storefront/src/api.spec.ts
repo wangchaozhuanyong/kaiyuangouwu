@@ -477,7 +477,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ emailAddress: 'customer@example.com' });
     });
 
-    it('passes account verification tokens and resend addresses to Vendure', async () => {
+    it('passes account verification tokens, optional passwords and resend addresses to Vendure', async () => {
         const resendFetchMock = mockGraphQlResponse({
             refreshCustomerVerification: { __typename: 'Success', success: true },
         });
@@ -485,6 +485,7 @@ describe('ShopApi storefront mutations', () => {
 
         await api.refreshCustomerVerification('customer@example.com');
         let request = JSON.parse(String(resendFetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
             variables: Record<string, unknown>;
         };
         expect(request.variables).toEqual({ emailAddress: 'customer@example.com' });
@@ -494,9 +495,24 @@ describe('ShopApi storefront mutations', () => {
         });
         await api.verifyCustomerAccount('verify+token');
         request = JSON.parse(String(verificationFetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
             variables: Record<string, unknown>;
         };
+        expect(request.query).toContain('verifyCustomerAccount(token: $token, password: $password)');
         expect(request.variables).toEqual({ token: 'verify+token' });
+
+        const passwordVerificationFetchMock = mockGraphQlResponse({
+            verifyCustomerAccount: { __typename: 'CurrentUser', id: '1' },
+        });
+        await api.verifyCustomerAccount('admin-created-token', 'new-secure-password');
+        request = JSON.parse(String(passwordVerificationFetchMock.mock.calls[0][1]?.body)) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.variables).toEqual({
+            token: 'admin-created-token',
+            password: 'new-secure-password',
+        });
     });
 
     it('surfaces an expired password reset token', async () => {

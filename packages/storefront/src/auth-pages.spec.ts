@@ -9,6 +9,8 @@ import {
     registerErrorMessage,
     RegisterPage,
     splitCustomerName,
+    verificationErrorMessage,
+    verificationRequiresPassword,
 } from './auth-pages';
 
 const authPageProps = {
@@ -83,6 +85,42 @@ describe('registerErrorMessage', () => {
         );
         expect(registerErrorMessage(new ShopApiError('RATE_LIMIT_ERROR', 'Too many attempts'), 'zh')).toBe(
             '注册失败（错误代码：RATE_LIMIT_ERROR）',
+        );
+    });
+});
+
+describe('account verification errors', () => {
+    it('requests a first password for accounts created without one', () => {
+        const error = new ShopApiError('MISSING_PASSWORD_ERROR', 'A password must be provided.');
+
+        expect(verificationRequiresPassword(error)).toBe(true);
+        expect(verificationRequiresPassword(new Error('A password must be provided.'))).toBe(false);
+    });
+
+    it('distinguishes expired and invalid verification links', () => {
+        expect(
+            verificationErrorMessage(
+                new ShopApiError('VERIFICATION_TOKEN_EXPIRED_ERROR', 'Verification token has expired'),
+                'zh',
+            ),
+        ).toContain('已过期');
+        expect(
+            verificationErrorMessage(
+                new ShopApiError('VERIFICATION_TOKEN_INVALID_ERROR', 'Verification token not recognized'),
+                'zh',
+            ),
+        ).toContain('无效');
+    });
+
+    it('shows a retryable message for password validation and network failures', () => {
+        expect(
+            verificationErrorMessage(
+                new ShopApiError('PASSWORD_VALIDATION_ERROR', 'Password is invalid'),
+                'zh',
+            ),
+        ).toBe('密码不符合安全要求，请重新设置');
+        expect(verificationErrorMessage(new TypeError('Failed to fetch'), 'zh')).toBe(
+            '网络连接失败，请检查网络后重试',
         );
     });
 });

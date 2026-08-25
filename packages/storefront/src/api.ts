@@ -1135,18 +1135,18 @@ export class ShopApi {
         this.assertNoError(result.refreshCustomerVerification);
     }
 
-    async verifyCustomerAccount(token: string): Promise<void> {
+    async verifyCustomerAccount(token: string, password?: string): Promise<void> {
         const result = await this.request<{ verifyCustomerAccount: ErrorResult }>(
             `
-                mutation VerifyStorefrontCustomer($token: String!) {
-                    verifyCustomerAccount(token: $token) {
+                mutation VerifyStorefrontCustomer($token: String!, $password: String) {
+                    verifyCustomerAccount(token: $token, password: $password) {
                         __typename
                         ... on CurrentUser { id identifier }
                         ... on ErrorResult { errorCode message }
                     }
                 }
             `,
-            { token },
+            { token, ...(password === undefined ? {} : { password }) },
         );
         this.assertNoError(result.verifyCustomerAccount);
     }

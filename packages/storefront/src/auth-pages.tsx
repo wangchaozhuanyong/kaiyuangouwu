@@ -147,6 +147,44 @@ export function registerErrorMessage(error: unknown, language: StorefrontLanguag
           : 'Registration failed. Please try again later';
 }
 
+export function verificationRequiresPassword(error: unknown): boolean {
+    return error instanceof ShopApiError && error.errorCode === 'MISSING_PASSWORD_ERROR';
+}
+
+export function verificationErrorMessage(error: unknown, language: StorefrontLanguage): string {
+    const isZh = language === 'zh';
+    if (error instanceof ShopApiError) {
+        if (error.errorCode === 'VERIFICATION_TOKEN_EXPIRED_ERROR') {
+            return isZh
+                ? '验证链接已过期，请重新发送验证邮件'
+                : 'This verification link has expired. Request a new verification email.';
+        }
+        if (error.errorCode === 'VERIFICATION_TOKEN_INVALID_ERROR') {
+            return isZh
+                ? '验证链接无效或已经使用'
+                : 'This verification link is invalid or has already been used.';
+        }
+        if (error.errorCode === 'PASSWORD_VALIDATION_ERROR') {
+            return isZh
+                ? '密码不符合安全要求，请重新设置'
+                : 'The password does not meet the security requirements.';
+        }
+        return isZh ? `验证失败（错误代码：${error.errorCode}）` : error.message;
+    }
+    if (isNetworkError(error)) {
+        return isZh
+            ? '网络连接失败，请检查网络后重试'
+            : 'Network connection failed. Check your connection and try again.';
+    }
+    return error instanceof Error
+        ? isZh
+            ? `验证失败：${error.message}`
+            : error.message
+        : isZh
+          ? '无法完成验证，请稍后重试'
+          : 'Verification failed. Please try again later.';
+}
+
 function isNetworkError(error: unknown): boolean {
     return (
         error instanceof TypeError ||
@@ -484,10 +522,45 @@ export function VerifyAccountPage({
 }: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
     const isZh = language === 'zh';
     const [error, setError] = useState('');
+    const [requiresPassword, setRequiresPassword] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [resending, setResending] = useState(false);
     const [resendError, setResendError] = useState('');
     const [resendMessage, setResendMessage] = useState('');
     const attempted = useRef(false);
+
+    const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!token) return;
+        const data = new FormData(event.currentTarget);
+        const password = formString(data, 'password');
+        const passwordError = validateAccountPassword(
+            password,
+            formString(data, 'confirmPassword'),
+            language,
+        );
+        if (passwordError) {
+            setError(passwordError);
+            return;
+        }
+        setSubmitting(true);
+        setError('');
+        try {
+            await api.verifyCustomerAccount(token, password);
+            await onSuccess();
+        } catch (requestError) {
+            if (
+                requestError instanceof ShopApiError &&
+                (requestError.errorCode === 'VERIFICATION_TOKEN_EXPIRED_ERROR' ||
+                    requestError.errorCode === 'VERIFICATION_TOKEN_INVALID_ERROR')
+            ) {
+                setRequiresPassword(false);
+            }
+            setError(verificationErrorMessage(requestError, language));
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     const resend = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -525,14 +598,15 @@ export function VerifyAccountPage({
         void api
             .verifyCustomerAccount(token)
             .then(onSuccess)
-            .catch(() => {
-                setError(
-                    isZh
-                        ? '验证链接无效、已过期或已经使用'
-                        : 'This verification link is invalid, expired, or has already been used.',
-                );
+            .catch(requestError => {
+                if (verificationRequiresPassword(requestError)) {
+                    setRequiresPassword(true);
+                    setError('');
+                    return;
+                }
+                setError(verificationErrorMessage(requestError, language));
             });
-    }, [api, isZh, onSuccess, token]);
+    }, [api, language, onSuccess, token]);
 
     return (
         <AuthLayout
@@ -540,22 +614,67 @@ export function VerifyAccountPage({
             {...{ language, storefrontName, logoUrl, onBack }}
         >
             <AuthResult
-                icon={error ? <CircleAlert /> : <Fingerprint />}
+                icon={requiresPassword ? <LockKeyhole /> : error ? <CircleAlert /> : <Fingerprint />}
                 title={
-                    error
+                    requiresPassword
                         ? isZh
-                            ? '无法完成验证'
-                            : 'Verification failed'
-                        : isZh
-                          ? '正在验证'
-                          : 'Verifying your email'
+                            ? '设置登录密码'
+                            : 'Set your sign-in password'
+                        : error
+                          ? isZh
+                              ? '无法完成验证'
+                              : 'Verification failed'
+                          : isZh
+                            ? '正在验证'
+                            : 'Verifying your email'
                 }
                 detail={
-                    error ||
-                    (isZh ? '请稍候，完成后将自动登录' : 'Please wait. You will be signed in automatically.')
+                    requiresPassword
+                        ? isZh
+                            ? '该账号由后台开户，验证邮箱后请设置首次登录密码'
+                            : 'This account was created by an administrator. Set your first password to finish verification.'
+                        : error ||
+                          (isZh
+                              ? '请稍候，完成后将自动登录'
+                              : 'Please wait. You will be signed in automatically.')
                 }
             >
-                {error && (
+                {requiresPassword ? (
+                    <form className="auth-recovery-form" onSubmit={event => void submitPassword(event)}>
+                        <Field
+                            name="password"
+                            label={isZh ? '登录密码' : 'Sign-in password'}
+                            type="password"
+                            autoComplete="new-password"
+                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                            icon={<LockKeyhole />}
+                            revealPassword
+                            language={language}
+                        />
+                        <Field
+                            name="confirmPassword"
+                            label={isZh ? '确认登录密码' : 'Confirm sign-in password'}
+                            type="password"
+                            autoComplete="new-password"
+                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                            icon={<LockKeyhole />}
+                            revealPassword
+                            language={language}
+                        />
+                        {error && (
+                            <small className="form-error" role="alert">
+                                {error}
+                            </small>
+                        )}
+                        <SubmitButton
+                            submitting={submitting}
+                            idle={isZh ? '设置密码并完成验证' : 'Set password and verify'}
+                            busy={isZh ? '验证中' : 'Verifying'}
+                        />
+                    </form>
+                ) : error ? (
                     <>
                         <form className="auth-recovery-form" onSubmit={event => void resend(event)}>
                             <Field
@@ -589,7 +708,7 @@ export function VerifyAccountPage({
                             {isZh ? '返回登录' : 'Back to sign in'}
                         </button>
                     </>
-                )}
+                ) : null}
             </AuthResult>
         </AuthLayout>
     );
