@@ -261,7 +261,7 @@ node packages/dev-server/dist/index.js
 
 ## 当前 Nginx 配置状态
 
-`deploy/nginx/damatong.conf` 已配置：
+生产机 `/etc/nginx/nginx.conf` 与 `deploy/nginx/damatong.conf` 已共同配置：
 
 - `damatong.net` 与 `www.damatong.net` 前台；
 - `console.damatong.net` 管理后台；
