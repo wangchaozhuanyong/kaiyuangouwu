@@ -1,19 +1,27 @@
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
+const requireFromCore = createRequire(path.join(repoRoot, 'packages/core/package.json'));
+
+function resolveNestPackage(packageName: string): string {
+    return path.dirname(requireFromCore.resolve(`${packageName}/package.json`));
+}
 
 /**
  * Bun's hoisted linker can install multiple physical copies of the same Nest
  * version for different peer contexts. Tests that combine a workspace plugin
- * with `@vendure/core` must use Core's Nest instance so injection tokens such
- * as `ModuleRef` keep object identity.
+ * with `@vendure/core` must resolve Nest from Core's own module context so
+ * injection tokens such as `ModuleRef` keep object identity. Resolving the
+ * actual package location also works when a clean CI install hoists the package
+ * without creating a package-local link.
  */
 export const nestTestAliases = {
-    '@nestjs/common': path.join(repoRoot, 'packages/core/node_modules/@nestjs/common'),
-    '@nestjs/core': path.join(repoRoot, 'packages/core/node_modules/@nestjs/core'),
-    '@nestjs/testing': path.join(repoRoot, 'packages/core/node_modules/@nestjs/testing'),
-    '@nestjs/typeorm': path.join(repoRoot, 'packages/core/node_modules/@nestjs/typeorm'),
+    '@nestjs/common': resolveNestPackage('@nestjs/common'),
+    '@nestjs/core': resolveNestPackage('@nestjs/core'),
+    '@nestjs/testing': resolveNestPackage('@nestjs/testing'),
+    '@nestjs/typeorm': resolveNestPackage('@nestjs/typeorm'),
 };
 
 /**
