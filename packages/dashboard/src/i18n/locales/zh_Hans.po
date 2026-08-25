@@ -7218,8 +7218,8 @@ msgid "Delete draft"
 msgstr "删除草稿"
 
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
-msgid "Source"
-msgstr "来源"
+#~ msgid "Source"
+#~ msgstr "来源"
 
 #: src/lib/components/data-table/data-table-bulk-actions.tsx
 #: src/lib/components/shared/asset/asset-bulk-actions.tsx

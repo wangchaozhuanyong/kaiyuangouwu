@@ -7218,8 +7218,8 @@ msgid "Delete draft"
 msgstr "Delete draft"
 
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
-msgid "Source"
-msgstr "Source"
+#~ msgid "Source"
+#~ msgstr "Source"
 
 #: src/lib/components/data-table/data-table-bulk-actions.tsx
 #: src/lib/components/shared/asset/asset-bulk-actions.tsx
