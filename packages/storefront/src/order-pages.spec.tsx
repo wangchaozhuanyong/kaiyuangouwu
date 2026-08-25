@@ -225,4 +225,23 @@ describe('OrderDetailPage fulfillment actions', () => {
         expect(markup).toContain('申请售后');
         expect(markup).not.toContain('取消订单');
     });
+
+    it('uses the Shop API fulfillment method to label digital delivery', () => {
+        const markup = renderDetail({
+            ...order,
+            fulfillments: [
+                {
+                    id: 'fulfillment-1',
+                    state: 'Delivered',
+                    method: 'auto-card-email',
+                    trackingCode: null,
+                    createdAt: '2026-08-17T00:00:00.000Z',
+                    updatedAt: '2026-08-18T03:42:00.000Z',
+                },
+            ],
+        });
+
+        expect(markup).toContain('邮箱自动发卡');
+        expect(markup).not.toContain('auto-card-email');
+    });
 });

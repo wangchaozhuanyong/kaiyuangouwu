@@ -199,7 +199,6 @@ export interface OrderFulfillment {
     id: string;
     state: string;
     method: string;
-    handlerCode?: string;
     trackingCode?: string | null;
     createdAt: string;
     updatedAt: string;

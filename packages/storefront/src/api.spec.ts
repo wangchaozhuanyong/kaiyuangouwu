@@ -782,6 +782,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('checkoutShipping { methodName }');
         expect(request.query).not.toContain('digitalDeliveries');
         expect(request.query).not.toContain('taxSummary');
+        expect(request.query).not.toContain('handlerCode');
     });
 
     it('paginates and filters customer orders on the server', async () => {
@@ -802,6 +803,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('checkoutFulfillment { containsDigitalProducts }');
         expect(request.query).not.toContain('digitalDeliveries');
         expect(request.query).not.toContain('taxSummary');
+        expect(request.query).not.toContain('handlerCode');
         expect(request.variables).toEqual({
             options: {
                 skip: 10,
@@ -848,6 +850,7 @@ describe('ShopApi storefront mutations', () => {
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('taxSummary { description taxRate taxBase taxTotal }');
+        expect(request.query).not.toContain('handlerCode');
         expect(request.query).toContain('checkoutShipping {');
         expect(request.query).toContain('estimateMinDays');
         expect(request.query).toContain('freeShippingApplied');

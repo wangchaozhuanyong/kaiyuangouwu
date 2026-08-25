@@ -3346,6 +3346,11 @@ img.fatal-error-mark {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
+.subcat-side-all {
+    flex-direction: row;
+    gap: 4px;
+}
+
 .subcat-side-name {
     line-height: 1.25;
     word-break: break-word;

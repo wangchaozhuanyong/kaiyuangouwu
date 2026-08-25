@@ -899,13 +899,7 @@ export function OrderDetailPage({
                                               ? '配送包裹'
                                               : 'Shipment'}
                                     </span>
-                                    <small>
-                                        {fulfillmentMethodLabel(
-                                            fulfillment.handlerCode,
-                                            fulfillment.method,
-                                            language,
-                                        )}
-                                    </small>
+                                    <small>{fulfillmentMethodLabel(fulfillment.method, language)}</small>
                                     <b>
                                         {fulfillment.trackingCode
                                             ? isZh
@@ -2048,18 +2042,15 @@ function isAutoCardLine(line: Order['lines'][number]): boolean {
     return fulfillmentType === 'digital' && deliveryMode === 'auto_card';
 }
 
-function fulfillmentMethodLabel(
-    handlerCode: string | undefined,
-    method: string,
-    language: StorefrontLanguage,
-): string {
-    if (handlerCode === 'digital-fulfillment') {
+function fulfillmentMethodLabel(method: string, language: StorefrontLanguage): string {
+    const normalizedMethod = method.trim().toLowerCase();
+    if (normalizedMethod === 'digital-fulfillment') {
         return language === 'zh' ? '文件下载' : 'File download';
     }
-    if (handlerCode === 'manual-service-fulfillment') {
+    if (normalizedMethod === 'manual-digital-service' || normalizedMethod === 'manual-service-fulfillment') {
         return language === 'zh' ? '人工数字服务' : 'Manual digital service';
     }
-    if (handlerCode === 'auto-card-fulfillment') {
+    if (normalizedMethod === 'auto-card-email' || normalizedMethod === 'auto-card-fulfillment') {
         return language === 'zh' ? '邮箱自动发卡' : 'Automatic email delivery';
     }
     return method;

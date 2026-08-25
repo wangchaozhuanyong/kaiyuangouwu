@@ -111,7 +111,6 @@ import { ProductReviewsSection, ReviewCenterPage } from './review-pages';
 import { productDescriptionText, sanitizeProductDescription } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
-import { SharePosterModal } from './share-poster-modal';
 import {
     couponCardsFromBlock,
     couponCardsFromCampaigns,
@@ -221,6 +220,9 @@ const LazyAccountSecurityPage = lazy(() =>
 );
 const LazyAddressesPage = lazy(() =>
     import('./addresses-page').then(module => ({ default: module.AddressesPage })),
+);
+const LazySharePosterModal = lazy(() =>
+    import('./share-poster-modal').then(module => ({ default: module.SharePosterModal })),
 );
 
 function sortCategoryProducts(
@@ -1536,8 +1538,8 @@ export function App() {
                         ? '使用条款'
                         : 'Terms of use'
                     : isZh
-                      ? '隐私说明'
-                      : 'Privacy notice',
+                      ? '隐私政策'
+                      : 'Privacy Policy',
             'not-found': isZh ? '页面未找到' : 'Page not found',
         };
         const defaultStorefrontDescription = isZh
@@ -1852,6 +1854,7 @@ export function App() {
                         couponCount={cart?.checkoutOrder?.couponCodes.length ?? 0}
                         addingVariantId={addingVariantId}
                         onNavigate={navigate}
+                        onContentTarget={openContentTarget}
                         onAdd={variant => void addToCart(variant)}
                         onLogout={() => {
                             void api.logout().then(() => {
@@ -2628,8 +2631,14 @@ function HomePage(props: HomePageProps) {
     const trustBlock = contentBlocks.find(block => block.type === 'TRUST_BAR');
     const coreCategoriesBlock = contentBlocks.find(block => block.type === 'CORE_CATEGORIES');
     const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
-    const managedSections = contentBlocks.filter(block =>
-        ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'SUPPORT', 'CUSTOM'].includes(block.type),
+    const bestSellersTitle = bestSellersBlock?.title || (isZh ? '热门商品' : 'Best sellers');
+    const managedSections = contentBlocks.filter(
+        block =>
+            ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'SUPPORT', 'CUSTOM'].includes(block.type) &&
+            !(
+                block.type === 'FEATURED_COLLECTION' &&
+                block.title.trim().toLocaleLowerCase() === bestSellersTitle.trim().toLocaleLowerCase()
+            ),
     );
     const managedContentProductPool = Array.from(
         new Map([...products, ...managedContentProducts].map(product => [product.id, product])).values(),
@@ -3241,7 +3250,7 @@ function HomePage(props: HomePageProps) {
 
                     {showBestSellers && bestSellerProducts.length ? (
                         <ProductSection
-                            title={bestSellersBlock?.title || (isZh ? '热门商品' : 'Best sellers')}
+                            title={bestSellersTitle}
                             subtitle={bestSellersBlock?.subtitle}
                             action={isZh ? '更多' : 'More'}
                             onAction={() => onNavigate({ name: 'category', sort: 'sales' })}
@@ -3277,6 +3286,7 @@ function HomePage(props: HomePageProps) {
                     {showFooter ? (
                         <LegalFooter
                             storefrontName={storefrontName}
+                            language={language}
                             content={legalBlock}
                             onContentTarget={onContentTarget}
                         />
@@ -4178,7 +4188,7 @@ function CategoryPage(props: CategoryPageProps) {
                     >
                         <button
                             type="button"
-                            className={`subcat-side-item ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
+                            className={`subcat-side-item subcat-side-all ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
                             onClick={() => onChildChange('all')}
                         >
                             <span className="subcat-side-name">{isZh ? '全部' : 'All'}</span>
@@ -4939,6 +4949,7 @@ interface AccountPageProps {
     couponCount: number;
     addingVariantId: string | null;
     onNavigate: (route: RouteState) => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onAdd: (variant: ProductVariant) => void;
     onLogout: () => void;
 }
@@ -4958,6 +4969,7 @@ function AccountPage(props: AccountPageProps) {
         couponCount,
         addingVariantId,
         onNavigate,
+        onContentTarget,
         onAdd,
         onLogout,
     } = props;
@@ -5327,7 +5339,11 @@ function AccountPage(props: AccountPageProps) {
                 onProduct={product => onNavigate({ name: 'product', id: product.id })}
                 onAdd={onAdd}
             />
-            <LegalFooter storefrontName={storefrontName} />
+            <LegalFooter
+                storefrontName={storefrontName}
+                language={language}
+                onContentTarget={onContentTarget}
+            />
         </main>
     );
 }
@@ -6447,21 +6463,31 @@ function ProductDetailPage({
             </div>
 
             {posterOpen && (
-                <SharePosterModal
-                    product={product}
-                    storefrontName={storefrontName}
-                    logoUrl={logoUrl}
-                    language={language}
-                    formattedPrice={
-                        activeFlashItem
-                            ? formatMoney(activeFlashItem.salePrice, activeFlashItem.currencyCode, locale)
-                            : variant
-                              ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                              : '--'
+                <Suspense
+                    fallback={
+                        <div className="poster-modal-overlay" role="status" aria-live="polite">
+                            <div className="poster-modal-card">
+                                <p>{isZh ? '正在加载分享海报…' : 'Loading share poster…'}</p>
+                            </div>
+                        </div>
                     }
-                    onClose={() => setPosterOpen(false)}
-                    onNotify={onNotify}
-                />
+                >
+                    <LazySharePosterModal
+                        product={product}
+                        storefrontName={storefrontName}
+                        logoUrl={logoUrl}
+                        language={language}
+                        formattedPrice={
+                            activeFlashItem
+                                ? formatMoney(activeFlashItem.salePrice, activeFlashItem.currencyCode, locale)
+                                : variant
+                                  ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+                                  : '--'
+                        }
+                        onClose={() => setPosterOpen(false)}
+                        onNotify={onNotify}
+                    />
+                </Suspense>
             )}
         </main>
     );
@@ -7763,8 +7789,8 @@ function ManagedLegalPage({
     const isPrivacy = kind === 'privacy';
     const fallbackTitle = isPrivacy
         ? isZh
-            ? '隐私说明'
-            : 'Privacy notice'
+            ? '隐私政策'
+            : 'Privacy Policy'
         : isZh
           ? '使用条款'
           : 'Terms of use';
@@ -7936,22 +7962,54 @@ function ServiceButton({
         </button>
     );
 }
-function LegalFooter({
+export function LegalFooter({
     storefrontName,
+    language,
     content,
     onContentTarget,
 }: {
     storefrontName: string;
+    language: StorefrontLanguage;
     content?: StorefrontContentBlock;
     onContentTarget?: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
+    const isZh = language === 'zh';
+    const items = [...(content?.items ?? [])].filter(
+        item => item.targetType !== 'NONE' && Boolean(item.targetValue?.trim()),
+    );
+    const normalizedTargets = new Set(
+        items.map(item => item.targetValue?.trim().toLowerCase().replace(/^#?\//u, '')),
+    );
+    const defaultLegalItems = [
+        {
+            id: 'default-privacy',
+            kind: 'privacy',
+            label: isZh ? '隐私政策' : 'Privacy Policy',
+            targetType: 'PAGE' as const,
+            targetValue: '#/legal?id=privacy',
+        },
+        {
+            id: 'default-terms',
+            kind: 'terms',
+            label: isZh ? '使用条款' : 'Terms of use',
+            targetType: 'PAGE' as const,
+            targetValue: '#/legal?id=terms',
+        },
+    ]
+        .filter(
+            fallback =>
+                !normalizedTargets.has(fallback.kind) && !normalizedTargets.has(`legal?id=${fallback.kind}`),
+        )
+        .map(({ kind: _kind, ...item }) => item);
+    const footerItems = [...items, ...defaultLegalItems];
+    const footerTitle = isZh ? '服务与政策' : 'Service and policies';
+
     return (
         <footer className="legal-footer">
-            {content?.title && <strong>{content.title}</strong>}
-            {content?.body && <p>{content.body}</p>}
-            {!!content?.items.length && (
-                <nav aria-label={content.title}>
-                    {content.items.map(item => (
+            <strong>{footerTitle}</strong>
+            {!!footerItems.length && (
+                <nav aria-label={footerTitle}>
+                    {footerItems.map(item => (
                         <button
                             key={item.id}
                             type="button"

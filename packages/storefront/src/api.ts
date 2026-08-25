@@ -102,7 +102,6 @@ const orderFields = `
         id
         state
         method
-        handlerCode
         trackingCode
         createdAt
         updatedAt
@@ -177,7 +176,6 @@ const orderSummaryFields = `
     fulfillments {
         state
         method
-        handlerCode
         trackingCode
         updatedAt
     }
