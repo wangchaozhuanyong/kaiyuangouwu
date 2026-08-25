@@ -115,4 +115,38 @@ describe('ProductPriceApplicator', () => {
         await applicator.applyChannelPriceAndTax(variantA2, ctx);
         expect(variantA2.taxRateApplied.value).toBe(20);
     });
+
+    it('uses the channel price with zero tax when taxation is not configured', async () => {
+        const applicator = createApplicator();
+        const channel = new Channel({
+            id: 'untaxed-channel',
+            code: 'untaxed-channel',
+            defaultCurrencyCode: CurrencyCode.USD,
+            pricesIncludeTax: false,
+        });
+        const ctx = new MutableRequestContext({
+            apiType: 'admin',
+            channel,
+            authorizedAsOwnerOnly: false,
+            isAuthorized: true,
+            session: {} as any,
+        });
+        const variant = new ProductVariant({
+            id: 'untaxed-variant',
+            taxCategory: taxCategoryStandard,
+            productVariantPrices: [
+                new ProductVariantPrice({
+                    channelId: channel.id,
+                    price: 1000,
+                    currencyCode: CurrencyCode.USD,
+                }),
+            ],
+        });
+
+        await applicator.applyChannelPriceAndTax(variant, ctx);
+
+        expect(variant.listPrice).toBe(1000);
+        expect(variant.listPriceIncludesTax).toBe(false);
+        expect(variant.taxRateApplied.value).toBe(0);
+    });
 });

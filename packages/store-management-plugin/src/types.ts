@@ -150,16 +150,7 @@ export interface ProvisionStoreResult {
 export type StoreProfileStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 
 export type StoreActivationCheckCode =
-    | 'PROFILE'
-    | 'DOMAIN'
-    | 'PASSWORD'
-    | 'CATALOG'
-    | 'SUPPORT'
-    | 'PRIVACY'
-    | 'TERMS'
-    | 'TAX'
-    | 'SHIPPING'
-    | 'PAYMENT';
+    'PROFILE' | 'DOMAIN' | 'PASSWORD' | 'CATALOG' | 'SUPPORT' | 'PRIVACY' | 'TERMS' | 'SHIPPING' | 'PAYMENT';
 
 export interface StoreActivationCheck {
     code: StoreActivationCheckCode;

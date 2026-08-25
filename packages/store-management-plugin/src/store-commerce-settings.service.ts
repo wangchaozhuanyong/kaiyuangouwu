@@ -50,8 +50,12 @@ export class StoreCommerceSettingsService {
         const [taxCategory, shippingMethods, taxZone, shippingZone] = await Promise.all([
             this.getDefaultTaxCategory(ctx),
             this.shippingMethodService.findAll(ctx),
-            this.zoneService.findOne(ctx, channel.defaultTaxZone.id),
-            this.zoneService.findOne(ctx, channel.defaultShippingZone.id),
+            channel.defaultTaxZone
+                ? this.zoneService.findOne(ctx, channel.defaultTaxZone.id)
+                : Promise.resolve(undefined),
+            channel.defaultShippingZone
+                ? this.zoneService.findOne(ctx, channel.defaultShippingZone.id)
+                : Promise.resolve(undefined),
         ]);
         const shippingMethodCode = storeShippingMethodCode(channel.code);
         const shippingMethod = shippingMethods.items.find(method => method.code === shippingMethodCode);
@@ -60,6 +64,7 @@ export class StoreCommerceSettingsService {
             taxCategory && taxZone ? await this.findTaxRate(ctx, taxZone.id, taxCategory.id) : undefined;
         const taxZoneName = taxZone?.name ?? null;
         const shippingZoneName = shippingZone?.name ?? null;
+        const managedTaxEnabled = taxZoneName === storeZoneName(channel.code, 'tax');
 
         return {
             channelId: channel.id,
@@ -109,8 +114,8 @@ export class StoreCommerceSettingsService {
             estimateMaxDays: numericArg(shippingMethod?.calculator?.args, 'estimateMaxDays', 3),
             blockedPostalPrefixes: stringArg(shippingMethod?.checker?.args, 'blockedPostalPrefixes', ''),
             ready:
-                Boolean(countryCode && taxRate && shippingMethod) &&
-                taxZoneName === storeZoneName(channel.code, 'tax') &&
+                Boolean(countryCode && shippingMethod) &&
+                (!managedTaxEnabled || Boolean(taxRate)) &&
                 shippingZoneName === storeZoneName(channel.code, 'shipping') &&
                 shippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
                 shippingMethod?.checker?.code === SHIPPING_CHECKER_CODE,

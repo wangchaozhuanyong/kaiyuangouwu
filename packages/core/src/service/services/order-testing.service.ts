@@ -64,9 +64,11 @@ export class OrderTestingService {
         let quote: TestShippingMethodQuote | undefined;
         if (result) {
             const { price, priceIncludesTax, taxRate, metadata } = result;
+            const effectiveTaxRate = ctx.channel.defaultTaxZone ? taxRate : 0;
+            const effectivePriceIncludesTax = Boolean(ctx.channel.defaultTaxZone) && priceIncludesTax;
             quote = {
-                price: priceIncludesTax ? netPriceOf(price, taxRate) : price,
-                priceWithTax: priceIncludesTax ? price : grossPriceOf(price, taxRate),
+                price: effectivePriceIncludesTax ? netPriceOf(price, effectiveTaxRate) : price,
+                priceWithTax: effectivePriceIncludesTax ? price : grossPriceOf(price, effectiveTaxRate),
                 metadata,
             };
         }
@@ -94,10 +96,12 @@ export class OrderTestingService {
             })
             .map(result => {
                 const { price, taxRate, priceIncludesTax, metadata } = result.result;
+                const effectiveTaxRate = ctx.channel.defaultTaxZone ? taxRate : 0;
+                const effectivePriceIncludesTax = Boolean(ctx.channel.defaultTaxZone) && priceIncludesTax;
                 return {
                     id: result.method.id,
-                    price: priceIncludesTax ? netPriceOf(price, taxRate) : price,
-                    priceWithTax: priceIncludesTax ? price : grossPriceOf(price, taxRate),
+                    price: effectivePriceIncludesTax ? netPriceOf(price, effectiveTaxRate) : price,
+                    priceWithTax: effectivePriceIncludesTax ? price : grossPriceOf(price, effectiveTaxRate),
                     name: result.method.name,
                     code: result.method.code,
                     description: result.method.description,

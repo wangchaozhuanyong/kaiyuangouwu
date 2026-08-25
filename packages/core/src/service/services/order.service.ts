@@ -466,7 +466,7 @@ export class OrderService {
         const transitionResult = await this.transitionToState(ctx, order.id, 'AddingItems');
         if (isGraphQlErrorResult(transitionResult)) {
             // this should never occur, so we will throw rather than return
-            throw transitionResult;
+            throw new InternalServerError(transitionResult.message);
         }
         return transitionResult;
     }
@@ -480,7 +480,7 @@ export class OrderService {
         const transitionResult = await this.transitionToState(ctx, order.id, 'Draft');
         if (isGraphQlErrorResult(transitionResult)) {
             // this should never occur, so we will throw rather than return
-            throw transitionResult;
+            throw new InternalServerError(transitionResult.message);
         }
         return transitionResult;
     }
@@ -581,7 +581,7 @@ export class OrderService {
             return validationError;
         }
 
-        if (order.currencyCode === currencyCode) {
+        if (String(order.currencyCode) === String(currencyCode)) {
             return order;
         }
 
@@ -1231,10 +1231,12 @@ export class OrderService {
         const eligibleMethods = await this.shippingCalculator.getEligibleShippingMethods(ctx, order);
         return eligibleMethods.map(eligible => {
             const { price, taxRate, priceIncludesTax, metadata } = eligible.result;
+            const effectiveTaxRate = ctx.channel.defaultTaxZone ? taxRate : 0;
+            const effectivePriceIncludesTax = Boolean(ctx.channel.defaultTaxZone) && priceIncludesTax;
             return {
                 id: eligible.method.id,
-                price: priceIncludesTax ? netPriceOf(price, taxRate) : price,
-                priceWithTax: priceIncludesTax ? price : grossPriceOf(price, taxRate),
+                price: effectivePriceIncludesTax ? netPriceOf(price, effectiveTaxRate) : price,
+                priceWithTax: effectivePriceIncludesTax ? price : grossPriceOf(price, effectiveTaxRate),
                 description: eligible.method.description,
                 name: eligible.method.name,
                 code: eligible.method.code,

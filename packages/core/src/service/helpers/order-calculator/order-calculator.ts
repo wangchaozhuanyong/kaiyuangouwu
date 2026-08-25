@@ -57,36 +57,32 @@ export class OrderCalculator {
         updatedOrderLines: OrderLine[] = [],
         options?: { recalculateShipping?: boolean },
     ): Promise<Order> {
-        const { taxZoneStrategy } = this.configService.taxOptions;
         // We reset the promotions array as all promotions
         // must be revalidated on any changes to an Order.
         order.promotions = [];
-        const zones = await this.zoneService.getAllWithMembers(ctx);
-        const activeTaxZone = await this.requestContextCache.get(
-            ctx,
-            CacheKey.ActiveTaxZone(ctx.channelId),
-            () => taxZoneStrategy.determineTaxZone(ctx, zones, ctx.channel, order),
-        );
+        const taxesEnabled = Boolean(ctx.channel.defaultTaxZone);
+        const activeTaxZone = taxesEnabled ? await this.determineActiveTaxZone(ctx, order) : undefined;
 
         let taxZoneChanged = false;
-        if (!activeTaxZone) {
+        if (taxesEnabled && !activeTaxZone) {
             throw new InternalServerError('error.no-active-tax-zone');
         }
-        if (!order.taxZoneId || !idsAreEqual(order.taxZoneId, activeTaxZone.id)) {
+        if (activeTaxZone && (!order.taxZoneId || !idsAreEqual(order.taxZoneId, activeTaxZone.id))) {
             order.taxZoneId = activeTaxZone.id;
             taxZoneChanged = true;
         }
-        for (const updatedOrderLine of updatedOrderLines) {
-            await this.applyTaxesToOrderLine(
-                ctx,
-                order,
-                updatedOrderLine,
-                this.createTaxRateGetter(ctx, activeTaxZone),
-            );
+        if (activeTaxZone) {
+            const getTaxRate = this.createTaxRateGetter(ctx, activeTaxZone);
+            for (const updatedOrderLine of updatedOrderLines) {
+                await this.applyTaxesToOrderLine(ctx, order, updatedOrderLine, getTaxRate);
+            }
+        } else {
+            order.taxZoneId = undefined;
+            this.clearTaxes(order);
         }
         this.calculateOrderTotals(order);
         if (order.lines.length) {
-            if (taxZoneChanged) {
+            if (activeTaxZone && taxZoneChanged) {
                 // First apply taxes to the non-discounted prices
                 await this.applyTaxes(ctx, order, activeTaxZone);
             }
@@ -95,7 +91,7 @@ export class OrderCalculator {
             const totalBeforePromotions = order.subTotal;
             await this.applyPromotions(ctx, order, promotions);
 
-            if (order.subTotal !== totalBeforePromotions) {
+            if (activeTaxZone && order.subTotal !== totalBeforePromotions) {
                 // Finally, re-calculate taxes because the promotions may have
                 // altered the unit prices, which in turn will alter the tax payable.
                 await this.applyTaxes(ctx, order, activeTaxZone);
@@ -103,10 +99,36 @@ export class OrderCalculator {
         }
         if (options?.recalculateShipping !== false) {
             await this.applyShipping(ctx, order);
+            if (!taxesEnabled) {
+                this.clearTaxes(order);
+            }
             await this.applyShippingPromotions(ctx, order, promotions);
         }
         this.calculateOrderTotals(order);
         return order;
+    }
+
+    private async determineActiveTaxZone(ctx: RequestContext, order: Order): Promise<Zone | undefined> {
+        const { taxZoneStrategy } = this.configService.taxOptions;
+        const zones = await this.zoneService.getAllWithMembers(ctx);
+        return this.requestContextCache.get(ctx, CacheKey.ActiveTaxZone(ctx.channelId), () =>
+            taxZoneStrategy.determineTaxZone(ctx, zones, ctx.channel, order),
+        );
+    }
+
+    private clearTaxes(order: Order): void {
+        for (const line of order.lines ?? []) {
+            line.taxLines = [];
+            line.listPriceIncludesTax = false;
+        }
+        for (const shippingLine of order.shippingLines ?? []) {
+            shippingLine.taxLines = [];
+            shippingLine.listPriceIncludesTax = false;
+        }
+        for (const surcharge of order.surcharges ?? []) {
+            surcharge.taxLines = [];
+            surcharge.listPriceIncludesTax = false;
+        }
     }
 
     /**
@@ -246,7 +268,9 @@ export class OrderCalculator {
                         const { orderLineDiscountDistributionStrategy } = this.configService.orderOptions;
                         const weights = await Promise.all(
                             order.lines.map(line =>
-                                orderLineDiscountDistributionStrategy.getWeight(ctx, line, order),
+                                Promise.resolve(
+                                    orderLineDiscountDistributionStrategy.getWeight(ctx, line, order),
+                                ),
                             ),
                         );
                         const distribution = prorate(weights, amount);

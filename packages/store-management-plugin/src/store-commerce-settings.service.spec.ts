@@ -77,6 +77,63 @@ describe('store commerce configuration helpers', () => {
 });
 
 describe('StoreCommerceSettingsService', () => {
+    it('loads shipping settings without requiring a tax zone', async () => {
+        const channel = {
+            id: 'channel-1',
+            code: 'my-malaysia',
+            defaultCurrencyCode: 'MYR',
+            pricesIncludeTax: false,
+            defaultTaxZone: undefined,
+            defaultShippingZone: { id: 'shipping-zone-1' },
+        };
+        const taxCategoryRepository = {
+            findOne: vi.fn().mockResolvedValue({ id: 'tax-category-1', name: 'Standard' }),
+        };
+        const connection = {
+            getRepository: vi.fn((_ctx, entity) => {
+                if (entity === TaxCategory) return taxCategoryRepository;
+                throw new Error(`Unexpected repository: ${entity.name}`);
+            }),
+        };
+        const channelService = { findOne: vi.fn().mockResolvedValue(channel) };
+        const zoneService = {
+            findOne: vi.fn().mockResolvedValue({
+                id: 'shipping-zone-1',
+                name: storeZoneName(channel.code, 'shipping'),
+                members: [{ code: 'MY' }],
+            }),
+        };
+        const shippingMethodService = {
+            findAll: vi.fn().mockResolvedValue({
+                items: [
+                    {
+                        id: 'shipping-method-1',
+                        code: storeShippingMethodCode(channel.code),
+                        calculator: { code: 'physical-subtotal-shipping-calculator', args: [] },
+                        checker: { code: 'supported-destination-eligibility-checker', args: [] },
+                        translations: [],
+                    },
+                ],
+            }),
+        };
+        const service = new StoreCommerceSettingsService(
+            connection as any,
+            channelService as any,
+            {} as any,
+            zoneService as any,
+            {} as any,
+            shippingMethodService as any,
+        );
+
+        const result = await service.get({ channelId: channel.id } as any);
+
+        expect(result.taxZoneName).toBeNull();
+        expect(result.taxRate).toBe(0);
+        expect(result.shippingZoneName).toBe(storeZoneName(channel.code, 'shipping'));
+        expect(result.ready).toBe(true);
+        expect(zoneService.findOne).toHaveBeenCalledTimes(1);
+    });
+
     it('creates isolated zones, tax rates and shipping configuration for the active store', async () => {
         const zoneRepository = { findOne: vi.fn().mockResolvedValue(null) };
         const taxCategory = { id: 'tax-category-1', name: 'Standard', isDefault: true };

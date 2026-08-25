@@ -44,10 +44,12 @@ export class AddressBasedTaxZoneStrategy implements TaxZoneStrategy {
             if (zone) {
                 return zone;
             }
-            Logger.debug(
-                `No tax zone found for country ${countryCode}. Returning default ${channel.defaultTaxZone.name} for order ${order.code}`,
-                loggerCtx,
-            );
+            if (channel.defaultTaxZone) {
+                Logger.debug(
+                    `No tax zone found for country ${countryCode}. Returning default ${channel.defaultTaxZone.name} for order ${order.code}`,
+                    loggerCtx,
+                );
+            }
         }
         return channel.defaultTaxZone;
     }

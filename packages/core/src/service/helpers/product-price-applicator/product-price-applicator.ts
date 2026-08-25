@@ -73,6 +73,13 @@ export class ProductPriceApplicator {
                 channel: ctx.channel.code,
             });
         }
+        if (!ctx.channel.defaultTaxZone) {
+            variant.listPrice = channelPrice?.price ?? 0;
+            variant.listPriceIncludesTax = false;
+            variant.taxRateApplied = this.taxRateService.getZeroTaxRate();
+            variant.currencyCode = channelPrice?.currencyCode ?? ctx.currencyCode;
+            return variant;
+        }
         const { taxZoneStrategy } = this.configService.taxOptions;
         const zones = await this.requestCache.get(ctx, CacheKey.AllZones, () =>
             this.zoneService.getAllWithMembers(ctx),

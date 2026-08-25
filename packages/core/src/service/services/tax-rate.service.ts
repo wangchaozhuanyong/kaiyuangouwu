@@ -198,6 +198,13 @@ export class TaxRateService {
         return rate || this.defaultTaxRate;
     }
 
+    /**
+     * Returns the built-in zero tax rate used when taxation is not configured for a Channel.
+     */
+    getZeroTaxRate(): TaxRate {
+        return this.defaultTaxRate;
+    }
+
     private async getActiveTaxRates(ctx: RequestContext): Promise<TaxRate[]> {
         return this.activeTaxRates.value(ctx);
     }

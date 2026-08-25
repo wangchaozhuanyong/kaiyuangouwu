@@ -108,6 +108,28 @@ describe('OrderCalculator', () => {
 
             expect(order.subTotal).toBe(0);
         });
+
+        it('applies zero tax when the channel has no default tax zone', async () => {
+            const ctx = createRequestContext({ pricesIncludeTax: false });
+            ctx.channel.defaultTaxZone = undefined as any;
+            const order = createOrder({
+                ctx,
+                lines: [
+                    {
+                        listPrice: 123,
+                        taxCategory: taxCategoryStandard,
+                        quantity: 2,
+                    },
+                ],
+            });
+
+            await orderCalculator.applyPriceAdjustments(ctx, order, []);
+
+            expect(order.lines[0].taxLines).toEqual([]);
+            expect(order.subTotal).toBe(246);
+            expect(order.subTotalWithTax).toBe(246);
+            expect(order.taxZoneId).toBeUndefined();
+        });
     });
 
     describe('shipping', () => {
@@ -253,7 +275,7 @@ describe('OrderCalculator', () => {
             });
             order.shippingLines = [
                 new ShippingLine({
-                    shippingMethodId: deletedShippingMethodId as any,
+                    shippingMethodId: deletedShippingMethodId,
                 }),
             ];
 

@@ -256,6 +256,17 @@ void test('keeps tax mode approval as an explicit manual gate', () => {
     assert.equal(report.summary.manual, 2);
 });
 
+void test('does not require tax configuration when taxation is disabled', () => {
+    const snapshot = readySnapshot();
+    snapshot.channels[0].defaultTaxZone = null;
+    snapshot.channels[0].taxRates = [];
+    const report = evaluateStorefrontReadiness(snapshot);
+    const taxChecks = report.checks.filter(check => check.id.startsWith('tax-'));
+
+    assert.equal(report.ready, true);
+    assert.equal(taxChecks.length, 0);
+});
+
 void test('blocks an enabled but unapproved tax rate', () => {
     const snapshot = readySnapshot();
     snapshot.channels[0].taxRates[0].value = 20;

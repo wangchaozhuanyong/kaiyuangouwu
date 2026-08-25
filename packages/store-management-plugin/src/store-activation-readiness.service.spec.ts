@@ -13,7 +13,6 @@ const completeSnapshot = {
     support: true,
     privacy: true,
     terms: true,
-    tax: true,
     shipping: true,
     payment: true,
 };
@@ -23,7 +22,7 @@ describe('store activation readiness', () => {
         const readiness = evaluateStoreActivationReadiness(completeSnapshot);
 
         expect(readiness.ready).toBe(true);
-        expect(readiness.checks).toHaveLength(10);
+        expect(readiness.checks).toHaveLength(9);
         expect(readiness.checks.every(check => check.ready)).toBe(true);
     });
 

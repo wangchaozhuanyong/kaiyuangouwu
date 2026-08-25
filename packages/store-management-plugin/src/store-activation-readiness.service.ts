@@ -7,7 +7,6 @@ import {
     ProductVariant,
     RequestContext,
     ShippingMethod,
-    TaxRate,
     TransactionalConnection,
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
@@ -20,7 +19,6 @@ import { storeShippingMethodCode, storeZoneName } from './store-commerce-setting
 import { StoreActivationCheck, StoreActivationCheckCode, StoreActivationReadiness } from './types';
 
 const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
-const PLACEHOLDER_TAX_RATE = 1.23;
 const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
 const SHIPPING_CHECKER_CODE = 'supported-destination-eligibility-checker';
 
@@ -50,7 +48,6 @@ export interface StoreActivationSnapshot {
     support: boolean;
     privacy: boolean;
     terms: boolean;
-    tax: boolean;
     shipping: boolean;
     payment: boolean;
 }
@@ -72,7 +69,6 @@ const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }
     SUPPORT: { zh: '发布中英文客服内容', en: 'Publish support content in Chinese and English' },
     PRIVACY: { zh: '发布中英文隐私政策', en: 'Publish the privacy policy in Chinese and English' },
     TERMS: { zh: '发布中英文使用条款', en: 'Publish the terms in Chinese and English' },
-    TAX: { zh: '保存店铺专属税区和正式税率', en: 'Save the store tax zone and production tax rate' },
     SHIPPING: { zh: '保存店铺专属配送区域和配送方式', en: 'Save the store shipping zone and method' },
     PAYMENT: { zh: '启用至少一种非测试支付方式', en: 'Enable at least one non-test payment method' },
 };
@@ -88,7 +84,6 @@ export function evaluateStoreActivationReadiness(
         ['SUPPORT', snapshot.support],
         ['PRIVACY', snapshot.privacy],
         ['TERMS', snapshot.terms],
-        ['TAX', snapshot.tax],
         ['SHIPPING', snapshot.shipping],
         ['PAYMENT', snapshot.payment],
     ];
@@ -155,16 +150,6 @@ export class StoreActivationReadinessService {
             }),
         ]);
 
-        const taxRate = channel.defaultTaxZone
-            ? await this.connection.getRepository(ctx, TaxRate).findOne({
-                  where: {
-                      enabled: true,
-                      zone: { id: channel.defaultTaxZone.id },
-                      customerGroup: IsNull(),
-                  },
-                  order: { createdAt: 'ASC' },
-              })
-            : null;
         const storeShippingMethod = shippingMethods.find(
             method => method.code === storeShippingMethodCode(channel.code),
         );
@@ -181,13 +166,6 @@ export class StoreActivationReadinessService {
             support: this.hasSupportContent(activeContent),
             privacy: this.hasLegalContent(activeContent, 'privacy'),
             terms: this.hasLegalContent(activeContent, 'terms'),
-            tax:
-                channel.defaultTaxZone?.name === storeZoneName(channel.code, 'tax') &&
-                Boolean(
-                    taxRate &&
-                    Number.isFinite(taxRate.value) &&
-                    Math.abs(taxRate.value - PLACEHOLDER_TAX_RATE) > 0.000_001,
-                ),
             shipping:
                 channel.defaultShippingZone?.name === storeZoneName(channel.code, 'shipping') &&
                 storeShippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
@@ -207,7 +185,6 @@ export class StoreActivationReadinessService {
             support: false,
             privacy: false,
             terms: false,
-            tax: false,
             shipping: false,
             payment: false,
         };

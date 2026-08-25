@@ -273,18 +273,19 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             detail: `${String(channel.defaultLanguageCode)}/${String(channel.defaultCurrencyCode)}`,
         });
 
-        const taxMemberCodes = new Set(
-            (channel.defaultTaxZone?.members ?? []).map(member => String(member.code).toUpperCase()),
-        );
-        pushCheck(checks, {
-            id: `tax-zone-${channelCode}`,
-            scope: channelCode,
-            title: '默认税区已配置',
-            passed: Boolean(channel.defaultTaxZone?.id) && taxMemberCodes.size > 0,
-            detail: `${String(channel.defaultTaxZone?.name ?? 'missing')} [${[...taxMemberCodes].join(
-                ', ',
-            )}]`,
-        });
+        const taxEnabled = Boolean(channel.defaultTaxZone?.id);
+        if (taxEnabled) {
+            const taxMemberCodes = new Set(
+                (channel.defaultTaxZone?.members ?? []).map(member => String(member.code).toUpperCase()),
+            );
+            pushCheck(checks, {
+                id: `tax-zone-${channelCode}`,
+                scope: channelCode,
+                title: '默认税区已配置',
+                passed: taxMemberCodes.size > 0,
+                detail: `${String(channel.defaultTaxZone?.name)} [${[...taxMemberCodes].join(', ')}]`,
+            });
+        }
 
         const shippingMemberCodes = new Set(
             (channel.defaultShippingZone?.members ?? []).map(member => String(member.code).toUpperCase()),
@@ -299,69 +300,71 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             ].join(', ')}]`,
         });
 
-        const approvedTaxMode = taxPolicy[channelCode]?.pricesIncludeTax;
-        pushCheck(checks, {
-            id: `tax-mode-${channelCode}`,
-            scope: channelCode,
-            title: '价格含税规则已批准',
-            passed: typeof approvedTaxMode === 'boolean' && approvedTaxMode === channel.pricesIncludeTax,
-            unresolved: typeof approvedTaxMode !== 'boolean',
-            detail:
-                typeof approvedTaxMode === 'boolean'
-                    ? `configured=${String(channel.pricesIncludeTax)}, approved=${String(approvedTaxMode)}`
-                    : `configured=${String(channel.pricesIncludeTax)}, no approved policy supplied`,
-        });
+        if (taxEnabled) {
+            const approvedTaxMode = taxPolicy[channelCode]?.pricesIncludeTax;
+            pushCheck(checks, {
+                id: `tax-mode-${channelCode}`,
+                scope: channelCode,
+                title: '价格含税规则已批准',
+                passed: typeof approvedTaxMode === 'boolean' && approvedTaxMode === channel.pricesIncludeTax,
+                unresolved: typeof approvedTaxMode !== 'boolean',
+                detail:
+                    typeof approvedTaxMode === 'boolean'
+                        ? `configured=${String(channel.pricesIncludeTax)}, approved=${String(approvedTaxMode)}`
+                        : `configured=${String(channel.pricesIncludeTax)}, no approved policy supplied`,
+            });
 
-        const enabledDefaultZoneRates = (channel.taxRates ?? []).filter(
-            rate => rate.enabled && String(rate.zone?.id) === String(channel.defaultTaxZone?.id),
-        );
-        const usedTaxCategories = new Map();
-        for (const product of channel.products ?? []) {
-            for (const variant of product.variants ?? []) {
-                if (variant.taxCategory?.id) {
-                    usedTaxCategories.set(String(variant.taxCategory.id), variant.taxCategory.name);
+            const enabledDefaultZoneRates = (channel.taxRates ?? []).filter(
+                rate => rate.enabled && String(rate.zone?.id) === String(channel.defaultTaxZone?.id),
+            );
+            const usedTaxCategories = new Map();
+            for (const product of channel.products ?? []) {
+                for (const variant of product.variants ?? []) {
+                    if (variant.taxCategory?.id) {
+                        usedTaxCategories.set(String(variant.taxCategory.id), variant.taxCategory.name);
+                    }
                 }
             }
-        }
-        const missingTaxCategories = [...usedTaxCategories.entries()].filter(
-            ([categoryId]) =>
-                !enabledDefaultZoneRates.some(
-                    rate => String(rate.category?.id) === categoryId && !rate.customerGroup,
-                ),
-        );
-        pushCheck(checks, {
-            id: `tax-rate-coverage-${channelCode}`,
-            scope: channelCode,
-            title: '在售商品税类已有默认税率',
-            passed: usedTaxCategories.size > 0 && missingTaxCategories.length === 0,
-            detail: missingTaxCategories.length
-                ? `missing: ${missingTaxCategories.map(([, name]) => String(name)).join(', ')}`
-                : `${String(usedTaxCategories.size)} categories covered`,
-        });
-
-        const approvedRates = taxPolicy[channelCode]?.rates;
-        const taxRatesApproved =
-            approvedRates &&
-            Object.entries(approvedRates).every(([categoryName, approvedValue]) =>
-                enabledDefaultZoneRates.some(
-                    rate =>
-                        !rate.customerGroup &&
-                        rate.category?.name === categoryName &&
-                        rate.value === approvedValue,
-                ),
+            const missingTaxCategories = [...usedTaxCategories.entries()].filter(
+                ([categoryId]) =>
+                    !enabledDefaultZoneRates.some(
+                        rate => String(rate.category?.id) === categoryId && !rate.customerGroup,
+                    ),
             );
-        pushCheck(checks, {
-            id: `tax-rates-approved-${channelCode}`,
-            scope: channelCode,
-            title: '税率数值已批准',
-            passed: Boolean(taxRatesApproved),
-            unresolved: !approvedRates,
-            detail: approvedRates
-                ? Object.entries(approvedRates)
-                      .map(([category, value]) => `${String(category)}=${String(value)}%`)
-                      .join(', ')
-                : 'no approved category rates supplied',
-        });
+            pushCheck(checks, {
+                id: `tax-rate-coverage-${channelCode}`,
+                scope: channelCode,
+                title: '在售商品税类已有默认税率',
+                passed: usedTaxCategories.size > 0 && missingTaxCategories.length === 0,
+                detail: missingTaxCategories.length
+                    ? `missing: ${missingTaxCategories.map(([, name]) => String(name)).join(', ')}`
+                    : `${String(usedTaxCategories.size)} categories covered`,
+            });
+
+            const approvedRates = taxPolicy[channelCode]?.rates;
+            const taxRatesApproved =
+                approvedRates &&
+                Object.entries(approvedRates).every(([categoryName, approvedValue]) =>
+                    enabledDefaultZoneRates.some(
+                        rate =>
+                            !rate.customerGroup &&
+                            rate.category?.name === categoryName &&
+                            rate.value === approvedValue,
+                    ),
+                );
+            pushCheck(checks, {
+                id: `tax-rates-approved-${channelCode}`,
+                scope: channelCode,
+                title: '税率数值已批准',
+                passed: Boolean(taxRatesApproved),
+                unresolved: !approvedRates,
+                detail: approvedRates
+                    ? Object.entries(approvedRates)
+                          .map(([category, value]) => `${String(category)}=${String(value)}%`)
+                          .join(', ')
+                    : 'no approved category rates supplied',
+            });
+        }
 
         const activePrimaryDomains = (channel.domains ?? []).filter(
             domain => domain.isPrimary && domain.status === 'ACTIVE' && isPublicHostname(domain.domain),
