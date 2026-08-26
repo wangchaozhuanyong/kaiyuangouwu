@@ -30,9 +30,9 @@ import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
-import { responsiveImageSources } from './responsive-image';
 import { PageSkeleton } from './route-loading';
 import { routeNavigateOptions } from './storefront-router';
+import { SafeImage } from './storefront-ui/product-display';
 import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
 import { TaxSummaryRows } from './tax-summary';
 import {
@@ -1683,24 +1683,7 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
                 <Package />
             </div>
         );
-    const responsive = responsiveImageSources(source, 'thumbnail');
-    if (!responsive) return <img src={source} alt={alt} loading="lazy" decoding="async" />;
-    return (
-        <picture className={orderPageClassName('responsive-picture safe-image-frame')}>
-            <source type="image/webp" srcSet={responsive.webpSrcSet} sizes={responsive.sizes} />
-            <img
-                className={orderPageClassName('safe-image is-loaded')}
-                src={responsive.fallbackSrc}
-                srcSet={responsive.fallbackSrcSet}
-                sizes={responsive.sizes}
-                width={responsive.width}
-                height={responsive.height}
-                alt={alt}
-                loading="lazy"
-                decoding="async"
-            />
-        </picture>
-    );
+    return <SafeImage src={source} alt={alt} imageKind="thumbnail" loading="lazy" decoding="async" />;
 }
 
 function OrderImage({ order }: { order: OrderSummary }) {

@@ -22,16 +22,24 @@ import {
     WifiOff,
     Zap,
 } from 'lucide-react';
-import { ReactNode, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
+import {
+    ReactNode,
+    PointerEvent as ReactPointerEvent,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import type { RouteState } from '../storefront-router';
 
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from '../hero-theme';
 import { selectManagedProducts } from '../home-merchandising';
 import { homepageModuleEntries } from '../homepage-module-order';
-import { storefrontWebpUrl } from '../responsive-image';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
+import { DEFAULT_HERO_FALLBACK_IMAGE } from '../storefront-images';
 import { routeNavigateOptions } from '../storefront-router';
 import {
     BrandLogo,
@@ -51,10 +59,12 @@ import {
     collectionImage,
     contentNumberSetting,
     contentStringArraySetting,
+    decodeStorefrontImage,
     formatMoney,
     productImage,
     renderColorfulQuickIcon,
     SafeImage,
+    shouldPrefetchMedia,
     trimText,
 } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
@@ -347,7 +357,10 @@ export function HomePage() {
     } = useStorefront<HomePageProps>();
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
-    const managedHeroes = contentBlocks.filter(block => block.type === 'HERO');
+    const managedHeroes = useMemo(
+        () => contentBlocks.filter(block => block.type === 'HERO'),
+        [contentBlocks],
+    );
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
     const couponBlock = contentBlocks.find(block => block.type === 'COUPONS');
     const flashSaleBlock = contentBlocks.find(block => block.type === 'FLASH_SALE');
@@ -386,6 +399,7 @@ export function HomePage() {
         startX: 0,
         startY: 0,
     });
+    const heroTransitionRef = useRef(0);
     const heroCount = managedHeroes.length;
     const managedHero = managedHeroes[heroIndex];
     const isVipTheme = heroIndex % 2 !== 0;
@@ -397,7 +411,7 @@ export function HomePage() {
     const heroImage = managedHero?.imageUrl ?? (managedHero ? builtInHeroImage(managedHero, isVipTheme) : '');
     const heroFallbackImage =
         productImage(managedHeroProduct ?? hero) ??
-        (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : '/storefront/default-hero.jpg');
+        (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : DEFAULT_HERO_FALLBACK_IMAGE);
     const heroStyle = managedHero ? heroThemeStyle(managedHero, isVipTheme) : undefined;
     const quickCollections = collections.slice(0, 5);
     const noticeItems: HomeNoticeItem[] = [
@@ -471,6 +485,22 @@ export function HomePage() {
         Math.max(3, contentNumberSetting(noticeBlock?.settings?.scrollIntervalSeconds, 5)),
     );
 
+    const showPreparedHero = useCallback(
+        async (nextIndex: number) => {
+            const nextHero = managedHeroes[nextIndex];
+            if (!nextHero) return;
+            const transitionId = ++heroTransitionRef.current;
+            const nextImage = nextHero.imageUrl ?? builtInHeroImage(nextHero, nextIndex % 2 !== 0);
+            try {
+                await decodeStorefrontImage(nextImage, 'hero');
+            } catch {
+                // SafeImage will try the configured fallback if the preferred source fails.
+            }
+            if (heroTransitionRef.current === transitionId) setHeroIndex(nextIndex);
+        },
+        [managedHeroes],
+    );
+
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
         const updateMotionPreference = () => setPrefersReducedMotion(mediaQuery.matches);
@@ -513,7 +543,7 @@ export function HomePage() {
             return;
         }
         const timer = window.setTimeout(
-            () => setHeroIndex(index => heroIndexAfterManualMove(index, heroCount, 1)),
+            () => void showPreparedHero(heroIndexAfterManualMove(heroIndex, heroCount, 1)),
             heroAutoplayIntervalSeconds * 1000,
         );
         return () => window.clearTimeout(timer);
@@ -526,7 +556,17 @@ export function HomePage() {
         heroInteractionPaused,
         pageVisible,
         prefersReducedMotion,
+        showPreparedHero,
     ]);
+
+    useEffect(() => {
+        if (heroCount < 2 || !shouldPrefetchMedia()) return;
+        const nextIndex = heroIndexAfterManualMove(heroIndex, heroCount, 1);
+        const nextHero = managedHeroes[nextIndex];
+        if (!nextHero) return;
+        const nextImage = nextHero.imageUrl ?? builtInHeroImage(nextHero, nextIndex % 2 !== 0);
+        void decodeStorefrontImage(nextImage, 'hero').catch(() => undefined);
+    }, [heroCount, heroIndex, managedHeroes]);
 
     useEffect(() => {
         if (heroIndex >= heroCount) setHeroIndex(0);
@@ -534,7 +574,7 @@ export function HomePage() {
 
     const selectHeroManually = (index: number) => {
         setHeroAutoplayStopped(true);
-        setHeroIndex(index);
+        void showPreparedHero(index);
     };
 
     const openActiveHero = () => {
@@ -810,6 +850,7 @@ export function HomePage() {
                                             className="hero-rich-backdrop"
                                             imageKind="hero"
                                             loading="eager"
+                                            fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
                                         />
                                     </button>
                                     <div className="hero-rich-overlay-shade" />
@@ -1325,20 +1366,16 @@ function HomeDualCategoryShowcase({
                         type="button"
                         className={`showcase-card${item.imageUrl ? ' has-managed-image' : ''}`}
                         disabled={disabled}
-                        style={
-                            item.imageUrl
-                                ? {
-                                      backgroundImage: [
-                                          'linear-gradient(145deg, rgba(12, 25, 41, 0.88), rgba(15, 23, 42, 0.78))',
-                                          `url(${JSON.stringify(storefrontWebpUrl(item.imageUrl, 'card'))})`,
-                                      ].join(', '),
-                                      backgroundPosition: 'center',
-                                      backgroundSize: 'cover',
-                                  }
-                                : undefined
-                        }
                         onClick={() => onContentTarget(item.targetType, item.targetValue)}
                     >
+                        {item.imageUrl ? (
+                            <>
+                                <span className="showcase-card-media" aria-hidden="true">
+                                    <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
+                                </span>
+                                <span className="showcase-card-image-shade" aria-hidden="true" />
+                            </>
+                        ) : null}
                         <div className="showcase-content">
                             {badgeLabel ? <span className="showcase-badge">{badgeLabel}</span> : null}
                             <h3>{item.label}</h3>

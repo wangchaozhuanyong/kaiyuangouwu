@@ -27,9 +27,9 @@ describe('product description rich text', () => {
             '<p><img src="/assets/preview/detail.png?token=public" alt="详情图" loading="lazy"></p>',
         );
 
-        expect(result).toContain('preset=storefront-detail-1200');
+        expect(result).toContain('preset=storefront-detail-1600');
         expect(result).toContain('format=webp');
-        expect(result).toContain('q=75');
+        expect(result).toContain('q=90');
         expect(result).toContain('token=public');
     });
 

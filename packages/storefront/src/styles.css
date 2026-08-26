@@ -203,8 +203,11 @@ img {
 }
 
 .safe-image-frame {
+    position: relative;
+    overflow: hidden;
     background-color: #eef1f0;
     background-position: center;
+    background-repeat: no-repeat;
     background-size: cover;
 }
 
@@ -217,6 +220,10 @@ img {
 
 .safe-image.is-loaded {
     opacity: 1;
+}
+
+.safe-image-frame.is-priority .safe-image {
+    transition: none;
 }
 
 .navigation-progress {
@@ -845,6 +852,10 @@ img.fatal-error-mark {
 .hero-rich-image-link:focus-visible {
     outline: 3px solid rgba(103, 232, 249, 0.95);
     outline-offset: -4px;
+}
+
+.hero .safe-image-frame {
+    background-color: var(--hero-overlay-color);
 }
 
 /* Full Bleed 3D Rich Visual Backdrop */
@@ -1574,6 +1585,36 @@ img.fatal-error-mark {
     cursor: pointer;
 }
 
+.showcase-card-media,
+.showcase-card-image-shade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.showcase-card-media {
+    z-index: 0;
+}
+
+.showcase-card-media .safe-image-frame {
+    background-color: var(--showcase-card-background);
+}
+
+.showcase-card-media > .responsive-picture,
+.showcase-card-media > .responsive-picture > img {
+    width: 100%;
+    height: 100%;
+}
+
+.showcase-card-media > .responsive-picture > img {
+    object-fit: cover;
+}
+
+.showcase-card-image-shade {
+    z-index: 1;
+    background: linear-gradient(145deg, rgba(12, 25, 41, 0.88), rgba(15, 23, 42, 0.78));
+}
+
 .showcase-card::before {
     content: '';
     position: absolute;
@@ -1581,7 +1622,7 @@ img.fatal-error-mark {
     border-radius: 14px;
     opacity: 0.62;
     pointer-events: none;
-    z-index: 0;
+    z-index: 2;
 }
 
 .showcase-card::after {
@@ -1594,7 +1635,7 @@ img.fatal-error-mark {
     background: rgb(var(--showcase-accent-rgb));
     opacity: 0.22;
     pointer-events: none;
-    z-index: 0;
+    z-index: 2;
     transition: opacity 280ms ease;
 }
 
@@ -1730,7 +1771,7 @@ img.fatal-error-mark {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    z-index: 1;
+    z-index: 3;
 }
 
 .showcase-badge {
@@ -6757,16 +6798,20 @@ img.fatal-error-mark {
     pointer-events: none;
 }
 
+.auth-hero > .safe-image-frame {
+    background-color: #020d24;
+}
+
 .auth-hero > img,
-.auth-hero > picture,
-.auth-hero > picture > img {
+.auth-hero > .responsive-picture,
+.auth-hero > .responsive-picture > img {
     width: 100%;
     height: 100%;
     display: block;
 }
 
 .auth-hero > img,
-.auth-hero > picture > img {
+.auth-hero > .responsive-picture > img {
     object-fit: cover;
     object-position: 50% 54%;
 }

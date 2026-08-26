@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { ImgHTMLAttributes, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
-import { responsiveImageSources, StorefrontImageKind, storefrontWebpUrl } from '../responsive-image';
+import { responsiveImageSources, StorefrontImageKind, storefrontPlaceholderUrl } from '../responsive-image';
 import { CollectionSummary, OrderSummary, Product, ProductVariant } from '../types';
 
 export function OpenAiIcon({ className }: { className?: string }) {
@@ -265,6 +265,10 @@ export function scheduleIdleWork(work: () => void): void {
 
 export function prefetchStorefrontImage(src: string, imageKind: StorefrontImageKind): void {
     if (!shouldPrefetchMedia()) return;
+    void decodeStorefrontImage(src, imageKind).catch(() => undefined);
+}
+
+export async function decodeStorefrontImage(src: string, imageKind: StorefrontImageKind): Promise<void> {
     const responsiveSource = responsiveImageSources(src, imageKind);
     const image = new Image();
     if (responsiveSource) {
@@ -274,7 +278,7 @@ export function prefetchStorefrontImage(src: string, imageKind: StorefrontImageK
     } else {
         image.src = src;
     }
-    void image.decode().catch(() => undefined);
+    await image.decode();
 }
 
 export function prefetchProductAsset(product: Product): void {
@@ -298,7 +302,7 @@ export function ProductVariantImage({ variant, alt }: { variant: ProductVariant;
     }
 
     return image ? (
-        <SafeImage src={image} alt={alt} imageKind="detail" loading="lazy" />
+        <SafeImage src={image} alt={alt} imageKind="thumbnail" loading="lazy" />
     ) : (
         <div className="image-placeholder" aria-hidden="true">
             <Package />
@@ -306,7 +310,20 @@ export function ProductVariantImage({ variant, alt }: { variant: ProductVariant;
     );
 }
 
-export function SafeImage({
+type SafeImageProps = {
+    src: string;
+    fallbackSrc?: string;
+    placeholderSrc?: string;
+    alt: string;
+    imageKind?: StorefrontImageKind;
+} & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
+
+export function SafeImage(props: SafeImageProps) {
+    const sourceIdentity = [props.src, props.fallbackSrc ?? '', props.imageKind ?? ''].join('\u0000');
+    return <SafeImageSource key={sourceIdentity} {...props} />;
+}
+
+function SafeImageSource({
     src,
     fallbackSrc,
     placeholderSrc,
@@ -315,38 +332,37 @@ export function SafeImage({
     onLoad,
     className,
     ...imageProps
-}: {
-    src: string;
-    fallbackSrc?: string;
-    placeholderSrc?: string;
-    alt: string;
-    imageKind?: StorefrontImageKind;
-} & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>) {
+}: SafeImageProps) {
     const [currentSrc, setCurrentSrc] = useState(src);
     const [failed, setFailed] = useState(false);
     const [useResponsiveSource, setUseResponsiveSource] = useState(true);
     const [loaded, setLoaded] = useState(false);
     const imageRef = useRef<HTMLImageElement>(null);
-    const sourceIdentity = [src, fallbackSrc ?? '', imageKind ?? ''].join('\u0000');
-    const sourceIdentityRef = useRef(sourceIdentity);
-
-    useEffect(() => {
-        if (sourceIdentityRef.current === sourceIdentity) {
-            const imageElement = imageRef.current;
-            if (imageElement?.complete && imageElement.naturalWidth > 0) setLoaded(true);
-            return;
-        }
-        sourceIdentityRef.current = sourceIdentity;
-        setCurrentSrc(src);
-        setFailed(false);
-        setUseResponsiveSource(true);
-        setLoaded(false);
-    }, [sourceIdentity, src]);
 
     const responsiveSource = useMemo(
         () => (imageKind && useResponsiveSource ? responsiveImageSources(currentSrc, imageKind) : null),
         [currentSrc, imageKind, useResponsiveSource],
     );
+    const effectivePlaceholderSrc =
+        (placeholderSrc && imageKind
+            ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
+            : placeholderSrc) ?? responsiveSource?.placeholderSrc;
+    const highPriority = imageProps.fetchPriority === 'high';
+
+    useEffect(() => {
+        const imageElement = imageRef.current;
+        if (!imageElement?.complete || imageElement.naturalWidth < 1) return;
+        let cancelled = false;
+        void imageElement
+            .decode()
+            .catch(() => undefined)
+            .then(() => {
+                if (!cancelled && imageRef.current === imageElement) setLoaded(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [currentSrc, responsiveSource]);
 
     if (failed) {
         return (
@@ -374,8 +390,15 @@ export function SafeImage({
             className={`safe-image${loaded ? ' is-loaded' : ''}${className ? ` ${className}` : ''}`}
             alt={alt}
             onLoad={event => {
-                setLoaded(true);
-                onLoad?.(event);
+                const imageElement = event.currentTarget;
+                void imageElement
+                    .decode()
+                    .catch(() => undefined)
+                    .then(() => {
+                        if (imageRef.current !== imageElement) return;
+                        setLoaded(true);
+                        onLoad?.(event);
+                    });
             }}
             onError={() => {
                 if (responsiveSource) {
@@ -392,20 +415,22 @@ export function SafeImage({
         />
     );
 
+    const frameClassName = `responsive-picture safe-image-frame${loaded ? ' is-loaded' : ''}${
+        highPriority ? ' is-priority' : ''
+    }${effectivePlaceholderSrc ? ' has-placeholder' : ''}`;
+    const frameStyle = effectivePlaceholderSrc
+        ? { backgroundImage: `url(${JSON.stringify(effectivePlaceholderSrc)})` }
+        : undefined;
+
     return responsiveSource ? (
-        <picture
-            className={`responsive-picture safe-image-frame${loaded ? ' is-loaded' : ''}`}
-            style={
-                placeholderSrc
-                    ? { backgroundImage: `url("${storefrontWebpUrl(placeholderSrc, 'thumbnail')}")` }
-                    : undefined
-            }
-        >
+        <picture className={frameClassName} style={frameStyle}>
             <source type="image/webp" srcSet={responsiveSource.webpSrcSet} sizes={responsiveSource.sizes} />
             {image}
         </picture>
     ) : (
-        image
+        <span className={frameClassName} style={frameStyle}>
+            {image}
+        </span>
     );
 }
 

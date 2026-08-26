@@ -28,6 +28,7 @@ import {
 import { productDescriptionText } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
+import { DEFAULT_HERO_IMAGE } from './storefront-images';
 import {
     MainPage,
     OrderTab,
@@ -1283,8 +1284,8 @@ export function App() {
                 : storeSummary;
         const imagePath =
             route.name === 'product' && selectedProduct
-                ? (productImage(selectedProduct) ?? '/storefront/default-hero.jpg')
-                : '/storefront/default-hero.jpg';
+                ? (productImage(selectedProduct) ?? DEFAULT_HERO_IMAGE)
+                : DEFAULT_HERO_IMAGE;
         const image = new URL(imagePath, window.location.origin).href;
         const imageAlt =
             route.name === 'product' && selectedProduct

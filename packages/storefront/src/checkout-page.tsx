@@ -19,8 +19,8 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { smartParseAddressText } from './address-parser';
 import { ShopApi } from './api';
-import { responsiveImageSources } from './responsive-image';
 import { routeNavigateOptions } from './storefront-router';
+import { SafeImage } from './storefront-ui/product-display';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
 import { TaxSummaryRows } from './tax-summary';
 import {
@@ -1346,25 +1346,7 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
                 <Package />
             </div>
         );
-    const source = responsiveImageSources(src, 'thumbnail');
-    return source ? (
-        <picture className={checkoutPageClassName('responsive-picture safe-image-frame')}>
-            <source type="image/webp" srcSet={source.webpSrcSet} sizes={source.sizes} />
-            <img
-                className={checkoutPageClassName('safe-image is-loaded')}
-                src={source.fallbackSrc}
-                srcSet={source.fallbackSrcSet}
-                sizes={source.sizes}
-                width={source.width}
-                height={source.height}
-                alt={alt}
-                loading="lazy"
-                decoding="async"
-            />
-        </picture>
-    ) : (
-        <img src={src} alt={alt} loading="lazy" decoding="async" />
-    );
+    return <SafeImage src={src} alt={alt} imageKind="thumbnail" loading="lazy" decoding="async" />;
 }
 function formatMoney(value: number, currency: string, locale: string) {
     return new Intl.NumberFormat(locale, {

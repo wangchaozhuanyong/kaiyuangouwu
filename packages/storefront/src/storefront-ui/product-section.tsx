@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 import { ProductCard } from '../components/common/product-card';
 import { MarketConfig, Product, ProductVariant } from '../types';
 
@@ -10,6 +12,7 @@ export function ProductSection({
     action,
     onAction,
     className,
+    style,
     products,
     market,
     locale,
@@ -25,6 +28,7 @@ export function ProductSection({
     action?: string;
     onAction?: () => void;
     className?: string;
+    style?: CSSProperties;
     products: Product[];
     market: MarketConfig;
     locale: string;
@@ -36,7 +40,10 @@ export function ProductSection({
 }) {
     if (!products.length) return null;
     return (
-        <section className={`content-section product-section${className ? ` ${className}` : ''}`}>
+        <section
+            className={`content-section product-section${className ? ` ${className}` : ''}`}
+            style={style}
+        >
             <SectionHeader
                 title={title}
                 subtitle={subtitle}

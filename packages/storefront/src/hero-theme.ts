@@ -1,5 +1,13 @@
 import type { CSSProperties } from 'react';
 
+import {
+    HERO_CLOUD_BRIDGE_FALLBACK_IMAGE,
+    HERO_CLOUD_BRIDGE_IMAGE,
+    HERO_GATEWAY_FALLBACK_IMAGE,
+    HERO_GATEWAY_IMAGE,
+    HERO_VIP_FALLBACK_IMAGE,
+    HERO_VIP_IMAGE,
+} from './storefront-images';
 import type { StorefrontContentBlock } from './types';
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
@@ -72,14 +80,14 @@ export function heroThemeStyle(block: StorefrontContentBlock, vipTheme: boolean)
 
 export function builtInHeroImage(block: StorefrontContentBlock, vipTheme: boolean): string {
     if (block.settings?.fallbackImage === 'cloudbridge-ai-hub') {
-        return '/storefront/hero-cloudbridge-ai-hub.webp';
+        return HERO_CLOUD_BRIDGE_IMAGE;
     }
-    return vipTheme ? '/storefront/hero-02-vip.webp' : '/storefront/hero-01-gateway.webp';
+    return vipTheme ? HERO_VIP_IMAGE : HERO_GATEWAY_IMAGE;
 }
 
 export function builtInHeroFallbackImage(block: StorefrontContentBlock, vipTheme: boolean): string {
     if (block.settings?.fallbackImage === 'cloudbridge-ai-hub') {
-        return '/storefront/hero-cloudbridge-ai-hub.jpg';
+        return HERO_CLOUD_BRIDGE_FALLBACK_IMAGE;
     }
-    return vipTheme ? '/storefront/hero-02-vip.jpg' : '/storefront/hero-01-gateway.jpg';
+    return vipTheme ? HERO_VIP_FALLBACK_IMAGE : HERO_GATEWAY_FALLBACK_IMAGE;
 }

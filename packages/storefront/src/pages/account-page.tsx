@@ -22,11 +22,13 @@ import {
     UserRound,
     WalletCards,
 } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
+import { ACCOUNT_RECOMMENDATION_CREST_IMAGE } from '../storefront-images';
 import { routeNavigateOptions } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
@@ -473,7 +475,12 @@ export function AccountPage() {
 
             <ProductSection
                 centerLabel={isZh ? '专属推荐' : 'Just for you'}
-                className="lg:col-span-full [&_.section-header]:relative [&_.section-header]:grid [&_.section-header]:min-h-[70px] [&_.section-header]:grid-cols-1 [&_.section-header]:place-items-center [&_.section-header]:overflow-hidden [&_.section-header-center-label]:grid [&_.section-header-center-label]:min-h-[70px] [&_.section-header-center-label]:w-full [&_.section-header-center-label]:place-items-center [&_.section-header-center-label]:bg-[url('/storefront/account-recommendation-crest.webp')] [&_.section-header-center-label]:bg-[length:min(100%,330px)_auto] [&_.section-header-center-label]:bg-center [&_.section-header-center-label]:bg-no-repeat [&_.section-header-center-label]:text-[16px] [&_.section-header-center-label]:font-semibold [&_.section-header-center-label]:tracking-[0.16em] [&_.section-header-center-label]:text-[var(--accent-ink)] [&_.section-header-center-label]:[text-indent:0.16em]"
+                className="lg:col-span-full [&_.section-header]:relative [&_.section-header]:grid [&_.section-header]:min-h-[70px] [&_.section-header]:grid-cols-1 [&_.section-header]:place-items-center [&_.section-header]:overflow-hidden [&_.section-header-center-label]:grid [&_.section-header-center-label]:min-h-[70px] [&_.section-header-center-label]:w-full [&_.section-header-center-label]:place-items-center [&_.section-header-center-label]:bg-[image:var(--account-recommendation-image)] [&_.section-header-center-label]:bg-[length:min(100%,330px)_auto] [&_.section-header-center-label]:bg-center [&_.section-header-center-label]:bg-no-repeat [&_.section-header-center-label]:text-[16px] [&_.section-header-center-label]:font-semibold [&_.section-header-center-label]:tracking-[0.16em] [&_.section-header-center-label]:text-[var(--accent-ink)] [&_.section-header-center-label]:[text-indent:0.16em]"
+                style={
+                    {
+                        '--account-recommendation-image': `url(${JSON.stringify(ACCOUNT_RECOMMENDATION_CREST_IMAGE)})`,
+                    } as CSSProperties
+                }
                 products={products.slice(0, 4)}
                 market={market}
                 locale={locale}

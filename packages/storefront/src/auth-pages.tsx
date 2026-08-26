@@ -20,6 +20,14 @@ import {
 } from './auth-validation';
 import { authVisualAccentColor, resolveAuthVisualMessage } from './auth-visual';
 import { storefrontWebpUrl } from './responsive-image';
+import {
+    AUTH_HERO_FALLBACK_IMAGE,
+    AUTH_HERO_IMAGE,
+    AUTH_LOGIN_HERO_FALLBACK_IMAGE,
+    AUTH_LOGIN_HERO_IMAGE,
+    AUTH_REGISTER_HERO_FALLBACK_IMAGE,
+    AUTH_REGISTER_HERO_IMAGE,
+} from './storefront-images';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
@@ -945,6 +953,12 @@ function AuthLayout({
     onBack: () => void;
     children: ReactNode;
 }) {
+    const hero =
+        heroVariant === 'login'
+            ? { src: AUTH_LOGIN_HERO_IMAGE, fallbackSrc: AUTH_LOGIN_HERO_FALLBACK_IMAGE }
+            : heroVariant === 'register'
+              ? { src: AUTH_REGISTER_HERO_IMAGE, fallbackSrc: AUTH_REGISTER_HERO_FALLBACK_IMAGE }
+              : { src: AUTH_HERO_IMAGE, fallbackSrc: AUTH_HERO_FALLBACK_IMAGE };
     const authVisualVariant = heroVariant === 'login' || heroVariant === 'register' ? heroVariant : null;
     const heroMessage = authVisualVariant
         ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
@@ -956,14 +970,14 @@ function AuthLayout({
               '--auth-hero-accent-color': authVisualAccentColor(heroContent, authVisualVariant),
           } as CSSProperties)
         : undefined;
-    const heroSource = heroContent?.imageUrl?.trim() || '/storefront/auth-ai-bridge-hero.webp';
+    const managedHeroSrc = heroContent?.imageUrl?.trim();
 
     return (
         <main className={`page subpage auth-page auth-page-${heroVariant}`} aria-label={title}>
             <section className={`auth-hero auth-hero-${heroVariant}`} style={heroStyle}>
                 <SafeImage
-                    src={heroSource}
-                    fallbackSrc="/storefront/auth-ai-bridge-hero.webp"
+                    src={managedHeroSrc || hero.src}
+                    fallbackSrc={hero.fallbackSrc}
                     alt=""
                     imageKind="hero"
                     loading="eager"
