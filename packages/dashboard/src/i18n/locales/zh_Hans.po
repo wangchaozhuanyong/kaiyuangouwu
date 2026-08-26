@@ -677,6 +677,10 @@ msgstr "输入交易流水号..."
 msgid "Customer group controls"
 msgstr "客户分组操作"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Assigning..."
+msgstr "正在分配..."
+
 #: src/app/routes/_authenticated/_collections/collections.tsx
 msgid "Search collection names..."
 msgstr "搜索分类名称..."
@@ -888,7 +892,7 @@ msgid "Sign in"
 msgstr "登录"
 
 #. placeholder {0}: collection.name
-#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "{0} storefront visibility"
 msgstr "{0}的前台显示状态"
 
@@ -1000,7 +1004,7 @@ msgstr "短日期"
 msgid "Search customers..."
 msgstr "搜索客户..."
 
-#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "Failed to update storefront visibility"
 msgstr "更新前台显示状态失败"
 
@@ -1185,7 +1189,7 @@ msgstr "订单行已删除"
 msgid "User"
 msgstr "用户"
 
-#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "Collection is now visible in the storefront"
 msgstr "分类已在前台显示"
 
@@ -1272,6 +1276,10 @@ msgstr "订单已设置配送地址"
 #: src/lib/components/shared/asset/asset-preview.tsx
 msgid "Focal Point"
 msgstr "焦点"
+
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Assign all products to stores"
+msgstr "将全部商品分配到店铺"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Single variant, no options"
@@ -1386,6 +1394,10 @@ msgstr "配送地址已更改"
 #: src/lib/components/shared/product-variant-selector.tsx
 msgid "No products found"
 msgstr "未找到商品"
+
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Could not load the product count"
+msgstr "无法加载商品总数"
 
 #: src/lib/components/shared/rich-text-editor/table-edit-icons.tsx
 msgid "Add row before"
@@ -1736,6 +1748,10 @@ msgstr "未找到国家"
 msgid "Toggle sidebar"
 msgstr "展开或收起侧边栏"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Some product batches could not be assigned"
+msgstr "部分商品批次分配失败"
+
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Successfully created variants"
 msgstr "商品 SKU 创建成功"
@@ -1758,6 +1774,10 @@ msgstr "支付方式"
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Stock"
 msgstr "库存"
+
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Loading products..."
+msgstr "正在加载商品..."
 
 #: src/lib/components/shared/customer-selector.tsx
 msgid "No customers found"
@@ -2133,8 +2153,8 @@ msgstr "微型图"
 msgid "Created"
 msgstr "已创建"
 
-#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "Hidden"
 msgstr "隐藏"
 
@@ -2217,6 +2237,7 @@ msgstr "转到末页"
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
 #: src/app/routes/_authenticated/_orders/components/settle-refund-dialog.tsx
 #: src/app/routes/_authenticated/_orders/components/state-transition-control.tsx
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/assign-facet-values-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/force-remove-option-group-dialog.tsx
 #: src/app/routes/_authenticated/_stock-locations/components/delete-stock-locations-dialog.tsx
@@ -3390,6 +3411,10 @@ msgstr "删除列"
 msgid "Assign existing"
 msgstr "分配现有"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Counting products..."
+msgstr "正在统计商品..."
+
 #: src/lib/components/data-table/filters/data-table-enum-filter.tsx
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "is null"
@@ -4123,6 +4148,10 @@ msgstr "切换标题列"
 msgid "New Promotion"
 msgstr "新建促销活动"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "{productCount} products will be assigned"
+msgstr "将分配 {productCount} 个商品"
+
 #: src/lib/components/data-input/string-list-input.tsx
 msgid "Drag {item}"
 msgstr "拖动 {item}"
@@ -4254,6 +4283,10 @@ msgstr "确认删除"
 #: src/app/routes/_authenticated/_orders/components/order-detail-shared.tsx
 msgid "Failed to modify order"
 msgstr "修改订单失败"
+
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Assigning products..."
+msgstr "正在分配商品..."
 
 #: src/app/routes/_authenticated/_orders/components/add-surcharge-form.tsx
 msgid "Includes tax at {taxRate}%"
@@ -5430,6 +5463,10 @@ msgstr "当前层级"
 msgid "Filter by tags"
 msgstr "按标签筛选"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Failed stores: {failedChannelCodes}. You can run the assignment again safely."
+msgstr "失败店铺：{failedChannelCodes}。可放心重新执行分配。"
+
 #: src/lib/components/login/login-form.tsx
 msgid "Sign in to access the admin dashboard"
 msgstr "登录以访问管理仪表板"
@@ -5489,8 +5526,8 @@ msgstr "无法加载记录"
 #~ msgid "Add a child product group under {0}"
 #~ msgstr "在“{0}”下添加子分类"
 
-#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "Visible"
 msgstr "显示"
 
@@ -5714,6 +5751,10 @@ msgstr "已付款"
 #: src/i18n/common-strings.ts
 msgid "orderState.Shipped"
 msgstr "已发货"
+
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Failed to assign all products"
+msgstr "全部商品分配失败"
 
 #: src/app/routes/_authenticated/_zones/components/zone-bulk-actions.tsx
 msgid "Removed {countryCount} countries/regions from zone"
@@ -6031,6 +6072,7 @@ msgstr "时间表模式"
 msgid "Payment failed"
 msgstr "支付失败"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 #: src/lib/components/shared/channel-selector.tsx
 msgid "Search channels..."
@@ -6077,6 +6119,7 @@ msgstr "将视图转换为全局失败"
 msgid "Select Payment Eligibility Checker"
 msgstr "选择支付适用条件"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 msgid "Select one or more channels"
 msgstr "请选择一个或多个店铺"
@@ -6270,6 +6313,12 @@ msgstr "从不"
 msgid "Completed"
 msgstr "已完成"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Assign all products"
+msgstr "分配全部商品"
+
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 msgid "Failed to update facet value"
 msgstr "更新筛选属性值失败"
@@ -6354,6 +6403,11 @@ msgstr "此配送方式的资格检查器条件不符合当前订单和配送地
 #: src/lib/components/shared/asset/asset-picker-dialog.tsx
 msgid "Select {0} assets"
 msgstr "选择 {0} 个素材"
+
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "There are no products in the default store"
+msgstr "默认店铺暂无商品"
 
 #: src/app/routes/_authenticated/_orders/components/edit-order-table.tsx
 msgid "Add coupon code"
@@ -6905,6 +6959,12 @@ msgstr "已选择 {0} 个项目"
 msgid "View field guidance"
 msgstr "查看字段说明"
 
+#. placeholder {0}: result.productCount
+#. placeholder {1}: result.targetCount
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Assigned all {0} products to {1} stores"
+msgstr "已将全部 {0} 个商品分配到 {1} 个店铺"
+
 #: src/lib/components/shared/language-selector.tsx
 msgid "Search languages..."
 msgstr "搜索语言..."
@@ -7186,7 +7246,7 @@ msgstr "保存规格组"
 msgid "This setting will be saved on every SKU created below."
 msgstr "此设置将保存到下方创建的每个 SKU。"
 
-#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "Collection is now hidden from the storefront"
 msgstr "分类已从前台隐藏"
 
@@ -7554,6 +7614,10 @@ msgstr "添加国家"
 msgid "Second-level collection"
 msgstr "二级分类"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Assign every product in the default store, including its SKUs, assets, and options, to one or more other stores."
+msgstr "将默认店铺中的全部商品及其 SKU、素材和选项分配到一个或多个其他店铺。"
+
 #: src/lib/components/data-input/custom-field-list-input.tsx
 msgid "Remove item"
 msgstr "删除项目"
@@ -7710,6 +7774,7 @@ msgstr "已成功创建区域"
 msgid "Customer updated"
 msgstr "客户已更新"
 
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 msgid "Price conversion factor"
 msgstr "价格转换系数"
@@ -8089,6 +8154,10 @@ msgstr "创建于"
 #: src/app/routes/_authenticated/_channels/channels.tsx
 msgid "Operating entity"
 msgstr "经营主体"
+
+#: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
+msgid "Target stores"
+msgstr "目标店铺"
 
 #: src/app/routes/_authenticated/_collections/components/collection-filters-selector.tsx
 msgid "Select products manually"

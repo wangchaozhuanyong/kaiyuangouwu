@@ -258,6 +258,17 @@ export const assignProductsToChannelDocument = graphql(`
     }
 `);
 
+export const allProductIdsDocument = graphql(`
+    query AllProductIds($options: ProductListOptions) {
+        products(options: $options) {
+            items {
+                id
+            }
+            totalItems
+        }
+    }
+`);
+
 export const removeProductsFromChannelDocument = graphql(`
     mutation RemoveProductsFromChannel($input: RemoveProductsFromChannelInput!) {
         removeProductsFromChannel(input: $input) {
