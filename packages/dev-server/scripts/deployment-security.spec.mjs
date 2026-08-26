@@ -29,6 +29,16 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(config, /root \/var\/www\/kaiyuangouwu-current\/packages\/storefront\/dist;/u);
 });
 
+void test('promotion route preserves backend CSP without inheriting the storefront policy', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const promoLocation = config.match(/location = \/promo \{(?<body>[\s\S]*?)\n    \}/u)?.groups?.body;
+
+    assert.ok(promoLocation);
+    assert.match(promoLocation, /add_header Strict-Transport-Security/u);
+    assert.match(promoLocation, /add_header Permissions-Policy/u);
+    assert.doesNotMatch(promoLocation, /add_header Content-Security-Policy/u);
+});
+
 void test('production PM2 config starts compiled runtime entries without the development CLI', async () => {
     const config = await readFile(
         path.join(repositoryRoot, 'deploy/ecosystem.production.config.cjs'),
