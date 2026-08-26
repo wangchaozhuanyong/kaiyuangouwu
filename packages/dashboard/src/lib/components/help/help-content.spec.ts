@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { getFieldHelpTopic, getPageHelpMode, getPageHelpTopic, localizeHelpText } from './help-content.js';
+import type { ImageSizeGuidance } from './help-content.js';
+import {
+    getFieldHelpTopic,
+    getImageSizeGuidance,
+    getPageHelpMode,
+    getPageHelpTopic,
+    localizeHelpText,
+} from './help-content.js';
 
 const pageIds = [
     'insights',
@@ -95,6 +102,18 @@ const documentedFields = [
     'stockLevels.0.stockOnHand',
 ] as const;
 
+const imageGuidanceKinds: ImageSizeGuidance[] = [
+    'assetLibrary',
+    'product',
+    'productGroup',
+    'richText',
+    'logo',
+    'hero',
+    'banner',
+    'contentCard',
+    'icon',
+];
+
 describe('China-first contextual help', () => {
     it.each(pageIds)('provides bilingual help for %s', pageId => {
         const topic = getPageHelpTopic(pageId);
@@ -116,6 +135,15 @@ describe('China-first contextual help', () => {
         expect(localizeHelpText(value, 'zh_Hans')).toBe('中文说明');
         expect(localizeHelpText(value, 'zh-CN')).toBe('中文说明');
         expect(localizeHelpText(value, 'en')).toBe('English guide');
+    });
+
+    it.each(imageGuidanceKinds)('provides bilingual image dimensions for %s', kind => {
+        const guidance = getImageSizeGuidance(kind);
+
+        expect(guidance.zh_Hans).toMatch(/[\u4e00-\u9fff]/u);
+        expect(guidance.en).toMatch(/[A-Za-z]/u);
+        expect(guidance.zh_Hans).toMatch(/\d+\s*×\s*\d+|1200 px/u);
+        expect(guidance.en).toMatch(/\d+\s*×\s*\d+|1200 px/u);
     });
 
     it('distinguishes list workflows from detail workflows', () => {

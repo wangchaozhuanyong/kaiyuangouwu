@@ -7,6 +7,7 @@ import {
     Badge,
     Button,
     DashboardRouteDefinition,
+    ImageSizeHint,
     Input,
     Label,
     Page,
@@ -266,6 +267,7 @@ function MyStoreProfilePage() {
                             </p>
                             <div className="space-y-2 sm:col-span-2">
                                 <Label>{text.logo}</Label>
+                                <ImageSizeHint guidance="logo" />
                                 <div className="flex flex-wrap items-center gap-3 border-t pt-3">
                                     <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
                                         {draft.logoAsset ? (
@@ -333,6 +335,7 @@ function MyStoreProfilePage() {
                     onSelect={assets => update('logoAsset', assets[0] ?? null)}
                     initialSelectedAssets={draft.logoAsset ? [draft.logoAsset] : []}
                     title={text.selectLogo}
+                    imageGuidance="logo"
                 />
             )}
         </Page>

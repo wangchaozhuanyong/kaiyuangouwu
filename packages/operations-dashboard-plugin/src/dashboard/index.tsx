@@ -1,6 +1,6 @@
 import { msg } from '@lingui/core/macro';
 import { defineDashboardExtension, NavMenuConfig, NavMenuItem, NavMenuSection } from '@vendure/dashboard';
-import { Boxes, ShieldCheck } from 'lucide-react';
+import { PanelsTopLeft } from 'lucide-react';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
@@ -22,6 +22,7 @@ const navigationMessages = {
     storeSettings: msg({ id: 'operations.nav.storeSettings', message: 'Store settings' }),
     accountsAndAccess: msg({ id: 'operations.nav.accountsAndAccess', message: 'Accounts & access' }),
     systemManagement: msg({ id: 'operations.nav.systemManagement', message: 'System management' }),
+    productList: msg({ id: 'operations.nav.productList', message: 'Product list' }),
     skuAndInventory: msg({ id: 'operations.nav.skuAndInventory', message: 'SKUs & inventory' }),
     productGroups: msg({ id: 'operations.nav.productGroups', message: 'Product groups' }),
     specificationTemplates: msg({
@@ -33,7 +34,13 @@ const navigationMessages = {
     stores: msg({ id: 'operations.nav.stores', message: 'Stores' }),
 };
 
-const movedItemIds = new Set(['stock-locations', 'shipping-methods', 'administrators', 'roles']);
+const movedItemIds = new Set([
+    'stock-locations',
+    'shipping-methods',
+    'administrators',
+    'roles',
+    'storefront-content',
+]);
 
 function isSection(item: NavMenuItem | NavMenuSection): item is NavMenuSection {
     return 'items' in item;
@@ -41,6 +48,7 @@ function isSection(item: NavMenuItem | NavMenuSection): item is NavMenuSection {
 
 function updateItemTitle(item: NavMenuItem): NavMenuItem {
     const titleById: Record<string, string> = {
+        products: navigationMessages.productList.id,
         'product-variants': navigationMessages.skuAndInventory.id,
         'option-groups': navigationMessages.specificationTemplates.id,
         facets: navigationMessages.productAttributes.id,
@@ -104,37 +112,45 @@ defineDashboardExtension({
         };
         const stockAndShippingItems = takeItems(config, ['stock-locations', 'shipping-methods']);
         const accessItems = takeItems(config, ['administrators', 'roles']);
+        const storefrontContentItem = takeItems(config, ['storefront-content'])[0];
+        const systemItems = config.sections.flatMap(section =>
+            section.id === 'system' && isSection(section) ? (section.items ?? []).map(updateItemTitle) : [],
+        );
 
-        const sections = config.sections.map(section => {
+        const sections: Array<NavMenuItem | NavMenuSection> = [];
+        for (const section of config.sections) {
+            if (section.id === 'system') {
+                continue;
+            }
             const title = titleBySectionId[section.id];
             if (!isSection(section)) {
-                return title ? { ...section, title } : section;
+                sections.push(title ? { ...section, title } : section);
+                continue;
             }
-            return {
+            const ownItems = (section.items ?? [])
+                .filter(item => !movedItemIds.has(item.id))
+                .map(updateItemTitle);
+            const items =
+                section.id === 'catalog'
+                    ? [...ownItems, ...stockAndShippingItems]
+                    : section.id === 'settings'
+                      ? [...ownItems, ...accessItems, ...systemItems]
+                      : ownItems;
+            sections.push({
                 ...section,
                 ...(title ? { title } : {}),
-                items: (section.items ?? []).filter(item => !movedItemIds.has(item.id)).map(updateItemTitle),
-            };
-        });
-
-        if (stockAndShippingItems.length) {
-            sections.push({
-                id: 'inventory-and-fulfillment',
-                title: navigationMessages.inventoryAndFulfillment.id,
-                icon: Boxes,
-                order: 550,
-                placement: 'top',
-                items: stockAndShippingItems,
+                items,
             });
         }
-        if (accessItems.length) {
-            sections.push({
-                id: 'accounts-and-access',
-                title: navigationMessages.accountsAndAccess.id,
-                icon: ShieldCheck,
-                order: 150,
-                placement: 'bottom',
-                items: accessItems,
+
+        if (storefrontContentItem) {
+            const settingsIndex = sections.findIndex(section => section.id === 'settings');
+            sections.splice(settingsIndex < 0 ? sections.length : settingsIndex, 0, {
+                ...storefrontContentItem,
+                title: '店铺装修',
+                icon: PanelsTopLeft,
+                order: 900,
+                placement: 'top',
             });
         }
 

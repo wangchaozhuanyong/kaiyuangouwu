@@ -178,6 +178,15 @@ export class ContentTranslationService {
         });
     }
 
+    async countStale(ctx: RequestContext): Promise<number> {
+        return this.connection.getRepository(ctx, ContentTranslationState).count({
+            where: {
+                channelId: String(ctx.channelId),
+                status: 'STALE',
+            },
+        });
+    }
+
     async audit(ctx: RequestContext, channelId?: string | number | null) {
         const repository = this.connection.getRepository(ctx, ContentTranslationState);
         const where =

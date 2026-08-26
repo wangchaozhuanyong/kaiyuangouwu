@@ -51,7 +51,6 @@ export interface HomepageCouponHubProps {
     block?: StorefrontContentBlock;
     coupons: StorefrontCouponCard[];
     language: StorefrontLanguage;
-    claimedCampaignIds: string[];
     loading: boolean;
     onClaim: (campaignId: string) => Promise<string | null>;
     onToast?: (message: string) => void;
@@ -61,7 +60,6 @@ export function HomepageCouponHub({
     block,
     coupons,
     language,
-    claimedCampaignIds,
     loading,
     onClaim,
     onToast,
@@ -70,7 +68,7 @@ export function HomepageCouponHub({
     const isZh = language === 'zh';
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const handleClaim = async (coupon: StorefrontCouponCard) => {
-        if (claimedCampaignIds.includes(coupon.campaignId) || claimingId) return;
+        if (!coupon.claimable || claimingId) return;
         setClaimingId(coupon.id);
         const error = await onClaim(coupon.campaignId);
         setClaimingId(null);
@@ -100,12 +98,13 @@ export function HomepageCouponHub({
 
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
-                    const isClaimed = claimedCampaignIds.includes(coupon.campaignId);
+                    const isClaimed = coupon.claimed;
+                    const canClaim = coupon.claimable;
 
                     return (
                         <div
                             key={coupon.id}
-                            className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${isClaimed ? 'is-claimed' : ''}`}
+                            className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${!canClaim ? 'is-claimed' : ''}`}
                             role="listitem"
                         >
                             <div className="coupon-ticket-main">
@@ -139,11 +138,11 @@ export function HomepageCouponHub({
                             <div className="coupon-ticket-action">
                                 <button
                                     type="button"
-                                    className={`coupon-claim-btn ${isClaimed ? 'is-claimed' : ''}`}
+                                    className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}`}
                                     onClick={() => void handleClaim(coupon)}
-                                    disabled={isClaimed || loading || claimingId !== null}
+                                    disabled={!canClaim || loading || claimingId !== null}
                                     aria-label={
-                                        isClaimed
+                                        !canClaim
                                             ? isZh
                                                 ? `已领取 ${coupon.title}`
                                                 : `Claimed ${coupon.title}`
@@ -152,17 +151,25 @@ export function HomepageCouponHub({
                                               : `Claim ${coupon.title}`
                                     }
                                 >
-                                    {isClaimed ? (
+                                    {!canClaim ? (
                                         <span className="coupon-btn-text-wrap">
                                             <Check size={12} strokeWidth={2.8} aria-hidden="true" />
-                                            <span>{isZh ? '已领' : 'Got'}</span>
+                                            <span>
+                                                {isZh
+                                                    ? isClaimed
+                                                        ? '已领'
+                                                        : '已领完'
+                                                    : isClaimed
+                                                      ? 'Got'
+                                                      : 'Ended'}
+                                            </span>
                                         </span>
                                     ) : (
                                         <span className="coupon-btn-text-wrap">
                                             {isZh ? (
                                                 <>
-                                                    <span>立即</span>
-                                                    <span>领取</span>
+                                                    <span>{isClaimed ? '再领' : '立即'}</span>
+                                                    <span>{isClaimed ? '一张' : '领取'}</span>
                                                 </>
                                             ) : (
                                                 <span>Claim</span>

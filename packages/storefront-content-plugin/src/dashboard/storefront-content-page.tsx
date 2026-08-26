@@ -13,6 +13,7 @@ import {
     AssetPickerDialog,
     Badge,
     Button,
+    ChannelCodeLabel,
     DashboardRouteDefinition,
     Dialog,
     DialogContent,
@@ -20,8 +21,10 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    ImageSizeHint,
     Input,
     Label,
+    Link,
     Page,
     PageActionBar,
     PageActionBarRight,
@@ -50,18 +53,32 @@ import {
     ArrowUp,
     Eye,
     EyeOff,
+    GripVertical,
     Image as ImageIcon,
     ImagePlus,
     LayoutTemplate,
     Pencil,
     Plus,
     RefreshCw,
+    Settings2,
+    Sparkles,
     Trash2,
+    TriangleAlert,
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { applyCoreCategoryDefaults, dualCardTemplateId, dualCardTemplates } from './dual-card-templates';
+import {
+    FixedHomepageModuleType,
+    HomepageLayoutEntry,
+    homepageLayoutEntries,
+    homepageModuleRegistry,
+    isFixedHomepageModuleType,
+    movedHomepageBlockIds,
+    reorderedHomepageBlockIds,
+} from './homepage-module-registry';
+import { swappedContentBlockIds } from './storefront-content-ordering';
 import {
     ContentBlock,
     ContentBlockTranslation,
@@ -77,23 +94,7 @@ import {
     updateStorefrontContentSettingsMutation,
 } from './storefront-content.graphql';
 
-const blockTypes: ContentBlockType[] = [
-    'HERO',
-    'NOTICE',
-    'QUICK_LINKS',
-    'CATEGORY_AD',
-    'FEATURED_COLLECTION',
-    'COUPONS',
-    'TRUST_BAR',
-    'CORE_CATEGORIES',
-    'FLASH_SALE',
-    'BEST_SELLERS',
-    'RECOMMENDATIONS',
-    'STORY',
-    'LEGAL',
-    'SUPPORT',
-    'CUSTOM',
-];
+const blockTypes: ContentBlockType[] = ['CUSTOM'];
 const targetTypes: ContentTargetType[] = [
     'NONE',
     'URL',
@@ -106,10 +107,22 @@ const targetTypes: ContentTargetType[] = [
     'COUPON',
 ];
 
+type ContentImageGuidance = 'hero' | 'banner' | 'contentCard' | 'icon';
+
+const CLOUD_BRIDGE_TARGET_URL = 'https://codexgemini.cc';
+const CLOUD_BRIDGE_HERO_THEME = {
+    overlayColor: '#FFF7F5',
+    titleColor: '#451A1A',
+    secondaryTextColor: '#6F3841',
+    accentColor: '#D33C30',
+    accentSecondaryColor: '#7C3AED',
+    buttonTextColor: '#FFFFFF',
+} as const;
+
 const zhCopy = {
-    title: '店铺装修',
-    description: '管理当前店铺的首页内容、条款和客服信息。切换店铺后会自动读取对应 Channel。',
-    add: '新建区块',
+    title: '首页装修',
+    description: '固定模块只需开启、关闭和排序；内容从各自的业务页面或模块设置中维护。',
+    add: '新增高级自定义模块',
     configureDualCards: '配置双卡片',
     empty: '当前店铺还没有装修内容',
     emptyHint: '新建第一个区块后，客户端会按启用状态和生效时间自动展示。',
@@ -163,6 +176,15 @@ const zhCopy = {
     productSelectionHint: '可按名称搜索，也可先按商品分类筛选。',
     backgroundColor: '背景色',
     textColor: '文字色',
+    heroTheme: '轮播文字与配色',
+    heroThemeHint: '颜色只作用于网页文字、遮罩和按钮，不会写进轮播图片。',
+    heroThemePreset: '应用云桥科技亮色',
+    heroOverlayColor: '左侧遮罩色',
+    heroTitleColor: '标题颜色',
+    heroSecondaryTextColor: '说明文字颜色',
+    heroAccentColor: '强调色',
+    heroAccentSecondaryColor: '按钮渐变结束色',
+    heroButtonTextColor: '按钮文字颜色',
     targetType: '跳转类型',
     targetValue: '跳转目标',
     targetHint: '根据类型填写商品 ID、集合 ID、优惠码、搜索词、页面路径或链接。',
@@ -191,6 +213,16 @@ const zhCopy = {
     reordered: '区块顺序已更新',
     validation: '请填写模块内部名称和中文标题；每个条目也需要中文名称',
     activeChannel: '当前店铺',
+    homepageLayout: '首页模块排序',
+    homepageLayoutDescription: '拖动或使用上下按钮调整首页展示顺序，固定模块的样式由系统统一控制。',
+    fixedTemplate: '固定模板',
+    customModule: '高级自定义',
+    notConfigured: '未配置',
+    configure: '模块设置',
+    dragToSort: '拖动排序',
+    duplicateWarning: '检测到历史重复数据，已按一个首页模块合并管理。',
+    heroNeedsSlide: '请先添加轮播图后再开启。',
+    fixedModuleSaved: '固定模块设置已保存',
     carouselSettings: '首页轮播设置',
     carouselSettingsDescription:
         '配置当前店铺首页广告的自动切换速度。用户手动切换后，本次访问将停止自动轮播。',
@@ -199,13 +231,27 @@ const zhCopy = {
     autoplayIntervalInvalid: '自动切换间隔必须是 3 到 30 秒之间的整数',
     saveCarouselSettings: '保存轮播设置',
     carouselSettingsUpdated: '轮播设置已更新',
+    carouselTitle: '首页轮播',
+    carouselDescription: '单独管理当前店铺首页轮播的图片、文案、样式、跳转和播放速度。',
+    carouselSlides: '轮播图片',
+    carouselSlidesDescription: '按顺序管理轮播图 1、2、3……关闭后该图片将不在前台展示。',
+    addCarouselSlide: '添加轮播图',
+    carouselEmpty: '当前店铺还没有轮播图',
+    carouselEmptyHint: '添加第一张图片后，首页才会显示轮播区域。',
+    carouselSlide: '轮播图',
+    createCarouselSlideTitle: '添加轮播图',
+    updateCarouselSlideTitle: '编辑轮播图',
+    carouselCreated: '轮播图已创建',
+    carouselUpdated: '轮播图已更新',
+    carouselDeleted: '轮播图已删除',
+    carouselReordered: '轮播顺序已更新',
 };
 
 const enCopy: typeof zhCopy = {
-    title: 'Storefront content',
+    title: 'Homepage builder',
     description:
-        'Manage homepage content, legal text and support details for the active store. Switching stores loads its Channel content.',
-    add: 'New block',
+        'Turn fixed modules on or off and arrange them. Manage content in each module settings or business page.',
+    add: 'Add advanced custom module',
     configureDualCards: 'Configure dual cards',
     empty: 'This store has no content blocks',
     emptyHint: 'Create the first block. The storefront respects its status and schedule automatically.',
@@ -263,6 +309,16 @@ const enCopy: typeof zhCopy = {
     productSelectionHint: 'Search by name or filter the catalog by category first.',
     backgroundColor: 'Background',
     textColor: 'Text color',
+    heroTheme: 'Carousel copy and colors',
+    heroThemeHint:
+        'Colors affect HTML copy, the overlay and the button; they are never baked into the image.',
+    heroThemePreset: 'Apply CloudBridge bright theme',
+    heroOverlayColor: 'Left overlay color',
+    heroTitleColor: 'Title color',
+    heroSecondaryTextColor: 'Supporting text color',
+    heroAccentColor: 'Accent color',
+    heroAccentSecondaryColor: 'Button gradient end',
+    heroButtonTextColor: 'Button text color',
     targetType: 'Target type',
     targetValue: 'Target value',
     targetHint: 'Enter a product ID, collection ID, coupon code, search term, page path or URL.',
@@ -291,6 +347,17 @@ const enCopy: typeof zhCopy = {
     reordered: 'Block order updated',
     validation: 'Enter an internal name, a Chinese title, and a Chinese label for every item',
     activeChannel: 'Active store',
+    homepageLayout: 'Homepage module order',
+    homepageLayoutDescription:
+        'Drag modules or use the arrow buttons to change storefront order. Fixed module layouts are controlled by the system.',
+    fixedTemplate: 'Fixed template',
+    customModule: 'Advanced custom',
+    notConfigured: 'Not configured',
+    configure: 'Module settings',
+    dragToSort: 'Drag to reorder',
+    duplicateWarning: 'Legacy duplicate records were detected and are managed as one homepage module.',
+    heroNeedsSlide: 'Add a carousel image before enabling this module.',
+    fixedModuleSaved: 'Fixed module settings saved',
     carouselSettings: 'Homepage carousel settings',
     carouselSettingsDescription:
         'Set the automatic rotation speed for this store. Autoplay stops for the visit after a customer changes slides manually.',
@@ -299,6 +366,22 @@ const enCopy: typeof zhCopy = {
     autoplayIntervalInvalid: 'The autoplay interval must be a whole number from 3 to 30 seconds',
     saveCarouselSettings: 'Save carousel settings',
     carouselSettingsUpdated: 'Carousel settings updated',
+    carouselTitle: 'Homepage carousel',
+    carouselDescription:
+        'Manage carousel images, copy, styles, targets and autoplay speed for the active store.',
+    carouselSlides: 'Carousel images',
+    carouselSlidesDescription:
+        'Manage carousel images 1, 2, 3 and onward in order. Disabled images are hidden from the storefront.',
+    addCarouselSlide: 'Add carousel image',
+    carouselEmpty: 'This store has no carousel images',
+    carouselEmptyHint: 'Add the first image to show the carousel area on the homepage.',
+    carouselSlide: 'Carousel image',
+    createCarouselSlideTitle: 'Add carousel image',
+    updateCarouselSlideTitle: 'Edit carousel image',
+    carouselCreated: 'Carousel image created',
+    carouselUpdated: 'Carousel image updated',
+    carouselDeleted: 'Carousel image deleted',
+    carouselReordered: 'Carousel order updated',
 };
 
 const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
@@ -336,15 +419,250 @@ export const storefrontContentRoute: DashboardRouteDefinition = {
         sectionId: 'marketing',
         id: 'storefront-content',
         url: '/storefront-content',
-        title: '店铺装修',
+        title: '首页装修',
         requiresPermission: ['ReadStorefrontContent'],
     },
     path: '/storefront-content',
-    loader: () => ({ breadcrumb: () => '店铺装修' }),
+    loader: () => ({ breadcrumb: () => '首页装修' }),
     component: () => <StorefrontContentPage />,
 };
 
-function StorefrontContentPage() {
+export const storefrontSiteContentRoute: DashboardRouteDefinition = {
+    navMenuItem: {
+        sectionId: 'marketing',
+        id: 'storefront-site-content',
+        url: '/storefront-site-content',
+        title: '全局内容',
+        requiresPermission: ['ReadStorefrontContent'],
+    },
+    path: '/storefront-site-content',
+    loader: () => ({ breadcrumb: () => '全局内容' }),
+    component: () => <StorefrontSiteContentPage />,
+};
+
+export const storefrontCarouselRoute: DashboardRouteDefinition = {
+    navMenuItem: {
+        sectionId: 'marketing',
+        id: 'storefront-carousel',
+        url: '/storefront-carousel',
+        title: '首页轮播',
+        requiresPermission: ['ReadStorefrontContent'],
+    },
+    path: '/storefront-carousel',
+    loader: () => ({ breadcrumb: () => '首页轮播' }),
+    component: () => <StorefrontCarouselPage />,
+};
+
+const globalContentModules = [
+    {
+        type: 'LEGAL',
+        labelZh: '条款内容',
+        labelEn: 'Legal content',
+        descriptionZh: '管理全站页脚、注册和结算流程使用的条款与隐私内容。',
+        descriptionEn: 'Terms and privacy content shared by the footer, registration and checkout.',
+    },
+    {
+        type: 'SUPPORT',
+        labelZh: '客服配置',
+        labelEn: 'Support settings',
+        descriptionZh: '管理全站客服页的联系方式、服务时间和快捷入口。',
+        descriptionEn: 'Contact methods, service hours and actions shared by the support page.',
+    },
+] as const;
+
+type GlobalContentType = (typeof globalContentModules)[number]['type'];
+
+function StorefrontSiteContentPage() {
+    const { i18n } = useLingui();
+    const isZh = i18n.locale.toLowerCase().startsWith('zh');
+    const text = isZh ? zhCopy : enCopy;
+    const { activeChannel } = useChannel();
+    const queryClient = useQueryClient();
+    const queryKey = ['storefront-content-blocks', activeChannel?.id];
+    const [draft, setDraft] = useState<ContentBlock | null>(null);
+    const query = useQuery({
+        queryKey,
+        queryFn: () => api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery),
+        enabled: Boolean(activeChannel?.id),
+    });
+    const blocks = query.data?.storefrontContentBlocks ?? [];
+    const refresh = () => queryClient.invalidateQueries({ queryKey });
+    const saveMutation = useMutation({
+        mutationFn: (block: ContentBlock) => {
+            const input = blockInput(block);
+            return block.id
+                ? api.mutate(updateStorefrontContentBlockMutation, { input: { id: block.id, ...input } })
+                : api.mutate(createStorefrontContentBlockMutation, { input });
+        },
+        onSuccess: async () => {
+            toast.success(isZh ? '全局内容已保存' : 'Global content saved');
+            setDraft(null);
+            await refresh();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const toggleMutation = useMutation({
+        mutationFn: async ({ type, enabled }: { type: GlobalContentType; enabled: boolean }) => {
+            const matching = blocks
+                .filter(block => block.type === type)
+                .sort((a, b) => a.position - b.position);
+            if (!matching.length) {
+                await api.mutate(createStorefrontContentBlockMutation, {
+                    input: blockInput({ ...globalContentDraft(type, blocks.length), enabled }),
+                });
+                return;
+            }
+            await Promise.all(
+                matching.flatMap((block, index) =>
+                    block.id
+                        ? [
+                              api.mutate(updateStorefrontContentBlockMutation, {
+                                  input: { id: block.id, enabled: index === 0 ? enabled : false },
+                              }),
+                          ]
+                        : [],
+                ),
+            );
+        },
+        onSuccess: refresh,
+        onError: error => toast.error(errorMessage(error)),
+    });
+
+    return (
+        <Page pageId="storefront-site-content">
+            <PageTitle>{isZh ? '全局内容' : 'Global content'}</PageTitle>
+            <PageLayout>
+                <PageBlock
+                    column="full"
+                    blockId="storefront-global-content"
+                    title={isZh ? '全站固定配置' : 'Site-wide fixed settings'}
+                    description={
+                        isZh
+                            ? '这些内容不参与首页排序，但可针对当前店铺单独开启和编辑。'
+                            : 'These settings are not part of homepage ordering and can be managed per store.'
+                    }
+                >
+                    <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>{text.activeChannel}</span>
+                        <Badge variant="outline">
+                            {activeChannel ? <ChannelCodeLabel code={activeChannel.code} /> : '-'}
+                        </Badge>
+                    </div>
+                    {query.isPending ? (
+                        <div className="space-y-3" aria-busy="true">
+                            <Skeleton className="h-24 w-full" />
+                            <Skeleton className="h-24 w-full" />
+                        </div>
+                    ) : query.isError ? (
+                        <Alert variant="destructive">
+                            <AlertDescription className="flex items-center justify-between gap-3">
+                                <span>{text.loadError}</span>
+                                <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+                                    <RefreshCw className="size-4" aria-hidden="true" />
+                                    {text.retry}
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
+                    ) : (
+                        <div className="space-y-2">
+                            {globalContentModules.map(module => {
+                                const matching = blocks
+                                    .filter(candidateBlock => candidateBlock.type === module.type)
+                                    .sort((a, b) => a.position - b.position);
+                                const block = matching[0];
+                                const enabled = matching.some(candidate => candidate.enabled);
+                                return (
+                                    <div
+                                        key={module.type}
+                                        className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center"
+                                    >
+                                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                                            <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                                                <LayoutTemplate className="size-4" aria-hidden="true" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <strong className="text-sm">
+                                                        {isZh ? module.labelZh : module.labelEn}
+                                                    </strong>
+                                                    <Badge variant="outline">{text.fixedTemplate}</Badge>
+                                                    <Badge variant={enabled ? 'default' : 'secondary'}>
+                                                        {enabled ? text.enabled : text.disabled}
+                                                    </Badge>
+                                                    {!block ? (
+                                                        <Badge variant="secondary">
+                                                            {text.notConfigured}
+                                                        </Badge>
+                                                    ) : null}
+                                                </div>
+                                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                                    {isZh ? module.descriptionZh : module.descriptionEn}
+                                                </p>
+                                                {matching.length > 1 ? (
+                                                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                                                        {text.duplicateWarning}
+                                                    </p>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-3">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={saveMutation.isPending || toggleMutation.isPending}
+                                                onClick={() =>
+                                                    setDraft(
+                                                        block
+                                                            ? cloneBlock(block)
+                                                            : globalContentDraft(module.type, blocks.length),
+                                                    )
+                                                }
+                                            >
+                                                <Pencil className="size-4" aria-hidden="true" />
+                                                {text.configure}
+                                            </Button>
+                                            <Switch
+                                                checked={enabled}
+                                                disabled={saveMutation.isPending || toggleMutation.isPending}
+                                                aria-label={`${isZh ? module.labelZh : module.labelEn} ${enabled ? text.enabled : text.disabled}`}
+                                                onCheckedChange={value =>
+                                                    toggleMutation.mutate({
+                                                        type: module.type,
+                                                        enabled: value,
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </PageBlock>
+            </PageLayout>
+            <BlockEditor
+                draft={draft}
+                lockedType={draft?.type}
+                fixedTemplate
+                isZh={isZh}
+                text={text}
+                saving={saveMutation.isPending}
+                onChange={setDraft}
+                onClose={() => !saveMutation.isPending && setDraft(null)}
+                onSave={block => {
+                    if (!isValid(block)) {
+                        toast.error(text.validation);
+                        return;
+                    }
+                    saveMutation.mutate(block);
+                }}
+            />
+        </Page>
+    );
+}
+
+function StorefrontCarouselPage() {
     const { i18n } = useLingui();
     const isZh = i18n.locale.toLowerCase().startsWith('zh');
     const text = isZh ? zhCopy : enCopy;
@@ -360,8 +678,8 @@ function StorefrontContentPage() {
         queryFn: () => api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery),
         enabled: Boolean(activeChannel?.id),
     });
-    const blocks = contentQuery.data?.storefrontContentBlocks ?? [];
-    const coreCategoriesBlock = blocks.find(block => block.type === 'CORE_CATEGORIES');
+    const allBlocks = contentQuery.data?.storefrontContentBlocks ?? [];
+    const slides = allBlocks.filter(block => block.type === 'HERO');
     const refresh = () => queryClient.invalidateQueries({ queryKey });
     const heroAutoplayIntervalSeconds = Number(heroAutoplayIntervalInput);
     const heroAutoplayIntervalValid =
@@ -377,13 +695,13 @@ function StorefrontContentPage() {
 
     const saveMutation = useMutation({
         mutationFn: (block: ContentBlock) => {
-            const input = blockInput(block);
+            const input = blockInput({ ...block, type: 'HERO' });
             return block.id
                 ? api.mutate(updateStorefrontContentBlockMutation, { input: { id: block.id, ...input } })
                 : api.mutate(createStorefrontContentBlockMutation, { input });
         },
         onSuccess: async (_, block) => {
-            toast.success(block.id ? text.updated : text.created);
+            toast.success(block.id ? text.carouselUpdated : text.carouselCreated);
             setDraft(null);
             await refresh();
         },
@@ -398,7 +716,7 @@ function StorefrontContentPage() {
     const reorderMutation = useMutation({
         mutationFn: (ids: string[]) => api.mutate(reorderStorefrontContentBlocksMutation, { ids }),
         onSuccess: async () => {
-            toast.success(text.reordered);
+            toast.success(text.carouselReordered);
             await refresh();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -406,7 +724,7 @@ function StorefrontContentPage() {
     const deleteMutation = useMutation({
         mutationFn: (id: string) => api.mutate(deleteStorefrontContentBlockMutation, { id }),
         onSuccess: async () => {
-            toast.success(text.deleted);
+            toast.success(text.carouselDeleted);
             setDeleteTarget(null);
             await refresh();
         },
@@ -426,50 +744,37 @@ function StorefrontContentPage() {
 
     const move = (index: number, direction: -1 | 1) => {
         const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= blocks.length) return;
-        const reordered = [...blocks];
-        [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
-        reorderMutation.mutate(reordered.flatMap(block => (block.id ? [block.id] : [])));
+        if (targetIndex < 0 || targetIndex >= slides.length) return;
+        reorderMutation.mutate(swappedContentBlockIds(allBlocks, slides[index].id, slides[targetIndex].id));
     };
 
+    const createSlide = () => setDraft(newHeroBlock(allBlocks.length, slides.length + 1));
+
     return (
-        <Page pageId="storefront-content">
-            <PageTitle>{text.title}</PageTitle>
+        <Page pageId="storefront-carousel">
+            <PageTitle>{text.carouselTitle}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
-                    <Button
-                        variant="outline"
-                        onClick={() =>
-                            setDraft(
-                                coreCategoriesBlock
-                                    ? applyCoreCategoryDefaults(cloneBlock(coreCategoriesBlock))
-                                    : newCoreCategoriesBlock(blocks.length),
-                            )
-                        }
-                    >
-                        <LayoutTemplate className="size-4" aria-hidden="true" />
-                        {text.configureDualCards}
-                    </Button>
-                    <Button onClick={() => setDraft(newBlock(blocks.length))}>
+                    <Button disabled={contentQuery.isPending || contentQuery.isError} onClick={createSlide}>
                         <Plus className="size-4" aria-hidden="true" />
-                        {text.add}
+                        {text.addCarouselSlide}
                     </Button>
                 </PageActionBarRight>
             </PageActionBar>
             <PageLayout>
                 <PageBlock
                     column="full"
-                    blockId="storefront-content-carousel-settings"
+                    blockId="storefront-carousel-settings"
                     title={text.carouselSettings}
                     description={text.carouselSettingsDescription}
                 >
-                    <div className="flex max-w-xl flex-col gap-4 sm:flex-row sm:items-end">
-                        <Field
-                            label={text.autoplayInterval}
-                            hint={text.autoplayIntervalHint}
-                            className="flex-1"
-                        >
-                            <div className="relative">
+                    <Field
+                        label={text.autoplayInterval}
+                        hint={text.autoplayIntervalHint}
+                        className="max-w-xl"
+                    >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                            <div className="relative flex-1">
                                 <Input
                                     type="number"
                                     min={3}
@@ -479,7 +784,9 @@ function StorefrontContentPage() {
                                     value={heroAutoplayIntervalInput}
                                     aria-invalid={!heroAutoplayIntervalValid}
                                     aria-describedby={
-                                        heroAutoplayIntervalValid ? undefined : 'autoplay-interval-error'
+                                        heroAutoplayIntervalValid
+                                            ? undefined
+                                            : 'carousel-autoplay-interval-error'
                                     }
                                     disabled={contentQuery.isPending || contentQuery.isError}
                                     onChange={event => setHeroAutoplayIntervalInput(event.target.value)}
@@ -488,44 +795,46 @@ function StorefrontContentPage() {
                                     {isZh ? '秒' : 'sec'}
                                 </span>
                             </div>
-                            {!heroAutoplayIntervalValid && (
-                                <p
-                                    id="autoplay-interval-error"
-                                    className="text-xs text-destructive"
-                                    role="alert"
-                                >
-                                    {text.autoplayIntervalInvalid}
-                                </p>
-                            )}
-                        </Field>
-                        <Button
-                            type="button"
-                            disabled={
-                                !heroAutoplayIntervalValid ||
-                                contentQuery.isPending ||
-                                contentQuery.isError ||
-                                settingsMutation.isPending
-                            }
-                            onClick={() => settingsMutation.mutate(heroAutoplayIntervalSeconds)}
-                        >
-                            {settingsMutation.isPending ? text.saving : text.saveCarouselSettings}
-                        </Button>
-                    </div>
+                            <Button
+                                type="button"
+                                disabled={
+                                    !heroAutoplayIntervalValid ||
+                                    contentQuery.isPending ||
+                                    contentQuery.isError ||
+                                    settingsMutation.isPending
+                                }
+                                onClick={() => settingsMutation.mutate(heroAutoplayIntervalSeconds)}
+                            >
+                                {settingsMutation.isPending ? text.saving : text.saveCarouselSettings}
+                            </Button>
+                        </div>
+                        {!heroAutoplayIntervalValid && (
+                            <p
+                                id="carousel-autoplay-interval-error"
+                                className="text-xs text-destructive"
+                                role="alert"
+                            >
+                                {text.autoplayIntervalInvalid}
+                            </p>
+                        )}
+                    </Field>
                 </PageBlock>
                 <PageBlock
                     column="full"
-                    blockId="storefront-content-list"
-                    title={text.title}
-                    description={text.description}
+                    blockId="storefront-carousel-slides"
+                    title={text.carouselSlides}
+                    description={text.carouselSlidesDescription}
                 >
                     <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                         <span>{text.activeChannel}</span>
-                        <Badge variant="outline">{activeChannel?.code ?? '-'}</Badge>
+                        <Badge variant="outline">
+                            {activeChannel ? <ChannelCodeLabel code={activeChannel.code} /> : '-'}
+                        </Badge>
                     </div>
                     {contentQuery.isPending ? (
                         <div className="space-y-3" aria-busy="true">
-                            <Skeleton className="h-20 w-full" />
-                            <Skeleton className="h-20 w-full" />
+                            <Skeleton className="h-24 w-full" />
+                            <Skeleton className="h-24 w-full" />
                         </div>
                     ) : contentQuery.isError ? (
                         <Alert variant="destructive">
@@ -541,27 +850,27 @@ function StorefrontContentPage() {
                                 </Button>
                             </AlertDescription>
                         </Alert>
-                    ) : blocks.length === 0 ? (
+                    ) : slides.length === 0 ? (
                         <div className="py-12 text-center">
-                            <LayoutTemplate
+                            <ImageIcon
                                 className="mx-auto mb-3 size-8 text-muted-foreground"
                                 aria-hidden="true"
                             />
-                            <p className="text-sm font-medium">{text.empty}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{text.emptyHint}</p>
-                            <Button className="mt-5" variant="outline" onClick={() => setDraft(newBlock(0))}>
+                            <p className="text-sm font-medium">{text.carouselEmpty}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{text.carouselEmptyHint}</p>
+                            <Button className="mt-5" variant="outline" onClick={createSlide}>
                                 <Plus className="size-4" aria-hidden="true" />
-                                {text.add}
+                                {text.addCarouselSlide}
                             </Button>
                         </div>
                     ) : (
                         <div className="divide-y border-y">
-                            {blocks.map((block, index) => (
-                                <BlockRow
-                                    key={block.id}
-                                    block={block}
+                            {slides.map((slide, index) => (
+                                <CarouselSlideRow
+                                    key={slide.id}
+                                    slide={slide}
                                     index={index}
-                                    count={blocks.length}
+                                    count={slides.length}
                                     isZh={isZh}
                                     text={text}
                                     pending={
@@ -570,12 +879,12 @@ function StorefrontContentPage() {
                                         deleteMutation.isPending
                                     }
                                     onMove={direction => move(index, direction)}
-                                    onEdit={() => setDraft(cloneBlock(block))}
+                                    onEdit={() => setDraft(cloneBlock(slide))}
                                     onToggle={() =>
-                                        block.id &&
-                                        quickUpdateMutation.mutate({ id: block.id, enabled: !block.enabled })
+                                        slide.id &&
+                                        quickUpdateMutation.mutate({ id: slide.id, enabled: !slide.enabled })
                                     }
-                                    onDelete={() => setDeleteTarget(block)}
+                                    onDelete={() => setDeleteTarget(slide)}
                                 />
                             ))}
                         </div>
@@ -585,6 +894,7 @@ function StorefrontContentPage() {
 
             <BlockEditor
                 draft={draft}
+                lockedType="HERO"
                 isZh={isZh}
                 text={text}
                 saving={saveMutation.isPending}
@@ -628,8 +938,420 @@ function StorefrontContentPage() {
     );
 }
 
-function BlockRow({
-    block,
+function StorefrontContentPage() {
+    const { i18n } = useLingui();
+    const isZh = i18n.locale.toLowerCase().startsWith('zh');
+    const text = isZh ? zhCopy : enCopy;
+    const { activeChannel } = useChannel();
+    const queryClient = useQueryClient();
+    const queryKey = ['storefront-content-blocks', activeChannel?.id];
+    const [draft, setDraft] = useState<ContentBlock | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<ContentBlock | null>(null);
+    const [draggedKey, setDraggedKey] = useState<string | null>(null);
+
+    const contentQuery = useQuery({
+        queryKey,
+        queryFn: () => api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery),
+        enabled: Boolean(activeChannel?.id),
+    });
+    const allBlocks = contentQuery.data?.storefrontContentBlocks ?? [];
+    const layoutEntries = homepageLayoutEntries(allBlocks);
+    const refresh = () => queryClient.invalidateQueries({ queryKey });
+
+    const saveMutation = useMutation({
+        mutationFn: (block: ContentBlock) => {
+            const input = blockInput(block);
+            return block.id
+                ? api.mutate(updateStorefrontContentBlockMutation, { input: { id: block.id, ...input } })
+                : api.mutate(createStorefrontContentBlockMutation, { input });
+        },
+        onSuccess: async (_, block) => {
+            toast.success(block.id ? text.updated : text.created);
+            setDraft(null);
+            await refresh();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const toggleMutation = useMutation({
+        mutationFn: async ({ entry, enabled }: { entry: HomepageLayoutEntry; enabled: boolean }) => {
+            if (!entry.blocks.length) {
+                if (!isFixedHomepageModuleType(entry.type) || entry.type === 'HERO') return;
+                const block = fixedModuleDraft(entry.type, entry.position);
+                await api.mutate(createStorefrontContentBlockMutation, {
+                    input: blockInput({ ...block, enabled }),
+                });
+                return;
+            }
+            await Promise.all(
+                entry.blocks.flatMap((block, index) =>
+                    block.id
+                        ? [
+                              api.mutate(updateStorefrontContentBlockMutation, {
+                                  input: {
+                                      id: block.id,
+                                      enabled:
+                                          entry.descriptor?.allowsMultipleRecords || index === 0
+                                              ? enabled
+                                              : false,
+                                  },
+                              }),
+                          ]
+                        : [],
+                ),
+            );
+        },
+        onSuccess: refresh,
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const layoutMutation = useMutation({
+        mutationFn: async (
+            change:
+                | { kind: 'move'; entryKey: string; direction: -1 | 1 }
+                | { kind: 'drop'; entryKey: string; targetKey: string },
+        ) => {
+            let currentBlocks = (await api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery))
+                .storefrontContentBlocks;
+            const currentEntries = homepageLayoutEntries(currentBlocks);
+            const missingFixedModules = currentEntries.filter(
+                (entry): entry is HomepageLayoutEntry & { type: FixedHomepageModuleType } =>
+                    entry.fixed && entry.type !== 'HERO' && entry.blocks.length === 0,
+            );
+
+            for (const entry of missingFixedModules) {
+                await api.mutate(createStorefrontContentBlockMutation, {
+                    input: blockInput(fixedModuleDraft(entry.type, entry.position)),
+                });
+            }
+            if (missingFixedModules.length) {
+                currentBlocks = (await api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery))
+                    .storefrontContentBlocks;
+            }
+
+            const entries = homepageLayoutEntries(currentBlocks);
+            const ids =
+                change.kind === 'move'
+                    ? reorderedHomepageBlockIds(entries, change.entryKey, change.direction, currentBlocks)
+                    : movedHomepageBlockIds(entries, change.entryKey, change.targetKey, currentBlocks);
+            if (ids.length) {
+                await api.mutate(reorderStorefrontContentBlocksMutation, { ids });
+            }
+        },
+        onSuccess: async () => {
+            toast.success(text.reordered);
+            await refresh();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => api.mutate(deleteStorefrontContentBlockMutation, { id }),
+        onSuccess: async () => {
+            toast.success(text.deleted);
+            setDeleteTarget(null);
+            await refresh();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const pending =
+        saveMutation.isPending ||
+        toggleMutation.isPending ||
+        layoutMutation.isPending ||
+        deleteMutation.isPending;
+
+    const openEditor = (entry: HomepageLayoutEntry) => {
+        if (entry.fixed) {
+            if (entry.type === 'HERO' || entry.descriptor?.settingsPath) return;
+            if (!isFixedHomepageModuleType(entry.type)) return;
+            setDraft(entry.block ? cloneBlock(entry.block) : fixedModuleDraft(entry.type, entry.position));
+            return;
+        }
+        if (entry.block) setDraft(cloneBlock(entry.block));
+    };
+
+    return (
+        <Page pageId="storefront-content">
+            <PageTitle>{text.title}</PageTitle>
+            <PageActionBar>
+                <PageActionBarRight>
+                    <Button onClick={() => setDraft(newBlock(allBlocks.length, 'CUSTOM'))} disabled={pending}>
+                        <Plus className="size-4" aria-hidden="true" />
+                        {text.add}
+                    </Button>
+                </PageActionBarRight>
+            </PageActionBar>
+            <PageLayout>
+                <PageBlock
+                    column="full"
+                    blockId="storefront-content-list"
+                    title={text.homepageLayout}
+                    description={text.homepageLayoutDescription}
+                >
+                    <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <span>{text.activeChannel}</span>
+                        <Badge variant="outline">
+                            {activeChannel ? <ChannelCodeLabel code={activeChannel.code} /> : '-'}
+                        </Badge>
+                    </div>
+                    {contentQuery.isPending ? (
+                        <div className="space-y-3" aria-busy="true">
+                            <Skeleton className="h-20 w-full" />
+                            <Skeleton className="h-20 w-full" />
+                        </div>
+                    ) : contentQuery.isError ? (
+                        <Alert variant="destructive">
+                            <AlertDescription className="flex items-center justify-between gap-3">
+                                <span>{text.loadError}</span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => void contentQuery.refetch()}
+                                >
+                                    <RefreshCw className="size-4" aria-hidden="true" />
+                                    {text.retry}
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
+                    ) : (
+                        <div className="space-y-2">
+                            {layoutEntries.map((entry, index) => (
+                                <HomepageModuleRow
+                                    key={entry.key}
+                                    entry={entry}
+                                    index={index}
+                                    count={layoutEntries.length}
+                                    isZh={isZh}
+                                    text={text}
+                                    pending={pending}
+                                    dragging={draggedKey === entry.key}
+                                    onDragStart={() => setDraggedKey(entry.key)}
+                                    onDragEnd={() => setDraggedKey(null)}
+                                    onDrop={() => {
+                                        if (draggedKey && draggedKey !== entry.key) {
+                                            layoutMutation.mutate({
+                                                kind: 'drop',
+                                                entryKey: draggedKey,
+                                                targetKey: entry.key,
+                                            });
+                                        }
+                                        setDraggedKey(null);
+                                    }}
+                                    onMove={direction =>
+                                        layoutMutation.mutate({
+                                            kind: 'move',
+                                            entryKey: entry.key,
+                                            direction,
+                                        })
+                                    }
+                                    onEdit={() => openEditor(entry)}
+                                    onToggle={enabled => toggleMutation.mutate({ entry, enabled })}
+                                    onDelete={() => entry.block && setDeleteTarget(entry.block)}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </PageBlock>
+            </PageLayout>
+
+            <BlockEditor
+                draft={draft}
+                lockedType={draft && isFixedHomepageModuleType(draft.type) ? draft.type : undefined}
+                fixedTemplate={Boolean(draft && isFixedHomepageModuleType(draft.type))}
+                isZh={isZh}
+                text={text}
+                saving={saveMutation.isPending}
+                onChange={setDraft}
+                onClose={() => !saveMutation.isPending && setDraft(null)}
+                onSave={block => {
+                    if (!isValid(block)) {
+                        toast.error(text.validation);
+                        return;
+                    }
+                    saveMutation.mutate(block);
+                }}
+            />
+
+            <AlertDialog open={Boolean(deleteTarget)} onOpenChange={open => !open && setDeleteTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{text.deleteTitle}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {deleteTarget?.code ? `${deleteTarget.code}：` : ''}
+                            {text.deleteDescription}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>
+                            {text.cancel}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={deleteMutation.isPending}
+                            onClick={event => {
+                                event.preventDefault();
+                                if (deleteTarget?.id) deleteMutation.mutate(deleteTarget.id);
+                            }}
+                        >
+                            {text.delete}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </Page>
+    );
+}
+
+function HomepageModuleRow({
+    entry,
+    index,
+    count,
+    isZh,
+    text,
+    pending,
+    dragging,
+    onDragStart,
+    onDragEnd,
+    onDrop,
+    onMove,
+    onEdit,
+    onToggle,
+    onDelete,
+}: Readonly<{
+    entry: HomepageLayoutEntry;
+    index: number;
+    count: number;
+    isZh: boolean;
+    text: typeof zhCopy;
+    pending: boolean;
+    dragging: boolean;
+    onDragStart: () => void;
+    onDragEnd: () => void;
+    onDrop: () => void;
+    onMove: (direction: -1 | 1) => void;
+    onEdit: () => void;
+    onToggle: (enabled: boolean) => void;
+    onDelete: () => void;
+}>) {
+    const block = entry.block;
+    const translation = block ? preferredBlockTranslation(block, isZh) : null;
+    const label = entry.fixed
+        ? isZh
+            ? entry.descriptor?.labelZh
+            : entry.descriptor?.labelEn
+        : block?.internalName || translation?.title || block?.code;
+    const description = entry.fixed
+        ? isZh
+            ? entry.descriptor?.descriptionZh
+            : entry.descriptor?.descriptionEn
+        : translation?.title ||
+          (isZh ? '可自由配置图文、商品和跳转' : 'Flexible content, products and destinations');
+    const heroWithoutSlides = entry.type === 'HERO' && entry.blocks.length === 0;
+    const displayedEnabled = heroWithoutSlides ? false : entry.enabled;
+    return (
+        <div
+            className={`flex flex-col gap-3 rounded-lg border bg-background p-4 transition-opacity sm:flex-row sm:items-center ${dragging ? 'opacity-50' : ''}`}
+            draggable={!pending}
+            onDragStart={event => {
+                event.dataTransfer.effectAllowed = 'move';
+                onDragStart();
+            }}
+            onDragEnd={onDragEnd}
+            onDragOver={event => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={event => {
+                event.preventDefault();
+                onDrop();
+            }}
+        >
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div
+                    className="mt-2 flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground active:cursor-grabbing"
+                    title={text.dragToSort}
+                    aria-label={text.dragToSort}
+                >
+                    <GripVertical className="size-4" aria-hidden="true" />
+                </div>
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                    {block?.imageUrl ? (
+                        <img className="size-10 rounded-md object-cover" src={block.imageUrl} alt="" />
+                    ) : (
+                        <LayoutTemplate className="size-4" aria-hidden="true" />
+                    )}
+                </div>
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium">{label}</span>
+                        <Badge variant="outline">
+                            {entry.fixed ? text.fixedTemplate : text.customModule}
+                        </Badge>
+                        <Badge variant={displayedEnabled ? 'default' : 'secondary'}>
+                            {displayedEnabled ? text.enabled : text.disabled}
+                        </Badge>
+                        {!entry.blocks.length ? (
+                            <Badge variant="secondary">{text.notConfigured}</Badge>
+                        ) : null}
+                        {(block?.startsAt || block?.endsAt) && (
+                            <Badge variant="outline">{text.scheduled}</Badge>
+                        )}
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+                    {entry.duplicateCount > 0 ? (
+                        <p className="mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                            <TriangleAlert className="size-3.5 shrink-0" aria-hidden="true" />
+                            {text.duplicateWarning}
+                        </p>
+                    ) : null}
+                    {heroWithoutSlides ? (
+                        <p className="mt-1 text-xs text-muted-foreground">{text.heroNeedsSlide}</p>
+                    ) : null}
+                </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 self-end sm:self-auto">
+                <IconButton label={text.moveUp} disabled={pending || index === 0} onClick={() => onMove(-1)}>
+                    <ArrowUp />
+                </IconButton>
+                <IconButton
+                    label={text.moveDown}
+                    disabled={pending || index === count - 1}
+                    onClick={() => onMove(1)}
+                >
+                    <ArrowDown />
+                </IconButton>
+                {entry.descriptor?.settingsPath ? (
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        render={<Link to={entry.descriptor.settingsPath} />}
+                    >
+                        <Settings2 className="size-4" aria-hidden="true" />
+                        {isZh
+                            ? (entry.descriptor.settingsLabelZh ?? text.configure)
+                            : (entry.descriptor.settingsLabelEn ?? text.configure)}
+                    </Button>
+                ) : (
+                    <IconButton label={text.configure} disabled={pending} onClick={onEdit}>
+                        <Pencil />
+                    </IconButton>
+                )}
+                {!entry.fixed ? (
+                    <IconButton label={text.delete} disabled={pending} onClick={onDelete}>
+                        <Trash2 />
+                    </IconButton>
+                ) : null}
+                <Switch
+                    className="ml-2"
+                    checked={heroWithoutSlides ? false : entry.enabled}
+                    disabled={pending || heroWithoutSlides}
+                    aria-label={`${label} ${displayedEnabled ? text.enabled : text.disabled}`}
+                    onCheckedChange={onToggle}
+                />
+            </div>
+        </div>
+    );
+}
+
+function CarouselSlideRow({
+    slide,
     index,
     count,
     isZh,
@@ -640,7 +1362,7 @@ function BlockRow({
     onToggle,
     onDelete,
 }: Readonly<{
-    block: ContentBlock;
+    slide: ContentBlock;
     index: number;
     count: number;
     isZh: boolean;
@@ -651,36 +1373,35 @@ function BlockRow({
     onToggle: () => void;
     onDelete: () => void;
 }>) {
-    const translation = preferredBlockTranslation(block, isZh);
+    const translation = preferredBlockTranslation(slide, isZh);
     return (
         <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                    {block.imageUrl ? (
-                        <img className="size-10 rounded-md object-cover" src={block.imageUrl} alt="" />
+                <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                    {slide.imageUrl ? (
+                        <img className="size-full object-cover" src={slide.imageUrl} alt="" />
                     ) : (
-                        <LayoutTemplate className="size-4" aria-hidden="true" />
+                        <ImageIcon className="size-5" aria-hidden="true" />
                     )}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 py-0.5">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium">
-                            {block.internalName || translation.title || block.code}
+                        <span className="text-sm font-medium">
+                            {text.carouselSlide} {index + 1}
                         </span>
-                        <Badge variant={block.enabled ? 'default' : 'secondary'}>
-                            {block.enabled ? text.enabled : text.disabled}
+                        <Badge variant={slide.enabled ? 'default' : 'secondary'}>
+                            {slide.enabled ? text.enabled : text.disabled}
                         </Badge>
-                        {(block.startsAt || block.endsAt) && (
+                        {(slide.startsAt || slide.endsAt) && (
                             <Badge variant="outline">{text.scheduled}</Badge>
                         )}
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        {translation.title && translation.title !== block.internalName ? (
-                            <span>{translation.title}</span>
-                        ) : null}
-                        <span>{isZh ? blockTypeLabels[block.type].zh : blockTypeLabels[block.type].en}</span>
-                        <span>{isZh ? `${block.items.length} 个条目` : `${block.items.length} items`}</span>
-                    </div>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">
+                        {translation.title || slide.internalName || slide.code}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {translation.subtitle || (isZh ? '暂无副标题' : 'No subtitle')}
+                    </p>
                 </div>
             </div>
             <div className="flex shrink-0 items-center gap-1 self-end sm:self-auto">
@@ -695,11 +1416,11 @@ function BlockRow({
                     <ArrowDown />
                 </IconButton>
                 <IconButton
-                    label={block.enabled ? text.disabled : text.enabled}
+                    label={slide.enabled ? text.disabled : text.enabled}
                     disabled={pending}
                     onClick={onToggle}
                 >
-                    {block.enabled ? <EyeOff /> : <Eye />}
+                    {slide.enabled ? <EyeOff /> : <Eye />}
                 </IconButton>
                 <IconButton label={text.edit} disabled={pending} onClick={onEdit}>
                     <Pencil />
@@ -926,8 +1647,118 @@ function DualCardTemplatePicker({
     );
 }
 
+function HeroThemeSettings({
+    draft,
+    text,
+    onChange,
+}: Readonly<{
+    draft: ContentBlock;
+    text: typeof zhCopy;
+    onChange: (draft: ContentBlock) => void;
+}>) {
+    const settings = draft.settings ?? {};
+    const secondaryTextColor = heroSettingColor(
+        settings.secondaryTextColor,
+        CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
+    );
+    const accentColor = heroSettingColor(settings.accentColor, CLOUD_BRIDGE_HERO_THEME.accentColor);
+    const accentSecondaryColor = heroSettingColor(
+        settings.accentSecondaryColor,
+        CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
+    );
+    const buttonTextColor = heroSettingColor(
+        settings.buttonTextColor,
+        CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+    );
+    const updateSetting = (key: string, value: string | null) =>
+        onChange({ ...draft, settings: { ...settings, [key]: value } });
+    const applyCloudBridgeTheme = () =>
+        onChange({
+            ...draft,
+            backgroundColor: CLOUD_BRIDGE_HERO_THEME.overlayColor,
+            textColor: CLOUD_BRIDGE_HERO_THEME.titleColor,
+            settings: {
+                ...settings,
+                themePreset: 'cloudbridge-bright',
+                fallbackImage: 'cloudbridge-ai-hub',
+                secondaryTextColor: CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
+                accentColor: CLOUD_BRIDGE_HERO_THEME.accentColor,
+                accentSecondaryColor: CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
+                buttonTextColor: CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+            },
+        });
+
+    return (
+        <section className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h3 className="text-sm font-medium">{text.heroTheme}</h3>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{text.heroThemeHint}</p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={applyCloudBridgeTheme}>
+                    <Sparkles className="size-4" aria-hidden="true" />
+                    {text.heroThemePreset}
+                </Button>
+            </div>
+            <div
+                className="h-3 w-full rounded-full border"
+                style={{
+                    background: `linear-gradient(90deg, ${accentColor}, ${accentSecondaryColor})`,
+                }}
+                aria-hidden="true"
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+                <Field label={text.heroOverlayColor}>
+                    <ColorInput
+                        value={draft.backgroundColor}
+                        ariaLabel={text.heroOverlayColor}
+                        onChange={value => onChange({ ...draft, backgroundColor: value })}
+                    />
+                </Field>
+                <Field label={text.heroTitleColor}>
+                    <ColorInput
+                        value={draft.textColor}
+                        ariaLabel={text.heroTitleColor}
+                        onChange={value => onChange({ ...draft, textColor: value })}
+                    />
+                </Field>
+                <Field label={text.heroSecondaryTextColor}>
+                    <ColorInput
+                        value={secondaryTextColor}
+                        ariaLabel={text.heroSecondaryTextColor}
+                        onChange={value => updateSetting('secondaryTextColor', value)}
+                    />
+                </Field>
+                <Field label={text.heroAccentColor}>
+                    <ColorInput
+                        value={accentColor}
+                        ariaLabel={text.heroAccentColor}
+                        onChange={value => updateSetting('accentColor', value)}
+                    />
+                </Field>
+                <Field label={text.heroAccentSecondaryColor}>
+                    <ColorInput
+                        value={accentSecondaryColor}
+                        ariaLabel={text.heroAccentSecondaryColor}
+                        onChange={value => updateSetting('accentSecondaryColor', value)}
+                    />
+                </Field>
+                <Field label={text.heroButtonTextColor}>
+                    <ColorInput
+                        value={buttonTextColor}
+                        ariaLabel={text.heroButtonTextColor}
+                        onChange={value => updateSetting('buttonTextColor', value)}
+                    />
+                </Field>
+            </div>
+        </section>
+    );
+}
+
 function BlockEditor({
     draft,
+    lockedType,
+    fixedTemplate = false,
     isZh,
     text,
     saving,
@@ -936,6 +1767,8 @@ function BlockEditor({
     onSave,
 }: Readonly<{
     draft: ContentBlock | null;
+    lockedType?: ContentBlockType;
+    fixedTemplate?: boolean;
     isZh: boolean;
     text: typeof zhCopy;
     saving: boolean;
@@ -972,30 +1805,42 @@ function BlockEditor({
                 <DialogHeader className="shrink-0 border-b px-6 py-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                            <DialogTitle>{draft.id ? text.updateTitle : text.createTitle}</DialogTitle>
+                            <DialogTitle>
+                                {lockedType === 'HERO'
+                                    ? draft.id
+                                        ? text.updateCarouselSlideTitle
+                                        : text.createCarouselSlideTitle
+                                    : draft.id
+                                      ? text.updateTitle
+                                      : text.createTitle}
+                            </DialogTitle>
                             <DialogDescription className="mt-1">{text.editorDescription}</DialogDescription>
                         </div>
-                        <div
-                            className="flex shrink-0 rounded-md border bg-muted/30 p-1"
-                            aria-label={text.simpleModeHint}
-                        >
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={advancedMode ? 'ghost' : 'secondary'}
-                                onClick={() => setAdvancedMode(false)}
+                        {!fixedTemplate ? (
+                            <div
+                                className="flex shrink-0 rounded-md border bg-muted/30 p-1"
+                                aria-label={text.simpleModeHint}
                             >
-                                {text.simpleMode}
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant={advancedMode ? 'secondary' : 'ghost'}
-                                onClick={() => setAdvancedMode(true)}
-                            >
-                                {text.advancedMode}
-                            </Button>
-                        </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={advancedMode ? 'ghost' : 'secondary'}
+                                    onClick={() => setAdvancedMode(false)}
+                                >
+                                    {text.simpleMode}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={advancedMode ? 'secondary' : 'ghost'}
+                                    onClick={() => setAdvancedMode(true)}
+                                >
+                                    {text.advancedMode}
+                                </Button>
+                            </div>
+                        ) : (
+                            <Badge variant="outline">{text.fixedTemplate}</Badge>
+                        )}
                     </div>
                     <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
                 </DialogHeader>
@@ -1004,45 +1849,51 @@ function BlockEditor({
                         <section className="space-y-4">
                             <h3 className="text-sm font-medium">{text.basic}</h3>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <Field label={text.internalName} hint={text.internalNameHint}>
-                                    <Input
-                                        value={draft.internalName}
-                                        onChange={event => update('internalName', event.target.value)}
-                                    />
-                                </Field>
-                                <Field label={text.type}>
-                                    <Select
-                                        value={draft.type}
-                                        onValueChange={value => {
-                                            if (!value) return;
-                                            const type = value;
-                                            const nextDraft = {
-                                                ...draft,
-                                                type,
-                                                layoutVariant: defaultLayoutForType(type),
-                                            };
-                                            onChange(
-                                                type === 'CORE_CATEGORIES'
-                                                    ? applyCoreCategoryDefaults(nextDraft)
-                                                    : nextDraft,
-                                            );
-                                            if (type === 'CUSTOM') setAdvancedMode(true);
-                                        }}
-                                    >
-                                        <SelectTrigger className="w-full min-w-0">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {blockTypes.map(type => (
-                                                <SelectItem key={type} value={type}>
-                                                    {isZh
-                                                        ? blockTypeLabels[type].zh
-                                                        : blockTypeLabels[type].en}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </Field>
+                                {!fixedTemplate ? (
+                                    <Field label={text.internalName} hint={text.internalNameHint}>
+                                        <Input
+                                            value={draft.internalName}
+                                            onChange={event => update('internalName', event.target.value)}
+                                        />
+                                    </Field>
+                                ) : null}
+                                {!lockedType ? (
+                                    <Field label={text.type}>
+                                        <Select
+                                            value={draft.type}
+                                            onValueChange={value => {
+                                                if (!value) return;
+                                                const type = value;
+                                                const nextDraft = {
+                                                    ...draft,
+                                                    type,
+                                                    layoutVariant: defaultLayoutForType(type),
+                                                };
+                                                onChange(
+                                                    type === 'CORE_CATEGORIES'
+                                                        ? applyCoreCategoryDefaults(nextDraft)
+                                                        : nextDraft,
+                                                );
+                                                if (type === 'CUSTOM') setAdvancedMode(true);
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {blockTypes
+                                                    .filter(type => type !== 'HERO')
+                                                    .map(type => (
+                                                        <SelectItem key={type} value={type}>
+                                                            {isZh
+                                                                ? blockTypeLabels[type].zh
+                                                                : blockTypeLabels[type].en}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                ) : null}
                                 {advancedMode ? (
                                     <Field label={text.code} hint={text.codeHint}>
                                         <Input
@@ -1065,19 +1916,21 @@ function BlockEditor({
                                         />
                                     </Field>
                                 ) : null}
-                                <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
-                                    <div className="min-w-0">
-                                        <Label>{text.status}</Label>
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            {text.statusHint}
-                                        </p>
+                                {!fixedTemplate ? (
+                                    <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+                                        <div className="min-w-0">
+                                            <Label>{text.status}</Label>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {text.statusHint}
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            className="shrink-0"
+                                            checked={draft.enabled}
+                                            onCheckedChange={value => update('enabled', value)}
+                                        />
                                     </div>
-                                    <Switch
-                                        className="shrink-0"
-                                        checked={draft.enabled}
-                                        onCheckedChange={value => update('enabled', value)}
-                                    />
-                                </div>
+                                ) : null}
                                 {advancedMode ? (
                                     <>
                                         <Field label={text.startsAt}>
@@ -1106,6 +1959,7 @@ function BlockEditor({
                                         label={text.imageAsset}
                                         asset={draft.imageAsset}
                                         fallbackUrl={draft.imageUrl}
+                                        imageGuidance={blockImageGuidance(draft.type)}
                                         text={text}
                                         onChange={asset =>
                                             onChange({
@@ -1136,8 +1990,9 @@ function BlockEditor({
                                                     })
                                                 }
                                             />
+                                            <ImageSizeHint guidance={blockImageGuidance(draft.type)} />
                                         </Field>
-                                        {draft.type !== 'CORE_CATEGORIES' ? (
+                                        {draft.type !== 'CORE_CATEGORIES' && draft.type !== 'HERO' ? (
                                             <>
                                                 <Field label={text.backgroundColor}>
                                                     <ColorInput
@@ -1155,6 +2010,12 @@ function BlockEditor({
                                                 </Field>
                                             </>
                                         ) : null}
+                                    </>
+                                ) : null}
+                                {advancedMode ||
+                                lockedType === 'HERO' ||
+                                simpleBlockNeedsTarget(draft.type) ? (
+                                    <>
                                         <Field label={text.targetType}>
                                             <TargetSelect
                                                 value={draft.targetType}
@@ -1182,6 +2043,13 @@ function BlockEditor({
                                 ) : null}
                             </div>
                         </section>
+
+                        {draft.type === 'HERO' ? (
+                            <>
+                                <Separator />
+                                <HeroThemeSettings draft={draft} text={text} onChange={onChange} />
+                            </>
+                        ) : null}
 
                         {(!advancedMode || draft.type === 'CORE_CATEGORIES') &&
                         simpleModuleHasSettings(draft.type) ? (
@@ -1324,77 +2192,95 @@ function BlockEditor({
                             <div
                                 className="relative min-h-[420px] overflow-hidden p-4"
                                 style={{
-                                    backgroundColor: draft.backgroundColor || '#ffffff',
-                                    color: draft.textColor || '#111827',
+                                    backgroundColor:
+                                        draft.type === 'HERO'
+                                            ? '#f8fafc'
+                                            : draft.backgroundColor || '#ffffff',
+                                    color: draft.type === 'HERO' ? '#111827' : draft.textColor || '#111827',
                                 }}
                             >
-                                {previewUsesBlockImage(draft.type) ? (
-                                    draft.imageUrl ? (
-                                        <img
-                                            className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
-                                            src={draft.imageUrl}
-                                            alt=""
-                                        />
-                                    ) : (
-                                        <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
-                                            <ImageIcon className="size-5 opacity-50" aria-hidden="true" />
-                                        </div>
-                                    )
-                                ) : null}
-                                {previewTranslation?.title ? (
+                                {draft.type === 'HERO' ? (
+                                    <HeroEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
+                                ) : (
                                     <>
-                                        <h4 className="text-lg font-semibold">{previewTranslation.title}</h4>
-                                        {previewTranslation.subtitle && (
-                                            <p className="mt-1 text-sm opacity-75">
-                                                {previewTranslation.subtitle}
-                                            </p>
-                                        )}
-                                        {previewTranslation.body && (
-                                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-                                                {previewTranslation.body}
-                                            </p>
-                                        )}
-                                        {previewTranslation.ctaLabel && (
-                                            <div className="mt-4 inline-flex min-h-9 items-center border border-current px-3 text-sm font-medium">
-                                                {previewTranslation.ctaLabel}
-                                            </div>
-                                        )}
-                                        {draft.items.length > 0 && (
-                                            <div className="mt-5 grid grid-cols-2 gap-2">
-                                                {draft.items.slice(0, 4).map((item, index) => {
-                                                    const itemTranslation = preferredItemTranslation(
-                                                        item,
-                                                        isZh,
-                                                    );
-                                                    return (
-                                                        <div
-                                                            key={item.id ?? index}
-                                                            className="border border-current/15 p-2"
-                                                        >
-                                                            {item.imageUrl ? (
-                                                                <img
-                                                                    className="mb-2 aspect-square w-full rounded object-cover"
-                                                                    src={item.imageUrl}
-                                                                    alt=""
-                                                                />
-                                                            ) : null}
-                                                            <div className="text-xs font-medium">
-                                                                {itemTranslation.label ||
-                                                                    `${text.item} ${index + 1}`}
-                                                            </div>
-                                                            <div className="mt-1 line-clamp-2 text-[11px] opacity-65">
-                                                                {itemTranslation.description}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                        {previewUsesBlockImage(draft.type) ? (
+                                            draft.imageUrl ? (
+                                                <img
+                                                    className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
+                                                    src={draft.imageUrl}
+                                                    alt=""
+                                                />
+                                            ) : (
+                                                <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
+                                                    <ImageIcon
+                                                        className="size-5 opacity-50"
+                                                        aria-hidden="true"
+                                                    />
+                                                </div>
+                                            )
+                                        ) : null}
+                                        {previewTranslation?.title ? (
+                                            <>
+                                                <h4 className="text-lg font-semibold">
+                                                    {previewTranslation.title}
+                                                </h4>
+                                                {previewTranslation.subtitle && (
+                                                    <p className="mt-1 text-sm opacity-75">
+                                                        {previewTranslation.subtitle}
+                                                    </p>
+                                                )}
+                                                {previewTranslation.body && (
+                                                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+                                                        {previewTranslation.body}
+                                                    </p>
+                                                )}
+                                                {previewTranslation.ctaLabel && (
+                                                    <div className="mt-4 inline-flex min-h-9 items-center border border-current px-3 text-sm font-medium">
+                                                        {previewTranslation.ctaLabel}
+                                                    </div>
+                                                )}
+                                                {draft.items.length > 0 && (
+                                                    <div className="mt-5 grid grid-cols-2 gap-2">
+                                                        {draft.items.slice(0, 4).map((item, index) => {
+                                                            const itemTranslation = preferredItemTranslation(
+                                                                item,
+                                                                isZh,
+                                                            );
+                                                            return (
+                                                                <div
+                                                                    key={item.id ?? index}
+                                                                    className="border border-current/15 p-2"
+                                                                >
+                                                                    {item.imageUrl ? (
+                                                                        <img
+                                                                            className="mb-2 aspect-square w-full rounded object-cover"
+                                                                            src={item.imageUrl}
+                                                                            alt=""
+                                                                        />
+                                                                    ) : null}
+                                                                    <div className="text-xs font-medium">
+                                                                        {itemTranslation.label ||
+                                                                            `${text.item} ${index + 1}`}
+                                                                    </div>
+                                                                    <div className="mt-1 line-clamp-2 text-[11px] opacity-65">
+                                                                        {itemTranslation.description}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="flex min-h-44 items-center justify-center text-center text-sm opacity-60">
+                                                {text.previewEmpty}
                                             </div>
                                         )}
                                     </>
-                                ) : (
-                                    <div className="flex min-h-44 items-center justify-center text-center text-sm opacity-60">
-                                        {text.previewEmpty}
-                                    </div>
                                 )}
                             </div>
                         </div>
@@ -1410,6 +2296,122 @@ function BlockEditor({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function HeroEditorPreview({
+    draft,
+    translation,
+    isZh,
+}: Readonly<{
+    draft: ContentBlock;
+    translation: ContentBlockTranslation | null;
+    isZh: boolean;
+}>) {
+    const settings = draft.settings ?? {};
+    const overlayColor = heroSettingColor(draft.backgroundColor, CLOUD_BRIDGE_HERO_THEME.overlayColor);
+    const titleColor = heroSettingColor(draft.textColor, CLOUD_BRIDGE_HERO_THEME.titleColor);
+    const bodyColor = heroSettingColor(
+        settings.secondaryTextColor,
+        CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
+    );
+    const accentColor = heroSettingColor(settings.accentColor, CLOUD_BRIDGE_HERO_THEME.accentColor);
+    const accentSecondaryColor = heroSettingColor(
+        settings.accentSecondaryColor,
+        CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
+    );
+    const buttonTextColor = heroSettingColor(
+        settings.buttonTextColor,
+        CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+    );
+    const imageBackground = draft.imageUrl
+        ? `url("${draft.imageUrl.replace(/"/g, '%22')}") center / cover no-repeat`
+        : 'linear-gradient(135deg, #f4fbff 0%, #67e8f9 43%, #818cf8 72%, #c084fc 100%)';
+    const overlayStrong = heroColorWithAlpha(overlayColor, 0.92);
+    const overlayMedium = heroColorWithAlpha(overlayColor, 0.76);
+
+    return (
+        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
+            <div className="relative aspect-[16/9] overflow-hidden" style={{ background: imageBackground }}>
+                {!draft.imageUrl ? (
+                    <div
+                        className="absolute right-4 top-1/2 size-20 -translate-y-1/2 rounded-full border-[10px] shadow-[0_0_28px_rgba(255,255,255,0.9)]"
+                        style={{
+                            borderColor: heroColorWithAlpha(accentColor, 0.7),
+                            backgroundColor: heroColorWithAlpha('#ffffff', 0.45),
+                        }}
+                        aria-hidden="true"
+                    />
+                ) : null}
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        background: `linear-gradient(90deg, ${overlayStrong} 0%, ${overlayMedium} 48%, transparent 100%)`,
+                    }}
+                />
+                <div className="absolute inset-0 flex w-[68%] flex-col justify-between p-3">
+                    <span
+                        className="self-start rounded-full border px-2 py-0.5 text-[7px] font-semibold"
+                        style={{
+                            borderColor: heroColorWithAlpha(accentColor, 0.55),
+                            backgroundColor: heroColorWithAlpha(accentColor, 0.18),
+                            color: accentColor,
+                        }}
+                    >
+                        {translation?.subtitle || (isZh ? '轮播副标题' : 'Carousel subtitle')}
+                    </span>
+                    <div>
+                        <h4 className="text-[14px] font-black leading-tight" style={{ color: titleColor }}>
+                            {translation?.title || (isZh ? '轮播标题' : 'Carousel title')}
+                        </h4>
+                        {translation?.body ? (
+                            <p
+                                className="mt-1 line-clamp-2 text-[8px] leading-3"
+                                style={{ color: bodyColor }}
+                            >
+                                {translation.body}
+                            </p>
+                        ) : null}
+                    </div>
+                    {draft.items.length ? (
+                        <div className="flex gap-1">
+                            {draft.items.slice(0, 3).map((item, index) => {
+                                const itemTranslation = preferredItemTranslation(item, isZh);
+                                return (
+                                    <span
+                                        key={item.id ?? index}
+                                        className="rounded border px-1.5 py-0.5 text-[6px]"
+                                        style={{
+                                            borderColor: heroColorWithAlpha(accentColor, 0.35),
+                                            backgroundColor: heroColorWithAlpha(overlayColor, 0.58),
+                                            color: bodyColor,
+                                        }}
+                                    >
+                                        {itemTranslation.label}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    ) : null}
+                    {translation?.ctaLabel ? (
+                        <span
+                            className="self-start rounded-md px-2 py-1 text-[7px] font-bold"
+                            style={{
+                                background: `linear-gradient(135deg, ${accentColor}, ${accentSecondaryColor})`,
+                                color: buttonTextColor,
+                            }}
+                        >
+                            {translation.ctaLabel}
+                        </span>
+                    ) : null}
+                </div>
+            </div>
+            <p className="px-3 py-2 text-[10px] leading-4 text-muted-foreground">
+                {isZh
+                    ? '预览展示网页文字与配色；轮播图片本身不包含文字。'
+                    : 'Preview of HTML copy and colors; the image itself remains text-free.'}
+            </p>
+        </div>
     );
 }
 
@@ -1480,6 +2482,7 @@ function ItemEditor({
                         label={text.imageAsset}
                         asset={item.imageAsset}
                         fallbackUrl={item.imageUrl}
+                        imageGuidance={itemImageGuidance(blockType)}
                         text={text}
                         onChange={asset =>
                             onChange({
@@ -1598,6 +2601,7 @@ function AssetSelectionField({
     className,
     asset,
     fallbackUrl,
+    imageGuidance,
     text,
     onChange,
 }: Readonly<{
@@ -1605,6 +2609,7 @@ function AssetSelectionField({
     className?: string;
     asset: ContentBlock['imageAsset'];
     fallbackUrl: string | null;
+    imageGuidance: ContentImageGuidance;
     text: typeof zhCopy;
     onChange: (asset: NonNullable<ContentBlock['imageAsset']> | null) => void;
 }>) {
@@ -1636,12 +2641,14 @@ function AssetSelectionField({
                     </div>
                 </div>
             </div>
+            <ImageSizeHint guidance={imageGuidance} />
             <AssetPickerDialog
                 open={open}
                 onClose={() => setOpen(false)}
                 onSelect={assets => onChange(assets[0] ?? null)}
                 initialSelectedAssets={asset ? [asset] : []}
                 title={text.selectImage}
+                imageGuidance={imageGuidance}
             />
         </Field>
     );
@@ -1686,6 +2693,18 @@ function ColorInput({
     );
 }
 
+function heroSettingColor(value: unknown, fallback: string): string {
+    return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
+}
+
+function heroColorWithAlpha(color: string, alpha: number): string {
+    const normalized = heroSettingColor(color, '#000000').slice(1);
+    const red = Number.parseInt(normalized.slice(0, 2), 16);
+    const green = Number.parseInt(normalized.slice(2, 4), 16);
+    const blue = Number.parseInt(normalized.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 function TargetSelect({
     value,
     isZh,
@@ -1727,13 +2746,19 @@ function simpleTextFieldsForType(type: ContentBlockType): {
 } {
     return {
         subtitle: ['HERO', 'CATEGORY_AD', 'STORY'].includes(type),
-        body: ['NOTICE', 'STORY', 'LEGAL', 'SUPPORT'].includes(type),
+        body: ['HERO', 'NOTICE', 'STORY', 'LEGAL', 'SUPPORT'].includes(type),
         cta: ['HERO', 'CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY'].includes(type),
     };
 }
 
 function simpleItemNeedsTarget(type: ContentBlockType): boolean {
-    return ['HERO', 'QUICK_LINKS', 'CATEGORY_AD', 'CORE_CATEGORIES', 'COUPONS', 'CUSTOM'].includes(type);
+    return ['HERO', 'QUICK_LINKS', 'CATEGORY_AD', 'CORE_CATEGORIES', 'COUPONS', 'SUPPORT', 'CUSTOM'].includes(
+        type,
+    );
+}
+
+function simpleBlockNeedsTarget(type: ContentBlockType): boolean {
+    return ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY'].includes(type);
 }
 
 function simpleItemUsesImage(type: ContentBlockType): boolean {
@@ -1777,6 +2802,14 @@ function previewUsesBlockImage(type: ContentBlockType): boolean {
     return ['HERO', 'CATEGORY_AD', 'STORY', 'CUSTOM'].includes(type);
 }
 
+function blockImageGuidance(type: ContentBlockType): ContentImageGuidance {
+    return type === 'HERO' ? 'hero' : 'banner';
+}
+
+function itemImageGuidance(type: ContentBlockType): ContentImageGuidance {
+    return ['QUICK_LINKS', 'TRUST_BAR'].includes(type) ? 'icon' : 'contentCard';
+}
+
 function stringArraySetting(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
@@ -1793,12 +2826,12 @@ function numberSetting(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function newBlock(position: number): ContentBlock {
+function newBlock(position: number, type: ContentBlockType = 'CUSTOM'): ContentBlock {
     return {
         code: `home-block-${Date.now().toString(36)}-${position}`,
-        internalName: `首页模块 ${position + 1}`,
-        type: 'HERO',
-        layoutVariant: 'HERO_OVERLAY',
+        internalName: type === 'CUSTOM' ? `高级自定义模块 ${position + 1}` : `首页模块 ${position + 1}`,
+        type,
+        layoutVariant: defaultLayoutForType(type),
         enabled: true,
         position,
         startsAt: null,
@@ -1816,13 +2849,89 @@ function newBlock(position: number): ContentBlock {
     };
 }
 
-function newCoreCategoriesBlock(position: number): ContentBlock {
-    return applyCoreCategoryDefaults({
-        ...newBlock(position),
-        type: 'CORE_CATEGORIES',
-        layoutVariant: 'CARD_GRID',
-        internalName: '首页核心品类双卡片',
+function fixedModuleDraft(type: FixedHomepageModuleType, position: number): ContentBlock {
+    const descriptor = homepageModuleRegistry.find(module => module.type === type);
+    if (!descriptor) throw new Error(`Unknown fixed homepage module: ${type}`);
+
+    const block: ContentBlock = {
+        ...newBlock(position, type),
+        code: `home-fixed-${type.toLowerCase().replace(/_/g, '-')}`,
+        internalName: descriptor.labelZh,
+        enabled: descriptor.defaultEnabled,
+        translations: [
+            { ...emptyBlockTranslation('zh_Hans'), title: descriptor.labelZh },
+            { ...emptyBlockTranslation('en'), title: descriptor.labelEn },
+        ],
+    };
+    return type === 'CORE_CATEGORIES' ? applyCoreCategoryDefaults(block) : block;
+}
+
+function globalContentDraft(type: GlobalContentType, position: number): ContentBlock {
+    const descriptor = globalContentModules.find(module => module.type === type);
+    if (!descriptor) throw new Error(`Unknown global content module: ${type}`);
+    return {
+        ...newBlock(position, type),
+        code: `storefront-${type.toLowerCase()}`,
+        internalName: descriptor.labelZh,
+        translations: [
+            { ...emptyBlockTranslation('zh_Hans'), title: descriptor.labelZh },
+            { ...emptyBlockTranslation('en'), title: descriptor.labelEn },
+        ],
+    };
+}
+
+function newHeroBlock(position: number, slideNumber: number): ContentBlock {
+    const heroStat = (
+        statPosition: number,
+        labelZh: string,
+        descriptionZh: string,
+        labelEn: string,
+        descriptionEn: string,
+    ): ContentItem => ({
+        ...newItem(statPosition, 'HERO'),
+        translations: [
+            { languageCode: 'zh_Hans', label: labelZh, description: descriptionZh },
+            { languageCode: 'en', label: labelEn, description: descriptionEn },
+        ],
     });
+
+    return {
+        ...newBlock(position, 'HERO'),
+        internalName: `首页轮播图 ${slideNumber}`,
+        backgroundColor: CLOUD_BRIDGE_HERO_THEME.overlayColor,
+        textColor: CLOUD_BRIDGE_HERO_THEME.titleColor,
+        targetType: 'URL',
+        targetValue: CLOUD_BRIDGE_TARGET_URL,
+        settings: {
+            themePreset: 'cloudbridge-bright',
+            fallbackImage: 'cloudbridge-ai-hub',
+            secondaryTextColor: CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
+            accentColor: CLOUD_BRIDGE_HERO_THEME.accentColor,
+            accentSecondaryColor: CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
+            buttonTextColor: CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+        },
+        translations: [
+            {
+                languageCode: 'zh_Hans',
+                title: '模型很多，入口只要一个',
+                subtitle: 'AI API 智能中转',
+                body: '统一接入多种 AI 能力，灵活路由、按需切换，让每一次调用更简单。',
+                ctaLabel: '开启云桥通道',
+            },
+            {
+                languageCode: 'en',
+                title: 'Many models. One gateway.',
+                subtitle: 'Intelligent AI API Relay',
+                body: 'Connect diverse AI capabilities through one flexible gateway and route every request with ease.',
+                ctaLabel: 'Open the gateway',
+            },
+        ],
+        items: [
+            heroStat(0, '统一', '多模型接入', 'Unified', 'Multi-model access'),
+            heroStat(1, '灵活', '按需切换', 'Flexible', 'Route on demand'),
+            heroStat(2, '快速', '开发调用', 'Ready', 'Developer friendly'),
+        ],
+    };
 }
 
 function newItem(position: number, blockType?: ContentBlockType): ContentItem {

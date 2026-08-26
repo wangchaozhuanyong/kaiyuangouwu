@@ -18,6 +18,12 @@ export class ContentTranslationAdminResolver {
         return this.service.audit(ctx, args.channelId);
     }
 
+    @Query()
+    @Allow(Permission.Authenticated)
+    contentTranslationStaleCount(@Ctx() ctx: RequestContext) {
+        return this.service.countStale(ctx);
+    }
+
     @Mutation()
     @Allow(Permission.SuperAdmin)
     async translateCustomerContent(@Args() args: { segments: ContentTranslationSegment[] }) {

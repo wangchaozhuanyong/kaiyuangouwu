@@ -1,6 +1,7 @@
-import { Country, Product, Province } from '@vendure/core';
+import { Country, Product, ProductVariant, Province } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { contentTranslationInternals } from './content-translation.service.js';
 import {
     NativeContentTranslationService,
     nativeContentTranslationInternals,
@@ -33,6 +34,65 @@ describe('native content translation event routing', () => {
     it('covers customer-visible country and province names', () => {
         expect(nativeContentTranslationInternals.supportsEntityType(Country)).toBe(true);
         expect(nativeContentTranslationInternals.supportsEntityType(Province)).toBe(true);
+    });
+
+    it('allows Simplified Chinese source content when the optional translation provider is absent', async () => {
+        const source = {
+            languageCode: 'zh_Hans',
+            name: '测试商品',
+            slug: 'ce-shi-shang-pin',
+            description: '<p>商品详情</p>',
+        };
+        const repository = {
+            createQueryBuilder: vi.fn(() => {
+                let languageCode = '';
+                const builder = {
+                    leftJoinAndSelect: vi.fn(() => builder),
+                    where: vi.fn(() => builder),
+                    andWhere: vi.fn((_query: string, parameters: { languageCode: string }) => {
+                        languageCode = parameters.languageCode;
+                        return builder;
+                    }),
+                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : null)),
+                };
+                return builder;
+            }),
+            create: vi.fn((value: any) => value),
+            save: vi.fn(async (value: any) => value),
+        };
+        const connection = {
+            rawConnection: {
+                getMetadata: vi.fn(() => ({
+                    relations: [
+                        {
+                            propertyName: 'translations',
+                            inverseEntityMetadata: { target: class ProductTranslation {} },
+                        },
+                    ],
+                })),
+            },
+            getRepository: vi.fn(() => repository),
+        };
+        const translations = {
+            findStates: vi.fn(async () => []),
+            isConfigured: vi.fn(() => false),
+            translate: vi.fn(),
+        };
+        const service = new NativeContentTranslationService(
+            {} as any,
+            connection as any,
+            translations as any,
+        );
+
+        await expect(
+            service.translateEntity({ channelId: 'channel-1' } as any, new Product({ id: 'product-1' }), {
+                translations: [source],
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(translations.translate).not.toHaveBeenCalled();
+        expect(repository.create).not.toHaveBeenCalled();
+        expect(repository.save).not.toHaveBeenCalled();
     });
 
     it('regenerates a required English translation when a submitted target was cleared', async () => {
@@ -195,6 +255,108 @@ describe('native content translation event routing', () => {
         expect(translations.recordState).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({ status: 'AUTO_TRANSLATED', locked: false }),
+        );
+    });
+
+    it('keeps manually edited English content and marks it stale when Chinese changes', async () => {
+        const source = {
+            languageCode: 'zh_Hans',
+            name: '新商品名称',
+        };
+        const target = {
+            languageCode: 'en',
+            name: 'Reviewed product name',
+        };
+        const repository = {
+            createQueryBuilder: vi.fn(() => {
+                let languageCode = '';
+                const builder = {
+                    leftJoinAndSelect: vi.fn(() => builder),
+                    where: vi.fn(() => builder),
+                    andWhere: vi.fn((_query: string, parameters: { languageCode: string }) => {
+                        languageCode = parameters.languageCode;
+                        return builder;
+                    }),
+                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                };
+                return builder;
+            }),
+            save: vi.fn(async (value: any) => value),
+        };
+        const connection = {
+            rawConnection: {
+                getMetadata: vi.fn(() => ({
+                    relations: [
+                        {
+                            propertyName: 'translations',
+                            inverseEntityMetadata: { target: class ProductVariantTranslation {} },
+                        },
+                    ],
+                })),
+            },
+            getRepository: vi.fn(() => repository),
+        };
+        const translations = {
+            findStates: vi
+                .fn()
+                .mockResolvedValueOnce([
+                    {
+                        fieldPath: 'name',
+                        sourceHash: contentTranslationInternals.hash('旧商品名称'),
+                        translatedHash: contentTranslationInternals.hash(target.name),
+                        status: 'MANUAL_LOCKED',
+                        locked: true,
+                    },
+                ])
+                .mockResolvedValueOnce([
+                    {
+                        fieldPath: 'name',
+                        sourceHash: contentTranslationInternals.hash(source.name),
+                        translatedHash: contentTranslationInternals.hash(target.name),
+                        status: 'STALE',
+                        locked: true,
+                    },
+                ]),
+            isConfigured: vi.fn(() => true),
+            providerName: vi.fn(() => 'test'),
+            translate: vi.fn(),
+            recordState: vi.fn(async () => undefined),
+        };
+        const service = new NativeContentTranslationService(
+            {} as any,
+            connection as any,
+            translations as any,
+        );
+        const entity = new ProductVariant({ id: 'variant-1' });
+        const ctx = { channelId: 'channel-1' } as any;
+
+        await expect(
+            service.translateEntity(ctx, entity, { translations: [source] }),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.translateEntity(ctx, entity, { translations: [source] }),
+        ).resolves.toBeUndefined();
+
+        expect(translations.translate).not.toHaveBeenCalled();
+        expect(repository.save).toHaveBeenCalledTimes(2);
+        expect(repository.save).toHaveBeenLastCalledWith(target, { reload: false });
+        expect(translations.recordState).toHaveBeenCalledTimes(2);
+        expect(translations.recordState).toHaveBeenNthCalledWith(
+            1,
+            ctx,
+            expect.objectContaining({
+                fieldPath: 'name',
+                sourceText: source.name,
+                translatedText: target.name,
+                status: 'STALE',
+                origin: 'MANUAL',
+                locked: true,
+            }),
+        );
+        expect(translations.recordState).toHaveBeenNthCalledWith(
+            2,
+            ctx,
+            expect.objectContaining({ status: 'STALE', locked: true }),
         );
     });
 

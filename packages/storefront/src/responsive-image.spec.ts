@@ -8,14 +8,14 @@ describe('responsiveImageSources', () => {
 
         expect(sources).toMatchObject({
             width: 640,
-            height: 560,
+            height: 640,
             sizes: '(min-width: 900px) 300px, calc(50vw - 14px)',
         });
-        expect(sources?.webpSrcSet).toContain('preset=storefront-card-320');
+        expect(sources?.webpSrcSet).toContain('preset=storefront-card-square-320');
         expect(sources?.webpSrcSet).toContain('format=webp');
         expect(sources?.fallbackSrcSet).toBe(sources?.webpSrcSet);
         expect(sources?.fallbackSrc).toContain('token=public');
-        expect(sources?.fallbackSrc).toContain('preset=storefront-card-640');
+        expect(sources?.fallbackSrc).toContain('preset=storefront-card-square-640');
         expect(JSON.stringify(sources)).not.toContain('format=avif');
         expect(JSON.stringify(sources)).not.toContain('format=jpg');
     });

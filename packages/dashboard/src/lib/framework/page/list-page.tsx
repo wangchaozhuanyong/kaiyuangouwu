@@ -340,6 +340,8 @@ export interface ListPageProps<
      * When true, disables the view options (column visibility) control in the table toolbar.
      */
     disableViewOptions?: boolean;
+    /** Keeps only search and refresh controls in the table toolbar. */
+    simpleToolbar?: boolean;
     /**
      * @description
      * When false, the row selection checkbox column will not be included.
@@ -528,6 +530,7 @@ export function ListPage<
     transformData,
     transformQueryKey,
     disableViewOptions,
+    simpleToolbar,
     includeSelectionColumn,
     setTableOptions,
     bulkActions,
@@ -631,6 +634,7 @@ export function ListPage<
         transformData,
         transformQueryKey,
         disableViewOptions,
+        simpleToolbar,
         includeSelectionColumn,
         registerRefresher,
     };

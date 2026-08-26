@@ -26,7 +26,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Trans } from '@lingui/react/macro';
 import { EllipsisIcon, ImageIcon, PaperclipIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { AssetPickerDialog } from './asset/asset-picker-dialog.js';
+import type { ImageSizeGuidance } from './asset/asset-picker-dialog.js';
+import { AssetPickerDialog, ImageSizeHint } from './asset/asset-picker-dialog.js';
 import { AssetPreviewDialog } from './asset/asset-preview-dialog.js';
 import { VendureImage } from './vendure-image.js';
 
@@ -44,6 +45,7 @@ interface EntityAssetsProps {
     updatePermissions?: boolean;
     multiSelect?: boolean;
     value?: EntityAssetValue;
+    imageGuidance?: ImageSizeGuidance;
     onBlur?: () => void;
     onChange?: (change: EntityAssetValue) => void;
 }
@@ -174,6 +176,7 @@ export function EntityAssets({
     compact = false,
     updatePermissions = true,
     multiSelect = true,
+    imageGuidance = 'assetLibrary',
     onChange,
 }: EntityAssetsProps) {
     const [assets, setAssets] = useState<Asset[]>([...initialAssets]);
@@ -299,6 +302,7 @@ export function EntityAssets({
         <>
             {compact ? (
                 <div className="flex flex-col gap-3">
+                    <ImageSizeHint guidance={imageGuidance} />
                     <FeaturedAsset
                         featuredAsset={featuredAsset}
                         compact={compact}
@@ -319,26 +323,29 @@ export function EntityAssets({
                     <AddAssetButton />
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-[256px_1fr] gap-4">
-                    <FeaturedAsset
-                        featuredAsset={featuredAsset}
-                        compact={compact}
-                        onSelectAssets={handleSelectAssets}
-                        onPreviewAsset={setPreviewAsset}
-                    />
-                    <div className="flex flex-col gap-4">
-                        <AssetList
-                            assets={assets}
+                <div className="flex flex-col gap-3">
+                    <ImageSizeHint guidance={imageGuidance} />
+                    <div className="grid grid-cols-1 md:grid-cols-[256px_1fr] gap-4">
+                        <FeaturedAsset
+                            featuredAsset={featuredAsset}
                             compact={compact}
-                            sensors={sensors}
-                            updatePermissions={updatePermissions}
-                            isFeatured={isFeatured}
-                            onPreview={setPreviewAsset}
-                            onSetAsFeatured={handleSetAsFeatured}
-                            onRemove={handleRemoveAsset}
-                            onDragEnd={handleDragEnd}
+                            onSelectAssets={handleSelectAssets}
+                            onPreviewAsset={setPreviewAsset}
                         />
-                        <AddAssetButton />
+                        <div className="flex flex-col gap-4">
+                            <AssetList
+                                assets={assets}
+                                compact={compact}
+                                sensors={sensors}
+                                updatePermissions={updatePermissions}
+                                isFeatured={isFeatured}
+                                onPreview={setPreviewAsset}
+                                onSetAsFeatured={handleSetAsFeatured}
+                                onRemove={handleRemoveAsset}
+                                onDragEnd={handleDragEnd}
+                            />
+                            <AddAssetButton />
+                        </div>
                     </div>
                 </div>
             )}
@@ -350,6 +357,7 @@ export function EntityAssets({
                     onSelect={handleAssetsPicked}
                     onClose={() => setIsPickerOpen(false)}
                     open={isPickerOpen}
+                    imageGuidance={imageGuidance}
                 />
             )}
 

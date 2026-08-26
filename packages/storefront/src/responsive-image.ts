@@ -24,10 +24,10 @@ export interface ResponsiveImageSources {
 const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
     card: {
         width: 640,
-        height: 560,
+        height: 640,
         presets: [
-            { name: 'storefront-card-320', width: 320 },
-            { name: 'storefront-card-640', width: 640 },
+            { name: 'storefront-card-square-320', width: 320 },
+            { name: 'storefront-card-square-640', width: 640 },
         ],
         sizes: '(min-width: 900px) 300px, calc(50vw - 14px)',
     },

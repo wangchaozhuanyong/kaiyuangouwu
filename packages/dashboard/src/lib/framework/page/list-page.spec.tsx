@@ -40,7 +40,7 @@ describe('ListPage prop forwarding', () => {
         captured.props = undefined;
     });
 
-    it('forwards transformQueryKey, disableViewOptions and includeSelectionColumn to PaginatedListDataTable', () => {
+    it('forwards table presentation options to PaginatedListDataTable', () => {
         const transformQueryKey = (queryKey: any[]) => [...queryKey, 'extra'];
 
         renderToStaticMarkup(
@@ -48,6 +48,7 @@ describe('ListPage prop forwarding', () => {
                 {...baseProps}
                 transformQueryKey={transformQueryKey}
                 disableViewOptions={true}
+                simpleToolbar={true}
                 // false is the non-default value, so this asserts the value is really forwarded
                 // rather than coinciding with PaginatedListDataTable's own default of true.
                 includeSelectionColumn={false}
@@ -57,6 +58,7 @@ describe('ListPage prop forwarding', () => {
         expect(captured.props).toBeDefined();
         expect(captured.props?.transformQueryKey).toBe(transformQueryKey);
         expect(captured.props?.disableViewOptions).toBe(true);
+        expect(captured.props?.simpleToolbar).toBe(true);
         expect(captured.props?.includeSelectionColumn).toBe(false);
     });
 });

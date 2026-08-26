@@ -15,7 +15,7 @@ import {
 import { Input } from '../../ui/input.js';
 import { Label } from '../../ui/label.js';
 import { Asset } from '../asset/asset-gallery.js';
-import { AssetPickerDialog } from '../asset/asset-picker-dialog.js';
+import { AssetPickerDialog, ImageSizeHint } from '../asset/asset-picker-dialog.js';
 
 export interface ImageDialogProps {
     editor: Editor;
@@ -158,6 +158,8 @@ export function ImageDialog({ editor, isOpen, onClose }: Readonly<ImageDialogPro
                             </Button>
                         </div>
 
+                        <ImageSizeHint guidance="richText" />
+
                         <div className="grid gap-2">
                             <Label htmlFor="image-title">
                                 <Trans>Title</Trans>
@@ -226,6 +228,7 @@ export function ImageDialog({ editor, isOpen, onClose }: Readonly<ImageDialogPro
                 onSelect={handleAssetSelect}
                 multiSelect={false}
                 title={t`Select asset`}
+                imageGuidance="richText"
             />
         </>
     );

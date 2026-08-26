@@ -25,6 +25,7 @@ import { ContentTranslationPluginOptions } from './types.js';
         schema: adminApiExtensions,
         resolvers: [ContentTranslationAdminResolver],
     },
+    dashboard: '../src/dashboard/index.ts',
     compatibility: '^3.7.0',
 })
 export class ContentTranslationPlugin {

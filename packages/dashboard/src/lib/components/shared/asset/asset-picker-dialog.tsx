@@ -1,3 +1,5 @@
+import type { ImageSizeGuidance } from '@/vdb/components/help/help-content.js';
+import { getImageSizeGuidance, localizeHelpText } from '@/vdb/components/help/help-content.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import {
@@ -11,9 +13,30 @@ import {
 import { getDashboardActionBarItems } from '@/vdb/framework/layout-engine/layout-extensions.js';
 import { PageContext } from '@/vdb/framework/layout-engine/page-provider.js';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { ImageIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { Asset, AssetGallery } from './asset-gallery.js';
+
+export type { ImageSizeGuidance };
+
+export function ImageSizeHint({
+    guidance,
+    className = '',
+}: Readonly<{ guidance: ImageSizeGuidance; className?: string }>) {
+    const { i18n } = useLingui();
+    const copy = localizeHelpText(getImageSizeGuidance(guidance), i18n.locale);
+
+    return (
+        <p
+            className={`flex items-start gap-1.5 rounded-md border bg-muted/50 px-2.5 py-2 text-xs leading-5 text-muted-foreground ${className}`}
+            data-testid="image-size-hint"
+        >
+            <ImageIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>{copy}</span>
+        </p>
+    );
+}
 
 /**
  * @description
@@ -22,7 +45,7 @@ import { Asset, AssetGallery } from './asset-gallery.js';
  * @docsCategory components
  * @docsPage AssetPickerDialog
  */
-interface AssetPickerDialogProps {
+export interface AssetPickerDialogProps {
     /**
      * @description
      * Whether the dialog is open.
@@ -61,6 +84,11 @@ interface AssetPickerDialogProps {
      * registered action bar items will be rendered in the dialog footer.
      */
     pageId?: string;
+    /**
+     * @description
+     * The image usage whose recommended dimensions should be shown in the picker.
+     */
+    imageGuidance?: ImageSizeGuidance;
 }
 
 /**
@@ -79,6 +107,7 @@ export function AssetPickerDialog({
     initialSelectedAssets = [],
     title,
     pageId,
+    imageGuidance = 'assetLibrary',
 }: AssetPickerDialogProps) {
     const { t } = useLingui();
     const [selectedAssets, setSelectedAssets] = useState<Asset[]>(initialSelectedAssets);
@@ -109,6 +138,7 @@ export function AssetPickerDialog({
                                 ? t`Browse and select one or more assets`
                                 : t`Browse and select an asset`}
                         </DialogDescription>
+                        <ImageSizeHint guidance={imageGuidance} className="mt-2" />
                     </DialogHeader>
 
                     <div className="flex-1 overflow-y-auto px-6 pt-1">

@@ -107,22 +107,44 @@ function CampaignMetric({ label, value }: { label: string; value: string | numbe
     );
 }
 
-export const storePromotionCampaignRoute: DashboardRouteDefinition = {
+export const storeCouponCampaignRoute: DashboardRouteDefinition = {
     navMenuItem: {
         sectionId: 'marketing',
-        id: 'store-promotion-campaigns',
-        url: '/store-promotion-campaigns',
-        title: '优惠券与秒杀',
+        id: 'store-coupons',
+        url: '/store-coupons',
+        title: '优惠券',
         icon: BadgePercent,
         order: 5,
         requiresPermission: ['ReadPromotion'],
     },
-    path: '/store-promotion-campaigns',
-    loader: () => ({ breadcrumb: () => '优惠券与秒杀' }),
-    component: () => <StorePromotionCampaignPage />,
+    path: '/store-coupons',
+    loader: () => ({ breadcrumb: () => '优惠券' }),
+    component: () => <StorePromotionCampaignPage mode="COUPONS" />,
 };
 
-function StorePromotionCampaignPage() {
+export const storeFlashSaleRoute: DashboardRouteDefinition = {
+    navMenuItem: {
+        sectionId: 'marketing',
+        id: 'store-flash-sales',
+        url: '/store-flash-sales',
+        title: '限时秒杀',
+        icon: Flame,
+        order: 6,
+        requiresPermission: ['ReadPromotion'],
+    },
+    path: '/store-flash-sales',
+    loader: () => ({ breadcrumb: () => '限时秒杀' }),
+    component: () => <StorePromotionCampaignPage mode="FLASH_SALES" />,
+};
+
+/** Keeps existing bookmarks working while the two business areas use separate navigation. */
+export const storePromotionCampaignRoute: DashboardRouteDefinition = {
+    path: '/store-promotion-campaigns',
+    loader: () => ({ breadcrumb: () => '优惠券' }),
+    component: () => <StorePromotionCampaignPage mode="COUPONS" />,
+};
+
+function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' }) {
     const { activeChannel } = useChannel();
     const queryClient = useQueryClient();
     const queryKey = ['store-promotion-campaigns', activeChannel?.id];
@@ -150,244 +172,267 @@ function StorePromotionCampaignPage() {
     });
 
     return (
-        <Page pageId="store-promotion-campaigns">
-            <PageTitle>优惠券与限时秒杀</PageTitle>
+        <Page pageId={mode === 'COUPONS' ? 'store-coupons' : 'store-flash-sales'}>
+            <PageTitle>{mode === 'COUPONS' ? '优惠券' : '限时秒杀'}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
-                    <Button variant="outline" onClick={() => setCouponOpen(true)}>
-                        <BadgePercent className="size-4" aria-hidden="true" />
-                        新建优惠券
-                    </Button>
-                    <Button onClick={() => setFlashOpen(true)}>
-                        <Flame className="size-4" aria-hidden="true" />
-                        新建秒杀
-                    </Button>
+                    {mode === 'COUPONS' ? (
+                        <Button onClick={() => setCouponOpen(true)}>
+                            <BadgePercent className="size-4" aria-hidden="true" />
+                            新建优惠券活动
+                        </Button>
+                    ) : (
+                        <Button onClick={() => setFlashOpen(true)}>
+                            <Flame className="size-4" aria-hidden="true" />
+                            新建秒杀活动
+                        </Button>
+                    )}
                 </PageActionBarRight>
             </PageActionBar>
             <PageLayout>
-                <PageBlock
-                    column="full"
-                    blockId="store-coupon-campaigns"
-                    title="优惠券"
-                    description="创建满减、消费折扣、分类折扣和单品折扣券；客户在前台领取，结算时由真实 Promotion 规则计算。"
-                >
-                    <CampaignState query={query} onRetry={() => void query.refetch()}>
-                        <div className="grid gap-3 lg:grid-cols-2">
-                            {query.data?.storeCouponCampaigns.map(coupon => (
-                                <div key={coupon.id} className="rounded-lg border p-4">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="min-w-0">
+                {mode === 'COUPONS' ? (
+                    <>
+                        <PageBlock
+                            column="full"
+                            blockId="store-coupon-campaigns"
+                            title="优惠券"
+                            description="创建满减、消费折扣、分类折扣和单品折扣券；客户在前台领取，结算时由真实 Promotion 规则计算。"
+                        >
+                            <CampaignState query={query} onRetry={() => void query.refetch()}>
+                                <div className="grid gap-3 lg:grid-cols-2">
+                                    {query.data?.storeCouponCampaigns.map(coupon => (
+                                        <div key={coupon.id} className="rounded-lg border p-4">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <strong className="truncate text-sm">
+                                                            {coupon.name}
+                                                        </strong>
+                                                        <Badge variant="outline">
+                                                            {couponKindLabels[coupon.kind]}
+                                                        </Badge>
+                                                        <Badge
+                                                            variant={coupon.enabled ? 'default' : 'secondary'}
+                                                        >
+                                                            {coupon.enabled ? '启用' : '停用'}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        {couponSummary(coupon)}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        领取 {coupon.claimedCount} · 已用 {coupon.usedCount} ·
+                                                        返还 {coupon.returnedCount} · 过期{' '}
+                                                        {coupon.expiredCount}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Switch
+                                                        checked={coupon.enabled}
+                                                        disabled={toggleMutation.isPending}
+                                                        onCheckedChange={enabled =>
+                                                            toggleMutation.mutate({ id: coupon.id, enabled })
+                                                        }
+                                                    />
+                                                    <ConfirmationDialog
+                                                        title="删除这张优惠券？"
+                                                        description="删除后客户将不能再领取或使用该优惠券。"
+                                                        confirmText="确认删除"
+                                                        cancelText="取消"
+                                                        onConfirm={() => deleteMutation.mutate(coupon.id)}
+                                                    >
+                                                        <Button
+                                                            type="button"
+                                                            size="icon-sm"
+                                                            variant="ghost"
+                                                            aria-label="删除优惠券"
+                                                            disabled={deleteMutation.isPending}
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    </ConfirmationDialog>
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs sm:grid-cols-4">
+                                                <CampaignMetric
+                                                    label="可用券"
+                                                    value={coupon.availableCount}
+                                                />
+                                                <CampaignMetric
+                                                    label="核销订单"
+                                                    value={coupon.redeemedOrderCount}
+                                                />
+                                                <CampaignMetric
+                                                    label="优惠金额"
+                                                    value={formatMoney(
+                                                        coupon.discountAmountTotal,
+                                                        activeChannel?.defaultCurrencyCode ?? 'CNY',
+                                                    )}
+                                                />
+                                                <CampaignMetric
+                                                    label="带动成交"
+                                                    value={formatMoney(
+                                                        coupon.assistedRevenueTotal,
+                                                        activeChannel?.defaultCurrencyCode ?? 'CNY',
+                                                    )}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {!query.data?.storeCouponCampaigns.length ? (
+                                        <p className="text-sm text-muted-foreground">还没有优惠券。</p>
+                                    ) : null}
+                                </div>
+                            </CampaignState>
+                        </PageBlock>
+
+                        <PageBlock
+                            column="full"
+                            blockId="store-coupon-ledger"
+                            title="优惠券使用流水"
+                            description={`记录领取、锁定、核销、返还、过期和退款事件，共 ${query.data?.storeCouponLedger.totalItems ?? 0} 条。`}
+                        >
+                            <CampaignState query={query} onRetry={() => void query.refetch()}>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[760px] text-left text-sm">
+                                        <thead className="border-b text-xs text-muted-foreground">
+                                            <tr>
+                                                <th className="px-2 py-2 font-medium">时间</th>
+                                                <th className="px-2 py-2 font-medium">事件</th>
+                                                <th className="px-2 py-2 font-medium">优惠券</th>
+                                                <th className="px-2 py-2 font-medium">客户</th>
+                                                <th className="px-2 py-2 font-medium">订单</th>
+                                                <th className="px-2 py-2 text-right font-medium">优惠金额</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {query.data?.storeCouponLedger.items.map(entry => (
+                                                <tr key={entry.id} className="border-b last:border-0">
+                                                    <td className="px-2 py-3 text-xs">
+                                                        {new Date(entry.createdAt).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-2 py-3">
+                                                        <Badge variant="outline">
+                                                            {couponLedgerEventLabels[entry.eventType]}
+                                                        </Badge>
+                                                    </td>
+                                                    <td className="px-2 py-3">{entry.campaignName}</td>
+                                                    <td className="px-2 py-3">
+                                                        <div>{entry.customerName}</div>
+                                                        <small className="text-muted-foreground">
+                                                            {entry.customerEmail}
+                                                        </small>
+                                                    </td>
+                                                    <td className="px-2 py-3">
+                                                        {entry.orderCode ?? '—'}
+                                                        {entry.refundId ? (
+                                                            <small className="block text-muted-foreground">
+                                                                退款 #{entry.refundId}
+                                                            </small>
+                                                        ) : null}
+                                                    </td>
+                                                    <td className="px-2 py-3 text-right">
+                                                        {entry.discountAmount == null
+                                                            ? '—'
+                                                            : formatMoney(
+                                                                  entry.discountAmount,
+                                                                  activeChannel?.defaultCurrencyCode ?? 'CNY',
+                                                              )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {!query.data?.storeCouponLedger.items.length ? (
+                                        <p className="py-4 text-sm text-muted-foreground">暂无优惠券流水。</p>
+                                    ) : null}
+                                </div>
+                            </CampaignState>
+                        </PageBlock>
+                    </>
+                ) : null}
+
+                {mode === 'FLASH_SALES' ? (
+                    <PageBlock
+                        column="full"
+                        blockId="store-flash-sales"
+                        title="限时秒杀"
+                        description="活动时间内同时影响首页展示和购物车结算，不能只改前端显示价格。"
+                    >
+                        <CampaignState query={query} onRetry={() => void query.refetch()}>
+                            <div className="space-y-3">
+                                {query.data?.storeFlashSales.map(sale => (
+                                    <div
+                                        key={sale.id}
+                                        className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center"
+                                    >
+                                        <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <strong className="truncate text-sm">{coupon.name}</strong>
-                                                <Badge variant="outline">
-                                                    {couponKindLabels[coupon.kind]}
-                                                </Badge>
-                                                <Badge variant={coupon.enabled ? 'default' : 'secondary'}>
-                                                    {coupon.enabled ? '启用' : '停用'}
+                                                <strong className="text-sm">{sale.name}</strong>
+                                                <Badge variant={sale.enabled ? 'default' : 'secondary'}>
+                                                    {sale.enabled ? '启用' : '停用'}
                                                 </Badge>
                                             </div>
                                             <p className="mt-1 text-xs text-muted-foreground">
-                                                {couponSummary(coupon)}
-                                            </p>
-                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                领取 {coupon.claimedCount} · 已用 {coupon.usedCount} · 返还{' '}
-                                                {coupon.returnedCount} · 过期 {coupon.expiredCount}
+                                                {sale.items.length} 个商品规格 ·{' '}
+                                                {formatDateRange(sale.startsAt, sale.endsAt)}
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Switch
-                                                checked={coupon.enabled}
-                                                disabled={toggleMutation.isPending}
-                                                onCheckedChange={enabled =>
-                                                    toggleMutation.mutate({ id: coupon.id, enabled })
-                                                }
-                                            />
-                                            <ConfirmationDialog
-                                                title="删除这张优惠券？"
-                                                description="删除后客户将不能再领取或使用该优惠券。"
-                                                confirmText="确认删除"
-                                                cancelText="取消"
-                                                onConfirm={() => deleteMutation.mutate(coupon.id)}
-                                            >
-                                                <Button
-                                                    type="button"
-                                                    size="icon-sm"
-                                                    variant="ghost"
-                                                    aria-label="删除优惠券"
-                                                    disabled={deleteMutation.isPending}
-                                                >
-                                                    <Trash2 className="size-4" />
-                                                </Button>
-                                            </ConfirmationDialog>
-                                        </div>
-                                    </div>
-                                    <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs sm:grid-cols-4">
-                                        <CampaignMetric label="可用券" value={coupon.availableCount} />
-                                        <CampaignMetric label="核销订单" value={coupon.redeemedOrderCount} />
-                                        <CampaignMetric
-                                            label="优惠金额"
-                                            value={formatMoney(
-                                                coupon.discountAmountTotal,
-                                                activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                            )}
+                                        <Switch
+                                            checked={sale.enabled}
+                                            disabled={toggleMutation.isPending}
+                                            onCheckedChange={enabled =>
+                                                toggleMutation.mutate({ id: sale.id, enabled })
+                                            }
                                         />
-                                        <CampaignMetric
-                                            label="带动成交"
-                                            value={formatMoney(
-                                                coupon.assistedRevenueTotal,
-                                                activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                            )}
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-                            {!query.data?.storeCouponCampaigns.length ? (
-                                <p className="text-sm text-muted-foreground">还没有优惠券。</p>
-                            ) : null}
-                        </div>
-                    </CampaignState>
-                </PageBlock>
-
-                <PageBlock
-                    column="full"
-                    blockId="store-coupon-ledger"
-                    title="优惠券使用流水"
-                    description={`记录领取、锁定、核销、返还、过期和退款事件，共 ${query.data?.storeCouponLedger.totalItems ?? 0} 条。`}
-                >
-                    <CampaignState query={query} onRetry={() => void query.refetch()}>
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[760px] text-left text-sm">
-                                <thead className="border-b text-xs text-muted-foreground">
-                                    <tr>
-                                        <th className="px-2 py-2 font-medium">时间</th>
-                                        <th className="px-2 py-2 font-medium">事件</th>
-                                        <th className="px-2 py-2 font-medium">优惠券</th>
-                                        <th className="px-2 py-2 font-medium">客户</th>
-                                        <th className="px-2 py-2 font-medium">订单</th>
-                                        <th className="px-2 py-2 text-right font-medium">优惠金额</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {query.data?.storeCouponLedger.items.map(entry => (
-                                        <tr key={entry.id} className="border-b last:border-0">
-                                            <td className="px-2 py-3 text-xs">
-                                                {new Date(entry.createdAt).toLocaleString()}
-                                            </td>
-                                            <td className="px-2 py-3">
-                                                <Badge variant="outline">
-                                                    {couponLedgerEventLabels[entry.eventType]}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-2 py-3">{entry.campaignName}</td>
-                                            <td className="px-2 py-3">
-                                                <div>{entry.customerName}</div>
-                                                <small className="text-muted-foreground">
-                                                    {entry.customerEmail}
-                                                </small>
-                                            </td>
-                                            <td className="px-2 py-3">
-                                                {entry.orderCode ?? '—'}
-                                                {entry.refundId ? (
-                                                    <small className="block text-muted-foreground">
-                                                        退款 #{entry.refundId}
-                                                    </small>
-                                                ) : null}
-                                            </td>
-                                            <td className="px-2 py-3 text-right">
-                                                {entry.discountAmount == null
-                                                    ? '—'
-                                                    : formatMoney(
-                                                          entry.discountAmount,
-                                                          activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                                      )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {!query.data?.storeCouponLedger.items.length ? (
-                                <p className="py-4 text-sm text-muted-foreground">暂无优惠券流水。</p>
-                            ) : null}
-                        </div>
-                    </CampaignState>
-                </PageBlock>
-
-                <PageBlock
-                    column="full"
-                    blockId="store-flash-sales"
-                    title="限时秒杀"
-                    description="活动时间内同时影响首页展示和购物车结算，不能只改前端显示价格。"
-                >
-                    <CampaignState query={query} onRetry={() => void query.refetch()}>
-                        <div className="space-y-3">
-                            {query.data?.storeFlashSales.map(sale => (
-                                <div
-                                    key={sale.id}
-                                    className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center"
-                                >
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <strong className="text-sm">{sale.name}</strong>
-                                            <Badge variant={sale.enabled ? 'default' : 'secondary'}>
-                                                {sale.enabled ? '启用' : '停用'}
-                                            </Badge>
-                                        </div>
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            {sale.items.length} 个商品规格 ·{' '}
-                                            {formatDateRange(sale.startsAt, sale.endsAt)}
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        checked={sale.enabled}
-                                        disabled={toggleMutation.isPending}
-                                        onCheckedChange={enabled =>
-                                            toggleMutation.mutate({ id: sale.id, enabled })
-                                        }
-                                    />
-                                    <ConfirmationDialog
-                                        title="删除这个秒杀活动？"
-                                        description="删除后首页和购物车将立即停止使用该秒杀价。"
-                                        confirmText="确认删除"
-                                        cancelText="取消"
-                                        onConfirm={() => deleteMutation.mutate(sale.id)}
-                                    >
-                                        <Button
-                                            type="button"
-                                            size="icon-sm"
-                                            variant="ghost"
-                                            aria-label="删除秒杀"
-                                            disabled={deleteMutation.isPending}
+                                        <ConfirmationDialog
+                                            title="删除这个秒杀活动？"
+                                            description="删除后首页和购物车将立即停止使用该秒杀价。"
+                                            confirmText="确认删除"
+                                            cancelText="取消"
+                                            onConfirm={() => deleteMutation.mutate(sale.id)}
                                         >
-                                            <Trash2 className="size-4" />
-                                        </Button>
-                                    </ConfirmationDialog>
-                                </div>
-                            ))}
-                            {!query.data?.storeFlashSales.length ? (
-                                <p className="text-sm text-muted-foreground">还没有秒杀活动。</p>
-                            ) : null}
-                        </div>
-                    </CampaignState>
-                </PageBlock>
+                                            <Button
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="ghost"
+                                                aria-label="删除秒杀"
+                                                disabled={deleteMutation.isPending}
+                                            >
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </ConfirmationDialog>
+                                    </div>
+                                ))}
+                                {!query.data?.storeFlashSales.length ? (
+                                    <p className="text-sm text-muted-foreground">还没有秒杀活动。</p>
+                                ) : null}
+                            </div>
+                        </CampaignState>
+                    </PageBlock>
+                ) : null}
             </PageLayout>
 
-            <CouponEditor
-                open={couponOpen}
-                collections={query.data?.collections.items ?? []}
-                onClose={() => setCouponOpen(false)}
-                onSaved={async () => {
-                    setCouponOpen(false);
-                    await refresh();
-                }}
-            />
-            <FlashSaleEditor
-                open={flashOpen}
-                onClose={() => setFlashOpen(false)}
-                onSaved={async () => {
-                    setFlashOpen(false);
-                    await refresh();
-                }}
-            />
+            {mode === 'COUPONS' ? (
+                <CouponEditor
+                    open={couponOpen}
+                    collections={query.data?.collections.items ?? []}
+                    onClose={() => setCouponOpen(false)}
+                    onSaved={async () => {
+                        setCouponOpen(false);
+                        await refresh();
+                    }}
+                />
+            ) : (
+                <FlashSaleEditor
+                    open={flashOpen}
+                    onClose={() => setFlashOpen(false)}
+                    onSaved={async () => {
+                        setFlashOpen(false);
+                        await refresh();
+                    }}
+                />
+            )}
         </Page>
     );
 }

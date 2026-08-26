@@ -88,8 +88,7 @@ export type CustomFieldKeysOfItem<Item> = Item extends { customFields?: infer CF
     : never;
 
 export type AllItemFieldKeys<T extends TypedDocumentNode<any, any>> =
-    | keyof PaginatedListItemFields<T>
-    | CustomFieldKeysOfItem<PaginatedListItemFields<T>>;
+    keyof PaginatedListItemFields<T> | CustomFieldKeysOfItem<PaginatedListItemFields<T>>;
 
 export type ColumnDefWithMetaDependencies<T extends TypedDocumentNode<any, any>> = Partial<
     ColumnDef<T, any>
@@ -216,6 +215,7 @@ export interface PaginatedListDataTableProps<
     rowActions?: RowAction<PaginatedListItemFields<T>>[];
     bulkActions?: BulkActionsInput;
     disableViewOptions?: boolean;
+    simpleToolbar?: boolean;
     transformData?: (data: PaginatedListItemFields<T>[]) => PaginatedListItemFields<T>[];
     setTableOptions?: (table: TableOptions<any>) => TableOptions<any>;
     /**
@@ -388,6 +388,7 @@ export function PaginatedListDataTable<
     rowActions,
     bulkActions,
     disableViewOptions,
+    simpleToolbar,
     setTableOptions,
     transformData,
     registerRefresher,
@@ -528,6 +529,7 @@ export function PaginatedListDataTable<
                 defaultColumnVisibility={columnVisibility}
                 facetedFilters={facetedFilters}
                 disableViewOptions={disableViewOptions}
+                simpleToolbar={simpleToolbar}
                 bulkActions={bulkActions}
                 setTableOptions={setTableOptions}
                 onRefresh={refetchPaginatedList}

@@ -706,8 +706,11 @@ export const devConfig: VendureConfig = {
                 { name: 'storefront-original-preview', width: 1600, height: 1600, mode: 'resize' },
                 { name: 'storefront-thumbnail-160', width: 160, height: 160, mode: 'crop' },
                 { name: 'storefront-thumbnail-320', width: 320, height: 320, mode: 'crop' },
+                // Keep legacy card presets available while older storefront bundles are still cached.
                 { name: 'storefront-card-320', width: 320, height: 280, mode: 'crop' },
                 { name: 'storefront-card-640', width: 640, height: 560, mode: 'crop' },
+                { name: 'storefront-card-square-320', width: 320, height: 320, mode: 'resize' },
+                { name: 'storefront-card-square-640', width: 640, height: 640, mode: 'resize' },
                 { name: 'storefront-hero-480', width: 480, height: 240, mode: 'crop' },
                 { name: 'storefront-hero-960', width: 960, height: 480, mode: 'crop' },
                 { name: 'storefront-hero-1440', width: 1440, height: 720, mode: 'crop' },
