@@ -5,21 +5,86 @@ set -Eeuo pipefail
 readonly candidate="${1:-}"
 readonly deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ecosystem="${deploy_dir}/ecosystem.production.config.cjs"
+readonly audit_tag="vendure-production-switch"
+
+sanitize_audit_value() {
+    printf '%s' "${1:-unknown}" | LC_ALL=C tr -c 'A-Za-z0-9_./:@+-' '_'
+}
+
+readonly deployment_id="$(sanitize_audit_value "${VENDURE_DEPLOYMENT_ID:-manual-$(date -u +%Y%m%dT%H%M%SZ)-$$}")"
+readonly actor="$(sanitize_audit_value "${SUDO_USER:-$(id -un)}")"
+readonly effective_user="$(sanitize_audit_value "$(id -un)")"
+readonly ssh_connection="${SSH_CONNECTION:-}"
+readonly source_ip="$(sanitize_audit_value "${ssh_connection%% *}")"
+readonly candidate_path="$(sanitize_audit_value "${candidate}")"
+candidate_sha="unknown"
+parent_process="$(ps -o comm= -p "${PPID}" 2>/dev/null || true)"
+readonly parent_process="$(sanitize_audit_value "${parent_process:-unknown}")"
+
+if [[ "${candidate##*/}" =~ ^([a-f0-9]{40})- ]]; then
+    candidate_sha="${BASH_REMATCH[1]}"
+fi
+
+audit_switch() {
+    local event="${1}"
+    local status="${2}"
+    local line="${3}"
+
+    /usr/bin/logger --tag "${audit_tag}" -- \
+        "event=$(sanitize_audit_value "${event}") deployment_id=${deployment_id} actor=${actor} effective_user=${effective_user} source_ip=${source_ip:-local} pid=$$ parent_pid=${PPID} parent=${parent_process} target_sha=$(sanitize_audit_value "${candidate_sha}") candidate=${candidate_path:-missing} status=$(sanitize_audit_value "${status}") line=$(sanitize_audit_value "${line}")"
+}
+
+fail_switch() {
+    local message="${1}"
+    local line="${BASH_LINENO[0]:-unknown}"
+
+    trap - ERR
+    printf '%s\n' "${message}" >&2
+    audit_switch failed 1 "${line}" || true
+    exit 1
+}
+
+handle_switch_error() {
+    local status="$?"
+    local line="${BASH_LINENO[0]:-unknown}"
+
+    trap - ERR
+    audit_switch failed "${status}" "${line}" || true
+    exit "${status}"
+}
+
+if [[ ! -x /usr/bin/logger ]]; then
+    printf 'Required production audit logger is missing: /usr/bin/logger\n' >&2
+    exit 1
+fi
+
+trap handle_switch_error ERR
+audit_switch requested pending 0
 
 if [[ -z "${candidate}" || "${candidate}" != /* || "${candidate}" == "/" ]]; then
-    printf 'Usage: %s /absolute/production/runtime\n' "${0}" >&2
-    exit 1
+    fail_switch "Usage: ${0} /absolute/production/runtime"
 fi
 
 for required_path in \
     "${candidate}/packages/dev-server/dist/index.js" \
     "${candidate}/packages/dev-server/dist/index-worker.js" \
+    "${candidate}/RUNTIME-METADATA.json" \
     "${ecosystem}"; do
     if [[ ! -f "${required_path}" ]]; then
-        printf 'Required production runtime file is missing: %s\n' "${required_path}" >&2
-        exit 1
+        fail_switch "Required production runtime file is missing: ${required_path}"
     fi
 done
+
+candidate_sha="$(node - "${candidate}/RUNTIME-METADATA.json" <<'NODE'
+const { readFileSync } = require('node:fs');
+
+const metadata = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+if (typeof metadata.gitSha !== 'string' || !/^[a-f0-9]{40}$/u.test(metadata.gitSha)) {
+    throw new Error('Runtime metadata contains an invalid Git SHA');
+}
+process.stdout.write(metadata.gitSha);
+NODE
+)"
 
 # PM2 reload preserves pm_cwd and pm_exec_path. Replace the old process
 # definitions so both services actually start from this immutable candidate.
@@ -64,3 +129,6 @@ if (errors.length) {
     process.exitCode = 1;
 }
 NODE
+
+audit_switch succeeded 0 0
+trap - ERR

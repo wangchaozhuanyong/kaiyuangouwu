@@ -151,11 +151,22 @@ test.describe('floating controls inside modal layers', () => {
         await expect(footer).toBeInViewport();
 
         await setStableViewport(1024, 768);
-        const tabletLandscapeBox = await wideDialog.boundingBox();
-        expect(tabletLandscapeBox).not.toBeNull();
-        expect(tabletLandscapeBox?.width).toBeGreaterThan(980);
-        expect(tabletLandscapeBox?.x ?? 0).toBeGreaterThanOrEqual(15);
-        expect((tabletLandscapeBox?.x ?? 0) + (tabletLandscapeBox?.width ?? 0)).toBeLessThanOrEqual(1009);
+        await expect
+            .poll(async () => {
+                const box = await wideDialog.boundingBox();
+                return box
+                    ? {
+                          isWide: box.width > 980,
+                          leftEdgeIsInViewport: box.x >= 15,
+                          rightEdgeIsInViewport: box.x + box.width <= 1009,
+                      }
+                    : null;
+            })
+            .toEqual({
+                isWide: true,
+                leftEdgeIsInViewport: true,
+                rightEdgeIsInViewport: true,
+            });
         const landscapeFormBox = await formPane.boundingBox();
         const landscapePreviewBox = await previewPane.boundingBox();
         expect(Math.abs((landscapeFormBox?.y ?? 0) - (landscapePreviewBox?.y ?? 0))).toBeLessThan(6);

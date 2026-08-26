@@ -207,6 +207,7 @@ function OrderListPage() {
             }}
             primaryRowAction={{ label: <Trans>View</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[{ component: FulfillOrdersBulkAction }]}
+            includeActionsColumn={false}
         >
             <PageActionBarLeft>
                 <Tabs

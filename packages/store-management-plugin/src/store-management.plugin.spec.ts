@@ -14,10 +14,10 @@ describe('StoreManagementPlugin promotion options', () => {
         StoreManagementPlugin.init({ enabled: false });
     });
 
-    it('requires a strong promotion entry secret when enabled in production', () => {
+    it('requires a strong signing secret for the referral balance handler in production', () => {
         vi.stubEnv('NODE_ENV', 'production');
 
-        expect(() => StoreManagementPlugin.init({ enabled: true, signingSecret: 'short' })).toThrow(
+        expect(() => StoreManagementPlugin.init({ enabled: false, signingSecret: 'short' })).toThrow(
             'at least 32 characters',
         );
     });

@@ -24,9 +24,9 @@ export function customerCouponStatusLabel(
               }
             : {
                   AVAILABLE: 'Available',
-                  LOCKED: 'Applied',
+                  LOCKED: 'Reserved by order',
                   USED: 'Used',
-                  RETURNED: 'Returned',
+                  RETURNED: 'Returned, unused',
                   EXPIRED: 'Expired',
                   REVOKED: 'Revoked',
               };

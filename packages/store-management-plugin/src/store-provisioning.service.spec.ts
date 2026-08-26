@@ -58,15 +58,17 @@ function createService() {
     };
     const merchantInitialPasswordService = { requirePasswordChange: vi.fn().mockResolvedValue(undefined) };
     const contentTranslations = {
-        prepareLocalizedFields: vi.fn(async (fields: any[]) =>
-            fields.map(field => ({
-                path: field.path,
-                sourceText: field.sourceText,
-                translatedText: field.targetText?.trim() || 'Alpha Shop',
-                status: field.targetText?.trim() ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
-                origin: field.targetText?.trim() ? 'MANUAL' : 'AUTO',
-                locked: Boolean(field.targetText?.trim()),
-            })),
+        prepareLocalizedFields: vi.fn((fields: any[]) =>
+            Promise.resolve(
+                fields.map(field => ({
+                    path: field.path,
+                    sourceText: field.sourceText,
+                    translatedText: field.targetText?.trim() || 'Alpha Shop',
+                    status: field.targetText?.trim() ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                    origin: field.targetText?.trim() ? 'MANUAL' : 'AUTO',
+                    locked: Boolean(field.targetText?.trim()),
+                })),
+            ),
         ),
         recordPreparedFields: vi.fn().mockResolvedValue(undefined),
     };
