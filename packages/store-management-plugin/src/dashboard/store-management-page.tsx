@@ -46,7 +46,7 @@ import {
     Store,
     X,
 } from 'lucide-react';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 
 import {
     StoreProfileRecord,
@@ -89,14 +89,18 @@ const zhCopy = {
     order: '排序',
     edit: '编辑网店资料',
     editTitle: '编辑网店',
-    editDescription: '店铺通过各自绑定的域名独立访问，前台不会展示跨店入口。',
+    editDescription: '填写中文资料即可自动生成英文；店铺通过各自绑定的域名独立访问。',
     status: '网店状态',
     sortOrder: '管理顺序',
-    storefrontNameZh: '中文店铺名称',
-    storefrontNameEn: '英文店铺名称',
-    descriptionZh: '公开中文简介',
-    descriptionEn: '公开英文简介',
-    publicDescriptionHelp: '公开简介会显示在对应语言的商城首页，并用于搜索与分享摘要。',
+    storefrontNameZh: '店铺名称',
+    storefrontNameEn: '英文店铺名称（人工覆盖）',
+    descriptionZh: '公开简介',
+    descriptionEn: '公开英文简介（人工覆盖）',
+    publicDescriptionHelp:
+        '中文是源内容，保存时自动生成英文。公开简介会显示在对应语言的商城首页，并用于搜索与分享摘要。',
+    commonMode: '常用模式',
+    englishReview: '英文校对',
+    translationHelp: '通常只需填写中文；仅在需要人工修改英文译文时切换到英文校对。',
     internalNote: '内部备注（仅平台管理员可见）',
     internalNoteHelp: '用于记录运营、联系或审核信息，不会发送给商家，也不会显示在商城。',
     logo: '网店 Logo',
@@ -107,7 +111,7 @@ const zhCopy = {
     saving: '正在保存',
     saved: '网店资料已保存',
     invalidOrder: '排序必须是大于或等于 0 的整数',
-    invalidName: '中英文店铺名称都必须是 1 至 16 个显示单位',
+    invalidName: '店铺名称必须是 1 至 16 个显示单位',
     readiness: '上线检查',
     ready: '已满足全部上线条件',
     notReady: '完成全部检查后才能设为正常运营',
@@ -130,14 +134,18 @@ const enCopy: typeof zhCopy = {
     order: 'Order',
     edit: 'Edit store profile',
     editTitle: 'Edit store',
-    editDescription: 'Each store is opened through its own bound domain without cross-store links.',
+    editDescription: 'Enter Chinese content to generate English; each store uses its own bound domain.',
     status: 'Store status',
     sortOrder: 'Management order',
-    storefrontNameZh: 'Chinese store name',
-    storefrontNameEn: 'English store name',
-    descriptionZh: 'Public Chinese description',
-    descriptionEn: 'Public English description',
-    publicDescriptionHelp: 'Public descriptions appear on the storefront and in search/share summaries.',
+    storefrontNameZh: 'Store name (Chinese source)',
+    storefrontNameEn: 'English store name (manual override)',
+    descriptionZh: 'Public description (Chinese source)',
+    descriptionEn: 'Public English description (manual override)',
+    publicDescriptionHelp:
+        'English is generated from the Chinese source when you save. Public descriptions appear on the storefront and in search/share summaries.',
+    commonMode: 'Common mode',
+    englishReview: 'Review English',
+    translationHelp: 'Usually you only need Chinese. Open English review only to override the translation.',
     internalNote: 'Internal note (platform administrators only)',
     internalNoteHelp: 'Operational notes are not exposed to merchants or storefront visitors.',
     logo: 'Store logo',
@@ -148,7 +156,7 @@ const enCopy: typeof zhCopy = {
     saving: 'Saving',
     saved: 'Store profile saved',
     invalidOrder: 'Order must be an integer greater than or equal to 0',
-    invalidName: 'Both store names must use 1 to 16 display units',
+    invalidName: 'The store name must use 1 to 16 display units',
     readiness: 'Launch checks',
     ready: 'All launch requirements are complete',
     notReady: 'Complete every check before activating the store',
@@ -428,6 +436,8 @@ function ProfileEditor({
     onClose: () => void;
     onSave: () => void;
 }>) {
+    const [editEnglish, setEditEnglish] = useState(false);
+    useEffect(() => setEditEnglish(false), [draft?.id]);
     if (!draft) return null;
     const update = <K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) =>
         onChange({ ...draft, [field]: value });
@@ -465,21 +475,52 @@ function ProfileEditor({
                                 onChange={event => update('sortOrder', event.target.value)}
                             />
                         </Field>
-                        <Field label={text.storefrontNameZh} htmlFor="profile-name-zh">
+                        <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">{text.translationHelp}</p>
+                            <div className="flex shrink-0 rounded-md border bg-background p-1">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={editEnglish ? 'ghost' : 'secondary'}
+                                    onClick={() => setEditEnglish(false)}
+                                >
+                                    {text.commonMode}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={editEnglish ? 'secondary' : 'ghost'}
+                                    onClick={() => setEditEnglish(true)}
+                                >
+                                    {text.englishReview}
+                                </Button>
+                            </div>
+                        </div>
+                        <Field
+                            label={text.storefrontNameZh}
+                            htmlFor="profile-name-zh"
+                            className={editEnglish ? undefined : 'sm:col-span-2'}
+                        >
                             <Input
                                 id="profile-name-zh"
                                 value={draft.storefrontNameZh}
                                 onChange={event => update('storefrontNameZh', event.target.value)}
                             />
                         </Field>
-                        <Field label={text.storefrontNameEn} htmlFor="profile-name-en">
-                            <Input
-                                id="profile-name-en"
-                                value={draft.storefrontNameEn}
-                                onChange={event => update('storefrontNameEn', event.target.value)}
-                            />
-                        </Field>
-                        <Field label={text.descriptionZh} htmlFor="profile-description-zh">
+                        {editEnglish ? (
+                            <Field label={text.storefrontNameEn} htmlFor="profile-name-en">
+                                <Input
+                                    id="profile-name-en"
+                                    value={draft.storefrontNameEn}
+                                    onChange={event => update('storefrontNameEn', event.target.value)}
+                                />
+                            </Field>
+                        ) : null}
+                        <Field
+                            label={text.descriptionZh}
+                            htmlFor="profile-description-zh"
+                            className={editEnglish ? undefined : 'sm:col-span-2'}
+                        >
                             <Textarea
                                 id="profile-description-zh"
                                 rows={4}
@@ -488,15 +529,17 @@ function ProfileEditor({
                                 onChange={event => update('descriptionZh', event.target.value)}
                             />
                         </Field>
-                        <Field label={text.descriptionEn} htmlFor="profile-description-en">
-                            <Textarea
-                                id="profile-description-en"
-                                rows={4}
-                                maxLength={800}
-                                value={draft.descriptionEn}
-                                onChange={event => update('descriptionEn', event.target.value)}
-                            />
-                        </Field>
+                        {editEnglish ? (
+                            <Field label={text.descriptionEn} htmlFor="profile-description-en">
+                                <Textarea
+                                    id="profile-description-en"
+                                    rows={4}
+                                    maxLength={800}
+                                    value={draft.descriptionEn}
+                                    onChange={event => update('descriptionEn', event.target.value)}
+                                />
+                            </Field>
+                        ) : null}
                         <p className="text-xs text-muted-foreground sm:col-span-2">
                             {text.publicDescriptionHelp}
                         </p>
@@ -610,10 +653,11 @@ function validStorefrontName(value: string): boolean {
 function Field({
     label,
     htmlFor,
+    className,
     children,
-}: Readonly<{ label: string; htmlFor: string; children: ReactNode }>) {
+}: Readonly<{ label: string; htmlFor: string; className?: string; children: ReactNode }>) {
     return (
-        <div className="space-y-2">
+        <div className={`space-y-2 ${className ?? ''}`}>
             <Label htmlFor={htmlFor}>{label}</Label>
             {children}
         </div>

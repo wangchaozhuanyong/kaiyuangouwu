@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { routeFromHash, routeFromRouterLocation, routeHref } from './storefront-router';
+import {
+    getStorefrontScrollRestorationKey,
+    routeFromHash,
+    routeFromRouterLocation,
+    routeHref,
+} from './storefront-router';
 
 describe('storefront routing', () => {
     it('builds browser-history URLs and reads their search state', () => {
@@ -13,6 +18,30 @@ describe('storefront routing', () => {
             name: 'orders',
             tab: 'shipping',
         });
+    });
+
+    it('keeps root-page scroll positions while isolating subpage history entries', () => {
+        expect(
+            getStorefrontScrollRestorationKey({
+                href: '/account',
+                pathname: '/account',
+                state: { __TSR_key: 'account-entry-1' },
+            }),
+        ).toBe('root:/account');
+        expect(
+            getStorefrontScrollRestorationKey({
+                href: '/account',
+                pathname: '/account/',
+                state: { __TSR_key: 'account-entry-2' },
+            }),
+        ).toBe('root:/account');
+        expect(
+            getStorefrontScrollRestorationKey({
+                href: '/favorites',
+                pathname: '/favorites',
+                state: { __TSR_key: 'favorites-entry' },
+            }),
+        ).toBe('favorites-entry');
     });
 
     it('opens the home page for an empty hash', () => {

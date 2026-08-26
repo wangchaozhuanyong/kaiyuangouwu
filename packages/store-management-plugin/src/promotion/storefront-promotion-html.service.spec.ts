@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
+import { PROMOTION_VISUAL_SCRIPT, PROMOTION_VISUAL_SCRIPT_SHA256 } from './promotion-visual-script';
 import {
+    MAX_PROMOTION_SOURCE_BYTES,
     StorefrontPromotionBindings,
     StorefrontPromotionHtmlService,
 } from './storefront-promotion-html.service';
@@ -62,8 +65,54 @@ describe('StorefrontPromotionHtmlService', () => {
     it('provides a responsive default page with semantic store bindings', () => {
         expect(service.defaultTemplate).toContain('min-height: 100dvh');
         expect(service.defaultTemplate).toContain('data-bind-src="store.logoUrl"');
-        expect(service.defaultTemplate).toContain('data-bind-src="store.heroImageUrl"');
+        expect(service.defaultTemplate).toContain('data-promo-signal-stage');
+        expect(service.defaultTemplate).toContain('data-promo-signal-canvas');
+        expect(service.defaultTemplate).toContain('data-promo-signal-core-logo');
         expect(service.defaultTemplate).toContain('data-store-entry');
+        expect(service.defaultTemplateVersion).toBe(4);
+        expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
+    });
+
+    it('appends only the trusted renderer to pages that opt into the signal canvas', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: service.defaultTemplate,
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html.match(/data-storefront-promotion-visual/g)).toHaveLength(1);
+        expect(html).toContain(PROMOTION_VISUAL_SCRIPT);
+        expect(html).toContain('进入主站选软件');
+
+        const renderedScript = html.match(
+            /<script data-storefront-promotion-visual="">([\s\S]*?)<\/script>/u,
+        )?.[1];
+        expect(renderedScript).toBe(PROMOTION_VISUAL_SCRIPT);
+        expect(
+            createHash('sha256')
+                .update(renderedScript ?? '')
+                .digest('base64'),
+        ).toBe(PROMOTION_VISUAL_SCRIPT_SHA256);
+    });
+
+    it('uses the store logo as the signal core and keeps the renderer when no logo is available', () => {
+        const withLogo = service.render({
+            contentType: 'HTML',
+            source: service.defaultTemplate,
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+        const withoutLogo = service.render({
+            contentType: 'HTML',
+            source: service.defaultTemplate,
+            bindings: { ...bindings, 'store.logoUrl': '' },
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(withLogo.match(/data-promo-signal-core-logo/g)).toHaveLength(1);
+        expect(withoutLogo).not.toContain('data-promo-signal-core-logo');
+        expect(withoutLogo).toContain('data-promo-signal-canvas');
     });
 
     it('normalizes custom page zoom and keyboard focus accessibility', () => {

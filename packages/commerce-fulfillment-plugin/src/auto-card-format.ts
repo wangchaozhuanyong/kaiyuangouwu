@@ -58,7 +58,7 @@ export function validateAutoCardFields(fields: AutoCardFieldDefinition[]): AutoC
             throw new Error('中文字段名称不能为空且不能超过 40 个字符');
         }
         if (!labelEn || labelEn.length > 40) {
-            throw new Error('英文字段名称不能为空且不能超过 40 个字符');
+            throw new Error('自动生成或人工校对的英文字段名称不能超过 40 个字符');
         }
         if (keys.has(key) || labels.has(label) || englishLabels.has(labelEn.toLowerCase())) {
             throw new Error(`发卡字段“${label}”重复`);

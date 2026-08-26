@@ -54,7 +54,7 @@ test.describe('product variant generation', () => {
         await page.getByPlaceholder('For example: Size').fill('Size');
 
         // Add option values by typing and pressing Enter
-        const optionInput = page.getByPlaceholder('Enter a value and press Enter');
+        const optionInput = page.getByPlaceholder('Simplified Chinese value');
         await optionInput.fill('Small');
         await optionInput.press('Enter');
         await optionInput.fill('Medium');
@@ -413,7 +413,7 @@ test.describe('remove option group from product detail (#4703)', () => {
         await expect(page.getByRole('dialog')).toBeVisible();
         await page.getByRole('tab', { name: 'Create new' }).click();
         await page.getByPlaceholder('For example: Size').fill('Size');
-        const optionInput = page.getByPlaceholder('Enter a value and press Enter');
+        const optionInput = page.getByPlaceholder('Simplified Chinese value');
         await optionInput.fill('Small');
         await optionInput.press('Enter');
         await page.getByRole('button', { name: 'Save option group' }).click();

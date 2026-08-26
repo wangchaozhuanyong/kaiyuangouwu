@@ -208,6 +208,7 @@ function OrderListPage() {
                 },
             }}
             bulkActions={[{ component: FulfillOrdersBulkAction }]}
+            includeActionsColumn={false}
         >
             <PageActionBarLeft>
                 <Tabs

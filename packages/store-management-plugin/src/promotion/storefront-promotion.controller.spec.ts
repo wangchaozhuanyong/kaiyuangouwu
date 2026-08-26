@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 
+import { PROMOTION_VISUAL_SCRIPT_SHA256 } from './promotion-visual-script';
 import { StorefrontPromotionController } from './storefront-promotion.controller';
 
 function responseMock() {
@@ -18,7 +19,7 @@ function responseMock() {
 }
 
 describe('StorefrontPromotionController', () => {
-    it('allows only the Cloudflare Insights resources injected into promotion pages', async () => {
+    it('allows only the trusted visual renderer and Cloudflare Insights scripts', async () => {
         const request = { ctx: {}, host: 'shop.example.com' };
         const accessService = {
             resolveRequest: vi.fn(() => Promise.resolve(request)),
@@ -39,7 +40,9 @@ describe('StorefrontPromotionController', () => {
             ([name]) => name === 'Content-Security-Policy',
         )?.[1];
         expect(contentSecurityPolicy).toContain("script-src 'none'");
-        expect(contentSecurityPolicy).toContain('script-src-elem https://static.cloudflareinsights.com');
+        expect(contentSecurityPolicy).toContain(
+            `script-src-elem 'sha256-${PROMOTION_VISUAL_SCRIPT_SHA256}' https://static.cloudflareinsights.com`,
+        );
         expect(contentSecurityPolicy).toContain('connect-src https://cloudflareinsights.com');
     });
 

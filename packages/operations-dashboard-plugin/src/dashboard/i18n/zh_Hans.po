@@ -460,7 +460,7 @@ msgstr "英文发卡说明"
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.instructionsEnHint"
-msgstr "客户使用英文时，这段说明会随卡密发送到邮箱。"
+msgstr "通常只需填写中文；保存时自动生成英文，必要时可切换校对。"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
@@ -726,6 +726,11 @@ msgstr "库存管理"
 #: src/dashboard/index.tsx
 msgid "operations.nav.specificationTemplates"
 msgstr "商品规格"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.storefrontDesign"
+msgstr "店铺装修"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx

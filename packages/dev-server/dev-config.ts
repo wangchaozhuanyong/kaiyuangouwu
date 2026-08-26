@@ -589,6 +589,11 @@ export const devConfig: VendureConfig = {
                 defaultValue: '云桥Ai',
                 public: true,
                 validate: validateStorefrontName,
+                // Storefront names are maintained in the dedicated store profile page,
+                // where Chinese is the source and English is generated on save. Hiding
+                // these raw fields avoids presenting a second bilingual entry point in
+                // the generic Channel form while keeping them available to the APIs.
+                ui: { dashboard: false },
                 label: [
                     { languageCode: LanguageCode.zh_Hans, value: '中文网站名称' },
                     { languageCode: LanguageCode.en, value: 'Chinese website name' },
@@ -609,6 +614,7 @@ export const devConfig: VendureConfig = {
                 defaultValue: 'Yunqiao Ai',
                 public: true,
                 validate: validateStorefrontName,
+                ui: { dashboard: false },
                 label: [
                     { languageCode: LanguageCode.zh_Hans, value: '英文网站名称' },
                     { languageCode: LanguageCode.en, value: 'English website name' },
@@ -704,6 +710,8 @@ export const devConfig: VendureConfig = {
             assetUploadDir,
             presets: [
                 { name: 'storefront-original-preview', width: 1600, height: 1600, mode: 'resize' },
+                { name: 'storefront-placeholder-square-48', width: 48, height: 48, mode: 'crop' },
+                { name: 'storefront-placeholder-wide-64', width: 64, height: 32, mode: 'crop' },
                 { name: 'storefront-thumbnail-160', width: 160, height: 160, mode: 'crop' },
                 { name: 'storefront-thumbnail-320', width: 320, height: 320, mode: 'crop' },
                 // Keep legacy card presets available while older storefront bundles are still cached.
@@ -711,15 +719,18 @@ export const devConfig: VendureConfig = {
                 { name: 'storefront-card-640', width: 640, height: 560, mode: 'crop' },
                 { name: 'storefront-card-square-320', width: 320, height: 320, mode: 'resize' },
                 { name: 'storefront-card-square-640', width: 640, height: 640, mode: 'resize' },
+                { name: 'storefront-card-square-960', width: 960, height: 960, mode: 'resize' },
                 { name: 'storefront-hero-480', width: 480, height: 240, mode: 'crop' },
                 { name: 'storefront-hero-960', width: 960, height: 480, mode: 'crop' },
                 { name: 'storefront-hero-1440', width: 1440, height: 720, mode: 'crop' },
+                { name: 'storefront-hero-1600', width: 1600, height: 800, mode: 'crop' },
                 { name: 'storefront-detail-640', width: 640, height: 640, mode: 'resize' },
                 { name: 'storefront-detail-1200', width: 1200, height: 1200, mode: 'resize' },
+                { name: 'storefront-detail-1600', width: 1600, height: 1600, mode: 'resize' },
             ],
             imageTransformStrategy: new PresetOnlyStrategy({
                 defaultPreset: 'storefront-original-preview',
-                permittedQuality: [75],
+                permittedQuality: [75, 90],
                 permittedFormats: ['webp'],
             }),
         }),

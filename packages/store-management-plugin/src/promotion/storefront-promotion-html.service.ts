@@ -6,6 +6,7 @@ import MarkdownIt from 'markdown-it';
 import { StorefrontPromotionContentType } from '../types';
 
 import { DEFAULT_PROMOTION_TEMPLATE, DEFAULT_PROMOTION_TEMPLATE_VERSION } from './default-promotion-template';
+import { PROMOTION_VISUAL_SCRIPT } from './promotion-visual-script';
 
 export const MAX_PROMOTION_SOURCE_BYTES = 60_000;
 
@@ -125,6 +126,7 @@ export class StorefrontPromotionHtmlService {
         this.normalizeImages($, trustedImageUrls);
         this.normalizeEntryForm($, input.entryTicket);
         this.normalizeHead($, input.bindings, input.canonicalUrl);
+        this.appendTrustedVisualScript($);
 
         const document = $.html().replace(/^<!doctype html>\s*/iu, '');
         return `<!doctype html>\n${document}`;
@@ -284,6 +286,14 @@ export class StorefrontPromotionHtmlService {
         if (canonicalUrl && this.isSafeUrl(canonicalUrl, false)) {
             $('head').append(`<link rel="canonical" href="${this.escapeHtml(canonicalUrl)}">`);
         }
+    }
+
+    private appendTrustedVisualScript($: ReturnType<typeof load>): void {
+        if ($('[data-promo-signal-canvas]').length === 0) return;
+        $('script[data-storefront-promotion-visual]').remove();
+        const script = $('<script data-storefront-promotion-visual></script>');
+        script.text(PROMOTION_VISUAL_SCRIPT);
+        $('body').append(script);
     }
 
     private replaceTokens(source: string, bindings: StorefrontPromotionBindings): string {

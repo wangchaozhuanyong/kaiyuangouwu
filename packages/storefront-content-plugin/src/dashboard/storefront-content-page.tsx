@@ -60,6 +60,7 @@ import {
     Pencil,
     Plus,
     RefreshCw,
+    Search,
     Settings2,
     Sparkles,
     Trash2,
@@ -78,6 +79,7 @@ import {
     movedHomepageBlockIds,
     reorderedHomepageBlockIds,
 } from './homepage-module-registry';
+import { contentBlockHasImage, contentBlockImagePreview } from './storefront-content-images';
 import { swappedContentBlockIds } from './storefront-content-ordering';
 import {
     ContentBlock,
@@ -86,13 +88,17 @@ import {
     ContentItem,
     ContentTargetType,
     StorefrontContentBlocksResult,
+    StorefrontContentTargetProductResult,
     createStorefrontContentBlockMutation,
     deleteStorefrontContentBlockMutation,
     reorderStorefrontContentBlocksMutation,
     storefrontContentBlocksQuery,
+    storefrontContentTargetProductQuery,
     updateStorefrontContentBlockMutation,
     updateStorefrontContentSettingsMutation,
 } from './storefront-content.graphql';
+import { prepareSupportDraft } from './support-settings';
+import { SupportSettingsEditor } from './support-settings-editor';
 
 const blockTypes: ContentBlockType[] = ['CUSTOM'];
 const targetTypes: ContentTargetType[] = [
@@ -162,12 +168,15 @@ const zhCopy = {
     replaceImage: '更换图片',
     removeImage: '移除图片',
     noImage: '暂未选择图片',
+    heroImageRequired: '轮播图上线前必须从素材库选择或上传图片',
+    heroImageMissing: '未配置图片',
     displaySettings: '显示设置',
     dualCardTemplate: '双卡片颜色模板',
     dualCardTemplateHint: '模板已包含背景、边框、强调色与纹理；切换模板不会改变文字和跳转目标。',
     dualCardDefault: '默认',
     displayCount: '显示商品数量',
     displayCountHint: '客户端首屏显示 1 到 50 个商品。',
+    categoryAdDisplayCountHint: '分类主视觉右侧最多显示 4 个商品；不足时从所选分类的首页商品中补齐。',
     noticeInterval: '公告滚动间隔',
     noticeIntervalHint: '有多条公告时，每 3 到 30 秒切换一条。',
     selectProducts: '选择固定商品',
@@ -188,6 +197,17 @@ const zhCopy = {
     targetType: '跳转类型',
     targetValue: '跳转目标',
     targetHint: '根据类型填写商品 ID、集合 ID、优惠码、搜索词、页面路径或链接。',
+    selectTargetProduct: '搜索并选择商品',
+    changeTargetProduct: '更换商品',
+    clearTarget: '清除跳转目标',
+    chooseTarget: '请选择跳转目标',
+    targetProductHint: '按商品名称搜索，选中后自动保存真实商品 ID。',
+    targetProductMissing: '找不到该商品，可能已删除或不属于当前店铺。',
+    pageTargetHint: '直接选择常用客户端页面；仅在特殊情况下使用自定义路径。',
+    supportTargetHint: '默认进入客服中心；也可配置在线客服链接、电话或邮箱。',
+    customTarget: '自定义路径或链接',
+    customPagePlaceholder: '例如：/custom-page',
+    customSupportPlaceholder: '例如：https://... 、tel:400... 或 mailto:...',
     translations: '多语言内容',
     chinese: '中文',
     english: 'English',
@@ -294,6 +314,8 @@ const enCopy: typeof zhCopy = {
     replaceImage: 'Replace image',
     removeImage: 'Remove image',
     noImage: 'No image selected',
+    heroImageRequired: 'Select or upload an image before publishing this carousel slide',
+    heroImageMissing: 'Image missing',
     displaySettings: 'Display settings',
     dualCardTemplate: 'Dual-card color template',
     dualCardTemplateHint:
@@ -301,6 +323,8 @@ const enCopy: typeof zhCopy = {
     dualCardDefault: 'Default',
     displayCount: 'Number of products',
     displayCountHint: 'Show 1 to 50 products in this storefront section.',
+    categoryAdDisplayCountHint:
+        'Show up to four products beside the category visual. Missing slots use homepage products from the selected category.',
     noticeInterval: 'Notice rotation interval',
     noticeIntervalHint: 'Rotate multiple notices every 3 to 30 seconds.',
     selectProducts: 'Select fixed products',
@@ -322,6 +346,17 @@ const enCopy: typeof zhCopy = {
     targetType: 'Target type',
     targetValue: 'Target value',
     targetHint: 'Enter a product ID, collection ID, coupon code, search term, page path or URL.',
+    selectTargetProduct: 'Search and select a product',
+    changeTargetProduct: 'Change product',
+    clearTarget: 'Clear target',
+    chooseTarget: 'Choose a target',
+    targetProductHint: 'Search by product name. The saved target uses the real product ID automatically.',
+    targetProductMissing: 'This product could not be found. It may be deleted or unavailable in this store.',
+    pageTargetHint: 'Choose a common storefront page, or use a custom path only when needed.',
+    supportTargetHint: 'Open the support center by default, or use a custom support URL, phone, or email.',
+    customTarget: 'Custom path or link',
+    customPagePlaceholder: 'For example: /custom-page',
+    customSupportPlaceholder: 'For example: https://..., tel:400..., or mailto:...',
     translations: 'Localized content',
     chinese: '中文',
     english: 'English',
@@ -399,6 +434,8 @@ const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
     STORY: { zh: '内容故事', en: 'Story' },
     LEGAL: { zh: '条款内容', en: 'Legal' },
     SUPPORT: { zh: '客服配置', en: 'Support' },
+    AUTH_LOGIN: { zh: '登录页视觉', en: 'Login visual' },
+    AUTH_REGISTER: { zh: '注册页视觉', en: 'Registration visual' },
     CUSTOM: { zh: '高级自定义模块', en: 'Custom block' },
 };
 
@@ -413,6 +450,25 @@ const targetTypeLabels: Record<ContentTargetType, { zh: string; en: string }> = 
     SUPPORT: { zh: '联系客服', en: 'Support action' },
     COUPON: { zh: '优惠码', en: 'Coupon code' },
 };
+
+const SUPPORT_CENTER_TARGET = '/support';
+const CUSTOM_TARGET_OPTION = '__custom__';
+const storefrontPageTargets = [
+    { value: '/', zh: '首页', en: 'Home' },
+    { value: '/category', zh: '商品分类', en: 'Categories' },
+    { value: '/search', zh: '搜索', en: 'Search' },
+    { value: '/cart', zh: '购物车', en: 'Cart' },
+    { value: '/account', zh: '个人中心', en: 'Account' },
+    { value: '/orders', zh: '我的订单', en: 'Orders' },
+    { value: '/coupons', zh: '优惠券中心', en: 'Coupon center' },
+    { value: '/favorites', zh: '我的收藏', en: 'Favorites' },
+    { value: '/history', zh: '浏览足迹', en: 'Browsing history' },
+    { value: '/notifications', zh: '消息中心', en: 'Notifications' },
+    { value: '/logistics', zh: '物流查询', en: 'Logistics' },
+    { value: SUPPORT_CENTER_TARGET, zh: '客服中心', en: 'Customer support' },
+] as const;
+
+const supportTargets = [{ value: SUPPORT_CENTER_TARGET, zh: '客服中心', en: 'Customer support' }] as const;
 
 export const storefrontContentRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -611,13 +667,16 @@ function StorefrontSiteContentPage() {
                                                 size="sm"
                                                 variant="outline"
                                                 disabled={saveMutation.isPending || toggleMutation.isPending}
-                                                onClick={() =>
+                                                onClick={() => {
+                                                    const next = block
+                                                        ? cloneBlock(block)
+                                                        : globalContentDraft(module.type, blocks.length);
                                                     setDraft(
-                                                        block
-                                                            ? cloneBlock(block)
-                                                            : globalContentDraft(module.type, blocks.length),
-                                                    )
-                                                }
+                                                        module.type === 'SUPPORT'
+                                                            ? prepareSupportDraft(next)
+                                                            : next,
+                                                    );
+                                                }}
                                             >
                                                 <Pencil className="size-4" aria-hidden="true" />
                                                 {text.configure}
@@ -626,12 +685,26 @@ function StorefrontSiteContentPage() {
                                                 checked={enabled}
                                                 disabled={saveMutation.isPending || toggleMutation.isPending}
                                                 aria-label={`${isZh ? module.labelZh : module.labelEn} ${enabled ? text.enabled : text.disabled}`}
-                                                onCheckedChange={value =>
+                                                onCheckedChange={value => {
+                                                    if (module.type === 'SUPPORT' && value) {
+                                                        const prepared = prepareSupportDraft(
+                                                            block
+                                                                ? cloneBlock(block)
+                                                                : globalContentDraft(
+                                                                      module.type,
+                                                                      blocks.length,
+                                                                  ),
+                                                        );
+                                                        if (!prepared.items.some(item => item.enabled)) {
+                                                            setDraft(prepared);
+                                                            return;
+                                                        }
+                                                    }
                                                     toggleMutation.mutate({
                                                         type: module.type,
                                                         enabled: value,
-                                                    })
-                                                }
+                                                    });
+                                                }}
                                             />
                                         </div>
                                     </div>
@@ -901,6 +974,10 @@ function StorefrontCarouselPage() {
                 onChange={setDraft}
                 onClose={() => !saveMutation.isPending && setDraft(null)}
                 onSave={block => {
+                    if (block.enabled && !contentBlockHasImage(block)) {
+                        toast.error(text.heroImageRequired);
+                        return;
+                    }
                     if (!isValid(block)) {
                         toast.error(text.validation);
                         return;
@@ -1374,12 +1451,13 @@ function CarouselSlideRow({
     onDelete: () => void;
 }>) {
     const translation = preferredBlockTranslation(slide, isZh);
+    const imagePreview = contentBlockImagePreview(slide);
     return (
         <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-3">
                 <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                    {slide.imageUrl ? (
-                        <img className="size-full object-cover" src={slide.imageUrl} alt="" />
+                    {imagePreview ? (
+                        <img className="size-full object-cover" src={imagePreview} alt="" />
                     ) : (
                         <ImageIcon className="size-5" aria-hidden="true" />
                     )}
@@ -1392,6 +1470,7 @@ function CarouselSlideRow({
                         <Badge variant={slide.enabled ? 'default' : 'secondary'}>
                             {slide.enabled ? text.enabled : text.disabled}
                         </Badge>
+                        {!imagePreview ? <Badge variant="outline">{text.heroImageMissing}</Badge> : null}
                         {(slide.startsAt || slide.endsAt) && (
                             <Badge variant="outline">{text.scheduled}</Badge>
                         )}
@@ -1475,13 +1554,17 @@ function ModuleSpecificSettings({
     const [productPickerOpen, setProductPickerOpen] = useState(false);
     const settings = draft.settings ?? {};
     const productSettingKey =
-        draft.type === 'FEATURED_COLLECTION' || draft.type === 'CUSTOM'
+        draft.type === 'CATEGORY_AD' || draft.type === 'FEATURED_COLLECTION' || draft.type === 'CUSTOM'
             ? 'selectedProductIds'
             : draft.type === 'BEST_SELLERS'
               ? 'pinnedProductIds'
               : null;
     const selectedProductIds = productSettingKey ? stringArraySetting(settings[productSettingKey]) : [];
-    const displayCount = numberSetting(settings.displayCount, 8);
+    const maximumDisplayCount = draft.type === 'CATEGORY_AD' ? 4 : 50;
+    const displayCount = Math.min(
+        maximumDisplayCount,
+        Math.max(1, numberSetting(settings.displayCount, draft.type === 'CATEGORY_AD' ? 4 : 8)),
+    );
     const noticeIntervalSeconds = numberSetting(settings.scrollIntervalSeconds, 5);
     const updateSettings = (patch: Record<string, unknown>) =>
         onChange({ ...draft, settings: { ...settings, ...patch } });
@@ -1519,15 +1602,25 @@ function ModuleSpecificSettings({
                         />
                     </Field>
                 ) : (
-                    <Field label={text.displayCount} hint={text.displayCountHint}>
+                    <Field
+                        label={text.displayCount}
+                        hint={
+                            draft.type === 'CATEGORY_AD'
+                                ? text.categoryAdDisplayCountHint
+                                : text.displayCountHint
+                        }
+                    >
                         <Input
                             type="number"
                             min={1}
-                            max={50}
+                            max={maximumDisplayCount}
                             value={displayCount}
                             onChange={event =>
                                 updateSettings({
-                                    displayCount: Math.min(50, Math.max(1, Number(event.target.value) || 1)),
+                                    displayCount: Math.min(
+                                        maximumDisplayCount,
+                                        Math.max(1, Number(event.target.value) || 1),
+                                    ),
                                 })
                             }
                         />
@@ -1786,6 +1879,19 @@ function BlockEditor({
     }, [draft?.id, draft?.type, draft == null]);
     if (!draft) return null;
 
+    if (fixedTemplate && draft.type === 'SUPPORT') {
+        return (
+            <SupportSettingsEditor
+                draft={draft}
+                isZh={isZh}
+                saving={saving}
+                onChange={onChange}
+                onClose={onClose}
+                onSave={onSave}
+            />
+        );
+    }
+
     const translationLanguages: Array<'zh_Hans' | 'en'> = advancedMode ? ['zh_Hans', 'en'] : ['zh_Hans'];
     const visibleTextFields = simpleTextFieldsForType(draft.type);
 
@@ -1816,9 +1922,10 @@ function BlockEditor({
                             </DialogTitle>
                             <DialogDescription className="mt-1">{text.editorDescription}</DialogDescription>
                         </div>
-                        {!fixedTemplate ? (
+                        <div className="flex shrink-0 items-center gap-2">
+                            {fixedTemplate ? <Badge variant="outline">{text.fixedTemplate}</Badge> : null}
                             <div
-                                className="flex shrink-0 rounded-md border bg-muted/30 p-1"
+                                className="flex rounded-md border bg-muted/30 p-1"
                                 aria-label={text.simpleModeHint}
                             >
                                 <Button
@@ -1838,9 +1945,7 @@ function BlockEditor({
                                     {text.advancedMode}
                                 </Button>
                             </div>
-                        ) : (
-                            <Badge variant="outline">{text.fixedTemplate}</Badge>
-                        )}
+                        </div>
                     </div>
                     <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
                 </DialogHeader>
@@ -2024,21 +2129,22 @@ function BlockEditor({
                                                     onChange({
                                                         ...draft,
                                                         targetType: value,
-                                                        targetValue:
-                                                            value === 'NONE' ? null : draft.targetValue,
+                                                        targetValue: targetValueAfterTypeChange(
+                                                            draft.targetType,
+                                                            draft.targetValue,
+                                                            value,
+                                                        ),
                                                     })
                                                 }
                                             />
                                         </Field>
-                                        <Field label={text.targetValue} hint={text.targetHint}>
-                                            <Input
-                                                disabled={draft.targetType === 'NONE'}
-                                                value={draft.targetValue ?? ''}
-                                                onChange={event =>
-                                                    update('targetValue', event.target.value || null)
-                                                }
-                                            />
-                                        </Field>
+                                        <TargetValueEditor
+                                            targetType={draft.targetType}
+                                            value={draft.targetValue}
+                                            isZh={isZh}
+                                            text={text}
+                                            onChange={value => update('targetValue', value)}
+                                        />
                                     </>
                                 ) : null}
                             </div>
@@ -2051,7 +2157,9 @@ function BlockEditor({
                             </>
                         ) : null}
 
-                        {(!advancedMode || draft.type === 'CORE_CATEGORIES') &&
+                        {(!advancedMode ||
+                            draft.type === 'CORE_CATEGORIES' ||
+                            draft.type === 'CATEGORY_AD') &&
                         simpleModuleHasSettings(draft.type) ? (
                             <>
                                 <Separator />
@@ -2205,6 +2313,24 @@ function BlockEditor({
                                         translation={previewTranslation}
                                         isZh={isZh}
                                     />
+                                ) : draft.type === 'CATEGORY_AD' ? (
+                                    <CategoryPromotionEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
+                                ) : draft.type === 'FEATURED_COLLECTION' ? (
+                                    <FeaturedCollectionEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
+                                ) : draft.type === 'STORY' ? (
+                                    <StoryEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
                                 ) : (
                                     <>
                                         {previewUsesBlockImage(draft.type) ? (
@@ -2296,6 +2422,178 @@ function BlockEditor({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function CategoryPromotionEditorPreview({
+    draft,
+    translation,
+    isZh,
+}: Readonly<{
+    draft: ContentBlock;
+    translation: ContentBlockTranslation | null;
+    isZh: boolean;
+}>) {
+    const selectedCount = stringArraySetting(draft.settings?.selectedProductIds).length;
+    const previewCount = Math.min(4, Math.max(2, selectedCount));
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-end justify-between gap-2 px-0.5">
+                <div className="min-w-0">
+                    <h4 className="truncate text-sm font-bold">
+                        {translation?.title || (isZh ? '分类精选' : 'Category edit')}
+                    </h4>
+                    {translation?.subtitle ? (
+                        <p className="mt-1 truncate text-[9px] text-muted-foreground">
+                            {translation.subtitle}
+                        </p>
+                    ) : null}
+                </div>
+                <span className="shrink-0 text-[9px] text-muted-foreground">
+                    {translation?.ctaLabel || (isZh ? '查看全部 →' : 'View all →')}
+                </span>
+            </div>
+            <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-muted">
+                {draft.imageUrl ? (
+                    <img className="size-full object-cover" src={draft.imageUrl} alt="" />
+                ) : (
+                    <ImageIcon
+                        className="absolute left-1/2 top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 opacity-35"
+                        aria-hidden="true"
+                    />
+                )}
+                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-950/65 to-transparent" />
+                <div className="absolute bottom-3 left-3 text-[9px] font-semibold tracking-[0.12em] text-white/85">
+                    {isZh ? '分类精选' : 'CATEGORY EDIT'}
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: previewCount }, (_, index) => (
+                    <div key={index} className="overflow-hidden rounded-lg border bg-background">
+                        <div className="relative aspect-square bg-muted">
+                            <ImageIcon
+                                className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 opacity-30"
+                                aria-hidden="true"
+                            />
+                        </div>
+                        <div className="space-y-1.5 p-2">
+                            <div className="h-2 w-4/5 rounded bg-foreground/20" />
+                            <div className="h-1.5 w-1/2 rounded bg-foreground/10" />
+                            <div className="h-2 w-1/3 rounded bg-foreground/25" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function FeaturedCollectionEditorPreview({
+    draft,
+    translation,
+    isZh,
+}: Readonly<{
+    draft: ContentBlock;
+    translation: ContentBlockTranslation | null;
+    isZh: boolean;
+}>) {
+    const selectedCount = stringArraySetting(draft.settings?.selectedProductIds).length;
+    const previewCount = Math.min(3, Math.max(2, selectedCount));
+
+    return (
+        <div className="space-y-2">
+            <div
+                className="overflow-hidden rounded-lg p-4"
+                style={{
+                    backgroundColor: draft.backgroundColor || '#eef3f7',
+                    color: draft.textColor || '#0f172a',
+                }}
+            >
+                <div className="text-[9px] font-semibold tracking-[0.14em] opacity-60">
+                    01 · {isZh ? '本期策展' : 'CURATED EDIT'}
+                </div>
+                <h4 className="mt-6 max-w-[10ch] text-xl font-bold leading-tight tracking-tight">
+                    {translation?.title || (isZh ? '推荐集合' : 'Featured collection')}
+                </h4>
+                {translation?.subtitle ? (
+                    <p className="mt-2 line-clamp-2 text-[11px] leading-5 opacity-65">
+                        {translation.subtitle}
+                    </p>
+                ) : null}
+                <div className="mt-5 text-[10px] font-medium">
+                    {translation?.ctaLabel || (isZh ? '浏览全部 →' : 'View collection →')}
+                </div>
+            </div>
+            <div className="flex gap-2 overflow-hidden">
+                {Array.from({ length: previewCount }, (_, index) => (
+                    <div key={index} className="min-w-[94px] flex-1 overflow-hidden rounded-lg bg-background">
+                        <div className="relative aspect-[4/5] bg-muted">
+                            <ImageIcon
+                                className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 opacity-35"
+                                aria-hidden="true"
+                            />
+                            <span className="absolute bottom-2 right-2 rounded-full bg-background/80 px-2 py-1 text-[8px]">
+                                {String(index + 1).padStart(2, '0')}
+                            </span>
+                        </div>
+                        <div className="space-y-1 p-2">
+                            <div className="h-2 w-3/4 rounded bg-foreground/20" />
+                            <div className="h-1.5 w-1/2 rounded bg-foreground/10" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function StoryEditorPreview({
+    draft,
+    translation,
+    isZh,
+}: Readonly<{
+    draft: ContentBlock;
+    translation: ContentBlockTranslation | null;
+    isZh: boolean;
+}>) {
+    return (
+        <div
+            className="grid min-h-56 grid-cols-[1.08fr_0.92fr] overflow-hidden rounded-lg"
+            style={{
+                backgroundColor: draft.backgroundColor || '#f1f5f9',
+                color: draft.textColor || '#0f172a',
+            }}
+        >
+            <div className="min-h-56 bg-muted">
+                {draft.imageUrl ? (
+                    <img className="size-full object-cover" src={draft.imageUrl} alt="" />
+                ) : (
+                    <div className="flex size-full items-center justify-center">
+                        <ImageIcon className="size-5 opacity-35" aria-hidden="true" />
+                    </div>
+                )}
+            </div>
+            <div className="flex flex-col justify-center p-3">
+                <div className="text-[8px] font-semibold tracking-[0.12em] opacity-55">
+                    {isZh ? '内容故事' : 'EDITORIAL'}
+                </div>
+                <h4 className="mt-4 text-sm font-bold leading-tight tracking-tight">
+                    {translation?.title || (isZh ? '内容故事' : 'Content story')}
+                </h4>
+                {translation?.subtitle ? (
+                    <p className="mt-2 line-clamp-2 text-[9px] font-medium leading-4 opacity-75">
+                        {translation.subtitle}
+                    </p>
+                ) : null}
+                {translation?.body ? (
+                    <p className="mt-2 line-clamp-3 text-[8px] leading-4 opacity-60">{translation.body}</p>
+                ) : null}
+                <div className="mt-4 border-b border-current/25 pb-1 text-[9px] font-medium">
+                    {translation?.ctaLabel || (isZh ? '继续阅读 →' : 'Read the story →')}
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -2514,18 +2812,22 @@ function ItemEditor({
                                     onChange({
                                         ...item,
                                         targetType: value,
-                                        targetValue: value === 'NONE' ? null : item.targetValue,
+                                        targetValue: targetValueAfterTypeChange(
+                                            item.targetType,
+                                            item.targetValue,
+                                            value,
+                                        ),
                                     })
                                 }
                             />
                         </Field>
-                        <Field label={text.targetValue} hint={text.targetHint}>
-                            <Input
-                                disabled={item.targetType === 'NONE'}
-                                value={item.targetValue ?? ''}
-                                onChange={event => update('targetValue', event.target.value || null)}
-                            />
-                        </Field>
+                        <TargetValueEditor
+                            targetType={item.targetType}
+                            value={item.targetValue}
+                            isZh={isZh}
+                            text={text}
+                            onChange={value => update('targetValue', value)}
+                        />
                     </>
                 ) : null}
                 {translationLanguages.map(languageCode => {
@@ -2726,6 +3028,237 @@ function TargetSelect({
     );
 }
 
+function targetValueAfterTypeChange(
+    currentType: ContentTargetType,
+    currentValue: string | null,
+    nextType: ContentTargetType,
+): string | null {
+    if (currentType === nextType) return currentValue;
+    return nextType === 'SUPPORT' ? SUPPORT_CENTER_TARGET : null;
+}
+
+function TargetValueEditor({
+    targetType,
+    value,
+    isZh,
+    text,
+    onChange,
+}: Readonly<{
+    targetType: ContentTargetType;
+    value: string | null;
+    isZh: boolean;
+    text: typeof zhCopy;
+    onChange: (value: string | null) => void;
+}>) {
+    if (targetType === 'NONE') return null;
+
+    if (targetType === 'PRODUCT') {
+        return (
+            <Field label={text.targetValue} hint={text.targetProductHint}>
+                <ProductTargetPicker value={value} text={text} onChange={onChange} />
+            </Field>
+        );
+    }
+
+    if (targetType === 'PAGE') {
+        return (
+            <Field label={text.targetValue} hint={text.pageTargetHint}>
+                <PresetTargetPicker
+                    key="page"
+                    value={value}
+                    options={storefrontPageTargets}
+                    isZh={isZh}
+                    customLabel={text.customTarget}
+                    placeholder={text.chooseTarget}
+                    customPlaceholder={text.customPagePlaceholder}
+                    onChange={onChange}
+                />
+            </Field>
+        );
+    }
+
+    if (targetType === 'SUPPORT') {
+        return (
+            <Field label={text.targetValue} hint={text.supportTargetHint}>
+                <PresetTargetPicker
+                    key="support"
+                    value={value}
+                    options={supportTargets}
+                    isZh={isZh}
+                    customLabel={text.customTarget}
+                    placeholder={text.chooseTarget}
+                    customPlaceholder={text.customSupportPlaceholder}
+                    onChange={onChange}
+                />
+            </Field>
+        );
+    }
+
+    return (
+        <Field label={text.targetValue} hint={text.targetHint}>
+            <Input value={value ?? ''} onChange={event => onChange(event.target.value || null)} />
+        </Field>
+    );
+}
+
+function ProductTargetPicker({
+    value,
+    text,
+    onChange,
+}: Readonly<{
+    value: string | null;
+    text: typeof zhCopy;
+    onChange: (value: string | null) => void;
+}>) {
+    const { activeChannel } = useChannel();
+    const [open, setOpen] = useState(false);
+    const selectedProductIds = useMemo(() => (value ? [value] : []), [value]);
+    const productQuery = useQuery({
+        queryKey: ['storefront-content-target-product', activeChannel?.id, value],
+        queryFn: () =>
+            api.query<StorefrontContentTargetProductResult>(storefrontContentTargetProductQuery, {
+                id: value,
+            }),
+        enabled: Boolean(activeChannel?.id && value),
+        placeholderData: undefined,
+    });
+    const product = productQuery.data?.product;
+
+    return (
+        <>
+            {value ? (
+                <div className="flex min-w-0 items-center gap-3 rounded-md border p-3">
+                    {productQuery.isLoading ? (
+                        <Skeleton className="size-14 shrink-0 rounded-md" />
+                    ) : product?.featuredAsset?.preview ? (
+                        <img
+                            className="size-14 shrink-0 rounded-md border object-cover"
+                            src={product.featuredAsset.preview}
+                            alt=""
+                        />
+                    ) : (
+                        <div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-dashed bg-muted/40">
+                            <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+                        </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                        {productQuery.isLoading ? (
+                            <div className="space-y-2">
+                                <Skeleton className="h-4 w-2/3" />
+                                <Skeleton className="h-3 w-1/2" />
+                            </div>
+                        ) : product ? (
+                            <>
+                                <p className="truncate text-sm font-medium">{product.name}</p>
+                                <p className="truncate text-xs text-muted-foreground">{product.slug}</p>
+                            </>
+                        ) : (
+                            <p className="text-xs text-destructive">{text.targetProductMissing}</p>
+                        )}
+                        <Button
+                            className="mt-2"
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setOpen(true)}
+                        >
+                            <Search className="size-4" aria-hidden="true" />
+                            {text.changeTargetProduct}
+                        </Button>
+                    </div>
+                    <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={text.clearTarget}
+                        title={text.clearTarget}
+                        onClick={() => onChange(null)}
+                    >
+                        <X className="size-4" aria-hidden="true" />
+                    </Button>
+                </div>
+            ) : (
+                <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+                    <Search className="size-4" aria-hidden="true" />
+                    {text.selectTargetProduct}
+                </Button>
+            )}
+            <ProductMultiSelectorDialog
+                mode="product"
+                singleSelect
+                initialSelectionIds={selectedProductIds}
+                onSelectionChange={ids => onChange(ids[0] ?? null)}
+                open={open}
+                onOpenChange={setOpen}
+            />
+        </>
+    );
+}
+
+function PresetTargetPicker({
+    value,
+    options,
+    isZh,
+    customLabel,
+    placeholder,
+    customPlaceholder,
+    onChange,
+}: Readonly<{
+    value: string | null;
+    options: ReadonlyArray<{ value: string; zh: string; en: string }>;
+    isZh: boolean;
+    customLabel: string;
+    placeholder: string;
+    customPlaceholder: string;
+    onChange: (value: string | null) => void;
+}>) {
+    const matchesPreset = options.some(option => option.value === value);
+    const [customSelected, setCustomSelected] = useState(Boolean(value && !matchesPreset));
+
+    useEffect(() => {
+        if (value && !matchesPreset) setCustomSelected(true);
+        if (matchesPreset) setCustomSelected(false);
+    }, [matchesPreset, value]);
+
+    return (
+        <div className="space-y-2">
+            <Select
+                value={customSelected ? CUSTOM_TARGET_OPTION : (value ?? '')}
+                onValueChange={next => {
+                    if (!next) return;
+                    if (next === CUSTOM_TARGET_OPTION) {
+                        setCustomSelected(true);
+                        if (matchesPreset) onChange(null);
+                        return;
+                    }
+                    setCustomSelected(false);
+                    onChange(next);
+                }}
+            >
+                <SelectTrigger className="w-full min-w-0">
+                    <SelectValue placeholder={placeholder} />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                            {isZh ? option.zh : option.en}
+                            <span className="ml-2 text-muted-foreground">{option.value}</span>
+                        </SelectItem>
+                    ))}
+                    <SelectItem value={CUSTOM_TARGET_OPTION}>{customLabel}</SelectItem>
+                </SelectContent>
+            </Select>
+            {customSelected ? (
+                <Input
+                    value={matchesPreset ? '' : (value ?? '')}
+                    placeholder={customPlaceholder}
+                    onChange={event => onChange(event.target.value || null)}
+                />
+            ) : null}
+        </div>
+    );
+}
+
 function defaultLayoutForType(type: ContentBlockType): ContentBlock['layoutVariant'] {
     if (type === 'HERO') return 'HERO_OVERLAY';
     if (type === 'NOTICE') return 'TICKER';
@@ -2752,9 +3285,16 @@ function simpleTextFieldsForType(type: ContentBlockType): {
 }
 
 function simpleItemNeedsTarget(type: ContentBlockType): boolean {
-    return ['HERO', 'QUICK_LINKS', 'CATEGORY_AD', 'CORE_CATEGORIES', 'COUPONS', 'SUPPORT', 'CUSTOM'].includes(
-        type,
-    );
+    return [
+        'HERO',
+        'QUICK_LINKS',
+        'CATEGORY_AD',
+        'CORE_CATEGORIES',
+        'COUPONS',
+        'LEGAL',
+        'SUPPORT',
+        'CUSTOM',
+    ].includes(type);
 }
 
 function simpleBlockNeedsTarget(type: ContentBlockType): boolean {
@@ -2777,6 +3317,7 @@ function simpleModuleHasSettings(type: ContentBlockType): boolean {
     return [
         'NOTICE',
         'CORE_CATEGORIES',
+        'CATEGORY_AD',
         'FEATURED_COLLECTION',
         'FLASH_SALE',
         'BEST_SELLERS',
@@ -2789,10 +3330,10 @@ function simpleModuleUsesItems(type: ContentBlockType): boolean {
         'HERO',
         'NOTICE',
         'QUICK_LINKS',
-        'CATEGORY_AD',
         'COUPONS',
         'TRUST_BAR',
         'CORE_CATEGORIES',
+        'LEGAL',
         'SUPPORT',
         'CUSTOM',
     ].includes(type);
@@ -2869,7 +3410,7 @@ function fixedModuleDraft(type: FixedHomepageModuleType, position: number): Cont
 function globalContentDraft(type: GlobalContentType, position: number): ContentBlock {
     const descriptor = globalContentModules.find(module => module.type === type);
     if (!descriptor) throw new Error(`Unknown global content module: ${type}`);
-    return {
+    const draft: ContentBlock = {
         ...newBlock(position, type),
         code: `storefront-${type.toLowerCase()}`,
         internalName: descriptor.labelZh,
@@ -2878,6 +3419,7 @@ function globalContentDraft(type: GlobalContentType, position: number): ContentB
             { ...emptyBlockTranslation('en'), title: descriptor.labelEn },
         ],
     };
+    return type === 'SUPPORT' ? prepareSupportDraft(draft) : draft;
 }
 
 function newHeroBlock(position: number, slideNumber: number): ContentBlock {
@@ -2920,6 +3462,7 @@ function newHeroBlock(position: number, slideNumber: number): ContentBlock {
             },
             {
                 languageCode: 'en',
+                // i18n-audit-ignore -- manually paired bilingual CMS seed content
                 title: 'Many models. One gateway.',
                 subtitle: 'Intelligent AI API Relay',
                 body: 'Connect diverse AI capabilities through one flexible gateway and route every request with ease.',

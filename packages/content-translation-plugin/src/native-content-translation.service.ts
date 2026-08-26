@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { normalizeString } from '@vendure/common/lib/normalize-string';
 import {
+    Channel,
     Collection,
     CollectionEvent,
     Country,
@@ -11,8 +12,11 @@ import {
     FacetValue,
     FacetValueEvent,
     ID,
+    LanguageCode,
+    Logger,
     PaymentMethod,
     PaymentMethodEvent,
+    ProcessContext,
     Product,
     ProductEvent,
     ProductOption,
@@ -26,6 +30,7 @@ import {
     Province,
     ProvinceEvent,
     RequestContext,
+    RequestContextService,
     ShippingMethod,
     ShippingMethodEvent,
     TransactionalConnection,
@@ -34,6 +39,7 @@ import {
 } from '@vendure/core';
 import { ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
+import { contentTranslationLoggerCtx } from './constants.js';
 import { ContentTranslationService, contentTranslationInternals } from './content-translation.service.js';
 import { ContentTranslationFormat } from './types.js';
 
@@ -60,7 +66,11 @@ export interface NativeContentBackfillResult {
     errors: string[];
 }
 
-type NativeEntity = VendureEntity & { enabled?: boolean; translations?: ObjectLiteral[] };
+type NativeEntity = VendureEntity & {
+    channels?: Channel[];
+    enabled?: boolean;
+    translations?: ObjectLiteral[];
+};
 type NativeEvent = {
     type: 'created' | 'updated' | 'deleted';
     ctx: RequestContext;
@@ -122,6 +132,8 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         private readonly eventBus: EventBus,
         private readonly connection: TransactionalConnection,
         private readonly translations: ContentTranslationService,
+        private readonly processContext?: ProcessContext,
+        private readonly requestContextService?: RequestContextService,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -143,6 +155,53 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             id: 'customer-content-auto-translate',
             handler: (event: any) => this.handle(event as NativeEvent),
         });
+        if (this.processContext?.isServer && this.requestContextService && this.translations.isConfigured()) {
+            void this.repairHistoricalTranslations().catch(error => {
+                Logger.error(
+                    `Automatic customer-content translation repair failed: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                    contentTranslationLoggerCtx,
+                    error instanceof Error ? error.stack : undefined,
+                );
+            });
+        }
+    }
+
+    async repairHistoricalTranslations(): Promise<NativeContentBackfillResult> {
+        if (!this.requestContextService || !this.translations.isConfigured()) {
+            return emptyBackfillResult();
+        }
+        const ctx = await this.requestContextService.create({
+            apiType: 'admin',
+            languageCode: LanguageCode.zh_Hans,
+        });
+        const aggregate = emptyBackfillResult();
+        let offset = 0;
+        do {
+            const page = await this.backfill(ctx, null, 100, offset);
+            aggregate.total = page.total;
+            aggregate.scanned += page.scanned;
+            aggregate.processed += page.processed;
+            aggregate.failed += page.failed;
+            aggregate.errors.push(...page.errors.slice(0, Math.max(0, 50 - aggregate.errors.length)));
+            aggregate.nextOffset = page.nextOffset;
+            aggregate.hasMore = page.hasMore;
+            if (page.scanned === 0) break;
+            offset = page.nextOffset;
+        } while (aggregate.hasMore);
+        const summary =
+            `Automatic customer-content translation repair scanned ${aggregate.scanned} records, ` +
+            `processed ${aggregate.processed}, failed ${aggregate.failed}`;
+        if (aggregate.failed) {
+            Logger.warn(
+                `${summary}. ${aggregate.errors.slice(0, 5).join('; ')}`,
+                contentTranslationLoggerCtx,
+            );
+        } else {
+            Logger.info(summary, contentTranslationLoggerCtx);
+        }
+        return aggregate;
     }
 
     private async handle(event: NativeEvent): Promise<void> {
@@ -178,7 +237,18 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             );
         }
         if (!target) {
-            throw new UserInputError(`Cannot save ${entityType}: English content is missing`);
+            throw new UserInputError(
+                `Cannot review ${entityType} in English: save the Simplified Chinese source first so English can be generated`,
+            );
+        }
+        const submittedChineseTarget = definition.fields.some(
+            field =>
+                Object.prototype.hasOwnProperty.call(targetInput, field.path) &&
+                contentTranslationInternals.containsHanContent(String(target[field.path] ?? '')),
+        );
+        if (submittedChineseTarget) {
+            await this.translateEntity(ctx, entity, { translations: [source] });
+            return;
         }
         for (const field of definition.fields) {
             if (!Object.prototype.hasOwnProperty.call(targetInput, field.path)) continue;
@@ -191,7 +261,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             }
             if (sourceText.trim() && !targetText.trim()) {
                 throw new UserInputError(
-                    `Cannot save ${entityType}: English field "${field.path}" cannot be empty while its Chinese source has content`,
+                    `Cannot review ${entityType} in English: field "${field.path}" is empty; save the Simplified Chinese source first so it can be generated`,
                 );
             }
             if (!sourceText.trim() && !targetText.trim()) continue;
@@ -253,7 +323,10 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 continue;
             }
             const entities = (await repository.find({
-                relations: ['translations'],
+                relations:
+                    entityClass === Product || entityClass === ProductVariant
+                        ? ['translations', 'channels']
+                        : ['translations'],
                 take: remaining,
                 skip: remainingOffset,
                 order: { id: 'ASC' },
@@ -268,6 +341,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 if (!source) continue;
                 try {
                     await this.translateEntity(ctx, entity, { translations: [source] });
+                    await this.refreshProductSearchIndex(ctx, entity);
                     result.processed++;
                 } catch (error) {
                     result.failed++;
@@ -309,27 +383,40 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         const statesByField = new Map(existingStates.map(state => [state.fieldPath, state]));
         const manualFields = new Set<string>();
         const staleFields = new Set<string>();
+        const currentAutoFields = new Set<string>();
         for (const field of definition.fields) {
             const state = statesByField.get(field.path);
-            const currentHash = contentTranslationInternals.hash(String(target?.[field.path] ?? ''));
+            const currentTargetText = String(target?.[field.path] ?? '');
+            const currentHash = contentTranslationInternals.hash(currentTargetText);
             const sourceHash = contentTranslationInternals.hash(String(source[field.path] ?? ''));
             const targetWasSubmitted = targetInput?.[field.path] != null;
             const targetWasCleared = targetWasSubmitted && !String(targetInput?.[field.path] ?? '').trim();
+            const targetContainsHan = contentTranslationInternals.containsHanContent(currentTargetText);
             const targetChanged =
                 targetWasSubmitted && !targetWasCleared && (!state || state.translatedHash !== currentHash);
-            if (targetChanged) {
+            if (targetChanged && !targetContainsHan) {
                 manualFields.add(field.path);
                 continue;
             }
             if (targetWasCleared) continue;
-            if (state?.locked) {
+            if (state?.locked && !targetContainsHan) {
                 if (state.sourceHash !== sourceHash || state.status === 'STALE') {
                     staleFields.add(field.path);
                 }
                 manualFields.add(field.path);
                 continue;
             }
-            if (!state && String(target?.[field.path] ?? '').trim() && currentHash !== sourceHash) {
+            if (
+                state?.status === 'AUTO_TRANSLATED' &&
+                !state.locked &&
+                state.sourceHash === sourceHash &&
+                state.translatedHash === currentHash &&
+                !targetContainsHan
+            ) {
+                currentAutoFields.add(field.path);
+                continue;
+            }
+            if (!state && currentTargetText.trim() && currentHash !== sourceHash && !targetContainsHan) {
                 manualFields.add(field.path);
             }
         }
@@ -342,7 +429,10 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             }
         }
         const segments = definition.fields
-            .filter(field => !field.deriveFrom && !manualFields.has(field.path))
+            .filter(
+                field =>
+                    !field.deriveFrom && !manualFields.has(field.path) && !currentAutoFields.has(field.path),
+            )
             .filter(field => String(source[field.path] ?? '').trim().length > 0)
             .map(field => ({
                 key: field.path,
@@ -350,10 +440,9 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 format: field.format ?? 'TEXT',
             }));
         if (segments.length && !this.translations.isConfigured()) {
-            // Simplified Chinese is the source of truth. A missing optional translation
-            // provider must not prevent the merchant from saving source content. English
-            // can be generated later through the backfill flow once a provider is enabled.
-            return;
+            throw new UserInputError(
+                'English content could not be generated because the translation provider is not configured',
+            );
         }
 
         const generated = segments.length
@@ -367,7 +456,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 base: entity,
             });
         for (const field of definition.fields) {
-            if (manualFields.has(field.path)) continue;
+            if (manualFields.has(field.path) || currentAutoFields.has(field.path)) continue;
             if (field.deriveFrom) {
                 const seed = String(
                     generatedByField.get(field.deriveFrom) ??
@@ -384,7 +473,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         for (const field of definition.fields) {
             if (field.required && !String(nextTarget[field.path] ?? '').trim()) {
                 throw new UserInputError(
-                    `Cannot save ${entityType}: required English field "${field.path}" is empty`,
+                    `Cannot save ${entityType}: automatic English translation for required field "${field.path}" is empty`,
                 );
             }
         }
@@ -417,6 +506,32 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         );
         if (!translationsRelation) return undefined;
         return this.connection.getRepository(ctx, translationsRelation.inverseEntityMetadata.target);
+    }
+
+    private async refreshProductSearchIndex(ctx: RequestContext, entity: NativeEntity): Promise<void> {
+        if (!(entity instanceof Product) && !(entity instanceof ProductVariant)) return;
+        const requestContextService = this.requestContextService;
+        const contexts =
+            requestContextService && entity.channels?.length
+                ? await Promise.all(
+                      entity.channels.map(channel =>
+                          requestContextService.create({
+                              apiType: 'admin',
+                              channelOrToken: channel,
+                              languageCode: LanguageCode.zh_Hans,
+                          }),
+                      ),
+                  )
+                : [ctx];
+        for (const channelCtx of contexts) {
+            if (entity instanceof Product) {
+                await this.eventBus.publish(new ProductEvent(channelCtx, entity, 'updated', entity.id));
+            } else {
+                await this.eventBus.publish(
+                    new ProductVariantEvent(channelCtx, [entity], 'updated', [entity.id]),
+                );
+            }
+        }
     }
 }
 
@@ -453,10 +568,23 @@ function findTranslation(
         .getOne();
 }
 
+function emptyBackfillResult(): NativeContentBackfillResult {
+    return {
+        total: 0,
+        scanned: 0,
+        processed: 0,
+        failed: 0,
+        nextOffset: 0,
+        hasMore: false,
+        errors: [],
+    };
+}
+
 export const nativeContentTranslationInternals = {
     containsSourceTranslation,
     containsTargetTranslation,
     getTranslationInput,
     findInputForEntity,
+    containsHanContent: contentTranslationInternals.containsHanContent,
     supportsEntityType: (entityType: NamedEntityClass) => definitions.has(entityType),
 };

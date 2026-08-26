@@ -1,4 +1,4 @@
-import { Product } from './types';
+import { Product, StorefrontContentTargetType } from './types';
 
 export function buildBestSellerProducts({
     pinnedProducts,
@@ -77,6 +77,38 @@ export function selectManagedProducts({
             return product ? [product] : [];
         })
         .slice(0, normalizeCount(count));
+}
+
+export function selectCategoryPromotionProducts({
+    selectedProductIds,
+    products,
+    targetType,
+    targetValue,
+    count,
+}: {
+    selectedProductIds: string[];
+    products: Product[];
+    targetType: StorefrontContentTargetType;
+    targetValue: string | null;
+    count: number;
+}): Product[] {
+    const normalizedCount = Math.min(4, normalizeCount(count));
+    const selectedProducts = selectManagedProducts({
+        productIds: selectedProductIds,
+        products,
+        count: normalizedCount,
+    });
+    if (!targetValue || !['COLLECTION', 'CATEGORY'].includes(targetType)) {
+        return selectedProducts;
+    }
+
+    const selectedIds = new Set(selectedProducts.map(product => product.id));
+    const categoryProducts = products.filter(
+        product =>
+            !selectedIds.has(product.id) &&
+            product.collections.some(collection => collection.id === targetValue),
+    );
+    return [...selectedProducts, ...categoryProducts].slice(0, normalizedCount);
 }
 
 function recommendationScore(

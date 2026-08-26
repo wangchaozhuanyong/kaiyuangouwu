@@ -15,6 +15,7 @@ import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { cn } from '@/vdb/lib/utils.js';
+import { dashboardContentLanguage } from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from '@tanstack/react-router';
 import { Check, ChevronsUpDown, Plus, Store } from 'lucide-react';
@@ -56,11 +57,18 @@ export function ChannelSwitcher() {
     const orderedChannels = displayChannel ? channels.filter(ch => ch.id !== displayChannel.id) : channels;
 
     useEffect(() => {
-        if (activeChannel && contentLanguage !== activeChannel.defaultLanguageCode) {
-            // Merchant-facing forms always edit the current store's default content
-            // language. This removes the easy-to-miss secondary language selector
-            // that previously caused records to be created without Chinese source text.
-            setContentLanguage(activeChannel.defaultLanguageCode);
+        if (!activeChannel) {
+            return;
+        }
+        const sourceLanguage = dashboardContentLanguage(
+            activeChannel.availableLanguageCodes,
+            activeChannel.defaultLanguageCode,
+        );
+        if (contentLanguage !== sourceLanguage) {
+            // The storefront default can legitimately be English, but Dashboard forms
+            // always edit the Simplified Chinese source whenever the channel supports it.
+            // Saving that source triggers server-side English generation.
+            setContentLanguage(sourceLanguage);
         }
     }, [activeChannel, contentLanguage, setContentLanguage]);
 

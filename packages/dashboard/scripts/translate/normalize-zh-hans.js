@@ -132,7 +132,14 @@ const exactTranslations = new Map([
     ['Option group name (Simplified Chinese)', '规格组名称（简体中文）'],
     ['Option value (Simplified Chinese)', '规格值（简体中文）'],
     ['Simplified Chinese value', '简体中文规格值'],
-    ['No option values found. Add both language versions first.', '未找到规格值，请先添加中英文版本。'],
+    [
+        'No option values found. Add a Simplified Chinese value first; English is generated when you save.',
+        '未找到规格值。请先添加简体中文，保存时会自动生成英文。',
+    ],
+    [
+        'The storefront can serve these languages. Editors enter Chinese and English is generated on save.',
+        '前台可以提供这些语言。运营人员录入中文，保存时会自动生成英文。',
+    ],
     ['This option value already exists', '该规格值已存在'],
     ['Current store: {displayChannelName}', '当前店铺：{displayChannelName}'],
     ['e.g., Red, Large, Cotton', '例如：红色、大号、棉'],

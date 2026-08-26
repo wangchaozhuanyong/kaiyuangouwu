@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react';
 import { selectManagedProducts } from '../home-merchandising';
 import { storefrontWebpUrl } from '../responsive-image';
 import { StorefrontCouponCard } from '../storefront-coupons';
+import { STOREFRONT_LOGO_IMAGE } from '../storefront-images';
 import { routePath } from '../storefront-router';
 import {
     MarketConfig,
@@ -43,7 +44,7 @@ import {
 import { ProductSection } from './product-section';
 
 export function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
-    const effectiveUrl = url ? storefrontWebpUrl(url, 'thumbnail') : '/storefront/logo.svg';
+    const effectiveUrl = url ? storefrontWebpUrl(url, 'thumbnail') : STOREFRONT_LOGO_IMAGE;
     return <img className={className} src={effectiveUrl} alt={name} />;
 }
 
@@ -234,7 +235,12 @@ export function FlashSaleSection({
                     >
                         <span className="flash-sale-image">
                             {item.imageUrl ? (
-                                <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
+                                <SafeImage
+                                    src={item.imageUrl}
+                                    alt={item.productName}
+                                    imageKind="card"
+                                    loading="lazy"
+                                />
                             ) : (
                                 <span className="image-placeholder" aria-hidden="true">
                                     <Package />
@@ -243,7 +249,9 @@ export function FlashSaleSection({
                             <em>{isZh ? '限时价' : 'Limited price'}</em>
                         </span>
                         <strong className="flash-sale-name">{item.productName}</strong>
-                        <small>{item.variantName}</small>
+                        {item.variantName && item.variantName !== item.productName ? (
+                            <small>{item.variantName}</small>
+                        ) : null}
                         <span className="flash-sale-price">
                             <b>{formatMoney(item.salePrice, item.currencyCode, locale)}</b>
                             <del>{formatMoney(item.originalPrice, item.currencyCode, locale)}</del>
@@ -436,20 +444,16 @@ export function HomeDualCategoryShowcase({
                         type="button"
                         className={`showcase-card${item.imageUrl ? ' has-managed-image' : ''}`}
                         disabled={disabled}
-                        style={
-                            item.imageUrl
-                                ? {
-                                      backgroundImage: [
-                                          'linear-gradient(145deg, rgba(12, 25, 41, 0.88), rgba(15, 23, 42, 0.78))',
-                                          `url(${JSON.stringify(storefrontWebpUrl(item.imageUrl, 'card'))})`,
-                                      ].join(', '),
-                                      backgroundPosition: 'center',
-                                      backgroundSize: 'cover',
-                                  }
-                                : undefined
-                        }
                         onClick={() => onContentTarget(item.targetType, item.targetValue)}
                     >
+                        {item.imageUrl ? (
+                            <>
+                                <span className="showcase-card-media" aria-hidden="true">
+                                    <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
+                                </span>
+                                <span className="showcase-card-image-shade" aria-hidden="true" />
+                            </>
+                        ) : null}
                         <div className="showcase-content">
                             {badgeLabel ? <span className="showcase-badge">{badgeLabel}</span> : null}
                             <h3>{item.label}</h3>

@@ -351,6 +351,14 @@ export interface ListPageProps<
     includeSelectionColumn?: boolean;
     /**
      * @description
+     * When false, the automatically generated row actions column will not be included.
+     * Bulk actions remain available from the selection toolbar.
+     *
+     * @default true
+     */
+    includeActionsColumn?: boolean;
+    /**
+     * @description
      * Allows you to directly manipulate the TanStack Table `TableOptions` object before the
      * table is created. And advanced option that is not often required.
      */
@@ -532,6 +540,7 @@ export function ListPage<
     disableViewOptions,
     simpleToolbar,
     includeSelectionColumn,
+    includeActionsColumn,
     setTableOptions,
     bulkActions,
     registerRefresher,
@@ -636,6 +645,7 @@ export function ListPage<
         disableViewOptions,
         simpleToolbar,
         includeSelectionColumn,
+        includeActionsColumn,
         registerRefresher,
     };
 

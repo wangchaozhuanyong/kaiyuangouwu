@@ -57,14 +57,17 @@ const emptyDraft: StoreDraft = {
 
 const zhCopy = {
     title: '开通网店',
-    description: '创建独立网店、商家后台账号和权限角色，并套用经过平台确认的基础配置。',
+    description: '创建独立网店、商家后台账号和权限角色；中文店名保存时自动生成英文。',
     merchant: '商家与网店',
     merchantName: '商家名称',
     merchantPlaceholder: '例如：云桥贸易有限公司',
     code: '网店编码',
     codePlaceholder: '例如：yunqiao-store',
-    chineseName: '网站中文名称',
-    englishName: '网站英文名称（可选，留空自动翻译）',
+    chineseName: '网站名称',
+    englishName: '网站英文名称（人工覆盖）',
+    commonMode: '常用模式',
+    englishReview: '英文校对',
+    translationHelp: '通常只需填写中文网站名称；创建网店时会自动生成英文。',
     template: '开店配置模板',
     selectTemplate: '选择已启用的模板',
     templateHelp:
@@ -91,14 +94,18 @@ const zhCopy = {
 
 const enCopy: typeof zhCopy = {
     title: 'Provision store',
-    description: 'Create an isolated store and administrator from an approved baseline configuration.',
+    description: 'Create an isolated store and administrator; English is generated from the Chinese name.',
     merchant: 'Merchant and store',
     merchantName: 'Merchant name',
     merchantPlaceholder: 'Example: Yunqiao Trading Ltd',
     code: 'Store code',
     codePlaceholder: 'Example: yunqiao-store',
-    chineseName: 'Chinese storefront name',
-    englishName: 'English storefront name (optional; auto-translated when blank)',
+    chineseName: 'Storefront name (Chinese source)',
+    englishName: 'English storefront name (manual override)',
+    commonMode: 'Common mode',
+    englishReview: 'Review English',
+    translationHelp:
+        'Usually you only need the Chinese name. English is generated when the store is created.',
     template: 'Store provisioning template',
     selectTemplate: 'Select an enabled template',
     templateHelp:
@@ -144,6 +151,7 @@ function StoreProvisioningPage() {
     const text = i18n.locale.toLowerCase().startsWith('zh') ? zhCopy : enCopy;
     const [draft, setDraft] = useState<StoreDraft>(emptyDraft);
     const [result, setResult] = useState<ProvisionStoreResult['provisionStore'] | null>(null);
+    const [editEnglish, setEditEnglish] = useState(false);
     const templatesQuery = useQuery({
         queryKey: ['store-provisioning-templates'],
         queryFn: () => api.query<StoreTemplatesResult>(storeTemplatesQuery),
@@ -244,6 +252,7 @@ function StoreProvisioningPage() {
                                 onClick={() => {
                                     setDraft(emptyDraft);
                                     setResult(null);
+                                    setEditEnglish(false);
                                 }}
                             >
                                 <Plus className="size-4" aria-hidden="true" />
@@ -284,6 +293,27 @@ function StoreProvisioningPage() {
                                         onChange={event => setField('code', event.target.value)}
                                     />
                                 </Field>
+                                <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 md:col-span-2 md:flex-row md:items-center md:justify-between">
+                                    <p className="text-xs text-muted-foreground">{text.translationHelp}</p>
+                                    <div className="flex shrink-0 rounded-md border bg-background p-1">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={editEnglish ? 'ghost' : 'secondary'}
+                                            onClick={() => setEditEnglish(false)}
+                                        >
+                                            {text.commonMode}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={editEnglish ? 'secondary' : 'ghost'}
+                                            onClick={() => setEditEnglish(true)}
+                                        >
+                                            {text.englishReview}
+                                        </Button>
+                                    </div>
+                                </div>
                                 <Field label={text.chineseName} htmlFor="store-name-zh">
                                     <Input
                                         id="store-name-zh"
@@ -293,14 +323,18 @@ function StoreProvisioningPage() {
                                         onChange={event => setField('storefrontNameZh', event.target.value)}
                                     />
                                 </Field>
-                                <Field label={text.englishName} htmlFor="store-name-en">
-                                    <Input
-                                        id="store-name-en"
-                                        form="store-provisioning-form"
-                                        value={draft.storefrontNameEn}
-                                        onChange={event => setField('storefrontNameEn', event.target.value)}
-                                    />
-                                </Field>
+                                {editEnglish ? (
+                                    <Field label={text.englishName} htmlFor="store-name-en">
+                                        <Input
+                                            id="store-name-en"
+                                            form="store-provisioning-form"
+                                            value={draft.storefrontNameEn}
+                                            onChange={event =>
+                                                setField('storefrontNameEn', event.target.value)
+                                            }
+                                        />
+                                    </Field>
+                                ) : null}
                                 <Field label={text.template} htmlFor="store-template">
                                     {templatesQuery.isPending ? (
                                         <Skeleton className="h-9 w-full" />

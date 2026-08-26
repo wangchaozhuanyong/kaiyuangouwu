@@ -1,5 +1,6 @@
 import { ReactNode, Suspense } from 'react';
 
+import { findAuthVisualContent } from '../auth-visual';
 import {
     LazyForgotPasswordPage,
     LazyLoginPage,
@@ -33,6 +34,7 @@ export function LoginRoutePage() {
                 logoUrl={runtime.logoUrl}
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
+                authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'login')}
                 onBack={runtime.goBack}
                 onSuccess={runtime.completeAuthentication}
                 onContentTarget={runtime.openContentTarget}
@@ -51,6 +53,7 @@ export function RegisterRoutePage() {
                 logoUrl={runtime.logoUrl}
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
+                authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'register')}
                 onBack={runtime.goBack}
                 onContentTarget={runtime.openContentTarget}
             />

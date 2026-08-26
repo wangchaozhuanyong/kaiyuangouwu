@@ -10,7 +10,7 @@ import {
     Mail,
     UserRound,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from './api';
 import {
@@ -18,8 +18,18 @@ import {
     ACCOUNT_PASSWORD_MIN_LENGTH,
     validateAccountPassword,
 } from './auth-validation';
+import { authVisualAccentColor, resolveAuthVisualMessage } from './auth-visual';
 import { storefrontWebpUrl } from './responsive-image';
+import {
+    AUTH_HERO_FALLBACK_IMAGE,
+    AUTH_HERO_IMAGE,
+    AUTH_LOGIN_HERO_FALLBACK_IMAGE,
+    AUTH_LOGIN_HERO_IMAGE,
+    AUTH_REGISTER_HERO_FALLBACK_IMAGE,
+    AUTH_REGISTER_HERO_IMAGE,
+} from './storefront-images';
 import { routeNavigateOptions } from './storefront-router';
+import { SafeImage } from './storefront-ui/product-display';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
 
 type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
@@ -208,6 +218,10 @@ interface AuthLegalProps {
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }
 
+interface AuthVisualProps {
+    authVisualContent?: StorefrontContentBlock;
+}
+
 interface AuthCompletionProps {
     onSuccess: () => Promise<void>;
 }
@@ -223,10 +237,11 @@ export function LoginPage({
     storefrontName,
     logoUrl,
     legalContent,
+    authVisualContent,
     onBack,
     onSuccess,
     onContentTarget,
-}: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps) {
+}: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps & AuthVisualProps) {
     const navigate = useNavigate();
     const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
@@ -248,7 +263,12 @@ export function LoginPage({
     };
 
     return (
-        <AuthLayout title={isZh ? '登录' : 'Sign in'} {...{ language, storefrontName, logoUrl, onBack }}>
+        <AuthLayout
+            title={isZh ? '登录' : 'Sign in'}
+            heroVariant="login"
+            heroContent={authVisualContent}
+            {...{ language, storefrontName, logoUrl, onBack }}
+        >
             <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
             <p>{isZh ? '登录后查看订单、地址与售后进度' : 'Sign in to view orders, addresses and support'}</p>
             <form onSubmit={event => void submit(event)}>
@@ -302,9 +322,10 @@ export function RegisterPage({
     storefrontName,
     logoUrl,
     legalContent,
+    authVisualContent,
     onBack,
     onContentTarget,
-}: AuthPageBaseProps & AuthLegalProps) {
+}: AuthPageBaseProps & AuthLegalProps & AuthVisualProps) {
     const navigate = useNavigate();
     const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
@@ -383,6 +404,8 @@ export function RegisterPage({
     return (
         <AuthLayout
             title={isZh ? '注册' : 'Create account'}
+            heroVariant="register"
+            heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
             {registeredEmail ? (
@@ -913,27 +936,51 @@ export function ResetPasswordPage({
 
 function AuthLayout({
     title,
+    heroVariant = 'default',
     language,
     storefrontName,
     logoUrl,
+    heroContent,
     onBack,
     children,
 }: {
     title: string;
+    heroVariant?: 'default' | 'login' | 'register';
     language: StorefrontLanguage;
     storefrontName: string;
     logoUrl?: string | null;
+    heroContent?: StorefrontContentBlock;
     onBack: () => void;
     children: ReactNode;
 }) {
+    const hero =
+        heroVariant === 'login'
+            ? { src: AUTH_LOGIN_HERO_IMAGE, fallbackSrc: AUTH_LOGIN_HERO_FALLBACK_IMAGE }
+            : heroVariant === 'register'
+              ? { src: AUTH_REGISTER_HERO_IMAGE, fallbackSrc: AUTH_REGISTER_HERO_FALLBACK_IMAGE }
+              : { src: AUTH_HERO_IMAGE, fallbackSrc: AUTH_HERO_FALLBACK_IMAGE };
+    const authVisualVariant = heroVariant === 'login' || heroVariant === 'register' ? heroVariant : null;
+    const heroMessage = authVisualVariant
+        ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
+        : null;
+    const heroStyle = authVisualVariant
+        ? ({
+              '--auth-hero-text-color': heroContent?.textColor ?? '#ffffff',
+              '--auth-hero-overlay-color': heroContent?.backgroundColor ?? '#020718',
+              '--auth-hero-accent-color': authVisualAccentColor(heroContent, authVisualVariant),
+          } as CSSProperties)
+        : undefined;
+    const managedHeroSrc = heroContent?.imageUrl?.trim();
+
     return (
-        <main className="page subpage auth-page" aria-label={title}>
-            <section className="auth-hero">
-                <img
-                    src="/storefront/auth-ai-bridge-hero.webp"
-                    width={1659}
-                    height={948}
+        <main className={`page subpage auth-page auth-page-${heroVariant}`} aria-label={title}>
+            <section className={`auth-hero auth-hero-${heroVariant}`} style={heroStyle}>
+                <SafeImage
+                    src={managedHeroSrc || hero.src}
+                    fallbackSrc={hero.fallbackSrc}
                     alt=""
+                    imageKind="hero"
+                    loading="eager"
                     decoding="async"
                     fetchPriority="high"
                 />
@@ -964,6 +1011,18 @@ function AuthLayout({
                         {language === 'zh' ? '智联云端 · 桥接未来' : 'Cloud intelligence · Bridging tomorrow'}
                     </small>
                 </div>
+                {heroMessage && (
+                    <div className="auth-hero-message">
+                        <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>
+                        <h2>{heroMessage.title}</h2>
+                        <p>{heroMessage.description}</p>
+                        <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
+                            {heroMessage.tags.map(tag => (
+                                <span key={tag}>{tag}</span>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </section>
             <section className="login-content">
                 <div className="auth-card-content">{children}</div>

@@ -22,6 +22,14 @@ const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_
 const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
 const SHIPPING_CHECKER_CODE = 'supported-destination-eligibility-checker';
 
+export function isUsableEnglishContent(value: unknown): boolean {
+    return (
+        typeof value === 'string' &&
+        value.trim().length > 0 &&
+        !/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(value)
+    );
+}
+
 export function isProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
     registeredHandlerCodes?: ReadonlySet<string>,
@@ -54,8 +62,8 @@ export interface StoreActivationSnapshot {
 
 const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }> = {
     PROFILE: {
-        zh: '补全中英文店铺名称、简介和 Logo',
-        en: 'Complete both store names, descriptions, and the logo',
+        zh: '填写店铺名称、简介和 Logo（英文自动生成）',
+        en: 'Complete the store name, description, and logo (English is generated automatically)',
     },
     DOMAIN: { zh: '验证并设置主域名', en: 'Verify and select a primary domain' },
     PASSWORD: {
@@ -63,12 +71,21 @@ const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }
         en: 'Complete the initial password change for every store administrator',
     },
     CATALOG: {
-        zh: '至少上架一个中英文资料完整的可售商品',
-        en: 'Publish at least one sellable product with complete Chinese and English content',
+        zh: '至少上架一个资料完整的可售商品（英文自动生成）',
+        en: 'Publish at least one complete sellable product (English is generated automatically)',
     },
-    SUPPORT: { zh: '发布中英文客服内容', en: 'Publish support content in Chinese and English' },
-    PRIVACY: { zh: '发布中英文隐私政策', en: 'Publish the privacy policy in Chinese and English' },
-    TERMS: { zh: '发布中英文使用条款', en: 'Publish the terms in Chinese and English' },
+    SUPPORT: {
+        zh: '发布客服内容（英文自动生成）',
+        en: 'Publish support content (English is generated automatically)',
+    },
+    PRIVACY: {
+        zh: '发布隐私政策（英文自动生成）',
+        en: 'Publish the privacy policy (English is generated automatically)',
+    },
+    TERMS: {
+        zh: '发布使用条款（英文自动生成）',
+        en: 'Publish the terms (English is generated automatically)',
+    },
     SHIPPING: { zh: '保存店铺专属配送区域和配送方式', en: 'Save the store shipping zone and method' },
     PAYMENT: { zh: '启用至少一种非测试支付方式', en: 'Enable at least one non-test payment method' },
 };
@@ -193,13 +210,13 @@ export class StoreActivationReadinessService {
     private hasCompleteProfile(profile: StoreProfile): boolean {
         const customFields = profile.channel?.customFields as
             { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | undefined;
-        return [
-            customFields?.storefrontNameZh,
-            customFields?.storefrontNameEn,
-            profile.descriptionZh,
-            profile.descriptionEn,
-            profile.logoAssetId,
-        ].every(value => String(value ?? '').trim().length > 0);
+        return (
+            [customFields?.storefrontNameZh, profile.descriptionZh, profile.logoAssetId].every(
+                value => String(value ?? '').trim().length > 0,
+            ) &&
+            isUsableEnglishContent(customFields?.storefrontNameEn) &&
+            isUsableEnglishContent(profile.descriptionEn)
+        );
     }
 
     private hasBilingualCatalog(variants: ProductVariant[]): boolean {
@@ -261,7 +278,9 @@ export class StoreActivationReadinessService {
                     translation.languageCode === languageCode &&
                     fields.every(field => {
                         const value = translation[field];
-                        return typeof value === 'string' && value.trim().length > 0;
+                        return languageCode === 'en'
+                            ? isUsableEnglishContent(value)
+                            : typeof value === 'string' && value.trim().length > 0;
                     }),
             ),
         );

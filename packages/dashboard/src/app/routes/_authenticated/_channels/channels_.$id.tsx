@@ -267,7 +267,10 @@ function ChannelDetailPage() {
                             name="availableLanguageCodes"
                             label={<Trans>Supported content languages</Trans>}
                             description={
-                                <Trans>Select the languages that editors can maintain for this store.</Trans>
+                                <Trans>
+                                    The storefront can serve these languages. Editors enter Chinese and
+                                    English is generated on save.
+                                </Trans>
                             }
                             render={({ field }) => (
                                 <LanguageSelector

@@ -268,7 +268,7 @@ export function CategoryPage() {
                                 className="primary-categories"
                                 aria-label={isZh ? '一级分类' : 'Main categories'}
                             >
-                                {primaryCollections.map(collection => {
+                                {primaryCollections.map((collection, index) => {
                                     const image = primaryCollectionImage(collection);
                                     return (
                                         <button
@@ -298,7 +298,7 @@ export function CategoryPage() {
                                                         src={image}
                                                         alt=""
                                                         imageKind="thumbnail"
-                                                        loading="lazy"
+                                                        loading={index < 6 ? 'eager' : 'lazy'}
                                                     />
                                                 ) : (
                                                     <span className="primary-category-placeholder">

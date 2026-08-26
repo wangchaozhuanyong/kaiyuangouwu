@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     evaluateStoreActivationReadiness,
     isProductionPaymentMethod,
+    isUsableEnglishContent,
 } from './store-activation-readiness.service';
 
 const completeSnapshot = {
@@ -63,5 +64,12 @@ describe('store activation readiness', () => {
                 new Set(['another-handler']),
             ),
         ).toBe(false);
+    });
+
+    it('does not accept Chinese text stored in an English translation field', () => {
+        expect(isUsableEnglishContent('Official ChatGPT Plus channel service')).toBe(true);
+        expect(isUsableEnglishContent('ChatGPT Plus 为官方渠道服务')).toBe(false);
+        expect(isUsableEnglishContent('<p>商品详情</p>')).toBe(false);
+        expect(isUsableEnglishContent('')).toBe(false);
     });
 });

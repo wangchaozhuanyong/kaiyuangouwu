@@ -66,4 +66,15 @@ describe('homepageModuleEntries', () => {
 
         expect(entries.find(entry => entry.type === 'HERO')?.blocks).toHaveLength(2);
     });
+
+    it('does not render login and registration visuals as homepage modules', () => {
+        const entries = homepageModuleEntries(
+            [block('AUTH_LOGIN', 1), block('AUTH_REGISTER', 2), block('NOTICE', 3)],
+            ['AUTH_LOGIN', 'AUTH_REGISTER', 'NOTICE'],
+        );
+
+        expect(entries.map(entry => entry.type)).not.toContain('AUTH_LOGIN');
+        expect(entries.map(entry => entry.type)).not.toContain('AUTH_REGISTER');
+        expect(entries.some(entry => entry.type === 'NOTICE')).toBe(true);
+    });
 });

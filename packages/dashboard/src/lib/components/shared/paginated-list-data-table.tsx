@@ -246,6 +246,14 @@ export interface PaginatedListDataTableProps<
      * @default true
      */
     includeSelectionColumn?: boolean;
+    /**
+     * @description
+     * When false, the automatically generated row actions column will not be included.
+     * Bulk actions remain available from the selection toolbar.
+     *
+     * @default true
+     */
+    includeActionsColumn?: boolean;
 }
 
 export const PaginatedListDataTableKey = 'PaginatedListDataTable';
@@ -395,6 +403,7 @@ export function PaginatedListDataTable<
     onReorder,
     disableDragAndDrop = false,
     includeSelectionColumn,
+    includeActionsColumn,
 }: Readonly<PaginatedListDataTableProps<T, U, V, AC>>) {
     const [searchTerm, setSearchTerm] = React.useState<string>('');
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
@@ -437,6 +446,7 @@ export function PaginatedListDataTable<
         additionalColumns,
         defaultColumnOrder: getStandardizedDefaultColumnOrder(defaultColumnOrder),
         includeSelectionColumn,
+        includeActionsColumn,
     });
     const columnVisibility = getColumnVisibility(columns, defaultColumnVisibility, customFieldColumnNames);
     // Get the actual visible columns and only fetch those

@@ -74,7 +74,7 @@ describe('StorePromotionCampaignService', () => {
                 productVariantId: 'variant-1',
                 originalPrice: 10_000,
                 salePrice: 8_000,
-                imageUrl: '/asset.webp',
+                imageUrl: '/assets/preview/product.webp',
             }),
         );
     });
@@ -205,6 +205,7 @@ function createHarness({ variants = [], promotions = [] }: { variants?: any[]; p
             promotionService as any,
             productVariantService as any,
             customerService as any,
+            { assetOptions: { assetStorageStrategy: {} } } as any,
         ),
     };
 }
@@ -219,31 +220,9 @@ function promotionFromInput(input: CreatePromotionInput) {
         couponCode: input.couponCode ?? null,
         usageLimit: input.usageLimit ?? null,
         perCustomerUsageLimit: input.perCustomerUsageLimit ?? null,
-        conditions: input.conditions.map(operationFromInput),
-        actions: input.actions.map(operationFromInput),
+        conditions: input.conditions.map(operation => ({ code: operation.code, args: operation.arguments })),
+        actions: input.actions.map(operation => ({ code: operation.code, args: operation.arguments })),
     } as any;
-}
-
-function operationFromInput(input: CreatePromotionInput['actions'][number]) {
-    return {
-        code: input.code,
-        args: Object.fromEntries(
-            input.arguments.map(argument => [
-                argument.name,
-                argument.name === 'variantRules'
-                    ? argument.value
-                    : argument.value.startsWith('[')
-                      ? JSON.parse(argument.value)
-                      : argument.value === 'true'
-                        ? true
-                        : argument.value === 'false'
-                          ? false
-                          : Number.isNaN(Number(argument.value))
-                            ? argument.value
-                            : Number(argument.value),
-            ]),
-        ),
-    };
 }
 
 function operationInput(code: string, values: Record<string, string>) {
@@ -259,7 +238,7 @@ function productVariant(id: string, priceWithTax: number) {
         name: '默认规格',
         priceWithTax,
         currencyCode: 'CNY',
-        featuredAsset: { preview: '/asset.webp' },
+        featuredAsset: { preview: 'preview/product.webp' },
         product: {
             id: 'product-1',
             name: '测试商品',

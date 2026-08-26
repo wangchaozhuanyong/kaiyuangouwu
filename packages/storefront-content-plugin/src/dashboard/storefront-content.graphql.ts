@@ -104,6 +104,20 @@ export const storefrontContentBlocksQuery = gql`
     }
 `;
 
+export const storefrontContentTargetProductQuery = gql`
+    query StorefrontContentTargetProduct($id: ID!) {
+        product(id: $id) {
+            id
+            name
+            slug
+            featuredAsset {
+                id
+                preview
+            }
+        }
+    }
+`;
+
 export const createStorefrontContentBlockMutation = gql`
     mutation CreateStorefrontContentBlock($input: CreateStorefrontContentBlockInput!) {
         createStorefrontContentBlock(input: $input) {
@@ -161,6 +175,8 @@ export type ContentBlockType =
     | 'STORY'
     | 'LEGAL'
     | 'SUPPORT'
+    | 'AUTH_LOGIN'
+    | 'AUTH_REGISTER'
     | 'CUSTOM';
 
 export type ContentLayoutVariant =
@@ -232,4 +248,13 @@ export interface StorefrontContentBlocksResult {
         configuredBlockTypes: ContentBlockType[];
     };
     storefrontContentBlocks: ContentBlock[];
+}
+
+export interface StorefrontContentTargetProductResult {
+    product: {
+        id: string;
+        name: string;
+        slug: string;
+        featuredAsset: { id: string; preview: string } | null;
+    } | null;
 }

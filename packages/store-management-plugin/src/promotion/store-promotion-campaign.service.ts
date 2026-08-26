@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import {
-    ConfigurableOperation,
     ConfigurableOperationInput,
     CreatePromotionInput,
     LanguageCode,
@@ -9,6 +8,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import type { ProductVariant } from '@vendure/core';
 import {
     Collection,
+    ConfigService,
     CustomerService,
     idsAreEqual,
     isGraphQlErrorResult,
@@ -34,6 +34,7 @@ import {
     StoreFlashSaleView,
 } from '../types';
 
+import { idListArg, numberArg, stringArg } from './promotion-operation-args';
 import { parseFlashSaleVariantRules } from './store-commerce-promotion-actions';
 
 @Injectable()
@@ -43,6 +44,7 @@ export class StorePromotionCampaignService {
         private readonly promotionService: PromotionService,
         private readonly productVariantService: ProductVariantService,
         private readonly customerService: CustomerService,
+        private readonly configService: ConfigService,
     ) {}
 
     async findCoupons(ctx: RequestContext): Promise<StoreCouponCampaignView[]> {
@@ -490,6 +492,8 @@ export class StorePromotionCampaignService {
                 const salePrice =
                     rule.salePrice ??
                     Math.round(originalPrice * (1 - Math.min(100, rule.percentageOff ?? 0) / 100));
+                const imageIdentifier =
+                    variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview ?? null;
                 return {
                     productId: String(variant.product.id),
                     productVariantId: String(variant.id),
@@ -498,8 +502,7 @@ export class StorePromotionCampaignService {
                     originalPrice,
                     salePrice,
                     currencyCode: variant.currencyCode,
-                    imageUrl:
-                        variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview ?? null,
+                    imageUrl: imageIdentifier ? this.mediaUrl(ctx, imageIdentifier) : null,
                 };
             }),
         );
@@ -512,6 +515,16 @@ export class StorePromotionCampaignService {
             endsAt: promotion.endsAt,
             items,
         };
+    }
+
+    private mediaUrl(ctx: RequestContext, identifier: string): string {
+        const normalized = identifier.trim();
+        if (!normalized || /^(?:https?:|data:image\/)/i.test(normalized)) return normalized;
+        const storageStrategy = this.configService.assetOptions.assetStorageStrategy;
+        if (ctx.req && storageStrategy.toAbsoluteUrl) {
+            return storageStrategy.toAbsoluteUrl(ctx.req, normalized.replace(/^\/assets\//, ''));
+        }
+        return normalized.startsWith('/') ? normalized : `/assets/${normalized}`;
     }
 
     private findPromotions(ctx: RequestContext): Promise<Promotion[]> {
@@ -629,30 +642,6 @@ function couponKindForAction(code: string): StoreCouponCampaignKind | null {
     if (code === 'store_collection_percentage_discount') return 'COLLECTION_PERCENTAGE';
     if (code === 'products_percentage_discount') return 'PRODUCT_PERCENTAGE';
     return null;
-}
-
-function numberArg(operationValue: ConfigurableOperation | undefined, name: string): number {
-    const value = operationArgument(operationValue, name);
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function stringArg(operationValue: ConfigurableOperation | undefined, name: string): string {
-    const value = operationArgument(operationValue, name);
-    return typeof value === 'string' ? value : '';
-}
-
-function idListArg(operationValue: ConfigurableOperation | undefined, name: string): ID[] {
-    const value = operationArgument(operationValue, name);
-    return Array.isArray(value) ? value.filter((item): item is ID => typeof item === 'string') : [];
-}
-
-function operationArgument(operationValue: ConfigurableOperation | undefined, name: string): unknown {
-    const args = operationValue?.args as unknown;
-    if (Array.isArray(args)) {
-        return (args as Array<{ name?: string; value?: unknown }>).find(argument => argument.name === name)
-            ?.value;
-    }
-    return args && typeof args === 'object' ? (args as Record<string, unknown>)[name] : undefined;
 }
 
 function uniqueIds(ids: ID[]): string[] {

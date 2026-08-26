@@ -1,7 +1,7 @@
 import { createBrowserHistory, createRouter } from '@tanstack/react-router';
 
 import { routeTree } from './routeTree.gen';
-import { routeFromHash, routeHref } from './storefront-router';
+import { getStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
 
 function parseStorefrontSearch(searchString: string): Record<string, string> {
     return Object.fromEntries(new URLSearchParams(searchString.replace(/^\?/, '')));
@@ -30,6 +30,7 @@ export const router = createRouter({
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
     scrollRestoration: true,
+    getScrollRestorationKey: getStorefrontScrollRestorationKey,
 });
 
 declare module '@tanstack/react-router' {

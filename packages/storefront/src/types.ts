@@ -462,6 +462,8 @@ export type StorefrontContentBlockType =
     | 'STORY'
     | 'LEGAL'
     | 'SUPPORT'
+    | 'AUTH_LOGIN'
+    | 'AUTH_REGISTER'
     | 'CUSTOM';
 
 export type StorefrontContentLayoutVariant =

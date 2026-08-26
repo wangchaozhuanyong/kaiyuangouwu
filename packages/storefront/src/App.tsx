@@ -28,6 +28,7 @@ import {
 import { productDescriptionText } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
+import { DEFAULT_HERO_IMAGE } from './storefront-images';
 import {
     MainPage,
     OrderTab,
@@ -35,7 +36,6 @@ import {
     routeFromHash,
     routeFromRouterLocation,
     routeHash,
-    routeHref,
     RouteName,
     routePath,
     routeSearch,
@@ -207,27 +207,6 @@ export const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
     en: 'Yunqiao Ai',
 };
 
-export function scrollStorageKey(marketCode: string, route: RouteState): string {
-    return `vendure-storefront-scroll:${marketCode}:${routeHref(route)}`;
-}
-
-export function saveScrollPosition(marketCode: string, route: RouteState, scrollTop: number): void {
-    try {
-        sessionStorage.setItem(scrollStorageKey(marketCode, route), String(Math.max(0, scrollTop)));
-    } catch {
-        // Scroll restoration remains available in memory when storage is unavailable.
-    }
-}
-
-export function readScrollPosition(marketCode: string, route: RouteState): number {
-    try {
-        const value = Number(sessionStorage.getItem(scrollStorageKey(marketCode, route)) ?? 0);
-        return Number.isFinite(value) && value >= 0 ? value : 0;
-    } catch {
-        return 0;
-    }
-}
-
 export function App() {
     const queryClient = useQueryClient();
     const router = useRouter();
@@ -293,10 +272,6 @@ export function App() {
     };
     const toastTimer = useRef<number | null>(null);
     const couponApplicationAttempts = useRef(new Set<string>());
-    const routeRef = useRef(route);
-    const mainPageScrollPositions = useRef<Partial<Record<MainPage, number>>>({});
-    const restoredInitialScroll = useRef(false);
-
     const locale = localeFor(language, market);
     const text = uiCopy[language];
     const isZh = language === 'zh';
@@ -643,33 +618,19 @@ export function App() {
     const navigate = useCallback(
         (next: RouteState, replace = false) => {
             const resolvedNext = next.name === 'category' ? { ...categoryStateRef.current, ...next } : next;
-            const currentRoute = routeRef.current;
-            if (rootPages.includes(currentRoute.name as MainPage)) {
-                mainPageScrollPositions.current[currentRoute.name as MainPage] = window.scrollY;
-            }
-            saveScrollPosition(market.code, currentRoute, window.scrollY);
             void tanstackNavigate({
                 to: routePath(resolvedNext.name),
                 search: routeSearch(resolvedNext),
                 replace,
             } as never);
         },
-        [market.code, tanstackNavigate],
+        [tanstackNavigate],
     );
 
     const goBack = useCallback(() => {
         if (window.history.length > 1) router.history.back();
         else navigate({ name: 'home' }, true);
     }, [navigate, router.history]);
-
-    useEffect(() => {
-        routeRef.current = route;
-        const nextScrollTop = rootPages.includes(route.name as MainPage)
-            ? (mainPageScrollPositions.current[route.name as MainPage] ??
-              readScrollPosition(market.code, route))
-            : readScrollPosition(market.code, route);
-        window.requestAnimationFrame(() => window.scrollTo({ top: nextScrollTop, behavior: 'instant' }));
-    }, [market.code, route]);
 
     useEffect(() => {
         if (route.name !== 'category') return;
@@ -681,21 +642,6 @@ export function App() {
         setMinimumPrice(route.minPrice ?? '');
         setMaximumPrice(route.maxPrice ?? '');
     }, [route]);
-
-    useEffect(() => {
-        if (!restoredInitialScroll.current) {
-            restoredInitialScroll.current = true;
-            window.requestAnimationFrame(() =>
-                window.scrollTo({
-                    top: readScrollPosition(market.code, routeRef.current),
-                    behavior: 'instant',
-                }),
-            );
-        }
-        const saveCurrentScroll = () => saveScrollPosition(market.code, routeRef.current, window.scrollY);
-        window.addEventListener('pagehide', saveCurrentScroll);
-        return () => window.removeEventListener('pagehide', saveCurrentScroll);
-    }, [market.code]);
 
     useEffect(() => {
         const setConnected = () => setOnline(navigator.onLine);
@@ -944,12 +890,14 @@ export function App() {
                 return;
             }
             if (targetType === 'SUPPORT') {
-                if (/^(mailto:|tel:)/i.test(value)) {
+                if (value === '/support' || value === 'support' || value === '#/support') {
+                    navigate({ name: 'support' });
+                } else if (/^(mailto:|tel:)/i.test(value)) {
                     window.location.assign(value);
                 } else if (/^https?:\/\//i.test(value)) {
                     window.open(value, '_blank', 'noopener,noreferrer');
                 } else {
-                    navigate({ name: 'account' });
+                    navigate({ name: 'support' });
                 }
                 return;
             }
@@ -1283,8 +1231,8 @@ export function App() {
                 : storeSummary;
         const imagePath =
             route.name === 'product' && selectedProduct
-                ? (productImage(selectedProduct) ?? '/storefront/default-hero.jpg')
-                : '/storefront/default-hero.jpg';
+                ? (productImage(selectedProduct) ?? DEFAULT_HERO_IMAGE)
+                : DEFAULT_HERO_IMAGE;
         const image = new URL(imagePath, window.location.origin).href;
         const imageAlt =
             route.name === 'product' && selectedProduct

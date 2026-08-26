@@ -44,6 +44,33 @@ const digitalProduct: Product = {
 };
 
 describe('product image navigation layers', () => {
+    it('does not cover manual digital product images with a delivery badge', () => {
+        const manualServiceProduct: Product = {
+            ...digitalProduct,
+            variants: [
+                {
+                    ...digitalProduct.variants[0],
+                    customFields: {
+                        ...digitalProduct.variants[0].customFields,
+                        digitalDeliveryMode: 'manual_service',
+                    },
+                },
+            ],
+        };
+        const markup = renderToStaticMarkup(
+            <ProductCard
+                product={manualServiceProduct}
+                market={market}
+                locale={market.locale}
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+
+        expect(markup).not.toContain('人工数字服务');
+    });
+
     it('keeps the full-card link above generated product covers while preserving action buttons', () => {
         const markup = renderToStaticMarkup(
             <ProductCard

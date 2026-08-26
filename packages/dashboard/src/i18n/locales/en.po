@@ -184,13 +184,26 @@ msgstr "Manage Languages"
 msgid "Duplicating... ({0}/{1})"
 msgstr "Duplicating... ({0}/{1})"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/lib/components/data-table/use-generated-columns.tsx
 msgid "Deleted successfully"
 msgstr "Deleted successfully"
 
+#. placeholder {0}: collection.name
+#. placeholder {0}: original.name
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+msgid "Add a second-level collection under {0}"
+msgstr "Add a second-level product group under {0}"
+
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Market and content defaults"
 msgstr "Market and content defaults"
+
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+msgid "Search collections"
+msgstr "Search product groups"
 
 #: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
 msgid "Deleted {selectionLength} assets"
@@ -217,7 +230,12 @@ msgid "Select a country or region"
 msgstr "Select a country or region"
 
 #. placeholder {0}: asset.name
+#. placeholder {0}: collection.name
 #. placeholder {0}: group.name
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
@@ -299,6 +317,10 @@ msgstr "Merchants"
 msgid "Options"
 msgstr "Options"
 
+#: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
+msgid "Delete anyway"
+msgstr "Delete anyway"
+
 #: src/app/routes/_authenticated/_system/components/cancel-jobs-bulk-action.tsx
 msgid "{fulfilled, plural, one {Successfully cancelled {fulfilled} job} other {Successfully cancelled {fulfilled} jobs}}"
 msgstr "{fulfilled, plural, one {Successfully cancelled {fulfilled} task} other {Successfully cancelled {fulfilled} tasks}}"
@@ -306,6 +328,10 @@ msgstr "{fulfilled, plural, one {Successfully cancelled {fulfilled} task} other 
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
 msgid "SKU:"
 msgstr "SKU:"
+
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Top-level collection created"
+msgstr "Top-level product group created"
 
 #: src/app/routes/_authenticated/_orders/components/add-manual-payment-dialog.tsx
 msgid "Add payment"
@@ -429,6 +455,7 @@ msgstr "Successfully created stock location"
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_countries/countries_.$id.tsx
 #: src/app/routes/_authenticated/_customer-groups/customer-groups_.$id.tsx
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
@@ -650,6 +677,10 @@ msgstr "Enter transaction ID..."
 msgid "Customer group controls"
 msgstr "Customer group controls"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Search collection names..."
+msgstr "Search product group names..."
+
 #: src/app/routes/_authenticated/_shipping-methods/components/test-address-form.tsx
 #: src/lib/components/shared/customer-address-form.tsx
 #: src/lib/components/shared/customer-address-form.tsx
@@ -856,6 +887,11 @@ msgstr "Are you sure you want to delete {selectionLength} assets?"
 msgid "Sign in"
 msgstr "Sign in"
 
+#. placeholder {0}: collection.name
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "{0} storefront visibility"
+msgstr "{0} storefront visibility"
+
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "List view"
 msgstr "List view"
@@ -963,6 +999,10 @@ msgstr "Short date"
 #: src/lib/components/shared/customer-selector.tsx
 msgid "Search customers..."
 msgstr "Search customers..."
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Failed to update storefront visibility"
+msgstr "Failed to update storefront visibility"
 
 #: src/app/routes/_authenticated/_assets/components/asset-tags-editor.tsx
 msgid "Failed to create tag"
@@ -1115,6 +1155,7 @@ msgstr "Default tax region"
 msgid "Choose products manually or assign matching products automatically."
 msgstr "Choose products manually or assign matching products automatically."
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_orders/orders.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
@@ -1143,6 +1184,10 @@ msgstr "Order line removed"
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 msgid "User"
 msgstr "User"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Collection is now visible in the storefront"
+msgstr "Product group is now visible in the storefront"
 
 #: src/lib/components/shared/customer-address-form.tsx
 msgid "Phone number (optional)"
@@ -1229,8 +1274,8 @@ msgid "Focal Point"
 msgstr "Focal Point"
 
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
-msgid "No option values found. Add both language versions first."
-msgstr "No option values found. Add both language versions first."
+msgid "No option values found. Add a Simplified Chinese value first; English is generated when you save."
+msgstr "No option values found. Add a Simplified Chinese value first; English is generated when you save."
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Single variant, no options"
@@ -1308,6 +1353,9 @@ msgstr "Could not find the order state before modification"
 msgid "Password"
 msgstr "Password"
 
+#: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/lib/components/data-table/use-generated-columns.tsx
 #: src/lib/components/data-table/use-generated-columns.tsx
 msgid "Failed to delete"
@@ -1465,6 +1513,11 @@ msgstr "Removed from group"
 msgid "Width"
 msgstr "Width"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Add top-level collection"
+msgstr "Add top-level product group"
+
 #: src/lib/components/shared/asset/asset-preview-selector.tsx
 msgid "Medium"
 msgstr "Medium"
@@ -1602,6 +1655,10 @@ msgstr "Payment transitioned"
 msgid "Remaining:"
 msgstr "Remaining:"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Second-level collection created"
+msgstr "Second-level product group created"
+
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
@@ -1622,6 +1679,11 @@ msgstr "Total refund:"
 #: src/lib/components/data-table/save-view-dialog.tsx
 msgid "Please enter a name for the view"
 msgstr "Please enter a name for the view"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Collection name"
+msgstr "Product group name"
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
@@ -1812,6 +1874,11 @@ msgstr "True"
 msgid "Select customer"
 msgstr "Select customer"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Add second-level collection"
+msgstr "Add second-level product group"
+
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-utils.tsx
 msgid "Order transitioned"
 msgstr "Order transitioned"
@@ -1872,6 +1939,10 @@ msgstr "Select a sales channel"
 msgid "Display language"
 msgstr "Display language"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Add a top-level product group"
+msgstr "Add a top-level product group"
+
 #: src/app/routes/_authenticated/_orders/components/order-detail-shared.tsx
 msgid "Fulfillment details"
 msgstr "Fulfillment details"
@@ -1926,6 +1997,10 @@ msgstr "Size"
 msgid "No translation found for {0}"
 msgstr "No translation found for {0}"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Collections can only have two levels and cannot be moved below a second-level collection"
+msgstr "Product groups can only have two levels and cannot be moved below a second-level product group"
+
 #: src/lib/components/shared/option-value-input.tsx
 msgid "Enter a value and press Enter"
 msgstr "Enter a value and press Enter"
@@ -1940,6 +2015,10 @@ msgstr "Use as the default billing address"
 
 #: src/app/common/delete-bulk-action.tsx
 #: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
+#: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
+#: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_roles/components/permission-labels.ts
 #: src/app/routes/_authenticated/_stock-locations/components/delete-stock-locations-dialog.tsx
 #: src/app/routes/_authenticated/_stock-locations/components/stock-location-bulk-actions.tsx
@@ -2054,6 +2133,11 @@ msgstr "Tiny"
 msgid "Created"
 msgstr "Created"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Hidden"
+msgstr "Hidden"
+
 #: src/app/routes/_authenticated/_products/components/assign-facet-values-dialog.tsx
 msgid "Select at least one filter attribute value or change an existing value"
 msgstr "Select at least one filter attribute value or change an existing value"
@@ -2122,7 +2206,10 @@ msgstr "Go to last page"
 
 #: src/app/common/duplicate-entity-dialog.tsx
 #: src/app/routes/_authenticated/_api-keys/components/rotate-api-key-button.tsx
+#: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
 #: src/app/routes/_authenticated/_assets/components/manage-tags-dialog.tsx
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 #: src/app/routes/_authenticated/_orders/components/add-manual-payment-dialog.tsx
 #: src/app/routes/_authenticated/_orders/components/fulfill-order-dialog.tsx
@@ -2325,6 +2412,14 @@ msgstr "Last 30 days"
 msgid "No facet values"
 msgstr "No filter attribute values"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Upload a square 1:1 image for the collection entry in the storefront."
+msgstr "Upload a square 1:1 image for the product group entry in the storefront."
+
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "None"
+msgstr "None"
+
 #: src/app/routes/_authenticated/_orders/hooks/use-refund-order.ts
 msgid "A reason for the refund is required"
 msgstr "A reason for the refund is required"
@@ -2423,6 +2518,7 @@ msgstr "Filter attribute values"
 msgid "Select 1 asset"
 msgstr "Select 1 asset"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 #: src/app/routes/_authenticated/_products/components/product-option-group-badge.tsx
@@ -2436,6 +2532,10 @@ msgstr "Edit"
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Variant updated successfully"
 msgstr "SKU updated successfully"
+
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Add a second-level product group"
+msgstr "Add a second-level product group"
 
 #: src/lib/components/shared/entity-assets.tsx
 msgid "No featured asset"
@@ -2598,6 +2698,11 @@ msgstr "Refund shipping"
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 msgid "Readonly"
 msgstr "Readonly"
+
+#: src/lib/components/shared/asset/asset-bulk-actions.tsx
+#: src/lib/components/shared/asset/asset-bulk-actions.tsx
+msgid "Clear selection"
+msgstr "Clear selection"
 
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "Failed to duplicate global view"
@@ -3169,6 +3274,7 @@ msgid "Zone"
 msgstr "Zone"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 msgid "No product groups found"
 msgstr "No product groups found"
 
@@ -3208,7 +3314,6 @@ msgstr "Save View"
 #: src/lib/components/data-table/data-table-bulk-actions.tsx
 #: src/lib/components/data-table/data-table-facet-value-faceted-filter.tsx
 #: src/lib/components/data-table/data-table-faceted-filter.tsx
-#: src/lib/components/shared/asset/asset-bulk-actions.tsx
 msgid "{0} selected"
 msgstr "{0} selected"
 
@@ -3231,6 +3336,10 @@ msgstr "Values"
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Customer set for order"
 msgstr "Customer set for order"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Manage the product groups displayed in the storefront"
+msgstr "Manage the product groups displayed in the storefront"
 
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/app/routes/_authenticated/_facets/facets_.$id.tsx
@@ -3562,6 +3671,7 @@ msgstr "Select country"
 msgid "Product group description"
 msgstr "Product group description"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Creating..."
 msgstr "Creating..."
@@ -3986,8 +4096,8 @@ msgid "Password reset verified"
 msgstr "Password reset verified"
 
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
-msgid "Select the languages that editors can maintain for this store."
-msgstr "Select the languages that editors can maintain for this store."
+msgid "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
+msgstr "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
 
 #: src/app/routes/_authenticated/_products/components/product-option-group-badge.tsx
 msgid "Edit {name}"
@@ -4003,6 +4113,8 @@ msgstr "Are you sure you want to navigate away from this page? Any unsaved chang
 
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
 #: src/lib/components/data-table/use-generated-columns.tsx
+#: src/lib/components/shared/asset/asset-bulk-actions.tsx
+#: src/lib/components/shared/asset/asset-bulk-actions.tsx
 #: src/lib/framework/layout-engine/page-layout.tsx
 msgid "More actions"
 msgstr "More actions"
@@ -4138,6 +4250,7 @@ msgstr "Synchronizes product search and filtering data"
 msgid "Please confirm you have saved the API key before closing."
 msgstr "Please confirm you have saved the API key before closing."
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/lib/components/data-table/use-generated-columns.tsx
 msgid "Confirm deletion"
 msgstr "Confirm deletion"
@@ -4187,6 +4300,10 @@ msgstr "Search roles..."
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
 msgid "Order performance for the selected period"
 msgstr "Order performance for the selected period"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Product count"
+msgstr "Product count"
 
 #: src/lib/components/layout/content-language-selector.tsx
 msgid "Select language"
@@ -4528,6 +4645,10 @@ msgstr "Store identity"
 msgid "New product"
 msgstr "New product"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "No parent collection (top level)"
+msgstr "No parent product group (top level)"
+
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 msgid "Failed for: {failedCodes}"
 msgstr "Failed for: {failedCodes}"
@@ -4691,6 +4812,10 @@ msgstr "Select merchant"
 msgid "Delivery method"
 msgstr "Delivery method"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Failed to create collection. Check for a duplicate name and try again."
+msgstr "Failed to create product group. Check for a duplicate name and try again."
+
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Use the store token only for local development or compatibility integrations."
 msgstr "Use the store token only for local development or compatibility integrations."
@@ -4732,6 +4857,10 @@ msgstr "Select a parent or quickly add a child product group."
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Failed to settle payment"
 msgstr "Failed to settle payment"
+
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Collection image"
+msgstr "Product group image"
 
 #. placeholder {0}: failed.length
 #. placeholder {1}: failed.length
@@ -5105,6 +5234,7 @@ msgid "Failed to update stock location"
 msgstr "Failed to update stock location"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 msgid "Loading product groups..."
 msgstr "Loading product groups..."
 
@@ -5296,6 +5426,10 @@ msgstr "Failed to update administrator"
 msgid "Manage your personal saved views for this table"
 msgstr "Manage your personal saved views for this table"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Current level"
+msgstr "Current level"
+
 #: src/app/routes/_authenticated/_assets/components/asset-tag-filter.tsx
 msgid "Filter by tags"
 msgstr "Filter by tags"
@@ -5303,6 +5437,10 @@ msgstr "Filter by tags"
 #: src/lib/components/login/login-form.tsx
 msgid "Sign in to access the admin dashboard"
 msgstr "Sign in to access the admin dashboard"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Level"
+msgstr "Level"
 
 #: src/lib/components/data-table/data-table-filter-badge.tsx
 #: src/lib/components/data-table/filters/data-table-boolean-filter.tsx
@@ -5354,6 +5492,11 @@ msgstr "Unable to load records"
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #~ msgid "Add a child product group under {0}"
 #~ msgstr "Add a child product group under {0}"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Visible"
+msgstr "Visible"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "does not contain"
@@ -5437,6 +5580,7 @@ msgstr "+ {0} more"
 msgid "Custom fields"
 msgstr "Custom fields"
 
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 msgid "Failed to load product groups"
 msgstr "Failed to load product groups"
@@ -6147,6 +6291,7 @@ msgstr "Loading selected items..."
 msgid "Failed to set billing address for order: {0}"
 msgstr "Failed to set billing address for order: {0}"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-bulk-actions.tsx
 msgid "Deleting a parent product group also permanently deletes all of its child product groups. Are you sure you want to continue?"
 msgstr "Deleting a parent product group also permanently deletes all of its child product groups. Are you sure you want to continue?"
@@ -6192,6 +6337,10 @@ msgstr "Successfully updated tax category"
 #: src/app/routes/_authenticated/_collections/components/collection-bulk-actions.tsx
 msgid "Move"
 msgstr "Move"
+
+#: src/lib/components/shared/asset/asset-bulk-actions.tsx
+msgid "Asset selection actions"
+msgstr "Asset selection actions"
 
 #: src/app/routes/_authenticated/_assets/components/manage-tags-dialog.tsx
 msgid "Edit or delete existing tags"
@@ -6397,8 +6546,8 @@ msgid "Failed to update order"
 msgstr "Failed to update order"
 
 #: src/lib/components/shared/asset/asset-bulk-actions.tsx
-msgid "With selected..."
-msgstr "With selected..."
+#~ msgid "With selected..."
+#~ msgstr "With selected..."
 
 #. placeholder {0}: variant.name
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
@@ -6448,6 +6597,10 @@ msgstr "My saved views"
 #: src/app/routes/_authenticated/_shipping-methods/components/test-address-form.tsx
 msgid "State / Province"
 msgstr "State / Province"
+
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Create collection"
+msgstr "Create product group"
 
 #: src/app/common/duplicate-bulk-action.tsx
 msgid "{remainingErrorCount} more errors"
@@ -6602,6 +6755,7 @@ msgstr "Custom scheduled task"
 msgid "scheduledTask.custom.description"
 msgstr "A scheduled background task registered by a plugin or business extension"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/lib/components/data-table/use-generated-columns.tsx
 msgid "Are you sure you want to delete this item? This action cannot be undone."
 msgstr "Are you sure you want to delete this item? This action cannot be undone."
@@ -6795,6 +6949,11 @@ msgstr "Failed to convert global view to personal view"
 msgid "The result of the job"
 msgstr "The result of the task"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Parent collection"
+msgstr "Parent product group"
+
 #. placeholder {0}: formatCurrency(outstandingAmount, currencyCode)
 #: src/app/routes/_authenticated/_orders/components/add-manual-payment-dialog.tsx
 msgid "Add payment ({0})"
@@ -6817,6 +6976,12 @@ msgstr "Failed to update customer"
 #: src/app/routes/_authenticated/_zones/components/zone-bulk-actions.tsx
 msgid "Are you sure you want to remove {countryCount} countries/regions from this zone?"
 msgstr "Are you sure you want to remove {countryCount} countries/regions from this zone?"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Storefront visibility"
+msgstr "Storefront visibility"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Remove option groups?"
@@ -6940,6 +7105,7 @@ msgstr "Fulfilling..."
 msgid "Company (optional)"
 msgstr "Company (optional)"
 
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/lib/components/data-input/relation-input.tsx
 msgid "Search collections..."
 msgstr "Search product groups..."
@@ -7023,6 +7189,10 @@ msgstr "Save option group"
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "This setting will be saved on every SKU created below."
 msgstr "This setting will be saved on every SKU created below."
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Collection is now hidden from the storefront"
+msgstr "Product group is now hidden from the storefront"
 
 #: src/lib/framework/page/detail-page.tsx
 msgid "Failed to update"
@@ -7215,6 +7385,10 @@ msgstr "Slug will be generated automatically..."
 msgid "Customer not found"
 msgstr "Customer not found"
 
+#: src/app/routes/_authenticated/_collections/collections.tsx
+msgid "Order"
+msgstr "Order"
+
 #: src/app/routes/_authenticated/_orders/components/fulfillment-details.tsx
 msgid "SKU: {sku}"
 msgstr "SKU: {sku}"
@@ -7377,6 +7551,12 @@ msgstr "Last month"
 #: src/app/routes/_authenticated/_countries/countries.tsx
 msgid "Add Country"
 msgstr "Add Country"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+msgid "Second-level collection"
+msgstr "Second-level product group"
 
 #: src/lib/components/data-input/custom-field-list-input.tsx
 msgid "Remove item"
@@ -7586,6 +7766,10 @@ msgstr "All SKUs use this setting"
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Note is private"
 msgstr "Note is private"
+
+#: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
+msgid "Asset is in use"
+msgstr "Asset is in use"
 
 #: src/lib/components/layout/language-dialog.tsx
 msgid "Medium date"
@@ -7927,6 +8111,10 @@ msgstr "Search..."
 msgid "You don't have permission to view global language settings"
 msgstr "You don't have permission to view global language settings"
 
+#: src/lib/components/shared/asset/asset-bulk-actions.tsx
+msgid "Selected"
+msgstr "Selected"
+
 #: src/app/routes/_authenticated/_tax-rates/tax-rates_.$id.tsx
 msgid "Successfully created tax rate"
 msgstr "Successfully created tax rate"
@@ -7982,6 +8170,10 @@ msgstr "No result yet"
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-utils.tsx
 msgid "Payment settled"
 msgstr "Payment settled"
+
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+msgid "No parent collection"
+msgstr "No parent product group"
 
 #: src/app/routes/_authenticated/_promotions/components/promotion-conditions-selector.tsx
 msgid "Available Conditions"
@@ -8065,6 +8257,11 @@ msgstr "Failed to delete {failed} {entityName}"
 msgid "Out-of-stock threshold"
 msgstr "Out-of-stock threshold"
 
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Enter a collection name"
+msgstr "Enter a product group name"
+
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 msgid "Failed to update value"
 msgstr "Failed to update value"
@@ -8128,6 +8325,15 @@ msgstr "Option"
 #: src/app/routes/_authenticated/_orders/components/order-process-dialog.tsx
 msgid "Order process"
 msgstr "Order process"
+
+#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+msgid "Second level"
+msgstr "Second level"
+
+#: src/app/routes/_authenticated/_collections/collections.tsx
+#: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+msgid "Top-level collection"
+msgstr "Top-level product group"
 
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 #: src/lib/components/shared/customer-selector.tsx

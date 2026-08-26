@@ -59,32 +59,30 @@ export function ProductCard({
                 aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
             />
 
-            <div className="pointer-events-none absolute left-2 top-2 z-20">
-                {isDigital ? (
-                    <span className="inline-flex items-center gap-[3px] rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] text-white shadow-[0_1px_4px_rgba(0,0,0,0.12)] [&_svg]:size-[11px]">
-                        <Download aria-hidden="true" />
-                        {isAutoCard
-                            ? isZh
-                                ? '邮箱自动发卡'
-                                : 'Automatic email delivery'
-                            : isFileDownload
-                              ? isZh
+            {(!isDigital || isAutoCard || isFileDownload) && (
+                <div className="pointer-events-none absolute left-2 top-2 z-20">
+                    {isDigital ? (
+                        <span className="inline-flex items-center gap-[3px] rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] text-white shadow-[0_1px_4px_rgba(0,0,0,0.12)] [&_svg]:size-[11px]">
+                            <Download aria-hidden="true" />
+                            {isAutoCard
+                                ? isZh
+                                    ? '邮箱自动发卡'
+                                    : 'Automatic email delivery'
+                                : isZh
                                   ? '数字文件下载'
-                                  : 'File download'
-                              : isZh
-                                ? '人工数字服务'
-                                : 'Manual service'}
-                    </span>
-                ) : isOutOfStock ? (
-                    <span className="inline-flex items-center rounded bg-slate-500 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] text-white shadow-[0_1px_4px_rgba(0,0,0,0.12)]">
-                        {isZh ? '暂时缺货' : 'Out of stock'}
-                    </span>
-                ) : (
-                    <span className="inline-flex items-center rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] text-white shadow-[0_1px_4px_rgba(0,0,0,0.12)]">
-                        {isZh ? '现货速发' : 'In Stock'}
-                    </span>
-                )}
-            </div>
+                                  : 'File download'}
+                        </span>
+                    ) : isOutOfStock ? (
+                        <span className="inline-flex items-center rounded bg-slate-500 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] text-white shadow-[0_1px_4px_rgba(0,0,0,0.12)]">
+                            {isZh ? '暂时缺货' : 'Out of stock'}
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] text-white shadow-[0_1px_4px_rgba(0,0,0,0.12)]">
+                            {isZh ? '现货速发' : 'In Stock'}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {onFavorite && (
                 <button

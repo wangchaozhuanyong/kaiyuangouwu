@@ -251,6 +251,17 @@ function CollectionDetailPage() {
         });
     };
 
+    const openCollection = (collectionId: string) => {
+        if (creatingNewEntity || collectionId === entity?.id) {
+            return;
+        }
+        void navigate({
+            to: '/collections/$id',
+            params: { id: collectionId },
+            search: {},
+        });
+    };
+
     const saveDisabled = !form.formState.isDirty || !form.formState.isValid || isPending || !filtersArgsValid;
 
     return (
@@ -324,6 +335,7 @@ function CollectionDetailPage() {
                         currentCollectionId={entity?.id}
                         onSelectParent={selectParent}
                         onAddChild={addChild}
+                        onOpenCollection={creatingNewEntity ? undefined : openCollection}
                         onRootCollectionIdChange={setRootCollectionId}
                     />
                 </PageBlock>

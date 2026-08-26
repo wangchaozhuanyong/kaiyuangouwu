@@ -25,6 +25,8 @@ export interface CrudTestConfig {
     searchTerm?: string;
     /** Set to false to skip bulk-delete tests (e.g. if the entity has no bulk action). Defaults to true. */
     hasBulkDelete?: boolean;
+    /** When bulk delete is disabled, verify that selection controls are absent. */
+    verifyBulkDeleteUnavailable?: boolean;
     /** Set to false to skip row-level delete tests. Defaults to false (most entities only have bulk delete). */
     hasRowDelete?: boolean;
     /** Set to false for list pages without a search input. Defaults to true. */
@@ -35,6 +37,10 @@ export interface CrudTestConfig {
     afterFillCreate?: (page: Page, detail: BaseDetailPage) => Promise<void>;
     /** Runs after fillFields in the update flow. Falls back to afterFillCreate if not provided. */
     afterFillUpdate?: (page: Page, detail: BaseDetailPage) => Promise<void>;
+    /** Verifies an inline or dialog-based create form after the New button is clicked. */
+    afterOpenCreate?: (page: Page) => Promise<void>;
+    /** Completes creation from an inline or dialog-based create form. */
+    createFromList?: (page: Page) => Promise<void>;
 }
 
 /**
@@ -129,15 +135,27 @@ export function createCrudTestSuite(config: CrudTestConfig) {
         // Test: Create
         // ──────────────────────────────────────────────
 
-        test(`should navigate to the create ${entityName} form`, async ({ page }) => {
+        test(`should open the create ${entityName} form`, async ({ page }) => {
             const listPage = getListPage(page);
             await listPage.goto();
             await listPage.expectLoaded();
             await listPage.clickNewButton();
-            await expect(page).toHaveURL(new RegExp(`${listPath}/new`));
+            if (config.afterOpenCreate) {
+                await config.afterOpenCreate(page);
+            } else {
+                await expect(page).toHaveURL(new RegExp(`${listPath}/new`));
+            }
         });
 
         test(`should create a new ${entityName}`, async ({ page }) => {
+            if (config.createFromList) {
+                const listPage = getListPage(page);
+                await listPage.goto();
+                await listPage.expectLoaded();
+                await listPage.clickNewButton();
+                await config.createFromList(page);
+                return;
+            }
             const detail = getDetailPage(page);
             await detail.gotoNew();
             await detail.expectNewPageLoaded();
@@ -241,6 +259,16 @@ export function createCrudTestSuite(config: CrudTestConfig) {
                         .click();
                 }
                 await listPage.expectSuccessToast();
+            });
+        } else if (config.verifyBulkDeleteUnavailable) {
+            test(`should not expose bulk-delete controls for ${entityNamePlural}`, async ({ page }) => {
+                const listPage = getListPage(page);
+                await listPage.goto();
+                await listPage.expectLoaded();
+                await narrowList(listPage, updatedSearchTerm);
+                await expect(listPage.getRows().first()).toBeVisible();
+                await expect(listPage.getRows().first().getByRole('checkbox')).toHaveCount(0);
+                await expect(page.getByTestId('dt-bulk-actions-trigger')).toHaveCount(0);
             });
         }
 

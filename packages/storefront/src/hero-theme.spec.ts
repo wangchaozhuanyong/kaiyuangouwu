@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from './hero-theme';
+import { HERO_CLOUD_BRIDGE_FALLBACK_IMAGE, HERO_CLOUD_BRIDGE_IMAGE } from './storefront-images';
 import type { StorefrontContentBlock } from './types';
 
 function hero(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
@@ -69,8 +70,8 @@ describe('hero theme', () => {
     it('uses the cloud bridge project artwork when configured', () => {
         const block = hero({ settings: { fallbackImage: 'cloudbridge-ai-hub' } });
 
-        expect(builtInHeroImage(block, false)).toBe('/storefront/hero-cloudbridge-ai-hub.webp');
-        expect(builtInHeroFallbackImage(block, false)).toBe('/storefront/hero-cloudbridge-ai-hub.jpg');
+        expect(builtInHeroImage(block, false)).toBe(HERO_CLOUD_BRIDGE_IMAGE);
+        expect(builtInHeroFallbackImage(block, false)).toBe(HERO_CLOUD_BRIDGE_FALLBACK_IMAGE);
     });
 
     it('switches copy surfaces to a light treatment for the CloudBridge bright theme', () => {

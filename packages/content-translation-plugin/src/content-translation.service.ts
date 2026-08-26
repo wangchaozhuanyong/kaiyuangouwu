@@ -45,6 +45,7 @@ export class ContentTranslationService {
             const normalizedExistingTarget = field.existingTargetText?.trim() ?? '';
             const hasManualTarget =
                 normalizedTarget.length > 0 &&
+                !containsHanContent(normalizedTarget) &&
                 (field.existingTargetText == null || normalizedTarget !== normalizedExistingTarget);
             if (hasManualTarget) {
                 prepared.set(field.path, {
@@ -59,7 +60,11 @@ export class ContentTranslationService {
             }
             const sourceUnchanged =
                 field.existingSourceText != null && field.existingSourceText.trim() === sourceText;
-            if (sourceUnchanged && field.existingTargetText?.trim()) {
+            if (
+                sourceUnchanged &&
+                field.existingTargetText?.trim() &&
+                !containsHanContent(field.existingTargetText)
+            ) {
                 prepared.set(field.path, {
                     path: field.path,
                     sourceText,
@@ -234,4 +239,8 @@ function hash(value: string): string {
     return createHash('sha256').update(value).digest('hex');
 }
 
-export const contentTranslationInternals = { hash };
+function containsHanContent(value: string): boolean {
+    return /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(value);
+}
+
+export const contentTranslationInternals = { hash, containsHanContent };

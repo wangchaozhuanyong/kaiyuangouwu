@@ -9,8 +9,8 @@ import { getBulkActions } from '@/vdb/framework/data-table/data-table-extensions
 import { useFloatingBulkActions } from '@/vdb/hooks/use-floating-bulk-actions.js';
 import { usePageBlock } from '@/vdb/hooks/use-page-block.js';
 import { usePage } from '@/vdb/hooks/use-page.js';
-import { Trans } from '@lingui/react/macro';
-import { ChevronDown } from 'lucide-react';
+import { Trans, useLingui } from '@lingui/react/macro';
+import { ChevronDown, X } from 'lucide-react';
 import { Asset } from './asset-gallery.js';
 
 export type AssetBulkActionContext = {
@@ -22,6 +22,7 @@ export type AssetBulkActionComponent = React.FunctionComponent<AssetBulkActionCo
 
 export type AssetBulkAction = {
     order?: number;
+    placement?: 'primary' | 'menu';
     component: AssetBulkActionComponent;
 };
 
@@ -29,9 +30,16 @@ interface AssetBulkActionsProps {
     selection: Asset[];
     bulkActions?: AssetBulkAction[];
     refetch: () => void;
+    onClearSelection: () => void;
 }
 
-export function AssetBulkActions({ selection, bulkActions, refetch }: Readonly<AssetBulkActionsProps>) {
+export function AssetBulkActions({
+    selection,
+    bulkActions,
+    refetch,
+    onClearSelection,
+}: Readonly<AssetBulkActionsProps>) {
+    const { t } = useLingui();
     const { pageId } = usePage();
     const pageBlock = usePageBlock();
     const blockId = pageBlock?.blockId;
@@ -65,41 +73,84 @@ export function AssetBulkActions({ selection, bulkActions, refetch }: Readonly<A
 
     const allBulkActions = [...convertedBulkActions, ...(bulkActions ?? [])];
     allBulkActions.sort((a, b) => (a.order ?? 10_000) - (b.order ?? 10_000));
+    const primaryActions = allBulkActions.filter(action => action.placement === 'primary');
+    const menuActions = allBulkActions.filter(action => action.placement !== 'primary');
 
     return (
         <div
-            className="flex items-center gap-4 px-8 py-2 animate-in fade-in duration-200 fixed transform -translate-x-1/2 bg-background shadow-2xl rounded-md border z-50"
+            className="fixed z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 animate-in items-center gap-2 rounded-lg border bg-background p-2 shadow-2xl fade-in duration-200"
             style={{
                 height: 'auto',
-                maxHeight: '60px',
                 bottom: position.bottom,
                 left: position.left,
             }}
+            role="toolbar"
+            aria-label={t`Asset selection actions`}
         >
-            <span className="text-sm text-muted-foreground">
-                <Trans>{selection.length} selected</Trans>
-            </span>
-            <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="h-8 shadow-none" />}>
-                        <Trans>With selected...</Trans>
-                        <ChevronDown className="ml-2 h-4 w-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                    {allBulkActions.length > 0 ? (
-                        allBulkActions.map((action, index) => (
+            <div className="flex h-8 items-center gap-2 border-r pr-2">
+                <span className="inline-flex min-w-6 items-center justify-center rounded bg-primary px-1.5 py-0.5 text-xs font-semibold tabular-nums text-primary-foreground">
+                    {selection.length}
+                </span>
+                <span className="whitespace-nowrap text-sm font-medium">
+                    <Trans>Selected</Trans>
+                </span>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-muted-foreground shadow-none hover:text-foreground"
+                    onClick={onClearSelection}
+                    aria-label={t`Clear selection`}
+                >
+                    <X className="h-4 w-4" />
+                    <span className="hidden sm:inline">
+                        <Trans>Clear selection</Trans>
+                    </span>
+                </Button>
+            </div>
+
+            {primaryActions.map((action, index) => (
+                <action.component
+                    key={`asset-primary-bulk-action-${index}`}
+                    selection={selection}
+                    refetch={refetch}
+                />
+            ))}
+
+            {menuActions.length > 0 && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger
+                        render={<Button variant="outline" size="sm" className="h-8 shadow-none" />}
+                    >
+                        <Trans>More actions</Trans>
+                        <ChevronDown className="ml-1 h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        {menuActions.map((action, index) => (
                             <action.component
-                                key={`asset-bulk-action-${index}`}
+                                key={`asset-menu-bulk-action-${index}`}
                                 selection={selection}
                                 refetch={refetch}
                             />
-                        ))
-                    ) : (
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
+
+            {allBulkActions.length === 0 && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger
+                        render={<Button variant="outline" size="sm" className="h-8 shadow-none" />}
+                    >
+                        <Trans>More actions</Trans>
+                        <ChevronDown className="ml-1 h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
                         <DropdownMenuItem className="text-muted-foreground" disabled>
                             <Trans>No actions available</Trans>
                         </DropdownMenuItem>
-                    )}
-                </DropdownMenuContent>
-            </DropdownMenu>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
         </div>
     );
 }
