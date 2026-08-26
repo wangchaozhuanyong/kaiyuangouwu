@@ -118,8 +118,13 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         type: 'BEST_SELLERS',
         labelZh: '热门商品',
         labelEn: 'Best sellers',
-        descriptionZh: '固定商品列表，按销量自动排序并支持置顶商品。',
-        descriptionEn: 'Fixed product list ranked by sales with optional pinned products.',
+        descriptionZh:
+            '点击右侧铅笔设置数量和置顶商品：置顶商品优先，其余按当前店铺已下单且未取消订单的累计销量补齐；无销量时每日固定随机，售罄商品也可能展示。',
+        descriptionEn: [
+            'Use the pencil to set the count and pinned products.',
+            'Pinned items come first; remaining slots use cumulative sales from placed, non-cancelled orders in this store.',
+            'If all sales are zero, order is randomized daily; out-of-stock items can appear.',
+        ].join(' '),
         defaultPosition: 90,
         defaultEnabled: true,
     },
@@ -127,8 +132,15 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         type: 'RECOMMENDATIONS',
         labelZh: '猜你喜欢',
         labelEn: 'Recommendations',
-        descriptionZh: '固定推荐商品版式，可设置展示数量和指定商品。',
-        descriptionEn: 'Fixed recommendation layout with display count and selected products.',
+        descriptionZh:
+            '点击右侧铅笔设置数量。系统按登录用户最近 5 个订单和当前店铺最近 20 个浏览商品的分类推荐，购买同类优先于浏览同类，并优先未看过的商品；无记录时每日固定随机，暂不支持人工指定商品。',
+        descriptionEn: [
+            'Use the pencil to set the count.',
+            "Recommendations use categories from the signed-in customer's five most recent orders",
+            'and up to 20 products recently viewed in this store.',
+            'Purchased categories outrank viewed categories, unseen products come first,',
+            'and no-history results are randomized daily. Manual product selection is not currently supported.',
+        ].join(' '),
         defaultPosition: 100,
         defaultEnabled: true,
     },

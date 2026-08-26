@@ -2752,9 +2752,16 @@ function simpleTextFieldsForType(type: ContentBlockType): {
 }
 
 function simpleItemNeedsTarget(type: ContentBlockType): boolean {
-    return ['HERO', 'QUICK_LINKS', 'CATEGORY_AD', 'CORE_CATEGORIES', 'COUPONS', 'SUPPORT', 'CUSTOM'].includes(
-        type,
-    );
+    return [
+        'HERO',
+        'QUICK_LINKS',
+        'CATEGORY_AD',
+        'CORE_CATEGORIES',
+        'COUPONS',
+        'LEGAL',
+        'SUPPORT',
+        'CUSTOM',
+    ].includes(type);
 }
 
 function simpleBlockNeedsTarget(type: ContentBlockType): boolean {
@@ -2793,6 +2800,7 @@ function simpleModuleUsesItems(type: ContentBlockType): boolean {
         'COUPONS',
         'TRUST_BAR',
         'CORE_CATEGORIES',
+        'LEGAL',
         'SUPPORT',
         'CUSTOM',
     ].includes(type);
