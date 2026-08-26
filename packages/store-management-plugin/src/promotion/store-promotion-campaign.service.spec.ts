@@ -74,7 +74,7 @@ describe('StorePromotionCampaignService', () => {
                 productVariantId: 'variant-1',
                 originalPrice: 10_000,
                 salePrice: 8_000,
-                imageUrl: '/asset.webp',
+                imageUrl: '/assets/preview/product.webp',
             }),
         );
     });
@@ -205,6 +205,7 @@ function createHarness({ variants = [], promotions = [] }: { variants?: any[]; p
             promotionService as any,
             productVariantService as any,
             customerService as any,
+            { assetOptions: { assetStorageStrategy: {} } } as any,
         ),
     };
 }
@@ -237,7 +238,7 @@ function productVariant(id: string, priceWithTax: number) {
         name: '默认规格',
         priceWithTax,
         currencyCode: 'CNY',
-        featuredAsset: { preview: '/asset.webp' },
+        featuredAsset: { preview: 'preview/product.webp' },
         product: {
             id: 'product-1',
             name: '测试商品',

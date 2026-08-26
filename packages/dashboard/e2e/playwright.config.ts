@@ -24,6 +24,7 @@ export default defineConfig({
     globalTeardown: './global-teardown.ts',
     use: {
         baseURL: `http://localhost:${VITE_PORT}`,
+        locale: 'en-US',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
     },
@@ -50,6 +51,7 @@ export default defineConfig({
             VITE_ADMIN_API_PORT: String(VENDURE_PORT),
             VITE_ADMIN_API_HOST: 'http://localhost',
             VENDURE_CONFIG_PATH: path.join(__dirname, 'fixtures/e2e-vendure-config.ts'),
+            VENDURE_DASHBOARD_E2E: 'true',
         },
         timeout: 120_000,
     },

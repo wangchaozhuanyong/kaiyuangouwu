@@ -32,6 +32,7 @@ const navigationMessages = {
     productAttributes: msg({ id: 'operations.nav.productAttributes', message: 'Product attributes' }),
     warehouses: msg({ id: 'operations.nav.warehouses', message: 'Warehouses' }),
     stores: msg({ id: 'operations.nav.stores', message: 'Stores' }),
+    storefrontDesign: msg({ id: 'operations.nav.storefrontDesign', message: 'Storefront design' }),
 };
 
 const movedItemIds = new Set([
@@ -147,7 +148,7 @@ defineDashboardExtension({
             const settingsIndex = sections.findIndex(section => section.id === 'settings');
             sections.splice(settingsIndex < 0 ? sections.length : settingsIndex, 0, {
                 ...storefrontContentItem,
-                title: '店铺装修',
+                title: navigationMessages.storefrontDesign.id,
                 icon: PanelsTopLeft,
                 order: 900,
                 placement: 'top',

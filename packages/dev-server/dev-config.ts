@@ -589,6 +589,11 @@ export const devConfig: VendureConfig = {
                 defaultValue: '云桥Ai',
                 public: true,
                 validate: validateStorefrontName,
+                // Storefront names are maintained in the dedicated store profile page,
+                // where Chinese is the source and English is generated on save. Hiding
+                // these raw fields avoids presenting a second bilingual entry point in
+                // the generic Channel form while keeping them available to the APIs.
+                ui: { dashboard: false },
                 label: [
                     { languageCode: LanguageCode.zh_Hans, value: '中文网站名称' },
                     { languageCode: LanguageCode.en, value: 'Chinese website name' },
@@ -609,6 +614,7 @@ export const devConfig: VendureConfig = {
                 defaultValue: 'Yunqiao Ai',
                 public: true,
                 validate: validateStorefrontName,
+                ui: { dashboard: false },
                 label: [
                     { languageCode: LanguageCode.zh_Hans, value: '英文网站名称' },
                     { languageCode: LanguageCode.en, value: 'English website name' },

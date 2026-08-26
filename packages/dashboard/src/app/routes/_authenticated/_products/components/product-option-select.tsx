@@ -60,7 +60,10 @@ export function ProductOptionSelect({ group, value, onChange }: Readonly<Product
                             <CommandInput placeholder={t`Search {name}...`.replace('{name}', group.name)} />
                             <CommandEmpty className="py-4">
                                 <div className="px-3 text-sm text-muted-foreground">
-                                    <Trans>No option values found. Add both language versions first.</Trans>
+                                    <Trans>
+                                        No option values found. Add a Simplified Chinese value first; English
+                                        is generated when you save.
+                                    </Trans>
                                 </div>
                             </CommandEmpty>
                             <CommandGroup>

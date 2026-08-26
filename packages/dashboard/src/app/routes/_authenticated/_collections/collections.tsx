@@ -1,5 +1,16 @@
 import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@/vdb/components/ui/alert-dialog.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Switch } from '@/vdb/components/ui/switch.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
@@ -12,7 +23,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { ExpandedState, getExpandedRowModel } from '@tanstack/react-table';
 import { TableOptions } from '@tanstack/table-core';
 import { ResultOf } from 'gql.tada';
-import { ChevronRight, Folder, FolderOpen, Pencil, PlusIcon } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen, Loader2, Pencil, PlusIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -26,6 +37,7 @@ import { RichTextDescriptionCell } from '@/vdb/components/shared/table-cell/orde
 import { Badge } from '@/vdb/components/ui/badge.js';
 import {
     collectionListDocument,
+    deleteCollectionDocument,
     moveCollectionDocument,
     updateCollectionDocument,
 } from './collections.graphql.js';
@@ -80,6 +92,7 @@ function isLoadMoreRow(row: CollectionOrLoadMore): row is LoadMoreRow {
 }
 
 function CollectionVisibilitySwitch({ collection }: Readonly<{ collection: Collection }>) {
+    const { t } = useLingui();
     const queryClient = useQueryClient();
     const [isUpdating, setIsUpdating] = useState(false);
 
@@ -90,10 +103,14 @@ function CollectionVisibilitySwitch({ collection }: Readonly<{ collection: Colle
                 input: { id: collection.id, isPrivate: !checked },
             });
             await queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
-            toast.success(checked ? '分类已在前台显示' : '分类已从前台隐藏');
+            toast.success(
+                checked
+                    ? t`Collection is now visible in the storefront`
+                    : t`Collection is now hidden from the storefront`,
+            );
         } catch (error) {
             console.error('Failed to update collection visibility:', error);
-            toast.error('更新前台显示状态失败');
+            toast.error(t`Failed to update storefront visibility`);
         } finally {
             setIsUpdating(false);
         }
@@ -105,10 +122,95 @@ function CollectionVisibilitySwitch({ collection }: Readonly<{ collection: Colle
                 checked={!collection.isPrivate}
                 disabled={isUpdating}
                 onCheckedChange={handleVisibilityChange}
-                aria-label={`${collection.name}前台显示`}
+                aria-label={t`${collection.name} storefront visibility`}
             />
-            <span className="text-xs text-muted-foreground">{collection.isPrivate ? '隐藏' : '显示'}</span>
+            <span className="text-xs text-muted-foreground">
+                {collection.isPrivate ? t`Hidden` : t`Visible`}
+            </span>
         </div>
+    );
+}
+
+function CollectionDeleteButton({
+    collection,
+    onDeleted,
+}: Readonly<{
+    collection: Collection;
+    onDeleted: () => Promise<void>;
+}>) {
+    const { t } = useLingui();
+    const [open, setOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const hasChildren = Boolean(collection.children?.length);
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            const result = await api.mutate(deleteCollectionDocument, { id: collection.id });
+            if (result.deleteCollection.result !== 'DELETED') {
+                toast.error(t`Failed to delete`, {
+                    description: result.deleteCollection.message,
+                });
+                return;
+            }
+
+            await onDeleted();
+            toast.success(t`Deleted successfully`);
+            setOpen(false);
+        } catch (error) {
+            toast.error(t`Failed to delete`, {
+                description: error instanceof Error ? error.message : t`Unknown error`,
+            });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    return (
+        <AlertDialog open={open} onOpenChange={isDeleting ? undefined : setOpen}>
+            <AlertDialogTrigger
+                render={
+                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" />
+                }
+            >
+                <Trash2 className="h-4 w-4" /> <Trans>Delete</Trans>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>
+                        <Trans>Confirm deletion</Trans>
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        {hasChildren ? (
+                            <Trans>
+                                Deleting a parent product group also permanently deletes all of its child
+                                product groups. Are you sure you want to continue?
+                            </Trans>
+                        ) : (
+                            <Trans>
+                                Are you sure you want to delete this item? This action cannot be undone.
+                            </Trans>
+                        )}
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting}>
+                        <Trans>Cancel</Trans>
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                        disabled={isDeleting}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={event => {
+                            event.preventDefault();
+                            void handleDelete();
+                        }}
+                    >
+                        {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        <Trans>Delete</Trans>
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }
 
@@ -355,7 +457,9 @@ function CollectionListPage() {
                 (targetParent && targetParent.breadcrumbs.length !== 2) ||
                 (isMovingBelowTopLevel && Boolean(item.children?.length))
             ) {
-                toast.error('分类最多支持两级，不能移动到二级分类下');
+                toast.error(
+                    t`Collections can only have two levels and cannot be moved below a second-level collection`,
+                );
                 throw new Error('Collection depth limit exceeded');
             }
 
@@ -438,7 +542,7 @@ function CollectionListPage() {
                             // in order to correctly render.
                             dependencies: ['children', 'breadcrumbs'],
                         },
-                        header: () => <>分类名称</>,
+                        header: () => <Trans>Collection name</Trans>,
                         cell: ({ row }) => {
                             const original = row.original as Collection;
                             const isExpanded = row.getIsExpanded();
@@ -477,10 +581,12 @@ function CollectionListPage() {
                                                             name: original.name,
                                                         })
                                                     }
-                                                    aria-label={`在 ${original.name} 下添加二级分类`}
+                                                    aria-label={t`Add a second-level collection under ${original.name}`}
                                                 >
                                                     <PlusIcon className="h-4 w-4" />
-                                                    <span className="hidden @xl:inline">添加二级分类</span>
+                                                    <span className="hidden @xl:inline">
+                                                        <Trans>Add second-level collection</Trans>
+                                                    </span>
                                                 </Button>
                                             </PermissionGuard>
                                         ) : null}
@@ -509,7 +615,7 @@ function CollectionListPage() {
                         },
                     },
                     productVariantCount: {
-                        header: () => <>商品数量</>,
+                        header: () => <Trans>Product count</Trans>,
                         cell: ({ row }) => {
                             return (
                                 <CollectionContentsSheet
@@ -544,36 +650,64 @@ function CollectionListPage() {
                         },
                     },
                     isPrivate: {
-                        header: () => <>前台显示</>,
+                        header: () => <Trans>Storefront visibility</Trans>,
                         cell: ({ row }) => <CollectionVisibilitySwitch collection={row.original} />,
                     },
                     position: {
-                        header: () => <>排序</>,
+                        header: () => <Trans>Order</Trans>,
                         cell: ({ row }) => <span className="tabular-nums">{row.original.position + 1}</span>,
                     },
                 }}
                 additionalColumns={{
                     level: {
                         meta: { dependencies: ['breadcrumbs'] },
-                        header: () => <>层级</>,
+                        header: () => <Trans>Level</Trans>,
                         cell: ({ row }) => (
                             <Badge variant="outline">
-                                {row.original.breadcrumbs.length === 2 ? '一级分类' : '二级分类'}
+                                {row.original.breadcrumbs.length === 2
+                                    ? t`Top-level collection`
+                                    : t`Second-level collection`}
                             </Badge>
                         ),
                         enableSorting: false,
                     },
                     operation: {
-                        meta: { dependencies: ['id'] },
-                        header: () => <>操作</>,
+                        meta: { dependencies: ['id', 'children'] },
+                        header: () => <Trans>Actions</Trans>,
                         cell: ({ row }) => (
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                render={<Link to="./$id" params={{ id: row.original.id }} />}
-                            >
-                                <Pencil className="h-4 w-4" /> 编辑
-                            </Button>
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    render={<Link to="./$id" params={{ id: row.original.id }} />}
+                                >
+                                    <Pencil className="h-4 w-4" /> <Trans>Edit</Trans>
+                                </Button>
+                                <PermissionGuard requires={['DeleteCollection', 'DeleteCatalog']}>
+                                    <CollectionDeleteButton
+                                        collection={row.original}
+                                        onDeleted={async () => {
+                                            queryClient.removeQueries({ queryKey: ['childCollections'] });
+                                            queryClient.removeQueries({ queryKey: ['collection-tree'] });
+                                            queryClient.removeQueries({
+                                                queryKey: ['collection-tree-children'],
+                                            });
+                                            setAccumulatedChildren({});
+                                            setExpanded(current => {
+                                                if (current === true || !current[row.original.id]) {
+                                                    return current;
+                                                }
+                                                const next = { ...current };
+                                                delete next[row.original.id];
+                                                return next;
+                                            });
+                                            await queryClient.invalidateQueries({
+                                                queryKey: ['PaginatedListDataTable'],
+                                            });
+                                        }}
+                                    />
+                                </PermissionGuard>
+                            </div>
                         ),
                         enableSorting: false,
                     },
@@ -650,7 +784,7 @@ function CollectionListPage() {
                     operation: true,
                     name: true,
                 }}
-                searchPlaceholder="搜索分类名称…"
+                searchPlaceholder={t`Search collection names...`}
                 onSearchTermChange={searchTerm => {
                     setSearchTerm(searchTerm);
                     return {
@@ -665,7 +799,9 @@ function CollectionListPage() {
                 disableDragAndDrop={!!searchTerm}
             >
                 <PageActionBarLeft>
-                    <p className="text-sm text-muted-foreground">管理店铺前台展示的商品分类</p>
+                    <p className="text-sm text-muted-foreground">
+                        <Trans>Manage the product groups displayed in the storefront</Trans>
+                    </p>
                 </PageActionBarLeft>
                 <ActionBarItem
                     itemId="create-button"
@@ -673,7 +809,7 @@ function CollectionListPage() {
                 >
                     <Button onClick={() => openQuickCreate()}>
                         <PlusIcon className="mr-2 h-4 w-4" />
-                        新增一级分类
+                        <Trans>Add top-level collection</Trans>
                     </Button>
                 </ActionBarItem>
             </ListPage>

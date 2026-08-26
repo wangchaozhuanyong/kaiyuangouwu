@@ -80,12 +80,13 @@ export class StorefrontContentService {
             },
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
-        return blocks
+        const published = blocks
             .filter(
                 block => (!block.startsAt || block.startsAt <= now) && (!block.endsAt || block.endsAt > now),
             )
             .filter(block => this.hasCompletePublishedTranslations(block))
             .map(block => this.translateBlock(block, ctx, true));
+        return published.filter(block => block.type !== 'HERO' || this.hasPublishedImage(block));
     }
 
     async getSettings(ctx: RequestContext): Promise<{
@@ -141,6 +142,7 @@ export class StorefrontContentService {
         const normalized = this.validateBlockInput(input);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
+        this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
         const block = await this.connection.getRepository(ctx, StorefrontContentBlock).save(
             new StorefrontContentBlock({
                 ...normalized,
@@ -195,6 +197,7 @@ export class StorefrontContentService {
         const requestedImageUrl =
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
         const image = await this.resolveImage(ctx, next.imageAssetId, requestedImageUrl, '区块图片');
+        this.assertEnabledHeroHasImage(next.type, next.enabled, image);
         Object.assign(block, {
             code: next.code,
             internalName: next.internalName,
@@ -512,6 +515,20 @@ export class StorefrontContentService {
                     Boolean(itemSource?.description.trim()) === Boolean(itemTarget?.description.trim())
                 );
             });
+    }
+
+    private hasPublishedImage(block: StorefrontContentBlock): boolean {
+        return Boolean(block.imageUrl?.trim());
+    }
+
+    private assertEnabledHeroHasImage(
+        type: StorefrontContentBlockType,
+        enabled: boolean,
+        image: ResolvedStorefrontImage,
+    ): void {
+        if (type === 'HERO' && enabled && !image.imageUrl?.trim()) {
+            throw new UserInputError('轮播图上线前必须从素材库选择或上传图片');
+        }
     }
 
     private async getOwnedBlockOrThrow(ctx: RequestContext, id: ID): Promise<StorefrontContentBlock> {

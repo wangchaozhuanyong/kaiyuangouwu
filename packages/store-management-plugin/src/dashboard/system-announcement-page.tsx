@@ -213,7 +213,11 @@ function AnnouncementEditor({
     onSaved: () => Promise<void>;
 }) {
     const [localDraft, setLocalDraft] = useState<AnnouncementDraft | null>(draft);
-    useEffect(() => setLocalDraft(draft), [draft]);
+    const [editEnglish, setEditEnglish] = useState(false);
+    useEffect(() => {
+        setLocalDraft(draft);
+        setEditEnglish(false);
+    }, [draft]);
     const mutation = useMutation({
         mutationFn: (value: AnnouncementDraft) =>
             value.id
@@ -242,27 +246,50 @@ function AnnouncementEditor({
             <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>{draft?.id ? '编辑系统公告' : '新建系统公告'}</DialogTitle>
-                    <DialogDescription>
-                        中文为原文；英文留空会在保存时自动生成，也可以手动修改。
-                    </DialogDescription>
+                    <DialogDescription>填写中文即可，保存时会自动生成英文。</DialogDescription>
                 </DialogHeader>
                 {localDraft ? (
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="中文标题">
+                        <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">
+                                通常只需填写中文；仅在需要人工修改英文译文时切换到英文校对。
+                            </p>
+                            <div className="flex shrink-0 rounded-md border bg-background p-1">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={editEnglish ? 'ghost' : 'secondary'}
+                                    onClick={() => setEditEnglish(false)}
+                                >
+                                    常用模式
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={editEnglish ? 'secondary' : 'ghost'}
+                                    onClick={() => setEditEnglish(true)}
+                                >
+                                    英文校对
+                                </Button>
+                            </div>
+                        </div>
+                        <Field label="公告标题" className={editEnglish ? undefined : 'sm:col-span-2'}>
                             <Input
                                 value={localDraft.titleZh}
                                 maxLength={120}
                                 onChange={event => update('titleZh', event.target.value)}
                             />
                         </Field>
-                        <Field label="英文标题（可选，留空自动翻译）">
-                            <Input
-                                value={localDraft.titleEn}
-                                maxLength={120}
-                                onChange={event => update('titleEn', event.target.value)}
-                            />
-                        </Field>
-                        <Field label="中文内容" className="sm:col-span-2">
+                        {editEnglish ? (
+                            <Field label="英文标题（人工覆盖）">
+                                <Input
+                                    value={localDraft.titleEn}
+                                    maxLength={120}
+                                    onChange={event => update('titleEn', event.target.value)}
+                                />
+                            </Field>
+                        ) : null}
+                        <Field label="公告内容" className="sm:col-span-2">
                             <Textarea
                                 rows={4}
                                 value={localDraft.contentZh}
@@ -270,14 +297,16 @@ function AnnouncementEditor({
                                 onChange={event => update('contentZh', event.target.value)}
                             />
                         </Field>
-                        <Field label="英文内容（可选，留空自动翻译）" className="sm:col-span-2">
-                            <Textarea
-                                rows={3}
-                                value={localDraft.contentEn}
-                                maxLength={2000}
-                                onChange={event => update('contentEn', event.target.value)}
-                            />
-                        </Field>
+                        {editEnglish ? (
+                            <Field label="英文内容（人工覆盖）" className="sm:col-span-2">
+                                <Textarea
+                                    rows={3}
+                                    value={localDraft.contentEn}
+                                    maxLength={2000}
+                                    onChange={event => update('contentEn', event.target.value)}
+                                />
+                            </Field>
+                        ) : null}
                         <Field
                             label="跳转链接"
                             hint="可留空；支持 HTTPS、HTTP 或站内相对路径。"

@@ -107,6 +107,20 @@ export function routePath(name: RouteName): string {
     return routePaths[name];
 }
 
+interface ScrollRestorationLocation {
+    href: string;
+    pathname: string;
+    state: { __TSR_key?: string };
+}
+
+const rootPagePaths = new Set(rootPages.map(routePath));
+
+export function getStorefrontScrollRestorationKey(location: ScrollRestorationLocation): string {
+    const pathname = location.pathname === '/' ? '/' : location.pathname.replace(/\/+$/, '');
+    if (rootPagePaths.has(pathname)) return `root:${pathname}`;
+    return location.state.__TSR_key ?? location.href;
+}
+
 export function routeSearch(route: RouteState): StorefrontRouteSearch {
     const { name: _name, ...search } = route;
     return search;

@@ -982,8 +982,8 @@ const fieldHelpTopics: Record<string, FieldHelpTopic> = {
     description: {
         title: text('说明内容', 'Description'),
         description: text(
-            '说明该项目的用途、适用范围或顾客可见内容。切换内容语言后分别维护中文和英文。',
-            'Explains the purpose, scope, or customer-facing content. Maintain Chinese and English separately by switching the content language.',
+            '说明该项目的用途、适用范围或顾客可见内容。默认填写中文，保存时自动生成英文。',
+            'Explains the purpose, scope, or customer-facing content. Enter the Chinese source; English is generated when you save.',
         ),
     },
     enabled: {
@@ -1032,15 +1032,15 @@ const fieldHelpTopics: Record<string, FieldHelpTopic> = {
     defaultLanguageCode: {
         title: text('默认内容语言', 'Default content language'),
         description: text(
-            '商品、分组等业务内容缺少当前语言时使用的默认语言。它不会改变后台界面语言。',
-            'The fallback language for products, groups, and other business content. It does not change the dashboard interface language.',
+            '前台请求未指定语言时使用的默认语言。它不改变后台界面语言，后台仍以中文作为翻译源内容。',
+            'The storefront fallback when a request does not specify a language. It does not change the dashboard interface or the Chinese translation source.',
         ),
     },
     availableLanguageCodes: {
         title: text('可用内容语言', 'Available content languages'),
         description: text(
-            '决定该销售渠道可以维护和读取哪些商品内容语言。至少要包含默认内容语言。',
-            'Controls which product-content languages this sales channel can maintain and serve. It must include the default content language.',
+            '决定该销售渠道可以向前台提供哪些内容语言。运营默认录入中文，英文由服务端自动生成。',
+            'Controls which content languages this sales channel can serve. Editors enter Chinese by default and the server generates English.',
         ),
     },
     availableLanguages: {

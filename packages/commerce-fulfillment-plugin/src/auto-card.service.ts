@@ -183,10 +183,12 @@ export class AutoCardService {
             instructionsZh.length > AUTO_CARD_MAX_INSTRUCTIONS_LENGTH ||
             instructionsEn.length > AUTO_CARD_MAX_INSTRUCTIONS_LENGTH
         ) {
-            throw new UserInputError(`中英文发货说明均不能超过 ${AUTO_CARD_MAX_INSTRUCTIONS_LENGTH} 个字符`);
+            throw new UserInputError(
+                `发货说明及其英文译文均不能超过 ${AUTO_CARD_MAX_INSTRUCTIONS_LENGTH} 个字符`,
+            );
         }
         if (input.enabled && (!instructionsZh || !instructionsEn)) {
-            throw new UserInputError('启用自动发卡前必须填写中英文发货说明');
+            throw new UserInputError('启用自动发卡前请填写发货说明；英文会在保存时自动生成');
         }
         if (
             !Number.isInteger(input.lowStockThreshold) ||

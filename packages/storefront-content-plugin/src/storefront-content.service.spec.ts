@@ -136,6 +136,58 @@ describe('StorefrontContentService publication guard', () => {
         block.translations[1].title = 'Home';
         expect((service as any).hasCompletePublishedTranslations(block)).toBe(true);
     });
+
+    it('publishes hero blocks only when they resolve to a storefront image URL', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const block = new StorefrontContentBlock({ type: 'HERO', imageUrl: null });
+
+        expect((service as any).hasPublishedImage(block)).toBe(false);
+        block.imageUrl = '/assets/preview/hero.webp';
+        expect((service as any).hasPublishedImage(block)).toBe(true);
+    });
+
+    it('requires an enabled hero to have a resolved image but allows an offline draft', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const missingImage = { asset: null, imageUrl: null };
+
+        expect(() => (service as any).assertEnabledHeroHasImage('HERO', true, missingImage)).toThrow(
+            /轮播图上线前必须/,
+        );
+        expect(() => (service as any).assertEnabledHeroHasImage('HERO', false, missingImage)).not.toThrow();
+        expect(() =>
+            (service as any).assertEnabledHeroHasImage('HERO', true, {
+                asset: { id: 'asset-1' },
+                imageUrl: '/assets/preview/hero.webp',
+            }),
+        ).not.toThrow();
+    });
+
+    it('omits a legacy enabled hero without an image from the Shop API result', async () => {
+        const block = new StorefrontContentBlock({
+            id: 'hero-without-image',
+            type: 'HERO',
+            enabled: true,
+            imageUrl: null,
+            startsAt: null,
+            endsAt: null,
+            translations: [
+                { languageCode: LanguageCode.zh_Hans, title: '首页', subtitle: '', body: '', ctaLabel: '' },
+                { languageCode: LanguageCode.en, title: 'Home', subtitle: '', body: '', ctaLabel: '' },
+            ],
+            items: [],
+        });
+        const repository = { find: vi.fn().mockResolvedValue([block]) };
+        const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+        const translator = { translate: vi.fn((value: StorefrontContentBlock) => value) };
+        const service = new StorefrontContentService(
+            connection as any,
+            translator as any,
+            { storefrontUrl: vi.fn() } as any,
+            {} as any,
+        );
+
+        await expect(service.findPublished({ channelId: 'store-a' } as any)).resolves.toEqual([]);
+    });
 });
 
 describe('StorefrontContentService image ownership', () => {

@@ -19,6 +19,11 @@ import defaultHero32 from './assets/storefront/default-hero-32.webp';
 import defaultHero480 from './assets/storefront/default-hero-480.webp';
 import defaultHero960 from './assets/storefront/default-hero-960.webp';
 import defaultHeroFallback from './assets/storefront/default-hero.jpg';
+import heroGateway1376 from './assets/storefront/hero-01-gateway-1376.webp';
+import heroGateway32 from './assets/storefront/hero-01-gateway-32.webp';
+import heroGateway480 from './assets/storefront/hero-01-gateway-480.webp';
+import heroGateway960 from './assets/storefront/hero-01-gateway-960.webp';
+import heroGatewayFallback from './assets/storefront/hero-01-gateway.jpg';
 import heroVip1376 from './assets/storefront/hero-02-vip-1376.webp';
 import heroVip32 from './assets/storefront/hero-02-vip-32.webp';
 import heroVip480 from './assets/storefront/hero-02-vip-480.webp';
@@ -79,8 +84,8 @@ export const AUTH_REGISTER_HERO_IMAGE = authRegisterHero1672;
 export const AUTH_REGISTER_HERO_FALLBACK_IMAGE = authRegisterHeroFallback;
 export const DEFAULT_HERO_IMAGE = defaultHero1376;
 export const DEFAULT_HERO_FALLBACK_IMAGE = defaultHeroFallback;
-export const HERO_GATEWAY_IMAGE = DEFAULT_HERO_IMAGE;
-export const HERO_GATEWAY_FALLBACK_IMAGE = DEFAULT_HERO_FALLBACK_IMAGE;
+export const HERO_GATEWAY_IMAGE = heroGateway1376;
+export const HERO_GATEWAY_FALLBACK_IMAGE = heroGatewayFallback;
 export const HERO_VIP_IMAGE = heroVip1376;
 export const HERO_VIP_FALLBACK_IMAGE = heroVipFallback;
 export const HERO_CLOUD_BRIDGE_IMAGE = heroCloudBridge1600;
@@ -128,6 +133,16 @@ const STATIC_IMAGE_SOURCES = new Map<string, StaticStorefrontImageSource>([
             src: defaultHero1376,
             srcSet: `${defaultHero480} 480w, ${defaultHero960} 960w, ${defaultHero1376} 1376w`,
             placeholderSrc: defaultHero32,
+            width: 1376,
+            height: 768,
+        }),
+    ],
+    [
+        heroGateway1376,
+        staticSource({
+            src: heroGateway1376,
+            srcSet: `${heroGateway480} 480w, ${heroGateway960} 960w, ${heroGateway1376} 1376w`,
+            placeholderSrc: heroGateway32,
             width: 1376,
             height: 768,
         }),

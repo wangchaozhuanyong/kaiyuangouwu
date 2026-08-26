@@ -33,9 +33,10 @@ import {
 } from 'react';
 import type { RouteState } from '../storefront-router';
 
+import { ProductCard } from '../components/common/product-card';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from '../hero-theme';
-import { selectManagedProducts } from '../home-merchandising';
+import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { homepageModuleEntries } from '../homepage-module-order';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
@@ -61,6 +62,7 @@ import {
     contentStringArraySetting,
     decodeStorefrontImage,
     formatMoney,
+    minimumProductPrice,
     productImage,
     renderColorfulQuickIcon,
     SafeImage,
@@ -358,7 +360,7 @@ export function HomePage() {
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(
-        () => contentBlocks.filter(block => block.type === 'HERO'),
+        () => contentBlocks.filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim())),
         [contentBlocks],
     );
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
@@ -720,6 +722,7 @@ export function HomePage() {
     const trustItems = trustBlock?.items.length
         ? trustBlock.items.slice(0, 4).map(item => item.label)
         : defaultTrustLabels;
+    const trustBarHasLongCopy = !isZh || trustItems.some(label => Array.from(label.trim()).length > 8);
 
     return (
         <main className="page home-page">
@@ -975,7 +978,7 @@ export function HomePage() {
 
                             {hasHomepageModule('TRUST_BAR') ? (
                                 <div
-                                    className="home-trust-bar"
+                                    className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}`}
                                     style={{ order: homepageModuleOrder('TRUST_BAR') }}
                                     aria-label={isZh ? '服务信息' : 'Service information'}
                                 >
@@ -984,7 +987,7 @@ export function HomePage() {
                                         return (
                                             <div className="home-trust-item" key={`${label}-${index}`}>
                                                 <TrustIcon className="trust-icon" aria-hidden="true" />
-                                                <span>{label}</span>
+                                                <span className="home-trust-label">{label}</span>
                                             </div>
                                         );
                                     })}
@@ -1050,6 +1053,11 @@ export function HomePage() {
                                 <ManagedContentSection
                                     block={block}
                                     products={managedContentProductPool}
+                                    language={language}
+                                    locale={locale}
+                                    market={market}
+                                    addingVariantId={addingVariantId}
+                                    onAdd={onAdd}
                                     onContentTarget={onContentTarget}
                                 />
                             </div>
@@ -1196,7 +1204,12 @@ function FlashSaleSection({
                     >
                         <span className="flash-sale-image">
                             {item.imageUrl ? (
-                                <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
+                                <SafeImage
+                                    src={item.imageUrl}
+                                    alt={item.productName}
+                                    imageKind="card"
+                                    loading="lazy"
+                                />
                             ) : (
                                 <span className="image-placeholder" aria-hidden="true">
                                     <Package />
@@ -1205,7 +1218,9 @@ function FlashSaleSection({
                             <em>{isZh ? '限时价' : 'Limited price'}</em>
                         </span>
                         <strong className="flash-sale-name">{item.productName}</strong>
-                        <small>{item.variantName}</small>
+                        {item.variantName && item.variantName !== item.productName ? (
+                            <small>{item.variantName}</small>
+                        ) : null}
                         <span className="flash-sale-price">
                             <b>{formatMoney(item.salePrice, item.currencyCode, locale)}</b>
                             <del>{formatMoney(item.originalPrice, item.currencyCode, locale)}</del>
@@ -1440,10 +1455,20 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
 function ManagedContentSection({
     block,
     products,
+    language,
+    locale,
+    market,
+    addingVariantId,
+    onAdd,
     onContentTarget,
 }: {
     block: StorefrontContentBlock;
     products: Product[];
+    language: StorefrontLanguage;
+    locale: string;
+    market: MarketConfig;
+    addingVariantId: string | null;
+    onAdd: (variant: ProductVariant) => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
@@ -1464,6 +1489,34 @@ function ManagedContentSection({
         block.targetType === 'PRODUCT'
             ? products.find(product => product.id === block.targetValue)
             : undefined;
+    if (block.type === 'CATEGORY_AD') {
+        return (
+            <CategoryPromotionSection
+                block={block}
+                products={products}
+                language={language}
+                locale={locale}
+                market={market}
+                addingVariantId={addingVariantId}
+                onAdd={onAdd}
+                onContentTarget={onContentTarget}
+            />
+        );
+    }
+    if (block.type === 'FEATURED_COLLECTION') {
+        return (
+            <FeaturedCollectionSection
+                block={block}
+                products={additionalSelectedProducts}
+                language={language}
+                locale={locale}
+                onContentTarget={onContentTarget}
+            />
+        );
+    }
+    if (block.type === 'STORY') {
+        return <ContentStorySection block={block} language={language} onContentTarget={onContentTarget} />;
+    }
     return (
         <section
             className={`content-section managed-content-section managed-content-${block.type.toLowerCase()}`}
@@ -1516,6 +1569,293 @@ function ManagedContentSection({
                     ))}
                 </div>
             )}
+        </section>
+    );
+}
+
+function CategoryPromotionSection({
+    block,
+    products,
+    language,
+    locale,
+    market,
+    addingVariantId,
+    onAdd,
+    onContentTarget,
+}: {
+    block: StorefrontContentBlock;
+    products: Product[];
+    language: StorefrontLanguage;
+    locale: string;
+    market: MarketConfig;
+    addingVariantId: string | null;
+    onAdd: (variant: ProductVariant) => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const isZh = language === 'zh';
+    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const displayCount = Math.min(4, Math.max(1, contentNumberSetting(block.settings?.displayCount, 4)));
+    const categoryProducts = selectCategoryPromotionProducts({
+        selectedProductIds: contentStringArraySetting(block.settings?.selectedProductIds),
+        products,
+        targetType: block.targetType,
+        targetValue: block.targetValue,
+        count: displayCount,
+    });
+    const productGridCount = Math.max(1, Math.min(4, categoryProducts.length));
+    const hasSupportingContent = categoryProducts.length > 0 || block.items.length > 0;
+
+    return (
+        <section
+            className="content-section managed-content-section managed-content-category_ad category-promotion-section"
+            style={{
+                backgroundColor: block.backgroundColor ?? undefined,
+                color: block.textColor ?? undefined,
+            }}
+        >
+            <SectionHeader
+                title={block.title}
+                subtitle={block.subtitle}
+                action={blockHasTarget ? block.ctaLabel || (isZh ? '查看全部' : 'View all') : undefined}
+                onAction={
+                    blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined
+                }
+            />
+            <div className={`category-promotion-layout${hasSupportingContent ? '' : ' is-visual-only'}`}>
+                <button
+                    className="category-promotion-visual"
+                    type="button"
+                    disabled={!blockHasTarget}
+                    onClick={() => onContentTarget(block.targetType, block.targetValue)}
+                    aria-label={
+                        blockHasTarget
+                            ? `${block.ctaLabel || (isZh ? '查看全部' : 'View all')}：${block.title}`
+                            : block.title
+                    }
+                >
+                    {block.imageUrl ? (
+                        <SafeImage src={block.imageUrl} alt={block.title} imageKind="hero" loading="lazy" />
+                    ) : (
+                        <span className="category-promotion-placeholder" aria-hidden="true">
+                            <LayoutGrid />
+                        </span>
+                    )}
+                    <span className="category-promotion-visual-copy" aria-hidden="true">
+                        <small>{isZh ? '分类精选' : 'Category edit'}</small>
+                        {blockHasTarget ? (
+                            <strong>
+                                {block.ctaLabel || (isZh ? '查看全部' : 'View all')}
+                                <ChevronRight />
+                            </strong>
+                        ) : null}
+                    </span>
+                </button>
+
+                {categoryProducts.length ? (
+                    <div
+                        className={`product-grid category-promotion-products category-promotion-products-${productGridCount}`}
+                    >
+                        {categoryProducts.map(product => (
+                            <ProductCard
+                                key={product.id}
+                                product={product}
+                                market={market}
+                                locale={locale}
+                                adding={product.variants.some(variant => variant.id === addingVariantId)}
+                                onOpen={() => onContentTarget('PRODUCT', product.id)}
+                                onAdd={() => product.variants[0] && onAdd(product.variants[0])}
+                            />
+                        ))}
+                    </div>
+                ) : block.items.length ? (
+                    <div className="managed-content-grid category-promotion-legacy-grid">
+                        {block.items.map(item => (
+                            <ManagedContentItemButton
+                                key={item.id}
+                                item={item}
+                                products={products}
+                                onContentTarget={onContentTarget}
+                            />
+                        ))}
+                    </div>
+                ) : null}
+            </div>
+        </section>
+    );
+}
+
+function FeaturedCollectionSection({
+    block,
+    products,
+    language,
+    locale,
+    onContentTarget,
+}: {
+    block: StorefrontContentBlock;
+    products: Product[];
+    language: StorefrontLanguage;
+    locale: string;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const isZh = language === 'zh';
+    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+
+    return (
+        <section
+            className="content-section featured-collection-section"
+            aria-labelledby={`${block.id}-title`}
+        >
+            <div className="featured-collection-layout">
+                <div
+                    className="featured-collection-intro"
+                    style={{
+                        backgroundColor: block.backgroundColor ?? undefined,
+                        color: block.textColor ?? undefined,
+                    }}
+                >
+                    <span className="featured-collection-kicker">
+                        <span aria-hidden="true">01</span>
+                        {isZh ? '本期策展' : 'Curated edit'}
+                    </span>
+                    <h2 id={`${block.id}-title`}>{block.title}</h2>
+                    {block.subtitle ? <p className="featured-collection-subtitle">{block.subtitle}</p> : null}
+                    {block.body ? <p className="featured-collection-body">{block.body}</p> : null}
+                    {blockHasTarget ? (
+                        <button
+                            className="featured-collection-action"
+                            type="button"
+                            onClick={() => onContentTarget(block.targetType, block.targetValue)}
+                        >
+                            {block.ctaLabel || (isZh ? '浏览全部' : 'View collection')}
+                            <ChevronRight aria-hidden="true" />
+                        </button>
+                    ) : null}
+                </div>
+
+                {products.length ? (
+                    <div className="featured-collection-track" aria-label={block.title}>
+                        {products.map((product, index) => {
+                            const imageUrl = productImage(product);
+                            const pricedVariant = product.variants.find(
+                                variant => variant.priceWithTax === minimumProductPrice(product),
+                            );
+                            return (
+                                <button
+                                    key={product.id}
+                                    className="featured-collection-product"
+                                    type="button"
+                                    onClick={() => onContentTarget('PRODUCT', product.id)}
+                                >
+                                    <span className="featured-collection-product-media">
+                                        {imageUrl ? (
+                                            <SafeImage
+                                                src={imageUrl}
+                                                alt={product.name}
+                                                imageKind="card"
+                                                loading="lazy"
+                                            />
+                                        ) : (
+                                            <span className="featured-collection-product-placeholder">
+                                                <LayoutGrid aria-hidden="true" />
+                                            </span>
+                                        )}
+                                        <span
+                                            className="featured-collection-product-index"
+                                            aria-hidden="true"
+                                        >
+                                            {String(index + 1).padStart(2, '0')}
+                                        </span>
+                                    </span>
+                                    <span className="featured-collection-product-copy">
+                                        <span className="featured-collection-product-meta">
+                                            {product.collections[0]?.name ||
+                                                (isZh ? '精选商品' : 'Selected product')}
+                                        </span>
+                                        <strong>{product.name}</strong>
+                                        {product.description ? (
+                                            <small>{trimText(product.description, 68)}</small>
+                                        ) : null}
+                                        {pricedVariant ? (
+                                            <span className="featured-collection-product-price">
+                                                {formatMoney(
+                                                    pricedVariant.priceWithTax,
+                                                    pricedVariant.currencyCode,
+                                                    locale,
+                                                )}
+                                            </span>
+                                        ) : null}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="featured-collection-empty" aria-hidden="true">
+                        <span>{isZh ? '精选内容' : 'Curated selection'}</span>
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+}
+
+function ContentStorySection({
+    block,
+    language,
+    onContentTarget,
+}: {
+    block: StorefrontContentBlock;
+    language: StorefrontLanguage;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+}) {
+    const isZh = language === 'zh';
+    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+
+    return (
+        <section className="content-section content-story-section" aria-labelledby={`${block.id}-title`}>
+            <article
+                className="content-story-layout"
+                style={{
+                    backgroundColor: block.backgroundColor ?? undefined,
+                    color: block.textColor ?? undefined,
+                }}
+            >
+                <button
+                    className="content-story-visual"
+                    type="button"
+                    disabled={!blockHasTarget}
+                    onClick={() => onContentTarget(block.targetType, block.targetValue)}
+                    aria-label={blockHasTarget ? block.ctaLabel || block.title : undefined}
+                >
+                    {block.imageUrl ? (
+                        <SafeImage src={block.imageUrl} alt={block.title} imageKind="hero" loading="lazy" />
+                    ) : (
+                        <span className="content-story-placeholder" aria-hidden="true">
+                            <span>STORY</span>
+                            <Sparkles />
+                        </span>
+                    )}
+                </button>
+                <div className="content-story-copy">
+                    <span className="content-story-kicker">
+                        <span aria-hidden="true" />
+                        {isZh ? '内容故事' : 'Editorial story'}
+                    </span>
+                    <h2 id={`${block.id}-title`}>{block.title}</h2>
+                    {block.subtitle ? <p className="content-story-subtitle">{block.subtitle}</p> : null}
+                    {block.body ? <p className="content-story-body">{block.body}</p> : null}
+                    {blockHasTarget ? (
+                        <button
+                            className="content-story-action"
+                            type="button"
+                            onClick={() => onContentTarget(block.targetType, block.targetValue)}
+                        >
+                            <span>{block.ctaLabel || (isZh ? '继续阅读' : 'Read the story')}</span>
+                            <ChevronRight aria-hidden="true" />
+                        </button>
+                    ) : null}
+                </div>
+            </article>
         </section>
     );
 }

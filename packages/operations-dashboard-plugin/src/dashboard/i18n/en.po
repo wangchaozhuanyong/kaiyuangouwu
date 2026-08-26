@@ -460,7 +460,7 @@ msgstr "English delivery instructions"
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.instructionsEnHint"
-msgstr "Shown in the delivery email when the customer uses English."
+msgstr "Usually you only need Chinese. English is generated on save and can be reviewed here."
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
@@ -714,6 +714,11 @@ msgstr "Product groups"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
+msgid "operations.nav.productList"
+msgstr "Product list"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.skuAndInventory"
 msgstr "SKUs & inventory"
 
@@ -721,6 +726,11 @@ msgstr "SKUs & inventory"
 #: src/dashboard/index.tsx
 msgid "operations.nav.specificationTemplates"
 msgstr "Specification templates"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.storefrontDesign"
+msgstr "Storefront design"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx

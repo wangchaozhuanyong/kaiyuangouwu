@@ -164,6 +164,7 @@ export function mapVariantsToSearchItems(
 
 interface ProductMultiSelectorProps {
     mode: 'product' | 'variant';
+    singleSelect?: boolean;
     initialSelectionIds?: string[];
     onSelectionChange: (selectedIds: string[]) => void;
     open: boolean;
@@ -193,6 +194,7 @@ function ProductList({
     getItemId,
     getItemName,
     toggleSelection,
+    singleSelect,
 }: Readonly<{
     items: SearchItem[];
     mode: 'product' | 'variant';
@@ -200,6 +202,7 @@ function ProductList({
     getItemId: (item: SearchItem) => string;
     getItemName: (item: SearchItem) => string;
     toggleSelection: (item: SearchItem) => void;
+    singleSelect: boolean;
 }>) {
     return (
         <>
@@ -212,7 +215,7 @@ function ProductList({
                 return (
                     <div
                         key={itemId}
-                        role="checkbox"
+                        role={singleSelect ? 'radio' : 'checkbox'}
                         tabIndex={0}
                         aria-checked={isSelected}
                         className={`border rounded-lg p-3 cursor-pointer transition-colors ${
@@ -260,6 +263,7 @@ const EMPTY_IDS: string[] = [];
 
 export function ProductMultiSelectorDialog({
     mode,
+    singleSelect = false,
     initialSelectionIds = EMPTY_IDS,
     onSelectionChange,
     open,
@@ -309,11 +313,14 @@ export function ProductMultiSelectorDialog({
         queryFn: async () => {
             const take = Math.min(initialSelectionIds.length, MAX_SELECTION_FETCH);
             if (mode === 'product') {
-                const result = await api.query(productsByIdsDocument, { ids: initialSelectionIds, take });
-                return mapProductsToSearchItems(result.products.items);
+                const productResult = await api.query(productsByIdsDocument, {
+                    ids: initialSelectionIds,
+                    take,
+                });
+                return mapProductsToSearchItems(productResult.products.items);
             }
-            const result = await api.query(variantsByIdsDocument, { ids: initialSelectionIds, take });
-            return mapVariantsToSearchItems(result.productVariants.items);
+            const variantResult = await api.query(variantsByIdsDocument, { ids: initialSelectionIds, take });
+            return mapVariantsToSearchItems(variantResult.productVariants.items);
         },
         enabled: open && initialSelectionIds.length > 0,
         // The query key carries the selection identity; never show a previous
@@ -351,14 +358,19 @@ export function ProductMultiSelectorDialog({
                     newSelectedItems.splice(index, 1);
                 }
             } else {
+                if (singleSelect) {
+                    newSelectedIds.clear();
+                    newSelectedItems.splice(0, newSelectedItems.length, item);
+                } else {
+                    newSelectedItems.push(item);
+                }
                 newSelectedIds.add(itemId);
-                newSelectedItems.push(item);
             }
 
             setSelectedIds(newSelectedIds);
             setSelectedItems(newSelectedItems);
         },
-        [selectedIds, selectedItems, getItemId],
+        [selectedIds, selectedItems, getItemId, singleSelect],
     );
 
     // Clear all selections
@@ -457,6 +469,7 @@ export function ProductMultiSelectorDialog({
                                         getItemId={getItemId}
                                         getItemName={getItemName}
                                         toggleSelection={toggleSelection}
+                                        singleSelect={singleSelect}
                                     />
                                 )}
                             </div>

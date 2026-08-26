@@ -92,4 +92,23 @@ describe('homepage module registry', () => {
             'notice',
         ]);
     });
+
+    it('keeps authentication visuals out of the homepage editor while retaining their reorder IDs', () => {
+        const blocks = [
+            block({ id: 'notice', code: 'notice', type: 'NOTICE', position: 1 }),
+            block({ id: 'auth-login', code: 'auth-login-visual', type: 'AUTH_LOGIN', position: 2 }),
+            block({ id: 'auth-register', code: 'auth-register-visual', type: 'AUTH_REGISTER', position: 3 }),
+            block({ id: 'custom', code: 'custom', type: 'CUSTOM', position: 4 }),
+        ];
+        const entries = homepageLayoutEntries(blocks);
+
+        expect(entries.some(entry => entry.block?.id === 'auth-login')).toBe(false);
+        expect(entries.some(entry => entry.block?.id === 'auth-register')).toBe(false);
+        expect(movedHomepageBlockIds(entries, 'custom:custom', 'fixed:NOTICE', blocks)).toEqual([
+            'custom',
+            'auth-login',
+            'auth-register',
+            'notice',
+        ]);
+    });
 });

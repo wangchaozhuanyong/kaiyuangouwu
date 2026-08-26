@@ -8,6 +8,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import type { ProductVariant } from '@vendure/core';
 import {
     Collection,
+    ConfigService,
     CustomerService,
     idsAreEqual,
     isGraphQlErrorResult,
@@ -43,6 +44,7 @@ export class StorePromotionCampaignService {
         private readonly promotionService: PromotionService,
         private readonly productVariantService: ProductVariantService,
         private readonly customerService: CustomerService,
+        private readonly configService: ConfigService,
     ) {}
 
     async findCoupons(ctx: RequestContext): Promise<StoreCouponCampaignView[]> {
@@ -490,6 +492,8 @@ export class StorePromotionCampaignService {
                 const salePrice =
                     rule.salePrice ??
                     Math.round(originalPrice * (1 - Math.min(100, rule.percentageOff ?? 0) / 100));
+                const imageIdentifier =
+                    variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview ?? null;
                 return {
                     productId: String(variant.product.id),
                     productVariantId: String(variant.id),
@@ -498,8 +502,7 @@ export class StorePromotionCampaignService {
                     originalPrice,
                     salePrice,
                     currencyCode: variant.currencyCode,
-                    imageUrl:
-                        variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview ?? null,
+                    imageUrl: imageIdentifier ? this.mediaUrl(ctx, imageIdentifier) : null,
                 };
             }),
         );
@@ -512,6 +515,16 @@ export class StorePromotionCampaignService {
             endsAt: promotion.endsAt,
             items,
         };
+    }
+
+    private mediaUrl(ctx: RequestContext, identifier: string): string {
+        const normalized = identifier.trim();
+        if (!normalized || /^(?:https?:|data:image\/)/i.test(normalized)) return normalized;
+        const storageStrategy = this.configService.assetOptions.assetStorageStrategy;
+        if (ctx.req && storageStrategy.toAbsoluteUrl) {
+            return storageStrategy.toAbsoluteUrl(ctx.req, normalized.replace(/^\/assets\//, ''));
+        }
+        return normalized.startsWith('/') ? normalized : `/assets/${normalized}`;
     }
 
     private findPromotions(ctx: RequestContext): Promise<Promotion[]> {

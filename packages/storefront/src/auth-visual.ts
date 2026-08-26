@@ -17,30 +17,30 @@ const managedType: Record<AuthVisualVariant, StorefrontContentBlock['type']> = {
 const defaults: Record<AuthVisualVariant, Record<StorefrontLanguage, AuthVisualMessage>> = {
     login: {
         zh: {
-            eyebrow: 'AI 软件严选 · 即刻启程',
-            title: '一次登录，连接你的 AI 效率宇宙',
-            description: '创作、编程与智能办公工具，统一收藏、购买与管理',
-            tags: ['灵感创作', '开发提速', '智能办公'],
+            eyebrow: 'AI 软件精选平台',
+            title: '登录你的 AI 新世界',
+            description: '创作、编程与办公工具，一站高效管理',
+            tags: ['AI 创作', '开发提效', '智能办公'],
         },
         en: {
-            eyebrow: 'CURATED AI SOFTWARE · READY WHEN YOU ARE',
-            title: 'One sign-in. Every AI advantage.',
-            description: 'Create, code and work with the right tools in one intelligent hub.',
-            tags: ['Create Faster', 'Code Smarter', 'Work Better'],
+            eyebrow: 'CURATED AI SOFTWARE',
+            title: 'Enter your AI universe',
+            description: 'Create, code and work with the right tools in one place',
+            tags: ['AI Creation', 'Development', 'Productivity'],
         },
     },
     register: {
         zh: {
-            eyebrow: '开启专属 AI 工作流',
-            title: '从今天起，让 AI 成为你的增长引擎',
-            description: '汇聚前沿工具与高效服务，打造属于你的智能生产力中心',
-            tags: ['精选工具', '专属收藏', '高效管理'],
+            eyebrow: '构建你的 AI 工作流',
+            title: '创建专属 AI 效率中心',
+            description: '发现常用工具，统一管理收藏与订单',
+            tags: ['工具发现', '收藏管理', '订单管理'],
         },
         en: {
             eyebrow: 'BUILD YOUR AI WORKFLOW',
-            title: 'Turn AI into your growth engine',
-            description: 'Discover leading tools and build a smarter productivity hub made for you.',
-            tags: ['Discover', 'Personalize', 'Grow Faster'],
+            title: 'Create your AI productivity hub',
+            description: 'Discover tools and manage favorites and orders in one place',
+            tags: ['Discover', 'Favorites', 'Orders'],
         },
     },
 };

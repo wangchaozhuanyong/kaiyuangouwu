@@ -41,11 +41,13 @@ describe('auth visual configuration', () => {
 
     it('requires a complete Chinese campaign before publishing', () => {
         const draft = createAuthVisualDraft('AUTH_REGISTER');
-        const chineseTag = draft.items[2].translations.find(
+        const chineseCampaign = draft.items[2].translations.find(
             translation => translation.languageCode === 'zh_Hans',
         );
-        expect(chineseTag).toBeDefined();
-        if (chineseTag) chineseTag.label = '';
+        if (!chineseCampaign) {
+            throw new Error('Expected the registration campaign to include a Chinese translation');
+        }
+        chineseCampaign.label = '';
 
         expect(isAuthVisualValid(draft)).toBe(false);
     });

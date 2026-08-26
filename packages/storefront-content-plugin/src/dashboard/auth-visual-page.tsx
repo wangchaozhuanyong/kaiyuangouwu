@@ -49,7 +49,7 @@ const copy = {
     zh: {
         nav: '登录注册页视觉',
         title: '登录注册页视觉',
-        description: '分别管理登录页和注册页的图片、颜色与中英文广告词；保存后立即生效。',
+        description: '分别管理登录页和注册页的图片与中文广告词；保存时自动生成英文并立即生效。',
         activeChannel: '当前店铺',
         refresh: '刷新',
         login: '登录页主视觉',
@@ -70,10 +70,10 @@ const copy = {
         content: '广告文案',
         chinese: '中文',
         english: 'English',
-        englishHint: '可直接编辑英文版本；前台切换英文时展示。',
+        englishHint: '可直接编辑；留空时保存会根据中文自动生成。',
         commonMode: '常用模式',
         englishReview: '英文校对',
-        translationHelp: '常用模式编辑中文；英文校对可维护独立英文广告文案。',
+        translationHelp: '通常只需填写中文；仅在需要人工修改英文译文时展开校对。',
         eyebrow: '顶部短句',
         headline: '广告主标题',
         subtitle: '说明文案',
@@ -89,7 +89,9 @@ const copy = {
     },
     en: {
         nav: 'Login & registration visuals',
+        // i18n-audit-ignore -- paired with the zh_Hans Dashboard copy above
         title: 'Login & registration visuals',
+        // i18n-audit-ignore -- paired with the zh_Hans Dashboard copy above
         description:
             'Manage imagery, localized campaign copy and benefit tags for sign-in and registration. Saving publishes to the active store immediately.',
         activeChannel: 'Active store',
@@ -113,7 +115,7 @@ const copy = {
         content: 'Campaign copy',
         chinese: '中文',
         english: 'English',
-        englishHint: 'Edit the English version shown when the storefront language is English.',
+        englishHint: 'Edit directly, or leave it blank to generate English from Chinese when saving.',
         commonMode: 'Common mode',
         englishReview: 'Review English',
         translationHelp:
@@ -133,6 +135,11 @@ const copy = {
             'Copy is layered over the image as HTML, not baked into it, and adapts automatically on mobile.',
     },
 } as const;
+
+const PREVIEW_OVERLAY_BACKGROUND = [
+    'linear-gradient(90deg, color-mix(in srgb, var(--preview-overlay) 88%, transparent), color-mix(in srgb, var(--preview-overlay) 28%, transparent))',
+    'linear-gradient(0deg, color-mix(in srgb, var(--preview-overlay) 46%, transparent), transparent 62%)',
+].join(', ');
 
 type AuthVisualCopy = { [Key in keyof (typeof copy)['zh']]: string };
 
@@ -308,14 +315,6 @@ function AuthVisualEditor({
         '--preview-accent': accentColor,
         ...(previewImage ? { backgroundImage: `url("${previewImage.replace(/"/g, '%22')}")` } : {}),
     } as CSSProperties;
-    const previewOverlayBackground = [
-        'linear-gradient(90deg,',
-        'color-mix(in srgb, var(--preview-overlay) 88%, transparent),',
-        'color-mix(in srgb, var(--preview-overlay) 28%, transparent)),',
-        'linear-gradient(0deg,',
-        'color-mix(in srgb, var(--preview-overlay) 46%, transparent),',
-        'transparent 62%)',
-    ].join(' ');
 
     const updateTranslation = (
         languageCode: AuthVisualLanguageCode,
@@ -524,7 +523,12 @@ function AuthVisualEditor({
                     className="relative aspect-[16/9] min-h-[280px] overflow-hidden rounded-2xl border bg-slate-950 bg-cover bg-center shadow-xl"
                     style={previewStyle}
                 >
-                    <div className="absolute inset-0" style={{ background: previewOverlayBackground }} />
+                    <div
+                        className="absolute inset-0"
+                        style={{
+                            background: PREVIEW_OVERLAY_BACKGROUND,
+                        }}
+                    />
                     {!previewImage ? (
                         <div className="absolute inset-0 grid place-items-center opacity-30">
                             <Sparkles className="size-28 text-cyan-300" />

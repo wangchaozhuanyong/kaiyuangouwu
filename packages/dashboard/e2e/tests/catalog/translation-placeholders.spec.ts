@@ -4,10 +4,9 @@ import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
-// Translation fallback placeholder feature:
-// When switching to a non-default content language, translatable fields (name,
-// slug, description) show the default-language value as an HTML placeholder.
-// This suite verifies placeholder presence, absence, and behaviour.
+// The merchant-facing editor is pinned to the active channel's default content
+// language. This suite verifies that pinning and the translation payload cleanup
+// which prevents empty secondary-language rows from being submitted.
 //
 // All tests share the same "Laptop" product and must run serially because
 // they mutate the channel's available languages and the content language state.
@@ -64,7 +63,7 @@ async function switchContentLanguage(page: Page, languageCode: string) {
     await page.waitForLoadState('networkidle');
 }
 
-test.describe('Translation fallback placeholders', () => {
+test.describe('Default-language product editing', () => {
     test.describe.configure({ mode: 'serial' });
 
     // ── Setup: add German to the channel's available languages ──────────
@@ -131,97 +130,60 @@ test.describe('Translation fallback placeholders', () => {
         await page.close();
     });
 
-    // ── Test 1: Name placeholder when switching to non-default language ─
-
-    test('should show fallback placeholder for name field when switching to non-default language', async ({
+    test('should restore the active channel default after a non-default language is stored', async ({
         page,
     }) => {
-        // Navigate to the product while on English (default) so goToLaptopProduct
-        // assertions pass, then switch to German which reloads the same page.
         await goToLaptopProduct(page);
         await switchContentLanguage(page, 'de');
 
-        // The name input should now show the English name as a placeholder
-        const nameInput = detailPage(page).formItem('Product name').getByRole('textbox');
-        await expect(nameInput).toHaveAttribute('placeholder', 'Fallback: Laptop', { timeout: 10_000 });
+        await expect
+            .poll(() =>
+                page.evaluate(() => {
+                    const settings = JSON.parse(localStorage.getItem('vendure-user-settings') || '{}');
+                    return settings.contentLanguage;
+                }),
+            )
+            .toBe('en');
     });
 
-    // ── Test 2: Slug placeholder ────────────────────────────────────────
-
-    test('should show fallback placeholder for slug field', async ({ page }) => {
+    test('should keep the default-language product name after a non-default language is stored', async ({
+        page,
+    }) => {
         await goToLaptopProduct(page);
         await switchContentLanguage(page, 'de');
 
-        // The slug input is inside a SlugInput component. When no value is
-        // set for German and the slug is in readonly mode, the external
-        // placeholder from TranslatableFormFieldWrapper is used.
-        // The slug field renders an <input> inside the SlugInput wrapper.
-        const slugFormItem = detailPage(page).formItem('Slug');
-        const slugInput = slugFormItem.locator('input').first();
-        await expect(slugInput).toHaveAttribute('placeholder', /Fallback: .*laptop/, { timeout: 10_000 });
-    });
-
-    // ── Test 3: No placeholder on default language ──────────────────────
-
-    test('should NOT show placeholder when on default language', async ({ page }) => {
-        // Switch back to English
-        await switchContentLanguage(page, 'en');
-        await goToLaptopProduct(page);
-
-        // We're on English (default language) - no placeholder should be present
-        // or the placeholder should NOT be the fallback value "Laptop"
         const nameInput = detailPage(page).formItem('Product name').getByRole('textbox');
-
-        // On the default language, the input has the actual value, not a fallback placeholder.
-        // The placeholder attribute should either be absent or empty (not the English name).
         await expect(nameInput).toHaveValue('Laptop');
-        const placeholder = await nameInput.getAttribute('placeholder');
-        expect(placeholder ?? '').not.toBe('Fallback: Laptop');
+        expect((await nameInput.getAttribute('placeholder')) ?? '').not.toBe('Fallback: Laptop');
     });
 
-    // ── Test 4: Placeholder hidden once user types a translation ────────
-
-    test('should remove placeholder when user types a translation', async ({ page }) => {
+    test('should keep the default-language slug after a non-default language is stored', async ({ page }) => {
         await goToLaptopProduct(page);
         await switchContentLanguage(page, 'de');
 
-        const nameInput = detailPage(page).formItem('Product name').getByRole('textbox');
-
-        // Verify the placeholder is present first
-        await expect(nameInput).toHaveAttribute('placeholder', 'Fallback: Laptop', { timeout: 10_000 });
-
-        // Type a German translation
-        await nameInput.fill('Laptop (Deutsch)');
-
-        // The HTML placeholder is still in the DOM, but with a value present
-        // the browser hides it visually. Verify the input has the typed value.
-        await expect(nameInput).toHaveValue('Laptop (Deutsch)');
+        const slugInput = detailPage(page).formItem('Slug').locator('input').first();
+        await expect(slugInput).toHaveValue('laptop');
+        expect((await slugInput.getAttribute('placeholder')) ?? '').not.toContain('Fallback:');
     });
 
-    // ── Test 5: Placeholder for rich text description ───────────────────
-
-    test('should show placeholder for rich text description', async ({ page }) => {
+    test('should keep the default-language description after a non-default language is stored', async ({
+        page,
+    }) => {
         await goToLaptopProduct(page);
         await switchContentLanguage(page, 'de');
 
-        // TipTap's Placeholder extension adds a `data-placeholder` attribute to
-        // the first empty child element with class `is-editor-empty`. The CSS
-        // displays it via `content: attr(data-placeholder)`.
-        const editorContainer = page.getByTestId('rich-text-editor');
-        await expect(editorContainer).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByTestId('rich-text-editor')).toContainText(
+            'Now equipped with seventh-generation',
+        );
+    });
 
-        // The placeholder is set on the empty paragraph element inside the editor.
-        // When the description field is empty for the German translation, TipTap
-        // adds the `.is-editor-empty` class and the `data-placeholder` attribute.
-        const emptyEditorNode = editorContainer.locator('.is-editor-empty[data-placeholder]');
-        await expect(emptyEditorNode).toBeVisible({ timeout: 10_000 });
+    test('should keep the product form pristine when restoring the default language', async ({ page }) => {
+        await goToLaptopProduct(page);
+        await switchContentLanguage(page, 'de');
 
-        // Verify the data-placeholder contains the English description text
-        // (stripped of HTML tags by RichTextInput). The Laptop description
-        // starts with "Now equipped with seventh-generation..."
-        const placeholderValue = await emptyEditorNode.getAttribute('data-placeholder');
-        expect(placeholderValue).toBeTruthy();
-        expect(placeholderValue).toContain('Now equipped with seventh-generation');
+        await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeDisabled({
+            timeout: 10_000,
+        });
     });
 
     // #4885 / OSS-579 — with German available, the form seeds a translation row for both en and de.

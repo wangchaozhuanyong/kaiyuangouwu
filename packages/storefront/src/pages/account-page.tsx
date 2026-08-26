@@ -462,8 +462,7 @@ export function AccountPage() {
                                 </span>
                                 <button
                                     type="button"
-                                    onClick={() => onAdd(variant)}
-                                    disabled={addingVariantId === variant.id}
+                                    onClick={() => navigateTo({ name: 'product', id: variant.product.id })}
                                 >
                                     {isZh ? '再次购买' : 'Buy again'}
                                 </button>

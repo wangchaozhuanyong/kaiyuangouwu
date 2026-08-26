@@ -29,21 +29,22 @@ export const AUTH_VISUAL_DEFINITIONS: Record<AuthVisualBlockType, AuthVisualDefi
         textColor: '#ffffff',
         translations: {
             zh_Hans: {
-                ctaLabel: 'AI 软件严选 · 即刻启程',
-                title: '一次登录，连接你的 AI 效率宇宙',
-                subtitle: '创作、编程与智能办公工具，统一收藏、购买与管理',
+                ctaLabel: 'AI 软件精选平台',
+                title: '登录你的 AI 新世界',
+                subtitle: '创作、编程与办公工具，一站高效管理',
                 body: '',
             },
             en: {
-                ctaLabel: 'CURATED AI SOFTWARE · READY WHEN YOU ARE',
-                title: 'One sign-in. Every AI advantage.',
-                subtitle: 'Create, code and work with the right tools in one intelligent hub.',
+                ctaLabel: 'CURATED AI SOFTWARE',
+                // i18n-audit-ignore -- paired with the zh_Hans campaign default above
+                title: 'Enter your AI universe',
+                subtitle: 'Create, code and work with the right tools in one place',
                 body: '',
             },
         },
         tags: {
-            zh_Hans: ['灵感创作', '开发提速', '智能办公'],
-            en: ['Create Faster', 'Code Smarter', 'Work Better'],
+            zh_Hans: ['AI 创作', '开发提效', '智能办公'],
+            en: ['AI Creation', 'Development', 'Productivity'],
         },
     },
     AUTH_REGISTER: {
@@ -56,21 +57,22 @@ export const AUTH_VISUAL_DEFINITIONS: Record<AuthVisualBlockType, AuthVisualDefi
         textColor: '#ffffff',
         translations: {
             zh_Hans: {
-                ctaLabel: '开启专属 AI 工作流',
-                title: '从今天起，让 AI 成为你的增长引擎',
-                subtitle: '汇聚前沿工具与高效服务，打造属于你的智能生产力中心',
+                ctaLabel: '构建你的 AI 工作流',
+                title: '创建专属 AI 效率中心',
+                subtitle: '发现常用工具，统一管理收藏与订单',
                 body: '',
             },
             en: {
                 ctaLabel: 'BUILD YOUR AI WORKFLOW',
-                title: 'Turn AI into your growth engine',
-                subtitle: 'Discover leading tools and build a smarter productivity hub made for you.',
+                // i18n-audit-ignore -- paired with the zh_Hans campaign default above
+                title: 'Create your AI productivity hub',
+                subtitle: 'Discover tools and manage favorites and orders in one place',
                 body: '',
             },
         },
         tags: {
-            zh_Hans: ['精选工具', '专属收藏', '高效管理'],
-            en: ['Discover', 'Personalize', 'Grow Faster'],
+            zh_Hans: ['工具发现', '收藏管理', '订单管理'],
+            en: ['Discover', 'Favorites', 'Orders'],
         },
     },
 };

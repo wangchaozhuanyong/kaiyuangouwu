@@ -135,9 +135,9 @@ describe('auth password visibility controls', () => {
             }),
         );
 
-        expect(markup).toContain('一次登录，连接你的 AI 效率宇宙');
         expect(markup).toContain('auth-login-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-register-ai-campaign-v2');
+        expect(markup).toContain('登录你的 AI 新世界');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(1);
         expect(markup).toMatch(/type="password"[^>]*name="password"/);
     });
@@ -145,9 +145,9 @@ describe('auth password visibility controls', () => {
     it('renders independent password visibility buttons for registration and confirmation', () => {
         const markup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
 
-        expect(markup).toContain('从今天起，让 AI 成为你的增长引擎');
         expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-login-ai-campaign-v2');
+        expect(markup).toContain('创建专属 AI 效率中心');
         expect(markup).toContain('智联云端 · 桥接未来');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
         expect(markup).toMatch(/name="fullName"/);
@@ -157,7 +157,7 @@ describe('auth password visibility controls', () => {
         expect(markup).toMatch(/type="password"[^>]*name="confirmPassword"/);
     });
 
-    it('renders the image, copy and theme published from the dashboard', () => {
+    it('renders the managed image, copy and theme when the dashboard has published a login visual', () => {
         const markup = renderToStaticMarkup(
             createElement(LoginPage, {
                 ...authPageProps,
@@ -170,7 +170,7 @@ describe('auth password visibility controls', () => {
                     position: 1,
                     startsAt: null,
                     endsAt: null,
-                    imageUrl: '/assets/preview/managed-login.jpg',
+                    imageUrl: '/assets/preview/managed-login.webp',
                     backgroundColor: '#010203',
                     textColor: '#fefefe',
                     targetType: 'NONE',
@@ -194,8 +194,7 @@ describe('auth password visibility controls', () => {
             }),
         );
 
-        expect(markup).toContain('managed-login.jpg');
-        expect(markup).toContain('format=webp');
+        expect(markup).toContain('managed-login.webp');
         expect(markup).toContain('后台登录主标题');
         expect(markup).toContain('后台卖点3');
         expect(markup).toContain('--auth-hero-overlay-color:#010203');

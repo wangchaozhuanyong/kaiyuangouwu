@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     buildBestSellerProducts,
     buildRecommendationProducts,
+    selectCategoryPromotionProducts,
     selectManagedProducts,
 } from './home-merchandising';
 import { Product } from './types';
@@ -70,6 +71,40 @@ describe('home merchandising', () => {
                 count: 2,
             }).map(item => item.id),
         ).toEqual(['c', 'a']);
+    });
+
+    it('keeps selected category-promotion products first and fills remaining slots from the category', () => {
+        const products = [
+            product('category-a', 'featured'),
+            product('pinned', 'other'),
+            product('category-b', 'featured'),
+            product('category-c', 'featured'),
+            product('category-d', 'featured'),
+        ];
+
+        expect(
+            selectCategoryPromotionProducts({
+                selectedProductIds: ['pinned'],
+                products,
+                targetType: 'COLLECTION',
+                targetValue: 'featured',
+                count: 8,
+            }).map(item => item.id),
+        ).toEqual(['pinned', 'category-a', 'category-b', 'category-c']);
+    });
+
+    it('does not fill category-promotion products for non-category destinations', () => {
+        const products = [product('selected', 'featured'), product('category-a', 'featured')];
+
+        expect(
+            selectCategoryPromotionProducts({
+                selectedProductIds: ['selected'],
+                products,
+                targetType: 'URL',
+                targetValue: 'https://example.com',
+                count: 4,
+            }).map(item => item.id),
+        ).toEqual(['selected']);
     });
 });
 

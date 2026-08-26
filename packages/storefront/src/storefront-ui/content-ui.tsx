@@ -235,7 +235,12 @@ export function FlashSaleSection({
                     >
                         <span className="flash-sale-image">
                             {item.imageUrl ? (
-                                <SafeImage src={item.imageUrl} alt="" imageKind="card" loading="lazy" />
+                                <SafeImage
+                                    src={item.imageUrl}
+                                    alt={item.productName}
+                                    imageKind="card"
+                                    loading="lazy"
+                                />
                             ) : (
                                 <span className="image-placeholder" aria-hidden="true">
                                     <Package />
@@ -244,7 +249,9 @@ export function FlashSaleSection({
                             <em>{isZh ? '限时价' : 'Limited price'}</em>
                         </span>
                         <strong className="flash-sale-name">{item.productName}</strong>
-                        <small>{item.variantName}</small>
+                        {item.variantName && item.variantName !== item.productName ? (
+                            <small>{item.variantName}</small>
+                        ) : null}
                         <span className="flash-sale-price">
                             <b>{formatMoney(item.salePrice, item.currencyCode, locale)}</b>
                             <del>{formatMoney(item.originalPrice, item.currencyCode, locale)}</del>

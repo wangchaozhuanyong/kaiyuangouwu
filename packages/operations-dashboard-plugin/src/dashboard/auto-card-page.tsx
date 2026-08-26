@@ -120,7 +120,7 @@ const messages = {
     }),
     instructionsEnHint: msg({
         id: 'operations.autoCard.instructionsEnHint',
-        message: 'Leave blank to generate it from the Chinese instructions on save.',
+        message: 'Usually you only need Chinese. English is generated on save and can be reviewed here.',
     }),
     fields: msg({ id: 'operations.autoCard.fields', message: 'Fields in one line' }),
     fieldKey: msg({ id: 'operations.autoCard.fieldKey', message: 'Field key' }),
@@ -665,6 +665,7 @@ function ConfigEditor({
     draft: ConfigDraft;
     onChange: (value: ConfigDraft) => void;
 }) {
+    const [editEnglish, setEditEnglish] = useState(false);
     const presets = createPresets(text);
     const applyPreset = (key: string | null) => {
         if (!key || key === 'custom') return;
@@ -733,6 +734,27 @@ function ConfigEditor({
                     />
                 </div>
             </div>
+            <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">{text.instructionsEnHint}</p>
+                <div className="flex shrink-0 rounded-md border bg-background p-1">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={editEnglish ? 'ghost' : 'secondary'}
+                        onClick={() => setEditEnglish(false)}
+                    >
+                        {text.instructionsZh}
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={editEnglish ? 'secondary' : 'ghost'}
+                        onClick={() => setEditEnglish(true)}
+                    >
+                        {text.instructionsEn}
+                    </Button>
+                </div>
+            </div>
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <Label>{text.fields}</Label>
@@ -761,7 +783,11 @@ function ConfigEditor({
                 {draft.fields.map((field, index) => (
                     <div
                         key={`${index}-${field.key}`}
-                        className="grid gap-3 rounded-lg border p-3 md:grid-cols-[0.8fr_1fr_1fr_auto_auto] md:items-end"
+                        className={`grid gap-3 rounded-lg border p-3 md:items-end ${
+                            editEnglish
+                                ? 'md:grid-cols-[0.8fr_1fr_1fr_auto_auto]'
+                                : 'md:grid-cols-[0.8fr_1fr_auto_auto]'
+                        }`}
                     >
                         <div className="space-y-1">
                             <Label>{text.fieldKey}</Label>
@@ -777,13 +803,15 @@ function ConfigEditor({
                                 onChange={event => updateField(index, { label: event.target.value })}
                             />
                         </div>
-                        <div className="space-y-1">
-                            <Label>{text.fieldLabelEn}</Label>
-                            <Input
-                                value={field.labelEn}
-                                onChange={event => updateField(index, { labelEn: event.target.value })}
-                            />
-                        </div>
+                        {editEnglish ? (
+                            <div className="space-y-1">
+                                <Label>{text.fieldLabelEn}</Label>
+                                <Input
+                                    value={field.labelEn}
+                                    onChange={event => updateField(index, { labelEn: event.target.value })}
+                                />
+                            </div>
+                        ) : null}
                         <div className="flex h-9 items-center gap-2">
                             <Switch
                                 checked={field.secret}
@@ -807,7 +835,7 @@ function ConfigEditor({
                     </div>
                 ))}
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className={`grid gap-4 ${editEnglish ? 'md:grid-cols-2' : ''}`}>
                 <div className="space-y-2">
                     <Label>{text.instructionsZh}</Label>
                     <Textarea
@@ -817,15 +845,17 @@ function ConfigEditor({
                     />
                     <p className="text-xs text-muted-foreground">{text.instructionsZhHint}</p>
                 </div>
-                <div className="space-y-2">
-                    <Label>{text.instructionsEn}</Label>
-                    <Textarea
-                        rows={5}
-                        value={draft.instructionsEn}
-                        onChange={event => onChange({ ...draft, instructionsEn: event.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">{text.instructionsEnHint}</p>
-                </div>
+                {editEnglish ? (
+                    <div className="space-y-2">
+                        <Label>{text.instructionsEn}</Label>
+                        <Textarea
+                            rows={5}
+                            value={draft.instructionsEn}
+                            onChange={event => onChange({ ...draft, instructionsEn: event.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">{text.instructionsEnHint}</p>
+                    </div>
+                ) : null}
             </div>
         </div>
     );

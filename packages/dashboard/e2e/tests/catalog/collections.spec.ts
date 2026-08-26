@@ -147,6 +147,7 @@ test.describe('Product group hierarchy workflow', () => {
     test.describe.configure({ mode: 'serial' });
 
     let parentId: string;
+    let childId: string;
     const PARENT_NAME = 'E2E Hierarchy Parent';
     const CHILD_NAME = 'E2E Hierarchy Child';
 
@@ -177,13 +178,19 @@ test.describe('Product group hierarchy workflow', () => {
     });
 
     test.afterAll(async ({ browser }) => {
-        if (!parentId) return;
         const page = await browser.newPage();
         const client = new VendureAdminClient(page);
         await client.login();
-        await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
-            id: parentId,
-        });
+        if (childId) {
+            await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+                id: childId,
+            });
+        }
+        if (parentId) {
+            await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+                id: parentId,
+            });
+        }
         await page.close();
     });
 
@@ -192,34 +199,82 @@ test.describe('Product group hierarchy workflow', () => {
         const parentRow = page.locator('tbody tr').filter({ has: page.getByText(PARENT_NAME) });
 
         await parentRow
-            .getByRole('button', { name: `Add a child product group under ${PARENT_NAME}` })
+            .getByRole('button', { name: `Add a second-level product group under ${PARENT_NAME}` })
             .click();
 
-        await expect(page).toHaveURL(new RegExp(`/collections/new\\?parentId=${parentId}`));
-        await expect(page.getByRole('heading', { name: 'New child product group' })).toBeVisible();
-        await expect(page.getByText(PARENT_NAME, { exact: true }).first()).toBeVisible();
+        const sheet = page.locator('[data-collection-quick-create]');
+        await expect(sheet.getByRole('heading', { name: 'Add second-level product group' })).toBeVisible();
+        await expect(sheet.getByLabel('Parent product group')).toHaveValue(PARENT_NAME);
+        await sheet.getByLabel('Product group name').fill(CHILD_NAME);
+        await sheet.getByRole('button', { name: 'Create product group' }).click();
+        await expect(sheet).toBeHidden();
+        await expect(page.getByText(CHILD_NAME, { exact: true })).toBeVisible({ timeout: 10_000 });
 
-        const detail = new BaseDetailPage(page, {
-            newPath: '/collections/new',
-            pathPrefix: '/collections/',
-            newTitle: 'New child product group',
-        });
-        await detail.fillInput('Product group name', CHILD_NAME);
-        await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', {
-            timeout: 5_000,
-        });
-        await page.getByRole('button', { name: 'Create child product group' }).click();
-        await detail.expectNavigatedToExisting();
-
-        const childId = new URL(page.url()).pathname.split('/').pop() ?? '';
         const client = new VendureAdminClient(page);
         await client.login();
-        const { collection } = await client.gql(
-            `query ($id: ID!) { collection(id: $id) { id parent { id } } }`,
-            { id: childId },
+        const { collections } = await client.gql(
+            `query ($name: String!) {
+                collections(options: { filter: { name: { eq: $name } } }) {
+                    items { id parent { id } }
+                }
+            }`,
+            { name: CHILD_NAME },
         );
-        expect(collection.parent.id).toBe(parentId);
+        const child = collections.items[0];
+        childId = child.id as string;
+        expect(child.parent.id).toBe(parentId);
     });
+});
+
+test('deletes a product group from the list row actions', async ({ page }) => {
+    const client = new VendureAdminClient(page);
+    await client.login();
+    const suffix = Date.now();
+    const collectionName = `E2E Row Delete ${suffix}`;
+    const { createCollection } = await client.gql(
+        `mutation ($input: CreateCollectionInput!) {
+            createCollection(input: $input) { id }
+        }`,
+        {
+            input: {
+                filters: [],
+                translations: [
+                    {
+                        languageCode: 'en',
+                        name: collectionName,
+                        slug: `e2e-row-delete-${suffix}`,
+                        description: '',
+                    },
+                ],
+            },
+        },
+    );
+    const collectionId = createCollection.id as string;
+
+    try {
+        await page.goto('/collections');
+        await page.getByPlaceholder('Search product group names...').fill(collectionName);
+
+        const row = page.locator('tbody tr').filter({ has: page.getByText(collectionName) });
+        await expect(row).toBeVisible({ timeout: 10_000 });
+        await row.getByRole('button', { name: 'Delete', exact: true }).click();
+
+        const dialog = page.getByRole('alertdialog');
+        await expect(dialog.getByText('Confirm deletion')).toBeVisible();
+        await dialog.getByRole('button', { name: 'Delete' }).click();
+
+        await expect(page.getByText('Deleted successfully')).toBeVisible({ timeout: 10_000 });
+        await expect(row).toBeHidden();
+    } finally {
+        const { collection } = await client.gql(`query ($id: ID!) { collection(id: $id) { id } }`, {
+            id: collectionId,
+        });
+        if (collection) {
+            await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+                id: collectionId,
+            });
+        }
+    }
 });
 
 createCrudTestSuite({
@@ -227,11 +282,23 @@ createCrudTestSuite({
     entityNamePlural: 'collections',
     listPath: '/collections',
     listTitle: 'Product groups',
-    newButtonLabel: 'New top-level product group',
+    newButtonLabel: 'Add top-level product group',
     newPageTitle: 'New product group',
     createFields: [{ label: 'Product group name', value: 'E2E Test Collection' }],
-    afterFillCreate: async (_page, detail) => {
-        await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
+    hasBulkDelete: false,
+    verifyBulkDeleteUnavailable: true,
+    afterOpenCreate: async page => {
+        const sheet = page.locator('[data-collection-quick-create]');
+        await expect(sheet.getByRole('heading', { name: 'Add top-level product group' })).toBeVisible();
+    },
+    createFromList: async page => {
+        const sheet = page.locator('[data-collection-quick-create]');
+        await sheet.getByLabel('Product group name').fill('E2E Test Collection');
+        await sheet.getByRole('button', { name: 'Create product group' }).click();
+        await expect(sheet).toBeHidden();
+        await expect(page.getByText('E2E Test Collection', { exact: true })).toBeVisible({
+            timeout: 10_000,
+        });
     },
 });
 

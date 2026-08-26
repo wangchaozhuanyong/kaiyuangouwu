@@ -315,7 +315,7 @@ export function ProductDetailPage() {
                               : 'Choose an address and confirm timing at checkout'}
                 </strong>
             </div>
-            <section className="detail-service-bar">
+            <section className={`detail-service-bar${isZh ? '' : ' has-long-copy'}`}>
                 <span>
                     <CircleCheck />
                     {isAutoCard

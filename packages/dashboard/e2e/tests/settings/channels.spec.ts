@@ -53,16 +53,12 @@ test.describe('Channels CRUD', () => {
         await dp.fillInput('Store code', 'e2e-test-channel');
         await dp.fillInput('Store API token', 'e2e-test-token');
 
-        // Available languages — MultiSelect popover (few items, no search input)
-        await dp.formItem('Supported content languages').getByRole('combobox').click();
-        // Popover renders options in a listbox inside [data-slot="popover-content"]
-        await page
-            .locator('[data-slot="popover-content"]')
-            .getByRole('option', { name: /English/ })
-            .click();
-        // Click outside to close the popover and let form state propagate
-        await page.locator('body').click({ position: { x: 0, y: 0 } });
-        await expect(page.locator('[data-slot="popover-content"]')).not.toBeVisible();
+        // Storefront content is always bilingual. The selector documents the fixed
+        // languages but is intentionally read-only in the merchant-facing form.
+        const supportedLanguages = dp.formItem('Supported content languages').getByRole('combobox');
+        await expect(supportedLanguages).toBeDisabled();
+        await expect(supportedLanguages).toContainText('English');
+        await expect(supportedLanguages).toContainText('zh_Hans');
 
         // Default language — single-select filtered by available languages
         await dp.formItem('Default content language').getByRole('combobox').click();

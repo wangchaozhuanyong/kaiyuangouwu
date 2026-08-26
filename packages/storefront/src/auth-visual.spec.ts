@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 
 import { authVisualAccentColor, findAuthVisualContent, resolveAuthVisualMessage } from './auth-visual';
+import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 
 function block(type: StorefrontContentBlockType): StorefrontContentBlock {
     return {
@@ -58,7 +58,7 @@ describe('managed auth visuals', () => {
 
     it('falls back safely when no managed content has been published', () => {
         expect(resolveAuthVisualMessage(undefined, 'register', 'zh')).toMatchObject({
-            title: '从今天起，让 AI 成为你的增长引擎',
+            title: '创建专属 AI 效率中心',
         });
         expect(authVisualAccentColor(undefined, 'register')).toBe('#fdba74');
     });

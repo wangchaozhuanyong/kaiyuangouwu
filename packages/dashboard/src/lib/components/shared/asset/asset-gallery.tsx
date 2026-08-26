@@ -447,7 +447,12 @@ export function AssetGallery({
                     bulkActions={bulkActions}
                     refetch={() => {
                         setSelected([]);
+                        onSelect?.([]);
                         refetch();
+                    }}
+                    onClearSelection={() => {
+                        setSelected([]);
+                        onSelect?.([]);
                     }}
                 />
             ) : null}

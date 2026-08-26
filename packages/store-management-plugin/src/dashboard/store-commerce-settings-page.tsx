@@ -72,11 +72,14 @@ const zhCopy = {
     taxRate: '商品税率（%）',
     pricesIncludeTax: '商品价格已含税',
     shipping: '标准配送',
-    shippingDescription: '实物商品使用的运费、范围和预计时效。',
-    nameZh: '中文配送名称',
-    nameEn: '英文配送名称（可选，留空自动翻译）',
-    descriptionZh: '中文配送说明',
-    descriptionEn: '英文配送说明（可选）',
+    shippingDescription: '实物商品使用的运费、范围和预计时效；中文内容保存时自动生成英文。',
+    nameZh: '配送名称',
+    nameEn: '英文配送名称（人工覆盖）',
+    descriptionZh: '配送说明',
+    descriptionEn: '英文配送说明（人工覆盖）',
+    commonMode: '常用模式',
+    englishReview: '英文校对',
+    translationHelp: '通常只需填写中文配送信息；仅在需要人工修改英文译文时展开校对。',
     baseRate: '基础运费',
     freeThreshold: '免邮门槛',
     shippingTaxRate: '运费税率（%）',
@@ -113,11 +116,14 @@ const enCopy: typeof zhCopy = {
     taxRate: 'Product tax rate (%)',
     pricesIncludeTax: 'Product prices include tax',
     shipping: 'Standard delivery',
-    shippingDescription: 'Rates, coverage, and estimates for physical products.',
-    nameZh: 'Chinese delivery name',
-    nameEn: 'English delivery name (optional)',
-    descriptionZh: 'Chinese delivery description',
-    descriptionEn: 'English delivery description (optional)',
+    shippingDescription: 'Rates, coverage, and estimates; English is generated from the Chinese content.',
+    nameZh: 'Delivery name (Chinese source)',
+    nameEn: 'English delivery name (manual override)',
+    descriptionZh: 'Delivery description (Chinese source)',
+    descriptionEn: 'English delivery description (manual override)',
+    commonMode: 'Common mode',
+    englishReview: 'Review English',
+    translationHelp: 'Usually you only need Chinese. Open English review only to override the translation.',
     baseRate: 'Base shipping rate',
     freeThreshold: 'Free shipping threshold',
     shippingTaxRate: 'Shipping tax rate (%)',
@@ -157,6 +163,7 @@ function StoreCommerceSettingsPage() {
     const text = i18n.locale.toLowerCase().startsWith('zh') ? zhCopy : enCopy;
     const { activeChannel } = useChannel();
     const [draft, setDraft] = useState<CommerceDraft | null>(null);
+    const [editEnglish, setEditEnglish] = useState(false);
     const configurationQuery = useQuery({
         queryKey: ['my-store-commerce-configuration', activeChannel?.id],
         queryFn: () => api.query<MyStoreCommerceConfigurationResult>(myStoreCommerceConfigurationQuery),
@@ -167,6 +174,7 @@ function StoreCommerceSettingsPage() {
 
     useEffect(() => {
         setDraft(configuration ? toDraft(configuration) : null);
+        setEditEnglish(false);
     }, [configuration, activeChannel?.id]);
 
     const mutation = useMutation({
@@ -257,7 +265,32 @@ function StoreCommerceSettingsPage() {
                 >
                     {draft ? (
                         <div className="grid gap-5 sm:grid-cols-2">
-                            <Field id="store-shipping-name-zh" label={text.nameZh}>
+                            <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-xs text-muted-foreground">{text.translationHelp}</p>
+                                <div className="flex shrink-0 rounded-md border bg-background p-1">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={editEnglish ? 'ghost' : 'secondary'}
+                                        onClick={() => setEditEnglish(false)}
+                                    >
+                                        {text.commonMode}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={editEnglish ? 'secondary' : 'ghost'}
+                                        onClick={() => setEditEnglish(true)}
+                                    >
+                                        {text.englishReview}
+                                    </Button>
+                                </div>
+                            </div>
+                            <Field
+                                id="store-shipping-name-zh"
+                                label={text.nameZh}
+                                className={editEnglish ? undefined : 'sm:col-span-2'}
+                            >
                                 <Input
                                     id="store-shipping-name-zh"
                                     maxLength={80}
@@ -265,15 +298,21 @@ function StoreCommerceSettingsPage() {
                                     onChange={event => update('shippingMethodNameZh', event.target.value)}
                                 />
                             </Field>
-                            <Field id="store-shipping-name-en" label={text.nameEn}>
-                                <Input
-                                    id="store-shipping-name-en"
-                                    maxLength={80}
-                                    value={draft.shippingMethodNameEn}
-                                    onChange={event => update('shippingMethodNameEn', event.target.value)}
-                                />
-                            </Field>
-                            <Field id="store-shipping-description-zh" label={text.descriptionZh}>
+                            {editEnglish ? (
+                                <Field id="store-shipping-name-en" label={text.nameEn}>
+                                    <Input
+                                        id="store-shipping-name-en"
+                                        maxLength={80}
+                                        value={draft.shippingMethodNameEn}
+                                        onChange={event => update('shippingMethodNameEn', event.target.value)}
+                                    />
+                                </Field>
+                            ) : null}
+                            <Field
+                                id="store-shipping-description-zh"
+                                label={text.descriptionZh}
+                                className={editEnglish ? undefined : 'sm:col-span-2'}
+                            >
                                 <Textarea
                                     id="store-shipping-description-zh"
                                     rows={3}
@@ -282,15 +321,19 @@ function StoreCommerceSettingsPage() {
                                     onChange={event => update('shippingDescriptionZh', event.target.value)}
                                 />
                             </Field>
-                            <Field id="store-shipping-description-en" label={text.descriptionEn}>
-                                <Textarea
-                                    id="store-shipping-description-en"
-                                    rows={3}
-                                    maxLength={500}
-                                    value={draft.shippingDescriptionEn}
-                                    onChange={event => update('shippingDescriptionEn', event.target.value)}
-                                />
-                            </Field>
+                            {editEnglish ? (
+                                <Field id="store-shipping-description-en" label={text.descriptionEn}>
+                                    <Textarea
+                                        id="store-shipping-description-en"
+                                        rows={3}
+                                        maxLength={500}
+                                        value={draft.shippingDescriptionEn}
+                                        onChange={event =>
+                                            update('shippingDescriptionEn', event.target.value)
+                                        }
+                                    />
+                                </Field>
+                            ) : null}
                             <Field
                                 id="store-shipping-base-rate"
                                 label={`${text.baseRate} (${configuration?.currencyCode ?? ''})`}

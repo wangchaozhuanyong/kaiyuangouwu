@@ -1,3 +1,4 @@
+import { LanguageCode } from '@vendure/common/lib/generated-types';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { loadEnv } from 'vite';
@@ -16,6 +17,7 @@ export default ({ mode }: { mode: string }) => {
 
     const adminApiHost = process.env.VITE_ADMIN_API_HOST ?? 'http://localhost';
     const adminApiPort = process.env.VITE_ADMIN_API_PORT ? +process.env.VITE_ADMIN_API_PORT : 'auto';
+    const isDashboardE2e = process.env.VENDURE_DASHBOARD_E2E === 'true';
 
     process.env.IS_LOCAL_DEV = adminApiHost.includes('localhost') ? 'true' : 'false';
 
@@ -67,6 +69,14 @@ export default ({ mode }: { mode: string }) => {
             vendureDashboardPlugin({
                 vendureConfigPath: pathToFileURL(vendureConfigPath),
                 api: { host: adminApiHost, port: adminApiPort },
+                i18n: isDashboardE2e
+                    ? {
+                          defaultLanguage: LanguageCode.en,
+                          defaultLocale: 'US',
+                          availableLanguages: [LanguageCode.en, LanguageCode.de, LanguageCode.zh_Hans],
+                          availableLocales: ['US'],
+                      }
+                    : undefined,
                 tempCompilationDir: path.resolve(__dirname, './.temp'),
                 // Opt into the pre-built bundle for the bundle-mode e2e run.
                 useExperimentalBundle: process.env.VITE_USE_EXPERIMENTAL_BUNDLE === 'true',

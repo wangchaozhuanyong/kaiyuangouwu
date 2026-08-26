@@ -68,6 +68,36 @@ describe('ContentTranslationService localized fields', () => {
         expect(field).toMatchObject({ translatedText: 'New title', origin: 'AUTO', locked: false });
     });
 
+    it('regenerates an English field whose existing value still contains Chinese', async () => {
+        const translate = vi.fn(async () => ({
+            provider: 'test',
+            translations: [{ key: 'description', text: 'Official channel service' }],
+        }));
+        const service = new ContentTranslationService({} as any, {
+            provider: { name: 'test', isConfigured: () => true, translate },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+
+        const [field] = await service.prepareLocalizedFields([
+            {
+                path: 'description',
+                sourceText: '官方渠道服务',
+                targetText: '官方渠道服务',
+                existingSourceText: '官方渠道服务',
+                existingTargetText: '官方渠道服务',
+            },
+        ]);
+
+        expect(translate).toHaveBeenCalledOnce();
+        expect(field).toMatchObject({
+            translatedText: 'Official channel service',
+            origin: 'AUTO',
+            locked: false,
+        });
+    });
+
     it('counts the complete audit set while limiting returned detail rows', async () => {
         const allStatuses = Array.from({ length: 1_001 }, (_, index) => ({
             status: index === 1_000 ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',

@@ -12,6 +12,7 @@ import {
 } from '@/vdb/components/ui/sheet.js';
 import { Switch } from '@/vdb/components/ui/switch.js';
 import { api } from '@/vdb/graphql/api.js';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
@@ -40,6 +41,7 @@ export function CollectionQuickCreateSheet({
     onOpenChange,
     onCreated,
 }: Readonly<CollectionQuickCreateSheetProps>) {
+    const { t } = useLingui();
     const queryClient = useQueryClient();
     const [name, setName] = useState('');
     const [isVisible, setIsVisible] = useState(true);
@@ -60,7 +62,7 @@ export function CollectionQuickCreateSheet({
         event.preventDefault();
         const trimmedName = name.trim();
         if (!trimmedName) {
-            toast.error('请输入分类名称');
+            toast.error(t`Enter a collection name`);
             return;
         }
 
@@ -80,12 +82,12 @@ export function CollectionQuickCreateSheet({
             queryClient.removeQueries({ queryKey: ['collection-tree'] });
             queryClient.removeQueries({ queryKey: ['collection-tree-children'] });
             await queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
-            toast.success(parent ? '二级分类已创建' : '一级分类已创建');
+            toast.success(parent ? t`Second-level collection created` : t`Top-level collection created`);
             onCreated(parent?.id);
             onOpenChange(false);
         } catch (error) {
             console.error('Failed to create collection:', error);
-            toast.error('创建分类失败，请检查分类名称是否重复后重试');
+            toast.error(t`Failed to create collection. Check for a duplicate name and try again.`);
         } finally {
             setIsSubmitting(false);
         }
@@ -101,29 +103,35 @@ export function CollectionQuickCreateSheet({
                 <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
                     <SheetHeader className="border-b px-6 py-5 text-left">
                         <SheetTitle className="text-lg font-semibold">
-                            {parent ? '添加二级分类' : '新增一级分类'}
+                            {parent ? t`Add second-level collection` : t`Add top-level collection`}
                         </SheetTitle>
                         <SheetDescription className="sr-only">
-                            {parent ? '添加二级商品分类' : '添加一级商品分类'}
+                            {parent ? t`Add a second-level product group` : t`Add a top-level product group`}
                         </SheetDescription>
                     </SheetHeader>
 
                     <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
                         <div className="space-y-3 rounded-md border bg-muted/25 p-4 text-sm">
                             <div className="grid grid-cols-[72px_1fr] gap-3">
-                                <span className="text-muted-foreground">当前层级</span>
-                                <span className="font-medium">{parent ? '二级分类' : '一级分类'}</span>
+                                <span className="text-muted-foreground">
+                                    <Trans>Current level</Trans>
+                                </span>
+                                <span className="font-medium">
+                                    {parent ? t`Second-level collection` : t`Top-level collection`}
+                                </span>
                             </div>
                             <div className="grid grid-cols-[72px_1fr] gap-3">
-                                <span className="text-muted-foreground">上级分类</span>
-                                <span className="font-medium">{parent?.name ?? '无'}</span>
+                                <span className="text-muted-foreground">
+                                    <Trans>Parent collection</Trans>
+                                </span>
+                                <span className="font-medium">{parent?.name ?? t`None`}</span>
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <div className="flex items-center justify-between gap-3">
                                 <Label htmlFor="quick-collection-name" className="text-base">
-                                    分类名称 <span className="text-destructive">*</span>
+                                    <Trans>Collection name</Trans> <span className="text-destructive">*</span>
                                 </Label>
                                 <span className="text-xs text-muted-foreground">
                                     {name.length}/{MAX_NAME_LENGTH}
@@ -134,7 +142,7 @@ export function CollectionQuickCreateSheet({
                                 value={name}
                                 maxLength={MAX_NAME_LENGTH}
                                 autoFocus
-                                placeholder="请输入分类名称"
+                                placeholder={t`Enter a collection name`}
                                 className="h-10"
                                 onChange={event => setName(event.target.value)}
                             />
@@ -142,11 +150,11 @@ export function CollectionQuickCreateSheet({
 
                         <div className="space-y-2">
                             <Label htmlFor="quick-collection-parent" className="text-base">
-                                上级分类
+                                <Trans>Parent collection</Trans>
                             </Label>
                             <Input
                                 id="quick-collection-parent"
-                                value={parent?.name ?? '无上级分类（一级分类）'}
+                                value={parent?.name ?? t`No parent collection (top level)`}
                                 readOnly
                                 aria-readonly="true"
                                 className="h-10 bg-muted/35"
@@ -155,23 +163,25 @@ export function CollectionQuickCreateSheet({
 
                         <div className="space-y-3">
                             <Label htmlFor="quick-collection-visible" className="text-base">
-                                前台显示
+                                <Trans>Storefront visibility</Trans>
                             </Label>
                             <div className="flex items-center gap-2">
                                 <Switch
                                     id="quick-collection-visible"
                                     checked={isVisible}
                                     onCheckedChange={setIsVisible}
-                                    aria-label="前台显示"
+                                    aria-label={t`Storefront visibility`}
                                 />
                                 <span className="text-sm text-muted-foreground">
-                                    {isVisible ? '显示' : '隐藏'}
+                                    {isVisible ? t`Visible` : t`Hidden`}
                                 </span>
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-base">分类图片</Label>
+                            <Label className="text-base">
+                                <Trans>Collection image</Trans>
+                            </Label>
                             <div className="[&_[data-testid=entity-assets-featured]]:h-32">
                                 <EntityAssets
                                     key={formSession}
@@ -182,7 +192,9 @@ export function CollectionQuickCreateSheet({
                                 />
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                建议上传 1:1 方图，用于店铺分类入口展示。
+                                <Trans>
+                                    Upload a square 1:1 image for the collection entry in the storefront.
+                                </Trans>
                             </p>
                         </div>
                     </div>
@@ -195,7 +207,7 @@ export function CollectionQuickCreateSheet({
                             disabled={isSubmitting}
                             onClick={() => onOpenChange(false)}
                         >
-                            取消
+                            <Trans>Cancel</Trans>
                         </Button>
                         <Button
                             type="submit"
@@ -203,7 +215,7 @@ export function CollectionQuickCreateSheet({
                             disabled={isSubmitting || !name.trim()}
                         >
                             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            {isSubmitting ? '创建中…' : '创建分类'}
+                            {isSubmitting ? t`Creating...` : t`Create collection`}
                         </Button>
                     </SheetFooter>
                 </form>

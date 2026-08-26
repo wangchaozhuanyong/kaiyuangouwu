@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -95,6 +96,15 @@ const coreCategoriesBlock: StorefrontContentBlock = {
     ],
 };
 
+const trustBarBlock: StorefrontContentBlock = {
+    ...heroBlock,
+    id: 'trust-1',
+    code: 'homepage-trust',
+    type: 'TRUST_BAR',
+    imageUrl: null,
+    items: [],
+};
+
 const baseProps = {
     products: [product],
     collections: [],
@@ -166,6 +176,13 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain(heroBlock.title);
     });
 
+    it('does not substitute a built-in image for a managed hero that has no backend image', () => {
+        const markup = renderHome({ contentBlocks: [{ ...heroBlock, imageUrl: null }] });
+
+        expect(markup).not.toContain('class="hero');
+        expect(markup).not.toContain('aria-roledescription="轮播"');
+    });
+
     it('applies the backend-managed hero copy colors and accent colors', () => {
         const markup = renderHome({
             contentBlocks: [
@@ -188,6 +205,54 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('--hero-body-color:#E0F2FE');
         expect(markup).toContain('--hero-accent-color:#22D3EE');
         expect(markup).toContain('--hero-accent-secondary-color:#7C3AED');
+    });
+});
+
+describe('HomePage localized trust bar layout', () => {
+    it('uses the compact single-row layout for short Chinese labels', () => {
+        const markup = renderHome({ contentBlocks: [trustBarBlock] });
+
+        expect(markup).toContain('class="home-trust-bar"');
+        expect(markup).not.toContain('home-trust-bar has-long-copy');
+    });
+
+    it('uses a wrapping layout for longer English labels', () => {
+        const markup = renderHome({
+            contentBlocks: [trustBarBlock],
+            language: 'en',
+            locale: 'en-MY',
+        });
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('class="home-trust-bar has-long-copy"');
+        expect(markup).toContain('class="home-trust-label">Trackable orders</span>');
+        expect(stylesheet).toMatch(
+            /\.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
+        );
+        expect(stylesheet).toMatch(
+            /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
+        );
+    });
+
+    it('uses a wrapping layout for long merchant-managed labels in any language', () => {
+        const managedTrustBlock: StorefrontContentBlock = {
+            ...trustBarBlock,
+            items: [
+                {
+                    id: 'trust-item-1',
+                    enabled: true,
+                    position: 0,
+                    imageUrl: null,
+                    targetType: 'NONE',
+                    targetValue: null,
+                    label: '数字商品订单交付进度可查',
+                    description: '',
+                },
+            ],
+        };
+        const markup = renderHome({ contentBlocks: [managedTrustBlock] });
+
+        expect(markup).toContain('class="home-trust-bar has-long-copy"');
     });
 });
 
