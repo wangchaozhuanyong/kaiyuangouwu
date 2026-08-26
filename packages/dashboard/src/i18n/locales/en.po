@@ -1273,10 +1273,6 @@ msgstr "Shipping address set for order"
 msgid "Focal Point"
 msgstr "Focal Point"
 
-#: src/app/routes/_authenticated/_products/components/product-option-select.tsx
-msgid "No option values found. Add a Simplified Chinese value first; English is generated when you save."
-msgstr "No option values found. Add a Simplified Chinese value first; English is generated when you save."
-
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Single variant, no options"
 msgstr "Single SKU, no options"
@@ -1377,6 +1373,10 @@ msgstr "Select row"
 #: src/app/routes/_authenticated/_roles/roles_.$id.tsx
 msgid "Permissions"
 msgstr "Permissions"
+
+#: src/app/routes/_authenticated/_channels/channels_.$id.tsx
+msgid "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
+msgstr "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
 
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
 msgid "Shipping address changed"
@@ -4094,10 +4094,6 @@ msgstr "Select size"
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 msgid "Password reset verified"
 msgstr "Password reset verified"
-
-#: src/app/routes/_authenticated/_channels/channels_.$id.tsx
-msgid "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
-msgstr "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
 
 #: src/app/routes/_authenticated/_products/components/product-option-group-badge.tsx
 msgid "Edit {name}"
@@ -7582,6 +7578,10 @@ msgstr "Video"
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "less than"
 msgstr "less than"
+
+#: src/app/routes/_authenticated/_products/components/product-option-select.tsx
+msgid "No option values found. Add a Simplified Chinese value first; English is generated when you save."
+msgstr "No option values found. Add a Simplified Chinese value first; English is generated when you save."
 
 #: src/app/routes/_authenticated/_collections/components/collection-filters-selector.tsx
 msgid "Assign automatically by conditions"

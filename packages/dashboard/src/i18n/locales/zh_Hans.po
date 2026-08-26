@@ -1273,10 +1273,6 @@ msgstr "订单已设置配送地址"
 msgid "Focal Point"
 msgstr "焦点"
 
-#: src/app/routes/_authenticated/_products/components/product-option-select.tsx
-msgid "No option values found. Add a Simplified Chinese value first; English is generated when you save."
-msgstr "未找到规格值。请先添加简体中文，保存时会自动生成英文。"
-
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Single variant, no options"
 msgstr "单一 SKU，不设置规格"
@@ -1377,6 +1373,10 @@ msgstr "选择当前行"
 #: src/app/routes/_authenticated/_roles/roles_.$id.tsx
 msgid "Permissions"
 msgstr "权限"
+
+#: src/app/routes/_authenticated/_channels/channels_.$id.tsx
+msgid "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
+msgstr "前台可以提供这些语言。运营人员录入中文，保存时会自动生成英文。"
 
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
 msgid "Shipping address changed"
@@ -4094,10 +4094,6 @@ msgstr "选择预览尺寸"
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 msgid "Password reset verified"
 msgstr "密码重置已验证"
-
-#: src/app/routes/_authenticated/_channels/channels_.$id.tsx
-msgid "The storefront can serve these languages. Editors enter Chinese and English is generated on save."
-msgstr "前台可以提供这些语言。运营人员录入中文，保存时会自动生成英文。"
 
 #: src/app/routes/_authenticated/_products/components/product-option-group-badge.tsx
 msgid "Edit {name}"
@@ -7582,6 +7578,10 @@ msgstr "视频"
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "less than"
 msgstr "小于"
+
+#: src/app/routes/_authenticated/_products/components/product-option-select.tsx
+msgid "No option values found. Add a Simplified Chinese value first; English is generated when you save."
+msgstr "未找到规格值。请先添加简体中文，保存时会自动生成英文。"
 
 #: src/app/routes/_authenticated/_collections/components/collection-filters-selector.tsx
 msgid "Assign automatically by conditions"
