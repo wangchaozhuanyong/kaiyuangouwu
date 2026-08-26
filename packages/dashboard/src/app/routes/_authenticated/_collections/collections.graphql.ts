@@ -103,6 +103,7 @@ export const updateCollectionDocument = graphql(`
     mutation UpdateCollection($input: UpdateCollectionInput!) {
         updateCollection(input: $input) {
             id
+            isPrivate
         }
     }
 `);

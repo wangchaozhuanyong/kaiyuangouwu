@@ -12,7 +12,6 @@ import {
     AlertDialogTrigger,
 } from '@/vdb/components/ui/alert-dialog.js';
 import { Button } from '@/vdb/components/ui/button.js';
-import { Switch } from '@/vdb/components/ui/switch.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { PageActionBarLeft } from '@/vdb/framework/layout-engine/page-layout.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
@@ -39,13 +38,17 @@ import {
     collectionListDocument,
     deleteCollectionDocument,
     moveCollectionDocument,
-    updateCollectionDocument,
 } from './collections.graphql.js';
 import { CollectionContentsSheet } from './components/collection-contents-sheet.js';
 import {
     CollectionQuickCreateParent,
     CollectionQuickCreateSheet,
 } from './components/collection-quick-create-sheet.js';
+import { updateCollectionVisibility } from './components/collection-visibility-state.js';
+import {
+    CollectionVisibilitySwitch,
+    CollectionVisibilityValue,
+} from './components/collection-visibility-switch.js';
 
 function parseExpandedParam(expanded?: string): ExpandedState {
     if (!expanded) return {};
@@ -87,48 +90,14 @@ type LoadMoreRow = {
 
 type CollectionOrLoadMore = Collection | LoadMoreRow;
 
+type ChildCollectionQueryData = {
+    collectionId: string;
+    items: Collection[];
+    totalItems: number;
+};
+
 function isLoadMoreRow(row: CollectionOrLoadMore): row is LoadMoreRow {
     return '_isLoadMore' in row && row._isLoadMore === true;
-}
-
-function CollectionVisibilitySwitch({ collection }: Readonly<{ collection: Collection }>) {
-    const { t } = useLingui();
-    const queryClient = useQueryClient();
-    const [isUpdating, setIsUpdating] = useState(false);
-
-    const handleVisibilityChange = async (checked: boolean) => {
-        setIsUpdating(true);
-        try {
-            await api.mutate(updateCollectionDocument, {
-                input: { id: collection.id, isPrivate: !checked },
-            });
-            await queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
-            toast.success(
-                checked
-                    ? t`Collection is now visible in the storefront`
-                    : t`Collection is now hidden from the storefront`,
-            );
-        } catch (error) {
-            console.error('Failed to update collection visibility:', error);
-            toast.error(t`Failed to update storefront visibility`);
-        } finally {
-            setIsUpdating(false);
-        }
-    };
-
-    return (
-        <div className="flex items-center gap-2">
-            <Switch
-                checked={!collection.isPrivate}
-                disabled={isUpdating}
-                onCheckedChange={handleVisibilityChange}
-                aria-label={t`${collection.name} storefront visibility`}
-            />
-            <span className="text-xs text-muted-foreground">
-                {collection.isPrivate ? t`Hidden` : t`Visible`}
-            </span>
-        </div>
-    );
 }
 
 function CollectionDeleteButton({
@@ -229,6 +198,54 @@ function CollectionListPage() {
     const [nextPageToFetch, setNextPageToFetch] = useState<Record<string, number>>({});
     const [quickCreateOpen, setQuickCreateOpen] = useState(false);
     const [quickCreateParent, setQuickCreateParent] = useState<CollectionQuickCreateParent>();
+
+    const handleVisibilityUpdated = useCallback(
+        ({ id, isPrivate }: CollectionVisibilityValue) => {
+            queryClient.setQueriesData<ResultOf<typeof collectionListDocument>>(
+                { queryKey: ['PaginatedListDataTable'] },
+                cachedData => {
+                    if (!cachedData?.collections?.items) {
+                        return cachedData;
+                    }
+                    const items = updateCollectionVisibility(cachedData.collections.items, id, isPrivate);
+                    if (items === cachedData.collections.items) {
+                        return cachedData;
+                    }
+                    return {
+                        ...cachedData,
+                        collections: {
+                            ...cachedData.collections,
+                            items,
+                        },
+                    };
+                },
+            );
+            queryClient.setQueriesData<ChildCollectionQueryData>(
+                { queryKey: ['childCollections'] },
+                cachedData => {
+                    if (!cachedData) {
+                        return cachedData;
+                    }
+                    const items = updateCollectionVisibility(cachedData.items, id, isPrivate);
+                    return items === cachedData.items ? cachedData : { ...cachedData, items };
+                },
+            );
+            setAccumulatedChildren(current => {
+                let hasUpdates = false;
+                const updatedEntries = Object.entries(current).map(([parentId, childData]) => {
+                    const items = updateCollectionVisibility(childData.items, id, isPrivate);
+                    if (items === childData.items) {
+                        return [parentId, childData] as const;
+                    }
+                    hasUpdates = true;
+                    return [parentId, { ...childData, items }] as const;
+                });
+                return hasUpdates ? Object.fromEntries(updatedEntries) : current;
+            });
+            void queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
+        },
+        [queryClient],
+    );
 
     const openQuickCreate = (parent?: CollectionQuickCreateParent) => {
         setQuickCreateParent(parent);
@@ -651,7 +668,12 @@ function CollectionListPage() {
                     },
                     isPrivate: {
                         header: () => <Trans>Storefront visibility</Trans>,
-                        cell: ({ row }) => <CollectionVisibilitySwitch collection={row.original} />,
+                        cell: ({ row }) => (
+                            <CollectionVisibilitySwitch
+                                collection={row.original}
+                                onVisibilityUpdated={handleVisibilityUpdated}
+                            />
+                        ),
                     },
                     position: {
                         header: () => <Trans>Order</Trans>,
