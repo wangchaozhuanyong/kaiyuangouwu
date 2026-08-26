@@ -174,7 +174,6 @@ msgstr "全局缺货阈值"
 msgid "Order amount"
 msgstr "订单金额"
 
-#: src/lib/components/layout/channel-switcher.tsx
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "Manage Languages"
 msgstr "管理语言"
@@ -796,8 +795,8 @@ msgid "Edit facet values"
 msgstr "编辑筛选属性值"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "Add child"
-msgstr "添加子分类"
+#~ msgid "Add child"
+#~ msgstr "添加子分类"
 
 #: src/app/routes/_authenticated/_orders/components/add-manual-payment-dialog.tsx
 msgid "Adding..."
@@ -970,8 +969,8 @@ msgid "Failed to create tag"
 msgstr "创建标签失败"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
-msgid "Search product groups"
-msgstr "搜索商品分类"
+#~ msgid "Search product groups"
+#~ msgstr "搜索商品分类"
 
 #. placeholder {0}: selectedIds.size
 #: src/lib/components/data-input/product-multi-selector-input.tsx
@@ -4712,14 +4711,12 @@ msgstr "已成功创建筛选属性"
 msgid "Maximum"
 msgstr "最大值"
 
-#. placeholder {0}: row.original.productVariantCount
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "{0} variants"
-msgstr "{0} 个商品 SKU"
+#~ msgid "{0} variants"
+#~ msgstr "{0} 个商品 SKU"
 
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
-#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 msgid "Top-level product group"
 msgstr "一级分类"
 
@@ -5352,13 +5349,11 @@ msgstr "密码已更新"
 msgid "Unable to load records"
 msgstr "无法加载记录"
 
-#. placeholder {0}: collection.name
-#. placeholder {0}: original.name
 #: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
-msgid "Add a child product group under {0}"
-msgstr "在“{0}”下添加子分类"
+#~ msgid "Add a child product group under {0}"
+#~ msgstr "在“{0}”下添加子分类"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "does not contain"
@@ -6028,8 +6023,8 @@ msgid "Regions"
 msgstr "地区"
 
 #: src/lib/components/layout/channel-switcher.tsx
-msgid "Content language:"
-msgstr "内容语言："
+#~ msgid "Content language:"
+#~ msgstr "内容语言："
 
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Select inventory tracking mode"
@@ -6788,8 +6783,8 @@ msgid "Minimum value must be less than maximum value"
 msgstr "最小值必须小于最大值"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "Contents"
-msgstr "内容"
+#~ msgid "Contents"
+#~ msgstr "内容"
 
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "Failed to convert global view to personal view"
@@ -7568,8 +7563,8 @@ msgid "No payment or refund is required for these changes."
 msgstr "这些更改不需要支付或退款。"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
-msgid "Search product groups..."
-msgstr "搜索商品分类……"
+#~ msgid "Search product groups..."
+#~ msgstr "搜索商品分类……"
 
 #: src/app/routes/_authenticated/_system/components/cancel-jobs-bulk-action.tsx
 msgid "{cancellableCount, plural, one {Are you sure you want to cancel {cancellableCount} job? This action cannot be undone.} other {Are you sure you want to cancel {cancellableCount} jobs? This action cannot be undone.}}"
@@ -7782,8 +7777,8 @@ msgid "Search product name, URL identifier or SKU"
 msgstr "搜索商品名称、URL 标识或 SKU"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "New top-level product group"
-msgstr "新建一级分类"
+#~ msgid "New top-level product group"
+#~ msgstr "新建一级分类"
 
 #: src/app/routes/_authenticated/_assets/components/manage-tags-dialog.tsx
 #: src/lib/components/data-table/save-view-dialog.tsx
@@ -7950,9 +7945,9 @@ msgid "Task type"
 msgstr "任务类型"
 
 #: src/lib/components/layout/channel-switcher.tsx
-msgctxt "active language"
-msgid "Active"
-msgstr "活跃"
+#~ msgctxt "active language"
+#~ msgid "Active"
+#~ msgstr "活跃"
 
 #: src/app/routes/_authenticated/_orders/components/order-tax-summary.tsx
 msgid "Tax base"

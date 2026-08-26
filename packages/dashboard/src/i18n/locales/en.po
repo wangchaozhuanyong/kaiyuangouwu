@@ -174,7 +174,6 @@ msgstr "Global out of stock threshold"
 msgid "Order amount"
 msgstr "Order amount"
 
-#: src/lib/components/layout/channel-switcher.tsx
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "Manage Languages"
 msgstr "Manage Languages"
@@ -796,8 +795,8 @@ msgid "Edit facet values"
 msgstr "Edit filter attribute values"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "Add child"
-msgstr "Add child"
+#~ msgid "Add child"
+#~ msgstr "Add child"
 
 #: src/app/routes/_authenticated/_orders/components/add-manual-payment-dialog.tsx
 msgid "Adding..."
@@ -970,8 +969,8 @@ msgid "Failed to create tag"
 msgstr "Failed to create tag"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
-msgid "Search product groups"
-msgstr "Search product groups"
+#~ msgid "Search product groups"
+#~ msgstr "Search product groups"
 
 #. placeholder {0}: selectedIds.size
 #: src/lib/components/data-input/product-multi-selector-input.tsx
@@ -4712,14 +4711,12 @@ msgstr "Successfully created filter attribute"
 msgid "Maximum"
 msgstr "Maximum"
 
-#. placeholder {0}: row.original.productVariantCount
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "{0} variants"
-msgstr "{0} SKUs"
+#~ msgid "{0} variants"
+#~ msgstr "{0} SKUs"
 
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
-#: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 msgid "Top-level product group"
 msgstr "Top-level product group"
 
@@ -5352,13 +5349,11 @@ msgstr "Password updated"
 msgid "Unable to load records"
 msgstr "Unable to load records"
 
-#. placeholder {0}: collection.name
-#. placeholder {0}: original.name
 #: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
-msgid "Add a child product group under {0}"
-msgstr "Add a child product group under {0}"
+#~ msgid "Add a child product group under {0}"
+#~ msgstr "Add a child product group under {0}"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "does not contain"
@@ -6028,8 +6023,8 @@ msgid "Regions"
 msgstr "Regions"
 
 #: src/lib/components/layout/channel-switcher.tsx
-msgid "Content language:"
-msgstr "Content language:"
+#~ msgid "Content language:"
+#~ msgstr "Content language:"
 
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Select inventory tracking mode"
@@ -6788,8 +6783,8 @@ msgid "Minimum value must be less than maximum value"
 msgstr "Minimum value must be less than maximum value"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "Contents"
-msgstr "Contents"
+#~ msgid "Contents"
+#~ msgstr "Contents"
 
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "Failed to convert global view to personal view"
@@ -7568,8 +7563,8 @@ msgid "No payment or refund is required for these changes."
 msgstr "No payment or refund is required for these changes."
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
-msgid "Search product groups..."
-msgstr "Search product groups..."
+#~ msgid "Search product groups..."
+#~ msgstr "Search product groups..."
 
 #: src/app/routes/_authenticated/_system/components/cancel-jobs-bulk-action.tsx
 msgid "{cancellableCount, plural, one {Are you sure you want to cancel {cancellableCount} job? This action cannot be undone.} other {Are you sure you want to cancel {cancellableCount} jobs? This action cannot be undone.}}"
@@ -7782,8 +7777,8 @@ msgid "Search product name, URL identifier or SKU"
 msgstr "Search product name, URL identifier or SKU"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
-msgid "New top-level product group"
-msgstr "New top-level product group"
+#~ msgid "New top-level product group"
+#~ msgstr "New top-level product group"
 
 #: src/app/routes/_authenticated/_assets/components/manage-tags-dialog.tsx
 #: src/lib/components/data-table/save-view-dialog.tsx
@@ -7950,9 +7945,9 @@ msgid "Task type"
 msgstr "Task type"
 
 #: src/lib/components/layout/channel-switcher.tsx
-msgctxt "active language"
-msgid "Active"
-msgstr "Active"
+#~ msgctxt "active language"
+#~ msgid "Active"
+#~ msgstr "Active"
 
 #: src/app/routes/_authenticated/_orders/components/order-tax-summary.tsx
 msgid "Tax base"
