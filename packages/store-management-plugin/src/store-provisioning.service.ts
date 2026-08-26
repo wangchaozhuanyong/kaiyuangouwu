@@ -29,6 +29,11 @@ import { IsNull } from 'typeorm';
 import { storeProfilePermission } from './constants';
 import { StoreProfile } from './entities/store-profile.entity';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import {
+    adjustReferralBalancePermission,
+    manageReferralWithdrawalPermission,
+    referralPermission,
+} from './referral/referral.constants';
 import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
 
@@ -81,6 +86,12 @@ export const storeAdministratorPermissions: Permission[] = [
     storeDomainPermission.Delete,
     storeProfilePermission.Read,
     storeProfilePermission.Update,
+    referralPermission.Create,
+    referralPermission.Read,
+    referralPermission.Update,
+    referralPermission.Delete,
+    manageReferralWithdrawalPermission.Permission,
+    adjustReferralBalancePermission.Permission,
 ];
 
 @Injectable()

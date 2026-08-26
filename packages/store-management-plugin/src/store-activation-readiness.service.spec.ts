@@ -57,6 +57,9 @@ describe('store activation readiness', () => {
         expect(isProductionPaymentMethod(method('stripe-sandbox', 'stripe-payment', 'Card payment'))).toBe(
             false,
         );
+        expect(
+            isProductionPaymentMethod(method('referral-balance', 'referral-balance-payment', '邀请返利余额')),
+        ).toBe(false);
         expect(isProductionPaymentMethod(method('stripe', 'stripe-payment', 'Card payment'))).toBe(true);
         expect(
             isProductionPaymentMethod(

@@ -8,6 +8,7 @@ import {
     CustomerAddressUpdateInput,
     CustomerOrderCounts,
     MarketConfig,
+    MyReferralOverview,
     Order,
     OrderConfirmationToken,
     OrderPage,
@@ -15,6 +16,8 @@ import {
     Product,
     ProductSearchPage,
     ProductSearchSort,
+    ReferralBalancePaymentResult,
+    ReferralProgram,
     RegisterCustomerInput,
     ShippingMethod,
     StoreCustomerCoupon,
@@ -96,6 +99,7 @@ const orderFields = `
     totalWithTax
     currencyCode
     customer { id emailAddress }
+    payments { id method amount state }
     discounts { description amountWithTax }
     taxSummary { description taxRate taxBase taxTotal }
     couponCodes
@@ -163,6 +167,16 @@ const orderFields = `
         freeShippingThreshold
         freeShippingApplied
     }
+`;
+
+const referralWalletFields = `
+    id
+    createdAt
+    updatedAt
+    currencyCode
+    availableBalance
+    pendingBalance
+    reservedBalance
 `;
 
 const customerCouponFields = `
@@ -1140,20 +1154,133 @@ export class ShopApi {
         this.assertNoError(result.login);
     }
 
-    async registerCustomerAccount(input: RegisterCustomerInput): Promise<void> {
-        const result = await this.request<{ registerCustomerAccount: ErrorResult }>(
+    async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
+        const result = await this.request<{ referralProgram: ReferralProgram }>(
             `
-                mutation RegisterStorefrontCustomer($input: RegisterCustomerInput!) {
-                    registerCustomerAccount(input: $input) {
+                query StorefrontReferralProgram {
+                    referralProgram {
+                        channelId
+                        enabled
+                        rewardRate
+                        releaseDelayDays
+                        minimumOrderAmount
+                        maxRewardPerOrder
+                        allowBalanceSpend
+                        attributionWindowDays
+                        defaultPosterTemplate
+                        posterTemplates
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.referralProgram;
+    }
+
+    async validateReferralInviteCode(code: string, signal?: AbortSignal): Promise<boolean> {
+        const result = await this.request<{ validateReferralInviteCode: boolean }>(
+            `
+                query ValidateReferralInviteCode($code: String!) {
+                    validateReferralInviteCode(code: $code)
+                }
+            `,
+            { code },
+            signal,
+        );
+        return result.validateReferralInviteCode;
+    }
+
+    async myReferralOverview(signal?: AbortSignal): Promise<MyReferralOverview> {
+        const result = await this.request<{ myReferralOverview: MyReferralOverview }>(
+            `
+                query MyStorefrontReferralOverview {
+                    myReferralOverview {
+                        enabled
+                        rewardRate
+                        releaseDelayDays
+                        inviteCode
+                        wallets { ${referralWalletFields} }
+                        invitedCount
+                        purchasedInviteeCount
+                        rewardSummaries { currencyCode grossReward clawedBackReward }
+                        invitees { id displayName boundAt firstPaidOrderAt }
+                        ledger {
+                            id
+                            createdAt
+                            eventType
+                            currencyCode
+                            availableDelta
+                            pendingDelta
+                            reservedDelta
+                            availableAfter
+                            pendingAfter
+                            reservedAfter
+                            orderId
+                            refundId
+                            withdrawalId
+                            actorType
+                            note
+                        }
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myReferralOverview;
+    }
+
+    async registerCustomerAccount(
+        input: RegisterCustomerInput,
+        inviteCode?: string,
+        source?: 'LINK' | 'POSTER' | 'CODE',
+    ): Promise<void> {
+        const result = await this.request<{ registerCustomerWithReferral: ErrorResult }>(
+            `
+                mutation RegisterStorefrontCustomer(
+                    $input: RegisterCustomerInput!
+                    $inviteCode: String
+                    $source: String
+                ) {
+                    registerCustomerWithReferral(input: $input, inviteCode: $inviteCode, source: $source) {
                         __typename
                         ... on Success { success }
                         ... on ErrorResult { errorCode message }
                     }
                 }
             `,
-            { input },
+            { input, inviteCode: inviteCode || null, source: source ?? null },
         );
-        this.assertNoError(result.registerCustomerAccount);
+        this.assertNoError(result.registerCustomerWithReferral);
+    }
+
+    async useReferralBalance(amount: number): Promise<ReferralBalancePaymentResult> {
+        const result = await this.request<{ useMyReferralBalance: ReferralBalancePaymentResult }>(
+            `
+                mutation UseStorefrontReferralBalance($amount: Money!) {
+                    useMyReferralBalance(amount: $amount) {
+                        amount
+                        wallet { ${referralWalletFields} }
+                        order { ${orderFields} }
+                    }
+                }
+            `,
+            { amount },
+        );
+        return result.useMyReferralBalance;
+    }
+
+    async recordStorefrontVisit(visitorId: string): Promise<boolean> {
+        const result = await this.request<{ recordStorefrontVisit: { recorded: boolean } }>(
+            `
+                mutation RecordStorefrontVisit($visitorId: String) {
+                    recordStorefrontVisit(visitorId: $visitorId) { recorded }
+                }
+            `,
+            { visitorId },
+        );
+        return result.recordStorefrontVisit.recorded;
     }
 
     async refreshCustomerVerification(emailAddress: string): Promise<void> {
@@ -1658,7 +1785,9 @@ export class ShopApi {
             undefined,
             signal,
         );
-        return result.eligiblePaymentMethods;
+        return result.eligiblePaymentMethods.filter(
+            method => method.code !== 'referral-balance' && method.code !== 'referral-balance-payment',
+        );
     }
 
     async addPaymentToOrder(method: string, metadata: Record<string, unknown> = {}): Promise<Order> {

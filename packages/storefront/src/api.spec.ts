@@ -369,6 +369,14 @@ describe('ShopApi storefront mutations', () => {
                     isEligible: true,
                     eligibilityMessage: null,
                 },
+                {
+                    id: 'payment-referral',
+                    code: 'referral-balance',
+                    name: '邀请返利余额',
+                    description: '',
+                    isEligible: true,
+                    eligibilityMessage: null,
+                },
             ],
         });
 
@@ -535,23 +543,27 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
-    it('registers a customer with the complete account input', async () => {
+    it('registers a customer with an optional referral attribution', async () => {
         const fetchMock = mockGraphQlResponse({
-            registerCustomerAccount: { __typename: 'Success', success: true },
+            registerCustomerWithReferral: { __typename: 'Success', success: true },
         });
 
-        await new ShopApi(market).registerCustomerAccount({
-            emailAddress: 'customer@example.com',
-            firstName: 'Test',
-            lastName: 'Customer',
-            password: 'secure-password',
-        });
+        await new ShopApi(market).registerCustomerAccount(
+            {
+                emailAddress: 'customer@example.com',
+                firstName: 'Test',
+                lastName: 'Customer',
+                password: 'secure-password',
+            },
+            'INVITE123',
+            'LINK',
+        );
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
             query: string;
             variables: Record<string, unknown>;
         };
-        expect(request.query).toContain('registerCustomerAccount(input: $input)');
+        expect(request.query).toContain('registerCustomerWithReferral');
         expect(request.variables).toEqual({
             input: {
                 emailAddress: 'customer@example.com',
@@ -559,6 +571,8 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
+            inviteCode: 'INVITE123',
+            source: 'LINK',
         });
     });
 

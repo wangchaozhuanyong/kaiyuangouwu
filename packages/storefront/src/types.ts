@@ -261,6 +261,12 @@ export interface Order {
     totalWithTax: number;
     currencyCode: string;
     customer?: { id: string; emailAddress: string } | null;
+    payments?: Array<{
+        id: string;
+        method: string;
+        amount: number;
+        state: string;
+    }>;
     lines: OrderLine[];
     discounts: Array<{ description: string; amountWithTax: number }>;
     taxSummary: OrderTaxSummary[];
@@ -348,6 +354,79 @@ export interface RegisterCustomerInput {
     firstName: string;
     lastName: string;
     password: string;
+}
+
+export interface ReferralProgram {
+    channelId: string;
+    enabled: boolean;
+    rewardRate: number;
+    releaseDelayDays: number;
+    minimumOrderAmount: number;
+    maxRewardPerOrder?: number | null;
+    allowBalanceSpend: boolean;
+    attributionWindowDays: number;
+    defaultPosterTemplate: string;
+    posterTemplates: string[];
+}
+
+export interface ReferralWallet {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    currencyCode: string;
+    availableBalance: number;
+    pendingBalance: number;
+    reservedBalance: number;
+}
+
+export interface ReferralRewardSummary {
+    currencyCode: string;
+    grossReward: number;
+    clawedBackReward: number;
+}
+
+export interface ReferralInvitee {
+    id: string;
+    displayName: string;
+    boundAt: string;
+    firstPaidOrderAt?: string | null;
+}
+
+export interface ReferralLedgerEntry {
+    id: string;
+    createdAt: string;
+    eventType: string;
+    currencyCode: string;
+    availableDelta: number;
+    pendingDelta: number;
+    reservedDelta: number;
+    availableAfter: number;
+    pendingAfter: number;
+    reservedAfter: number;
+    orderId?: string | null;
+    refundId?: string | null;
+    withdrawalId?: string | null;
+    actorType: string;
+    note?: string | null;
+}
+
+export interface MyReferralOverview {
+    enabled: boolean;
+    rewardRate: number;
+    releaseDelayDays: number;
+    inviteCode: string;
+    wallets: ReferralWallet[];
+    invitedCount: number;
+    purchasedInviteeCount: number;
+    rewardSummaries: ReferralRewardSummary[];
+    invitees: ReferralInvitee[];
+    ledger: ReferralLedgerEntry[];
+}
+
+export interface ReferralBalancePaymentResult {
+    order: Order;
+    wallet: ReferralWallet;
+    amount: number;
 }
 
 export interface ActiveCustomer {

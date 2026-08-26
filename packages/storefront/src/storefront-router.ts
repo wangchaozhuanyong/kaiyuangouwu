@@ -18,6 +18,7 @@ export type RouteName =
     | 'history'
     | 'notifications'
     | 'coupons'
+    | 'referral'
     | 'flash-sale'
     | 'recommendations'
     | 'support'
@@ -56,6 +57,7 @@ export const customerResolvedRoutes: RouteName[] = [
     'checkout',
     'payment',
     'coupons',
+    'referral',
     'orders',
     'logistics',
     'order-detail',
@@ -86,6 +88,7 @@ const routePaths: Record<RouteName, string> = {
     history: '/history',
     notifications: '/notifications',
     coupons: '/coupons',
+    referral: '/referral',
     'flash-sale': '/flash-sale',
     recommendations: '/recommendations',
     support: '/support',

@@ -45,6 +45,7 @@ import { SeedSimplifiedChineseSourceTranslations1787684400000 } from './17876844
 import { AddStorefrontMultiCurrency1787763600000 } from './1787763600000-add-storefront-multi-currency';
 import { AlignStorefrontMultiCurrency1787767200000 } from './1787767200000-align-storefront-multi-currency';
 import { NormalizeStorefrontExchangeRate1787770800000 } from './1787770800000-normalize-storefront-exchange-rate';
+import { AddReferralRebate1787774400000 } from './1787774400000-add-referral-rebate';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -94,4 +95,5 @@ export const devServerMigrations = [
     AddStorefrontMultiCurrency1787763600000,
     AlignStorefrontMultiCurrency1787767200000,
     NormalizeStorefrontExchangeRate1787770800000,
+    AddReferralRebate1787774400000,
 ];

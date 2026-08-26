@@ -81,6 +81,49 @@ const commonTypes = gql`
         returnCount: Int!
         usable: Boolean!
     }
+
+    type ReferralProgram {
+        channelId: ID!
+        enabled: Boolean!
+        rewardRate: Float!
+        releaseDelayDays: Int!
+        minimumOrderAmount: Money!
+        maxRewardPerOrder: Money
+        allowBalanceSpend: Boolean!
+        attributionWindowDays: Int!
+        defaultPosterTemplate: String!
+        posterTemplates: [String!]!
+    }
+
+    type ReferralWallet implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        currencyCode: CurrencyCode!
+        availableBalance: Money!
+        pendingBalance: Money!
+        reservedBalance: Money!
+    }
+
+    type ReferralLedgerEntry implements Node {
+        id: ID!
+        createdAt: DateTime!
+        eventType: String!
+        currencyCode: CurrencyCode!
+        availableDelta: Money!
+        pendingDelta: Money!
+        reservedDelta: Money!
+        availableAfter: Money!
+        pendingAfter: Money!
+        reservedAfter: Money!
+        orderId: ID
+        refundId: ID
+        withdrawalId: ID
+        actorType: String!
+        note: String
+        customerName: String
+        customerEmail: String
+    }
 `;
 
 export const adminApiExtensions = gql`
@@ -433,6 +476,172 @@ export const adminApiExtensions = gql`
         enabled: Boolean!
     }
 
+    input UpdateReferralProgramInput {
+        enabled: Boolean!
+        rewardRate: Float!
+        releaseDelayDays: Int!
+        minimumOrderAmount: Money!
+        maxRewardPerOrder: Money
+        allowBalanceSpend: Boolean!
+        attributionWindowDays: Int!
+        defaultPosterTemplate: String!
+    }
+
+    type ReferralRelationshipAdmin implements Node {
+        id: ID!
+        createdAt: DateTime!
+        inviterCustomerId: ID!
+        inviterName: String!
+        inviterEmail: String!
+        inviteeCustomerId: ID!
+        inviteeName: String!
+        inviteeEmail: String!
+        inviteCodeSnapshot: String!
+        source: String!
+        boundAt: DateTime!
+        firstPaidOrderAt: DateTime
+    }
+
+    type ReferralRelationshipAdminList implements PaginatedList {
+        items: [ReferralRelationshipAdmin!]!
+        totalItems: Int!
+    }
+
+    type ReferralInviterSummary {
+        customerId: ID!
+        customerName: String!
+        customerEmail: String!
+        inviteCode: String!
+        invitedCount: Int!
+        purchasedInviteeCount: Int!
+    }
+
+    type ReferralInviterSummaryList {
+        items: [ReferralInviterSummary!]!
+        totalItems: Int!
+    }
+
+    type ReferralLedgerAdminList implements PaginatedList {
+        items: [ReferralLedgerEntry!]!
+        totalItems: Int!
+    }
+
+    type ReferralRewardAdmin implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        orderId: ID!
+        orderCode: String!
+        inviterCustomerId: ID!
+        inviterName: String!
+        inviterEmail: String!
+        inviteeCustomerId: ID!
+        inviteeName: String!
+        inviteeEmail: String!
+        currencyCode: CurrencyCode!
+        rewardRate: Float!
+        eligibleAmount: Money!
+        rewardAmount: Money!
+        releasedAmount: Money!
+        clawedBackAmount: Money!
+        settledRefundTotal: Money!
+        settledEligibleRefundTotal: Money!
+        orderTotalWithTax: Money!
+        status: String!
+        earnedAt: DateTime!
+        availableAt: DateTime!
+        releasedAt: DateTime
+    }
+
+    type ReferralRewardAdminList implements PaginatedList {
+        items: [ReferralRewardAdmin!]!
+        totalItems: Int!
+    }
+
+    type ReferralSalesMetric {
+        currencyCode: CurrencyCode!
+        sales: Money!
+    }
+
+    type ReferralTodayMetrics {
+        businessDate: String!
+        visitorCount: Int!
+        newCustomerCount: Int!
+        consumerCount: Int!
+        firstTimeConsumerCount: Int!
+        returningConsumerCount: Int!
+        orderCount: Int!
+        todayInvitedCount: Int!
+        todayInvitedPurchaserCount: Int!
+        salesByCurrency: [ReferralSalesMetric!]!
+    }
+
+    type ReferralBalanceAuditItem {
+        walletId: ID!
+        customerId: ID!
+        customerName: String!
+        customerEmail: String!
+        currencyCode: CurrencyCode!
+        actualAvailableBalance: Money!
+        actualPendingBalance: Money!
+        actualReservedBalance: Money!
+        ledgerAvailableBalance: Money!
+        ledgerPendingBalance: Money!
+        ledgerReservedBalance: Money!
+        availableDifference: Money!
+        pendingDifference: Money!
+        reservedDifference: Money!
+    }
+
+    type ReferralBalanceAuditResult {
+        auditedWallets: Int!
+        items: [ReferralBalanceAuditItem!]!
+    }
+
+    type ReferralWithdrawal implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        code: String!
+        customerId: ID!
+        customerName: String!
+        customerEmail: String!
+        currencyCode: CurrencyCode!
+        amount: Money!
+        status: String!
+        payoutMethod: String!
+        payoutAccountMasked: String!
+        externalReference: String
+        note: String
+        requestedByAdministratorId: ID
+        processedByAdministratorId: ID
+        approvedAt: DateTime
+        paidAt: DateTime
+        rejectedAt: DateTime
+        cancelledAt: DateTime
+    }
+
+    type ReferralWithdrawalList implements PaginatedList {
+        items: [ReferralWithdrawal!]!
+        totalItems: Int!
+    }
+
+    input CreateReferralWithdrawalInput {
+        customerId: ID!
+        currencyCode: CurrencyCode!
+        amount: Money!
+        payoutMethod: String!
+        payoutAccountMasked: String!
+        note: String
+    }
+
+    input ProcessReferralWithdrawalInput {
+        id: ID!
+        status: String!
+        externalReference: String
+        note: String
+    }
+
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
@@ -445,6 +654,14 @@ export const adminApiExtensions = gql`
         storeCouponLedger(options: StoreCouponLedgerListOptions): StoreCouponLedgerEntryList!
         storeFlashSales: [StoreFlashSale!]!
         systemAnnouncements: [SystemAnnouncement!]!
+        referralProgram: ReferralProgram!
+        referralRelationships(skip: Int, take: Int): ReferralRelationshipAdminList!
+        referralInviterSummaries(skip: Int, take: Int): ReferralInviterSummaryList!
+        referralLedger(skip: Int, take: Int): ReferralLedgerAdminList!
+        referralRewards(skip: Int, take: Int): ReferralRewardAdminList!
+        referralWithdrawals(skip: Int, take: Int): ReferralWithdrawalList!
+        referralTodayMetrics: ReferralTodayMetrics!
+        referralBalanceAudit: ReferralBalanceAuditResult!
     }
 
     extend type Mutation {
@@ -473,6 +690,15 @@ export const adminApiExtensions = gql`
         createSystemAnnouncement(input: CreateSystemAnnouncementInput!): SystemAnnouncement!
         updateSystemAnnouncement(input: UpdateSystemAnnouncementInput!): SystemAnnouncement!
         deleteSystemAnnouncement(id: ID!): DeletionResponse!
+        updateReferralProgram(input: UpdateReferralProgramInput!): ReferralProgram!
+        createReferralWithdrawal(input: CreateReferralWithdrawalInput!): ReferralWithdrawal!
+        processReferralWithdrawal(input: ProcessReferralWithdrawalInput!): ReferralWithdrawal!
+        adjustReferralBalance(
+            customerId: ID!
+            currencyCode: CurrencyCode!
+            amount: Money!
+            reason: String!
+        ): ReferralWallet!
     }
 
     extend type Order {
@@ -534,6 +760,42 @@ export const shopApiExtensions = gql`
         endsAt: DateTime
     }
 
+    type ReferralInvitee {
+        id: ID!
+        displayName: String!
+        boundAt: DateTime!
+        firstPaidOrderAt: DateTime
+    }
+
+    type ReferralRewardSummary {
+        currencyCode: CurrencyCode!
+        grossReward: Money!
+        clawedBackReward: Money!
+    }
+
+    type MyReferralOverview {
+        enabled: Boolean!
+        rewardRate: Float!
+        releaseDelayDays: Int!
+        inviteCode: String!
+        wallets: [ReferralWallet!]!
+        invitedCount: Int!
+        purchasedInviteeCount: Int!
+        rewardSummaries: [ReferralRewardSummary!]!
+        invitees: [ReferralInvitee!]!
+        ledger: [ReferralLedgerEntry!]!
+    }
+
+    type ReferralBalancePaymentResult {
+        order: Order!
+        wallet: ReferralWallet!
+        amount: Money!
+    }
+
+    type StorefrontVisitResult {
+        recorded: Boolean!
+    }
+
     extend type Query {
         storefrontBranding: StorefrontBranding!
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
@@ -541,11 +803,21 @@ export const shopApiExtensions = gql`
         myStorefrontCoupons: [StoreCustomerCoupon!]!
         activeStorefrontFlashSales: [StoreFlashSale!]!
         activeSystemAnnouncements: [StorefrontSystemAnnouncement!]!
+        referralProgram: ReferralProgram!
+        validateReferralInviteCode(code: String!): Boolean!
+        myReferralOverview: MyReferralOverview!
     }
 
     extend type Mutation {
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
         applyStorefrontCoupon(id: ID!): StoreCustomerCoupon!
         removeStorefrontCoupon(id: ID!): StoreCustomerCoupon!
+        registerCustomerWithReferral(
+            input: RegisterCustomerInput!
+            inviteCode: String
+            source: String
+        ): RegisterCustomerAccountResult!
+        useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
+        recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
     }
 `;

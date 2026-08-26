@@ -25,6 +25,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from './query-client';
+import { captureReferralAttribution, storefrontVisitorId } from './referral-attribution';
 import { productDescriptionText } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
@@ -308,6 +309,14 @@ export function App() {
     const vendureLanguageCode = languageCodeFor(language);
     const api = useMemo(() => new ShopApi(market, vendureLanguageCode), [market, vendureLanguageCode]);
 
+    useEffect(() => {
+        try {
+            captureReferralAttribution();
+        } catch {
+            // Private browsing can disable localStorage; registration remains usable.
+        }
+    }, []);
+
     const productsQuery = useQuery({
         queryKey: storefrontQueryKeys.products(market.code, vendureLanguageCode, 16),
         queryFn: ({ signal }) => api.products(16, signal),
@@ -381,6 +390,15 @@ export function App() {
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
     const cart = cartQuery.data ?? null;
     const customer = customerQuery.data ?? null;
+
+    useEffect(() => {
+        try {
+            const visitorId = storefrontVisitorId();
+            void api.recordStorefrontVisit(visitorId).catch(() => undefined);
+        } catch {
+            // Analytics must never block storefront usage.
+        }
+    }, [api, customer?.id]);
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         market.code,
         vendureLanguageCode,
@@ -1236,6 +1254,7 @@ export function App() {
             history: isZh ? '浏览足迹' : 'Browsing history',
             notifications: isZh ? '消息通知' : 'Notifications',
             coupons: isZh ? '优惠券' : 'Coupons',
+            referral: isZh ? '邀请返利' : 'Referral rewards',
             support: isZh ? '客服中心' : 'Customer support',
             reviews: isZh ? '评价中心' : 'Reviews',
             login: isZh ? '登录' : 'Sign in',

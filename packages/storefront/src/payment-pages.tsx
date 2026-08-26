@@ -6,6 +6,7 @@ import {
     CircleAlert,
     CircleCheck,
     Download,
+    Gift,
     House,
     Package,
     ShieldCheck,
@@ -30,20 +31,24 @@ export function PaymentPage({
     api,
     cart,
     order,
+    customer,
     market,
     locale,
     language,
     onCancel,
     onComplete,
+    onOrderChange,
 }: {
     api: ShopApi;
     cart: StorefrontCart | null;
     order: Order | null;
+    customer: ActiveCustomer | null;
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
     onCancel: (order: Order) => void;
     onComplete: (order: Order, confirmationToken: string) => Promise<void>;
+    onOrderChange: (order: Order) => void;
 }) {
     const navigate = useNavigate();
     const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
@@ -51,7 +56,10 @@ export function PaymentPage({
     const [selectedMethod, setSelectedMethod] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [paymentError, setPaymentError] = useState('');
+    const [referralAmount, setReferralAmount] = useState('');
+    const [applyingReferral, setApplyingReferral] = useState(false);
     const submissionLock = useRef(false);
+    const confirmationTokenRef = useRef('');
     const isTestMode = import.meta.env.DEV;
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
     const methodsQuery = useQuery({
@@ -61,6 +69,42 @@ export function PaymentPage({
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
+    const referralProgramQuery = useQuery({
+        queryKey: storefrontQueryKeys.referralProgram(market.code, languageCodeFor(language)),
+        queryFn: ({ signal }) => api.referralProgram(signal),
+        enabled: Boolean(customer && isPending),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const referralOverviewQuery = useQuery({
+        queryKey: storefrontQueryKeys.customerReferral(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.myReferralOverview(signal),
+        enabled: Boolean(customer && isPending && referralProgramQuery.data?.enabled),
+        staleTime: 0,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const appliedReferralAmount =
+        order?.payments
+            ?.filter(
+                payment =>
+                    payment.method === 'referral-balance' &&
+                    (payment.state === 'Settled' || payment.state === 'Authorized'),
+            )
+            .reduce((total, payment) => total + payment.amount, 0) ?? 0;
+    const referralWallet = referralOverviewQuery.data?.wallets.find(
+        wallet => wallet.currencyCode === order?.currencyCode,
+    );
+    const outstandingAmount = Math.max(0, (order?.totalWithTax ?? 0) - appliedReferralAmount);
+    const maximumReferralAmount = Math.min(referralWallet?.availableBalance ?? 0, outstandingAmount);
+    const canUseReferral =
+        referralProgramQuery.data?.enabled === true &&
+        referralProgramQuery.data.allowBalanceSpend &&
+        maximumReferralAmount > 0 &&
+        appliedReferralAmount === 0;
     const availability = paymentAvailability(isPending ? (methodsQuery.data ?? []) : [], {
         allowTestMethods: isTestMode,
     });
@@ -89,6 +133,46 @@ export function PaymentPage({
         );
     }, [isPending, methods]);
 
+    useEffect(() => {
+        if (!canUseReferral || referralAmount) return;
+        setReferralAmount((maximumReferralAmount / 100).toFixed(2));
+    }, [canUseReferral, maximumReferralAmount, referralAmount]);
+
+    const applyReferralBalance = async () => {
+        const amount = Math.round(Number(referralAmount) * 100);
+        if (!Number.isInteger(amount) || amount <= 0 || amount > maximumReferralAmount || applyingReferral) {
+            setPaymentError(
+                isZh
+                    ? '请输入不超过可用余额和待支付金额的有效金额'
+                    : 'Enter a valid amount within your available balance',
+            );
+            return;
+        }
+        setApplyingReferral(true);
+        setPaymentError('');
+        try {
+            if (!confirmationTokenRef.current) {
+                confirmationTokenRef.current = (await api.createOrderConfirmationToken()).token;
+            }
+            const result = await api.useReferralBalance(amount);
+            onOrderChange(result.order);
+            await referralOverviewQuery.refetch();
+            if (result.order.state === 'PaymentSettled' || result.order.state === 'PaymentAuthorized') {
+                await onComplete(result.order, confirmationTokenRef.current);
+            }
+        } catch (requestError) {
+            setPaymentError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '返利余额抵扣失败，请重试'
+                      : 'Could not apply the referral balance',
+            );
+        } finally {
+            setApplyingReferral(false);
+        }
+    };
+
     const submitPayment = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (
@@ -103,9 +187,10 @@ export function PaymentPage({
         setSubmitting(true);
         setPaymentError('');
         try {
-            const confirmation = await api.createOrderConfirmationToken();
+            const confirmationToken =
+                confirmationTokenRef.current || (await api.createOrderConfirmationToken()).token;
             const paidOrder = await api.addPaymentToOrder(selectedMethod);
-            await onComplete(paidOrder, confirmation.token);
+            await onComplete(paidOrder, confirmationToken);
         } catch (requestError) {
             setPaymentError(
                 requestError instanceof Error
@@ -181,6 +266,74 @@ export function PaymentPage({
                             </span>
                         </div>
                     </section>
+                    {customer && referralProgramQuery.data?.enabled && (
+                        <section className="payment-method-section">
+                            <h2>{isZh ? '返利余额抵扣' : 'Referral balance'}</h2>
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="flex items-center gap-2 font-bold text-slate-800">
+                                        <Gift aria-hidden="true" className="size-4 text-amber-600" />
+                                        {isZh ? '可用余额' : 'Available balance'}
+                                    </span>
+                                    <strong className="text-amber-700">
+                                        {formatMoney(
+                                            referralWallet?.availableBalance ?? 0,
+                                            order.currencyCode,
+                                            locale,
+                                        )}
+                                    </strong>
+                                </div>
+                                {appliedReferralAmount > 0 ? (
+                                    <p className="mb-0 mt-3 text-sm font-semibold text-emerald-700">
+                                        {isZh
+                                            ? `已抵扣 ${formatMoney(appliedReferralAmount, order.currencyCode, locale)}，剩余金额请继续选择支付方式。`
+                                            : `${formatMoney(appliedReferralAmount, order.currencyCode, locale)} applied. Choose a method for the remainder.`}
+                                    </p>
+                                ) : canUseReferral ? (
+                                    <div className="mt-3 flex gap-2">
+                                        <label className="sr-only" htmlFor="referral-balance-amount">
+                                            {isZh ? '返利余额抵扣金额' : 'Referral balance amount'}
+                                        </label>
+                                        <input
+                                            id="referral-balance-amount"
+                                            className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 text-base outline-none focus:border-amber-500"
+                                            type="number"
+                                            min="0.01"
+                                            max={(maximumReferralAmount / 100).toFixed(2)}
+                                            step="0.01"
+                                            value={referralAmount}
+                                            disabled={applyingReferral || submitting}
+                                            onChange={event => setReferralAmount(event.currentTarget.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="min-h-11 rounded-xl bg-amber-500 px-4 font-extrabold text-white disabled:opacity-50"
+                                            disabled={applyingReferral || submitting}
+                                            onClick={() => void applyReferralBalance()}
+                                        >
+                                            {applyingReferral
+                                                ? isZh
+                                                    ? '抵扣中…'
+                                                    : 'Applying…'
+                                                : isZh
+                                                  ? '使用余额'
+                                                  : 'Apply'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="mb-0 mt-3 text-sm text-slate-500">
+                                        {referralProgramQuery.data.allowBalanceSpend
+                                            ? isZh
+                                                ? '当前币种暂无可用返利余额。'
+                                                : 'No referral balance is available in this currency.'
+                                            : isZh
+                                              ? '店铺暂时关闭了返利余额消费。'
+                                              : 'Referral balance spending is temporarily paused.'}
+                                    </p>
+                                )}
+                            </div>
+                        </section>
+                    )}
                     <section className="payment-method-section">
                         <h2>{isZh ? '支付方式' : 'Payment method'}</h2>
                         {loading ? (
@@ -293,6 +446,18 @@ export function PaymentPage({
                             <dt>{isZh ? '应付合计' : 'Total due'}</dt>
                             <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
                         </div>
+                        {appliedReferralAmount > 0 && (
+                            <>
+                                <div>
+                                    <dt>{isZh ? '返利余额抵扣' : 'Referral balance'}</dt>
+                                    <dd>-{formatMoney(appliedReferralAmount, order.currencyCode, locale)}</dd>
+                                </div>
+                                <div className="summary-total">
+                                    <dt>{isZh ? '剩余待支付' : 'Remaining due'}</dt>
+                                    <dd>{formatMoney(outstandingAmount, order.currencyCode, locale)}</dd>
+                                </div>
+                            </>
+                        )}
                     </dl>
                     <button type="submit" disabled={!selectedMethod || submitting || loading}>
                         <WalletCards aria-hidden="true" />
@@ -315,10 +480,16 @@ export function PaymentPage({
                     <button
                         type="button"
                         className="payment-edit-order"
-                        disabled={submitting}
+                        disabled={submitting || applyingReferral || appliedReferralAmount > 0}
                         onClick={() => onCancel(order)}
                     >
-                        {isZh ? '返回修改订单' : 'Return to edit order'}
+                        {appliedReferralAmount > 0
+                            ? isZh
+                                ? '余额已抵扣，订单需完成支付'
+                                : 'Balance applied; complete payment'
+                            : isZh
+                              ? '返回修改订单'
+                              : 'Return to edit order'}
                     </button>
                 </aside>
             </form>

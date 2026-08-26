@@ -48,9 +48,7 @@ export class StorefrontCheckoutSession {
 }
 
 export type StorefrontCheckoutResult =
-    | StorefrontCheckoutSession
-    | StorefrontCartMutationError
-    | OrderLimitError;
+    StorefrontCheckoutSession | StorefrontCartMutationError | OrderLimitError;
 
 interface CartOwner {
     ownerType: StorefrontCartOwnerType;
@@ -63,6 +61,7 @@ interface AddStorefrontCartItemInput {
 }
 
 const NON_PRODUCTION_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
+const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
 
 export function isRegisteredProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
@@ -70,6 +69,9 @@ export function isRegisteredProductionPaymentMethod(
 ): boolean {
     const handlerCode = method.handler?.code;
     if (!handlerCode || !registeredHandlerCodes.has(handlerCode)) {
+        return false;
+    }
+    if (INTERNAL_BALANCE_PAYMENT_CODES.has(method.code) || INTERNAL_BALANCE_PAYMENT_CODES.has(handlerCode)) {
         return false;
     }
     const searchable = [

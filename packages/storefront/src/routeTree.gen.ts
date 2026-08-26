@@ -34,6 +34,7 @@ import { Route as PaymentRouteImport } from './routes/payment'
 import { Route as ProductRouteImport } from './routes/product'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as RecommendationsRouteImport } from './routes/recommendations'
+import { Route as ReferralRouteImport } from './routes/referral'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReviewsRouteImport } from './routes/reviews'
@@ -166,6 +167,11 @@ const RecommendationsRoute = RecommendationsRouteImport.update({
   path: '/recommendations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReferralRoute = ReferralRouteImport.update({
+  id: '/referral',
+  path: '/referral',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -223,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/product': typeof ProductRoute
   '/purchase': typeof PurchaseRoute
   '/recommendations': typeof RecommendationsRoute
+  '/referral': typeof ReferralRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
@@ -256,6 +263,7 @@ export interface FileRoutesByTo {
   '/product': typeof ProductRoute
   '/purchase': typeof PurchaseRoute
   '/recommendations': typeof RecommendationsRoute
+  '/referral': typeof ReferralRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
@@ -290,6 +298,7 @@ export interface FileRoutesById {
   '/product': typeof ProductRoute
   '/purchase': typeof PurchaseRoute
   '/recommendations': typeof RecommendationsRoute
+  '/referral': typeof ReferralRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
@@ -325,6 +334,7 @@ export interface FileRouteTypes {
     | '/product'
     | '/purchase'
     | '/recommendations'
+    | '/referral'
     | '/register'
     | '/reset-password'
     | '/reviews'
@@ -358,6 +368,7 @@ export interface FileRouteTypes {
     | '/product'
     | '/purchase'
     | '/recommendations'
+    | '/referral'
     | '/register'
     | '/reset-password'
     | '/reviews'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | '/product'
     | '/purchase'
     | '/recommendations'
+    | '/referral'
     | '/register'
     | '/reset-password'
     | '/reviews'
@@ -425,6 +437,7 @@ export interface RootRouteChildren {
   ProductRoute: typeof ProductRoute
   PurchaseRoute: typeof PurchaseRoute
   RecommendationsRoute: typeof RecommendationsRoute
+  ReferralRoute: typeof ReferralRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ReviewsRoute: typeof ReviewsRoute
@@ -610,6 +623,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecommendationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/referral': {
+      id: '/referral'
+      path: '/referral'
+      fullPath: '/referral'
+      preLoaderRoute: typeof ReferralRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -681,6 +701,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductRoute: ProductRoute,
   PurchaseRoute: PurchaseRoute,
   RecommendationsRoute: RecommendationsRoute,
+  ReferralRoute: ReferralRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ReviewsRoute: ReviewsRoute,

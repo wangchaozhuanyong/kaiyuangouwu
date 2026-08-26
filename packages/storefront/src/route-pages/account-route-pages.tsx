@@ -19,6 +19,9 @@ const FavoriteProductsPage = lazy(() =>
 const NotificationsPage = lazy(() =>
     import('../pages/notifications-page').then(module => ({ default: module.NotificationsPage })),
 );
+const ReferralPage = lazy(() =>
+    import('../pages/referral-page').then(module => ({ default: module.ReferralPage })),
+);
 
 export function AccountRoutePage() {
     const runtime = useRuntime();
@@ -151,6 +154,30 @@ export function CouponsRoutePage() {
                 }}
             >
                 <CouponCenterPage />
+            </PageContext>
+        </RouteGate>
+    );
+}
+
+export function ReferralRoutePage() {
+    const runtime = useRuntime();
+    return (
+        <RouteGate name="referral">
+            <PageContext
+                value={{
+                    api: runtime.api,
+                    customer: runtime.customer,
+                    market: runtime.market,
+                    locale: runtime.locale,
+                    language: runtime.language,
+                    storefrontName: runtime.storefrontName,
+                    logoUrl: runtime.logoUrl,
+                    onBack: runtime.goBack,
+                    onNotify: runtime.notify,
+                    onLogin: () => runtime.navigate({ name: 'login' }),
+                }}
+            >
+                <ReferralPage />
             </PageContext>
         </RouteGate>
     );

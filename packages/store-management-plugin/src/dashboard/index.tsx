@@ -3,6 +3,8 @@ import { defineDashboardExtension } from '@vendure/dashboard';
 import { restrictPlatformNavigation } from './merchant-navigation';
 import { MerchantPasswordGate } from './merchant-password-gate';
 import { myStoreProfileRoute } from './my-store-profile-page';
+import { referralRoute } from './referral-page';
+import { ReferralTodayWidget } from './referral-today-widget';
 import { storeCommerceSettingsRoute } from './store-commerce-settings-page';
 import { StoreCouponOrderBlock } from './store-coupon-order-block';
 import { storeCurrencySettingsRoute } from './store-currency-settings-page';
@@ -28,6 +30,18 @@ defineDashboardExtension({
         storeFlashSaleRoute,
         storePromotionCampaignRoute,
         systemAnnouncementRoute,
+        referralRoute,
+    ],
+    widgets: [
+        {
+            id: 'referral-today-widget',
+            name: '今日客户与邀请数据',
+            order: 70,
+            component: ReferralTodayWidget,
+            defaultSize: { w: 12, h: 3, x: 0, y: 0 },
+            minSize: { w: 8, h: 3 },
+            requiresPermissions: ['ReadReferral'],
+        },
     ],
     navSections: restrictPlatformNavigation,
     pageBlocks: [

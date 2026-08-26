@@ -9,6 +9,7 @@ import {
     ClipboardList,
     Clock3,
     Footprints,
+    Gift,
     Headphones,
     Heart,
     MapPin,
@@ -23,16 +24,16 @@ import {
     WalletCards,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
+import { isReferralClientFeatureEnabled } from '../referral-client-feature';
 import { ACCOUNT_RECOMMENDATION_CREST_IMAGE } from '../storefront-images';
-import { routeNavigateOptions } from '../storefront-router';
+import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
-import { OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
+import { formatMoney, OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
 import { useStorefront } from '../StorefrontContext';
 import {
@@ -102,6 +103,27 @@ export function AccountPage() {
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
+    const referralProgramQuery = useQuery({
+        queryKey: storefrontQueryKeys.referralProgram(market.code, languageCodeFor(language)),
+        queryFn: ({ signal }) => api.referralProgram(signal),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const referralEnabled = isReferralClientFeatureEnabled(referralProgramQuery.data);
+    const referralOverviewQuery = useQuery({
+        queryKey: storefrontQueryKeys.customerReferral(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.myReferralOverview(signal),
+        enabled: Boolean(customer && referralEnabled),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const referralWallet = referralOverviewQuery.data?.wallets.find(
+        wallet => wallet.currencyCode === market.currencyCode,
+    );
     const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0 };
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
@@ -185,7 +207,7 @@ export function AccountPage() {
                         </div>
 
                         <div
-                            className="mt-3 grid w-full grid-cols-3 gap-2"
+                            className={`mt-3 grid w-full ${referralEnabled ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}
                             role="group"
                             aria-label={isZh ? '账户资产' : 'Account assets'}
                         >
@@ -239,6 +261,30 @@ export function AccountPage() {
                                     {isZh ? '浏览足迹' : 'Footprint'}
                                 </span>
                             </button>
+
+                            {referralEnabled && (
+                                <button
+                                    type="button"
+                                    className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-[#eef2f6] bg-slate-50 px-1 pb-1.5 pt-2 shadow-[0_1px_3px_rgba(15,23,42,0.02)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:shadow-[0_2px_6px_rgba(15,23,42,0.05)] active:scale-95"
+                                    onClick={() => navigateTo({ name: 'referral' })}
+                                >
+                                    <span className="relative grid size-8 place-items-center rounded-[10px] border border-amber-200/90 bg-amber-50 text-amber-600 shadow-[0_1px_4px_rgba(15,23,42,0.04)] [&_svg]:size-4">
+                                        <Gift aria-hidden="true" />
+                                    </span>
+                                    <b className="mt-[3px] max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[14px] font-extrabold leading-[1.3] tabular-nums text-slate-900">
+                                        {referralOverviewQuery.isLoading
+                                            ? '…'
+                                            : formatMoney(
+                                                  referralWallet?.availableBalance ?? 0,
+                                                  market.currencyCode,
+                                                  locale,
+                                              )}
+                                    </b>
+                                    <span className="whitespace-nowrap text-[10.5px] font-semibold tracking-[0.01em] text-slate-500">
+                                        {isZh ? '邀请返利' : 'Referral'}
+                                    </span>
+                                </button>
+                            )}
                         </div>
                     </div>
                 ) : (

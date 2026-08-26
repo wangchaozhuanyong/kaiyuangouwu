@@ -1,4 +1,11 @@
 export { storeProfilePermission } from './constants.js';
+export { ReferralAccount } from './entities/referral-account.entity.js';
+export { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity.js';
+export { ReferralProgramConfig } from './entities/referral-program-config.entity.js';
+export { ReferralRelationship } from './entities/referral-relationship.entity.js';
+export { ReferralReward } from './entities/referral-reward.entity.js';
+export { ReferralWallet } from './entities/referral-wallet.entity.js';
+export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
 export { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity.js';
@@ -16,6 +23,12 @@ export type {
     ValidateAccountEntryProofInput,
 } from './promotion/account-entry-proof.js';
 export { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service.js';
+export {
+    adjustReferralBalancePermission,
+    manageReferralWithdrawalPermission,
+    referralPermission,
+} from './referral/referral.constants.js';
+export { ReferralService } from './referral/referral.service.js';
 export { StoreActivationReadinessService } from './store-activation-readiness.service.js';
 export { StoreCommerceSettingsService } from './store-commerce-settings.service.js';
 export { StoreCurrencySettingsService, convertMinorPrice } from './store-currency-settings.service.js';
