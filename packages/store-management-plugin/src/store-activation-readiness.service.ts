@@ -19,6 +19,7 @@ import { storeShippingMethodCode, storeZoneName } from './store-commerce-setting
 import { StoreActivationCheck, StoreActivationCheckCode, StoreActivationReadiness } from './types';
 
 const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
+const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
 const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
 const SHIPPING_CHECKER_CODE = 'supported-destination-eligibility-checker';
 
@@ -34,6 +35,12 @@ export function isProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
     registeredHandlerCodes?: ReadonlySet<string>,
 ): boolean {
+    if (
+        INTERNAL_BALANCE_PAYMENT_CODES.has(method.code) ||
+        (method.handler?.code && INTERNAL_BALANCE_PAYMENT_CODES.has(method.handler.code))
+    ) {
+        return false;
+    }
     if (
         registeredHandlerCodes &&
         (!method.handler?.code || !registeredHandlerCodes.has(method.handler.code))

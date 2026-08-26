@@ -100,7 +100,7 @@ export function HomepageCouponHub({
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
                     const isClaimed = coupon.claimed;
-                    const canClaim = coupon.claimable;
+                    const canClaim = coupon.claimable && !coupon.claimed;
 
                     return (
                         <div
@@ -169,8 +169,8 @@ export function HomepageCouponHub({
                                         <span className="coupon-btn-text-wrap">
                                             {isZh ? (
                                                 <>
-                                                    <span>{isClaimed ? '再领' : '立即'}</span>
-                                                    <span>{isClaimed ? '一张' : '领取'}</span>
+                                                    <span>立即</span>
+                                                    <span>领取</span>
                                                 </>
                                             ) : (
                                                 <span>Claim</span>
@@ -531,8 +531,8 @@ export function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLang
                     <RotateCcw aria-hidden="true" />
                 </div>
                 <div className="trust-text">
-                    <strong>{isZh ? '售后入口' : 'After-sales'}</strong>
-                    <small>{isZh ? '可在订单内提交申请' : 'Request support from an order'}</small>
+                    <strong>{isZh ? '售后入口' : 'Returns'}</strong>
+                    <small>{isZh ? '可在订单内提交申请' : 'Request a return from an order'}</small>
                 </div>
             </div>
         </section>
@@ -577,9 +577,14 @@ export function ManagedContentSection({
             <SectionHeader
                 title={block.title}
                 subtitle={block.subtitle}
-                action={blockHasTarget ? block.ctaLabel || undefined : undefined}
+                subtitlePlacement={block.type === 'CATEGORY_AD' ? 'end' : 'below'}
+                action={
+                    block.type !== 'CATEGORY_AD' && blockHasTarget ? block.ctaLabel || undefined : undefined
+                }
                 onAction={
-                    blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined
+                    block.type !== 'CATEGORY_AD' && blockHasTarget
+                        ? () => onContentTarget(block.targetType, block.targetValue)
+                        : undefined
                 }
             />
             {block.body && <p className="managed-content-body">{block.body}</p>}

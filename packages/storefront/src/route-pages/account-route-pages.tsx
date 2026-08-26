@@ -7,6 +7,9 @@ import { RoutePageContext as PageContext, RouteGate, useRouteRuntime as useRunti
 const AccountPage = lazy(() =>
     import('../pages/account-page').then(module => ({ default: module.AccountPage })),
 );
+const AnnouncementsPage = lazy(() =>
+    import('../pages/announcements-page').then(module => ({ default: module.AnnouncementsPage })),
+);
 const BrowsingHistoryPage = lazy(() =>
     import('../pages/browsing-history-page').then(module => ({ default: module.BrowsingHistoryPage })),
 );
@@ -18,6 +21,9 @@ const FavoriteProductsPage = lazy(() =>
 );
 const NotificationsPage = lazy(() =>
     import('../pages/notifications-page').then(module => ({ default: module.NotificationsPage })),
+);
+const ReferralPage = lazy(() =>
+    import('../pages/referral-page').then(module => ({ default: module.ReferralPage })),
 );
 
 export function AccountRoutePage() {
@@ -35,9 +41,10 @@ export function AccountRoutePage() {
                     storefrontName: runtime.storefrontName,
                     logoUrl: runtime.logoUrl,
                     favoriteProductCount: runtime.favoriteProductIds.length,
-                    recentProductCount: runtime.recentProductIds.length,
-                    couponCount: runtime.myCoupons.filter((coupon: { usable: boolean }) => coupon.usable)
-                        .length,
+                    announcementCount: runtime.systemAnnouncements.length,
+                    couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
+                        ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),
+                    ).length,
                     addingVariantId: runtime.addingVariantId,
                     onContentTarget: runtime.openContentTarget,
                     onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
@@ -53,6 +60,24 @@ export function AccountRoutePage() {
                 <AccountPage />
             </PageContext>
         </RouteGate>
+    );
+}
+
+export function AnnouncementsRoutePage() {
+    const runtime = useRuntime();
+    return (
+        <PageContext
+            value={{
+                announcements: runtime.systemAnnouncements,
+                loading: runtime.contentQuery.isLoading && runtime.contentQuery.data === undefined,
+                error: runtime.contentError,
+                language: runtime.language,
+                onBack: runtime.goBack,
+                onRetry: () => void runtime.contentQuery.refetch(),
+            }}
+        >
+            <AnnouncementsPage />
+        </PageContext>
     );
 }
 
@@ -141,16 +166,38 @@ export function CouponsRoutePage() {
                 value={{
                     coupons: runtime.activeCoupons,
                     myCoupons: runtime.myCoupons,
+                    usageRecords: runtime.couponUsageRecords,
                     currencyCode: runtime.market.currencyCode,
                     language: runtime.language,
                     loading: runtime.cartLoading,
-                    cartHasItems: (runtime.cart?.totalQuantity ?? 0) > 0,
                     onClaim: runtime.claimCoupon,
-                    onApply: runtime.applyCoupon,
-                    onRemove: runtime.removeCoupon,
                 }}
             >
                 <CouponCenterPage />
+            </PageContext>
+        </RouteGate>
+    );
+}
+
+export function ReferralRoutePage() {
+    const runtime = useRuntime();
+    return (
+        <RouteGate name="referral">
+            <PageContext
+                value={{
+                    api: runtime.api,
+                    customer: runtime.customer,
+                    market: runtime.market,
+                    locale: runtime.locale,
+                    language: runtime.language,
+                    storefrontName: runtime.storefrontName,
+                    logoUrl: runtime.logoUrl,
+                    onBack: runtime.goBack,
+                    onNotify: runtime.notify,
+                    onLogin: () => runtime.navigate({ name: 'login' }),
+                }}
+            >
+                <ReferralPage />
             </PageContext>
         </RouteGate>
     );

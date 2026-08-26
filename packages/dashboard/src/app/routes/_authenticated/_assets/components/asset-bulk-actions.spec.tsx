@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/vdb/graphql/api.js', () => ({
     api: {
-        mutate: () => mocks.deleteAssets,
+        mutate: (_document: unknown, variables: unknown, requestHeaders: unknown) =>
+            mocks.deleteAssets(variables, requestHeaders),
     },
 }));
 
@@ -92,6 +93,17 @@ describe('DeleteAssetsBulkAction', () => {
         });
     }
 
+    async function enterCurrentPassword(dialog: ParentNode) {
+        const input = dialog.querySelector<HTMLInputElement>('input[type="password"]');
+        expect(input).not.toBeNull();
+        await act(async () => {
+            const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+            valueSetter?.call(input, 'Current123!');
+            input?.dispatchEvent(new Event('input', { bubbles: true }));
+            await Promise.resolve();
+        });
+    }
+
     function buttonWithText(text: string, rootElement: ParentNode = document) {
         const button = [...rootElement.querySelectorAll('button')].find(
             candidate => candidate.textContent?.trim() === text,
@@ -109,11 +121,13 @@ describe('DeleteAssetsBulkAction', () => {
         const dialog = document.querySelector('[role="alertdialog"]');
         expect(dialog?.textContent).toContain('Are you sure you want to delete 1 assets?');
 
+        await enterCurrentPassword(dialog ?? document);
         await click(buttonWithText('Delete', dialog ?? document));
 
-        expect(mocks.deleteAssets).toHaveBeenCalledWith({
-            input: { assetIds: ['asset-1'], force: false },
-        });
+        expect(mocks.deleteAssets).toHaveBeenCalledWith(
+            { input: { assetIds: ['asset-1'], force: false } },
+            { 'x-vendure-sensitive-action-password': 'Current123!' },
+        );
         expect(refetch).toHaveBeenCalledOnce();
         expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     });
@@ -127,7 +141,9 @@ describe('DeleteAssetsBulkAction', () => {
         const refetch = await renderAction();
 
         await click(buttonWithText('Delete', container));
-        await click(buttonWithText('Delete', document.querySelector('[role="alertdialog"]') ?? document));
+        const confirmationDialog = document.querySelector('[role="alertdialog"]');
+        await enterCurrentPassword(confirmationDialog ?? document);
+        await click(buttonWithText('Delete', confirmationDialog ?? document));
 
         const usageDialog = document.querySelector('[role="alertdialog"]');
         expect(usageDialog?.textContent).toContain('Asset is in use');
@@ -135,9 +151,11 @@ describe('DeleteAssetsBulkAction', () => {
 
         await click(buttonWithText('Delete anyway', usageDialog ?? document));
 
-        expect(mocks.deleteAssets).toHaveBeenNthCalledWith(2, {
-            input: { assetIds: ['asset-1'], force: true },
-        });
+        expect(mocks.deleteAssets).toHaveBeenNthCalledWith(
+            2,
+            { input: { assetIds: ['asset-1'], force: true } },
+            { 'x-vendure-sensitive-action-password': 'Current123!' },
+        );
         expect(refetch).toHaveBeenCalledOnce();
     });
 });

@@ -4,6 +4,11 @@ import { Permission } from '@vendure/common/lib/generated-types';
 import { PaymentMethod, ShippingMethod, StockLocation } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+    adjustReferralBalancePermission,
+    manageReferralWithdrawalPermission,
+    referralPermission,
+} from './referral/referral.constants';
 import { storeAdministratorPermissions, StoreProvisioningService } from './store-provisioning.service';
 
 function createService() {
@@ -293,6 +298,16 @@ describe('StoreProvisioningService', () => {
         expect(storeAdministratorPermissions).toContain('UpdateStorefrontContent');
         expect(storeAdministratorPermissions).toContain('ReadStoreProfile');
         expect(storeAdministratorPermissions).toContain('UpdateStoreProfile');
+        expect(storeAdministratorPermissions).toEqual(
+            expect.arrayContaining([
+                referralPermission.Create,
+                referralPermission.Read,
+                referralPermission.Update,
+                referralPermission.Delete,
+                manageReferralWithdrawalPermission.Permission,
+                adjustReferralBalancePermission.Permission,
+            ]),
+        );
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateChannel);
         expect(storeAdministratorPermissions).not.toContain(Permission.DeleteChannel);
         expect(storeAdministratorPermissions).not.toContain(Permission.CreateSeller);

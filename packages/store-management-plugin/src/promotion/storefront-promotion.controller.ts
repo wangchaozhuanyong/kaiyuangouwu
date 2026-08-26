@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
 import { isAccountEntryRoute } from './account-entry-proof';
+import { promotionEntryRedirect } from './promotion-entry-destination';
 import { PROMOTION_VISUAL_SCRIPT_SHA256 } from './promotion-visual-script';
 import { StorefrontPromotionAccessService } from './storefront-promotion-access.service';
 import { StorefrontPromotionService } from './storefront-promotion.service';
@@ -27,7 +28,12 @@ export class StorefrontPromotionController {
     }
 
     @Post('enter')
-    async enter(@Req() req: Request, @Res() res: Response, @Body('ticket') ticket?: string): Promise<void> {
+    async enter(
+        @Req() req: Request,
+        @Res() res: Response,
+        @Body('ticket') ticket?: string,
+        @Body('destination') destination?: string,
+    ): Promise<void> {
         const request = await this.accessService.resolveRequest(req);
         if (!request || !ticket || !this.accessService.validateEntryTicket(ticket, request)) {
             res.status(403).type('text/plain').send('入口已失效，请返回推广页重试');
@@ -35,7 +41,7 @@ export class StorefrontPromotionController {
         }
         res.setHeader('Set-Cookie', this.accessService.createEntryCookie(request));
         res.setHeader('Cache-Control', 'no-store');
-        res.redirect(303, '/');
+        res.redirect(303, promotionEntryRedirect(destination));
     }
 
     @Get('access')

@@ -1,4 +1,3 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import {
     CustomerCell,
     OrderMoneyCell,
@@ -142,8 +141,7 @@ function OrderListPage() {
                     header: () => <Trans>Order number</Trans>,
                     cell: ({ cell, row }) => {
                         const value = cell.getValue() as string;
-                        const id = row.original.id;
-                        return <DetailPageButton id={id} label={value} />;
+                        return <span>{value}</span>;
                     },
                 },
                 customer: {
@@ -207,8 +205,8 @@ function OrderListPage() {
                     enableSorting: false,
                 },
             }}
+            primaryRowAction={{ label: <Trans>View</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[{ component: FulfillOrdersBulkAction }]}
-            includeActionsColumn={false}
         >
             <PageActionBarLeft>
                 <Tabs

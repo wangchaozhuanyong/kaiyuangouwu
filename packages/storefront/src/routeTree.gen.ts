@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AccountSecurityRouteImport } from './routes/account-security'
 import { Route as AddressesRouteImport } from './routes/addresses'
+import { Route as AnnouncementsRouteImport } from './routes/announcements'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CategoryRouteImport } from './routes/category'
 import { Route as CheckoutRouteImport } from './routes/checkout'
@@ -34,6 +35,7 @@ import { Route as PaymentRouteImport } from './routes/payment'
 import { Route as ProductRouteImport } from './routes/product'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as RecommendationsRouteImport } from './routes/recommendations'
+import { Route as ReferralRouteImport } from './routes/referral'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReviewsRouteImport } from './routes/reviews'
@@ -59,6 +61,11 @@ const AccountSecurityRoute = AccountSecurityRouteImport.update({
 const AddressesRoute = AddressesRouteImport.update({
   id: '/addresses',
   path: '/addresses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnnouncementsRoute = AnnouncementsRouteImport.update({
+  id: '/announcements',
+  path: '/announcements',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CartRoute = CartRouteImport.update({
@@ -166,6 +173,11 @@ const RecommendationsRoute = RecommendationsRouteImport.update({
   path: '/recommendations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReferralRoute = ReferralRouteImport.update({
+  id: '/referral',
+  path: '/referral',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -202,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/account-security': typeof AccountSecurityRoute
   '/addresses': typeof AddressesRoute
+  '/announcements': typeof AnnouncementsRoute
   '/cart': typeof CartRoute
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
@@ -223,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/product': typeof ProductRoute
   '/purchase': typeof PurchaseRoute
   '/recommendations': typeof RecommendationsRoute
+  '/referral': typeof ReferralRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
@@ -235,6 +249,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/account-security': typeof AccountSecurityRoute
   '/addresses': typeof AddressesRoute
+  '/announcements': typeof AnnouncementsRoute
   '/cart': typeof CartRoute
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
@@ -256,6 +271,7 @@ export interface FileRoutesByTo {
   '/product': typeof ProductRoute
   '/purchase': typeof PurchaseRoute
   '/recommendations': typeof RecommendationsRoute
+  '/referral': typeof ReferralRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
@@ -269,6 +285,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/account-security': typeof AccountSecurityRoute
   '/addresses': typeof AddressesRoute
+  '/announcements': typeof AnnouncementsRoute
   '/cart': typeof CartRoute
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
@@ -290,6 +307,7 @@ export interface FileRoutesById {
   '/product': typeof ProductRoute
   '/purchase': typeof PurchaseRoute
   '/recommendations': typeof RecommendationsRoute
+  '/referral': typeof ReferralRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
@@ -304,6 +322,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/account-security'
     | '/addresses'
+    | '/announcements'
     | '/cart'
     | '/category'
     | '/checkout'
@@ -325,6 +344,7 @@ export interface FileRouteTypes {
     | '/product'
     | '/purchase'
     | '/recommendations'
+    | '/referral'
     | '/register'
     | '/reset-password'
     | '/reviews'
@@ -337,6 +357,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/account-security'
     | '/addresses'
+    | '/announcements'
     | '/cart'
     | '/category'
     | '/checkout'
@@ -358,6 +379,7 @@ export interface FileRouteTypes {
     | '/product'
     | '/purchase'
     | '/recommendations'
+    | '/referral'
     | '/register'
     | '/reset-password'
     | '/reviews'
@@ -370,6 +392,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/account-security'
     | '/addresses'
+    | '/announcements'
     | '/cart'
     | '/category'
     | '/checkout'
@@ -391,6 +414,7 @@ export interface FileRouteTypes {
     | '/product'
     | '/purchase'
     | '/recommendations'
+    | '/referral'
     | '/register'
     | '/reset-password'
     | '/reviews'
@@ -404,6 +428,7 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   AccountSecurityRoute: typeof AccountSecurityRoute
   AddressesRoute: typeof AddressesRoute
+  AnnouncementsRoute: typeof AnnouncementsRoute
   CartRoute: typeof CartRoute
   CategoryRoute: typeof CategoryRoute
   CheckoutRoute: typeof CheckoutRoute
@@ -425,6 +450,7 @@ export interface RootRouteChildren {
   ProductRoute: typeof ProductRoute
   PurchaseRoute: typeof PurchaseRoute
   RecommendationsRoute: typeof RecommendationsRoute
+  ReferralRoute: typeof ReferralRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ReviewsRoute: typeof ReviewsRoute
@@ -461,6 +487,13 @@ declare module '@tanstack/react-router' {
       path: '/addresses'
       fullPath: '/addresses'
       preLoaderRoute: typeof AddressesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/announcements': {
+      id: '/announcements'
+      path: '/announcements'
+      fullPath: '/announcements'
+      preLoaderRoute: typeof AnnouncementsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cart': {
@@ -610,6 +643,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecommendationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/referral': {
+      id: '/referral'
+      path: '/referral'
+      fullPath: '/referral'
+      preLoaderRoute: typeof ReferralRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -660,6 +700,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   AccountSecurityRoute: AccountSecurityRoute,
   AddressesRoute: AddressesRoute,
+  AnnouncementsRoute: AnnouncementsRoute,
   CartRoute: CartRoute,
   CategoryRoute: CategoryRoute,
   CheckoutRoute: CheckoutRoute,
@@ -681,6 +722,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductRoute: ProductRoute,
   PurchaseRoute: PurchaseRoute,
   RecommendationsRoute: RecommendationsRoute,
+  ReferralRoute: ReferralRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ReviewsRoute: ReviewsRoute,

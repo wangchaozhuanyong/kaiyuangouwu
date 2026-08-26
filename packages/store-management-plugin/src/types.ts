@@ -197,6 +197,24 @@ export interface StoreCouponOrderAllocationView {
     refundId: ID | null;
 }
 
+export interface StoreCouponUsageRecordView {
+    id: ID;
+    customerCouponId: ID;
+    campaignId: ID;
+    campaignName: string;
+    campaignKind: StoreCouponCampaignKind;
+    status: 'USED' | 'REFUNDED';
+    currencyCode: CurrencyCode;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+    savedAmount: number;
+    usedAt: Date;
+    refundedAt: Date | null;
+    orderId: ID;
+    orderCode: string;
+}
+
 export interface StoreFlashSaleVariantPriceInput {
     productVariantId: ID;
     salePrice: number;
@@ -229,6 +247,28 @@ export interface StoreFlashSaleView {
     startsAt: Date | null;
     endsAt: Date | null;
     items: StoreFlashSaleItemView[];
+}
+
+export interface StorePromotionNameView {
+    id: ID;
+    name: string;
+}
+
+export interface StoreCouponCampaignActionResult {
+    campaignId: ID;
+    affectedCount: number;
+}
+
+export interface StoreCouponDailyMetricView {
+    date: string;
+    claimedCount: number;
+    redeemedCount: number;
+    refundedCount: number;
+    returnedCount: number;
+    expiredCount: number;
+    revokedCount: number;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
 }
 
 export interface ProvisionStoreAdministratorInput {
@@ -335,4 +375,65 @@ export interface UpdateMyStoreCommerceConfigurationInput {
     estimateMinDays: number;
     estimateMaxDays: number;
     blockedPostalPrefixes: string;
+}
+
+export type StoreCurrencyRateMode = 'AUTO' | 'MANUAL';
+export type StoreCurrencyRoundingMode = 'CENT' | 'TENTH' | 'WHOLE';
+
+export interface StoreCurrencyConfiguration {
+    channelId: ID;
+    channelCode: string;
+    defaultCurrencyCode: CurrencyCode;
+    availableCurrencyCodes: CurrencyCode[];
+    selectorEnabled: boolean;
+    rateMode: StoreCurrencyRateMode;
+    cnyToMyrRate: number;
+    markupPercent: number;
+    roundingMode: StoreCurrencyRoundingMode;
+    rateSource: string | null;
+    rateUpdatedAt: Date | null;
+    pricesUpdatedAt: Date | null;
+    syncedPriceCount: number;
+    usdtDisplayEnabled: boolean;
+    usdtMarkupPercent: number;
+    cnyPerUsdtRate: number | null;
+    myrPerUsdtRate: number | null;
+    usdtRateSource: string | null;
+    usdtRateUpdatedAt: Date | null;
+    usdtRateAvailable: boolean;
+    usdtPaymentConfigured: boolean;
+    usdtPaymentNetwork: string;
+    usdtReceivingAddressMasked: string | null;
+    usdtReceivingAddressFingerprint: string | null;
+}
+
+export interface UpdateStoreCurrencyConfigurationInput {
+    defaultCurrencyCode: CurrencyCode;
+    availableCurrencyCodes: CurrencyCode[];
+    selectorEnabled: boolean;
+    rateMode: StoreCurrencyRateMode;
+    cnyToMyrRate: number;
+    markupPercent: number;
+    roundingMode: StoreCurrencyRoundingMode;
+    usdtDisplayEnabled: boolean;
+    usdtMarkupPercent: number;
+}
+
+export interface StorefrontUsdtCheckoutQuoteView {
+    id: ID;
+    fiatCurrencyCode: string;
+    fiatAmount: number;
+    fiatPerUsdtRate: number;
+    markupPercent: number;
+    usdtAmount: number;
+    source: string;
+    network: string;
+    tokenContractAddress: string;
+    receivingAddress: string;
+    receivingAddressFingerprint: string;
+    paymentStatus: string;
+    transactionId: string | null;
+    settledAt: Date | null;
+    createdAt: Date;
+    expiresAt: Date;
 }

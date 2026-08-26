@@ -261,6 +261,12 @@ export interface Order {
     totalWithTax: number;
     currencyCode: string;
     customer?: { id: string; emailAddress: string } | null;
+    payments?: Array<{
+        id: string;
+        method: string;
+        amount: number;
+        state: string;
+    }>;
     lines: OrderLine[];
     discounts: Array<{ description: string; amountWithTax: number }>;
     taxSummary: OrderTaxSummary[];
@@ -348,6 +354,79 @@ export interface RegisterCustomerInput {
     firstName: string;
     lastName: string;
     password: string;
+}
+
+export interface ReferralProgram {
+    channelId: string;
+    enabled: boolean;
+    rewardRate: number;
+    releaseDelayDays: number;
+    minimumOrderAmount: number;
+    maxRewardPerOrder?: number | null;
+    allowBalanceSpend: boolean;
+    attributionWindowDays: number;
+    defaultPosterTemplate: string;
+    posterTemplates: string[];
+}
+
+export interface ReferralWallet {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    currencyCode: string;
+    availableBalance: number;
+    pendingBalance: number;
+    reservedBalance: number;
+}
+
+export interface ReferralRewardSummary {
+    currencyCode: string;
+    grossReward: number;
+    clawedBackReward: number;
+}
+
+export interface ReferralInvitee {
+    id: string;
+    displayName: string;
+    boundAt: string;
+    firstPaidOrderAt?: string | null;
+}
+
+export interface ReferralLedgerEntry {
+    id: string;
+    createdAt: string;
+    eventType: string;
+    currencyCode: string;
+    availableDelta: number;
+    pendingDelta: number;
+    reservedDelta: number;
+    availableAfter: number;
+    pendingAfter: number;
+    reservedAfter: number;
+    orderId?: string | null;
+    refundId?: string | null;
+    withdrawalId?: string | null;
+    actorType: string;
+    note?: string | null;
+}
+
+export interface MyReferralOverview {
+    enabled: boolean;
+    rewardRate: number;
+    releaseDelayDays: number;
+    inviteCode: string;
+    wallets: ReferralWallet[];
+    invitedCount: number;
+    purchasedInviteeCount: number;
+    rewardSummaries: ReferralRewardSummary[];
+    invitees: ReferralInvitee[];
+    ledger: ReferralLedgerEntry[];
+}
+
+export interface ReferralBalancePaymentResult {
+    order: Order;
+    wallet: ReferralWallet;
+    amount: number;
 }
 
 export interface ActiveCustomer {
@@ -441,10 +520,45 @@ export interface StorefrontConfig {
     }>;
     logoUrl?: string | null;
     description?: string | null;
+    currencyConfiguration?: StorefrontCurrencyConfiguration;
     customFields: {
         storefrontNameZh?: string | null;
         storefrontNameEn?: string | null;
     };
+}
+
+export interface StorefrontCurrencyConfiguration {
+    defaultCurrencyCode: string;
+    availableCurrencyCodes: string[];
+    selectorEnabled: boolean;
+    cnyToMyrRate: number;
+    rateUpdatedAt?: string | null;
+    usdtDisplayEnabled: boolean;
+    usdtMarkupPercent: number;
+    cnyPerUsdtRate: number | null;
+    myrPerUsdtRate: number | null;
+    usdtRateSource: string | null;
+    usdtRateUpdatedAt: string | null;
+    usdtRateAvailable: boolean;
+}
+
+export interface StorefrontUsdtCheckoutQuote {
+    id: string;
+    fiatCurrencyCode: string;
+    fiatAmount: number;
+    fiatPerUsdtRate: number;
+    markupPercent: number;
+    usdtAmount: number;
+    source: string;
+    network: string;
+    tokenContractAddress: string;
+    receivingAddress: string;
+    receivingAddressFingerprint: string;
+    paymentStatus: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED';
+    transactionId: string | null;
+    settledAt: string | null;
+    createdAt: string;
+    expiresAt: string;
 }
 
 export type StorefrontContentBlockType =
@@ -523,6 +637,7 @@ export interface StorefrontCouponCampaign {
     endsAt: string | null;
     claimStartsAt: string | null;
     claimEndsAt: string | null;
+    validityDays: number | null;
     minimumSpend: number;
     discountAmount: number | null;
     discountRate: number | null;
@@ -553,6 +668,24 @@ export interface StoreCustomerCoupon {
     usedOrderId: string | null;
     returnCount: number;
     usable: boolean;
+}
+
+export interface StoreCouponUsageRecord {
+    id: string;
+    customerCouponId: string;
+    campaignId: string;
+    campaignName: string;
+    campaignKind: StorefrontCouponCampaignKind;
+    status: 'USED' | 'REFUNDED';
+    currencyCode: string;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+    savedAmount: number;
+    usedAt: string;
+    refundedAt: string | null;
+    orderId: string;
+    orderCode: string;
 }
 
 export interface StorefrontFlashSaleItem {

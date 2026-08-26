@@ -1,4 +1,8 @@
 import { useAllBulkActions } from '@/vdb/components/data-table/use-all-bulk-actions.js';
+import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
 import { toast } from '@/vdb/components/ui/sonner.js';
 import { DisplayComponent } from '@/vdb/framework/component-registry/display-component.js';
 import {
@@ -16,9 +20,11 @@ import { api } from '@/vdb/graphql/api.js';
 import { usePageBlock } from '@/vdb/hooks/use-page-block.js';
 import { usePage } from '@/vdb/hooks/use-page.js';
 import { usePaginatedList } from '@/vdb/hooks/use-paginated-list.js';
+import { usePermissions } from '@/vdb/hooks/use-permissions.js';
 import { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import {
     AccessorFnColumnDef,
     AccessorKeyColumnDef,
@@ -27,13 +33,14 @@ import {
     Row,
 } from '@tanstack/react-table';
 import { EllipsisIcon, TrashIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
     AdditionalColumns,
     AllItemFieldKeys,
     CustomizeColumnConfig,
     FacetedFilterConfig,
     PaginatedListItemFields,
+    PrimaryRowAction,
     RowAction,
 } from '../shared/paginated-list-data-table.js';
 import {
@@ -73,6 +80,7 @@ import { DataTableColumnHeader } from './data-table-column-header.js';
 export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
     fields,
     customizeColumns,
+    primaryRowAction,
     rowActions,
     bulkActions,
     deleteMutation,
@@ -85,6 +93,7 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
 }: Readonly<{
     fields: FieldInfo[];
     customizeColumns?: CustomizeColumnConfig<T>;
+    primaryRowAction?: PrimaryRowAction<PaginatedListItemFields<T>>;
     rowActions?: RowAction<PaginatedListItemFields<T>>[];
     bulkActions?: BulkActionsInput;
     deleteMutation?: TypedDocumentNode<any, any>;
@@ -103,6 +112,11 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
     const { t } = useLingui();
     const columnHelper = createColumnHelper<PaginatedListItemFields<T>>();
     const allBulkActions = useAllBulkActions(bulkActions ?? []);
+    const { hasPermissions } = usePermissions();
+    const allowedPrimaryRowAction =
+        primaryRowAction?.requiresPermission && !hasPermissions(primaryRowAction.requiresPermission)
+            ? undefined
+            : primaryRowAction;
 
     const { columns, customFieldColumnNames } = useMemo(() => {
         const columnConfigs: Array<{ fieldInfo: FieldInfo; isCustomField: boolean }> = [];
@@ -199,8 +213,16 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
             finalColumns = [...orderedColumns, ...remainingColumns];
         }
 
-        if (includeActionsColumn && (rowActions || deleteMutation || bulkActions)) {
-            const rowActionColumn = getRowActions(rowActions, deleteMutation, allBulkActions);
+        if (
+            includeActionsColumn &&
+            (allowedPrimaryRowAction || rowActions || deleteMutation || bulkActions)
+        ) {
+            const rowActionColumn = getRowActions(
+                allowedPrimaryRowAction,
+                rowActions,
+                deleteMutation,
+                allBulkActions,
+            );
             if (rowActionColumn) {
                 finalColumns.push(rowActionColumn);
             }
@@ -235,18 +257,37 @@ export function useGeneratedColumns<T extends TypedDocumentNode<any, any>>({
         }
 
         return { columns: finalColumns, customFieldColumnNames };
-    }, [fields, customizeColumns, rowActions, deleteMutation, additionalColumns, defaultColumnOrder, t]);
+    }, [
+        fields,
+        customizeColumns,
+        allowedPrimaryRowAction,
+        rowActions,
+        deleteMutation,
+        bulkActions,
+        additionalColumns,
+        defaultColumnOrder,
+        facetedFilters,
+        includeSelectionColumn,
+        includeActionsColumn,
+        enableSorting,
+        allBulkActions,
+        pageId,
+        pageBlock?.blockId,
+        t,
+    ]);
 
     return { columns, customFieldColumnNames };
 }
 
-function getRowActions(
+export function getRowActions(
+    primaryRowAction?: PrimaryRowAction<any>,
     rowActions?: RowAction<any>[],
     deleteMutation?: TypedDocumentNode<any, any>,
     bulkActionGroups?: BulkActionGroup[],
 ): AccessorKeyColumnDef<any> | undefined {
     const hasRowActions = rowActions && rowActions.length > 0;
     const hasBulkActions = bulkActionGroups?.some(g => g.actions.length > 0);
+    const hasOverflowActions = Boolean(hasRowActions || hasBulkActions || deleteMutation);
 
     return {
         id: 'actions',
@@ -255,59 +296,113 @@ function getRowActions(
         enableColumnFilter: false,
         enableHiding: false,
         cell: ({ row, table }) => {
+            const primaryActionHidden = primaryRowAction?.hidden?.(row) ?? false;
+            const primaryActionLabel =
+                typeof primaryRowAction?.label === 'function'
+                    ? primaryRowAction.label(row)
+                    : primaryRowAction?.label;
+            const primaryActionHref =
+                typeof primaryRowAction?.href === 'function'
+                    ? primaryRowAction.href(row)
+                    : primaryRowAction?.href;
+            const primaryActionDisabled =
+                typeof primaryRowAction?.disabled === 'function'
+                    ? primaryRowAction.disabled(row)
+                    : primaryRowAction?.disabled;
+            const primaryActionAriaLabel =
+                typeof primaryRowAction?.ariaLabel === 'function'
+                    ? primaryRowAction.ariaLabel(row)
+                    : primaryRowAction?.ariaLabel;
+            const primaryActionTitle =
+                typeof primaryRowAction?.title === 'function'
+                    ? primaryRowAction.title(row)
+                    : primaryRowAction?.title;
+            const PrimaryActionIcon = primaryRowAction?.icon;
+
             return (
-                <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon" data-testid="dt-row-actions-trigger" />}
-                    >
-                        <EllipsisIcon aria-hidden="true" />
-                        <span className="sr-only">
-                            <Trans>More actions</Trans>
-                        </span>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="min-w-56">
-                        {hasRowActions && (
-                            <DropdownMenuGroup>
-                                {rowActions.map((action, index) => (
-                                    <DropdownMenuItem
-                                        onClick={() => action.onClick?.(row)}
-                                        key={`${action.label}-${index}`}
-                                    >
-                                        {action.label}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuGroup>
-                        )}
-                        {hasBulkActions &&
-                            bulkActionGroups?.map((group, groupIndex) => {
-                                if (group.actions.length === 0) return null;
-                                const showSeparator = hasRowActions || groupIndex > 0;
-                                return (
-                                    <div key={`group-${groupIndex}`}>
-                                        {showSeparator && <DropdownMenuSeparator />}
-                                        <DropdownMenuGroup>
-                                            {group.label && (
-                                                <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-                                            )}
-                                            {group.actions.map((action, index) => (
-                                                <action.component
-                                                    key={`bulk-action-${groupIndex}-${index}`}
-                                                    selection={[row.original]}
-                                                    table={table}
-                                                />
-                                            ))}
-                                        </DropdownMenuGroup>
-                                    </div>
-                                );
-                            })}
-                        {deleteMutation && (hasRowActions || hasBulkActions) && <DropdownMenuSeparator />}
-                        {deleteMutation && (
-                            <DropdownMenuGroup>
-                                <DeleteMutationRowAction deleteMutation={deleteMutation} row={row} />
-                            </DropdownMenuGroup>
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="flex items-center gap-1">
+                    {primaryRowAction && !primaryActionHidden && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={primaryActionDisabled}
+                            aria-label={primaryActionAriaLabel}
+                            title={primaryActionTitle}
+                            onClick={() => primaryRowAction.onClick?.(row)}
+                            render={
+                                primaryActionHref ? (
+                                    <Link to={primaryActionHref} preload={false} />
+                                ) : undefined
+                            }
+                            data-testid="dt-row-primary-action"
+                        >
+                            {PrimaryActionIcon && <PrimaryActionIcon className="h-4 w-4" />}
+                            {primaryActionLabel}
+                        </Button>
+                    )}
+                    {hasOverflowActions && (
+                        <DropdownMenu modal={false}>
+                            <DropdownMenuTrigger
+                                render={
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        data-testid="dt-row-actions-trigger"
+                                    />
+                                }
+                            >
+                                <EllipsisIcon aria-hidden="true" />
+                                <span className="sr-only">
+                                    <Trans>More actions</Trans>
+                                </span>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="min-w-56">
+                                {hasRowActions && (
+                                    <DropdownMenuGroup>
+                                        {rowActions.map((action, index) => (
+                                            <DropdownMenuItem
+                                                onClick={() => action.onClick?.(row)}
+                                                key={`${action.label}-${index}`}
+                                            >
+                                                {action.label}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuGroup>
+                                )}
+                                {hasBulkActions &&
+                                    bulkActionGroups?.map((group, groupIndex) => {
+                                        if (group.actions.length === 0) return null;
+                                        const showSeparator = hasRowActions || groupIndex > 0;
+                                        return (
+                                            <div key={`group-${groupIndex}`}>
+                                                {showSeparator && <DropdownMenuSeparator />}
+                                                <DropdownMenuGroup>
+                                                    {group.label && (
+                                                        <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                                                    )}
+                                                    {group.actions.map((action, index) => (
+                                                        <action.component
+                                                            key={`bulk-action-${groupIndex}-${index}`}
+                                                            selection={[row.original]}
+                                                            table={table}
+                                                        />
+                                                    ))}
+                                                </DropdownMenuGroup>
+                                            </div>
+                                        );
+                                    })}
+                                {deleteMutation && (hasRowActions || hasBulkActions) && (
+                                    <DropdownMenuSeparator />
+                                )}
+                                {deleteMutation && (
+                                    <DropdownMenuGroup>
+                                        <DeleteMutationRowAction deleteMutation={deleteMutation} row={row} />
+                                    </DropdownMenuGroup>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
+                </div>
             );
         },
     };
@@ -373,13 +468,16 @@ function DeleteMutationRowAction({
 }>) {
     const { refetchPaginatedList } = usePaginatedList();
     const { t } = useLingui();
+    const [open, setOpen] = useState(false);
+    const [password, setPassword] = useState('');
 
     // Inspect the mutation variables to determine if it expects 'id' or 'ids'
     const mutationVariables = getOperationVariablesFields(deleteMutation);
     const hasIdsParameter = mutationVariables.some(field => field.name === 'ids');
 
-    const { mutate: deleteMutationFn } = useMutation({
-        mutationFn: api.mutate(deleteMutation),
+    const { mutate: deleteMutationFn, isPending } = useMutation({
+        mutationFn: ({ variables, password }: { variables: Record<string, unknown>; password: string }) =>
+            api.mutate(deleteMutation, variables, sensitiveActionHeaders(password)),
         onSuccess: (result: {
             [key: string]:
                 | { result: 'DELETED' | 'NOT_DELETED'; message: string }
@@ -394,6 +492,8 @@ function DeleteMutationRowAction({
             if (resultToCheck.result === 'DELETED') {
                 refetchPaginatedList();
                 toast.success(t`Deleted successfully`);
+                setOpen(false);
+                setPassword('');
             } else {
                 toast.error(t`Failed to delete`, {
                     description: resultToCheck.message,
@@ -407,8 +507,18 @@ function DeleteMutationRowAction({
         },
     });
     return (
-        <AlertDialog>
-            <AlertDialogTrigger nativeButton={false} render={<DropdownMenuItem closeOnClick={false} />}>
+        <AlertDialog
+            open={open}
+            onOpenChange={nextOpen => {
+                if (isPending) return;
+                setOpen(nextOpen);
+                if (!nextOpen) setPassword('');
+            }}
+        >
+            <AlertDialogTrigger
+                nativeButton={false}
+                render={<DropdownMenuItem closeOnClick={false} onClick={() => setOpen(true)} />}
+            >
                 <div className="flex items-center gap-2">
                     <TrashIcon className="w-4 h-4" />
                     <Trans>Delete</Trans>
@@ -425,20 +535,22 @@ function DeleteMutationRowAction({
                         </Trans>
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                <SensitiveActionPasswordField value={password} onChange={setPassword} disabled={isPending} />
                 <AlertDialogFooter>
-                    <AlertDialogCancel>
+                    <AlertDialogCancel disabled={isPending}>
                         <Trans>Cancel</Trans>
                     </AlertDialogCancel>
                     <AlertDialogAction
                         onClick={() => {
                             // Pass variables based on what the mutation expects
                             if (hasIdsParameter) {
-                                deleteMutationFn({ ids: [row.original.id] });
+                                deleteMutationFn({ variables: { ids: [row.original.id] }, password });
                             } else {
                                 // Fallback to single id if we can't determine the format
-                                deleteMutationFn({ id: row.original.id });
+                                deleteMutationFn({ variables: { id: row.original.id }, password });
                             }
                         }}
+                        disabled={!password || isPending}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                         <Trans>Delete</Trans>

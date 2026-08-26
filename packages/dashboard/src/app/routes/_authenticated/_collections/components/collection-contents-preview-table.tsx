@@ -1,11 +1,9 @@
 import { PaginatedListDataTable } from '@/vdb/components/shared/paginated-list-data-table.js';
 import { Alert, AlertDescription, AlertTitle } from '@/vdb/components/ui/alert.js';
-import { Button } from '@/vdb/components/ui/button.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import { Trans } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { PreviewCollectionVariantsInput } from '@vendure/common/lib/generated-types';
 import { Eye } from 'lucide-react';
@@ -113,17 +111,12 @@ export function CollectionContentsPreviewTable({
                         customizeColumns={{
                             name: {
                                 header: () => <Trans>Product SKU name</Trans>,
-                                cell: ({ row }) => {
-                                    return (
-                                        <Button
-                                            render={<Link to={`../../product-variants/${row.original.id}`} />}
-                                            variant="ghost"
-                                        >
-                                            {row.original.name}{' '}
-                                        </Button>
-                                    );
-                                },
+                                cell: ({ row }) => <span>{row.original.name}</span>,
                             },
+                        }}
+                        primaryRowAction={{
+                            label: <Trans>View</Trans>,
+                            href: row => `../../product-variants/${row.original.id}`,
                         }}
                         page={page}
                         itemsPerPage={pageSize}

@@ -3,13 +3,11 @@ import {
     PaginatedListDataTable,
     PaginatedListDataTableKey,
 } from '@/vdb/components/shared/paginated-list-data-table.js';
-import { Button } from '@/vdb/components/ui/button.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { api } from '@/vdb/graphql/api.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -106,16 +104,13 @@ export function CustomerGroupMembersTable({
                         header: t`Name`,
                         cell: ({ row }) => {
                             const value = `${row.original.firstName} ${row.original.lastName}`;
-                            return (
-                                <Button
-                                    render={<Link to="/customers/$id" params={{ id: row.original.id }} />}
-                                    variant="ghost"
-                                >
-                                    {value}
-                                </Button>
-                            );
+                            return <span>{value}</span>;
                         },
                     },
+                }}
+                primaryRowAction={{
+                    label: <Trans>View</Trans>,
+                    href: row => `/customers/${row.original.id}`,
                 }}
                 defaultColumnOrder={['name', 'emailAddress']}
                 defaultVisibility={{

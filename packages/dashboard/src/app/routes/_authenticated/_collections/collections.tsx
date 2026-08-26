@@ -1,5 +1,8 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
+import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -12,7 +15,6 @@ import {
     AlertDialogTrigger,
 } from '@/vdb/components/ui/alert-dialog.js';
 import { Button } from '@/vdb/components/ui/button.js';
-import { Switch } from '@/vdb/components/ui/switch.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { PageActionBarLeft } from '@/vdb/framework/layout-engine/page-layout.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
@@ -39,13 +41,17 @@ import {
     collectionListDocument,
     deleteCollectionDocument,
     moveCollectionDocument,
-    updateCollectionDocument,
 } from './collections.graphql.js';
 import { CollectionContentsSheet } from './components/collection-contents-sheet.js';
 import {
     CollectionQuickCreateParent,
     CollectionQuickCreateSheet,
 } from './components/collection-quick-create-sheet.js';
+import { updateCollectionVisibility } from './components/collection-visibility-state.js';
+import {
+    CollectionVisibilitySwitch,
+    CollectionVisibilityValue,
+} from './components/collection-visibility-switch.js';
 
 function parseExpandedParam(expanded?: string): ExpandedState {
     if (!expanded) return {};
@@ -87,48 +93,14 @@ type LoadMoreRow = {
 
 type CollectionOrLoadMore = Collection | LoadMoreRow;
 
+type ChildCollectionQueryData = {
+    collectionId: string;
+    items: Collection[];
+    totalItems: number;
+};
+
 function isLoadMoreRow(row: CollectionOrLoadMore): row is LoadMoreRow {
     return '_isLoadMore' in row && row._isLoadMore === true;
-}
-
-function CollectionVisibilitySwitch({ collection }: Readonly<{ collection: Collection }>) {
-    const { t } = useLingui();
-    const queryClient = useQueryClient();
-    const [isUpdating, setIsUpdating] = useState(false);
-
-    const handleVisibilityChange = async (checked: boolean) => {
-        setIsUpdating(true);
-        try {
-            await api.mutate(updateCollectionDocument, {
-                input: { id: collection.id, isPrivate: !checked },
-            });
-            await queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
-            toast.success(
-                checked
-                    ? t`Collection is now visible in the storefront`
-                    : t`Collection is now hidden from the storefront`,
-            );
-        } catch (error) {
-            console.error('Failed to update collection visibility:', error);
-            toast.error(t`Failed to update storefront visibility`);
-        } finally {
-            setIsUpdating(false);
-        }
-    };
-
-    return (
-        <div className="flex items-center gap-2">
-            <Switch
-                checked={!collection.isPrivate}
-                disabled={isUpdating}
-                onCheckedChange={handleVisibilityChange}
-                aria-label={t`${collection.name} storefront visibility`}
-            />
-            <span className="text-xs text-muted-foreground">
-                {collection.isPrivate ? t`Hidden` : t`Visible`}
-            </span>
-        </div>
-    );
 }
 
 function CollectionDeleteButton({
@@ -141,12 +113,17 @@ function CollectionDeleteButton({
     const { t } = useLingui();
     const [open, setOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [password, setPassword] = useState('');
     const hasChildren = Boolean(collection.children?.length);
 
     const handleDelete = async () => {
         setIsDeleting(true);
         try {
-            const result = await api.mutate(deleteCollectionDocument, { id: collection.id });
+            const result = await api.mutate(
+                deleteCollectionDocument,
+                { id: collection.id },
+                sensitiveActionHeaders(password),
+            );
             if (result.deleteCollection.result !== 'DELETED') {
                 toast.error(t`Failed to delete`, {
                     description: result.deleteCollection.message,
@@ -156,6 +133,7 @@ function CollectionDeleteButton({
 
             await onDeleted();
             toast.success(t`Deleted successfully`);
+            setPassword('');
             setOpen(false);
         } catch (error) {
             toast.error(t`Failed to delete`, {
@@ -167,7 +145,17 @@ function CollectionDeleteButton({
     };
 
     return (
-        <AlertDialog open={open} onOpenChange={isDeleting ? undefined : setOpen}>
+        <AlertDialog
+            open={open}
+            onOpenChange={
+                isDeleting
+                    ? undefined
+                    : nextOpen => {
+                          setOpen(nextOpen);
+                          if (!nextOpen) setPassword('');
+                      }
+            }
+        >
             <AlertDialogTrigger
                 render={
                     <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" />
@@ -193,12 +181,13 @@ function CollectionDeleteButton({
                         )}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                <SensitiveActionPasswordField value={password} onChange={setPassword} disabled={isDeleting} />
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={isDeleting}>
                         <Trans>Cancel</Trans>
                     </AlertDialogCancel>
                     <AlertDialogAction
-                        disabled={isDeleting}
+                        disabled={isDeleting || !password}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         onClick={event => {
                             event.preventDefault();
@@ -229,6 +218,54 @@ function CollectionListPage() {
     const [nextPageToFetch, setNextPageToFetch] = useState<Record<string, number>>({});
     const [quickCreateOpen, setQuickCreateOpen] = useState(false);
     const [quickCreateParent, setQuickCreateParent] = useState<CollectionQuickCreateParent>();
+
+    const handleVisibilityUpdated = useCallback(
+        ({ id, isPrivate }: CollectionVisibilityValue) => {
+            queryClient.setQueriesData<ResultOf<typeof collectionListDocument>>(
+                { queryKey: ['PaginatedListDataTable'] },
+                cachedData => {
+                    if (!cachedData?.collections?.items) {
+                        return cachedData;
+                    }
+                    const items = updateCollectionVisibility(cachedData.collections.items, id, isPrivate);
+                    if (items === cachedData.collections.items) {
+                        return cachedData;
+                    }
+                    return {
+                        ...cachedData,
+                        collections: {
+                            ...cachedData.collections,
+                            items,
+                        },
+                    };
+                },
+            );
+            queryClient.setQueriesData<ChildCollectionQueryData>(
+                { queryKey: ['childCollections'] },
+                cachedData => {
+                    if (!cachedData) {
+                        return cachedData;
+                    }
+                    const items = updateCollectionVisibility(cachedData.items, id, isPrivate);
+                    return items === cachedData.items ? cachedData : { ...cachedData, items };
+                },
+            );
+            setAccumulatedChildren(current => {
+                let hasUpdates = false;
+                const updatedEntries = Object.entries(current).map(([parentId, childData]) => {
+                    const items = updateCollectionVisibility(childData.items, id, isPrivate);
+                    if (items === childData.items) {
+                        return [parentId, childData] as const;
+                    }
+                    hasUpdates = true;
+                    return [parentId, { ...childData, items }] as const;
+                });
+                return hasUpdates ? Object.fromEntries(updatedEntries) : current;
+            });
+            void queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
+        },
+        [queryClient],
+    );
 
     const openQuickCreate = (parent?: CollectionQuickCreateParent) => {
         setQuickCreateParent(parent);
@@ -568,7 +605,7 @@ function CollectionListPage() {
                                         <ChevronRight className="ml-3 h-4 w-4 shrink-0 text-muted-foreground" />
                                     )}
                                     <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                                        <DetailPageButton id={original.id} label={original.name} />
+                                        <span className="truncate">{original.name}</span>
                                         {isTopLevel ? (
                                             <PermissionGuard requires={['CreateCollection', 'CreateCatalog']}>
                                                 <Button
@@ -651,7 +688,12 @@ function CollectionListPage() {
                     },
                     isPrivate: {
                         header: () => <Trans>Storefront visibility</Trans>,
-                        cell: ({ row }) => <CollectionVisibilitySwitch collection={row.original} />,
+                        cell: ({ row }) => (
+                            <CollectionVisibilitySwitch
+                                collection={row.original}
+                                onVisibilityUpdated={handleVisibilityUpdated}
+                            />
+                        ),
                     },
                     position: {
                         header: () => <Trans>Order</Trans>,

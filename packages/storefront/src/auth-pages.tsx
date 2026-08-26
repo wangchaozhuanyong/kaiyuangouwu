@@ -6,6 +6,7 @@ import {
     Eye,
     EyeOff,
     Fingerprint,
+    Gift,
     LockKeyhole,
     Mail,
     UserRound,
@@ -19,6 +20,13 @@ import {
     validateAccountPassword,
 } from './auth-validation';
 import { authVisualAccentColor, resolveAuthVisualMessage } from './auth-visual';
+import {
+    attributionWithinWindow,
+    captureReferralAttribution,
+    normalizeReferralCode,
+    ReferralSource,
+} from './referral-attribution';
+import { isReferralClientFeatureEnabled } from './referral-client-feature';
 import { storefrontWebpUrl } from './responsive-image';
 import {
     AUTH_HERO_FALLBACK_IMAGE,
@@ -334,6 +342,29 @@ export function RegisterPage({
     const [error, setError] = useState('');
     const [resendMessage, setResendMessage] = useState('');
     const [resendSeconds, setResendSeconds] = useState(0);
+    const [referralEnabled, setReferralEnabled] = useState(false);
+    const [inviteCode, setInviteCode] = useState('');
+    const [inviteSource, setInviteSource] = useState<ReferralSource>('CODE');
+    const [inviteStatus, setInviteStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+
+    useEffect(() => {
+        const controller = new AbortController();
+        void api
+            .referralProgram(controller.signal)
+            .then(program => {
+                setReferralEnabled(isReferralClientFeatureEnabled(program));
+                const captured = attributionWithinWindow(
+                    captureReferralAttribution(),
+                    program.attributionWindowDays,
+                );
+                if (captured) {
+                    setInviteCode(captured.code);
+                    setInviteSource(captured.source);
+                }
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, [api]);
 
     useEffect(() => {
         if (resendSeconds <= 0) return;
@@ -364,12 +395,24 @@ export function RegisterPage({
         setError('');
         try {
             const emailAddress = formString(data, 'emailAddress').trim();
-            await api.registerCustomerAccount({
-                emailAddress,
-                firstName,
-                lastName,
-                password,
-            });
+            const submittedInviteCode = referralEnabled
+                ? normalizeReferralCode(formString(data, 'inviteCode'))
+                : '';
+            if (submittedInviteCode && !(await api.validateReferralInviteCode(submittedInviteCode))) {
+                setInviteStatus('invalid');
+                setError(isZh ? '邀请码无效，请检查后重试' : 'This invitation code is invalid');
+                return;
+            }
+            await api.registerCustomerAccount(
+                {
+                    emailAddress,
+                    firstName,
+                    lastName,
+                    password,
+                },
+                submittedInviteCode || undefined,
+                submittedInviteCode ? inviteSource : undefined,
+            );
             setRegisteredEmail(emailAddress);
             setResendSeconds(60);
         } catch (requestError) {
@@ -497,6 +540,56 @@ export function RegisterPage({
                             revealPassword
                             language={language}
                         />
+                        {referralEnabled && (
+                            <>
+                                <Field
+                                    name="inviteCode"
+                                    label={isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
+                                    autoComplete="off"
+                                    maxLength={12}
+                                    icon={<Gift />}
+                                    required={false}
+                                    value={inviteCode}
+                                    onChange={value => {
+                                        setInviteCode(normalizeReferralCode(value));
+                                        setInviteSource('CODE');
+                                        setInviteStatus('idle');
+                                    }}
+                                    onBlur={value => {
+                                        const code = normalizeReferralCode(value);
+                                        if (!code) {
+                                            setInviteStatus('idle');
+                                            return;
+                                        }
+                                        setInviteStatus('checking');
+                                        void api
+                                            .validateReferralInviteCode(code)
+                                            .then(valid => setInviteStatus(valid ? 'valid' : 'invalid'))
+                                            .catch(() => setInviteStatus('idle'));
+                                    }}
+                                />
+                                {inviteStatus !== 'idle' && (
+                                    <small
+                                        className={
+                                            inviteStatus === 'invalid' ? 'form-error' : 'auth-success-message'
+                                        }
+                                        role={inviteStatus === 'invalid' ? 'alert' : 'status'}
+                                    >
+                                        {inviteStatus === 'checking'
+                                            ? isZh
+                                                ? '正在验证邀请码…'
+                                                : 'Checking invitation code…'
+                                            : inviteStatus === 'valid'
+                                              ? isZh
+                                                  ? '邀请码有效，注册后将自动绑定邀请关系'
+                                                  : 'Valid code. Your referral will be linked after registration.'
+                                              : isZh
+                                                ? '邀请码无效，不填写也可以正常注册'
+                                                : 'Invalid code. You can leave this field empty.'}
+                                    </small>
+                                )}
+                            </>
+                        )}
                         <Field
                             name="confirmPassword"
                             label={isZh ? '确认密码' : 'Confirm password'}
@@ -1042,6 +1135,10 @@ function Field({
     revealPassword = false,
     language = 'en',
     wide = true,
+    required = true,
+    value,
+    onChange,
+    onBlur,
 }: {
     name: string;
     label: string;
@@ -1053,6 +1150,10 @@ function Field({
     revealPassword?: boolean;
     language?: StorefrontLanguage;
     wide?: boolean;
+    required?: boolean;
+    value?: string;
+    onChange?: (value: string) => void;
+    onBlur?: (value: string) => void;
 }) {
     const inputId = useId();
     const [passwordVisible, setPasswordVisible] = useState(false);
@@ -1070,11 +1171,14 @@ function Field({
             id={inputId}
             name={name}
             type={inputType}
-            required
+            required={required}
             autoComplete={autoComplete}
             minLength={minLength}
             maxLength={maxLength}
             placeholder={label}
+            value={value}
+            onChange={onChange ? event => onChange(event.currentTarget.value) : undefined}
+            onBlur={onBlur ? event => onBlur(event.currentTarget.value) : undefined}
         />
     );
 

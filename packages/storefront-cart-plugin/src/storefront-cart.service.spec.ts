@@ -37,6 +37,12 @@ describe('production payment readiness', () => {
                 handlers,
             ),
         ).toBe(false);
+        expect(
+            isRegisteredProductionPaymentMethod(
+                method('referral-balance', 'referral-balance-payment', '邀请返利余额'),
+                new Set(['referral-balance-payment']),
+            ),
+        ).toBe(false);
     });
 });
 

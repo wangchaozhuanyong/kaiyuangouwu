@@ -42,6 +42,12 @@ import { AddCouponLifecycle1787677200000 } from './1787677200000-add-coupon-life
 import { AlignAfterSalesAutoCardSchema1787680800000 } from './1787680800000-align-after-sales-auto-card-schema';
 import { AlignProductionMysqlSchema1787682600000 } from './1787682600000-align-production-mysql-schema';
 import { SeedSimplifiedChineseSourceTranslations1787684400000 } from './1787684400000-seed-simplified-chinese-source-translations';
+import { AddStorefrontMultiCurrency1787763600000 } from './1787763600000-add-storefront-multi-currency';
+import { AlignStorefrontMultiCurrency1787767200000 } from './1787767200000-align-storefront-multi-currency';
+import { NormalizeStorefrontExchangeRate1787770800000 } from './1787770800000-normalize-storefront-exchange-rate';
+import { AddReferralRebate1787774400000 } from './1787774400000-add-referral-rebate';
+import { AddStorefrontUsdtDisplay1787778000000 } from './1787778000000-add-storefront-usdt-display';
+import { AddUsdtTrc20Payments1787781600000 } from './1787781600000-add-usdt-trc20-payments';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -88,4 +94,10 @@ export const devServerMigrations = [
     AlignAfterSalesAutoCardSchema1787680800000,
     AlignProductionMysqlSchema1787682600000,
     SeedSimplifiedChineseSourceTranslations1787684400000,
+    AddStorefrontMultiCurrency1787763600000,
+    AlignStorefrontMultiCurrency1787767200000,
+    NormalizeStorefrontExchangeRate1787770800000,
+    AddReferralRebate1787774400000,
+    AddStorefrontUsdtDisplay1787778000000,
+    AddUsdtTrc20Payments1787781600000,
 ];

@@ -664,6 +664,11 @@ msgstr "有效行"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
+msgid "operations.autoCard.viewOrder"
+msgstr "查看订单"
+
+#. js-lingui-explicit-id
+#: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.waiting"
 msgstr "等待补货"
 

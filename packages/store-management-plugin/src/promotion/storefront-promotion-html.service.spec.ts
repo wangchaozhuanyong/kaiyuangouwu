@@ -15,6 +15,21 @@ const bindings: StorefrontPromotionBindings = {
     'store.heroImageUrl': 'https://shop.example.com/assets/preview/hero.jpg?format=webp',
     'store.currentYear': '2026',
     'store.language': 'zh-CN',
+    'store.featuredProduct1Id': '101',
+    'store.featuredProduct1Name': 'AI 接口月度方案',
+    'store.featuredProduct1Description': '适合个人项目的按月服务方案',
+    'store.featuredProduct1PriceLabel': '¥39.00 起',
+    'store.featuredProduct1ImageUrl': 'https://shop.example.com/assets/preview/product-1.jpg?format=webp',
+    'store.featuredProduct2Id': '102',
+    'store.featuredProduct2Name': '生产力软件订阅',
+    'store.featuredProduct2Description': '常用软件订阅与授权',
+    'store.featuredProduct2PriceLabel': '¥69.00 起',
+    'store.featuredProduct2ImageUrl': '',
+    'store.featuredProduct3Id': '',
+    'store.featuredProduct3Name': '',
+    'store.featuredProduct3Description': '',
+    'store.featuredProduct3PriceLabel': '',
+    'store.featuredProduct3ImageUrl': '',
 };
 
 describe('StorefrontPromotionHtmlService', () => {
@@ -69,8 +84,48 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('data-promo-signal-canvas');
         expect(service.defaultTemplate).toContain('data-promo-signal-core-logo');
         expect(service.defaultTemplate).toContain('data-store-entry');
-        expect(service.defaultTemplateVersion).toBe(4);
+        expect(service.defaultTemplateVersion).toBe(6);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
+    });
+
+    it('renders real product bindings and normalizes product entry destinations', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: service.defaultTemplate,
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html).toContain('AI 接口月度方案');
+        expect(html).toContain('¥39.00 起');
+        expect(html).toContain('name="destination" value="product:101"');
+        expect(html).toContain('src="https://shop.example.com/assets/preview/product-1.jpg');
+        expect(html).not.toContain('store.featuredProduct3Name');
+        expect(html).not.toContain('商品正在整理中');
+    });
+
+    it('shows an honest empty state when no featured products are available', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: service.defaultTemplate,
+            bindings: {
+                ...bindings,
+                'store.featuredProduct1Id': '',
+                'store.featuredProduct1Name': '',
+                'store.featuredProduct1Description': '',
+                'store.featuredProduct1PriceLabel': '',
+                'store.featuredProduct1ImageUrl': '',
+                'store.featuredProduct2Id': '',
+                'store.featuredProduct2Name': '',
+                'store.featuredProduct2Description': '',
+                'store.featuredProduct2PriceLabel': '',
+                'store.featuredProduct2ImageUrl': '',
+            },
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html).toContain('商品正在整理中');
+        expect(html).not.toContain('<article class="promo-product-card');
     });
 
     it('appends only the trusted renderer to pages that opt into the signal canvas', () => {

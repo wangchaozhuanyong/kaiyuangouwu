@@ -1,4 +1,3 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
@@ -73,7 +72,7 @@ function CustomerListPage() {
                     header: () => <Trans>Customer name</Trans>,
                     cell: ({ row }) => {
                         const value = `${row.original.firstName} ${row.original.lastName}`;
-                        return <DetailPageButton id={row.original.id} label={value} />;
+                        return <span>{value}</span>;
                     },
                 },
             }}
@@ -86,6 +85,7 @@ function CustomerListPage() {
                 user: true,
                 createdAt: true,
             }}
+            primaryRowAction={{ label: <Trans>View</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[
                 {
                     component: DeleteCustomersBulkAction,

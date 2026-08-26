@@ -7,7 +7,6 @@ import {
     idsAreEqual,
     isGraphQlErrorResult,
     Order,
-    OrderPlacedEvent,
     OrderService,
     OrderStateTransitionEvent,
     Promotion,
@@ -28,10 +27,12 @@ import {
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
 import {
+    StoreCouponCampaignActionResult,
     StoreCouponLedgerEntryList,
     StoreCouponLedgerEntryView,
     StoreCouponLedgerListOptions,
     StoreCouponOrderAllocationView,
+    StoreCouponUsageRecordView,
     StoreCustomerCouponView,
 } from '../types';
 
@@ -56,17 +57,17 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
 
     async onApplicationBootstrap(): Promise<void> {
         this.eventBus.registerBlockingEventHandler({
-            event: OrderPlacedEvent,
-            id: 'store-coupon-redeem-on-order-placed',
-            handler: event => this.redeemForPlacedOrder(event.ctx, event.order.id),
-        });
-        this.eventBus.registerBlockingEventHandler({
             event: OrderStateTransitionEvent,
-            id: 'store-coupon-return-on-order-cancelled',
-            handler: event =>
-                event.toState === 'Cancelled'
-                    ? this.handleCancelledOrder(event.ctx, event.order.id)
-                    : Promise.resolve(),
+            id: 'store-coupon-handle-paid-or-cancelled-order',
+            handler: event => {
+                if (event.toState === 'PaymentAuthorized' || event.toState === 'PaymentSettled') {
+                    return this.redeemForPaidOrder(event.ctx, event.order.id);
+                }
+                if (event.toState === 'Cancelled') {
+                    return this.handleCancelledOrder(event.ctx, event.order.id);
+                }
+                return Promise.resolve();
+            },
         });
         this.eventBus.registerBlockingEventHandler({
             event: RefundStateTransitionEvent,
@@ -95,10 +96,55 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         await this.reconcileCustomer(ctx, customer.id);
         const coupons = await this.connection.getRepository(ctx, CustomerCoupon).find({
             where: { channelId: ctx.channelId, customerId: customer.id },
+            relations: { promotion: true, campaignConfig: true },
             order: { claimedAt: 'DESC' },
             take: 200,
         });
+        for (const coupon of coupons) {
+            if (
+                usableCustomerCouponStatuses.includes(coupon.status) &&
+                (!coupon.promotion || coupon.promotion.deletedAt || !coupon.promotion.enabled)
+            ) {
+                await this.revokeCoupon(ctx, coupon, '优惠券活动已删除或停用，系统自动作废');
+            }
+        }
         return coupons.map(coupon => this.toCustomerCouponView(coupon));
+    }
+
+    async findMyUsageRecords(ctx: RequestContext): Promise<StoreCouponUsageRecordView[]> {
+        const customer = await this.activeCustomerOrThrow(ctx);
+        const allocations = await this.connection.getRepository(ctx, CouponOrderAllocation).find({
+            where: {
+                channelId: ctx.channelId,
+                customerId: customer.id,
+                status: In(['USED', 'REFUNDED']),
+            },
+            relations: { customerCoupon: true, order: true },
+            order: { usedAt: 'DESC' },
+            take: 200,
+        });
+        return allocations.flatMap(allocation => {
+            if (!allocation.usedAt || !allocation.customerCoupon || !allocation.order) return [];
+            return [
+                {
+                    id: allocation.id,
+                    customerCouponId: allocation.customerCouponId,
+                    campaignId: allocation.promotionId,
+                    campaignName: allocation.campaignName,
+                    campaignKind: allocation.customerCoupon.campaignKind,
+                    status: allocation.status as 'USED' | 'REFUNDED',
+                    currencyCode: allocation.currencyCode,
+                    minimumSpend: allocation.customerCoupon.minimumSpend,
+                    discountAmount: allocation.customerCoupon.discountAmount,
+                    discountRate: allocation.customerCoupon.discountRate,
+                    savedAmount: allocation.discountAmountWithTax,
+                    usedAt: allocation.usedAt,
+                    refundedAt: allocation.refundedAt,
+                    orderId: allocation.orderId,
+                    orderCode: allocation.order.code,
+                },
+            ];
+        });
     }
 
     async apply(ctx: RequestContext, customerCouponId: ID): Promise<StoreCustomerCouponView> {
@@ -176,7 +222,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             return this.toCustomerCouponView(coupon);
         }
         const order = await this.orderService.findOne(ctx, coupon.lockedOrderId, ['lines', 'shippingLines']);
-        await this.releaseLockedCoupon(ctx, coupon, order ?? null, '客户从购物车移除优惠券');
+        await this.releaseLockedCoupon(ctx, coupon, order ?? null, '客户在购物车取消使用优惠券');
         return this.toCustomerCouponView(coupon);
     }
 
@@ -190,6 +236,49 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (coupon.status === 'USED' || coupon.status === 'EXPIRED' || coupon.status === 'REVOKED') {
             throw new UserInputError('当前状态的优惠券不能撤销');
         }
+        await this.revokeCoupon(ctx, coupon, reason?.trim() || '管理员撤销优惠券');
+        return this.toCustomerCouponView(coupon);
+    }
+
+    async revokeCampaignOutstanding(
+        ctx: RequestContext,
+        campaignId: ID,
+        reason?: string | null,
+    ): Promise<StoreCouponCampaignActionResult> {
+        const promotion = await this.promotionService.findOne(ctx, campaignId);
+        if (!promotion?.couponCode) throw new UserInputError('找不到该优惠券活动');
+        const config = await this.configForPromotion(ctx, promotion);
+        const now = new Date();
+        if (!config.claimEndsAt || config.claimEndsAt > now) {
+            config.claimEndsAt = now;
+            await this.connection
+                .getRepository(ctx, StoreCouponCampaignConfig)
+                .save(config, { reload: false });
+        }
+
+        const repository = this.connection.getRepository(ctx, CustomerCoupon);
+        let affectedCount = 0;
+        while (true) {
+            const coupons = await repository.find({
+                where: {
+                    channelId: ctx.channelId,
+                    promotionId: campaignId,
+                    status: In(['AVAILABLE', 'RETURNED', 'LOCKED']),
+                },
+                relations: { promotion: true, campaignConfig: true },
+                order: { id: 'ASC' },
+                take: 100,
+            });
+            if (!coupons.length) break;
+            for (const coupon of coupons) {
+                await this.revokeCoupon(ctx, coupon, reason?.trim() || '管理员批量作废活动中的未使用优惠券');
+                affectedCount++;
+            }
+        }
+        return { campaignId, affectedCount };
+    }
+
+    private async revokeCoupon(ctx: RequestContext, coupon: CustomerCoupon, note: string) {
         if (coupon.status === 'LOCKED' && coupon.lockedOrderId != null) {
             const order = await this.orderService.findOne(ctx, coupon.lockedOrderId, [
                 'lines',
@@ -205,9 +294,8 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         await this.connection.getRepository(ctx, CustomerCoupon).save(coupon, { reload: false });
         await this.addLedger(ctx, coupon, 'REVOKED', {
             actorType: 'ADMIN',
-            note: reason?.trim() || '管理员撤销优惠券',
+            note,
         });
-        return this.toCustomerCouponView(coupon);
     }
 
     async findLedger(
@@ -353,8 +441,8 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (config.issueLimit != null && issuedCount >= config.issueLimit) {
             throw new UserInputError('优惠券已领完');
         }
-        if (!grantedByAdmin && customerClaimedCount >= config.perCustomerClaimLimit) {
-            throw new UserInputError('已达到每人领取上限');
+        if (!grantedByAdmin && customerClaimedCount > 0) {
+            throw new UserInputError('该优惠券已经领取');
         }
 
         const rule = couponRuleSnapshot(promotion);
@@ -401,8 +489,9 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         return this.toCustomerCouponView(coupon);
     }
 
-    private async redeemForPlacedOrder(ctx: RequestContext, orderId: ID): Promise<void> {
-        const coupons = await this.connection.getRepository(ctx, CustomerCoupon).find({
+    private async redeemForPaidOrder(ctx: RequestContext, orderId: ID): Promise<void> {
+        const repository = this.connection.getRepository(ctx, CustomerCoupon);
+        const coupons = await repository.find({
             where: { channelId: ctx.channelId, lockedOrderId: orderId, status: 'LOCKED' },
             relations: { promotion: true, campaignConfig: true },
         });
@@ -414,11 +503,26 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 await this.releaseLockedCoupon(ctx, coupon, null, '订单未产生实际优惠，自动释放优惠券');
                 continue;
             }
+            const usedAt = new Date();
+            const transition = await repository.update(
+                {
+                    id: coupon.id,
+                    channelId: ctx.channelId,
+                    status: 'LOCKED',
+                    lockedOrderId: order.id,
+                },
+                {
+                    status: 'USED',
+                    usedAt,
+                    usedOrderId: order.id,
+                    lockExpiresAt: null,
+                },
+            );
+            if (transition.affected !== 1) continue;
             coupon.status = 'USED';
-            coupon.usedAt = new Date();
+            coupon.usedAt = usedAt;
             coupon.usedOrderId = order.id;
             coupon.lockExpiresAt = null;
-            await this.connection.getRepository(ctx, CustomerCoupon).save(coupon, { reload: false });
             await this.upsertAllocation(ctx, coupon, order, 'USED');
             await this.addLedger(ctx, coupon, 'REDEEMED', {
                 actorType: 'SYSTEM',
@@ -541,23 +645,37 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         note: string,
     ) {
         const orderId = coupon.lockedOrderId;
+        if (orderId == null) return;
+        const nextStatus = coupon.returnedAt ? 'RETURNED' : 'AVAILABLE';
+        const transition = await this.connection.getRepository(ctx, CustomerCoupon).update(
+            {
+                id: coupon.id,
+                channelId: ctx.channelId,
+                status: 'LOCKED',
+                lockedOrderId: orderId,
+            },
+            {
+                status: nextStatus,
+                lockedAt: null,
+                lockExpiresAt: null,
+                lockedOrderId: null,
+            },
+        );
+        if (transition.affected !== 1) return;
         if (order && coupon.promotion?.couponCode) {
             await this.orderService.removeCouponCode(ctx, order.id, coupon.promotion.couponCode);
         }
-        coupon.status = coupon.returnedAt ? 'RETURNED' : 'AVAILABLE';
+        coupon.status = nextStatus;
         coupon.lockedAt = null;
         coupon.lockExpiresAt = null;
         coupon.lockedOrderId = null;
-        await this.connection.getRepository(ctx, CustomerCoupon).save(coupon, { reload: false });
-        if (orderId != null) {
-            const allocation = await this.allocationFor(ctx, coupon.id, orderId);
-            if (allocation && allocation.status === 'LOCKED') {
-                allocation.status = 'RELEASED';
-                allocation.releasedAt = new Date();
-                await this.connection.getRepository(ctx, CouponOrderAllocation).save(allocation, {
-                    reload: false,
-                });
-            }
+        const allocation = await this.allocationFor(ctx, coupon.id, orderId);
+        if (allocation && allocation.status === 'LOCKED') {
+            allocation.status = 'RELEASED';
+            allocation.releasedAt = new Date();
+            await this.connection.getRepository(ctx, CouponOrderAllocation).save(allocation, {
+                reload: false,
+            });
         }
         await this.addLedger(ctx, coupon, 'RELEASED', {
             actorType: 'SYSTEM',
@@ -695,7 +813,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 .where('row.id = :id', { id })
                 .getOne();
         } catch (error) {
-            if (!(error instanceof LockNotSupportedOnGivenDriverError)) throw error;
+            if (!isLockNotSupportedError(error)) throw error;
         }
     }
 
@@ -731,7 +849,9 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             lockedOrderId: coupon.lockedOrderId,
             usedOrderId: coupon.usedOrderId,
             returnCount: coupon.returnCount,
-            usable: usableCustomerCouponStatuses.includes(coupon.status),
+            usable:
+                usableCustomerCouponStatuses.includes(coupon.status) &&
+                Boolean(coupon.promotion && !coupon.promotion.deletedAt && coupon.promotion.enabled),
         };
     }
 
@@ -799,6 +919,15 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             if (!existing) throw error;
         }
     }
+}
+
+function isLockNotSupportedError(error: unknown): boolean {
+    if (error instanceof LockNotSupportedOnGivenDriverError) return true;
+    if (!(error instanceof Error)) return false;
+    return (
+        error.name === 'LockNotSupportedOnGivenDriverError' ||
+        error.message.toLowerCase().includes('locking not supported')
+    );
 }
 
 function couponRuleSnapshot(promotion: Promotion) {

@@ -48,8 +48,14 @@ export class BaseListPage {
         return this.dataTable.locator('tbody tr');
     }
 
-    /** Click the first button in the data table matching `name` to navigate to its detail page. */
+    /** Click the explicit primary action in the row matching `name`, with a legacy-link fallback. */
     async clickEntity(name: string) {
+        const row = this.getRows().filter({ hasText: name }).first();
+        const primaryAction = row.getByTestId('dt-row-primary-action');
+        if (await primaryAction.isVisible().catch(() => false)) {
+            await primaryAction.click();
+            return;
+        }
         const exactMatch = this.dataTable.getByRole('button', { name, exact: true }).first();
         if (await exactMatch.isVisible().catch(() => false)) {
             await exactMatch.click();
@@ -95,8 +101,13 @@ export class BaseListPage {
         // Click "Delete" in the dropdown. AlertDialogTrigger renders role="button"
         // instead of role="menuitem", so match by text within the menu.
         await this.page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
-        // Confirm in the AlertDialog
-        await this.page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        // Confirm in the AlertDialog. Sensitive destructive actions also require the current password.
+        const alertDialog = this.page.locator('[role="alertdialog"]');
+        const passwordInput = alertDialog.locator('input[type="password"]');
+        if (await passwordInput.isVisible().catch(() => false)) {
+            await passwordInput.fill('superadmin');
+        }
+        await alertDialog.getByRole('button', { name: 'Continue' }).click();
     }
 
     /** Open the row-level action menu (ellipsis) for a specific row index, then click "Delete" and confirm. */
@@ -105,7 +116,12 @@ export class BaseListPage {
         await row.getByTestId('dt-row-actions-trigger').click();
         await this.page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
         // Confirm in the AlertDialog
-        await this.page.locator('[role="alertdialog"]').getByRole('button', { name: 'Delete' }).click();
+        const alertDialog = this.page.locator('[role="alertdialog"]');
+        const passwordInput = alertDialog.locator('input[type="password"]');
+        if (await passwordInput.isVisible().catch(() => false)) {
+            await passwordInput.fill('superadmin');
+        }
+        await alertDialog.getByRole('button', { name: 'Delete' }).click();
     }
 
     async expectRowCount(count: number) {

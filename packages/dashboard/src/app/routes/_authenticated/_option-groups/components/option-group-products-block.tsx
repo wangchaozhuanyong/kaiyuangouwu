@@ -1,12 +1,12 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
+import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { api } from '@/vdb/graphql/api.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useDebounce } from '@uidotdev/usehooks';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from '@/vdb/components/ui/button.js';
 import { productsByOptionGroupDocument } from '../option-groups.graphql.js';
 
 const PAGE_SIZE = 10;
@@ -64,12 +64,15 @@ export function OptionGroupProductsBlock({
                     </div>
                 ) : (
                     items.map(item => (
-                        <div key={item.id} className="px-1 py-0.5">
-                            <DetailPageButton
-                                id={item.id}
-                                label={item.name}
-                                href={`/products/${item.id}`}
-                            />
+                        <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                            <span className="truncate text-sm">{item.name}</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                render={<Link to={`/products/${item.id}`} preload={false} />}
+                            >
+                                <Trans>View</Trans>
+                            </Button>
                         </div>
                     ))
                 )}

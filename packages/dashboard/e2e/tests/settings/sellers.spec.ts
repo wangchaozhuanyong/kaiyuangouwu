@@ -12,6 +12,8 @@ test.describe('Sellers', () => {
         listTitle: 'Merchants',
         newButtonLabel: 'New Merchant',
         newPageTitle: 'New merchant',
+        createPresentation: 'drawer',
+        editPresentation: 'drawer',
         createFields: [{ label: 'Name', value: 'E2E Test Seller' }],
         updateFields: [{ label: 'Name', value: 'E2E Test Seller Updated' }],
         hasBulkDelete: true,

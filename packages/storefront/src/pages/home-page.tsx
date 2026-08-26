@@ -31,17 +31,17 @@ import {
     useRef,
     useState,
 } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { ProductCard } from '../components/common/product-card';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
-import { homepageModuleEntries } from '../homepage-module-order';
+import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
+import { compactUiCopy } from '../i18n';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { DEFAULT_HERO_FALLBACK_IMAGE } from '../storefront-images';
-import { routeNavigateOptions } from '../storefront-router';
+import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     BrandLogo,
     dualCardTemplateSetting,
@@ -106,6 +106,67 @@ export interface HomeNoticeItem {
     targetType: StorefrontContentTargetType;
     targetValue: string | null;
     linkUrl: string | null;
+}
+
+export function buildHomeNoticeItems(
+    systemAnnouncements: StorefrontSystemAnnouncement[],
+    noticeBlock: StorefrontContentBlock | undefined,
+    language: StorefrontLanguage,
+): HomeNoticeItem[] {
+    const systemNoticeItems = systemAnnouncements.flatMap(announcement => {
+        const announcementTitle = announcement.title.trim();
+        const content = announcement.content.trim();
+        if (!announcementTitle && !content) return [];
+        return [
+            {
+                id: `system-${announcement.id}`,
+                summary: [announcementTitle, content].filter(Boolean).join(' · '),
+                title: announcementTitle,
+                content,
+                ctaLabel: '',
+                targetType: 'NONE' as const,
+                targetValue: null,
+                linkUrl: announcement.linkUrl,
+            },
+        ];
+    });
+    if (systemNoticeItems.length) return systemNoticeItems;
+
+    const managedNoticeItems = (noticeBlock?.items ?? []).flatMap(item => {
+        const label = item.label.trim();
+        const description = item.description.trim();
+        if (!label && !description) return [];
+        return [
+            {
+                id: item.id,
+                summary: label || description,
+                title: label || noticeBlock?.title || (language === 'zh' ? '公告详情' : 'Notice details'),
+                content: description,
+                ctaLabel: '',
+                targetType: item.targetType,
+                targetValue: item.targetValue,
+                linkUrl: null,
+            },
+        ];
+    });
+    if (managedNoticeItems.length || !noticeBlock || noticeBlock.items.length) return managedNoticeItems;
+
+    const title = noticeBlock.title.trim();
+    const subtitle = noticeBlock.subtitle.trim();
+    const body = noticeBlock.body.trim();
+    if (!title && !subtitle && !body) return [];
+    return [
+        {
+            id: noticeBlock.id,
+            summary: title || body || subtitle,
+            title,
+            content: [subtitle, body].filter(Boolean).join('\n\n'),
+            ctaLabel: noticeBlock.ctaLabel,
+            targetType: noticeBlock.targetType,
+            targetValue: noticeBlock.targetValue,
+            linkUrl: null,
+        },
+    ];
 }
 
 export function NoticeDetailSheet({
@@ -200,7 +261,7 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
                     const isClaimed = coupon.claimed;
-                    const canClaim = coupon.claimable;
+                    const canClaim = coupon.claimable && !coupon.claimed;
 
                     return (
                         <div
@@ -269,8 +330,8 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
                                         <span className="coupon-btn-text-wrap">
                                             {isZh ? (
                                                 <>
-                                                    <span>{isClaimed ? '再领' : '立即'}</span>
-                                                    <span>{isClaimed ? '一张' : '领取'}</span>
+                                                    <span>立即</span>
+                                                    <span>领取</span>
                                                 </>
                                             ) : (
                                                 <span>Claim</span>
@@ -295,6 +356,7 @@ interface HomePageProps {
     heroAutoplayIntervalSeconds: number;
     configuredBlockTypes: Array<StorefrontContentBlock['type']>;
     coupons: StorefrontCouponCampaign[];
+    claimedCampaignIds: string[];
     flashSales: StorefrontFlashSale[];
     systemAnnouncements: StorefrontSystemAnnouncement[];
     bestSellerProducts: Product[];
@@ -313,6 +375,11 @@ interface HomePageProps {
     onCategorySelect: (collection: CollectionSummary) => void;
     onAdd: (variant: ProductVariant) => void;
     onToggleLanguage: () => void;
+    availableCurrencyCodes: string[];
+    currencySelectorEnabled: boolean;
+    displayCurrencyCode: string;
+    currencyLoading: boolean;
+    onCurrencyChange: (currencyCode: string) => void;
     onNotifications: () => void;
     onToast?: (message: string) => void;
     onClaimCoupon: (campaignId: string) => Promise<string | null>;
@@ -332,6 +399,7 @@ export function HomePage() {
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         coupons,
+        claimedCampaignIds,
         flashSales,
         systemAnnouncements,
         bestSellerProducts,
@@ -350,6 +418,11 @@ export function HomePage() {
         onCategorySelect,
         onAdd,
         onToggleLanguage,
+        availableCurrencyCodes,
+        currencySelectorEnabled,
+        displayCurrencyCode,
+        currencyLoading,
+        onCurrencyChange,
         onNotifications,
         onToast,
         onClaimCoupon,
@@ -358,6 +431,7 @@ export function HomePage() {
         onRetry,
     } = useStorefront<HomePageProps>();
     const isZh = language === 'zh';
+    const compactCopy = compactUiCopy[language];
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(
         () => contentBlocks.filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim())),
@@ -403,6 +477,7 @@ export function HomePage() {
     });
     const heroTransitionRef = useRef(0);
     const heroCount = managedHeroes.length;
+    const desktopIntroOrder = heroCount > 0 ? desktopIntroModuleOrder(homepageModules) : null;
     const managedHero = managedHeroes[heroIndex];
     const isVipTheme = heroIndex % 2 !== 0;
     const managedHeroProduct =
@@ -416,42 +491,7 @@ export function HomePage() {
         (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : DEFAULT_HERO_FALLBACK_IMAGE);
     const heroStyle = managedHero ? heroThemeStyle(managedHero, isVipTheme) : undefined;
     const quickCollections = collections.slice(0, 5);
-    const noticeItems: HomeNoticeItem[] = [
-        ...systemAnnouncements.map(announcement => ({
-            id: `system-${announcement.id}`,
-            summary: [announcement.title, announcement.content].filter(Boolean).join(' · '),
-            title: announcement.title,
-            content: announcement.content,
-            ctaLabel: '',
-            targetType: 'NONE' as const,
-            targetValue: null,
-            linkUrl: announcement.linkUrl,
-        })),
-        ...(noticeBlock?.items ?? []).map(item => ({
-            id: item.id,
-            summary: item.label || item.description,
-            title: item.label || noticeBlock?.title || (isZh ? '公告详情' : 'Notice details'),
-            content: item.description,
-            ctaLabel: '',
-            targetType: item.targetType,
-            targetValue: item.targetValue,
-            linkUrl: null,
-        })),
-        ...(!noticeBlock?.items.length && noticeBlock?.title
-            ? [
-                  {
-                      id: noticeBlock.id,
-                      summary: noticeBlock.title || noticeBlock.body,
-                      title: noticeBlock.title,
-                      content: [noticeBlock.subtitle, noticeBlock.body].filter(Boolean).join('\n\n'),
-                      ctaLabel: noticeBlock.ctaLabel,
-                      targetType: noticeBlock.targetType,
-                      targetValue: noticeBlock.targetValue,
-                      linkUrl: null,
-                  },
-              ]
-            : []),
-    ];
+    const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
         summary: isZh ? '现货商品配送时效以结算页为准' : 'Delivery timing is confirmed at checkout',
@@ -470,7 +510,11 @@ export function HomePage() {
             ? defaultNoticeItem
             : noticeItems.find(item => item.id === openNoticeId);
     const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
-    const campaignCouponCards = couponCardsFromCampaigns(coupons, language, market.currencyCode);
+    const claimedCampaignIdSet = new Set(claimedCampaignIds);
+    const customerAwareCoupons = coupons.map(coupon =>
+        claimedCampaignIdSet.has(coupon.id) ? { ...coupon, claimed: true, claimable: false } : coupon,
+    );
+    const campaignCouponCards = couponCardsFromCampaigns(customerAwareCoupons, language, market.currencyCode);
     const couponCards = campaignCouponCards.filter(
         (coupon, index, items) =>
             items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
@@ -688,41 +732,39 @@ export function HomePage() {
               }),
               {
                   id: 'all-products',
-                  label: isZh ? '全部商品' : 'All products',
-                  icon: renderColorfulQuickIcon(isZh ? '全部商品' : 'All products', 0),
+                  label: compactCopy.home.catalog,
+                  icon: renderColorfulQuickIcon(compactCopy.home.catalog, 0),
                   onClick: () => navigateTo({ name: 'category' }),
               },
               ...(hero
                   ? [
                         {
                             id: 'weekly-edit',
-                            label: isZh ? '本周精选' : 'Weekly edit',
-                            icon: renderColorfulQuickIcon(isZh ? '本周精选' : 'Weekly edit', 1),
+                            label: compactCopy.home.featured,
+                            icon: renderColorfulQuickIcon(compactCopy.home.featured, 1),
                             onClick: () => navigateTo({ name: 'product', id: hero.id }),
                         },
                     ]
                   : []),
               {
                   id: 'cart-shortcut',
-                  label: isZh ? '购物车' : 'Cart',
-                  icon: renderColorfulQuickIcon(isZh ? '购物车' : 'Cart', 2),
+                  label: compactCopy.home.cart,
+                  icon: renderColorfulQuickIcon(compactCopy.home.cart, 2),
                   onClick: () => navigateTo({ name: 'cart' }),
               },
               {
                   id: 'my-orders',
-                  label: isZh ? '我的订单' : 'My orders',
-                  icon: renderColorfulQuickIcon(isZh ? '我的订单' : 'My orders', 3),
+                  label: compactCopy.home.orders,
+                  icon: renderColorfulQuickIcon(compactCopy.home.orders, 3),
                   onClick: () => navigateTo({ name: 'orders', tab: 'all' }),
               },
           ].slice(0, 5);
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
-    const defaultTrustLabels = isZh
-        ? ['订单进度可查', '价格结算确认', '账号安全保护', '售后渠道可查']
-        : ['Trackable orders', 'Checkout pricing', 'Account protection', 'Support channels'];
+    const defaultTrustLabels = Object.values(compactCopy.trust);
     const trustItems = trustBlock?.items.length
         ? trustBlock.items.slice(0, 4).map(item => item.label)
         : defaultTrustLabels;
-    const trustBarHasLongCopy = !isZh || trustItems.some(label => Array.from(label.trim()).length > 8);
+    const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
 
     return (
         <main className="page home-page">
@@ -744,6 +786,22 @@ export function HomePage() {
                     <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
                 </button>
                 <div className="topbar-actions">
+                    {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (
+                        <select
+                            className="currency-select"
+                            value={displayCurrencyCode}
+                            disabled={currencyLoading}
+                            onChange={event => onCurrencyChange(event.target.value)}
+                            aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
+                            title={isZh ? '选择显示币种' : 'Choose display currency'}
+                        >
+                            {availableCurrencyCodes.map(currencyCode => (
+                                <option key={currencyCode} value={currencyCode}>
+                                    {currencyCode === 'USDT' ? 'USDT（参考价）' : currencyCode}
+                                </option>
+                            ))}
+                        </select>
+                    ) : null}
                     <button
                         className="language-button"
                         type="button"
@@ -812,7 +870,12 @@ export function HomePage() {
                                 <ChevronRight aria-hidden="true" />
                             </button>
                         ) : null}
-                        <div className="home-intro-grid">
+                        <div
+                            className={`home-intro-grid${
+                                desktopIntroOrder === null ? '' : ' is-desktop-grouped'
+                            }`}
+                            style={desktopIntroOrder === null ? undefined : { order: desktopIntroOrder }}
+                        >
                             {hasHomepageModule('HERO') && heroCount > 0 && (
                                 <section
                                     className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
@@ -1444,8 +1507,8 @@ function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage })
                     <RotateCcw aria-hidden="true" />
                 </div>
                 <div className="trust-text">
-                    <strong>{isZh ? '售后入口' : 'After-sales'}</strong>
-                    <small>{isZh ? '可在订单内提交申请' : 'Request support from an order'}</small>
+                    <strong>{isZh ? '售后入口' : 'Returns'}</strong>
+                    <small>{isZh ? '可在订单内提交申请' : 'Request a return from an order'}</small>
                 </div>
             </div>
         </section>
@@ -1613,14 +1676,7 @@ function CategoryPromotionSection({
                 color: block.textColor ?? undefined,
             }}
         >
-            <SectionHeader
-                title={block.title}
-                subtitle={block.subtitle}
-                action={blockHasTarget ? block.ctaLabel || (isZh ? '查看全部' : 'View all') : undefined}
-                onAction={
-                    blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined
-                }
-            />
+            <SectionHeader title={block.title} subtitle={block.subtitle} subtitlePlacement="end" />
             <div className={`category-promotion-layout${hasSupportingContent ? '' : ' is-visual-only'}`}>
                 <button
                     className="category-promotion-visual"
@@ -1628,9 +1684,7 @@ function CategoryPromotionSection({
                     disabled={!blockHasTarget}
                     onClick={() => onContentTarget(block.targetType, block.targetValue)}
                     aria-label={
-                        blockHasTarget
-                            ? `${block.ctaLabel || (isZh ? '查看全部' : 'View all')}：${block.title}`
-                            : block.title
+                        blockHasTarget ? (isZh ? `打开${block.title}` : `Open ${block.title}`) : block.title
                     }
                 >
                     {block.imageUrl ? (
@@ -1642,12 +1696,6 @@ function CategoryPromotionSection({
                     )}
                     <span className="category-promotion-visual-copy" aria-hidden="true">
                         <small>{isZh ? '分类精选' : 'Category edit'}</small>
-                        {blockHasTarget ? (
-                            <strong>
-                                {block.ctaLabel || (isZh ? '查看全部' : 'View all')}
-                                <ChevronRight />
-                            </strong>
-                        ) : null}
                     </span>
                 </button>
 
@@ -1733,7 +1781,12 @@ function FeaturedCollectionSection({
                 </div>
 
                 {products.length ? (
-                    <div className="featured-collection-track" aria-label={block.title}>
+                    <div
+                        className="featured-collection-track"
+                        aria-label={`${block.title}，${
+                            isZh ? '左右滑动查看更多商品' : 'Swipe horizontally for more products'
+                        }`}
+                    >
                         {products.map((product, index) => {
                             const imageUrl = productImage(product);
                             const pricedVariant = product.variants.find(

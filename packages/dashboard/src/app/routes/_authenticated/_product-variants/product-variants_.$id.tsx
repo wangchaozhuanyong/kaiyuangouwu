@@ -2,7 +2,6 @@ import { MoneyInput } from '@/vdb/components/data-input/money-input.js';
 import { NumberInput } from '@/vdb/components/data-input/number-input.js';
 import { AssignedFacetValues } from '@/vdb/components/shared/assigned-facet-values.js';
 import { CustomFieldsForm } from '@/vdb/components/shared/custom-fields-form.js';
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { EntityAssets } from '@/vdb/components/shared/entity-assets.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
@@ -32,10 +31,10 @@ import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { VariablesOf } from 'gql.tada';
-import { Edit2, Trash } from 'lucide-react';
+import { Edit2, ExternalLink, Trash, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
@@ -78,8 +77,29 @@ type PriceInput = NonNullable<VariablesOf<typeof updateProductVariantDocument>['
 
 function ProductVariantDetailPage() {
     const params = Route.useParams();
+    return <ProductVariantEditor variantId={params.id} />;
+}
+
+export interface ProductVariantEditorProps {
+    variantId: string;
+    presentation?: 'page' | 'sheet';
+    linkSearch?: Record<string, string>;
+    onDirtyChange?: (isDirty: boolean) => void;
+    onRequestClose?: () => void;
+    onSaved?: () => void;
+}
+
+export function ProductVariantEditor({
+    variantId,
+    presentation = 'page',
+    linkSearch,
+    onDirtyChange,
+    onRequestClose,
+    onSaved,
+}: Readonly<ProductVariantEditorProps>) {
     const navigate = useNavigate();
-    const creatingNewEntity = params.id === NEW_ENTITY_PATH;
+    const queryClient = useQueryClient();
+    const creatingNewEntity = variantId === NEW_ENTITY_PATH;
     const { t } = useLingui();
     const { activeChannel } = useChannel();
 
@@ -139,7 +159,7 @@ function ProductVariantDetailPage() {
             }
             return { ...input, stockLevels: changedStockLevels };
         },
-        params: { id: params.id },
+        params: { id: variantId },
         onSuccess: data => {
             toast.success(
                 creatingNewEntity
@@ -147,6 +167,8 @@ function ProductVariantDetailPage() {
                     : t`Successfully updated product variant`,
             );
             resetForm();
+            void queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
+            onSaved?.();
             if (creatingNewEntity) {
                 navigate({ to: `../${(data as any)?.[0]?.id}`, from: Route.id });
             }
@@ -167,6 +189,10 @@ function ProductVariantDetailPage() {
             stockOnHand: stockLevel.stockOnHand,
         }));
     }, [entity]);
+
+    useEffect(() => {
+        onDirtyChange?.(form.formState.isDirty);
+    }, [form.formState.isDirty, onDirtyChange]);
 
     const availableCurrencies = activeChannel?.availableCurrencyCodes ?? [];
     const [prices, taxCategoryId, stockLevels] = form.watch(['prices', 'taxCategoryId', 'stockLevels']);
@@ -239,19 +265,58 @@ function ProductVariantDetailPage() {
     };
 
     return (
-        <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
+        <Page
+            pageId={pageId}
+            form={form}
+            submitHandler={submitHandler}
+            entity={entity}
+            className={presentation === 'sheet' ? 'm-0 min-w-0 p-4' : undefined}
+        >
             <PageTitle>
                 {creatingNewEntity ? <Trans>New product variant</Trans> : (entity?.name ?? '')}
             </PageTitle>
             <PageActionBar>
+                {presentation === 'sheet' && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        render={
+                            <Link
+                                to={`/product-variants/${variantId}`}
+                                search={linkSearch ?? {}}
+                                preload={false}
+                            />
+                        }
+                    >
+                        <ExternalLink className="h-4 w-4" />
+                        <Trans>Open full page</Trans>
+                    </Button>
+                )}
                 <ActionBarItem itemId="save-button" requiresPermission={['UpdateProduct', 'UpdateCatalog']}>
                     <Button
                         type="submit"
                         disabled={!form.formState.isDirty || !form.formState.isValid || isPending}
                     >
-                        {creatingNewEntity ? <Trans>Create</Trans> : <Trans>Update</Trans>}
+                        {isPending ? (
+                            <Trans>Saving...</Trans>
+                        ) : creatingNewEntity ? (
+                            <Trans>Create</Trans>
+                        ) : (
+                            <Trans>Update</Trans>
+                        )}
                     </Button>
                 </ActionBarItem>
+                {presentation === 'sheet' && onRequestClose && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={onRequestClose}
+                        aria-label={t`Close`}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                )}
             </PageActionBar>
             <PageLayout>
                 <PageBlock column="side" blockId="enabled">
@@ -506,11 +571,17 @@ function ProductVariantDetailPage() {
                 </PageBlock>
 
                 <PageBlock column="side" blockId="parent-product" title={<Trans>Parent product</Trans>}>
-                    <DetailPageButton
-                        label={entity?.product.name}
-                        href={`/products/${entity?.product.id}`}
-                        className="border"
-                    />
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm">{entity?.product.name}</span>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            render={<Link to={`/products/${entity?.product.id}`} preload={false} />}
+                        >
+                            <Trans>View product</Trans>
+                        </Button>
+                    </div>
                 </PageBlock>
                 <PageBlock column="side" blockId="assets" title={<Trans>Assets</Trans>}>
                     <Field>

@@ -8,6 +8,7 @@ import { VendureImage } from '@/vdb/components/shared/vendure-image.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { Label } from '@/vdb/components/ui/label.js';
+import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import {
     CustomFieldsPageBlock,
     Page,
@@ -16,13 +17,13 @@ import {
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-loader.js';
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { createFileRoute } from '@tanstack/react-router';
-import { FocusIcon } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { ExternalLink, FocusIcon, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { assetDetailDocument, assetUpdateDocument } from './assets.graphql.js';
 import { AssetTagsEditor } from './components/asset-tags-editor.js';
@@ -46,7 +47,26 @@ export const Route = createFileRoute('/_authenticated/_assets/assets_/$id')({
 
 function AssetDetailPage() {
     const params = Route.useParams();
+    return <AssetEditor assetId={params.id} />;
+}
+
+export interface AssetEditorProps {
+    assetId: string;
+    presentation?: 'page' | 'sheet';
+    onDirtyChange?: (isDirty: boolean) => void;
+    onRequestClose?: () => void;
+    onSaved?: () => void;
+}
+
+export function AssetEditor({
+    assetId,
+    presentation = 'page',
+    onDirtyChange,
+    onRequestClose,
+    onSaved,
+}: Readonly<AssetEditorProps>) {
     const { t } = useLingui();
+    const queryClient = useQueryClient();
 
     const imageRef = useRef<HTMLImageElement>(null);
     const [size, setSize] = useState<PreviewPreset>('medium');
@@ -80,10 +100,12 @@ function AssetDetailPage() {
                 customFields: entity.customFields,
             };
         },
-        params: { id: params.id },
+        params: { id: assetId },
         onSuccess: async () => {
             toast(t`Successfully updated asset`);
             form.reset(form.getValues());
+            void queryClient.invalidateQueries({ queryKey: ['AssetGallery'] });
+            onSaved?.();
         },
         onError: err => {
             toast(t`Failed to update asset`, {
@@ -91,6 +113,10 @@ function AssetDetailPage() {
             });
         },
     });
+
+    useEffect(() => {
+        onDirtyChange?.(form.formState.isDirty);
+    }, [form.formState.isDirty, onDirtyChange]);
 
     const updateDimensions = () => {
         if (!imageRef.current) return;
@@ -105,16 +131,43 @@ function AssetDetailPage() {
         return null;
     }
     return (
-        <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
+        <Page
+            pageId={pageId}
+            form={form}
+            submitHandler={submitHandler}
+            entity={entity}
+            className={presentation === 'sheet' ? 'm-0 min-w-0 p-4' : undefined}
+        >
             <PageTitle>
                 <Trans>Edit asset</Trans>
             </PageTitle>
             <PageActionBar>
+                {presentation === 'sheet' && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        render={<Link to={`/assets/${assetId}`} preload={false} />}
+                    >
+                        <ExternalLink className="h-4 w-4" />
+                        <Trans>Open full page</Trans>
+                    </Button>
+                )}
                 <ActionBarItem itemId="save-button" requiresPermission={['UpdateChannel']}>
                     <Button type="submit" disabled={!form.formState.isDirty || isPending}>
-                        <Trans>Update</Trans>
+                        {isPending ? <Trans>Saving...</Trans> : <Trans>Update</Trans>}
                     </Button>
                 </ActionBarItem>
+                {presentation === 'sheet' && onRequestClose && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={onRequestClose}
+                        aria-label={t`Close`}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                )}
             </PageActionBar>
             <PageLayout>
                 <PageBlock column="main" blockId="asset-preview">

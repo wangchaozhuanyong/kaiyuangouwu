@@ -3,6 +3,7 @@ import { ConfirmationDialog } from '@/vdb/components/shared/confirmation-dialog.
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
+import { sensitiveActionHeaders } from '@/vdb/components/shared/sensitive-action-password.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import {
@@ -25,11 +26,12 @@ import { useRedirectToListOnNotFound } from '@/vdb/hooks/use-redirect-to-list-on
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { ExternalLink, KeyRound, Plus, Save, Trash2 } from 'lucide-react';
+import { createFileRoute } from '@tanstack/react-router';
+import { KeyRound, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { ProductVariantEditorSheet } from '../_product-variants/components/product-variant-editor-sheet.js';
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
 import { AddProductVariantDialog } from './components/add-product-variant-dialog.js';
 import { ForceRemoveOptionGroupDialog } from './components/force-remove-option-group-dialog.js';
@@ -183,6 +185,7 @@ function ManageProductVariants() {
         Record<string, Record<string, string>>
     >({});
     const [variantDrafts, setVariantDrafts] = useState<Record<string, VariantDraft>>({});
+    const [selectedVariant, setSelectedVariant] = useState<{ id: string; name: string }>();
 
     const {
         data: productData,
@@ -227,6 +230,19 @@ function ManageProductVariants() {
             ),
         );
     }, [productData?.product]);
+
+    const hasPendingTableChanges =
+        productData?.product?.variants.some(variant => {
+            const draft = variantDrafts[variant.id];
+            return (
+                draft &&
+                (draft.sku !== variant.sku ||
+                    draft.price !== variant.price ||
+                    draft.stockOnHand !== variant.stockOnHand ||
+                    draft.fulfillmentType !== getVariantFulfillmentType(variant) ||
+                    draft.digitalDeliveryMode !== getVariantDigitalDeliveryMode(variant))
+            );
+        }) ?? false;
 
     const updateVariantDraft = (variantId: string, patch: Partial<VariantDraft>) => {
         setVariantDrafts(current => ({
@@ -274,7 +290,8 @@ function ManageProductVariants() {
     };
 
     const deleteVariantMutation = useMutation({
-        mutationFn: api.mutate(deleteProductVariantDocument),
+        mutationFn: ({ id, password }: { id: string; password: string }) =>
+            api.mutate(deleteProductVariantDocument, { id }, sensitiveActionHeaders(password)),
         onSuccess: () => {
             toast.success(t`Variant deleted successfully`);
             refetch();
@@ -329,8 +346,8 @@ function ManageProductVariants() {
         });
     };
 
-    const deleteVariant = async (variantId: string) => {
-        await deleteVariantMutation.mutateAsync({ id: variantId });
+    const deleteVariant = async (variantId: string, password: string) => {
+        await deleteVariantMutation.mutateAsync({ id: variantId, password });
     };
 
     const getOption = (variant: Variant, groupId: string) => {
@@ -456,13 +473,7 @@ function ManageProductVariants() {
                                         return (
                                             <TableRow key={variant.id}>
                                                 <TableCell>
-                                                    <Link
-                                                        to={`/product-variants/${variant.id}`}
-                                                        className="inline-flex items-center gap-1 font-medium hover:underline"
-                                                    >
-                                                        {variant.name}
-                                                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                                                    </Link>
+                                                    <span className="font-medium">{variant.name}</span>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Input
@@ -683,6 +694,29 @@ function ManageProductVariants() {
                                                         <Button
                                                             type="button"
                                                             size="sm"
+                                                            variant="outline"
+                                                            disabled={hasPendingTableChanges}
+                                                            title={
+                                                                hasPendingTableChanges
+                                                                    ? t`Save pending table changes before opening the editor`
+                                                                    : t`Edit ${variant.name}`
+                                                            }
+                                                            onClick={() =>
+                                                                setSelectedVariant({
+                                                                    id: variant.id,
+                                                                    name: variant.name,
+                                                                })
+                                                            }
+                                                        >
+                                                            <Pencil
+                                                                className="mr-1 h-4 w-4"
+                                                                aria-hidden="true"
+                                                            />
+                                                            <Trans>Edit</Trans>
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
                                                             onClick={() => saveVariant(variant)}
                                                             disabled={updateVariantMutation.isPending}
                                                             data-testid="variant-save-btn"
@@ -714,7 +748,12 @@ function ManageProductVariants() {
                                                         <ConfirmationDialog
                                                             title={t`Delete variant`}
                                                             description={t`Are you sure you want to delete this variant?`}
-                                                            onConfirm={() => deleteVariant(variant.id)}
+                                                            onConfirm={password =>
+                                                                password
+                                                                    ? deleteVariant(variant.id, password)
+                                                                    : undefined
+                                                            }
+                                                            requirePassword
                                                         >
                                                             <Button
                                                                 size="icon"
@@ -755,6 +794,17 @@ function ManageProductVariants() {
                 }}
                 onConfirm={forceRemoveOptionGroup}
                 isPending={isRemovingOptionGroup}
+            />
+            <ProductVariantEditorSheet
+                open={Boolean(selectedVariant)}
+                variantId={selectedVariant?.id}
+                variantName={selectedVariant?.name}
+                onSaved={() => void refetch()}
+                onOpenChange={open => {
+                    if (!open) {
+                        setSelectedVariant(undefined);
+                    }
+                }}
             />
         </Page>
     );

@@ -57,10 +57,13 @@ export function PaymentRoutePage() {
                     api={runtime.api}
                     cart={runtime.cart}
                     order={runtime.currentCheckoutOrder}
+                    customer={runtime.customer}
                     market={runtime.market}
+                    displayCurrencyCode={runtime.displayCurrencyCode}
                     locale={runtime.locale}
                     language={runtime.language}
                     onCancel={(order: Order) => void runtime.reopenPendingOrder(order)}
+                    onOrderChange={(order: Order) => runtime.setCheckoutOrder(order)}
                     onComplete={async (order: Order, confirmationToken: string) => {
                         runtime.setCompletedOrder(order);
                         runtime.setCheckoutOrder(order);

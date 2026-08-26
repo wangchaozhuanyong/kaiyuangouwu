@@ -99,6 +99,22 @@ export const storePromotionProductsQuery = gql`
     }
 `;
 
+export const storeCouponDailyReportQuery = gql`
+    query StoreCouponDailyReport($from: DateTime!, $to: DateTime!, $campaignId: ID) {
+        storeCouponDailyReport(from: $from, to: $to, campaignId: $campaignId) {
+            date
+            claimedCount
+            redeemedCount
+            refundedCount
+            returnedCount
+            expiredCount
+            revokedCount
+            discountAmountTotal
+            assistedRevenueTotal
+        }
+    }
+`;
+
 export const createStoreCouponCampaignMutation = gql`
     mutation CreateStoreCouponCampaign($input: CreateStoreCouponCampaignInput!) {
         createStoreCouponCampaign(input: $input) {
@@ -116,17 +132,44 @@ export const createStoreFlashSaleMutation = gql`
 `;
 
 export const setStorePromotionEnabledMutation = gql`
-    mutation SetStorePromotionEnabled($id: ID!, $enabled: Boolean!) {
-        setStorePromotionEnabled(id: $id, enabled: $enabled) {
+    mutation SetStorePromotionEnabled($id: ID!, $enabled: Boolean!, $password: String!) {
+        setStorePromotionEnabled(id: $id, enabled: $enabled, password: $password) {
             id
             enabled
         }
     }
 `;
 
+export const updateStorePromotionNameMutation = gql`
+    mutation UpdateStorePromotionName($id: ID!, $name: String!) {
+        updateStorePromotionName(id: $id, name: $name) {
+            id
+            name
+        }
+    }
+`;
+
+export const stopStoreCouponIssuanceMutation = gql`
+    mutation StopStoreCouponIssuance($id: ID!, $password: String!) {
+        stopStoreCouponIssuance(id: $id, password: $password) {
+            id
+            claimEndsAt
+        }
+    }
+`;
+
+export const revokeStoreCouponCampaignOutstandingMutation = gql`
+    mutation RevokeStoreCouponCampaignOutstanding($id: ID!, $password: String!, $reason: String) {
+        revokeStoreCouponCampaignOutstanding(id: $id, password: $password, reason: $reason) {
+            campaignId
+            affectedCount
+        }
+    }
+`;
+
 export const deleteStorePromotionMutation = gql`
-    mutation DeleteStorePromotion($id: ID!) {
-        deleteStorePromotion(id: $id) {
+    mutation DeleteStorePromotion($id: ID!, $password: String!) {
+        deleteStorePromotion(id: $id, password: $password) {
             result
             message
         }
@@ -198,6 +241,18 @@ export interface StoreCouponLedgerRecord {
     note: string | null;
 }
 
+export interface StoreCouponDailyMetricRecord {
+    date: string;
+    claimedCount: number;
+    redeemedCount: number;
+    refundedCount: number;
+    returnedCount: number;
+    expiredCount: number;
+    revokedCount: number;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
+}
+
 export interface StoreFlashSaleRecord {
     id: string;
     name: string;
@@ -220,6 +275,10 @@ export interface StorePromotionCampaignsResult {
     storeCouponLedger: { items: StoreCouponLedgerRecord[]; totalItems: number };
     storeFlashSales: StoreFlashSaleRecord[];
     collections: { items: Array<{ id: string; name: string }> };
+}
+
+export interface StoreCouponDailyReportResult {
+    storeCouponDailyReport: StoreCouponDailyMetricRecord[];
 }
 
 export interface StorePromotionProductRecord {

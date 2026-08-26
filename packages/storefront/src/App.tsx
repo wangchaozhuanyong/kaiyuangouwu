@@ -4,6 +4,7 @@ import { WifiOff } from 'lucide-react';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from './api';
+import { categoryTargetSelection } from './category-navigation';
 import { BottomNavigation } from './components/common/bottom-navigation';
 import { normalizeHeroAutoplayIntervalSeconds } from './hero-carousel';
 import { buildBestSellerProducts, buildRecommendationProducts } from './home-merchandising';
@@ -18,6 +19,7 @@ import {
     uiCopy,
 } from './i18n';
 import { offlineLoadError, QueryLoadState, resolveQueryLoadState } from './loading-state';
+import { configureMoneyDisplay } from './money-display';
 import { orderStatusRefreshInterval } from './order-refresh';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -25,6 +27,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from './query-client';
+import { captureReferralAttribution, storefrontVisitorId } from './referral-attribution';
 import { productDescriptionText } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
@@ -70,6 +73,9 @@ export const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
 export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
 export const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 export const STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY = 'storefront-language-preference-v2';
+export const STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY = 'storefront-currency-preference-v1';
+export const STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY =
+    'storefront-settlement-currency-preference-v1';
 export const FAVORITE_PRODUCT_LIMIT = 100;
 export const RECENT_PRODUCT_LIMIT = 20;
 
@@ -107,6 +113,57 @@ export function writeManualLanguage(marketCode: string, language: StorefrontLang
         );
     } catch {
         // A disabled localStorage must not prevent language changes.
+    }
+}
+
+export function readStoredCurrency(market: MarketConfig, available?: readonly string[]): string {
+    try {
+        const stored = localStorage.getItem(
+            scopedStorageKey(STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY, market.code),
+        );
+        if (stored && (!available || available.includes(stored))) return stored;
+    } catch {
+        // A disabled localStorage must not prevent the storefront from loading.
+    }
+    return available?.includes(market.currencyCode)
+        ? market.currencyCode
+        : (available?.[0] ?? market.currencyCode);
+}
+
+export function writeStoredCurrency(marketCode: string, currencyCode: string): void {
+    try {
+        localStorage.setItem(
+            scopedStorageKey(STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY, marketCode),
+            currencyCode,
+        );
+    } catch {
+        // The in-memory choice still works for this page lifetime.
+    }
+}
+
+export function readStoredSettlementCurrency(market: MarketConfig, available?: readonly string[]): string {
+    try {
+        const stored = localStorage.getItem(
+            scopedStorageKey(STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY, market.code),
+        );
+        if (stored && stored !== 'USDT' && (!available || available.includes(stored))) return stored;
+    } catch {
+        // A disabled localStorage must not prevent the storefront from loading.
+    }
+    return available?.includes(market.currencyCode)
+        ? market.currencyCode
+        : (available?.[0] ?? market.currencyCode);
+}
+
+export function writeStoredSettlementCurrency(marketCode: string, currencyCode: string): void {
+    if (currencyCode === 'USDT') return;
+    try {
+        localStorage.setItem(
+            scopedStorageKey(STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY, marketCode),
+            currencyCode,
+        );
+    } catch {
+        // The in-memory choice still works for this page lifetime.
     }
 }
 
@@ -226,11 +283,15 @@ export function App() {
         language: StorefrontLanguage;
     }>(() => {
         const initialMarket = enabledMarkets[0];
+        const currencyCode = readStoredSettlementCurrency(initialMarket);
         return {
-            market: initialMarket,
+            market: { ...initialMarket, currencyCode },
             language: readStoredLanguage(initialMarket),
         };
     });
+    const [displayCurrencyCode, setDisplayCurrencyCode] = useState(() =>
+        readStoredCurrency(enabledMarkets[0]),
+    );
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
     const [storefrontNames, setStorefrontNames] =
@@ -239,6 +300,8 @@ export function App() {
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [storefrontDescription, setStorefrontDescription] = useState('');
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
+    const [availableCurrencyCodes, setAvailableCurrencyCodes] = useState<string[]>([]);
+    const [currencySelectorEnabled, setCurrencySelectorEnabled] = useState(false);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
     const [cartLoading, setCartLoading] = useState(false);
@@ -271,13 +334,20 @@ export function App() {
         maxPrice: maximumPrice || undefined,
     };
     const toastTimer = useRef<number | null>(null);
-    const couponApplicationAttempts = useRef(new Set<string>());
     const locale = localeFor(language, market);
     const text = uiCopy[language];
     const isZh = language === 'zh';
     const storefrontName = storefrontNames[language];
     const vendureLanguageCode = languageCodeFor(language);
     const api = useMemo(() => new ShopApi(market, vendureLanguageCode), [market, vendureLanguageCode]);
+
+    useEffect(() => {
+        try {
+            captureReferralAttribution();
+        } catch {
+            // Private browsing can disable localStorage; registration remains usable.
+        }
+    }, []);
 
     const productsQuery = useQuery({
         queryKey: storefrontQueryKeys.products(market.code, vendureLanguageCode, 16),
@@ -299,6 +369,13 @@ export function App() {
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
+        refetchInterval: 60_000,
+    });
+    configureMoneyDisplay({
+        displayCurrencyCode,
+        cnyPerUsdtRate: configQuery.data?.currencyConfiguration?.cnyPerUsdtRate ?? null,
+        myrPerUsdtRate: configQuery.data?.currencyConfiguration?.myrPerUsdtRate ?? null,
+        usdtMarkupPercent: configQuery.data?.currencyConfiguration?.usdtMarkupPercent ?? 0,
     });
     const contentQuery = useQuery({
         queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
@@ -352,6 +429,15 @@ export function App() {
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
     const cart = cartQuery.data ?? null;
     const customer = customerQuery.data ?? null;
+
+    useEffect(() => {
+        try {
+            const visitorId = storefrontVisitorId();
+            void api.recordStorefrontVisit(visitorId).catch(() => undefined);
+        } catch {
+            // Analytics must never block storefront usage.
+        }
+    }, [api, customer?.id]);
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         market.code,
         vendureLanguageCode,
@@ -365,6 +451,18 @@ export function App() {
         refetchInterval: customer ? 60_000 : false,
     });
     const myCoupons = customerCouponsQuery.data ?? [];
+    const customerCouponUsageRecordsQuery = useQuery({
+        queryKey: storefrontQueryKeys.customerCouponUsageRecords(
+            market.code,
+            vendureLanguageCode,
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.myCouponUsageRecords(signal),
+        enabled: Boolean(customer),
+        staleTime: 0,
+        refetchInterval: customer ? 60_000 : false,
+    });
+    const couponUsageRecords = customerCouponUsageRecordsQuery.data ?? [];
     const claimedCampaignIds = Array.from(new Set(myCoupons.map(coupon => coupon.campaignId)));
     const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
     const recommendationsBlock = contentBlocks.find(block => block.type === 'RECOMMENDATIONS');
@@ -657,8 +755,27 @@ export function App() {
         const config = configQuery.data;
         if (!config) return;
         const nextStorefrontCode = config.code;
-        const nextMarket = marketForStorefrontConfig(config, market);
+        const configuredMarket = marketForStorefrontConfig(config, market);
+        const currencyConfiguration = config.currencyConfiguration;
+        const settlementCurrencyCodes = currencyConfiguration?.availableCurrencyCodes.length
+            ? currencyConfiguration.availableCurrencyCodes
+            : [configuredMarket.currencyCode];
+        const nextAvailableCurrencyCodes = [
+            ...settlementCurrencyCodes,
+            ...(currencyConfiguration?.usdtDisplayEnabled && currencyConfiguration.usdtRateAvailable
+                ? ['USDT']
+                : []),
+        ];
+        const selectedDisplayCurrency = readStoredCurrency(configuredMarket, nextAvailableCurrencyCodes);
+        const selectedSettlementCurrency =
+            selectedDisplayCurrency === 'USDT'
+                ? readStoredSettlementCurrency(configuredMarket, settlementCurrencyCodes)
+                : selectedDisplayCurrency;
+        const nextMarket = { ...configuredMarket, currencyCode: selectedSettlementCurrency };
         setAvailableCountries(config.availableCountries);
+        setAvailableCurrencyCodes(nextAvailableCurrencyCodes);
+        setCurrencySelectorEnabled(currencyConfiguration?.selectorEnabled === true);
+        setDisplayCurrencyCode(selectedDisplayCurrency);
         if (
             nextMarket.code !== market.code ||
             nextMarket.defaultLanguageCode !== market.defaultLanguageCode ||
@@ -672,7 +789,6 @@ export function App() {
             return;
         }
         setStorefrontCode(nextStorefrontCode);
-        couponApplicationAttempts.current.clear();
         setFavoriteProductIds(
             readStoredStrings(
                 scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
@@ -876,9 +992,10 @@ export function App() {
                 return;
             }
             if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
-                setActiveCollectionId(value);
-                setActiveChildId(value);
-                navigate({ name: 'category', collectionId: value, childId: value });
+                const target = categoryTargetSelection(collections, value);
+                setActiveCollectionId(target.collectionId);
+                setActiveChildId(target.childId);
+                navigate({ name: 'category', ...target });
                 return;
             }
             if (targetType === 'SEARCH') {
@@ -909,7 +1026,7 @@ export function App() {
                 window.open(value, '_blank', 'noopener,noreferrer');
             }
         },
-        [navigate],
+        [collections, navigate],
     );
 
     const applyCoupon = useCallback(
@@ -950,18 +1067,7 @@ export function App() {
                 await queryClient.invalidateQueries({
                     queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
                 });
-                if ((cart?.totalQuantity ?? 0) > 0) {
-                    await api.applyCustomerCoupon(claimedCoupon.id);
-                    await refreshCart();
-                    await queryClient.invalidateQueries({ queryKey: customerCouponQueryKey });
-                    notify(isZh ? '优惠券已领取并使用' : 'Coupon claimed and applied');
-                } else {
-                    notify(
-                        isZh
-                            ? '优惠券已领取，加入商品后可在结算页使用'
-                            : 'Coupon claimed. Use it after adding an item.',
-                    );
-                }
+                notify(isZh ? '优惠券领取成功' : 'Coupon claimed');
                 return null;
             } catch (requestError) {
                 return requestError instanceof Error ? requestError.message : text.loadError;
@@ -971,7 +1077,6 @@ export function App() {
         },
         [
             api,
-            cart?.totalQuantity,
             customer,
             customerCouponQueryKey,
             isZh,
@@ -979,7 +1084,6 @@ export function App() {
             navigate,
             notify,
             queryClient,
-            refreshCart,
             text.loadError,
             vendureLanguageCode,
         ],
@@ -995,7 +1099,7 @@ export function App() {
                     refreshCart(),
                     queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
                 ]);
-                notify(isZh ? '优惠券已移除' : 'Coupon removed');
+                notify(isZh ? '已取消使用优惠券' : 'Coupon unapplied');
                 return null;
             } catch (requestError) {
                 return requestError instanceof Error ? requestError.message : text.loadError;
@@ -1005,36 +1109,6 @@ export function App() {
         },
         [api, customerCouponQueryKey, isZh, notify, queryClient, refreshCart, text.loadError],
     );
-
-    useEffect(() => {
-        if (!cart || cart.totalQuantity < 1) return;
-        const autoAttemptKey = `${cart.id}:auto`;
-        if (couponApplicationAttempts.current.has(autoAttemptKey)) return;
-        const pendingCoupon = myCoupons.find(coupon => {
-            const attemptKey = `${cart.id}:${coupon.id}`;
-            return coupon.usable && !couponApplicationAttempts.current.has(attemptKey);
-        });
-        if (!pendingCoupon) return;
-
-        let cancelled = false;
-        const applyPendingCoupon = async () => {
-            const attemptKey = `${cart.id}:${pendingCoupon.id}`;
-            couponApplicationAttempts.current.add(autoAttemptKey);
-            couponApplicationAttempts.current.add(attemptKey);
-            const nextError = await applyCoupon(pendingCoupon.id);
-            if (nextError && !cancelled) {
-                notify(
-                    isZh
-                        ? `“${pendingCoupon.campaignName}”暂不满足使用条件`
-                        : `“${pendingCoupon.campaignName}” is not eligible for this cart`,
-                );
-            }
-        };
-        void applyPendingCoupon();
-        return () => {
-            cancelled = true;
-        };
-    }, [applyCoupon, cart, isZh, myCoupons, notify]);
 
     const reopenPendingOrder = useCallback(
         async (order: Order) => {
@@ -1124,7 +1198,7 @@ export function App() {
                     refetchType: 'none',
                 });
             }
-            notify(isZh ? '售后申请已提交' : 'After-sales request submitted');
+            notify(isZh ? '售后申请已提交' : 'Return request submitted');
             navigate({ name: 'orders', tab: 'service' });
         },
         [api, customer, isZh, market.code, navigate, notify, queryClient, vendureLanguageCode],
@@ -1194,9 +1268,11 @@ export function App() {
             addresses: isZh ? '地址管理' : 'Addresses',
             'account-security': isZh ? '账户与安全' : 'Account and security',
             favorites: isZh ? '我的收藏' : 'My favorites',
+            announcements: isZh ? '网站公告' : 'Website notices',
             history: isZh ? '浏览足迹' : 'Browsing history',
             notifications: isZh ? '消息通知' : 'Notifications',
             coupons: isZh ? '优惠券' : 'Coupons',
+            referral: isZh ? '邀请返利' : 'Referral rewards',
             support: isZh ? '客服中心' : 'Customer support',
             reviews: isZh ? '评价中心' : 'Reviews',
             login: isZh ? '登录' : 'Sign in',
@@ -1320,6 +1396,60 @@ export function App() {
             return { ...currentContext, language: nextLanguage };
         });
 
+    const switchCurrency = useCallback(
+        async (currencyCode: string) => {
+            if (
+                currencyCode === displayCurrencyCode ||
+                !availableCurrencyCodes.includes(currencyCode) ||
+                cartLoading
+            ) {
+                return;
+            }
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                if (currencyCode !== 'USDT' && cart?.checkoutOrder && currencyCode !== market.currencyCode) {
+                    const updatedOrder = await api.setCurrencyForOrder(currencyCode);
+                    setCheckoutOrder(updatedOrder);
+                }
+                writeStoredCurrency(market.code, currencyCode);
+                writeStoredSettlementCurrency(market.code, currencyCode);
+                setDisplayCurrencyCode(currencyCode);
+                if (currencyCode !== 'USDT' && currencyCode !== market.currencyCode) {
+                    setStorefrontContext(current => ({
+                        ...current,
+                        market: { ...current.market, currencyCode },
+                    }));
+                    queryClient.removeQueries({ queryKey: ['storefront', market.code] });
+                }
+                notify(
+                    language === 'zh'
+                        ? `已切换为 ${currencyCode} 价格`
+                        : `Prices switched to ${currencyCode}`,
+                );
+            } catch (requestError) {
+                const message = requestError instanceof Error ? requestError.message : text.loadError;
+                setCartError(message);
+                notify(message);
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [
+            api,
+            availableCurrencyCodes,
+            cart?.checkoutOrder,
+            cartLoading,
+            displayCurrencyCode,
+            language,
+            market.code,
+            market.currencyCode,
+            notify,
+            queryClient,
+            text.loadError,
+        ],
+    );
+
     const updateCategory = useCallback(
         (
             updates: Partial<
@@ -1377,6 +1507,9 @@ export function App() {
         storefrontCode,
         logoUrl,
         availableCountries,
+        availableCurrencyCodes,
+        currencySelectorEnabled,
+        displayCurrencyCode,
         addingVariantId,
         claimedCampaignIds,
         cart,
@@ -1390,6 +1523,7 @@ export function App() {
         customerLoadError,
         customerQuery,
         myCoupons,
+        couponUsageRecords,
         currentCheckoutOrder,
         completedOrder,
         activeCollectionId,
@@ -1415,6 +1549,7 @@ export function App() {
         goBack,
         notify,
         toggleLanguage,
+        switchCurrency,
         updateCategory,
         openContentTarget,
         refetchStorefront,

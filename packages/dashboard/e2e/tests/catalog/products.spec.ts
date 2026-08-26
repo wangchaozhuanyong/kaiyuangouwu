@@ -50,6 +50,12 @@ test.describe('Product detail features', () => {
             page.locator('[data-slot="card-title"]').getByText('Filter attribute values', { exact: true }),
         ).toBeVisible();
 
+        // Product groups can be assigned without leaving the product detail page
+        await expect(
+            page.locator('[data-slot="card-title"]').getByText('Product groups', { exact: true }),
+        ).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Add product group', exact: true })).toBeVisible();
+
         // Assets block
         await expect(
             page.locator('[data-slot="card-title"]').getByText('Asset library', { exact: true }),

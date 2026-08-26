@@ -84,6 +84,10 @@ describe('ShopApi storefront mutations', () => {
             expect.stringContaining('languageCode=en'),
             expect.objectContaining({ method: 'POST' }),
         );
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining('currencyCode=CNY'),
+            expect.objectContaining({ method: 'POST' }),
+        );
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('storefrontContent');
         expect(request.query).toContain('storefrontContentSettings');
@@ -93,6 +97,64 @@ describe('ShopApi storefront mutations', () => {
         expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
             'vendure-token': 'cn-mainland',
         });
+    });
+
+    it('switches the active checkout order to the selected settlement currency', async () => {
+        const order = {
+            __typename: 'Order',
+            id: 'order-1',
+            code: 'ORDER-1',
+            state: 'AddingItems',
+            totalQuantity: 1,
+            subTotalWithTax: 5991,
+            shippingWithTax: 0,
+            totalWithTax: 5991,
+            currencyCode: 'MYR',
+            lines: [],
+            discounts: [],
+            taxSummary: [],
+            couponCodes: [],
+            customFields: {},
+        };
+        const fetchMock = mockGraphQlResponse({ setCurrencyCodeForOrder: order });
+
+        await expect(new ShopApi(market).setCurrencyForOrder('MYR')).resolves.toEqual(order);
+
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('setCurrencyCodeForOrder');
+        expect(request.variables).toEqual({ currencyCode: 'MYR' });
+    });
+
+    it('creates a server-locked USDT checkout quote', async () => {
+        const quote = {
+            id: 'quote-1',
+            fiatCurrencyCode: 'CNY',
+            fiatAmount: 10_000,
+            fiatPerUsdtRate: 7.2,
+            markupPercent: 1,
+            usdtAmount: 14.027823,
+            source: 'Binance P2P',
+            network: 'TRC20',
+            tokenContractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+            receivingAddress: 'TReceivingAddress',
+            receivingAddressFingerprint: 'a'.repeat(64),
+            paymentStatus: 'PENDING',
+            transactionId: null,
+            settledAt: null,
+            createdAt: '2026-08-26T00:00:00.000Z',
+            expiresAt: '2026-08-26T00:10:00.000Z',
+        };
+        const fetchMock = mockGraphQlResponse({ createStorefrontUsdtCheckoutQuote: quote });
+
+        await expect(new ShopApi(market).createUsdtCheckoutQuote()).resolves.toEqual(quote);
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        expect(request.query).toContain('createStorefrontUsdtCheckoutQuote');
+        expect(request.query).toContain('usdtAmount');
+        expect(request.query).toContain('receivingAddressFingerprint');
+        expect(request.query).toContain('paymentStatus');
     });
 
     it('falls back to a five-second carousel interval when settings are absent', async () => {
@@ -325,6 +387,37 @@ describe('ShopApi storefront mutations', () => {
         expect(`${claimRequest.query}${applyRequest.query}`).not.toContain('couponCode');
     });
 
+    it('loads immutable coupon usage records separately from current coupon status', async () => {
+        const fetchMock = mockGraphQlResponse({
+            myStorefrontCouponUsageRecords: [
+                {
+                    id: 'allocation-1',
+                    customerCouponId: 'coupon-1',
+                    campaignId: 'campaign-1',
+                    campaignName: '退款返券活动',
+                    campaignKind: 'ORDER_FIXED',
+                    status: 'REFUNDED',
+                    currencyCode: 'CNY',
+                    minimumSpend: 10_000,
+                    discountAmount: 1_000,
+                    discountRate: null,
+                    savedAmount: 1_000,
+                    usedAt: '2026-08-26T00:00:00.000Z',
+                    refundedAt: '2026-08-27T00:00:00.000Z',
+                    orderId: 'order-1',
+                    orderCode: 'T0001',
+                },
+            ],
+        });
+
+        await expect(new ShopApi(market).myCouponUsageRecords()).resolves.toEqual([
+            expect.objectContaining({ id: 'allocation-1', status: 'REFUNDED', orderCode: 'T0001' }),
+        ]);
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('myStorefrontCouponUsageRecords');
+        expect(request.query).toContain('savedAmount');
+    });
+
     it('loads eligible payment methods for the active order', async () => {
         const fetchMock = mockGraphQlResponse({
             eligiblePaymentMethods: [
@@ -504,21 +597,25 @@ describe('ShopApi storefront mutations', () => {
 
     it('registers a customer with the complete account input', async () => {
         const fetchMock = mockGraphQlResponse({
-            registerCustomerAccount: { __typename: 'Success', success: true },
+            registerCustomerWithReferral: { __typename: 'Success', success: true },
         });
 
-        await new ShopApi(market).registerCustomerAccount({
-            emailAddress: 'customer@example.com',
-            firstName: 'Test',
-            lastName: 'Customer',
-            password: 'secure-password',
-        });
+        await new ShopApi(market).registerCustomerAccount(
+            {
+                emailAddress: 'customer@example.com',
+                firstName: 'Test',
+                lastName: 'Customer',
+                password: 'secure-password',
+            },
+            'INVITE88',
+            'POSTER',
+        );
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
             query: string;
             variables: Record<string, unknown>;
         };
-        expect(request.query).toContain('registerCustomerAccount(input: $input)');
+        expect(request.query).toContain('registerCustomerWithReferral(input: $input');
         expect(request.variables).toEqual({
             input: {
                 emailAddress: 'customer@example.com',
@@ -526,6 +623,8 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
+            inviteCode: 'INVITE88',
+            source: 'POSTER',
         });
     });
 

@@ -8,6 +8,7 @@ import {
     CustomerAddressUpdateInput,
     CustomerOrderCounts,
     MarketConfig,
+    MyReferralOverview,
     Order,
     OrderConfirmationToken,
     OrderPage,
@@ -15,8 +16,11 @@ import {
     Product,
     ProductSearchPage,
     ProductSearchSort,
+    ReferralBalancePaymentResult,
+    ReferralProgram,
     RegisterCustomerInput,
     ShippingMethod,
+    StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCatalogInput,
@@ -25,11 +29,13 @@ import {
     StorefrontContentBlock,
     StorefrontContentResponse,
     StorefrontCouponCampaign,
+    StorefrontCurrencyConfiguration,
     StorefrontFlashSale,
     StorefrontReview,
     StorefrontReviewCandidate,
     StorefrontReviewList,
     StorefrontSystemAnnouncement,
+    StorefrontUsdtCheckoutQuote,
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
@@ -95,6 +101,7 @@ const orderFields = `
     totalWithTax
     currencyCode
     customer { id emailAddress }
+    payments { id method amount state }
     discounts { description amountWithTax }
     taxSummary { description taxRate taxBase taxTotal }
     couponCodes
@@ -184,6 +191,16 @@ const customerCouponFields = `
     usedOrderId
     returnCount
     usable
+`;
+
+const referralWalletFields = `
+    id
+    createdAt
+    updatedAt
+    currencyCode
+    availableBalance
+    pendingBalance
+    reservedBalance
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order
@@ -433,6 +450,7 @@ export class ShopApi {
             activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl' | 'description'>;
             availableCountries: StorefrontConfig['availableCountries'];
             storefrontBranding: { logoUrl: string | null; description: string };
+            storefrontCurrencyConfiguration: StorefrontCurrencyConfiguration;
         }>(
             `
             query StorefrontConfig {
@@ -453,6 +471,20 @@ export class ShopApi {
                     logoUrl
                     description
                 }
+                storefrontCurrencyConfiguration {
+                    defaultCurrencyCode
+                    availableCurrencyCodes
+                    selectorEnabled
+                    cnyToMyrRate
+                    rateUpdatedAt
+                    usdtDisplayEnabled
+                    usdtMarkupPercent
+                    cnyPerUsdtRate
+                    myrPerUsdtRate
+                    usdtRateSource
+                    usdtRateUpdatedAt
+                    usdtRateAvailable
+                }
             }
         `,
             undefined,
@@ -463,6 +495,7 @@ export class ShopApi {
             availableCountries: result.availableCountries,
             logoUrl: result.storefrontBranding?.logoUrl ?? null,
             description: result.storefrontBranding?.description ?? '',
+            currencyConfiguration: result.storefrontCurrencyConfiguration,
         };
     }
 
@@ -484,6 +517,7 @@ export class ShopApi {
                     endsAt
                     claimStartsAt
                     claimEndsAt
+                    validityDays
                     minimumSpend
                     discountAmount
                     discountRate
@@ -1130,20 +1164,133 @@ export class ShopApi {
         this.assertNoError(result.login);
     }
 
-    async registerCustomerAccount(input: RegisterCustomerInput): Promise<void> {
-        const result = await this.request<{ registerCustomerAccount: ErrorResult }>(
+    async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
+        const result = await this.request<{ referralProgram: ReferralProgram }>(
             `
-                mutation RegisterStorefrontCustomer($input: RegisterCustomerInput!) {
-                    registerCustomerAccount(input: $input) {
+                query StorefrontReferralProgram {
+                    referralProgram {
+                        channelId
+                        enabled
+                        rewardRate
+                        releaseDelayDays
+                        minimumOrderAmount
+                        maxRewardPerOrder
+                        allowBalanceSpend
+                        attributionWindowDays
+                        defaultPosterTemplate
+                        posterTemplates
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.referralProgram;
+    }
+
+    async validateReferralInviteCode(code: string, signal?: AbortSignal): Promise<boolean> {
+        const result = await this.request<{ validateReferralInviteCode: boolean }>(
+            `
+                query ValidateReferralInviteCode($code: String!) {
+                    validateReferralInviteCode(code: $code)
+                }
+            `,
+            { code },
+            signal,
+        );
+        return result.validateReferralInviteCode;
+    }
+
+    async myReferralOverview(signal?: AbortSignal): Promise<MyReferralOverview> {
+        const result = await this.request<{ myReferralOverview: MyReferralOverview }>(
+            `
+                query MyStorefrontReferralOverview {
+                    myReferralOverview {
+                        enabled
+                        rewardRate
+                        releaseDelayDays
+                        inviteCode
+                        wallets { ${referralWalletFields} }
+                        invitedCount
+                        purchasedInviteeCount
+                        rewardSummaries { currencyCode grossReward clawedBackReward }
+                        invitees { id displayName boundAt firstPaidOrderAt }
+                        ledger {
+                            id
+                            createdAt
+                            eventType
+                            currencyCode
+                            availableDelta
+                            pendingDelta
+                            reservedDelta
+                            availableAfter
+                            pendingAfter
+                            reservedAfter
+                            orderId
+                            refundId
+                            withdrawalId
+                            actorType
+                            note
+                        }
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myReferralOverview;
+    }
+
+    async registerCustomerAccount(
+        input: RegisterCustomerInput,
+        inviteCode?: string,
+        source?: 'LINK' | 'POSTER' | 'CODE',
+    ): Promise<void> {
+        const result = await this.request<{ registerCustomerWithReferral: ErrorResult }>(
+            `
+                mutation RegisterStorefrontCustomer(
+                    $input: RegisterCustomerInput!
+                    $inviteCode: String
+                    $source: String
+                ) {
+                    registerCustomerWithReferral(input: $input, inviteCode: $inviteCode, source: $source) {
                         __typename
                         ... on Success { success }
                         ... on ErrorResult { errorCode message }
                     }
                 }
             `,
-            { input },
+            { input, inviteCode: inviteCode || null, source: source ?? null },
         );
-        this.assertNoError(result.registerCustomerAccount);
+        this.assertNoError(result.registerCustomerWithReferral);
+    }
+
+    async useReferralBalance(amount: number): Promise<ReferralBalancePaymentResult> {
+        const result = await this.request<{ useMyReferralBalance: ReferralBalancePaymentResult }>(
+            `
+                mutation UseStorefrontReferralBalance($amount: Money!) {
+                    useMyReferralBalance(amount: $amount) {
+                        amount
+                        wallet { ${referralWalletFields} }
+                        order { ${orderFields} }
+                    }
+                }
+            `,
+            { amount },
+        );
+        return result.useMyReferralBalance;
+    }
+
+    async recordStorefrontVisit(visitorId: string): Promise<boolean> {
+        const result = await this.request<{ recordStorefrontVisit: { recorded: boolean } }>(
+            `
+                mutation RecordStorefrontVisit($visitorId: String) {
+                    recordStorefrontVisit(visitorId: $visitorId) { recorded }
+                }
+            `,
+            { visitorId },
+        );
+        return result.recordStorefrontVisit.recorded;
     }
 
     async refreshCustomerVerification(emailAddress: string): Promise<void> {
@@ -1462,6 +1609,37 @@ export class ShopApi {
         return result.myStorefrontCoupons;
     }
 
+    async myCouponUsageRecords(signal?: AbortSignal): Promise<StoreCouponUsageRecord[]> {
+        const result = await this.request<{
+            myStorefrontCouponUsageRecords: StoreCouponUsageRecord[];
+        }>(
+            `
+                query MyStorefrontCouponUsageRecords {
+                    myStorefrontCouponUsageRecords {
+                        id
+                        customerCouponId
+                        campaignId
+                        campaignName
+                        campaignKind
+                        status
+                        currencyCode
+                        minimumSpend
+                        discountAmount
+                        discountRate
+                        savedAmount
+                        usedAt
+                        refundedAt
+                        orderId
+                        orderCode
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myStorefrontCouponUsageRecords;
+    }
+
     async claimCoupon(campaignId: string): Promise<StoreCustomerCoupon> {
         const result = await this.request<{ claimStorefrontCoupon: StoreCustomerCoupon }>(
             `
@@ -1615,6 +1793,22 @@ export class ShopApi {
         return this.assertOrder(result.setOrderShippingMethod);
     }
 
+    async setCurrencyForOrder(currencyCode: string): Promise<Order> {
+        const result = await this.request<{ setCurrencyCodeForOrder: Order & ErrorResult }>(
+            `
+                mutation SetStorefrontOrderCurrency($currencyCode: CurrencyCode!) {
+                    setCurrencyCodeForOrder(currencyCode: $currencyCode) {
+                        __typename
+                        ... on Order { ${orderFields} }
+                        ... on ErrorResult { errorCode message }
+                    }
+                }
+            `,
+            { currencyCode },
+        );
+        return this.assertOrder(result.setCurrencyCodeForOrder);
+    }
+
     async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
         const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
             `
@@ -1632,7 +1826,41 @@ export class ShopApi {
             undefined,
             signal,
         );
-        return result.eligiblePaymentMethods;
+        return result.eligiblePaymentMethods.filter(
+            method => method.code !== 'referral-balance' && method.code !== 'referral-balance-payment',
+        );
+    }
+
+    async createUsdtCheckoutQuote(signal?: AbortSignal): Promise<StorefrontUsdtCheckoutQuote> {
+        const result = await this.request<{
+            createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote;
+        }>(
+            `
+                mutation CreateStorefrontUsdtCheckoutQuote {
+                    createStorefrontUsdtCheckoutQuote {
+                        id
+                        fiatCurrencyCode
+                        fiatAmount
+                        fiatPerUsdtRate
+                        markupPercent
+                        usdtAmount
+                        source
+                        network
+                        tokenContractAddress
+                        receivingAddress
+                        receivingAddressFingerprint
+                        paymentStatus
+                        transactionId
+                        settledAt
+                        createdAt
+                        expiresAt
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.createStorefrontUsdtCheckoutQuote;
     }
 
     async addPaymentToOrder(method: string, metadata: Record<string, unknown> = {}): Promise<Order> {
@@ -1667,7 +1895,9 @@ export class ShopApi {
             headers.authorization = `Bearer ${this.authToken}`;
         }
         const languageSeparator = API_URL.includes('?') ? '&' : '?';
-        const requestUrl = `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}`;
+        const requestUrl =
+            `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}` +
+            `&currencyCode=${encodeURIComponent(this.market.currencyCode)}`;
         const response = await fetch(requestUrl, {
             method: 'POST',
             credentials: 'include',

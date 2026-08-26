@@ -15,10 +15,10 @@ export function customerCouponStatusLabel(
     const labels =
         language === 'zh'
             ? {
-                  AVAILABLE: '可使用',
-                  LOCKED: '已用于当前订单',
+                  AVAILABLE: '未使用',
+                  LOCKED: '订单占用中',
                   USED: '已核销',
-                  RETURNED: '退款已返还',
+                  RETURNED: '已返还，未使用',
                   EXPIRED: '已过期',
                   REVOKED: '已撤销',
               }
@@ -39,11 +39,11 @@ export function afterSalesNotification(
 ): { title: string; detail: string; tone: 'pending' | 'progress' | 'complete' | 'muted' } {
     const isZh = language === 'zh';
     const titleByState: Record<AfterSalesRequest['state'], string> = {
-        PENDING: isZh ? '售后申请等待处理' : 'After-sales request awaiting review',
-        APPROVED: isZh ? '售后申请已通过' : 'After-sales request approved',
-        REJECTED: isZh ? '售后申请未通过' : 'After-sales request not approved',
-        CANCELLED: isZh ? '售后申请已撤销' : 'After-sales request cancelled',
-        COMPLETED: isZh ? '售后处理已完成' : 'After-sales request completed',
+        PENDING: isZh ? '售后申请等待处理' : 'Return request awaiting review',
+        APPROVED: isZh ? '售后申请已通过' : 'Return request approved',
+        REJECTED: isZh ? '售后申请未通过' : 'Return request declined',
+        CANCELLED: isZh ? '售后申请已撤销' : 'Return request cancelled',
+        COMPLETED: isZh ? '售后处理已完成' : 'Return request completed',
     };
     return {
         title: titleByState[request.state],

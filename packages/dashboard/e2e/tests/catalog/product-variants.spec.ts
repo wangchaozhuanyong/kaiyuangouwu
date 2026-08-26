@@ -9,6 +9,30 @@ const productDetailConfig = {
     newTitle: 'New product',
 };
 
+test.describe('product SKU list workflow', () => {
+    test('opens the SKU editor from the explicit row action without leaving the list', async ({ page }) => {
+        await page.goto('/product-variants');
+        await expect(page.locator('table')).toBeVisible();
+        await page.getByTestId('dt-search-input').fill('Laptop');
+        await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+
+        const skuRow = page
+            .locator('table tbody tr')
+            .filter({ hasText: /Laptop/i })
+            .first();
+        await expect(skuRow).toBeVisible();
+        const listUrl = page.url();
+        await skuRow.getByRole('button', { name: 'Edit', exact: true }).click();
+
+        const editorDrawer = page.getByRole('dialog');
+        await expect(editorDrawer).toBeVisible();
+        await expect(editorDrawer.getByRole('button', { name: 'Open full page' })).toBeVisible();
+        await expect(page).toHaveURL(listUrl);
+        await editorDrawer.getByRole('button', { name: 'Close', exact: true }).click();
+        await expect(editorDrawer).toBeHidden();
+    });
+});
+
 // #4478 — Product option groups & variant generation flow
 test.describe('product variant generation', () => {
     test.describe.configure({ mode: 'serial' });
@@ -165,13 +189,31 @@ test.describe('product variant generation', () => {
         });
 
         // Only Small and Medium were created (Large was unchecked)
-        const variantLink = page.getByRole('button', { name: /E2E Variant Test Product Small/i });
-        await variantLink.scrollIntoViewIfNeeded();
-        await expect(variantLink).toBeVisible({ timeout: 10_000 });
-        await expect(page.getByRole('button', { name: /E2E Variant Test Product Medium/i })).toBeVisible();
+        const smallVariantRow = page
+            .locator('table tbody tr')
+            .filter({ hasText: /E2E Variant Test Product Small/i });
+        await smallVariantRow.scrollIntoViewIfNeeded();
+        await expect(smallVariantRow).toBeVisible({ timeout: 10_000 });
+        await expect(
+            page.locator('table tbody tr').filter({ hasText: /E2E Variant Test Product Medium/i }),
+        ).toBeVisible();
 
         // Large should NOT exist as a variant
-        await expect(page.getByRole('button', { name: /E2E Variant Test Product Large/i })).toHaveCount(0);
+        await expect(
+            page.locator('table tbody tr').filter({ hasText: /E2E Variant Test Product Large/i }),
+        ).toHaveCount(0);
+
+        // Editing stays in context: the explicit row action opens the SKU workbench drawer.
+        const productUrl = page.url();
+        await smallVariantRow.getByRole('button', { name: 'Edit', exact: true }).click();
+        const editorDrawer = page.getByRole('dialog');
+        await expect(editorDrawer).toBeVisible();
+        await expect(
+            editorDrawer.getByRole('heading', { name: /E2E Variant Test Product Small/i }),
+        ).toBeVisible();
+        await expect(page).toHaveURL(productUrl);
+        await editorDrawer.getByRole('button', { name: 'Close', exact: true }).click();
+        await expect(editorDrawer).toBeHidden();
 
         // The "Manage variants" link should be visible
         const manageLink = page.getByRole('button', { name: /Manage SKUs/i });
@@ -257,6 +299,22 @@ test.describe('manage product variants', () => {
         await expect(table.getByRole('columnheader', { name: 'Stock on Hand' })).toBeVisible();
         await expect(table.getByRole('columnheader', { name: 'Product type' })).toBeVisible();
         await expect(page.getByTestId('variant-save-btn').first()).toBeVisible();
+    });
+
+    test('should open the explicit SKU edit action in a drawer without leaving the page', async ({
+        page,
+    }) => {
+        await page.goto(`/products/${laptopId}/variants`);
+        await expect(page.getByRole('heading', { name: /Manage SKUs/i })).toBeVisible();
+
+        const initialUrl = page.url();
+        const firstRow = page.locator('table tbody tr').first();
+        await firstRow.getByRole('button', { name: 'Edit' }).click();
+
+        const drawer = page.getByRole('dialog');
+        await expect(drawer).toBeVisible();
+        await expect(drawer.getByText('Open full page')).toBeVisible();
+        await expect(page).toHaveURL(initialUrl);
     });
 
     test('should switch an SKU between digital email delivery and physical shipping', async ({ page }) => {

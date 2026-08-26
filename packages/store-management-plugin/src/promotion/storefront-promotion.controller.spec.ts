@@ -68,6 +68,47 @@ describe('StorefrontPromotionController', () => {
         expect(response.redirect).not.toHaveBeenCalled();
     });
 
+    it('redirects valid promotion entries only to allow-listed storefront destinations', async () => {
+        const request = { host: 'shop.example.com' };
+        const accessService = {
+            resolveRequest: vi.fn(() => Promise.resolve(request)),
+            validateEntryTicket: vi.fn(() => true),
+            createEntryCookie: vi.fn(() => 'entry=cookie'),
+        };
+        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const productResponse = responseMock();
+        const unsafeResponse = responseMock();
+
+        await controller.enter({} as Request, productResponse as unknown as Response, 'ticket', 'product:42');
+        await controller.enter(
+            {} as Request,
+            unsafeResponse as unknown as Response,
+            'ticket',
+            'https://evil.example',
+        );
+
+        expect(productResponse.redirect).toHaveBeenCalledWith(303, '/product?id=42');
+        expect(unsafeResponse.redirect).toHaveBeenCalledWith(303, '/');
+    });
+
+    it('redirects policy and support entries through the same signed gate', async () => {
+        const request = { host: 'shop.example.com' };
+        const accessService = {
+            resolveRequest: vi.fn(() => Promise.resolve(request)),
+            validateEntryTicket: vi.fn(() => true),
+            createEntryCookie: vi.fn(() => 'entry=cookie'),
+        };
+        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const privacyResponse = responseMock();
+        const supportResponse = responseMock();
+
+        await controller.enter({} as Request, privacyResponse as unknown as Response, 'ticket', 'privacy');
+        await controller.enter({} as Request, supportResponse as unknown as Response, 'ticket', 'support');
+
+        expect(privacyResponse.redirect).toHaveBeenCalledWith(303, '/legal?id=privacy');
+        expect(supportResponse.redirect).toHaveBeenCalledWith(303, '/support');
+    });
+
     it('redirects only after the signed proof is accepted', async () => {
         const request = { host: 'shop.example.com' };
         const accessService = {

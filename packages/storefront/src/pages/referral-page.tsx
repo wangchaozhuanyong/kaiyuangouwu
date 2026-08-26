@@ -1,0 +1,417 @@
+/* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
+import { useQuery } from '@tanstack/react-query';
+import { Check, Copy, Gift, Image, Share2, ShoppingBag, Users, WalletCards } from 'lucide-react';
+import { useMemo, useState } from 'react';
+
+import { ShopApi } from '../api';
+import { languageCodeFor } from '../i18n';
+import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
+import { referralShareUrl } from '../referral-attribution';
+import { ReferralPosterModal } from '../referral-poster-modal';
+import { PageSkeleton } from '../route-loading';
+import { EmptyState, Subpage } from '../storefront-ui/page-shell';
+import { formatMoney } from '../storefront-ui/product-display';
+import { useStorefront } from '../StorefrontContext';
+import { ActiveCustomer, MarketConfig, ReferralLedgerEntry, StorefrontLanguage } from '../types';
+
+interface ReferralPageProps {
+    api: ShopApi;
+    customer: ActiveCustomer | null;
+    market: MarketConfig;
+    locale: string;
+    language: StorefrontLanguage;
+    storefrontName: string;
+    logoUrl: string | null;
+    onBack: () => void;
+    onNotify: (message: string) => void;
+    onLogin: () => void;
+}
+
+export function ReferralPage() {
+    const { api, customer, market, locale, language, storefrontName, logoUrl, onBack, onNotify, onLogin } =
+        useStorefront<ReferralPageProps>();
+    const isZh = language === 'zh';
+    const [copied, setCopied] = useState(false);
+    const [showPoster, setShowPoster] = useState(false);
+    const programQuery = useQuery({
+        queryKey: storefrontQueryKeys.referralProgram(market.code, languageCodeFor(language)),
+        queryFn: ({ signal }) => api.referralProgram(signal),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const overviewQuery = useQuery({
+        queryKey: storefrontQueryKeys.customerReferral(
+            market.code,
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.myReferralOverview(signal),
+        enabled: Boolean(customer && programQuery.data?.enabled),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const overview = overviewQuery.data;
+    const wallet = overview?.wallets.find(item => item.currencyCode === market.currencyCode);
+    const rewardSummary = overview?.rewardSummaries.find(item => item.currencyCode === market.currencyCode);
+    const shareUrl = overview ? referralShareUrl(overview.inviteCode) : '';
+    const displayLedger = useMemo(
+        () => overview?.ledger.filter(entry => entry.currencyCode === market.currencyCode) ?? [],
+        [market.currencyCode, overview?.ledger],
+    );
+
+    const copyInvite = async () => {
+        if (!overview) return;
+        try {
+            await navigator.clipboard.writeText(
+                isZh
+                    ? `${storefrontName} 邀请你来逛逛\n邀请码：${overview.inviteCode}\n${shareUrl}`
+                    : `${storefrontName} invitation\nCode: ${overview.inviteCode}\n${shareUrl}`,
+            );
+            setCopied(true);
+            onNotify(isZh ? '邀请码和邀请链接已复制' : 'Invitation code and link copied');
+            window.setTimeout(() => setCopied(false), 1800);
+        } catch {
+            onNotify(isZh ? '复制失败，请手动复制' : 'Could not copy');
+        }
+    };
+
+    const share = async () => {
+        if (!overview) return;
+        if (!navigator.share) {
+            await copyInvite();
+            return;
+        }
+        try {
+            await navigator.share({
+                title: isZh ? `${storefrontName} 好友邀请` : `${storefrontName} invitation`,
+                text: isZh
+                    ? `我的邀请码：${overview.inviteCode}`
+                    : `My invitation code: ${overview.inviteCode}`,
+                url: shareUrl,
+            });
+        } catch {
+            // Closing the native share sheet is not an error for the customer.
+        }
+    };
+
+    return (
+        <Subpage title={isZh ? '邀请返利' : 'Referral rewards'} language={language} onBack={onBack}>
+            {programQuery.isLoading || overviewQuery.isLoading ? (
+                <PageSkeleton label={isZh ? '正在加载邀请返利' : 'Loading referral rewards'} />
+            ) : !customer ? (
+                <EmptyState
+                    icon={<Gift />}
+                    title={isZh ? '登录后查看邀请返利' : 'Sign in to view referral rewards'}
+                    detail={
+                        isZh
+                            ? '登录后可获取专属邀请码、生成海报并查看奖励流水。'
+                            : 'Sign in for your code, posters and reward activity.'
+                    }
+                    action={isZh ? '去登录' : 'Sign in'}
+                    onAction={onLogin}
+                />
+            ) : !programQuery.data?.enabled ? (
+                <EmptyState
+                    icon={<Gift />}
+                    title={isZh ? '邀请返利暂未开放' : 'Referral rewards are unavailable'}
+                    detail={
+                        isZh
+                            ? '活动开放后，这里会显示你的邀请码和奖励明细。'
+                            : 'Your invitation code and rewards will appear here when the program opens.'
+                    }
+                />
+            ) : overviewQuery.error || !overview ? (
+                <EmptyState
+                    icon={<Gift />}
+                    title={isZh ? '邀请信息加载失败' : 'Could not load referrals'}
+                    detail={
+                        overviewQuery.error instanceof Error
+                            ? overviewQuery.error.message
+                            : isZh
+                              ? '请稍后重试'
+                              : 'Try again later'
+                    }
+                    action={isZh ? '重试' : 'Retry'}
+                    onAction={() => void overviewQuery.refetch()}
+                />
+            ) : (
+                <div className="mx-auto grid w-full max-w-5xl gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
+                    <section className="overflow-hidden rounded-3xl bg-[radial-gradient(circle_at_88%_0%,rgba(251,191,36,0.5),transparent_28%),linear-gradient(145deg,#991b1b,#dc2626_58%,#be123c)] p-5 text-white shadow-[0_18px_50px_-24px_rgba(153,27,27,0.7)] lg:p-7">
+                        <p className="m-0 text-xs font-extrabold uppercase tracking-[0.2em] text-amber-200">
+                            {isZh ? '好友邀请计划' : 'Invite friends'}
+                        </p>
+                        <h1 className="mb-0 mt-3 text-3xl font-black tracking-tight">
+                            {isZh ? '分享好物，奖励可直接抵扣消费' : 'Share more, save on your next order'}
+                        </h1>
+                        <p className="mb-0 mt-3 max-w-xl text-sm leading-6 text-red-50/90">
+                            {isZh
+                                ? `好友通过你的链接或邀请码注册并成功消费后，你可获得订单有效商品金额的 ${overview.rewardRate}% 奖励。退款会按比例扣回。`
+                                : `Earn ${overview.rewardRate}% of eligible product spend after an invited friend pays. Refunds are clawed back proportionally.`}
+                        </p>
+                        <div className="mt-6 rounded-2xl border border-white/25 bg-white/12 p-4 backdrop-blur">
+                            <small className="font-bold text-red-100">
+                                {isZh ? '我的邀请码' : 'MY INVITATION CODE'}
+                            </small>
+                            <div className="mt-2 flex items-center gap-3">
+                                <strong className="min-w-0 flex-1 break-all font-mono text-2xl tracking-[0.18em]">
+                                    {overview.inviteCode}
+                                </strong>
+                                <button
+                                    type="button"
+                                    className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-red-700"
+                                    onClick={() => void copyInvite()}
+                                    aria-label={isZh ? '复制邀请码' : 'Copy invitation code'}
+                                >
+                                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                                </button>
+                            </div>
+                            <p className="mb-0 mt-2 truncate text-xs text-red-100/80">{shareUrl}</p>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-3 font-extrabold text-red-700"
+                                onClick={() => void share()}
+                            >
+                                <Share2 className="size-4" />
+                                {isZh ? '立即分享' : 'Share now'}
+                            </button>
+                            <button
+                                type="button"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/10 px-3 font-extrabold text-white"
+                                onClick={() => setShowPoster(true)}
+                            >
+                                <Image className="size-4" />
+                                {isZh ? '生成海报' : 'Create poster'}
+                            </button>
+                        </div>
+                    </section>
+
+                    <section className="grid grid-cols-2 gap-3">
+                        <SummaryCard
+                            icon={<WalletCards />}
+                            label={isZh ? '可用奖励' : 'Available'}
+                            value={formatMoney(wallet?.availableBalance ?? 0, market.currencyCode, locale)}
+                            accent="text-emerald-600 bg-emerald-50"
+                        />
+                        <SummaryCard
+                            icon={<Gift />}
+                            label={isZh ? '待生效' : 'Pending'}
+                            value={formatMoney(wallet?.pendingBalance ?? 0, market.currencyCode, locale)}
+                            accent="text-amber-600 bg-amber-50"
+                        />
+                        <SummaryCard
+                            icon={<Users />}
+                            label={isZh ? '已邀请' : 'Invited'}
+                            value={String(overview.invitedCount)}
+                            accent="text-blue-600 bg-blue-50"
+                        />
+                        <SummaryCard
+                            icon={<ShoppingBag />}
+                            label={isZh ? '已消费好友' : 'Purchased'}
+                            value={String(overview.purchasedInviteeCount)}
+                            accent="text-violet-600 bg-violet-50"
+                        />
+                        <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+                            <div className="flex justify-between">
+                                <span>{isZh ? '累计获得' : 'Total earned'}</span>
+                                <strong className="text-slate-900">
+                                    {formatMoney(
+                                        rewardSummary?.grossReward ?? 0,
+                                        market.currencyCode,
+                                        locale,
+                                    )}
+                                </strong>
+                            </div>
+                            <div className="mt-2 flex justify-between">
+                                <span>{isZh ? '退款扣回' : 'Refund clawbacks'}</span>
+                                <strong className="text-red-600">
+                                    -
+                                    {formatMoney(
+                                        rewardSummary?.clawedBackReward ?? 0,
+                                        market.currencyCode,
+                                        locale,
+                                    )}
+                                </strong>
+                            </div>
+                            <p className="mb-0 mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">
+                                {isZh
+                                    ? `奖励在订单成功后进入待生效，默认 ${overview.releaseDelayDays} 天后可用；仅能购物抵扣，提现需联系客服并由有权限的管理员人工处理。`
+                                    : `Rewards become available ${overview.releaseDelayDays} days after payment. They are for order spend; withdrawals require support and authorized manual processing.`}
+                            </p>
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
+                        <div className="mb-3 flex items-end justify-between">
+                            <div>
+                                <h2 className="m-0 text-lg font-black text-slate-900">
+                                    {isZh ? '邀请记录' : 'Invitees'}
+                                </h2>
+                                <p className="mb-0 mt-1 text-xs text-slate-500">
+                                    {isZh
+                                        ? '只展示脱敏信息，保护好友隐私'
+                                        : 'Personal details are masked for privacy'}
+                                </p>
+                            </div>
+                            <span className="text-xs font-bold text-slate-500">{overview.invitedCount}</span>
+                        </div>
+                        {overview.invitees.length ? (
+                            <div className="divide-y divide-slate-100">
+                                {overview.invitees.map(invitee => (
+                                    <div key={invitee.id} className="flex items-center gap-3 py-3">
+                                        <span className="grid size-10 place-items-center rounded-full bg-red-50 font-black text-red-600">
+                                            {invitee.displayName.slice(0, 1)}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <strong className="block truncate text-sm text-slate-900">
+                                                {invitee.displayName}
+                                            </strong>
+                                            <small className="text-slate-500">
+                                                {new Intl.DateTimeFormat(locale, {
+                                                    dateStyle: 'medium',
+                                                }).format(new Date(invitee.boundAt))}
+                                            </small>
+                                        </div>
+                                        <span
+                                            className={`rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                                        >
+                                            {invitee.firstPaidOrderAt
+                                                ? isZh
+                                                    ? '已消费'
+                                                    : 'Purchased'
+                                                : isZh
+                                                  ? '未消费'
+                                                  : 'No purchase'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="py-8 text-center text-sm text-slate-500">
+                                {isZh
+                                    ? '还没有邀请记录，分享给第一位好友吧'
+                                    : 'No invitees yet. Share with your first friend.'}
+                            </p>
+                        )}
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
+                        <div className="mb-3">
+                            <h2 className="m-0 text-lg font-black text-slate-900">
+                                {isZh ? '奖励流水' : 'Reward activity'}
+                            </h2>
+                            <p className="mb-0 mt-1 text-xs text-slate-500">
+                                {isZh
+                                    ? '奖励、生效、退款扣回、消费与人工提款全程留痕'
+                                    : 'A complete trail of rewards, clawbacks, spend and withdrawals'}
+                            </p>
+                        </div>
+                        {displayLedger.length ? (
+                            <div className="divide-y divide-slate-100">
+                                {displayLedger.slice(0, 30).map(entry => (
+                                    <LedgerRow
+                                        key={entry.id}
+                                        entry={entry}
+                                        locale={locale}
+                                        language={language}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="py-8 text-center text-sm text-slate-500">
+                                {isZh ? '暂无奖励流水' : 'No reward activity yet'}
+                            </p>
+                        )}
+                    </section>
+                </div>
+            )}
+            {showPoster && overview && programQuery.data && (
+                <ReferralPosterModal
+                    inviteCode={overview.inviteCode}
+                    storefrontName={storefrontName}
+                    logoUrl={logoUrl}
+                    language={language}
+                    rewardRate={overview.rewardRate}
+                    templates={programQuery.data.posterTemplates}
+                    defaultTemplate={programQuery.data.defaultPosterTemplate}
+                    onClose={() => setShowPoster(false)}
+                    onNotify={onNotify}
+                />
+            )}
+        </Subpage>
+    );
+}
+
+function SummaryCard({
+    icon,
+    label,
+    value,
+    accent,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    value: string;
+    accent: string;
+}) {
+    return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <span className={`grid size-9 place-items-center rounded-xl ${accent} [&_svg]:size-4`}>
+                {icon}
+            </span>
+            <strong className="mt-4 block truncate text-xl font-black tabular-nums text-slate-900">
+                {value}
+            </strong>
+            <small className="mt-1 block font-semibold text-slate-500">{label}</small>
+        </div>
+    );
+}
+
+function LedgerRow({
+    entry,
+    locale,
+    language,
+}: {
+    entry: ReferralLedgerEntry;
+    locale: string;
+    language: StorefrontLanguage;
+}) {
+    const delta = entry.availableDelta || entry.pendingDelta || entry.reservedDelta;
+    const isPositive = delta > 0;
+    const labels: Record<string, [string, string]> = {
+        REWARD_PENDING: ['奖励待生效', 'Reward pending'],
+        REWARD_AVAILABLE: ['奖励已获得', 'Reward earned'],
+        REWARD_RELEASED: ['奖励已生效', 'Reward released'],
+        REFUND_CLAWBACK: ['退款扣回', 'Refund clawback'],
+        SPEND_RESERVED: ['订单抵扣', 'Order spend'],
+        SPEND_CAPTURED: ['抵扣已确认', 'Spend captured'],
+        SPEND_REFUNDED: ['抵扣退回', 'Spend refunded'],
+        WITHDRAWAL_RESERVED: ['提款申请', 'Withdrawal requested'],
+        WITHDRAWAL_PAID: ['提款已支付', 'Withdrawal paid'],
+        WITHDRAWAL_REJECTED: ['提款退回', 'Withdrawal returned'],
+        WITHDRAWAL_CANCELLED: ['提款取消', 'Withdrawal cancelled'],
+        ADMIN_ADJUSTMENT: ['人工调整', 'Manual adjustment'],
+    };
+    const label = labels[entry.eventType]?.[language === 'zh' ? 0 : 1] ?? entry.eventType;
+    return (
+        <div className="flex items-center gap-3 py-3">
+            <span
+                className={`grid size-9 place-items-center rounded-full ${isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}
+            >
+                <WalletCards className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+                <strong className="block truncate text-sm text-slate-900">{label}</strong>
+                <small className="text-slate-500">
+                    {new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
+                        new Date(entry.createdAt),
+                    )}
+                </small>
+            </div>
+            <strong className={isPositive ? 'text-emerald-600' : 'text-slate-900'}>
+                {delta > 0 ? '+' : ''}
+                {formatMoney(delta, entry.currencyCode, locale)}
+            </strong>
+        </div>
+    );
+}

@@ -1,6 +1,6 @@
-import type { StoreCustomerCoupon, StorefrontCouponCampaign } from './types';
+import type { StoreCouponUsageRecord, StoreCustomerCoupon, StorefrontCouponCampaign } from './types';
 
-export type CouponCenterTab = 'ACTIVITIES' | 'UNCLAIMED' | 'USABLE' | 'HISTORY';
+export type CouponCenterTab = 'ACTIVITIES' | 'UNCLAIMED' | 'UNUSED' | 'HISTORY';
 
 export function couponCampaignsForTab(
     campaigns: StorefrontCouponCampaign[],
@@ -14,11 +14,8 @@ export function customerCouponsForTab(
     coupons: StoreCustomerCoupon[],
     tab: CouponCenterTab,
 ): StoreCustomerCoupon[] {
-    if (tab === 'USABLE') {
+    if (tab === 'UNUSED') {
         return coupons.filter(coupon => ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status));
-    }
-    if (tab === 'HISTORY') {
-        return coupons.filter(coupon => ['USED', 'EXPIRED', 'REVOKED'].includes(coupon.status));
     }
     return [];
 }
@@ -27,10 +24,12 @@ export function couponCenterTabCount(
     tab: CouponCenterTab,
     campaigns: StorefrontCouponCampaign[],
     coupons: StoreCustomerCoupon[],
+    usageRecords: StoreCouponUsageRecord[] = [],
 ): number {
-    return tab === 'ACTIVITIES' || tab === 'UNCLAIMED'
-        ? couponCampaignsForTab(campaigns, tab).length
-        : customerCouponsForTab(coupons, tab).length;
+    if (tab === 'ACTIVITIES' || tab === 'UNCLAIMED') {
+        return couponCampaignsForTab(campaigns, tab).length;
+    }
+    return tab === 'HISTORY' ? usageRecords.length : customerCouponsForTab(coupons, tab).length;
 }
 
 export function isLockedCoupon(coupon: StoreCustomerCoupon): boolean {

@@ -15,9 +15,11 @@ export type RouteName =
     | 'addresses'
     | 'account-security'
     | 'favorites'
+    | 'announcements'
     | 'history'
     | 'notifications'
     | 'coupons'
+    | 'referral'
     | 'flash-sale'
     | 'recommendations'
     | 'support'
@@ -56,6 +58,7 @@ export const customerResolvedRoutes: RouteName[] = [
     'checkout',
     'payment',
     'coupons',
+    'referral',
     'orders',
     'logistics',
     'order-detail',
@@ -83,9 +86,11 @@ const routePaths: Record<RouteName, string> = {
     addresses: '/addresses',
     'account-security': '/account-security',
     favorites: '/favorites',
+    announcements: '/announcements',
     history: '/history',
     notifications: '/notifications',
     coupons: '/coupons',
+    referral: '/referral',
     'flash-sale': '/flash-sale',
     recommendations: '/recommendations',
     support: '/support',
