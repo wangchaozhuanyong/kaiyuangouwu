@@ -66,4 +66,15 @@ describe('homepageModuleEntries', () => {
 
         expect(entries.find(entry => entry.type === 'HERO')?.blocks).toHaveLength(2);
     });
+
+    it('keeps login and registration visuals out of the homepage module list', () => {
+        const entries = homepageModuleEntries(
+            [block('AUTH_LOGIN', 1), block('AUTH_REGISTER', 2), block('CUSTOM', 3)],
+            ['AUTH_LOGIN', 'AUTH_REGISTER', 'CUSTOM'],
+        );
+
+        expect(entries.some(entry => entry.type === 'AUTH_LOGIN')).toBe(false);
+        expect(entries.some(entry => entry.type === 'AUTH_REGISTER')).toBe(false);
+        expect(entries.some(entry => entry.type === 'CUSTOM')).toBe(true);
+    });
 });

@@ -135,6 +135,7 @@ describe('auth password visibility controls', () => {
             }),
         );
 
+        expect(markup).toContain('一次登录，连接你的 AI 效率宇宙');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(1);
         expect(markup).toMatch(/type="password"[^>]*name="password"/);
     });
@@ -144,6 +145,7 @@ describe('auth password visibility controls', () => {
 
         expect(markup).toContain('/storefront/auth-ai-bridge-hero.webp');
         expect(markup).not.toContain('/storefront/auth-ai-bridge-hero.jpg');
+        expect(markup).toContain('从今天起，让 AI 成为你的增长引擎');
         expect(markup).toContain('智联云端 · 桥接未来');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
         expect(markup).toMatch(/name="fullName"/);
@@ -151,6 +153,51 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('验证码');
         expect(markup).toMatch(/type="password"[^>]*name="password"/);
         expect(markup).toMatch(/type="password"[^>]*name="confirmPassword"/);
+    });
+
+    it('renders the image, copy and theme published from the dashboard', () => {
+        const markup = renderToStaticMarkup(
+            createElement(LoginPage, {
+                ...authPageProps,
+                onSuccess: vi.fn().mockResolvedValue(undefined),
+                authVisualContent: {
+                    id: 'auth-login',
+                    code: 'auth-login-visual',
+                    type: 'AUTH_LOGIN',
+                    enabled: true,
+                    position: 1,
+                    startsAt: null,
+                    endsAt: null,
+                    imageUrl: '/assets/preview/managed-login.jpg',
+                    backgroundColor: '#010203',
+                    textColor: '#fefefe',
+                    targetType: 'NONE',
+                    targetValue: null,
+                    settings: { accentColor: '#abcdef' },
+                    title: '后台登录主标题',
+                    subtitle: '后台登录说明',
+                    body: '',
+                    ctaLabel: '后台顶部短句',
+                    items: [1, 2, 3].map(position => ({
+                        id: `tag-${position}`,
+                        enabled: true,
+                        position,
+                        imageUrl: null,
+                        targetType: 'NONE' as const,
+                        targetValue: null,
+                        label: `后台卖点${position}`,
+                        description: '',
+                    })),
+                },
+            }),
+        );
+
+        expect(markup).toContain('managed-login.jpg');
+        expect(markup).toContain('format=webp');
+        expect(markup).toContain('后台登录主标题');
+        expect(markup).toContain('后台卖点3');
+        expect(markup).toContain('--auth-hero-overlay-color:#010203');
+        expect(markup).toContain('--auth-hero-accent-color:#abcdef');
     });
 });
 

@@ -24,6 +24,8 @@ export const storefrontContentBlockTypes = [
     'STORY',
     'LEGAL',
     'SUPPORT',
+    'AUTH_LOGIN',
+    'AUTH_REGISTER',
     'CUSTOM',
 ] as const;
 

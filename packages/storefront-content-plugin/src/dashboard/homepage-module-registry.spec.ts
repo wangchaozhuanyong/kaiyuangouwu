@@ -36,6 +36,8 @@ describe('homepage module registry', () => {
         expect(isFixedHomepageModuleType('CUSTOM')).toBe(false);
         expect(isFixedHomepageModuleType('LEGAL')).toBe(false);
         expect(isFixedHomepageModuleType('SUPPORT')).toBe(false);
+        expect(isFixedHomepageModuleType('AUTH_LOGIN')).toBe(false);
+        expect(isFixedHomepageModuleType('AUTH_REGISTER')).toBe(false);
     });
 
     it('returns every fixed module even before a channel has saved its configuration', () => {

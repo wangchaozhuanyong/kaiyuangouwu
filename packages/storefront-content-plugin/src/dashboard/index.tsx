@@ -1,5 +1,6 @@
 import { defineDashboardExtension } from '@vendure/dashboard';
 
+import { authVisualRoute } from './auth-visual-page';
 import {
     storefrontCarouselRoute,
     storefrontContentRoute,
@@ -7,5 +8,5 @@ import {
 } from './storefront-content-page';
 
 defineDashboardExtension({
-    routes: [storefrontCarouselRoute, storefrontContentRoute, storefrontSiteContentRoute],
+    routes: [authVisualRoute, storefrontCarouselRoute, storefrontContentRoute, storefrontSiteContentRoute],
 });

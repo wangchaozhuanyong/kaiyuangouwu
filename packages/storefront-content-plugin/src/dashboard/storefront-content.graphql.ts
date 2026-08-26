@@ -161,6 +161,8 @@ export type ContentBlockType =
     | 'STORY'
     | 'LEGAL'
     | 'SUPPORT'
+    | 'AUTH_LOGIN'
+    | 'AUTH_REGISTER'
     | 'CUSTOM';
 
 export type ContentLayoutVariant =

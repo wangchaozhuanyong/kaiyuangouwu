@@ -399,6 +399,8 @@ const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
     STORY: { zh: '内容故事', en: 'Story' },
     LEGAL: { zh: '条款内容', en: 'Legal' },
     SUPPORT: { zh: '客服配置', en: 'Support' },
+    AUTH_LOGIN: { zh: '登录页视觉', en: 'Login visual' },
+    AUTH_REGISTER: { zh: '注册页视觉', en: 'Registration visual' },
     CUSTOM: { zh: '高级自定义模块', en: 'Custom block' },
 };
 
