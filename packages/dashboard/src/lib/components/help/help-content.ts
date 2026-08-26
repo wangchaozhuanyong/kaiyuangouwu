@@ -3,6 +3,17 @@ export type LocalizedHelpText = {
     en: string;
 };
 
+export type ImageSizeGuidance =
+    | 'assetLibrary'
+    | 'product'
+    | 'productGroup'
+    | 'richText'
+    | 'logo'
+    | 'hero'
+    | 'banner'
+    | 'contentCard'
+    | 'icon';
+
 export type PageHelpTopic = {
     title: LocalizedHelpText;
     purpose: LocalizedHelpText;
@@ -14,8 +25,51 @@ export type PageHelpTopic = {
 
 const text = (zh_Hans: string, en: string): LocalizedHelpText => ({ zh_Hans, en });
 
+const imageSizeGuidance: Record<ImageSizeGuidance, LocalizedHelpText> = {
+    assetLibrary: text(
+        '常用建议尺寸：商品与分组图 1200 × 1200 px；首页主视觉 1440 × 720 px；店铺 Logo 512 × 512 px。',
+        'Common recommendations: product and group images 1200 × 1200 px; homepage hero 1440 × 720 px; store logo 512 × 512 px.',
+    ),
+    product: text(
+        '建议尺寸：1200 × 1200 px（1:1）。主体居中，四周保留约 8% 安全边距。',
+        'Recommended: 1200 × 1200 px (1:1). Centre the subject and keep about 8% safe space around the edges.',
+    ),
+    productGroup: text(
+        '建议尺寸：1200 × 1200 px（1:1）。分组主体居中，避免文字和标志贴近边缘。',
+        'Recommended: 1200 × 1200 px (1:1). Centre the group subject and keep text and logos away from the edges.',
+    ),
+    richText: text(
+        '建议宽度：1200 px；高度按原图比例。请勿放大小于正文实际展示宽度的图片。',
+        'Recommended width: 1200 px, with height following the original aspect ratio. Avoid upscaling images smaller than their displayed width.',
+    ),
+    logo: text(
+        '建议尺寸：512 × 512 px（1:1），使用透明背景 PNG 或 SVG，图形四周保留安全边距。',
+        'Recommended: 512 × 512 px (1:1), using a transparent PNG or SVG with safe space around the mark.',
+    ),
+    hero: text(
+        '建议尺寸：1440 × 720 px（2:1）。主要图形放在右侧，左侧预留标题和按钮区域。',
+        'Recommended: 1440 × 720 px (2:1). Place the main artwork on the right and reserve the left side for headings and actions.',
+    ),
+    banner: text(
+        '建议尺寸：1440 × 720 px（2:1）。主要内容居中，上下各保留约 8% 安全边距。',
+        'Recommended: 1440 × 720 px (2:1). Centre the main content and keep about 8% safe space at the top and bottom.',
+    ),
+    contentCard: text(
+        '建议尺寸：1200 × 1200 px（1:1）。主要内容居中，避免关键信息贴近边缘。',
+        'Recommended: 1200 × 1200 px (1:1). Centre the main content and keep important details away from the edges.',
+    ),
+    icon: text(
+        '建议尺寸：320 × 320 px（1:1），优先使用透明背景 PNG 或 SVG。',
+        'Recommended: 320 × 320 px (1:1), preferably a transparent PNG or SVG.',
+    ),
+};
+
 export function localizeHelpText(value: LocalizedHelpText, locale: string) {
     return locale.startsWith('zh') ? value.zh_Hans : value.en;
+}
+
+export function getImageSizeGuidance(kind: ImageSizeGuidance): LocalizedHelpText {
+    return imageSizeGuidance[kind];
 }
 
 const pageHelpTopics: Record<string, PageHelpTopic> = {

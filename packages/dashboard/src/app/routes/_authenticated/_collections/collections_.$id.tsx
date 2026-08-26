@@ -515,6 +515,7 @@ function CollectionDetailPage() {
                                 assets={entity?.assets}
                                 featuredAsset={entity?.featuredAsset}
                                 compact={true}
+                                imageGuidance="productGroup"
                                 value={form.getValues()}
                                 onChange={value => {
                                     form.setValue('featuredAssetId', value.featuredAssetId ?? undefined, {

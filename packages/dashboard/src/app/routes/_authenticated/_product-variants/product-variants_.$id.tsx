@@ -518,6 +518,7 @@ function ProductVariantDetailPage() {
                             assets={entity?.assets}
                             featuredAsset={entity?.featuredAsset}
                             compact={true}
+                            imageGuidance="product"
                             value={form.getValues()}
                             onChange={value => {
                                 form.setValue('featuredAssetId', value.featuredAssetId ?? undefined, {

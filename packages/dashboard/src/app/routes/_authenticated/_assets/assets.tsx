@@ -1,4 +1,5 @@
 import { AssetGallery, AssetViewMode } from '@/vdb/components/shared/asset/asset-gallery.js';
+import { ImageSizeHint } from '@/vdb/components/shared/asset/asset-picker-dialog.js';
 import { Page, PageBlock, PageTitle } from '@/vdb/framework/layout-engine/page-layout.js';
 import { z } from '@/vdb/lib/zod.js';
 import { Trans } from '@lingui/react/macro';
@@ -40,6 +41,7 @@ function RouteComponent() {
                 <Trans>Assets</Trans>
             </PageTitle>
             <PageBlock blockId="asset-gallery" column="main">
+                <ImageSizeHint guidance="assetLibrary" className="mb-4" />
                 <AssetGallery
                     selectable={true}
                     multiSelect="auto"

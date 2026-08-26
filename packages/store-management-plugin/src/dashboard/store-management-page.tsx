@@ -14,6 +14,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    ImageSizeHint,
     Input,
     Label,
     Page,
@@ -538,6 +539,7 @@ function ProfileEditor({
                         </div>
                         <div className="space-y-2 sm:col-span-2">
                             <Label>{text.logo}</Label>
+                            <ImageSizeHint guidance="logo" />
                             <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
                                     {draft.logoAsset ? (
@@ -590,6 +592,7 @@ function ProfileEditor({
                 onSelect={assets => update('logoAsset', assets[0] ?? null)}
                 initialSelectedAssets={draft.logoAsset ? [draft.logoAsset] : []}
                 title={text.selectLogo}
+                imageGuidance="logo"
             />
         </>
     );

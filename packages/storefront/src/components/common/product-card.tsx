@@ -109,7 +109,7 @@ export function ProductCard({
                 </button>
             )}
 
-            <div className="aspect-square w-full overflow-hidden bg-slate-50 [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:h-full [&_img]:w-full [&_img]:bg-[var(--product-media-bg)] [&_img]:object-cover [&_img]:transition-transform [&_img]:duration-300 [&_img]:ease-out group-hover:[&_img]:scale-[1.03]">
+            <div className="aspect-square w-full overflow-hidden bg-slate-50 [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:h-full [&_img]:w-full [&_img]:bg-[var(--product-media-bg)] [&_img]:object-contain">
                 <ProductImage product={product} />
             </div>
 

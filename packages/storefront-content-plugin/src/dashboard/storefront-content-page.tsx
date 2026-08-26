@@ -20,6 +20,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    ImageSizeHint,
     Input,
     Label,
     Page,
@@ -105,6 +106,8 @@ const targetTypes: ContentTargetType[] = [
     'SUPPORT',
     'COUPON',
 ];
+
+type ContentImageGuidance = 'hero' | 'banner' | 'contentCard' | 'icon';
 
 const zhCopy = {
     title: '店铺装修',
@@ -1106,6 +1109,7 @@ function BlockEditor({
                                         label={text.imageAsset}
                                         asset={draft.imageAsset}
                                         fallbackUrl={draft.imageUrl}
+                                        imageGuidance={blockImageGuidance(draft.type)}
                                         text={text}
                                         onChange={asset =>
                                             onChange({
@@ -1136,6 +1140,7 @@ function BlockEditor({
                                                     })
                                                 }
                                             />
+                                            <ImageSizeHint guidance={blockImageGuidance(draft.type)} />
                                         </Field>
                                         {draft.type !== 'CORE_CATEGORIES' ? (
                                             <>
@@ -1480,6 +1485,7 @@ function ItemEditor({
                         label={text.imageAsset}
                         asset={item.imageAsset}
                         fallbackUrl={item.imageUrl}
+                        imageGuidance={itemImageGuidance(blockType)}
                         text={text}
                         onChange={asset =>
                             onChange({
@@ -1598,6 +1604,7 @@ function AssetSelectionField({
     className,
     asset,
     fallbackUrl,
+    imageGuidance,
     text,
     onChange,
 }: Readonly<{
@@ -1605,6 +1612,7 @@ function AssetSelectionField({
     className?: string;
     asset: ContentBlock['imageAsset'];
     fallbackUrl: string | null;
+    imageGuidance: ContentImageGuidance;
     text: typeof zhCopy;
     onChange: (asset: NonNullable<ContentBlock['imageAsset']> | null) => void;
 }>) {
@@ -1636,12 +1644,14 @@ function AssetSelectionField({
                     </div>
                 </div>
             </div>
+            <ImageSizeHint guidance={imageGuidance} />
             <AssetPickerDialog
                 open={open}
                 onClose={() => setOpen(false)}
                 onSelect={assets => onChange(assets[0] ?? null)}
                 initialSelectedAssets={asset ? [asset] : []}
                 title={text.selectImage}
+                imageGuidance={imageGuidance}
             />
         </Field>
     );
@@ -1775,6 +1785,14 @@ function simpleModuleUsesItems(type: ContentBlockType): boolean {
 
 function previewUsesBlockImage(type: ContentBlockType): boolean {
     return ['HERO', 'CATEGORY_AD', 'STORY', 'CUSTOM'].includes(type);
+}
+
+function blockImageGuidance(type: ContentBlockType): ContentImageGuidance {
+    return type === 'HERO' ? 'hero' : 'banner';
+}
+
+function itemImageGuidance(type: ContentBlockType): ContentImageGuidance {
+    return ['QUICK_LINKS', 'TRUST_BAR'].includes(type) ? 'icon' : 'contentCard';
 }
 
 function stringArraySetting(value: unknown): string[] {
