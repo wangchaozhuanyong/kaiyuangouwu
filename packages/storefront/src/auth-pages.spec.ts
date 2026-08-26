@@ -18,9 +18,10 @@ const authPageProps = {
     language: 'zh' as const,
     storefrontName: '云桥Ai',
     onBack: vi.fn(),
-    onNavigate: vi.fn(),
     onContentTarget: vi.fn(),
 };
+
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
 describe('loginErrorMessage', () => {
     it('does not reveal whether an account exists', () => {

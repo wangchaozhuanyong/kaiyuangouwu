@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
     ChevronRight,
@@ -19,6 +20,8 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { smartParseAddressText } from './address-parser';
 import { ShopApi } from './api';
 import { responsiveImageSources } from './responsive-image';
+import { routeNavigateOptions } from './storefront-router';
+import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
 import { TaxSummaryRows } from './tax-summary';
 import {
     ActiveCustomer,
@@ -34,6 +37,9 @@ import {
     StorefrontConfig,
     StorefrontLanguage,
 } from './types';
+
+const checkoutPageClassName = (className?: string | false | null) =>
+    pageClassName(checkoutPageStyles, className);
 
 const ORDER_NOTE_MAX_LENGTH = 500;
 type CheckoutRoute = { name: 'payment' | 'cart' | 'addresses' };
@@ -52,7 +58,6 @@ export function CheckoutPage({
     onBack,
     onSessionChange,
     onCartChange,
-    onNavigate,
     onNotify,
     coupons,
     onApplyCoupon,
@@ -70,12 +75,14 @@ export function CheckoutPage({
     onBack: () => void;
     onSessionChange: (session: StorefrontCheckoutSession) => void;
     onCartChange: (cart: StorefrontCart) => void;
-    onNavigate: (route: CheckoutRoute, replace?: boolean) => void;
     onNotify: (message: string) => void;
     coupons: StoreCustomerCoupon[];
     onApplyCoupon: (customerCouponId: string) => Promise<string | null>;
     onRemoveCoupon: (customerCouponId: string) => Promise<string | null>;
 }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: CheckoutRoute, replace = false) =>
+        void navigate({ ...routeNavigateOptions(route), replace } as never);
     const isZh = language === 'zh';
     const directPurchase = mode === 'purchase';
     const [submitting, setSubmitting] = useState(false);
@@ -279,7 +286,7 @@ export function CheckoutPage({
             onNotify(
                 isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.',
             );
-            onNavigate({ name: 'payment' }, true);
+            navigateTo({ name: 'payment' }, true);
         } catch (requestError) {
             setFormError(
                 requestError instanceof Error
@@ -325,7 +332,7 @@ export function CheckoutPage({
                               ? '返回购物车'
                               : 'Back to cart'
                     }
-                    onAction={directPurchase ? onBack : () => onNavigate({ name: 'cart' })}
+                    onAction={directPurchase ? onBack : () => navigateTo({ name: 'cart' })}
                 />
             </Subpage>
         );
@@ -393,7 +400,11 @@ export function CheckoutPage({
     );
 
     return (
-        <main className={`page subpage checkout-page${directPurchase ? ' purchase-page' : ''}`}>
+        <main
+            className={checkoutPageClassName(
+                `page subpage checkout-page${directPurchase ? ' purchase-page' : ''}`,
+            )}
+        >
             <SubHeader
                 title={
                     directPurchase
@@ -407,11 +418,19 @@ export function CheckoutPage({
                 language={language}
                 onBack={onBack}
             />
-            <form ref={formRef} className="checkout-form" onSubmit={event => void submit(event)}>
+            <form
+                ref={formRef}
+                className={checkoutPageClassName('checkout-form')}
+                onSubmit={event => void submit(event)}
+            >
                 {directPurchase && renderCheckoutItems()}
                 {isDigitalOnly ? (
-                    <section className="checkout-section checkout-digital-delivery-section">
-                        <header className="digital-delivery-heading">
+                    <section
+                        className={checkoutPageClassName(
+                            'checkout-section checkout-digital-delivery-section',
+                        )}
+                    >
+                        <header className={checkoutPageClassName('digital-delivery-heading')}>
                             <div>
                                 <h2>{isZh ? '接收方式' : 'Delivery contact'}</h2>
                                 <p>
@@ -422,7 +441,7 @@ export function CheckoutPage({
                             </div>
                             <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
                         </header>
-                        <label className="digital-delivery-email-field">
+                        <label className={checkoutPageClassName('digital-delivery-email-field')}>
                             <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
                             <input
                                 name="deliveryEmail"
@@ -440,9 +459,9 @@ export function CheckoutPage({
                         </label>
                     </section>
                 ) : !customer ? (
-                    <section className="checkout-section checkout-contact-section">
+                    <section className={checkoutPageClassName('checkout-section checkout-contact-section')}>
                         <h2>{isZh ? '联系信息' : 'Contact'}</h2>
-                        <div className="form-grid">
+                        <div className={checkoutPageClassName('form-grid')}>
                             <Field name="firstName" label={isZh ? '名字' : 'First name'} />
                             <Field name="lastName" label={isZh ? '姓氏' : 'Last name'} />
                             <Field
@@ -455,12 +474,12 @@ export function CheckoutPage({
                     </section>
                 ) : null}
                 {requiresShipping && (
-                    <section className="checkout-section checkout-address-section">
-                        <div className="checkout-section-header-row">
+                    <section className={checkoutPageClassName('checkout-section checkout-address-section')}>
+                        <div className={checkoutPageClassName('checkout-section-header-row')}>
                             <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
                             <button
                                 type="button"
-                                className="smart-paste-toggle-btn"
+                                className={checkoutPageClassName('smart-paste-toggle-btn')}
                                 onClick={() => setSmartPasteOpen(!smartPasteOpen)}
                             >
                                 <ClipboardCheck size={14} />
@@ -469,9 +488,9 @@ export function CheckoutPage({
                         </div>
 
                         {smartPasteOpen && (
-                            <div className="smart-paste-card">
+                            <div className={checkoutPageClassName('smart-paste-card')}>
                                 <textarea
-                                    className="smart-paste-input"
+                                    className={checkoutPageClassName('smart-paste-input')}
                                     rows={3}
                                     placeholder={
                                         isZh
@@ -481,10 +500,10 @@ export function CheckoutPage({
                                     value={smartPasteText}
                                     onChange={e => setSmartPasteText(e.target.value)}
                                 />
-                                <div className="smart-paste-actions">
+                                <div className={checkoutPageClassName('smart-paste-actions')}>
                                     <button
                                         type="button"
-                                        className="smart-paste-submit-btn"
+                                        className={checkoutPageClassName('smart-paste-submit-btn')}
                                         onClick={() => {
                                             if (!smartPasteText.trim()) return;
                                             const parsed = smartParseAddressText(smartPasteText);
@@ -513,24 +532,30 @@ export function CheckoutPage({
 
                         {customer?.addresses && customer.addresses.length > 1 && (
                             <div
-                                className="checkout-address-quick-switcher"
+                                className={checkoutPageClassName('checkout-address-quick-switcher')}
                                 aria-label={isZh ? '快捷选择收货地址' : 'Quick select address'}
                             >
                                 {customer.addresses.map(addr => (
                                     <button
                                         type="button"
                                         key={addr.id}
-                                        className={`checkout-address-chip-card${addr.id === (activeAddress?.id ?? '') ? ' is-active' : ''}`}
+                                        className={checkoutPageClassName(
+                                            `checkout-address-chip-card${addr.id === (activeAddress?.id ?? '') ? ' is-active' : ''}`,
+                                        )}
                                         onClick={() => setSelectedAddressId(addr.id)}
                                     >
-                                        <div className="chip-card-top">
+                                        <div className={checkoutPageClassName('chip-card-top')}>
                                             <strong>{addr.fullName}</strong>
                                             <span>{addr.phoneNumber}</span>
                                             {addr.defaultShippingAddress && (
-                                                <em className="default-tag">{isZh ? '默认' : 'Default'}</em>
+                                                <em className={checkoutPageClassName('default-tag')}>
+                                                    {isZh ? '默认' : 'Default'}
+                                                </em>
                                             )}
                                         </div>
-                                        <small className="chip-card-address">{addressText(addr)}</small>
+                                        <small className={checkoutPageClassName('chip-card-address')}>
+                                            {addressText(addr)}
+                                        </small>
                                     </button>
                                 ))}
                             </div>
@@ -539,9 +564,9 @@ export function CheckoutPage({
                         {defaultAddress ? (
                             <>
                                 <button
-                                    className="saved-address"
+                                    className={checkoutPageClassName('saved-address')}
                                     type="button"
-                                    onClick={() => onNavigate({ name: 'addresses' })}
+                                    onClick={() => navigateTo({ name: 'addresses' })}
                                 >
                                     <MapPin />
                                     <span>
@@ -569,7 +594,7 @@ export function CheckoutPage({
                                 />
                             </>
                         ) : (
-                            <div className="form-grid">
+                            <div className={checkoutPageClassName('form-grid')}>
                                 <CountryField
                                     countries={availableCountries}
                                     defaultCountryCode={market.countryCode}
@@ -618,10 +643,10 @@ export function CheckoutPage({
                     </section>
                 )}
                 {!directPurchase && renderCheckoutItems()}
-                <section className="checkout-section checkout-options">
+                <section className={checkoutPageClassName('checkout-section checkout-options')}>
                     {isDigitalOnly && (
                         <div
-                            className="digital-delivery-method"
+                            className={checkoutPageClassName('digital-delivery-method')}
                             aria-label={isZh ? '交付方式' : 'Delivery method'}
                         >
                             <span>{isZh ? '交付方式' : 'Delivery method'}</span>
@@ -641,7 +666,10 @@ export function CheckoutPage({
                         </button>
                     )}
                     {requiresShipping && !!shippingMethods.length && (
-                        <fieldset className="shipping-method-list" disabled={shippingUpdating || submitting}>
+                        <fieldset
+                            className={checkoutPageClassName('shipping-method-list')}
+                            disabled={shippingUpdating || submitting}
+                        >
                             <legend>{isZh ? '配送方式' : 'Delivery'}</legend>
                             {shippingMethods.map(method => (
                                 <label key={method.id}>
@@ -661,7 +689,7 @@ export function CheckoutPage({
                                             locale,
                                             language,
                                         ) && (
-                                            <small className="shipping-method-meta">
+                                            <small className={checkoutPageClassName('shipping-method-meta')}>
                                                 {shippingMethodDetails(
                                                     method,
                                                     order.currencyCode,
@@ -724,7 +752,7 @@ export function CheckoutPage({
                         </small>
                     </button>
                 </section>
-                <section className="checkout-section checkout-summary-section">
+                <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
                     <PriceSummary
                         order={order}
                         locale={locale}
@@ -733,7 +761,7 @@ export function CheckoutPage({
                     />
                 </section>
                 <section
-                    className="checkout-assurance checkout-protection-section"
+                    className={checkoutPageClassName('checkout-assurance checkout-protection-section')}
                     aria-label={isZh ? '购物保障' : 'Purchase protection'}
                 >
                     <span>
@@ -762,8 +790,12 @@ export function CheckoutPage({
                     </span>
                 </section>
                 {formError && <InlineError message={formError} />}
-                <div className="submit-order-bar">
-                    <div className={directPurchase ? 'purchase-submit-total' : undefined}>
+                <div className={checkoutPageClassName('submit-order-bar')}>
+                    <div
+                        className={checkoutPageClassName(
+                            directPurchase ? 'purchase-submit-total' : undefined,
+                        )}
+                    >
                         {directPurchase ? (
                             <>
                                 <small>{isZh ? '合计' : 'Total'}</small>
@@ -821,7 +853,10 @@ export function CheckoutPage({
                     language={language}
                     onClose={() => !noteSaving && setNoteOpen(false)}
                 >
-                    <form className="order-note-sheet" onSubmit={event => void saveOrderNote(event)}>
+                    <form
+                        className={checkoutPageClassName('order-note-sheet')}
+                        onSubmit={event => void saveOrderNote(event)}
+                    >
                         <label>
                             <span>{isZh ? '给商家留言' : 'Message for the store'}</span>
                             <textarea
@@ -837,14 +872,14 @@ export function CheckoutPage({
                                 onChange={event => setNoteDraft(event.currentTarget.value)}
                             />
                         </label>
-                        <div className="order-note-meta">
+                        <div className={checkoutPageClassName('order-note-meta')}>
                             <small>{isZh ? '最多 500 个字符' : 'Up to 500 characters'}</small>
                             <span>
                                 {noteDraft.length}/{ORDER_NOTE_MAX_LENGTH}
                             </span>
                         </div>
                         {noteError && <InlineError message={noteError} />}
-                        <div className="order-note-actions">
+                        <div className={checkoutPageClassName('order-note-actions')}>
                             <button
                                 type="button"
                                 disabled={noteSaving || !noteDraft}
@@ -852,7 +887,11 @@ export function CheckoutPage({
                             >
                                 {isZh ? '清空' : 'Clear'}
                             </button>
-                            <button className="primary-action" type="submit" disabled={noteSaving}>
+                            <button
+                                className={checkoutPageClassName('primary-action')}
+                                type="submit"
+                                disabled={noteSaving}
+                            >
                                 {noteSaving ? (isZh ? '保存中' : 'Saving') : isZh ? '保存备注' : 'Save note'}
                             </button>
                         </div>
@@ -884,12 +923,12 @@ function CheckoutItemsGroup({
 }) {
     const isZh = language === 'zh';
     return (
-        <section className="checkout-section checkout-product-group">
-            <header className="checkout-section-title">
+        <section className={checkoutPageClassName('checkout-section checkout-product-group')}>
+            <header className={checkoutPageClassName('checkout-section-title')}>
                 <h2>{title}</h2>
                 <span>{hint}</span>
             </header>
-            <div className="checkout-items">
+            <div className={checkoutPageClassName('checkout-items')}>
                 {lines.map(line => (
                     <article key={line.id}>
                         <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
@@ -914,13 +953,13 @@ function CheckoutItemsGroup({
                                           : 'After-sales support'}
                             </em>
                         </div>
-                        <span className="checkout-line-meta">
+                        <span className={checkoutPageClassName('checkout-line-meta')}>
                             <b>
                                 {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
                             </b>
                             {directPurchase ? (
                                 <span
-                                    className="purchase-quantity-control"
+                                    className={checkoutPageClassName('purchase-quantity-control')}
                                     aria-label={isZh ? '购买数量' : 'Quantity'}
                                 >
                                     <button
@@ -978,7 +1017,7 @@ function PriceSummary({
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
     return (
-        <dl className="price-summary">
+        <dl className={checkoutPageClassName('price-summary')}>
             <div>
                 <dt>{isZh ? '商品金额' : 'Items'}</dt>
                 <dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd>
@@ -990,13 +1029,13 @@ function PriceSummary({
                 <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
             </div>
             {discount > 0 && (
-                <div className="discount">
+                <div className={checkoutPageClassName('discount')}>
                     <dt>{isZh ? '优惠' : 'Discount'}</dt>
                     <dd>-{formatMoney(discount, order.currencyCode, locale)}</dd>
                 </div>
             )}
             <TaxSummaryRows order={order} locale={locale} language={language} />
-            <div className="summary-total">
+            <div className={checkoutPageClassName('summary-total')}>
                 <dt>{isZh ? '合计' : 'Total'}</dt>
                 <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
             </div>
@@ -1065,9 +1104,9 @@ function CouponSheet({
     const selectableCoupons = coupons.filter(coupon => coupon.usable || coupon.lockedOrderId === orderId);
     return (
         <Sheet title={isZh ? '选择优惠券' : 'Choose a coupon'} language={language} onClose={onClose}>
-            <div className="coupon-sheet-content">
+            <div className={checkoutPageClassName('coupon-sheet-content')}>
                 {selectableCoupons.length ? (
-                    <section className="applied-coupons">
+                    <section className={checkoutPageClassName('applied-coupons')}>
                         <strong>{isZh ? '我的可用优惠券' : 'My available coupons'}</strong>
                         {selectableCoupons.map(coupon => {
                             const applied = coupon.lockedOrderId === orderId;
@@ -1091,7 +1130,7 @@ function CouponSheet({
                 ) : (
                     <p>{isZh ? '暂无可用优惠券，请先到领券中心领取' : 'No coupons available yet.'}</p>
                 )}
-                {error && <small className="form-error">{error}</small>}
+                {error && <small className={checkoutPageClassName('form-error')}>{error}</small>}
             </div>
         </Sheet>
     );
@@ -1160,16 +1199,16 @@ function Sheet({
         };
     }, []);
     return (
-        <div className="sheet-layer" role="presentation">
+        <div className={checkoutPageClassName('sheet-layer')} role="presentation">
             <button
-                className="sheet-mask"
+                className={checkoutPageClassName('sheet-mask')}
                 type="button"
                 onClick={onClose}
                 aria-label={language === 'zh' ? '关闭' : 'Close'}
             />
             <section
                 ref={dialogRef}
-                className="sheet"
+                className={checkoutPageClassName('sheet')}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}
@@ -1196,7 +1235,7 @@ function SubHeader({
     onBack: () => void;
 }) {
     return (
-        <header className="topbar subpage-header">
+        <header className={checkoutPageClassName('topbar subpage-header')}>
             <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
                 <ArrowLeft aria-hidden="true" />
             </button>
@@ -1217,7 +1256,7 @@ function Subpage({
     children: ReactNode;
 }) {
     return (
-        <main className="page subpage">
+        <main className={checkoutPageClassName('page subpage')}>
             <SubHeader title={title} language={language} onBack={onBack} />
             {children}
         </main>
@@ -1235,7 +1274,7 @@ function EmptyState({
     onAction?: () => void;
 }) {
     return (
-        <section className="empty-state">
+        <section className={checkoutPageClassName('empty-state')}>
             <span>{icon}</span>
             <h2>{title}</h2>
             {action && (
@@ -1248,7 +1287,7 @@ function EmptyState({
 }
 function InlineError({ message }: { message: string }) {
     return (
-        <div className="inline-error" role="alert">
+        <div className={checkoutPageClassName('inline-error')} role="alert">
             <span>{message}</span>
         </div>
     );
@@ -1267,7 +1306,7 @@ function Field({
     wide?: boolean;
 }) {
     return (
-        <label className={wide ? 'field-wide' : undefined}>
+        <label className={checkoutPageClassName(wide ? 'field-wide' : undefined)}>
             <span>{label}</span>
             <input name={name} type={type} defaultValue={defaultValue} required />
         </label>
@@ -1287,7 +1326,7 @@ function CountryField({
         ? defaultCountryCode
         : options[0].code;
     return (
-        <label className="field-wide">
+        <label className={checkoutPageClassName('field-wide')}>
             <span>{language === 'zh' ? '国家/地区' : 'Country/region'}</span>
             <select name="countryCode" defaultValue={selected} required>
                 {options.map(country => (
@@ -1303,16 +1342,16 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
     const src = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
     if (!src)
         return (
-            <div className="image-placeholder" aria-hidden="true">
+            <div className={checkoutPageClassName('image-placeholder')} aria-hidden="true">
                 <Package />
             </div>
         );
     const source = responsiveImageSources(src, 'thumbnail');
     return source ? (
-        <picture className="responsive-picture safe-image-frame">
+        <picture className={checkoutPageClassName('responsive-picture safe-image-frame')}>
             <source type="image/webp" srcSet={source.webpSrcSet} sizes={source.sizes} />
             <img
-                className="safe-image is-loaded"
+                className={checkoutPageClassName('safe-image is-loaded')}
                 src={source.fallbackSrc}
                 srcSet={source.fallbackSrcSet}
                 sizes={source.sizes}

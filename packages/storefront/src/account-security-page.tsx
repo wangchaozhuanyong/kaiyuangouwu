@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ReactNode } from 'react';
 
+import { routeNavigateOptions } from './storefront-router';
 import { ActiveCustomer, StorefrontLanguage } from './types';
 
 type AccountRoute = { name: 'login' | 'forgot-password' | 'addresses' };
@@ -19,16 +21,16 @@ export function AccountSecurityPage({
     language,
     storefrontName,
     onBack,
-    onNavigate,
     onLogout,
 }: {
     customer: ActiveCustomer | null;
     language: StorefrontLanguage;
     storefrontName: string;
     onBack: () => void;
-    onNavigate: (route: AccountRoute) => void;
     onLogout: () => void;
 }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: AccountRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     if (!customer) {
         return (
@@ -37,7 +39,7 @@ export function AccountSecurityPage({
                     icon={<UserRound size={32} />}
                     title={isZh ? '请先登录' : 'Sign in required'}
                     action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => onNavigate({ name: 'login' })}
+                    onAction={() => navigateTo({ name: 'login' })}
                 />
             </Subpage>
         );
@@ -82,7 +84,7 @@ export function AccountSecurityPage({
                         <button
                             type="button"
                             className="security-item-btn"
-                            onClick={() => onNavigate({ name: 'forgot-password' })}
+                            onClick={() => navigateTo({ name: 'forgot-password' })}
                         >
                             <span className="security-item-icon icon-password" aria-hidden="true">
                                 <KeyRound size={17} />
@@ -104,7 +106,7 @@ export function AccountSecurityPage({
                         <button
                             type="button"
                             className="security-item-btn"
-                            onClick={() => onNavigate({ name: 'addresses' })}
+                            onClick={() => navigateTo({ name: 'addresses' })}
                         >
                             <span className="security-item-icon icon-address" aria-hidden="true">
                                 <MapPin size={17} />

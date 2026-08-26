@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
     CircleAlert,
@@ -18,6 +19,7 @@ import {
     validateAccountPassword,
 } from './auth-validation';
 import { storefrontWebpUrl } from './responsive-image';
+import { routeNavigateOptions } from './storefront-router';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
 
 type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
@@ -199,7 +201,6 @@ interface AuthPageBaseProps {
     storefrontName: string;
     logoUrl?: string | null;
     onBack: () => void;
-    onNavigate: (route: AuthRoute) => void;
 }
 
 interface AuthLegalProps {
@@ -224,9 +225,10 @@ export function LoginPage({
     legalContent,
     onBack,
     onSuccess,
-    onNavigate,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps) {
+    const navigate = useNavigate();
+    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -269,7 +271,7 @@ export function LoginPage({
                 <button
                     className="auth-inline-link"
                     type="button"
-                    onClick={() => onNavigate({ name: 'forgot-password' })}
+                    onClick={() => navigateTo({ name: 'forgot-password' })}
                 >
                     {isZh ? '忘记密码？' : 'Forgot password?'}
                 </button>
@@ -287,7 +289,7 @@ export function LoginPage({
             <AuthSwitch
                 prompt={isZh ? '还没有账户？' : 'New here?'}
                 action={isZh ? '注册账户' : 'Create account'}
-                onClick={() => onNavigate({ name: 'register' })}
+                onClick={() => navigateTo({ name: 'register' })}
             />
             <AuthLegalNotice content={legalContent} language={language} onContentTarget={onContentTarget} />
         </AuthLayout>
@@ -301,9 +303,10 @@ export function RegisterPage({
     logoUrl,
     legalContent,
     onBack,
-    onNavigate,
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps) {
+    const navigate = useNavigate();
+    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
@@ -433,7 +436,7 @@ export function RegisterPage({
                     <button
                         className="auth-secondary-action"
                         type="button"
-                        onClick={() => onNavigate({ name: 'login' })}
+                        onClick={() => navigateTo({ name: 'login' })}
                     >
                         {isZh ? '返回登录' : 'Back to sign in'}
                     </button>
@@ -496,7 +499,7 @@ export function RegisterPage({
                     <AuthSwitch
                         prompt={isZh ? '已有账户？' : 'Already have an account?'}
                         action={isZh ? '去登录' : 'Sign in'}
-                        onClick={() => onNavigate({ name: 'login' })}
+                        onClick={() => navigateTo({ name: 'login' })}
                     />
                     <AuthLegalNotice
                         content={legalContent}
@@ -518,8 +521,9 @@ export function VerifyAccountPage({
     token,
     onBack,
     onSuccess,
-    onNavigate,
 }: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [error, setError] = useState('');
     const [requiresPassword, setRequiresPassword] = useState(false);
@@ -703,7 +707,7 @@ export function VerifyAccountPage({
                         <button
                             className="auth-secondary-action"
                             type="button"
-                            onClick={() => onNavigate({ name: 'login' })}
+                            onClick={() => navigateTo({ name: 'login' })}
                         >
                             {isZh ? '返回登录' : 'Back to sign in'}
                         </button>
@@ -714,14 +718,9 @@ export function VerifyAccountPage({
     );
 }
 
-export function ForgotPasswordPage({
-    api,
-    language,
-    storefrontName,
-    logoUrl,
-    onBack,
-    onNavigate,
-}: AuthPageBaseProps) {
+export function ForgotPasswordPage({ api, language, storefrontName, logoUrl, onBack }: AuthPageBaseProps) {
+    const navigate = useNavigate();
+    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [requested, setRequested] = useState(false);
@@ -767,7 +766,7 @@ export function ForgotPasswordPage({
                         idle={isZh ? '返回登录' : 'Back to sign in'}
                         busy=""
                         submitting={false}
-                        onClick={() => onNavigate({ name: 'login' })}
+                        onClick={() => navigateTo({ name: 'login' })}
                     />
                 </AuthResult>
             ) : (
@@ -811,8 +810,9 @@ export function ResetPasswordPage({
     token,
     onBack,
     onSuccess,
-    onNavigate,
 }: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(
@@ -903,7 +903,7 @@ export function ResetPasswordPage({
                         idle={isZh ? '重新获取链接' : 'Request another link'}
                         busy=""
                         submitting={false}
-                        onClick={() => onNavigate({ name: 'forgot-password' })}
+                        onClick={() => navigateTo({ name: 'forgot-password' })}
                     />
                 </AuthResult>
             )}

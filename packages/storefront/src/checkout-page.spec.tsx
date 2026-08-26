@@ -6,6 +6,8 @@ import { ShopApi } from './api';
 import { CheckoutPage } from './checkout-page';
 import { ActiveCustomer, MarketConfig, Order, OrderLine, ProductVariant, StorefrontCart } from './types';
 
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+
 const market: MarketConfig = {
     code: 'my-malaysia',
     defaultLanguageCode: 'zh_Hans',
@@ -116,7 +118,6 @@ function renderCheckout(order: Order, customer: ActiveCustomer | null = null): s
             onBack: vi.fn(),
             onSessionChange: vi.fn(),
             onCartChange: vi.fn(),
-            onNavigate: vi.fn(),
             onNotify: vi.fn(),
             coupons: [],
             onApplyCoupon: vi.fn().mockResolvedValue(null),

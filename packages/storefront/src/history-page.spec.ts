@@ -4,9 +4,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
-import { BrowsingHistoryPage, FavoriteProductsPage } from './App';
+import { BrowsingHistoryPage } from './pages/browsing-history-page';
+import { FavoriteProductsPage } from './pages/favorite-products-page';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
+import { StorefrontContext } from './StorefrontContext';
 import { MarketConfig, Product } from './types';
+
+vi.mock('@tanstack/react-router', async importOriginal => ({
+    ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+    useNavigate: () => vi.fn(),
+    useRouter: () => ({ history: { back: vi.fn() } }),
+}));
 
 const market: MarketConfig = {
     code: 'my-malaysia',
@@ -38,18 +46,22 @@ function renderHistory(cachedProducts?: Product[]) {
             cachedProducts,
         );
     }
-    const page = createElement(BrowsingHistoryPage, {
-        api: { productsByIds: vi.fn() } as unknown as ShopApi,
-        productIds,
-        market,
-        locale: market.locale,
-        language: 'zh' as const,
-        addingVariantId: null,
-        onBack: vi.fn(),
-        onNavigate: vi.fn(),
-        onAdd: vi.fn(),
-        onClear: vi.fn(),
-    });
+    const page = createElement(
+        StorefrontContext.Provider,
+        {
+            value: {
+                api: { productsByIds: vi.fn() } as unknown as ShopApi,
+                productIds,
+                market,
+                locale: market.locale,
+                language: 'zh' as const,
+                addingVariantId: null,
+                onAdd: vi.fn(),
+                onClear: vi.fn(),
+            },
+        },
+        createElement(BrowsingHistoryPage),
+    );
     return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
 }
 
@@ -62,19 +74,23 @@ function renderFavorites(cachedProducts?: Product[]) {
             cachedProducts,
         );
     }
-    const page = createElement(FavoriteProductsPage, {
-        api: { productsByIds: vi.fn() } as unknown as ShopApi,
-        productIds,
-        market,
-        locale: market.locale,
-        language: 'zh' as const,
-        addingVariantId: null,
-        onBack: vi.fn(),
-        onNavigate: vi.fn(),
-        onAdd: vi.fn(),
-        onRemove: vi.fn(),
-        onClear: vi.fn(),
-    });
+    const page = createElement(
+        StorefrontContext.Provider,
+        {
+            value: {
+                api: { productsByIds: vi.fn() } as unknown as ShopApi,
+                productIds,
+                market,
+                locale: market.locale,
+                language: 'zh' as const,
+                addingVariantId: null,
+                onAdd: vi.fn(),
+                onRemove: vi.fn(),
+                onClear: vi.fn(),
+            },
+        },
+        createElement(FavoriteProductsPage),
+    );
     return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
 }
 

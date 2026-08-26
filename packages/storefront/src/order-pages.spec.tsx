@@ -8,6 +8,8 @@ import { LogisticsPage, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { ActiveCustomer, MarketConfig, Order } from './types';
 
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+
 const market: MarketConfig = {
     code: 'my-malaysia',
     defaultLanguageCode: 'zh_Hans',
@@ -86,7 +88,6 @@ function renderOrders(cachedOrders?: Order[]) {
         storefrontName: '测试商城',
         initialTab: 'all' as const,
         onBack: vi.fn(),
-        onNavigate: vi.fn(),
         onBuyAgain: vi.fn(),
         onNotify: vi.fn(),
     });
@@ -113,7 +114,6 @@ function renderLogistics(cachedOrders?: Order[]) {
         locale: market.locale,
         language: 'zh' as const,
         onBack: vi.fn(),
-        onNavigate: vi.fn(),
     });
     return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
 }

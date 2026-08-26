@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { routeFromHash } from './App';
+import { routeFromHash, routeFromRouterLocation, routeHref } from './storefront-router';
 
-describe('storefront hash routing', () => {
+describe('storefront routing', () => {
+    it('builds browser-history URLs and reads their search state', () => {
+        expect(routeHref({ name: 'product', id: '42' })).toBe('/product?id=42');
+        expect(routeFromRouterLocation('/product', { id: 42 })).toMatchObject({
+            name: 'product',
+            id: '42',
+        });
+        expect(routeFromRouterLocation('/orders', { tab: 'shipping' })).toMatchObject({
+            name: 'orders',
+            tab: 'shipping',
+        });
+    });
+
     it('opens the home page for an empty hash', () => {
         expect(routeFromHash('')).toEqual({
             name: 'home',

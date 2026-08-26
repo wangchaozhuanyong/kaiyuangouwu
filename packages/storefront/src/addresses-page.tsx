@@ -1,7 +1,9 @@
+import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, CircleCheck, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
+import { routeNavigateOptions } from './storefront-router';
 import {
     ActiveCustomer,
     CustomerAddress,
@@ -11,6 +13,11 @@ import {
     StorefrontLanguage,
 } from './types';
 
+function formText(data: FormData, name: string, fallback = ''): string {
+    const value = data.get(name);
+    return typeof value === 'string' ? value : fallback;
+}
+
 export function AddressesPage({
     api,
     customer,
@@ -19,7 +26,6 @@ export function AddressesPage({
     language,
     onBack,
     onCustomerChange,
-    onNavigate,
     onNotify,
 }: {
     api: ShopApi;
@@ -29,9 +35,9 @@ export function AddressesPage({
     language: StorefrontLanguage;
     onBack: () => void;
     onCustomerChange: (customer: ActiveCustomer | null) => void;
-    onNavigate: (route: { name: 'login' }) => void;
     onNotify: (message: string) => void;
 }) {
+    const navigate = useNavigate();
     const isZh = language === 'zh';
     const [open, setOpen] = useState(false);
     const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
@@ -44,7 +50,7 @@ export function AddressesPage({
                     icon={<MapPin />}
                     title={isZh ? '登录后管理地址' : 'Sign in to manage addresses'}
                     action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => onNavigate({ name: 'login' })}
+                    onAction={() => void navigate(routeNavigateOptions({ name: 'login' }) as never)}
                 />
             </Subpage>
         );
@@ -56,14 +62,14 @@ export function AddressesPage({
         setFormError('');
         try {
             const input: CustomerAddressInput = {
-                fullName: String(data.get('fullName')),
-                phoneNumber: String(data.get('phoneNumber')),
-                province: String(data.get('province')),
-                city: String(data.get('city')),
-                streetLine1: String(data.get('streetLine1')),
-                streetLine2: String(data.get('streetLine2') ?? ''),
-                postalCode: String(data.get('postalCode')),
-                countryCode: String(data.get('countryCode') ?? market.countryCode),
+                fullName: formText(data, 'fullName'),
+                phoneNumber: formText(data, 'phoneNumber'),
+                province: formText(data, 'province'),
+                city: formText(data, 'city'),
+                streetLine1: formText(data, 'streetLine1'),
+                streetLine2: formText(data, 'streetLine2'),
+                postalCode: formText(data, 'postalCode'),
+                countryCode: formText(data, 'countryCode', market.countryCode),
                 defaultShippingAddress:
                     customer.addresses?.length === 0 || data.get('defaultShippingAddress') === 'on',
             };

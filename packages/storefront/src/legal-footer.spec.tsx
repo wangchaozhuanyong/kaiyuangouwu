@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { LegalFooter } from './App';
+import { LegalFooter } from './storefront-ui/page-shell';
 import { StorefrontContentBlock } from './types';
 
 const legalBlock: StorefrontContentBlock = {

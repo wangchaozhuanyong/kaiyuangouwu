@@ -1,9 +1,10 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { App } from './App';
 import { restorePublicQueryCache, storefrontQueryClient, watchPublicQueryCache } from './query-client';
+import { router } from './router';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 import './styles.css';
@@ -26,7 +27,7 @@ createRoot(rootElement).render(
         <QueryClientProvider client={storefrontQueryClient}>
             <StorefrontUpdatePrompt />
             <StorefrontErrorBoundary>
-                <App />
+                <RouterProvider router={router} />
             </StorefrontErrorBoundary>
         </QueryClientProvider>
     </StrictMode>,

@@ -2,8 +2,14 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CartPage } from './App';
+import { CartPage } from './pages/cart-page';
+import { StorefrontContext } from './StorefrontContext';
 import { MarketConfig, StorefrontCart } from './types';
+
+vi.mock('@tanstack/react-router', async importOriginal => ({
+    ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+    useNavigate: () => vi.fn(),
+}));
 
 const market: MarketConfig = {
     code: 'my-malaysia',
@@ -58,7 +64,6 @@ const callbacks = {
     onFavorite: vi.fn(),
     onCheckout: vi.fn(),
     onReopen: vi.fn(),
-    onNavigate: vi.fn(),
     onAdd: vi.fn(),
     onNotify: vi.fn(),
     onRetry: vi.fn(),
@@ -68,20 +73,26 @@ const callbacks = {
 
 function renderCart(value: StorefrontCart | null) {
     return renderToStaticMarkup(
-        createElement(CartPage, {
-            cart: value,
-            customer: null,
-            products: [],
-            market,
-            locale: market.locale,
-            language: 'zh' as const,
-            loading: false,
-            error: null,
-            addingVariantId: null,
-            favoriteProductIds: [],
-            coupons: [],
-            ...callbacks,
-        }),
+        createElement(
+            StorefrontContext.Provider,
+            {
+                value: {
+                    cart: value,
+                    customer: null,
+                    products: [],
+                    market,
+                    locale: market.locale,
+                    language: 'zh' as const,
+                    loading: false,
+                    error: null,
+                    addingVariantId: null,
+                    favoriteProductIds: [],
+                    coupons: [],
+                    ...callbacks,
+                },
+            },
+            createElement(CartPage),
+        ),
     );
 }
 

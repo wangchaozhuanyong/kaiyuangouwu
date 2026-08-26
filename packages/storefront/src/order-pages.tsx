@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
     Boxes,
@@ -31,6 +32,8 @@ import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { responsiveImageSources } from './responsive-image';
 import { PageSkeleton } from './route-loading';
+import { routeNavigateOptions } from './storefront-router';
+import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
 import { TaxSummaryRows } from './tax-summary';
 import {
     ActiveCustomer,
@@ -46,6 +49,8 @@ import {
     StorefrontLanguage,
 } from './types';
 
+const orderPageClassName = (className?: string | false | null) => pageClassName(orderPageStyles, className);
+
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 type OrderRoute = { name: 'login' | 'order-detail'; id?: string };
 type LogisticsFilter = 'all' | 'transit' | 'preparing' | 'delivered';
@@ -60,7 +65,6 @@ export function OrdersPage({
     storefrontName,
     initialTab,
     onBack,
-    onNavigate,
     onBuyAgain,
     onNotify,
 }: {
@@ -72,10 +76,11 @@ export function OrdersPage({
     storefrontName: string;
     initialTab: OrderTab;
     onBack: () => void;
-    onNavigate: (route: OrderRoute) => void;
     onBuyAgain: (order: OrderSummary) => Promise<void>;
     onNotify: (message: string) => void;
 }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: OrderRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [tab, setTab] = useState<OrderTab>(initialTab);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -175,7 +180,7 @@ export function OrdersPage({
     useEffect(() => setTab(initialTab), [initialTab]);
 
     return (
-        <main className="page subpage orders-page">
+        <main className={orderPageClassName('page subpage orders-page')}>
             <SubHeader
                 title={isZh ? '我的订单' : 'My orders'}
                 language={language}
@@ -191,12 +196,12 @@ export function OrdersPage({
                     </button>
                 }
             />
-            <nav className="order-tabs">
+            <nav className={orderPageClassName('order-tabs')}>
                 {tabs.map(item => (
                     <button
                         type="button"
                         key={item.id}
-                        className={tab === item.id ? 'is-active' : undefined}
+                        className={orderPageClassName(tab === item.id ? 'is-active' : undefined)}
                         onClick={() => setTab(item.id)}
                     >
                         {item.label}
@@ -205,7 +210,7 @@ export function OrdersPage({
             </nav>
             {searchOpen && (
                 <form
-                    className="order-search"
+                    className={orderPageClassName('order-search')}
                     onSubmit={event => {
                         event.preventDefault();
                         setOrderCode(searchInput.trim());
@@ -243,7 +248,7 @@ export function OrdersPage({
                             : 'Orders and delivery details are saved to your account'
                     }
                     action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => onNavigate({ name: 'login' })}
+                    onAction={() => navigateTo({ name: 'login' })}
                 />
             ) : tab === 'service' ? (
                 <AfterSalesList
@@ -260,7 +265,7 @@ export function OrdersPage({
                     locale={locale}
                     language={language}
                     onRetry={() => void afterSalesQuery.refetch()}
-                    onOpenOrder={orderId => onNavigate({ name: 'order-detail', id: orderId })}
+                    onOpenOrder={orderId => navigateTo({ name: 'order-detail', id: orderId })}
                     onCancel={id => void cancelAfterSales(id)}
                 />
             ) : loading && !orders.length ? (
@@ -274,7 +279,7 @@ export function OrdersPage({
                     onAction={() => void ordersQuery.refetch()}
                 />
             ) : orders.length ? (
-                <div className="order-list">
+                <div className={orderPageClassName('order-list')}>
                     {orders.map(order => (
                         <OrderCard
                             key={order.id}
@@ -282,7 +287,7 @@ export function OrdersPage({
                             locale={locale}
                             language={language}
                             storefrontName={storefrontName}
-                            onOpen={() => onNavigate({ name: 'order-detail', id: order.id })}
+                            onOpen={() => navigateTo({ name: 'order-detail', id: order.id })}
                             onBuyAgain={() => void onBuyAgain(order)}
                         />
                     ))}
@@ -296,7 +301,7 @@ export function OrdersPage({
                     {orders.length < totalItems && (
                         <button
                             type="button"
-                            className="load-more-button order-load-more"
+                            className={orderPageClassName('load-more-button order-load-more')}
                             disabled={loadingMore}
                             onClick={() => void ordersQuery.fetchNextPage()}
                         >
@@ -328,7 +333,6 @@ export function LogisticsPage({
     locale,
     language,
     onBack,
-    onNavigate,
 }: {
     api: ShopApi;
     customer: ActiveCustomer | null;
@@ -336,8 +340,9 @@ export function LogisticsPage({
     locale: string;
     language: StorefrontLanguage;
     onBack: () => void;
-    onNavigate: (route: OrderRoute) => void;
 }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: OrderRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [filter, setFilter] = useState<LogisticsFilter>('all');
     const pageSize = 10;
@@ -403,87 +408,103 @@ export function LogisticsPage({
     };
 
     return (
-        <main className="page subpage logistics-page">
+        <main className={orderPageClassName('page subpage logistics-page')}>
             <SubHeader title={isZh ? '物流动态' : 'Delivery updates'} language={language} onBack={onBack} />
 
             {/* 1. 模块化物流状态仪表盘 */}
-            <div className="logistics-modular-hub">
+            <div className={orderPageClassName('logistics-modular-hub')}>
                 <nav
-                    className="logistics-stats-grid"
+                    className={orderPageClassName('logistics-stats-grid')}
                     aria-label={isZh ? '物流状态筛选' : 'Filter delivery status'}
                 >
                     <button
                         type="button"
-                        className={`logistics-stat-card ${filter === 'all' ? 'is-active' : ''}`}
+                        className={orderPageClassName(
+                            `logistics-stat-card ${filter === 'all' ? 'is-active' : ''}`,
+                        )}
                         aria-pressed={filter === 'all'}
                         onClick={() => setFilter('all')}
                     >
-                        <div className="stat-card-top">
-                            <span className="stat-card-icon icon-all">
+                        <div className={orderPageClassName('stat-card-top')}>
+                            <span className={orderPageClassName('stat-card-icon icon-all')}>
                                 <Boxes size={18} />
                             </span>
-                            <span className="stat-card-count">{counts.all}</span>
+                            <span className={orderPageClassName('stat-card-count')}>{counts.all}</span>
                         </div>
-                        <span className="stat-card-label">{isZh ? '全部包裹' : 'All'}</span>
+                        <span className={orderPageClassName('stat-card-label')}>
+                            {isZh ? '全部包裹' : 'All'}
+                        </span>
                     </button>
 
                     <button
                         type="button"
-                        className={`logistics-stat-card ${filter === 'transit' ? 'is-active' : ''}`}
+                        className={orderPageClassName(
+                            `logistics-stat-card ${filter === 'transit' ? 'is-active' : ''}`,
+                        )}
                         aria-pressed={filter === 'transit'}
                         onClick={() => setFilter('transit')}
                     >
-                        <div className="stat-card-top">
-                            <span className="stat-card-icon icon-transit">
+                        <div className={orderPageClassName('stat-card-top')}>
+                            <span className={orderPageClassName('stat-card-icon icon-transit')}>
                                 <Truck size={18} />
                             </span>
-                            <span className="stat-card-count">{counts.transit}</span>
+                            <span className={orderPageClassName('stat-card-count')}>{counts.transit}</span>
                         </div>
-                        <span className="stat-card-label">{isZh ? '运输中' : 'In transit'}</span>
+                        <span className={orderPageClassName('stat-card-label')}>
+                            {isZh ? '运输中' : 'In transit'}
+                        </span>
                     </button>
 
                     <button
                         type="button"
-                        className={`logistics-stat-card ${filter === 'preparing' ? 'is-active' : ''}`}
+                        className={orderPageClassName(
+                            `logistics-stat-card ${filter === 'preparing' ? 'is-active' : ''}`,
+                        )}
                         aria-pressed={filter === 'preparing'}
                         onClick={() => setFilter('preparing')}
                     >
-                        <div className="stat-card-top">
-                            <span className="stat-card-icon icon-preparing">
+                        <div className={orderPageClassName('stat-card-top')}>
+                            <span className={orderPageClassName('stat-card-icon icon-preparing')}>
                                 <Clock3 size={18} />
                             </span>
-                            <span className="stat-card-count">{counts.preparing}</span>
+                            <span className={orderPageClassName('stat-card-count')}>{counts.preparing}</span>
                         </div>
-                        <span className="stat-card-label">{isZh ? '待发货' : 'Preparing'}</span>
+                        <span className={orderPageClassName('stat-card-label')}>
+                            {isZh ? '待发货' : 'Preparing'}
+                        </span>
                     </button>
 
                     <button
                         type="button"
-                        className={`logistics-stat-card ${filter === 'delivered' ? 'is-active' : ''}`}
+                        className={orderPageClassName(
+                            `logistics-stat-card ${filter === 'delivered' ? 'is-active' : ''}`,
+                        )}
                         aria-pressed={filter === 'delivered'}
                         onClick={() => setFilter('delivered')}
                     >
-                        <div className="stat-card-top">
-                            <span className="stat-card-icon icon-delivered">
+                        <div className={orderPageClassName('stat-card-top')}>
+                            <span className={orderPageClassName('stat-card-icon icon-delivered')}>
                                 <PackageCheck size={18} />
                             </span>
-                            <span className="stat-card-count">{counts.delivered}</span>
+                            <span className={orderPageClassName('stat-card-count')}>{counts.delivered}</span>
                         </div>
-                        <span className="stat-card-label">{isZh ? '已签收' : 'Delivered'}</span>
+                        <span className={orderPageClassName('stat-card-label')}>
+                            {isZh ? '已签收' : 'Delivered'}
+                        </span>
                     </button>
                 </nav>
 
                 {/* 2. 物流状态信息微条 */}
-                <div className="logistics-service-strip" aria-hidden="true">
-                    <div className="service-strip-item">
+                <div className={orderPageClassName('logistics-service-strip')} aria-hidden="true">
+                    <div className={orderPageClassName('service-strip-item')}>
                         <ShieldCheck size={13} />
                         <span>{isZh ? '配送状态可查' : 'Delivery Status'}</span>
                     </div>
-                    <div className="service-strip-item">
+                    <div className={orderPageClassName('service-strip-item')}>
                         <Radio size={13} />
                         <span>{isZh ? '实时路由追踪' : 'Live Tracking'}</span>
                     </div>
-                    <div className="service-strip-item">
+                    <div className={orderPageClassName('service-strip-item')}>
                         <Sparkles size={13} />
                         <span>{isZh ? '售后入口可查' : 'After-sales'}</span>
                     </div>
@@ -499,7 +520,7 @@ export function LogisticsPage({
                             : 'Delivery progress for physical orders appears here'
                     }
                     action={isZh ? '去登录' : 'Sign in'}
-                    onAction={() => onNavigate({ name: 'login' })}
+                    onAction={() => navigateTo({ name: 'login' })}
                 />
             ) : loading && !orders.length ? (
                 <PageSkeleton label={isZh ? '正在加载物流信息' : 'Loading delivery updates'} />
@@ -512,7 +533,7 @@ export function LogisticsPage({
                     onAction={() => void logisticsQuery.refetch()}
                 />
             ) : logisticsOrders.length ? (
-                <div className="logistics-list">
+                <div className={orderPageClassName('logistics-list')}>
                     {visibleOrders.length ? (
                         visibleOrders.map(order => (
                             <LogisticsCard
@@ -520,7 +541,7 @@ export function LogisticsPage({
                                 order={order}
                                 locale={locale}
                                 language={language}
-                                onOpen={() => onNavigate({ name: 'order-detail', id: order.id })}
+                                onOpen={() => navigateTo({ name: 'order-detail', id: order.id })}
                             />
                         ))
                     ) : (
@@ -542,7 +563,7 @@ export function LogisticsPage({
                     {logisticsQuery.hasNextPage && (
                         <button
                             type="button"
-                            className="load-more-button logistics-load-more"
+                            className={orderPageClassName('load-more-button logistics-load-more')}
                             disabled={loadingMore}
                             onClick={() => void logisticsQuery.fetchNextPage()}
                         >
@@ -589,9 +610,11 @@ function LogisticsCard({
     const trackingCode = fulfillment?.trackingCode;
 
     return (
-        <article className={`logistics-card is-${status}`}>
+        <article className={orderPageClassName(`logistics-card is-${status}`)}>
             <header>
-                <span className="logistics-status-icon">{logisticsStatusIcon(status)}</span>
+                <span className={orderPageClassName('logistics-status-icon')}>
+                    {logisticsStatusIcon(status)}
+                </span>
                 <span>
                     <strong>{logisticsStatusLabel(status, language)}</strong>
                     <small>{logisticsStatusHint(status, language)}</small>
@@ -600,9 +623,9 @@ function LogisticsCard({
                     {updatedAt ? formatOrderDate(updatedAt, locale) : isZh ? '时间待更新' : 'Time pending'}
                 </time>
             </header>
-            <div className="logistics-products">
+            <div className={orderPageClassName('logistics-products')}>
                 {physicalLines.map(line => (
-                    <div className="logistics-product" key={line.id}>
+                    <div className={orderPageClassName('logistics-product')} key={line.id}>
                         <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
                         <span>
                             <strong>{line.productVariant.name}</strong>
@@ -612,12 +635,12 @@ function LogisticsCard({
                     </div>
                 ))}
             </div>
-            <details className="logistics-detail" open={status === 'transit'}>
+            <details className={orderPageClassName('logistics-detail')} open={status === 'transit'}>
                 <summary>
                     <span>{isZh ? '查看物流详情' : 'View delivery details'}</span>
                     <ChevronRight aria-hidden="true" />
                 </summary>
-                <div className="logistics-detail-body">
+                <div className={orderPageClassName('logistics-detail-body')}>
                     <dl>
                         <div>
                             <dt>{isZh ? '配送方式' : 'Delivery method'}</dt>
@@ -631,8 +654,8 @@ function LogisticsCard({
                             </dd>
                         </div>
                     </dl>
-                    <ol className="logistics-timeline">
-                        <li className="is-current">
+                    <ol className={orderPageClassName('logistics-timeline')}>
+                        <li className={orderPageClassName('is-current')}>
                             <span />
                             <div>
                                 <strong>{logisticsStatusLabel(status, language)}</strong>
@@ -659,7 +682,11 @@ function LogisticsCard({
                             </div>
                         </li>
                     </ol>
-                    <button type="button" className="logistics-order-link" onClick={onOpen}>
+                    <button
+                        type="button"
+                        className={orderPageClassName('logistics-order-link')}
+                        onClick={onOpen}
+                    >
                         <span>{isZh ? `订单 ${order.code}` : `Order ${order.code}`}</span>
                         <span>
                             {isZh ? '查看订单详情' : 'View order'}
@@ -722,9 +749,15 @@ function AfterSalesList({
         );
     }
     return (
-        <section className="after-sales-list" aria-label={isZh ? '售后申请' : 'After-sales requests'}>
+        <section
+            className={orderPageClassName('after-sales-list')}
+            aria-label={isZh ? '售后申请' : 'After-sales requests'}
+        >
             {requests.map(request => (
-                <article key={request.id} className={`after-sales-card is-${request.state.toLowerCase()}`}>
+                <article
+                    key={request.id}
+                    className={orderPageClassName(`after-sales-card is-${request.state.toLowerCase()}`)}
+                >
                     <header>
                         <span>
                             {afterSalesStateIcon(request.state)}
@@ -734,13 +767,13 @@ function AfterSalesList({
                     </header>
                     <button
                         type="button"
-                        className="after-sales-order-link"
+                        className={orderPageClassName('after-sales-order-link')}
                         onClick={() => onOpenOrder(request.order.id)}
                     >
                         <span>{isZh ? `订单 ${request.order.code}` : `Order ${request.order.code}`}</span>
                         <ChevronRight aria-hidden="true" />
                     </button>
-                    <div className="after-sales-items">
+                    <div className={orderPageClassName('after-sales-items')}>
                         {request.items.map(item => (
                             <span key={item.id}>
                                 <strong>{item.productName}</strong>
@@ -782,7 +815,7 @@ function AfterSalesList({
                     {request.state === 'PENDING' && (
                         <button
                             type="button"
-                            className="after-sales-cancel"
+                            className={orderPageClassName('after-sales-cancel')}
                             disabled={Boolean(cancellingId)}
                             onClick={() => onCancel(request.id)}
                         >
@@ -875,21 +908,24 @@ export function OrderDetailPage({
                 ? '订单状态已更新'
                 : 'Order status updated';
     return (
-        <main className="page subpage order-detail-page">
+        <main className={orderPageClassName('page subpage order-detail-page')}>
             <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
-            <section className="order-status">
+            <section className={orderPageClassName('order-status')}>
                 <strong>{orderStateLabel(order.state, language)}</strong>
                 <span>{statusHint}</span>
                 <small>{isZh ? `订单号 ${order.code}` : `Order ${order.code}`}</small>
             </section>
             {(inTransit || fulfillments.length > 0) && (
-                <section className="order-logistics" id="order-logistics">
+                <section className={orderPageClassName('order-logistics')} id="order-logistics">
                     <Navigation />
-                    <div className="order-logistics-content">
+                    <div className={orderPageClassName('order-logistics-content')}>
                         <strong>{isZh ? '物流信息' : 'Delivery details'}</strong>
                         {fulfillments.length ? (
                             fulfillments.map((fulfillment, index) => (
-                                <div className="order-logistics-item" key={fulfillment.id}>
+                                <div
+                                    className={orderPageClassName('order-logistics-item')}
+                                    key={fulfillment.id}
+                                >
                                     <span>
                                         {fulfillments.length > 1
                                             ? isZh
@@ -925,7 +961,7 @@ export function OrderDetailPage({
                     </div>
                 </section>
             )}
-            <section className="order-detail-products">
+            <section className={orderPageClassName('order-detail-products')}>
                 <header>
                     <strong>{storefrontName}</strong>
                     <span>{isZh ? `${order.lines.length} 种商品` : `${order.lines.length} products`}</span>
@@ -960,7 +996,10 @@ export function OrderDetailPage({
                 ))}
             </section>
             {!!digitalDeliveries.length && (
-                <section className="digital-delivery-panel" aria-labelledby="digital-delivery-title">
+                <section
+                    className={orderPageClassName('digital-delivery-panel')}
+                    aria-labelledby="digital-delivery-title"
+                >
                     <header>
                         <div>
                             <Download aria-hidden="true" />
@@ -996,7 +1035,7 @@ export function OrderDetailPage({
             )}
             {!!autoCardDeliveries.length && (
                 <section
-                    className="digital-delivery-panel auto-card-delivery-panel"
+                    className={orderPageClassName('digital-delivery-panel auto-card-delivery-panel')}
                     aria-labelledby="auto-card-delivery-title"
                 >
                     <header>
@@ -1027,7 +1066,7 @@ export function OrderDetailPage({
                     </div>
                 </section>
             )}
-            <section className="order-information">
+            <section className={orderPageClassName('order-information')}>
                 <div>
                     <span>{isZh ? '下单时间' : 'Placed at'}</span>
                     <b>{formatOrderDate(order.orderPlacedAt, locale)}</b>
@@ -1043,12 +1082,16 @@ export function OrderDetailPage({
                     </div>
                 )}
             </section>
-            <section className="order-detail-summary">
+            <section className={orderPageClassName('order-detail-summary')}>
                 <PriceSummary order={order} locale={locale} language={language} />
             </section>
-            <div className="order-detail-actions">
+            <div className={orderPageClassName('order-detail-actions')}>
                 {canCancel && (
-                    <button type="button" className="danger-action" onClick={() => setCancelOpen(true)}>
+                    <button
+                        type="button"
+                        className={orderPageClassName('danger-action')}
+                        onClick={() => setCancelOpen(true)}
+                    >
                         {isZh ? '取消订单' : 'Cancel order'}
                     </button>
                 )}
@@ -1059,7 +1102,7 @@ export function OrderDetailPage({
                 )}
                 <button
                     type="button"
-                    className="primary-action"
+                    className={orderPageClassName('primary-action')}
                     onClick={
                         pending
                             ? () => void onReopen(order)
@@ -1231,9 +1274,9 @@ function AfterSalesRequestSheet({
     };
 
     return (
-        <div className="sheet-layer" role="presentation">
+        <div className={orderPageClassName('sheet-layer')} role="presentation">
             <button
-                className="sheet-mask"
+                className={orderPageClassName('sheet-mask')}
                 type="button"
                 disabled={submitting}
                 onClick={onClose}
@@ -1241,7 +1284,7 @@ function AfterSalesRequestSheet({
             />
             <section
                 ref={dialogRef}
-                className="sheet after-sales-sheet"
+                className={orderPageClassName('sheet after-sales-sheet')}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}
@@ -1259,7 +1302,7 @@ function AfterSalesRequestSheet({
                     </button>
                 </header>
                 <form onSubmit={event => void submit(event)}>
-                    <fieldset className="after-sales-line-selection">
+                    <fieldset className={orderPageClassName('after-sales-line-selection')}>
                         <legend>{isZh ? '选择商品和数量' : 'Select products and quantities'}</legend>
                         {eligibleLines.map(line => {
                             const selected = (quantities[line.id] ?? 0) > 0;
@@ -1283,7 +1326,7 @@ function AfterSalesRequestSheet({
                                         </span>
                                     </label>
                                     {selected && (
-                                        <label className="after-sales-quantity">
+                                        <label className={orderPageClassName('after-sales-quantity')}>
                                             <span>{isZh ? '数量' : 'Qty'}</span>
                                             <input
                                                 type="number"
@@ -1308,14 +1351,14 @@ function AfterSalesRequestSheet({
                             );
                         })}
                         {eligibleLines.length < order.lines.length && (
-                            <div className="inline-notice" role="note">
+                            <div className={orderPageClassName('inline-notice')} role="note">
                                 {isZh
                                     ? '自动发卡商品发卡后不支持退款，发卡异常请联系客服。'
                                     : 'Automatically delivered credentials are non-refundable. Contact support for delivery issues.'}
                             </div>
                         )}
                     </fieldset>
-                    <label className="after-sales-field">
+                    <label className={orderPageClassName('after-sales-field')}>
                         <span>{isZh ? '售后类型' : 'Request type'}</span>
                         <select
                             value={type}
@@ -1337,7 +1380,7 @@ function AfterSalesRequestSheet({
                             </small>
                         )}
                     </label>
-                    <label className="after-sales-field">
+                    <label className={orderPageClassName('after-sales-field')}>
                         <span>{isZh ? '申请原因' : 'Reason'}</span>
                         <select
                             value={reason}
@@ -1351,7 +1394,7 @@ function AfterSalesRequestSheet({
                             ))}
                         </select>
                     </label>
-                    <label className="after-sales-field">
+                    <label className={orderPageClassName('after-sales-field')}>
                         <span>{isZh ? '问题描述' : 'Description'}</span>
                         <textarea
                             value={description}
@@ -1368,7 +1411,7 @@ function AfterSalesRequestSheet({
                             onChange={event => setDescription(event.currentTarget.value)}
                         />
                     </label>
-                    <div className="after-sales-request-total">
+                    <div className={orderPageClassName('after-sales-request-total')}>
                         <span>{isZh ? '预计申请金额' : 'Estimated request amount'}</span>
                         <strong>{formatMoney(requestedPreview, order.currencyCode, locale)}</strong>
                         <small>
@@ -1378,16 +1421,16 @@ function AfterSalesRequestSheet({
                         </small>
                     </div>
                     {error && (
-                        <div className="inline-error" role="alert">
+                        <div className={orderPageClassName('inline-error')} role="alert">
                             {error}
                         </div>
                     )}
-                    <div className="after-sales-submit-actions">
+                    <div className={orderPageClassName('after-sales-submit-actions')}>
                         <button type="button" disabled={submitting} onClick={onClose}>
                             {isZh ? '取消' : 'Cancel'}
                         </button>
                         <button
-                            className="primary-action"
+                            className={orderPageClassName('primary-action')}
                             type="submit"
                             disabled={submitting || !selectedLines.length || description.trim().length < 3}
                         >
@@ -1446,76 +1489,96 @@ function OrderCard({
     const formattedTime = order.orderPlacedAt ? formatBusinessDate(locale, order.orderPlacedAt) : '';
 
     return (
-        <article className={`order-card ${stateModifier}`}>
-            <header className="order-card-header">
-                <button type="button" className="order-card-store-btn" onClick={onOpen}>
-                    <Store className="order-card-store-icon" aria-hidden="true" />
+        <article className={orderPageClassName(`order-card ${stateModifier}`)}>
+            <header className={orderPageClassName('order-card-header')}>
+                <button type="button" className={orderPageClassName('order-card-store-btn')} onClick={onOpen}>
+                    <Store className={orderPageClassName('order-card-store-icon')} aria-hidden="true" />
                     <strong>{storefrontName}</strong>
                     <ChevronRight aria-hidden="true" />
                 </button>
-                <span className={`order-state-badge ${stateModifier}`}>
+                <span className={orderPageClassName(`order-state-badge ${stateModifier}`)}>
                     {orderStateLabel(order.state, language)}
                 </span>
             </header>
-            <button className="order-card-product" type="button" onClick={onOpen}>
+            <button className={orderPageClassName('order-card-product')} type="button" onClick={onOpen}>
                 <OrderImage order={order} />
-                <div className="order-product-info">
-                    <strong className="order-product-title">{firstLineName}</strong>
+                <div className={orderPageClassName('order-product-info')}>
+                    <strong className={orderPageClassName('order-product-title')}>{firstLineName}</strong>
                     {hasMultipleLines ? (
-                        <small className="order-product-spec">
+                        <small className={orderPageClassName('order-product-spec')}>
                             {isZh
                                 ? `另有 ${order.lines.length - 1} 种商品`
                                 : `${order.lines.length - 1} more items`}
                         </small>
                     ) : variantSku ? (
-                        <small className="order-product-spec">
+                        <small className={orderPageClassName('order-product-spec')}>
                             {isZh ? `规格编码: ${variantSku}` : `SKU: ${variantSku}`}
                         </small>
                     ) : null}
-                    <div className="order-product-tags">
-                        <span className="order-product-tag">{isZh ? '商品信息' : 'Product details'}</span>
-                        <span className="order-product-tag">{isZh ? '售后入口' : 'After-sales'}</span>
+                    <div className={orderPageClassName('order-product-tags')}>
+                        <span className={orderPageClassName('order-product-tag')}>
+                            {isZh ? '商品信息' : 'Product details'}
+                        </span>
+                        <span className={orderPageClassName('order-product-tag')}>
+                            {isZh ? '售后入口' : 'After-sales'}
+                        </span>
                     </div>
                 </div>
-                <div className="order-product-meta">
-                    <b className="order-product-price">
+                <div className={orderPageClassName('order-product-meta')}>
+                    <b className={orderPageClassName('order-product-price')}>
                         {formatMoney(
                             line?.linePriceWithTax ?? order.totalWithTax,
                             order.currencyCode,
                             locale,
                         )}
                     </b>
-                    <small className="order-product-qty">×{order.totalQuantity}</small>
+                    <small className={orderPageClassName('order-product-qty')}>×{order.totalQuantity}</small>
                 </div>
             </button>
-            <footer className="order-card-footer">
-                <div className="order-total-summary">
-                    <span className="order-total-count">
+            <footer className={orderPageClassName('order-card-footer')}>
+                <div className={orderPageClassName('order-total-summary')}>
+                    <span className={orderPageClassName('order-total-count')}>
                         {isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}
                     </span>
-                    <span className="order-total-label">
+                    <span className={orderPageClassName('order-total-label')}>
                         {isPendingPayment ? (isZh ? '应付' : 'To pay') : isZh ? '实付' : 'Total'}
                     </span>
-                    <strong className="order-total-amount">
+                    <strong className={orderPageClassName('order-total-amount')}>
                         {formatMoney(order.totalWithTax, order.currencyCode, locale)}
                     </strong>
                 </div>
-                <div className="order-card-buttons">
-                    <button type="button" className="order-btn secondary-btn" onClick={onOpen}>
+                <div className={orderPageClassName('order-card-buttons')}>
+                    <button
+                        type="button"
+                        className={orderPageClassName('order-btn secondary-btn')}
+                        onClick={onOpen}
+                    >
                         {isZh ? '查看详情' : 'Details'}
                     </button>
                     {isPendingPayment && (
-                        <button type="button" className="order-btn primary-btn" onClick={onOpen}>
+                        <button
+                            type="button"
+                            className={orderPageClassName('order-btn primary-btn')}
+                            onClick={onOpen}
+                        >
                             {isZh ? '立即付款' : 'Pay now'}
                         </button>
                     )}
                     {isShipped && (
-                        <button type="button" className="order-btn primary-btn" onClick={onOpen}>
+                        <button
+                            type="button"
+                            className={orderPageClassName('order-btn primary-btn')}
+                            onClick={onOpen}
+                        >
                             {isZh ? '查看物流' : 'Track'}
                         </button>
                     )}
                     {(isDelivered || isCancelled) && (
-                        <button type="button" className="order-btn primary-btn" onClick={onBuyAgain}>
+                        <button
+                            type="button"
+                            className={orderPageClassName('order-btn primary-btn')}
+                            onClick={onBuyAgain}
+                        >
                             {isZh ? '再次购买' : 'Buy again'}
                         </button>
                     )}
@@ -1537,7 +1600,7 @@ function SubHeader({
     action?: ReactNode;
 }) {
     return (
-        <header className="topbar subpage-header">
+        <header className={orderPageClassName('topbar subpage-header')}>
             <button type="button" onClick={onBack} aria-label={language === 'zh' ? '返回' : 'Back'}>
                 <ArrowLeft aria-hidden="true" />
             </button>
@@ -1559,7 +1622,7 @@ function Subpage({
     children: ReactNode;
 }) {
     return (
-        <main className="page subpage">
+        <main className={orderPageClassName('page subpage')}>
             <SubHeader title={title} language={language} onBack={onBack} />
             {children}
         </main>
@@ -1580,7 +1643,7 @@ function EmptyState({
     onAction?: () => void;
 }) {
     return (
-        <section className="empty-state">
+        <section className={orderPageClassName('empty-state')}>
             <span>{icon}</span>
             <h2>{title}</h2>
             {detail && <p>{detail}</p>}
@@ -1603,7 +1666,7 @@ function InlineError({
     onAction: () => void;
 }) {
     return (
-        <div className="inline-error" role="alert">
+        <div className={orderPageClassName('inline-error')} role="alert">
             <span>{message}</span>
             <button type="button" onClick={onAction}>
                 {action}
@@ -1616,17 +1679,17 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
     const source = variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview;
     if (!source)
         return (
-            <div className="image-placeholder" aria-hidden="true">
+            <div className={orderPageClassName('image-placeholder')} aria-hidden="true">
                 <Package />
             </div>
         );
     const responsive = responsiveImageSources(source, 'thumbnail');
     if (!responsive) return <img src={source} alt={alt} loading="lazy" decoding="async" />;
     return (
-        <picture className="responsive-picture safe-image-frame">
+        <picture className={orderPageClassName('responsive-picture safe-image-frame')}>
             <source type="image/webp" srcSet={responsive.webpSrcSet} sizes={responsive.sizes} />
             <img
-                className="safe-image is-loaded"
+                className={orderPageClassName('safe-image is-loaded')}
                 src={responsive.fallbackSrc}
                 srcSet={responsive.fallbackSrcSet}
                 sizes={responsive.sizes}
@@ -1645,7 +1708,7 @@ function OrderImage({ order }: { order: OrderSummary }) {
     return variant ? (
         <ProductVariantImage variant={variant} alt={variant.name} />
     ) : (
-        <div className="image-placeholder" aria-hidden="true">
+        <div className={orderPageClassName('image-placeholder')} aria-hidden="true">
             <Package />
         </div>
     );
@@ -1663,7 +1726,7 @@ function PriceSummary({
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
     return (
-        <dl className="price-summary">
+        <dl className={orderPageClassName('price-summary')}>
             <div>
                 <dt>{isZh ? '商品金额' : 'Items'}</dt>
                 <dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd>
@@ -1673,13 +1736,13 @@ function PriceSummary({
                 <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
             </div>
             {discount > 0 && (
-                <div className="discount">
+                <div className={orderPageClassName('discount')}>
                     <dt>{isZh ? '优惠' : 'Discount'}</dt>
                     <dd>-{formatMoney(discount, order.currencyCode, locale)}</dd>
                 </div>
             )}
             <TaxSummaryRows order={order} locale={locale} language={language} />
-            <div className="summary-total">
+            <div className={orderPageClassName('summary-total')}>
                 <dt>{isZh ? '合计' : 'Total'}</dt>
                 <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
             </div>
@@ -1778,9 +1841,9 @@ function CancelOrderSheet({
     };
 
     return (
-        <div className="sheet-layer" role="presentation">
+        <div className={orderPageClassName('sheet-layer')} role="presentation">
             <button
-                className="sheet-mask"
+                className={orderPageClassName('sheet-mask')}
                 type="button"
                 disabled={submitting}
                 onClick={onClose}
@@ -1788,7 +1851,7 @@ function CancelOrderSheet({
             />
             <section
                 ref={dialogRef}
-                className="sheet order-cancel-sheet"
+                className={orderPageClassName('sheet order-cancel-sheet')}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}
@@ -1825,16 +1888,16 @@ function CancelOrderSheet({
                     </label>
                     <small>{reason.length}/500</small>
                     {error && (
-                        <div className="inline-error" role="alert">
+                        <div className={orderPageClassName('inline-error')} role="alert">
                             {error}
                         </div>
                     )}
-                    <div className="order-cancel-actions">
+                    <div className={orderPageClassName('order-cancel-actions')}>
                         <button type="button" disabled={submitting} onClick={onClose}>
                             {isZh ? '暂不取消' : 'Keep order'}
                         </button>
                         <button
-                            className="danger-action"
+                            className={orderPageClassName('danger-action')}
                             type="submit"
                             disabled={submitting || !reason.trim()}
                         >

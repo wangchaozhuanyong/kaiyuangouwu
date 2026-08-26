@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
     Check,
@@ -19,6 +20,7 @@ import { orderStatusRefreshInterval } from './order-refresh';
 import { paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
+import { routeNavigateOptions } from './storefront-router';
 import { TaxSummaryRows } from './tax-summary';
 import { ActiveCustomer, MarketConfig, Order, StorefrontCart, StorefrontLanguage } from './types';
 
@@ -33,7 +35,6 @@ export function PaymentPage({
     language,
     onCancel,
     onComplete,
-    onNavigate,
 }: {
     api: ShopApi;
     cart: StorefrontCart | null;
@@ -43,8 +44,9 @@ export function PaymentPage({
     language: StorefrontLanguage;
     onCancel: (order: Order) => void;
     onComplete: (order: Order, confirmationToken: string) => Promise<void>;
-    onNavigate: (route: PaymentRoute) => void;
 }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const [selectedMethod, setSelectedMethod] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -123,14 +125,14 @@ export function PaymentPage({
             <Subpage
                 title={isZh ? '选择支付方式' : 'Choose payment'}
                 language={language}
-                onBack={() => onNavigate({ name: 'cart' })}
+                onBack={() => navigateTo({ name: 'cart' })}
             >
                 <EmptyState
                     icon={<WalletCards />}
                     title={isZh ? '没有待支付订单' : 'No order awaiting payment'}
                     detail={isZh ? '请返回购物车重新结算' : 'Return to your cart and start checkout again.'}
                     action={isZh ? '返回购物车' : 'Back to cart'}
-                    onAction={() => onNavigate({ name: 'cart' })}
+                    onAction={() => navigateTo({ name: 'cart' })}
                 />
             </Subpage>
         );
@@ -333,7 +335,6 @@ export function OrderConfirmationPage({
     market,
     locale,
     language,
-    onNavigate,
 }: {
     api: ShopApi;
     code: string;
@@ -343,8 +344,9 @@ export function OrderConfirmationPage({
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
-    onNavigate: (route: PaymentRoute) => void;
 }) {
+    const navigate = useNavigate();
+    const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const orderQuery = useQuery({
         queryKey: storefrontQueryKeys.orderByCode(market.code, languageCodeFor(language), code),
@@ -370,7 +372,7 @@ export function OrderConfirmationPage({
             <Subpage
                 title={isZh ? '订单已提交' : 'Order confirmed'}
                 language={language}
-                onBack={() => onNavigate({ name: 'home' })}
+                onBack={() => navigateTo({ name: 'home' })}
             >
                 <PageSkeleton label={isZh ? '正在加载订单结果' : 'Loading order result'} />
             </Subpage>
@@ -381,7 +383,7 @@ export function OrderConfirmationPage({
             <Subpage
                 title={isZh ? '订单已提交' : 'Order confirmed'}
                 language={language}
-                onBack={() => onNavigate({ name: 'home' })}
+                onBack={() => navigateTo({ name: 'home' })}
             >
                 <EmptyState
                     icon={<Package />}
@@ -397,7 +399,7 @@ export function OrderConfirmationPage({
                               : 'The confirmation link is missing its security token. Sign in to view your orders.')
                     }
                     action={loadError ? (isZh ? '重试' : 'Retry') : isZh ? '返回首页' : 'Back to home'}
-                    onAction={() => (loadError ? void orderQuery.refetch() : onNavigate({ name: 'home' }))}
+                    onAction={() => (loadError ? void orderQuery.refetch() : navigateTo({ name: 'home' }))}
                 />
             </Subpage>
         );
@@ -525,12 +527,12 @@ export function OrderConfirmationPage({
                 </section>
             )}
             <div className="order-confirmation-actions">
-                <button type="button" className="primary-action" onClick={() => onNavigate({ name: 'home' })}>
+                <button type="button" className="primary-action" onClick={() => navigateTo({ name: 'home' })}>
                     <House aria-hidden="true" />
                     {isZh ? '继续购物' : 'Continue shopping'}
                 </button>
                 {customer && (
-                    <button type="button" onClick={() => onNavigate({ name: 'orders', tab: 'shipping' })}>
+                    <button type="button" onClick={() => navigateTo({ name: 'orders', tab: 'shipping' })}>
                         <Package aria-hidden="true" />
                         {isZh ? '查看我的订单' : 'View my orders'}
                     </button>

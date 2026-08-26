@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, ChevronRight, MessageSquare, Package, RefreshCw, Star } from 'lucide-react';
+import { CheckCircle2, ChevronRight, MessageSquare, Package, RefreshCw, Star } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 
 import { ShopApi } from './api';
@@ -11,6 +11,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from './query-client';
+import { SubHeader } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
     MarketConfig,
@@ -92,13 +93,7 @@ export function ReviewCenterPage({
 
     return (
         <main className="page subpage review-center-page">
-            <header className="subpage-header">
-                <button type="button" onClick={onBack} aria-label={isZh ? '返回' : 'Back'}>
-                    <ArrowLeft aria-hidden="true" />
-                </button>
-                <strong>{isZh ? '评价中心' : 'Reviews'}</strong>
-                <span />
-            </header>
+            <SubHeader title={isZh ? '评价中心' : 'Reviews'} language={language} onBack={onBack} />
             {!customer ? (
                 <ReviewEmptyState
                     icon={<MessageSquare />}
