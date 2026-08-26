@@ -98,6 +98,22 @@ test.describe('Orders', () => {
     test('should create, configure, and complete a draft order', async ({ page }) => {
         test.setTimeout(60_000); // Draft order flow involves multiple mutations
 
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const { productVariants } = await client.gql(`
+            query {
+                productVariants(options: { take: 100, filter: { name: { contains: "Laptop" } } }) {
+                    items { name sku stockOnHand }
+                }
+            }
+        `);
+        const inStockVariant = productVariants.items.find(
+            (variant: { stockOnHand: number }) => variant.stockOnHand > 0,
+        ) as { name: string; sku: string; stockOnHand: number } | undefined;
+        if (!inStockVariant) {
+            throw new Error('No in-stock Laptop variant is available for the draft-order test');
+        }
+
         // Step 1: Create a draft order from the list page
         const lp = listPage(page);
         await lp.goto();
@@ -108,22 +124,24 @@ test.describe('Orders', () => {
         // Step 2: Set a customer — CustomerSelector uses Command/Popover
         await page.getByRole('button', { name: /Select customer/i }).click();
         await page.getByPlaceholder('Search customers...').fill('hayden');
-        // CommandItems have role="option"; wait for search results to load
-        await expect(page.getByRole('option').first()).toBeVisible({ timeout: 5_000 });
-        await page.getByRole('option').first().click();
-        // Wait for the set-customer mutation to complete and re-render
-        await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        const customerOption = page.getByRole('option', { name: /Hayden Zieme/i });
+        await expect(customerOption).toBeVisible({ timeout: 5_000 });
+        await customerOption.click();
+        await expect(page.getByText('Customer set for order')).toBeVisible({ timeout: 10_000 });
 
         // Step 3: Add a product variant — ProductVariantSelector uses Command/Popover
         // The button has role="combobox" but no aria-label, so we match by role + text content
         const addItemButton = page.locator('[role="combobox"]').filter({ hasText: 'Add item to order' });
         await addItemButton.scrollIntoViewIfNeeded();
         await addItemButton.click();
-        await page.getByPlaceholder('Search products or SKUs...').fill('laptop');
-        await expect(page.getByRole('option').first()).toBeVisible({ timeout: 5_000 });
-        await page.getByRole('option').first().click();
-        // Wait for add-line mutation — the combobox should close
-        await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        await page.getByPlaceholder('Search products or SKUs...').fill(inStockVariant.sku);
+        const variantOption = page.getByRole('option', { name: new RegExp(inStockVariant.sku, 'i') });
+        await expect(variantOption).toBeVisible({ timeout: 5_000 });
+        await variantOption.click();
+        await expect(page.getByText('Item added to order')).toBeVisible({ timeout: 10_000 });
+        await expect(page.locator('#app').getByText(inStockVariant.name, { exact: true })).toBeVisible({
+            timeout: 10_000,
+        });
 
         // Step 4: Set a complete shipping address. Seeded customer addresses intentionally omit
         // optional-looking fields that this storefront requires before a physical order can ship.
@@ -142,11 +160,9 @@ test.describe('Orders', () => {
         await addressPopover.getByLabel('Postal Code').fill('SW1A 1AA');
         await addressPopover.getByLabel('Phone Number').fill('+44 20 7946 0958');
         await addressPopover.getByRole('combobox').click();
-        await page.getByRole('option').first().click();
-        await Promise.all([
-            page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200),
-            addressPopover.getByRole('button', { name: /Okay/i }).click(),
-        ]);
+        await page.getByRole('option', { name: 'United Kingdom', exact: true }).click();
+        await addressPopover.getByRole('button', { name: /Okay/i }).click();
+        await expect(page.getByText('Shipping address set for order')).toBeVisible({ timeout: 10_000 });
 
         // Step 5: Select a shipping method — inline cards (not a popover)
         // Shipping methods appear after address is set; wait for them
@@ -155,8 +171,7 @@ test.describe('Orders', () => {
         await shippingLabel.scrollIntoViewIfNeeded();
         await expect(shippingLabel).toBeVisible({ timeout: 5_000 });
         await shippingLabel.click();
-        // Wait for set-shipping-method mutation
-        await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        await expect(page.getByText('Shipping method set for order')).toBeVisible({ timeout: 10_000 });
 
         // Step 6: Complete the draft order
         const completeDraftButton = page.getByRole('button', { name: /Complete draft/i });
@@ -837,9 +852,19 @@ async function createPaidOrder(client: VendureAdminClient): Promise<string> {
         { orderId, customerId: customers.items[0].id },
     );
 
-    const { productVariants } = await client.gql(
-        `query { productVariants(options: { take: 1 }) { items { id } } }`,
-    );
+    const { productVariants } = await client.gql(`
+        query {
+            productVariants(options: { take: 100 }) {
+                items { id stockOnHand }
+            }
+        }
+    `);
+    const inStockVariant = productVariants.items.find(
+        (variant: { stockOnHand: number }) => variant.stockOnHand > 0,
+    ) as { id: string; stockOnHand: number } | undefined;
+    if (!inStockVariant) {
+        throw new Error('No in-stock product variant is available for the paid-order test helper');
+    }
     await client.gql(
         `
         mutation ($orderId: ID!, $variantId: ID!) {
@@ -848,7 +873,7 @@ async function createPaidOrder(client: VendureAdminClient): Promise<string> {
             }) { ... on Order { id } ... on ErrorResult { errorCode message } }
         }
     `,
-        { orderId, variantId: productVariants.items[0].id },
+        { orderId, variantId: inStockVariant.id },
     );
 
     await client.gql(
