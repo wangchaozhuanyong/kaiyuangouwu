@@ -73,8 +73,9 @@ describe('homepageModuleEntries', () => {
             ['AUTH_LOGIN', 'AUTH_REGISTER', 'CUSTOM'],
         );
 
-        expect(entries.some(entry => entry.type === 'AUTH_LOGIN')).toBe(false);
-        expect(entries.some(entry => entry.type === 'AUTH_REGISTER')).toBe(false);
-        expect(entries.some(entry => entry.type === 'CUSTOM')).toBe(true);
+        const renderedTypes = entries.map(entry => String(entry.type));
+        expect(renderedTypes).not.toContain('AUTH_LOGIN');
+        expect(renderedTypes).not.toContain('AUTH_REGISTER');
+        expect(renderedTypes).toContain('CUSTOM');
     });
 });
