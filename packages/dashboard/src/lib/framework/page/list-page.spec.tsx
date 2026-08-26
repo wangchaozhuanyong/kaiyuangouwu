@@ -52,6 +52,7 @@ describe('ListPage prop forwarding', () => {
                 // false is the non-default value, so this asserts the value is really forwarded
                 // rather than coinciding with PaginatedListDataTable's own default of true.
                 includeSelectionColumn={false}
+                includeActionsColumn={false}
             />,
         );
 
@@ -60,5 +61,6 @@ describe('ListPage prop forwarding', () => {
         expect(captured.props?.disableViewOptions).toBe(true);
         expect(captured.props?.simpleToolbar).toBe(true);
         expect(captured.props?.includeSelectionColumn).toBe(false);
+        expect(captured.props?.includeActionsColumn).toBe(false);
     });
 });
