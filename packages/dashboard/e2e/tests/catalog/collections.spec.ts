@@ -250,6 +250,7 @@ test('deletes a product group from the list row actions', async ({ page }) => {
         },
     );
     const collectionId = createCollection.id as string;
+    let deletedViaUi = false;
 
     try {
         await page.goto('/collections');
@@ -264,15 +265,18 @@ test('deletes a product group from the list row actions', async ({ page }) => {
         await dialog.getByRole('button', { name: 'Delete' }).click();
 
         await expect(page.getByText('Deleted successfully')).toBeVisible({ timeout: 10_000 });
+        deletedViaUi = true;
         await expect(row).toBeHidden();
     } finally {
-        const { collection } = await client.gql(`query ($id: ID!) { collection(id: $id) { id } }`, {
-            id: collectionId,
-        });
-        if (collection) {
-            await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+        if (!deletedViaUi) {
+            const { collection } = await client.gql(`query ($id: ID!) { collection(id: $id) { id } }`, {
                 id: collectionId,
             });
+            if (collection) {
+                await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+                    id: collectionId,
+                });
+            }
         }
     }
 });
