@@ -92,6 +92,7 @@ jobs:
                   VENDURE_DASHBOARD_URL: https://admin.build.test/dashboard
                   VENDURE_STOREFRONT_URL: https://store.build.test
                   VENDURE_EMAIL_FROM: Build Check <build@build.test>
+                  VENDURE_GOOGLE_TRANSLATION_API_KEY: build-check-google-translation-api-key
                   VENDURE_IMPORT_ASSETS_DIR: /tmp/vendure-build-import
                   VENDURE_ASSET_UPLOAD_DIR: /tmp/vendure-build-assets
                   DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
