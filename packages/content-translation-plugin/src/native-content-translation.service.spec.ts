@@ -1,4 +1,4 @@
-import { Collection, Country, Product, ProductVariant, Province } from '@vendure/core';
+import { Country, Product, ProductVariant, Province } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { contentTranslationInternals } from './content-translation.service.js';
@@ -36,12 +36,12 @@ describe('native content translation event routing', () => {
         expect(nativeContentTranslationInternals.supportsEntityType(Province)).toBe(true);
     });
 
-    it('allows a Simplified Chinese collection when the optional translation provider is absent', async () => {
+    it('allows Simplified Chinese source content when the optional translation provider is absent', async () => {
         const source = {
             languageCode: 'zh_Hans',
-            name: '测试分类',
-            slug: 'ce-shi-fen-lei',
-            description: '',
+            name: '测试商品',
+            slug: 'ce-shi-shang-pin',
+            description: '<p>商品详情</p>',
         };
         const repository = {
             createQueryBuilder: vi.fn(() => {
@@ -66,7 +66,7 @@ describe('native content translation event routing', () => {
                     relations: [
                         {
                             propertyName: 'translations',
-                            inverseEntityMetadata: { target: class CollectionTranslation {} },
+                            inverseEntityMetadata: { target: class ProductTranslation {} },
                         },
                     ],
                 })),
@@ -85,11 +85,9 @@ describe('native content translation event routing', () => {
         );
 
         await expect(
-            service.translateEntity(
-                { channelId: 'channel-1' } as any,
-                new Collection({ id: 'collection-1' }),
-                { translations: [source] },
-            ),
+            service.translateEntity({ channelId: 'channel-1' } as any, new Product({ id: 'product-1' }), {
+                translations: [source],
+            }),
         ).resolves.toBeUndefined();
 
         expect(translations.translate).not.toHaveBeenCalled();
