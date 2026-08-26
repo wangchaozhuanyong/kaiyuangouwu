@@ -143,19 +143,19 @@ describe('storefront coupons', () => {
         expect(card).toMatchObject({ claimed: true, claimable: true });
     });
 
-    it('hides test campaigns and invalid no-op discounts', () => {
+    it('shows coupons regardless of their name and hides invalid no-op discounts', () => {
         const campaigns = [
             {
-                id: 'audit-campaign',
-                name: '订单九折',
-                kind: 'ORDER_PERCENTAGE' as const,
+                id: 'test-campaign',
+                name: '测试满减',
+                kind: 'ORDER_FIXED' as const,
                 startsAt: null,
                 endsAt: null,
                 claimStartsAt: null,
                 claimEndsAt: null,
                 minimumSpend: 0,
-                discountAmount: null,
-                discountRate: 9,
+                discountAmount: 100,
+                discountRate: null,
                 remainingIssueCount: null,
                 claimed: false,
                 claimable: true,
@@ -177,6 +177,8 @@ describe('storefront coupons', () => {
             },
         ];
 
-        expect(couponCardsFromCampaigns(campaigns, 'zh', 'CNY')).toEqual([]);
+        expect(couponCardsFromCampaigns(campaigns, 'zh', 'CNY')).toEqual([
+            expect.objectContaining({ campaignId: 'test-campaign', title: '测试满减', value: '1' }),
+        ]);
     });
 });

@@ -129,8 +129,8 @@ function createIssueHarness({
         couponCode: 'CPN_INTERNAL',
         startsAt,
         endsAt,
-        actions: [{ code: 'order_fixed_discount', args: { discount: 2_000 } }],
-        conditions: [{ code: 'minimum_order_amount', args: { amount: 10_000 } }],
+        actions: [{ code: 'order_fixed_discount', args: [{ name: 'discount', value: '2000' }] }],
+        conditions: [{ code: 'minimum_order_amount', args: [{ name: 'amount', value: '10000' }] }],
     };
     const config = {
         id: 'config-1',

@@ -1,5 +1,4 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
-import { ConfigurableOperation } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     Customer,
@@ -42,6 +41,7 @@ import {
     couponLedgerEventTypes,
     usableCustomerCouponStatuses,
 } from './coupon-lifecycle.constants';
+import { numberArg } from './promotion-operation-args';
 
 @Injectable()
 export class StoreCouponLifecycleService implements OnApplicationBootstrap {
@@ -823,16 +823,6 @@ function couponKindForAction(code: string) {
     if (code === 'store_collection_percentage_discount') return 'COLLECTION_PERCENTAGE' as const;
     if (code === 'products_percentage_discount') return 'PRODUCT_PERCENTAGE' as const;
     return null;
-}
-
-function numberArg(operationValue: ConfigurableOperation | undefined, name: string): number {
-    const args = operationValue?.args as unknown;
-    const value = Array.isArray(args)
-        ? (args as Array<{ name?: string; value?: unknown }>).find(argument => argument.name === name)?.value
-        : args && typeof args === 'object'
-          ? (args as Record<string, unknown>)[name]
-          : undefined;
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function earliestDate(first: Date | null | undefined, second: Date | null | undefined): Date | null {

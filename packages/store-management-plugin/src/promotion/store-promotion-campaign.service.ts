@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import {
-    ConfigurableOperation,
     ConfigurableOperationInput,
     CreatePromotionInput,
     LanguageCode,
@@ -34,6 +33,7 @@ import {
     StoreFlashSaleView,
 } from '../types';
 
+import { idListArg, numberArg, stringArg } from './promotion-operation-args';
 import { parseFlashSaleVariantRules } from './store-commerce-promotion-actions';
 
 @Injectable()
@@ -629,30 +629,6 @@ function couponKindForAction(code: string): StoreCouponCampaignKind | null {
     if (code === 'store_collection_percentage_discount') return 'COLLECTION_PERCENTAGE';
     if (code === 'products_percentage_discount') return 'PRODUCT_PERCENTAGE';
     return null;
-}
-
-function numberArg(operationValue: ConfigurableOperation | undefined, name: string): number {
-    const value = operationArgument(operationValue, name);
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function stringArg(operationValue: ConfigurableOperation | undefined, name: string): string {
-    const value = operationArgument(operationValue, name);
-    return typeof value === 'string' ? value : '';
-}
-
-function idListArg(operationValue: ConfigurableOperation | undefined, name: string): ID[] {
-    const value = operationArgument(operationValue, name);
-    return Array.isArray(value) ? value.filter((item): item is ID => typeof item === 'string') : [];
-}
-
-function operationArgument(operationValue: ConfigurableOperation | undefined, name: string): unknown {
-    const args = operationValue?.args as unknown;
-    if (Array.isArray(args)) {
-        return (args as Array<{ name?: string; value?: unknown }>).find(argument => argument.name === name)
-            ?.value;
-    }
-    return args && typeof args === 'object' ? (args as Record<string, unknown>)[name] : undefined;
 }
 
 function uniqueIds(ids: ID[]): string[] {

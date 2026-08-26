@@ -219,31 +219,9 @@ function promotionFromInput(input: CreatePromotionInput) {
         couponCode: input.couponCode ?? null,
         usageLimit: input.usageLimit ?? null,
         perCustomerUsageLimit: input.perCustomerUsageLimit ?? null,
-        conditions: input.conditions.map(operationFromInput),
-        actions: input.actions.map(operationFromInput),
+        conditions: input.conditions.map(operation => ({ code: operation.code, args: operation.arguments })),
+        actions: input.actions.map(operation => ({ code: operation.code, args: operation.arguments })),
     } as any;
-}
-
-function operationFromInput(input: CreatePromotionInput['actions'][number]) {
-    return {
-        code: input.code,
-        args: Object.fromEntries(
-            input.arguments.map(argument => [
-                argument.name,
-                argument.name === 'variantRules'
-                    ? argument.value
-                    : argument.value.startsWith('[')
-                      ? JSON.parse(argument.value)
-                      : argument.value === 'true'
-                        ? true
-                        : argument.value === 'false'
-                          ? false
-                          : Number.isNaN(Number(argument.value))
-                            ? argument.value
-                            : Number(argument.value),
-            ]),
-        ),
-    };
 }
 
 function operationInput(code: string, values: Record<string, string>) {

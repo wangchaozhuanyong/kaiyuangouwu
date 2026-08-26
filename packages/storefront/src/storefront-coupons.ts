@@ -16,8 +16,6 @@ export interface StorefrontCouponCard {
     claimable: boolean;
 }
 
-const NON_PRODUCTION_COUPON_PATTERN =
-    /(?:^|[-_\s])(audit|crud|demo|dummy|qa|sample|staging|test)(?:$|[-_\s])|测试|临时演示/iu;
 const couponThemes: StorefrontCouponTheme[] = ['gold', 'rose', 'blue', 'emerald'];
 
 export function couponCardsFromBlock(
@@ -83,9 +81,6 @@ export function couponCardsFromCampaigns(
 }
 
 function isDisplayableCampaign(coupon: StorefrontCouponCampaign): boolean {
-    if (NON_PRODUCTION_COUPON_PATTERN.test(`${coupon.id} ${coupon.name}`)) {
-        return false;
-    }
     if (coupon.minimumSpend < 0) return false;
     if (coupon.kind === 'ORDER_FIXED') {
         return coupon.discountAmount != null && coupon.discountAmount > 0;
