@@ -194,9 +194,18 @@ NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 node packages/dev-server
 迁移成功后，API Server 和 Worker 必须都保持 `RUN_MIGRATIONS=false`。PM2 的 reload 会保留旧进程定义中的 `pm_cwd` 和 `pm_exec_path`，不能用于切换不可变运行目录；使用已加载生产环境变量的同一个 shell 会话重建进程定义：
 
 ```bash
-/var/www/kaiyuangouwu/deploy/switch-production-runtime.sh "${CANDIDATE}"
+DEPLOYMENT_ID="${TARGET_SHA}-$(date -u +%Y%m%dT%H%M%SZ)"
+VENDURE_DEPLOYMENT_ID="${DEPLOYMENT_ID}" \
+    /var/www/kaiyuangouwu/deploy/switch-production-runtime.sh "${CANDIDATE}"
 curl -fsS http://127.0.0.1:3002/health
 pm2 save
+```
+
+切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
+
+```bash
+sudo -n journalctl -t vendure-production-switch --since '30 minutes ago' --no-pager -o cat | \
+    grep -F "deployment_id=${DEPLOYMENT_ID}"
 ```
 
 健康检查成功后再原子切换 Storefront 稳定指针：
@@ -209,7 +218,7 @@ sudo -n nginx -t
 sudo -n systemctl reload nginx
 ```
 
-`PREVIOUS_RUNTIME` 只能是上一个已通过验收的发布目录，并必须写入当次发布记录。切换失败时，调用 `switch-production-runtime.sh "${PREVIOUS_RUNTIME}"` 重建上一版本的进程定义，执行 `pm2 save`，再原子恢复稳定指针；不重新安装依赖，不删除数据库、上传资产或 `.env`。
+`PREVIOUS_RUNTIME` 只能是上一个已通过验收的发布目录，并必须写入当次发布记录。切换失败时，设置唯一的 `VENDURE_DEPLOYMENT_ID="${DEPLOYMENT_ID}-rollback"`，调用 `switch-production-runtime.sh "${PREVIOUS_RUNTIME}"` 重建上一版本的进程定义，执行 `pm2 save`，再原子恢复稳定指针；不重新安装依赖，不删除数据库、上传资产或 `.env`。
 
 ## 标准发布流程
 

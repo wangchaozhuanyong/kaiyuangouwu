@@ -55,6 +55,21 @@ void test('production PM2 config starts compiled runtime entries without the dev
 void test('production runtime switch rebuilds PM2 definitions for an immutable release', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/switch-production-runtime.sh'), 'utf8');
 
+    const requestAudit = script.indexOf('audit_switch requested');
+    const processDeletion = script.indexOf('pm2 delete');
+    const successAudit = script.indexOf('audit_switch succeeded');
+
+    assert.notEqual(requestAudit, -1);
+    assert.notEqual(processDeletion, -1);
+    assert.notEqual(successAudit, -1);
+    assert.ok(requestAudit < processDeletion);
+    assert.ok(successAudit > processDeletion);
+    assert.match(script, /\/usr\/bin\/logger --tag "\$\{audit_tag\}"/u);
+    assert.match(script, /vendure-production-switch/u);
+    assert.match(script, /audit_switch failed/u);
+    assert.match(script, /VENDURE_DEPLOYMENT_ID/u);
+    assert.match(script, /SSH_CONNECTION/u);
+    assert.match(script, /RUNTIME-METADATA\.json/u);
     assert.match(script, /pm2 delete/u);
     assert.match(script, /pm2 start/u);
     assert.match(script, /pm_cwd/u);
@@ -76,6 +91,8 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sudo -n mv -Tf/u);
     assert.match(runbook, /sudo -n nginx -t/u);
     assert.match(runbook, /sudo -n systemctl reload nginx/u);
+    assert.match(runbook, /journalctl -t vendure-production-switch/u);
+    assert.match(runbook, /VENDURE_DEPLOYMENT_ID/u);
 });
 
 void test('experimental UI examples do not commit Google API keys', async () => {
