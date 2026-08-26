@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+    currentStorefrontAssetFingerprint,
     extractStorefrontAssetFingerprint,
     fetchStorefrontAssetFingerprint,
     storefrontAssetFingerprint,
@@ -29,6 +30,25 @@ describe('storefront version detection', () => {
         );
 
         expect(first).toBe(second);
+    });
+
+    it('ignores route modulepreloads injected after the entry bundle starts', () => {
+        expect(
+            extractStorefrontAssetFingerprint(
+                [
+                    '<script type="module" src="/assets/index-a.js"></script>',
+                    '<link rel="stylesheet" href="/assets/index-b.css">',
+                    '<link rel="modulepreload" href="/assets/product-route.js">',
+                ].join(''),
+                baseUrl,
+            ),
+        ).toBe('https://shop.example.com/assets/index-a.js|https://shop.example.com/assets/index-b.css');
+
+        const querySelectorAll = vi.fn(() => []);
+        currentStorefrontAssetFingerprint({ querySelectorAll } as unknown as Document, baseUrl);
+        expect(querySelectorAll).toHaveBeenCalledWith(
+            'link[rel="stylesheet"][href], script[type="module"][src]',
+        );
     });
 
     it('ignores HTML without a built storefront asset', () => {

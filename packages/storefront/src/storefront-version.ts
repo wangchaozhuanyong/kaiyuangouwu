@@ -27,6 +27,9 @@ export function storefrontAssetFingerprint(references: Iterable<string>, baseUrl
 export function extractStorefrontAssetFingerprint(indexHtml: string, baseUrl: string): string | null {
     const references: string[] = [];
     for (const tag of indexHtml.match(/<(?:link|script)\b[^>]*>/giu) ?? []) {
+        const isStylesheet = /^<link\b/iu.test(tag) && /\brel\s*=\s*(["'])stylesheet\1/iu.test(tag);
+        const isModuleScript = /^<script\b/iu.test(tag) && /\btype\s*=\s*(["'])module\1/iu.test(tag);
+        if (!isStylesheet && !isModuleScript) continue;
         const reference = tag.match(/\b(?:href|src)\s*=\s*(["'])(.*?)\1/iu)?.[2];
         if (reference) references.push(reference);
     }
@@ -39,7 +42,7 @@ export function currentStorefrontAssetFingerprint(
 ): string | null {
     const references = Array.from(
         documentRef.querySelectorAll<HTMLLinkElement | HTMLScriptElement>(
-            'link[rel="stylesheet"][href], link[rel="modulepreload"][href], script[type="module"][src]',
+            'link[rel="stylesheet"][href], script[type="module"][src]',
         ),
         element => element.getAttribute('href') ?? element.getAttribute('src') ?? '',
     );
