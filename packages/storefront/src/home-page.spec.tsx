@@ -165,6 +165,30 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('aria-label="查看推荐内容：后台配置的首页轮播"');
         expect(markup).toContain(heroBlock.title);
     });
+
+    it('applies the backend-managed hero copy colors and accent colors', () => {
+        const markup = renderHome({
+            contentBlocks: [
+                {
+                    ...heroBlock,
+                    backgroundColor: '#312E81',
+                    textColor: '#FFFFFF',
+                    settings: {
+                        secondaryTextColor: '#E0F2FE',
+                        accentColor: '#22D3EE',
+                        accentSecondaryColor: '#7C3AED',
+                        buttonTextColor: '#FFFFFF',
+                    },
+                },
+            ],
+        });
+
+        expect(markup).toContain('--hero-overlay-color:#312E81');
+        expect(markup).toContain('--hero-title-color:#FFFFFF');
+        expect(markup).toContain('--hero-body-color:#E0F2FE');
+        expect(markup).toContain('--hero-accent-color:#22D3EE');
+        expect(markup).toContain('--hero-accent-secondary-color:#7C3AED');
+    });
 });
 
 describe('HomePage notices', () => {

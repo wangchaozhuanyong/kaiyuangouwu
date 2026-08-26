@@ -26,6 +26,7 @@ import { ReactNode, PointerEvent as ReactPointerEvent, useEffect, useRef, useSta
 import type { RouteState } from '../storefront-router';
 
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
+import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from '../hero-theme';
 import { selectManagedProducts } from '../home-merchandising';
 import { storefrontWebpUrl } from '../responsive-image';
 import { PageSkeleton } from '../route-loading';
@@ -385,15 +386,17 @@ export function HomePage() {
     });
     const heroCount = managedHeroes.length;
     const managedHero = managedHeroes[heroIndex];
+    const isVipTheme = heroIndex % 2 !== 0;
     const managedHeroProduct =
         managedHero?.targetType === 'PRODUCT'
             ? managedContentProductPool.find(product => product.id === managedHero.targetValue)
             : undefined;
     const hero = managedHeroProduct;
-    const heroImage =
-        managedHero?.imageUrl ??
-        (heroIndex % 2 === 0 ? '/storefront/hero-01-gateway.webp' : '/storefront/hero-02-vip.webp');
-    const heroFallbackImage = productImage(managedHeroProduct ?? hero) ?? '/storefront/default-hero.jpg';
+    const heroImage = managedHero?.imageUrl ?? (managedHero ? builtInHeroImage(managedHero, isVipTheme) : '');
+    const heroFallbackImage =
+        productImage(managedHeroProduct ?? hero) ??
+        (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : '/storefront/default-hero.jpg');
+    const heroStyle = managedHero ? heroThemeStyle(managedHero, isVipTheme) : undefined;
     const quickCollections = collections.slice(0, 5);
     const noticeItems: HomeNoticeItem[] = [
         ...systemAnnouncements.map(announcement => ({
@@ -776,6 +779,7 @@ export function HomePage() {
                         {heroCount > 0 && (
                             <section
                                 className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
+                                style={heroStyle}
                                 role="region"
                                 aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
                                 aria-roledescription={isZh ? '轮播' : 'carousel'}
@@ -818,7 +822,6 @@ export function HomePage() {
 
                                 {/* Dynamic Content Overlay with 3D Cyber Layout */}
                                 {(() => {
-                                    const isVipTheme = heroIndex % 2 !== 0;
                                     const defaultTitle = hero?.name || storefrontName;
                                     const title =
                                         managedHero?.title && !/^首页(图片)?轮播/i.test(managedHero.title)
