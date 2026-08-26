@@ -350,6 +350,11 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 format: field.format ?? 'TEXT',
             }));
         if (segments.length && !this.translations.isConfigured()) {
+            if (entityType === Collection.name) {
+                // Collections are managed from Simplified Chinese as the source of truth.
+                // English remains optional and can be generated later by the backfill flow.
+                return;
+            }
             throw new UserInputError(
                 'English content could not be generated because the translation provider is not configured',
             );

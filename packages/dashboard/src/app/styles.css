@@ -146,3 +146,16 @@ html[dir='rtl'] * {
 [data-base-ui-portal][aria-hidden='true']:has(> [role='presentation'][data-side]) > [role='presentation'] {
     z-index: var(--vdb-z-background-floating);
 }
+
+/* Category creation is an always-visible side workspace rather than a modal.
+   Keep the list readable so merchants can confirm the selected parent while editing. */
+body:has([data-collection-quick-create]) [data-slot='sheet-overlay'] {
+    background: transparent;
+    backdrop-filter: none;
+}
+
+@media (min-width: 1280px) {
+    body:has([data-collection-quick-create]) [data-slot='sidebar-inset'] {
+        padding-right: 380px;
+    }
+}

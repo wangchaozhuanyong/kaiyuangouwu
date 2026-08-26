@@ -621,7 +621,7 @@ msgstr "更新税率失败"
 
 #: src/app/routes/_authenticated/_collections/components/collection-contents-sheet.tsx
 msgid "This is the contents of the <0>{collectionName}</0> collection."
-msgstr "这是 <0>{collectionName}</0> 商品分组的内容。"
+msgstr "这是 <0>{collectionName}</0> 分类中的商品。"
 
 #: src/app/routes/_authenticated/_facets/facets.tsx
 msgid "private"
@@ -806,7 +806,7 @@ msgstr "正在添加..."
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Move Collections"
-msgstr "移动商品分组"
+msgstr "移动分类"
 
 #: src/app/routes/_authenticated/_administrators/administrators_.$id.tsx
 #: src/app/routes/_authenticated/_administrators/administrators.tsx
@@ -864,7 +864,7 @@ msgstr "列表视图"
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "New child product group"
-msgstr "新建子分类"
+msgstr "添加二级分类"
 
 #: src/app/routes/_authenticated/_shipping-methods/components/test-order-builder.tsx
 msgid "Test Order"
@@ -1161,7 +1161,7 @@ msgstr "完成草稿订单失败：{0}"
 
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "Failed to create collection"
-msgstr "创建商品分组失败"
+msgstr "创建分类失败"
 
 #: src/lib/components/data-table/save-view-dialog.tsx
 msgid "Global view (visible to all users)"
@@ -1426,7 +1426,7 @@ msgstr "每 5 秒"
 
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "Successfully created collection"
-msgstr "已成功创建商品分组"
+msgstr "分类创建成功"
 
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
 msgid "Scheduled task"
@@ -1655,7 +1655,7 @@ msgstr "，已选择 {0} 项"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Manage product groups"
-msgstr "管理商品分组"
+msgstr "管理商品分类"
 
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 msgid "Configuration item"
@@ -2072,7 +2072,7 @@ msgstr "商品类型"
 #. placeholder {0}: collectionsToMove.length === 1 ? 'this collection' : `${collectionsToMove.length} collections`
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Select a target collection to move {0} to."
-msgstr "选择要将 {0} 移动到的目标商品分组。"
+msgstr "选择要将 {0} 移动到的目标分类。"
 
 #. placeholder {0}: variants.length
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
@@ -2444,7 +2444,7 @@ msgstr "暂未设置主图"
 
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Filter by collection name"
-msgstr "按商品分组名称筛选"
+msgstr "按分类名称筛选"
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/customer-history-utils.tsx
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-utils.tsx
@@ -3092,7 +3092,7 @@ msgstr "设置所有店铺可用的语言。然后，各个店铺可以支持这
 
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Collections moved successfully"
-msgstr "商品分组移动成功"
+msgstr "分类移动成功"
 
 #: src/lib/components/data-input/relation-selector.tsx
 msgid "Change selection"
@@ -3355,7 +3355,7 @@ msgstr "时间表"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
 msgid "Cannot move a collection into its own descendant"
-msgstr "无法将商品分组移动到其自身的子集"
+msgstr "无法将分类移动到自己的下级分类中"
 
 #: src/app/routes/_authenticated/_tax-categories/tax-categories.tsx
 msgid "New Tax Category"
@@ -3442,7 +3442,7 @@ msgstr "添加筛选属性值"
 
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Please select a target collection"
-msgstr "请选择目标商品分组"
+msgstr "请选择目标分类"
 
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "Global language settings updated successfully"
@@ -3939,7 +3939,7 @@ msgstr "新区域"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
 msgid "Failed to update collection position"
-msgstr "更新商品分组位置失败"
+msgstr "更新分类排序失败"
 
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
 msgid "Refund"
@@ -4445,7 +4445,7 @@ msgstr "最新订单小部件"
 
 #: src/app/routes/_authenticated/_collections/components/collection-contents-sheet.tsx
 msgid "Collection contents for {collectionName}"
-msgstr "{collectionName} 的商品分组内容"
+msgstr "{collectionName} 中的商品"
 
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
 msgid "Shipping method changed"
@@ -5145,7 +5145,7 @@ msgstr "无提醒"
 #. placeholder {2}: selectedCollectionId === topLevelCollectionId ? 'top level' : collectionNameCache.current.get(selectedCollectionId) || 'selected collection'
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Moving {0} collection{1} into {2}"
-msgstr "正在将 {0} 个商品分组移动到 {2}"
+msgstr "正在将 {0} 个分类移动到 {2}"
 
 #: src/app/routes/_authenticated/_shipping-methods/components/test-shipping-methods-sheet.tsx
 #: src/app/routes/_authenticated/_shipping-methods/components/test-single-shipping-method-sheet.tsx
@@ -5382,7 +5382,7 @@ msgstr "已成功创建税务分类"
 
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Failed to move collections"
-msgstr "移动商品分组失败"
+msgstr "移动分类失败"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
@@ -5764,7 +5764,7 @@ msgstr "店铺"
 #. js-lingui-explicit-id
 #: src/app/routes/_authenticated/_roles/components/permission-labels.ts
 msgid "permission.resource.collection"
-msgstr "商品分组"
+msgstr "商品分类"
 
 #. js-lingui-explicit-id
 #: src/app/routes/_authenticated/_roles/components/permission-labels.ts
@@ -6078,7 +6078,7 @@ msgstr "更新角色失败"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Product groups"
-msgstr "商品分组"
+msgstr "商品分类"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
 msgid "This is the only time the full API key will be displayed. Copy or download it now — it cannot be retrieved later."
@@ -6086,7 +6086,7 @@ msgstr "完整的 API 密钥 仅此一次显示。请立即复制或下载，之
 
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "Successfully updated collection"
-msgstr "已成功更新商品分组"
+msgstr "分类更新成功"
 
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
 msgid "Successfully updated payment method"
@@ -6545,7 +6545,7 @@ msgstr "编辑所选链接的属性"
 
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Select a destination collection"
-msgstr "选择目标商品分组"
+msgstr "选择目标分类"
 
 #. js-lingui-explicit-id
 #: src/app/routes/_authenticated/_system/scheduled-task-utils.ts
@@ -6710,7 +6710,7 @@ msgstr "选择履约处理器"
 
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "Failed to update collection"
-msgstr "更新商品分组失败"
+msgstr "更新分类失败"
 
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Price and tax"
@@ -6829,7 +6829,7 @@ msgstr "移除规格组？"
 
 #: src/app/routes/_authenticated/_collections/components/collection-contents-preview-table.tsx
 msgid "This is a preview of the collection contents based on the current filter settings. Once you save the collection, the contents will be updated to reflect the new filter settings."
-msgstr "这是基于当前筛选器设置的商品分组内容预览。保存商品分组后,内容将更新以反映新的筛选器设置。"
+msgstr "这是根据当前筛选条件生成的分类商品预览。保存分类后，商品会按新条件自动更新。"
 
 #: src/app/routes/_authenticated/_orders/orders.tsx
 msgid "Search order number, customer surname or transaction ID"
@@ -6849,7 +6849,7 @@ msgstr "从组中移除客户失败"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This product is not currently included in a product group."
-msgstr "该商品当前未加入任何商品分组。"
+msgstr "该商品当前未加入任何商品分类。"
 
 #: src/app/routes/_authenticated/_orders/components/state-transition-control.tsx
 msgid "Change status"
@@ -6903,7 +6903,7 @@ msgstr "已开始重建搜索索引"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
 msgid "Collection position updated"
-msgstr "商品分组位置已更新"
+msgstr "分类排序已更新"
 
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 #~ msgid "Add \"{newOptionInput}\""
@@ -7142,7 +7142,7 @@ msgstr "已成功添加选项值"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
 msgid "Collection moved to new parent"
-msgstr "商品分组已移至新的父级"
+msgstr "分类已移至新的上级分类"
 
 #: src/app/routes/_authenticated/_products/hooks/use-remove-option-group.ts
 #: src/app/routes/_authenticated/_products/hooks/use-remove-option-group.ts
@@ -7631,7 +7631,7 @@ msgstr "手动编辑 URL 标识"
 
 #: src/app/routes/_authenticated/_collections/components/collection-contents-preview-table.tsx
 msgid "Add filters to preview the collection contents."
-msgstr "添加筛选器以预览商品分组内容。"
+msgstr "添加筛选条件后可预览分类中的商品。"
 
 #: src/app/routes/_authenticated/_shipping-methods/components/test-order-builder.tsx
 msgid "Subtotal"
@@ -7811,7 +7811,7 @@ msgstr "浏览并选择一个或多个素材"
 
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Loading collections..."
-msgstr "正在加载商品分组..."
+msgstr "正在加载商品分类…"
 
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 msgid "Successfully updated facet value"

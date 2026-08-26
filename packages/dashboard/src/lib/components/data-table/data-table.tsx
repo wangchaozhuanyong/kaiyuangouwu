@@ -151,6 +151,8 @@ interface DataTableProps<TData> {
     defaultColumnVisibility?: VisibilityState;
     facetedFilters?: { [key: string]: FacetedFilter | undefined };
     disableViewOptions?: boolean;
+    /** Keeps only search and refresh in the toolbar for focused merchant workflows. */
+    simpleToolbar?: boolean;
     bulkActions?: BulkActionsInput;
     /**
      * @description
@@ -204,6 +206,7 @@ export function DataTable<TData>({
     defaultColumnVisibility,
     facetedFilters,
     disableViewOptions,
+    simpleToolbar,
     bulkActions,
     setTableOptions,
     onRefresh,
@@ -400,14 +403,16 @@ export function DataTable<TData>({
                                     );
                                 })}
                             </Suspense>
-                            {onFilterChange && <AddFilterMenu columns={table.getAllColumns()} />}
-                            {pageId && onFilterChange && <MyViewsButton />}
-                            {pageId && onFilterChange && globalViews.length > 0 && (
+                            {!simpleToolbar && onFilterChange && (
+                                <AddFilterMenu columns={table.getAllColumns()} />
+                            )}
+                            {!simpleToolbar && pageId && onFilterChange && <MyViewsButton />}
+                            {!simpleToolbar && pageId && onFilterChange && globalViews.length > 0 && (
                                 <div className="hidden @md/table:contents">
                                     <GlobalViewsBar />
                                 </div>
                             )}
-                            {nonFacetedFilters.length > 0 && (
+                            {!simpleToolbar && nonFacetedFilters.length > 0 && (
                                 <>
                                     <Separator orientation="vertical" className="self-stretch" />
                                     {nonFacetedFilters.length <= INLINE_FILTER_BADGE_LIMIT ? (
@@ -456,7 +461,7 @@ export function DataTable<TData>({
                             )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                            {pageId && onFilterChange && <SaveViewButton />}
+                            {!simpleToolbar && pageId && onFilterChange && <SaveViewButton />}
                             {!disableViewOptions && <DataTableViewOptions table={table} />}
                             {onRefresh && (
                                 <RefreshButton onRefresh={onRefresh} isLoading={isLoading ?? false} />

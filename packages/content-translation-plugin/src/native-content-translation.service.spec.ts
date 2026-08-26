@@ -1,4 +1,4 @@
-import { Country, Product, ProductVariant, Province } from '@vendure/core';
+import { Collection, Country, Product, ProductVariant, Province } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { contentTranslationInternals } from './content-translation.service.js';
@@ -34,6 +34,67 @@ describe('native content translation event routing', () => {
     it('covers customer-visible country and province names', () => {
         expect(nativeContentTranslationInternals.supportsEntityType(Country)).toBe(true);
         expect(nativeContentTranslationInternals.supportsEntityType(Province)).toBe(true);
+    });
+
+    it('allows a Simplified Chinese collection when the optional translation provider is absent', async () => {
+        const source = {
+            languageCode: 'zh_Hans',
+            name: '测试分类',
+            slug: 'ce-shi-fen-lei',
+            description: '',
+        };
+        const repository = {
+            createQueryBuilder: vi.fn(() => {
+                let languageCode = '';
+                const builder = {
+                    leftJoinAndSelect: vi.fn(() => builder),
+                    where: vi.fn(() => builder),
+                    andWhere: vi.fn((_query: string, parameters: { languageCode: string }) => {
+                        languageCode = parameters.languageCode;
+                        return builder;
+                    }),
+                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : null)),
+                };
+                return builder;
+            }),
+            create: vi.fn((value: any) => value),
+            save: vi.fn(async (value: any) => value),
+        };
+        const connection = {
+            rawConnection: {
+                getMetadata: vi.fn(() => ({
+                    relations: [
+                        {
+                            propertyName: 'translations',
+                            inverseEntityMetadata: { target: class CollectionTranslation {} },
+                        },
+                    ],
+                })),
+            },
+            getRepository: vi.fn(() => repository),
+        };
+        const translations = {
+            findStates: vi.fn(async () => []),
+            isConfigured: vi.fn(() => false),
+            translate: vi.fn(),
+        };
+        const service = new NativeContentTranslationService(
+            {} as any,
+            connection as any,
+            translations as any,
+        );
+
+        await expect(
+            service.translateEntity(
+                { channelId: 'channel-1' } as any,
+                new Collection({ id: 'collection-1' }),
+                { translations: [source] },
+            ),
+        ).resolves.toBeUndefined();
+
+        expect(translations.translate).not.toHaveBeenCalled();
+        expect(repository.create).not.toHaveBeenCalled();
+        expect(repository.save).not.toHaveBeenCalled();
     });
 
     it('regenerates a required English translation when a submitted target was cleared', async () => {

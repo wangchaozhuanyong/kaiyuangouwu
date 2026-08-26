@@ -675,7 +675,7 @@ msgstr "账号与权限"
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.customerCenter"
-msgstr "客户中心"
+msgstr "客户"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -685,12 +685,12 @@ msgstr "库存与履约"
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.marketingCenter"
-msgstr "营销中心"
+msgstr "营销"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.orderCenter"
-msgstr "订单中心"
+msgstr "订单"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -705,22 +705,27 @@ msgstr "商品属性"
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.productCenter"
-msgstr "商品中心"
+msgstr "商品"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.productGroups"
-msgstr "商品分组"
+msgstr "商品分类"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.productList"
+msgstr "商品列表"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.skuAndInventory"
-msgstr "SKU 与库存"
+msgstr "库存管理"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.specificationTemplates"
-msgstr "规格模板"
+msgstr "商品规格"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -730,7 +735,7 @@ msgstr "店铺"
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.storeSettings"
-msgstr "店铺设置"
+msgstr "设置"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx

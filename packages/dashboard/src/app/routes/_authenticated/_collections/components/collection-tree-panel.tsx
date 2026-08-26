@@ -31,6 +31,9 @@ export interface CollectionTreePanelProps {
 const PAGE_SIZE = 100;
 
 function isUnavailableParent(collection: CollectionTreeItem, currentCollectionId?: string) {
+    if (collection.breadcrumbs.length !== 2) {
+        return true;
+    }
     if (!currentCollectionId) {
         return false;
     }
@@ -129,8 +132,8 @@ export function CollectionTreePanel({
                 <Input
                     value={searchTerm}
                     onChange={event => setSearchTerm(event.target.value)}
-                    placeholder={t`Search product groups...`}
-                    aria-label={t`Search product groups`}
+                    placeholder="搜索分类…"
+                    aria-label="搜索分类"
                     className="pl-9"
                 />
             </div>
@@ -172,9 +175,7 @@ export function CollectionTreePanel({
                             onClick={() => onSelectParent(undefined)}
                         >
                             <Folder className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            <span className="font-medium">
-                                <Trans>Top-level product group</Trans>
-                            </span>
+                            <span className="font-medium">无上级分类</span>
                         </button>
                         {collections.map(collection => (
                             <CollectionTreeNode
@@ -212,6 +213,7 @@ function SearchResultRow({
 }>) {
     const { t } = useLingui();
     const unavailable = isUnavailableParent(collection, currentCollectionId);
+    const canAddChild = collection.breadcrumbs.length === 2;
     const path = collection.breadcrumbs
         .slice(1)
         .map(breadcrumb => breadcrumb.name)
@@ -235,15 +237,19 @@ function SearchResultRow({
                     <div className="truncate text-sm font-medium">{collection.name}</div>
                     <div className="truncate text-xs text-muted-foreground">{path}</div>
                 </button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => onAddChild(collection.id)}
-                    aria-label={t`Add a child product group under ${collection.name}`}
-                >
-                    <Plus className="h-4 w-4" />
-                </Button>
+                {canAddChild ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onAddChild(collection.id)}
+                        aria-label={`在 ${collection.name} 下添加二级分类`}
+                    >
+                        <Plus className="h-4 w-4" />
+                    </Button>
+                ) : (
+                    <span className="shrink-0 text-xs text-muted-foreground">二级分类</span>
+                )}
             </div>
         </div>
     );
@@ -276,6 +282,7 @@ function CollectionTreeNode({
     const children = childCollectionsByParentId[collection.id] ?? [];
     const unavailable = isUnavailableParent(collection, currentCollectionId);
     const isSelected = selectedParentId === collection.id;
+    const isTopLevel = depth === 0 && collection.breadcrumbs.length === 2;
 
     return (
         <div>
@@ -293,7 +300,7 @@ function CollectionTreeNode({
                     size="icon-sm"
                     className="shrink-0"
                     onClick={() => onToggleExpanded(collection.id)}
-                    disabled={!hasChildren}
+                    disabled={!hasChildren || !isTopLevel}
                     aria-label={isExpanded ? t`Collapse` : t`Expand`}
                 >
                     {hasChildren ? (
@@ -310,7 +317,7 @@ function CollectionTreeNode({
                     type="button"
                     className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-1 text-left text-sm"
                     onClick={() => onSelectParent(collection.id)}
-                    disabled={unavailable}
+                    disabled={unavailable || !isTopLevel}
                 >
                     {isExpanded ? (
                         <FolderOpen className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -322,16 +329,20 @@ function CollectionTreeNode({
                         {collection.productVariantCount ?? 0}
                     </span>
                 </button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-                    onClick={() => onAddChild(collection.id)}
-                    aria-label={t`Add a child product group under ${collection.name}`}
-                >
-                    <Plus className="h-4 w-4" />
-                </Button>
+                {isTopLevel ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                        onClick={() => onAddChild(collection.id)}
+                        aria-label={`在 ${collection.name} 下添加二级分类`}
+                    >
+                        <Plus className="h-4 w-4" />
+                    </Button>
+                ) : (
+                    <span className="mr-2 shrink-0 text-xs text-muted-foreground">二级</span>
+                )}
             </div>
             {isExpanded &&
                 children.map(child => (
