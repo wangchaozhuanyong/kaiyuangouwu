@@ -14,6 +14,37 @@ const ctx = {
 } as any;
 
 describe('StoreCouponLifecycleService', () => {
+    it('redeems only after payment succeeds, not when checkout merely enters payment', async () => {
+        const handlers = new Map<string, (event: any) => Promise<void>>();
+        const service = new StoreCouponLifecycleService(
+            {
+                rawConnection: {
+                    getRepository: () => ({ find: vi.fn(async () => []) }),
+                },
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {
+                registerBlockingEventHandler: vi.fn((config: any) => {
+                    handlers.set(config.id, config.handler);
+                }),
+            } as any,
+            {} as any,
+        );
+        const redeem = vi.spyOn(service as any, 'redeemForPaidOrder').mockResolvedValue(undefined);
+
+        await service.onApplicationBootstrap();
+        const handleOrder = handlers.get('store-coupon-handle-paid-or-cancelled-order');
+        expect(handleOrder).toBeDefined();
+
+        await handleOrder?.({ ctx, order: { id: 'order-1' }, toState: 'ArrangingPayment' });
+        expect(redeem).not.toHaveBeenCalled();
+
+        await handleOrder?.({ ctx, order: { id: 'order-1' }, toState: 'PaymentSettled' });
+        expect(redeem).toHaveBeenCalledOnce();
+    });
+
     it('backfills the entitlement guard onto legacy generated coupon promotions', async () => {
         const update = vi.fn(async () => undefined);
         const promotion = {
@@ -81,6 +112,153 @@ describe('StoreCouponLifecycleService', () => {
         expect(harness.customerCouponSave).not.toHaveBeenCalled();
     });
 
+    it('prevents a customer from claiming the same campaign twice', async () => {
+        const harness = createIssueHarness({ customerClaimedCount: 1 });
+
+        await expect(harness.service.claim(ctx, 'promotion-1')).rejects.toThrow('该优惠券已经领取');
+        expect(harness.customerCouponSave).not.toHaveBeenCalled();
+    });
+
+    it('redeems a locked coupon at most once when the order event is repeated', async () => {
+        const coupon = {
+            id: 'coupon-1',
+            channelId: 'channel-1',
+            promotionId: 'promotion-1',
+            customerId: 'customer-1',
+            status: 'LOCKED',
+            lockedOrderId: 'order-1',
+            campaignName: '满减券',
+            promotion: { couponCode: 'CPN_INTERNAL' },
+            campaignConfig: {},
+        } as any;
+        const order = {
+            id: 'order-1',
+            currencyCode: 'CNY',
+            totalWithTax: 10_000,
+            lines: [
+                {
+                    id: 'line-1',
+                    quantity: 1,
+                    discounts: [
+                        {
+                            adjustmentSource: 'promotion:promotion-1',
+                            amount: -2_000,
+                            amountWithTax: -2_000,
+                        },
+                    ],
+                },
+            ],
+            shippingLines: [],
+        } as any;
+        const couponUpdate = vi
+            .fn()
+            .mockResolvedValueOnce({ affected: 1 })
+            .mockResolvedValueOnce({ affected: 0 });
+        const allocationSave = vi.fn(async (value: unknown) => value);
+        const ledgerSave = vi.fn(async (value: unknown) => value);
+        const repositories = new Map<any, any>([
+            [CustomerCoupon, { find: vi.fn(async () => [coupon]), update: couponUpdate }],
+            [CouponOrderAllocation, { findOne: vi.fn(async () => undefined), save: allocationSave }],
+            [CouponLedgerEntry, { findOne: vi.fn(async () => undefined), save: ledgerSave }],
+        ]);
+        const service = new StoreCouponLifecycleService(
+            {
+                getRepository: (_ctx: unknown, entity: any) => repositories.get(entity),
+                getEntityOrThrow: vi.fn(async () => order),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await (service as any).redeemForPaidOrder(ctx, order.id);
+        await (service as any).redeemForPaidOrder(ctx, order.id);
+
+        expect(couponUpdate).toHaveBeenCalledTimes(2);
+        expect(allocationSave).toHaveBeenCalledTimes(1);
+        expect(ledgerSave).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects applying a coupon that has already been used', async () => {
+        const applyCouponCode = vi.fn();
+        const couponRepository = {
+            createQueryBuilder: vi.fn(() => chainQueryBuilder({ getOne: async () => ({ id: 'coupon-1' }) })),
+            findOne: vi.fn(async () => ({
+                id: 'coupon-1',
+                channelId: 'channel-1',
+                customerId: 'customer-1',
+                status: 'USED',
+                validFrom: new Date(Date.now() - 60_000),
+                validUntil: new Date(Date.now() + 60_000),
+                promotion: { couponCode: 'CPN_INTERNAL' },
+                campaignConfig: { stackPolicy: 'EXCLUSIVE' },
+            })),
+        };
+        const service = new StoreCouponLifecycleService(
+            { getRepository: () => couponRepository } as any,
+            { findOneByUserId: vi.fn(async () => ({ id: 'customer-1' })) } as any,
+            {} as any,
+            {
+                getActiveOrderForUser: vi.fn(async () => ({ id: 'order-2', lines: [{ id: 'line-1' }] })),
+                applyCouponCode,
+            } as any,
+            {} as any,
+            {} as any,
+        );
+
+        await expect(service.apply(ctx, 'coupon-1')).rejects.toThrow('优惠券已使用');
+        expect(applyCouponCode).not.toHaveBeenCalled();
+    });
+
+    it('keeps a refunded allocation in the customer usage history', async () => {
+        const find = vi.fn(async () => [
+            {
+                id: 'allocation-1',
+                customerCouponId: 'coupon-1',
+                promotionId: 'promotion-1',
+                campaignName: '退款返券活动',
+                status: 'REFUNDED',
+                currencyCode: 'CNY',
+                discountAmountWithTax: 1_000,
+                usedAt: new Date('2026-08-26T00:00:00.000Z'),
+                refundedAt: new Date('2026-08-27T00:00:00.000Z'),
+                orderId: 'order-1',
+                order: { code: 'T0001' },
+                customerCoupon: {
+                    campaignKind: 'ORDER_FIXED',
+                    minimumSpend: 10_000,
+                    discountAmount: 1_000,
+                    discountRate: null,
+                },
+            },
+        ]);
+        const service = new StoreCouponLifecycleService(
+            { getRepository: () => ({ find }) } as any,
+            { findOneByUserId: vi.fn(async () => ({ id: 'customer-1' })) } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await expect(service.findMyUsageRecords(ctx)).resolves.toEqual([
+            expect.objectContaining({
+                id: 'allocation-1',
+                status: 'REFUNDED',
+                orderCode: 'T0001',
+                savedAmount: 1_000,
+            }),
+        ]);
+        expect(find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                relations: { customerCoupon: true, order: true },
+                order: { usedAt: 'DESC' },
+            }),
+        );
+    });
+
     it('returns a used coupon only after a full settled refund', async () => {
         const harness = createRefundHarness({ settledRefundTotal: 10_000, orderTotal: 10_000 });
 
@@ -114,11 +292,13 @@ function createIssueHarness({
     startsAt = null,
     endsAt = new Date(Date.now() + 10 * 24 * 60 * 60_000),
     issuedCount = 0,
+    customerClaimedCount = 0,
     issueLimit = 100,
 }: {
     startsAt?: Date | null;
     endsAt?: Date | null;
     issuedCount?: number;
+    customerClaimedCount?: number;
     issueLimit?: number | null;
 } = {}) {
     const customer = { id: 'customer-1' };
@@ -163,7 +343,7 @@ function createIssueHarness({
         [
             CustomerCoupon,
             {
-                count: vi.fn().mockResolvedValueOnce(issuedCount).mockResolvedValueOnce(0),
+                count: vi.fn().mockResolvedValueOnce(issuedCount).mockResolvedValueOnce(customerClaimedCount),
                 save: customerCouponSave,
             },
         ],

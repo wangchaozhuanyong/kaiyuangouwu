@@ -358,6 +358,37 @@ describe('ShopApi storefront mutations', () => {
         expect(`${claimRequest.query}${applyRequest.query}`).not.toContain('couponCode');
     });
 
+    it('loads immutable coupon usage records separately from current coupon status', async () => {
+        const fetchMock = mockGraphQlResponse({
+            myStorefrontCouponUsageRecords: [
+                {
+                    id: 'allocation-1',
+                    customerCouponId: 'coupon-1',
+                    campaignId: 'campaign-1',
+                    campaignName: '退款返券活动',
+                    campaignKind: 'ORDER_FIXED',
+                    status: 'REFUNDED',
+                    currencyCode: 'CNY',
+                    minimumSpend: 10_000,
+                    discountAmount: 1_000,
+                    discountRate: null,
+                    savedAmount: 1_000,
+                    usedAt: '2026-08-26T00:00:00.000Z',
+                    refundedAt: '2026-08-27T00:00:00.000Z',
+                    orderId: 'order-1',
+                    orderCode: 'T0001',
+                },
+            ],
+        });
+
+        await expect(new ShopApi(market).myCouponUsageRecords()).resolves.toEqual([
+            expect.objectContaining({ id: 'allocation-1', status: 'REFUNDED', orderCode: 'T0001' }),
+        ]);
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('myStorefrontCouponUsageRecords');
+        expect(request.query).toContain('savedAmount');
+    });
+
     it('loads eligible payment methods for the active order', async () => {
         const fetchMock = mockGraphQlResponse({
             eligiblePaymentMethods: [

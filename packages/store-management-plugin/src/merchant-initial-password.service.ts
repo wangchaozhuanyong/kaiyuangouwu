@@ -78,6 +78,15 @@ export class MerchantInitialPasswordService {
         return { mustChangePassword: false };
     }
 
+    async assertCurrentPassword(ctx: RequestContext, password: string): Promise<void> {
+        if (!ctx.activeUserId) {
+            throw new ForbiddenError();
+        }
+        if (!password || !(await this.matchesCurrentPassword(ctx, ctx.activeUserId, password))) {
+            throw new UserInputError('当前账号密码不正确');
+        }
+    }
+
     async assertRootFieldAccess(ctx: RequestContext, parentType: string, fieldName: string): Promise<void> {
         if (
             ctx.apiType !== 'admin' ||

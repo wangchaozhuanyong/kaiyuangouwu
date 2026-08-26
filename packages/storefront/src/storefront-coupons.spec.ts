@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { couponCardsFromBlock, couponCardsFromCampaigns } from './storefront-coupons';
+import {
+    couponCardFromCustomerCoupon,
+    couponCardFromUsageRecord,
+    couponCardsFromBlock,
+    couponCardsFromCampaigns,
+    couponScopeLabel,
+} from './storefront-coupons';
 import { StorefrontContentBlock } from './types';
 
 function couponBlock(): StorefrontContentBlock {
@@ -72,6 +78,7 @@ describe('storefront coupons', () => {
                         endsAt: null,
                         claimStartsAt: null,
                         claimEndsAt: null,
+                        validityDays: null,
                         minimumSpend: 10_000,
                         discountAmount: 2_000,
                         discountRate: null,
@@ -87,6 +94,7 @@ describe('storefront coupons', () => {
                         endsAt: null,
                         claimStartsAt: null,
                         claimEndsAt: null,
+                        validityDays: null,
                         minimumSpend: 0,
                         discountAmount: null,
                         discountRate: 8.5,
@@ -117,17 +125,18 @@ describe('storefront coupons', () => {
         ]);
     });
 
-    it('keeps server claimability separate from whether the customer has claimed before', () => {
+    it('never makes an already-claimed campaign claimable in the ticket UI', () => {
         const [card] = couponCardsFromCampaigns(
             [
                 {
                     id: 'repeatable-campaign',
-                    name: '可重复领取',
+                    name: '已领取活动',
                     kind: 'ORDER_FIXED',
                     startsAt: null,
                     endsAt: null,
                     claimStartsAt: null,
                     claimEndsAt: null,
+                    validityDays: null,
                     minimumSpend: 0,
                     discountAmount: 500,
                     discountRate: null,
@@ -140,7 +149,7 @@ describe('storefront coupons', () => {
             'CNY',
         );
 
-        expect(card).toMatchObject({ claimed: true, claimable: true });
+        expect(card).toMatchObject({ claimed: true, claimable: false });
     });
 
     it('shows coupons regardless of their name and hides invalid no-op discounts', () => {
@@ -153,6 +162,7 @@ describe('storefront coupons', () => {
                 endsAt: null,
                 claimStartsAt: null,
                 claimEndsAt: null,
+                validityDays: null,
                 minimumSpend: 0,
                 discountAmount: 100,
                 discountRate: null,
@@ -168,6 +178,7 @@ describe('storefront coupons', () => {
                 endsAt: null,
                 claimStartsAt: null,
                 claimEndsAt: null,
+                validityDays: null,
                 minimumSpend: 0,
                 discountAmount: null,
                 discountRate: 10,
@@ -180,5 +191,67 @@ describe('storefront coupons', () => {
         expect(couponCardsFromCampaigns(campaigns, 'zh', 'CNY')).toEqual([
             expect.objectContaining({ campaignId: 'test-campaign', title: '测试满减', value: '1' }),
         ]);
+    });
+
+    it('maps an owned coupon into the same ticket design without making it claimable', () => {
+        const card = couponCardFromCustomerCoupon(
+            {
+                id: 'coupon-1',
+                campaignId: 'campaign-1',
+                campaignName: '新客满减',
+                campaignKind: 'ORDER_FIXED',
+                status: 'AVAILABLE',
+                minimumSpend: 10_000,
+                discountAmount: 2_000,
+                discountRate: null,
+                claimedAt: '2026-08-26T00:00:00.000Z',
+                validFrom: '2026-08-26T00:00:00.000Z',
+                validUntil: '2026-09-02T00:00:00.000Z',
+                lockedAt: null,
+                usedAt: null,
+                returnedAt: null,
+                expiredAt: null,
+                lockedOrderId: null,
+                usedOrderId: null,
+                returnCount: 0,
+                usable: true,
+            },
+            'zh',
+            'CNY',
+        );
+
+        expect(card).toMatchObject({
+            value: '20',
+            unit: '¥',
+            description: '满 ¥100 可用',
+            claimed: true,
+            claimable: false,
+        });
+        expect(couponScopeLabel('PRODUCT_PERCENTAGE', 'zh')).toBe('指定商品');
+    });
+
+    it('keeps a refunded usage record renderable after the coupon returns to unused', () => {
+        const card = couponCardFromUsageRecord(
+            {
+                id: 'allocation-1',
+                customerCouponId: 'coupon-1',
+                campaignId: 'campaign-1',
+                campaignName: '退款返券活动',
+                campaignKind: 'ORDER_FIXED',
+                status: 'REFUNDED',
+                currencyCode: 'CNY',
+                minimumSpend: 10_000,
+                discountAmount: 1_000,
+                discountRate: null,
+                savedAmount: 1_000,
+                usedAt: '2026-08-26T00:00:00.000Z',
+                refundedAt: '2026-08-27T00:00:00.000Z',
+                orderId: 'order-1',
+                orderCode: 'T0001',
+            },
+            'zh',
+        );
+
+        expect(card).toMatchObject({ title: '退款返券活动', value: '10', claimable: false });
     });
 });

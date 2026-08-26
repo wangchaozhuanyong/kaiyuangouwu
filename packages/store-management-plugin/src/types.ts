@@ -197,6 +197,24 @@ export interface StoreCouponOrderAllocationView {
     refundId: ID | null;
 }
 
+export interface StoreCouponUsageRecordView {
+    id: ID;
+    customerCouponId: ID;
+    campaignId: ID;
+    campaignName: string;
+    campaignKind: StoreCouponCampaignKind;
+    status: 'USED' | 'REFUNDED';
+    currencyCode: CurrencyCode;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+    savedAmount: number;
+    usedAt: Date;
+    refundedAt: Date | null;
+    orderId: ID;
+    orderCode: string;
+}
+
 export interface StoreFlashSaleVariantPriceInput {
     productVariantId: ID;
     salePrice: number;
@@ -229,6 +247,16 @@ export interface StoreFlashSaleView {
     startsAt: Date | null;
     endsAt: Date | null;
     items: StoreFlashSaleItemView[];
+}
+
+export interface StorePromotionNameView {
+    id: ID;
+    name: string;
+}
+
+export interface StoreCouponCampaignActionResult {
+    campaignId: ID;
+    affectedCount: number;
 }
 
 export interface ProvisionStoreAdministratorInput {

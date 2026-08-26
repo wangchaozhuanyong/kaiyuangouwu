@@ -39,8 +39,9 @@ export function AccountRoutePage() {
                     logoUrl: runtime.logoUrl,
                     favoriteProductCount: runtime.favoriteProductIds.length,
                     recentProductCount: runtime.recentProductIds.length,
-                    couponCount: runtime.myCoupons.filter((coupon: { usable: boolean }) => coupon.usable)
-                        .length,
+                    couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
+                        ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),
+                    ).length,
                     addingVariantId: runtime.addingVariantId,
                     onContentTarget: runtime.openContentTarget,
                     onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
@@ -144,13 +145,11 @@ export function CouponsRoutePage() {
                 value={{
                     coupons: runtime.activeCoupons,
                     myCoupons: runtime.myCoupons,
+                    usageRecords: runtime.couponUsageRecords,
                     currencyCode: runtime.market.currencyCode,
                     language: runtime.language,
                     loading: runtime.cartLoading,
-                    cartHasItems: (runtime.cart?.totalQuantity ?? 0) > 0,
                     onClaim: runtime.claimCoupon,
-                    onApply: runtime.applyCoupon,
-                    onRemove: runtime.removeCoupon,
                 }}
             >
                 <CouponCenterPage />

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { StoreCustomerCoupon, StorefrontCouponCampaign } from './types';
 
-import { couponCampaignsForTab, customerCouponsForTab, isLockedCoupon } from './coupon-center-state';
+import {
+    couponCampaignsForTab,
+    couponCenterTabCount,
+    customerCouponsForTab,
+    isLockedCoupon,
+} from './coupon-center-state';
+import { type StoreCustomerCoupon, type StorefrontCouponCampaign } from './types';
 
 const campaign = (claimed: boolean, claimable: boolean): StorefrontCouponCampaign => ({
     id: `${claimed}-${claimable}`,
@@ -11,6 +16,7 @@ const campaign = (claimed: boolean, claimable: boolean): StorefrontCouponCampaig
     endsAt: null,
     claimStartsAt: null,
     claimEndsAt: null,
+    validityDays: null,
     minimumSpend: 0,
     discountAmount: 100,
     discountRate: null,
@@ -51,7 +57,7 @@ describe('coupon center state', () => {
         ).toHaveLength(1);
     });
 
-    it('keeps available, returned and locked coupons in the usable lifecycle view', () => {
+    it('keeps available, returned and locked coupons in the unused lifecycle view', () => {
         expect(
             customerCouponsForTab(
                 [
@@ -61,9 +67,14 @@ describe('coupon center state', () => {
                     coupon('USED'),
                     coupon('EXPIRED'),
                 ],
-                'USABLE',
+                'UNUSED',
             ).map(item => item.status),
         ).toEqual(['AVAILABLE', 'RETURNED', 'LOCKED']);
+    });
+
+    it('does not derive immutable usage history from mutable coupon status', () => {
+        expect(customerCouponsForTab([coupon('USED'), coupon('RETURNED')], 'HISTORY')).toEqual([]);
+        expect(couponCenterTabCount('HISTORY', [], [], [{ id: 'allocation-1' } as any])).toBe(1);
     });
 
     it('recognizes a locked coupon without depending on a checkout order object', () => {

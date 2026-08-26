@@ -100,7 +100,7 @@ export function HomepageCouponHub({
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
                     const isClaimed = coupon.claimed;
-                    const canClaim = coupon.claimable;
+                    const canClaim = coupon.claimable && !coupon.claimed;
 
                     return (
                         <div
@@ -169,8 +169,8 @@ export function HomepageCouponHub({
                                         <span className="coupon-btn-text-wrap">
                                             {isZh ? (
                                                 <>
-                                                    <span>{isClaimed ? '再领' : '立即'}</span>
-                                                    <span>{isClaimed ? '一张' : '领取'}</span>
+                                                    <span>立即</span>
+                                                    <span>领取</span>
                                                 </>
                                             ) : (
                                                 <span>Claim</span>

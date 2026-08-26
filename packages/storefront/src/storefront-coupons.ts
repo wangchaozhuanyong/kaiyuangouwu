@@ -1,4 +1,10 @@
-import { StorefrontContentBlock, StorefrontCouponCampaign, StorefrontLanguage } from './types';
+import {
+    StoreCouponUsageRecord,
+    StoreCustomerCoupon,
+    StorefrontContentBlock,
+    StorefrontCouponCampaign,
+    StorefrontLanguage,
+} from './types';
 
 export type StorefrontCouponTheme = 'gold' | 'rose' | 'blue' | 'emerald';
 
@@ -75,9 +81,95 @@ export function couponCardsFromCampaigns(
             tag: campaignKindLabel(coupon.kind, language),
             theme: couponThemes[index % couponThemes.length],
             claimed: coupon.claimed,
-            claimable: coupon.claimable,
+            claimable: coupon.claimable && !coupon.claimed,
         };
     });
+}
+
+export function couponCardFromCustomerCoupon(
+    coupon: StoreCustomerCoupon,
+    language: StorefrontLanguage,
+    currencyCode: string,
+    index = 0,
+): StorefrontCouponCard {
+    const isZh = language === 'zh';
+    const currencyUnit = currencySymbol(currencyCode, language);
+    const isFixed = coupon.campaignKind === 'ORDER_FIXED';
+    const minimum = formatMinorAmount(coupon.minimumSpend, language);
+    return {
+        id: coupon.id,
+        campaignId: coupon.campaignId,
+        value: isFixed
+            ? formatMinorAmount(coupon.discountAmount ?? 0, language)
+            : formatDiscountRate(coupon.discountRate),
+        unit: isFixed ? currencyUnit : isZh ? '折' : 'x',
+        unitBefore: isFixed,
+        title: coupon.campaignName,
+        description: coupon.minimumSpend
+            ? isZh
+                ? `满 ${currencyUnit}${minimum} 可用`
+                : `Spend ${currencyUnit}${minimum}`
+            : isZh
+              ? '无门槛'
+              : 'No minimum',
+        tag: campaignKindLabel(coupon.campaignKind, language),
+        theme: couponThemes[index % couponThemes.length],
+        claimed: true,
+        claimable: false,
+    };
+}
+
+export function couponCardFromUsageRecord(
+    record: StoreCouponUsageRecord,
+    language: StorefrontLanguage,
+    index = 0,
+): StorefrontCouponCard {
+    const isZh = language === 'zh';
+    const currencyUnit = currencySymbol(record.currencyCode, language);
+    const isFixed = record.campaignKind === 'ORDER_FIXED';
+    const minimum = formatMinorAmount(record.minimumSpend, language);
+    return {
+        id: record.id,
+        campaignId: record.campaignId,
+        value: isFixed
+            ? formatMinorAmount(record.discountAmount ?? 0, language)
+            : formatDiscountRate(record.discountRate),
+        unit: isFixed ? currencyUnit : isZh ? '折' : 'x',
+        unitBefore: isFixed,
+        title: record.campaignName,
+        description: record.minimumSpend
+            ? isZh
+                ? `满 ${currencyUnit}${minimum} 可用`
+                : `Spend ${currencyUnit}${minimum}`
+            : isZh
+              ? '无门槛'
+              : 'No minimum',
+        tag: campaignKindLabel(record.campaignKind, language),
+        theme: couponThemes[index % couponThemes.length],
+        claimed: true,
+        claimable: false,
+    };
+}
+
+export function couponScopeLabel(
+    kind: StorefrontCouponCampaign['kind'],
+    language: StorefrontLanguage,
+): string {
+    const labels =
+        language === 'zh'
+            ? {
+                  ORDER_FIXED: '全场订单',
+                  ORDER_PERCENTAGE: '全场订单',
+                  COLLECTION_PERCENTAGE: '指定分类商品',
+                  PRODUCT_PERCENTAGE: '指定商品',
+              }
+            : {
+                  ORDER_FIXED: 'All orders',
+                  ORDER_PERCENTAGE: 'All orders',
+                  COLLECTION_PERCENTAGE: 'Selected categories',
+                  PRODUCT_PERCENTAGE: 'Selected products',
+              };
+    return labels[kind];
 }
 
 function isDisplayableCampaign(coupon: StorefrontCouponCampaign): boolean {

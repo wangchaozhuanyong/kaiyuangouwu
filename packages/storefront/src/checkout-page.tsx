@@ -1121,7 +1121,7 @@ function CouponSheet({
                                         onClick={() => void choose(coupon)}
                                         disabled={loading || submitting}
                                     >
-                                        {applied ? (isZh ? '移除' : 'Remove') : isZh ? '使用' : 'Apply'}
+                                        {applied ? (isZh ? '取消使用' : 'Unapply') : isZh ? '使用' : 'Apply'}
                                     </button>
                                 </div>
                             );

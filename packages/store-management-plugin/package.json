@@ -18,7 +18,8 @@
         "build": "tsc --project tsconfig.build.json",
         "check-types": "tsc --project tsconfig.json --noEmit",
         "test": "vitest run",
-        "test:referral-e2e": "cross-env PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/referral-rebate.e2e-spec.ts"
+        "test:referral-e2e": "cross-env PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/referral-rebate.e2e-spec.ts",
+        "test:coupon-e2e": "cross-env PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/coupon-lifecycle.e2e-spec.ts"
     },
     "dependencies": {
         "@lingui/react": "^5.9.3",

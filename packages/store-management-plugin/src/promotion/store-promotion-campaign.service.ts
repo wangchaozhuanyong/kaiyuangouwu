@@ -32,6 +32,7 @@ import {
     StoreCouponCampaignView,
     StoreFlashSaleItemView,
     StoreFlashSaleView,
+    StorePromotionNameView,
 } from '../types';
 
 import { idListArg, numberArg, stringArg } from './promotion-operation-args';
@@ -86,7 +87,7 @@ export class StorePromotionCampaignService {
             const issueLimit = config?.issueLimit ?? promotion.usageLimit ?? null;
             const remainingIssueCount =
                 issueLimit == null ? null : Math.max(0, issueLimit - stats.claimedCount);
-            const perCustomerClaimLimit = config?.perCustomerClaimLimit ?? 1;
+            const perCustomerClaimLimit = 1;
             const customerClaimedCount = customerCounts.get(String(promotion.id)) ?? 0;
             return {
                 ...view,
@@ -102,8 +103,7 @@ export class StorePromotionCampaignService {
                 remainingIssueCount,
                 claimed: customerClaimedCount > 0,
                 claimable:
-                    customerClaimedCount < perCustomerClaimLimit &&
-                    (remainingIssueCount == null || remainingIssueCount > 0),
+                    customerClaimedCount === 0 && (remainingIssueCount == null || remainingIssueCount > 0),
             };
         });
     }
@@ -114,11 +114,9 @@ export class StorePromotionCampaignService {
             .filter(
                 coupon =>
                     coupon.enabled &&
-                    (!coupon.startsAt || coupon.startsAt <= now) &&
                     (!coupon.endsAt || coupon.endsAt > now) &&
                     (!coupon.claimStartsAt || coupon.claimStartsAt <= now) &&
-                    (!coupon.claimEndsAt || coupon.claimEndsAt > now) &&
-                    (coupon.claimed || coupon.remainingIssueCount == null || coupon.remainingIssueCount > 0),
+                    (!coupon.claimEndsAt || coupon.claimEndsAt > now),
             )
             .slice(0, 50);
     }
@@ -149,8 +147,7 @@ export class StorePromotionCampaignService {
                 validityDays: this.optionalPositiveInteger(input.validityDays, '领取后有效天数'),
                 issueLimit:
                     this.optionalPositiveInteger(input.issueLimit, '发放数量') ?? result.usageLimit ?? null,
-                perCustomerClaimLimit:
-                    this.optionalPositiveInteger(input.perCustomerClaimLimit, '每位客户领取次数') ?? 1,
+                perCustomerClaimLimit: 1,
                 stackPolicy: input.stackPolicy ?? 'EXCLUSIVE',
                 returnOnCancellation: input.returnOnCancellation ?? true,
                 returnOnFullRefund: input.returnOnFullRefund ?? true,
@@ -258,9 +255,20 @@ export class StorePromotionCampaignService {
     }
 
     async setEnabled(ctx: RequestContext, id: ID, enabled: boolean): Promise<Promotion> {
+        const existingPromotion = await this.promotionService.findOne(ctx, id);
+        if (!existingPromotion || !this.isManagedPromotion(existingPromotion)) {
+            throw new UserInputError('找不到该营销活动');
+        }
+        if (!enabled && this.toCouponView(existingPromotion)) {
+            const issuedCount = await this.connection
+                .getRepository(ctx, CustomerCoupon)
+                .count({ where: { channelId: ctx.channelId, promotionId: id } });
+            if (issuedCount > 0) {
+                throw new UserInputError('该优惠券已经发放，不能直接停用；请使用“停止发放”保留客户已领取券');
+            }
+        }
         if (enabled) {
-            const promotion = await this.promotionService.findOne(ctx, id);
-            if (!promotion) throw new UserInputError('找不到该促销活动');
+            const promotion = existingPromotion;
             const flashAction = promotion.actions.find(action => action.code === 'store_flash_sale_price');
             if (flashAction) {
                 await this.assertNoOverlappingFlashSale(
@@ -281,7 +289,60 @@ export class StorePromotionCampaignService {
         return result;
     }
 
-    delete(ctx: RequestContext, id: ID) {
+    async updateName(ctx: RequestContext, id: ID, value: string): Promise<StorePromotionNameView> {
+        const promotion = await this.promotionService.findOne(ctx, id);
+        if (!promotion || !this.isManagedPromotion(promotion)) {
+            throw new UserInputError('找不到该营销活动');
+        }
+        const name = this.requiredText(value, '活动名称', 120);
+        const result = await this.promotionService.updatePromotion(ctx, {
+            id,
+            translations: promotionTranslations(ctx, name, promotion.description || '营销活动'),
+        });
+        if (isGraphQlErrorResult(result)) {
+            throw new UserInputError(result.message);
+        }
+        if (this.toCouponView(promotion)) {
+            await this.connection
+                .getRepository(ctx, CustomerCoupon)
+                .update({ channelId: ctx.channelId, promotionId: id }, { campaignName: name });
+        }
+        return { id: result.id, name: result.name };
+    }
+
+    async stopCouponIssuance(ctx: RequestContext, id: ID): Promise<StoreCouponCampaignView> {
+        const promotion = await this.promotionService.findOne(ctx, id);
+        if (!promotion || !this.toCouponView(promotion)) {
+            throw new UserInputError('找不到该优惠券活动');
+        }
+        const config = await this.configForPromotion(ctx, promotion);
+        const now = new Date();
+        if (!config.claimEndsAt || config.claimEndsAt > now) {
+            config.claimEndsAt = now;
+            await this.connection
+                .getRepository(ctx, StoreCouponCampaignConfig)
+                .save(config, { reload: false });
+        }
+        const updated = (await this.findCoupons(ctx)).find(coupon => idsAreEqual(coupon.id, id));
+        if (!updated) throw new UserInputError('优惠券活动停止发放后无法读取');
+        return updated;
+    }
+
+    async delete(ctx: RequestContext, id: ID) {
+        const promotion = await this.promotionService.findOne(ctx, id);
+        if (!promotion || !this.isManagedPromotion(promotion)) {
+            throw new UserInputError('找不到该营销活动');
+        }
+        if (this.toCouponView(promotion)) {
+            const issuedCount = await this.connection
+                .getRepository(ctx, CustomerCoupon)
+                .count({ where: { channelId: ctx.channelId, promotionId: id } });
+            if (issuedCount > 0) {
+                throw new UserInputError(
+                    `该优惠券已经发放 ${issuedCount} 张，不能删除；可停止发放或批量作废未使用券`,
+                );
+            }
+        }
         return this.promotionService.softDeletePromotion(ctx, id);
     }
 
@@ -525,6 +586,37 @@ export class StorePromotionCampaignService {
             return storageStrategy.toAbsoluteUrl(ctx.req, normalized.replace(/^\/assets\//, ''));
         }
         return normalized.startsWith('/') ? normalized : `/assets/${normalized}`;
+    }
+
+    private isManagedPromotion(promotion: Promotion): boolean {
+        return Boolean(
+            this.toCouponView(promotion) ||
+            promotion.actions.some(action => action.code === 'store_flash_sale_price'),
+        );
+    }
+
+    private async configForPromotion(ctx: RequestContext, promotion: Promotion) {
+        const repository = this.connection.getRepository(ctx, StoreCouponCampaignConfig);
+        let config = await repository.findOne({
+            where: { channelId: ctx.channelId, promotionId: promotion.id },
+        });
+        if (!config) {
+            config = await repository.save(
+                new StoreCouponCampaignConfig({
+                    channelId: ctx.channelId,
+                    promotionId: promotion.id,
+                    claimStartsAt: promotion.startsAt,
+                    claimEndsAt: promotion.endsAt,
+                    validityDays: null,
+                    issueLimit: promotion.usageLimit,
+                    perCustomerClaimLimit: 1,
+                    stackPolicy: 'EXCLUSIVE',
+                    returnOnCancellation: true,
+                    returnOnFullRefund: true,
+                }),
+            );
+        }
+        return config;
     }
 
     private findPromotions(ctx: RequestContext): Promise<Promotion[]> {

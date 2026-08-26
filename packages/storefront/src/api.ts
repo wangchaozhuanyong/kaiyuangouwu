@@ -20,6 +20,7 @@ import {
     ReferralProgram,
     RegisterCustomerInput,
     ShippingMethod,
+    StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCatalogInput,
@@ -508,6 +509,7 @@ export class ShopApi {
                     endsAt
                     claimStartsAt
                     claimEndsAt
+                    validityDays
                     minimumSpend
                     discountAmount
                     discountRate
@@ -1597,6 +1599,37 @@ export class ShopApi {
             signal,
         );
         return result.myStorefrontCoupons;
+    }
+
+    async myCouponUsageRecords(signal?: AbortSignal): Promise<StoreCouponUsageRecord[]> {
+        const result = await this.request<{
+            myStorefrontCouponUsageRecords: StoreCouponUsageRecord[];
+        }>(
+            `
+                query MyStorefrontCouponUsageRecords {
+                    myStorefrontCouponUsageRecords {
+                        id
+                        customerCouponId
+                        campaignId
+                        campaignName
+                        campaignKind
+                        status
+                        currencyCode
+                        minimumSpend
+                        discountAmount
+                        discountRate
+                        savedAmount
+                        usedAt
+                        refundedAt
+                        orderId
+                        orderCode
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myStorefrontCouponUsageRecords;
     }
 
     async claimCoupon(campaignId: string): Promise<StoreCustomerCoupon> {

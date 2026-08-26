@@ -124,6 +124,24 @@ const commonTypes = gql`
         customerName: String
         customerEmail: String
     }
+
+    type StoreCouponUsageRecord {
+        id: ID!
+        customerCouponId: ID!
+        campaignId: ID!
+        campaignName: String!
+        campaignKind: StoreCouponCampaignKind!
+        status: String!
+        currencyCode: CurrencyCode!
+        minimumSpend: Money!
+        discountAmount: Money
+        discountRate: Float
+        savedAmount: Money!
+        usedAt: DateTime!
+        refundedAt: DateTime
+        orderId: ID!
+        orderCode: String!
+    }
 `;
 
 export const adminApiExtensions = gql`
@@ -642,6 +660,16 @@ export const adminApiExtensions = gql`
         note: String
     }
 
+    type StorePromotionNameResult {
+        id: ID!
+        name: String!
+    }
+
+    type StoreCouponCampaignActionResult {
+        campaignId: ID!
+        affectedCount: Int!
+    }
+
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
@@ -683,8 +711,15 @@ export const adminApiExtensions = gql`
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
         createStoreCouponCampaign(input: CreateStoreCouponCampaignInput!): StoreCouponCampaign!
         createStoreFlashSale(input: CreateStoreFlashSaleInput!): StoreFlashSale!
-        setStorePromotionEnabled(id: ID!, enabled: Boolean!): StorePromotionToggleResult!
-        deleteStorePromotion(id: ID!): DeletionResponse!
+        setStorePromotionEnabled(id: ID!, enabled: Boolean!, password: String!): StorePromotionToggleResult!
+        updateStorePromotionName(id: ID!, name: String!): StorePromotionNameResult!
+        stopStoreCouponIssuance(id: ID!, password: String!): StoreCouponCampaign!
+        revokeStoreCouponCampaignOutstanding(
+            id: ID!
+            password: String!
+            reason: String
+        ): StoreCouponCampaignActionResult!
+        deleteStorePromotion(id: ID!, password: String!): DeletionResponse!
         grantStoreCoupon(campaignId: ID!, customerId: ID!): StoreCustomerCoupon!
         revokeStoreCustomerCoupon(id: ID!, reason: String): StoreCustomerCoupon!
         createSystemAnnouncement(input: CreateSystemAnnouncementInput!): SystemAnnouncement!
@@ -746,6 +781,7 @@ export const shopApiExtensions = gql`
         discountRate: Float
         claimStartsAt: DateTime
         claimEndsAt: DateTime
+        validityDays: Int
         remainingIssueCount: Int
         claimed: Boolean!
         claimable: Boolean!
@@ -801,6 +837,7 @@ export const shopApiExtensions = gql`
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
+        myStorefrontCouponUsageRecords: [StoreCouponUsageRecord!]!
         activeStorefrontFlashSales: [StoreFlashSale!]!
         activeSystemAnnouncements: [StorefrontSystemAnnouncement!]!
         referralProgram: ReferralProgram!

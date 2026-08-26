@@ -137,6 +137,11 @@ export const storefrontQueryKeys = {
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'referral-program'] as const,
     customerReferral: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'referral'] as const,
+    customerCouponUsageRecords: (marketCode: string, languageCode: string, customerId: string) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'coupon-usage-records',
+        ] as const,
     customerScope: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer', customerId] as const,
     customerOrderCounts: (marketCode: string, languageCode: string, customerId: string) =>

@@ -611,6 +611,7 @@ export interface StorefrontCouponCampaign {
     endsAt: string | null;
     claimStartsAt: string | null;
     claimEndsAt: string | null;
+    validityDays: number | null;
     minimumSpend: number;
     discountAmount: number | null;
     discountRate: number | null;
@@ -641,6 +642,24 @@ export interface StoreCustomerCoupon {
     usedOrderId: string | null;
     returnCount: number;
     usable: boolean;
+}
+
+export interface StoreCouponUsageRecord {
+    id: string;
+    customerCouponId: string;
+    campaignId: string;
+    campaignName: string;
+    campaignKind: StorefrontCouponCampaignKind;
+    status: 'USED' | 'REFUNDED';
+    currencyCode: string;
+    minimumSpend: number;
+    discountAmount: number | null;
+    discountRate: number | null;
+    savedAmount: number;
+    usedAt: string;
+    refundedAt: string | null;
+    orderId: string;
+    orderCode: string;
 }
 
 export interface StorefrontFlashSaleItem {

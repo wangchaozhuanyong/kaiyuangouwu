@@ -1,6 +1,7 @@
 import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Order, Permission, RequestContext, Transaction } from '@vendure/core';
 
+import { MerchantInitialPasswordService } from '../merchant-initial-password.service';
 import {
     CreateStoreCouponCampaignInput,
     CreateStoreFlashSaleInput,
@@ -15,6 +16,7 @@ export class StorePromotionCampaignAdminResolver {
     constructor(
         private readonly campaignService: StorePromotionCampaignService,
         private readonly lifecycleService: StoreCouponLifecycleService,
+        private readonly passwordService: MerchantInitialPasswordService,
     ) {}
 
     @Query()
@@ -59,15 +61,54 @@ export class StorePromotionCampaignAdminResolver {
         @Ctx() ctx: RequestContext,
         @Args('id') id: ID,
         @Args('enabled') enabled: boolean,
+        @Args('password') password: string,
     ) {
-        return this.campaignService.setEnabled(ctx, id, enabled);
+        return this.passwordService
+            .assertCurrentPassword(ctx, password)
+            .then(() => this.campaignService.setEnabled(ctx, id, enabled));
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    updateStorePromotionName(@Ctx() ctx: RequestContext, @Args('id') id: ID, @Args('name') name: string) {
+        return this.campaignService.updateName(ctx, id, name);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    stopStoreCouponIssuance(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('password') password: string,
+    ) {
+        return this.passwordService
+            .assertCurrentPassword(ctx, password)
+            .then(() => this.campaignService.stopCouponIssuance(ctx, id));
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    revokeStoreCouponCampaignOutstanding(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('password') password: string,
+        @Args('reason') reason?: string,
+    ) {
+        return this.passwordService
+            .assertCurrentPassword(ctx, password)
+            .then(() => this.lifecycleService.revokeCampaignOutstanding(ctx, id, reason));
     }
 
     @Transaction()
     @Mutation()
     @Allow(Permission.DeletePromotion)
-    deleteStorePromotion(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.campaignService.delete(ctx, id);
+    deleteStorePromotion(@Ctx() ctx: RequestContext, @Args('id') id: ID, @Args('password') password: string) {
+        return this.passwordService
+            .assertCurrentPassword(ctx, password)
+            .then(() => this.campaignService.delete(ctx, id));
     }
 
     @Transaction()
@@ -116,6 +157,12 @@ export class StorePromotionCampaignShopResolver {
     @Allow(Permission.Authenticated)
     myStorefrontCoupons(@Ctx() ctx: RequestContext) {
         return this.lifecycleService.findMine(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
+    myStorefrontCouponUsageRecords(@Ctx() ctx: RequestContext) {
+        return this.lifecycleService.findMyUsageRecords(ctx);
     }
 
     @Transaction()

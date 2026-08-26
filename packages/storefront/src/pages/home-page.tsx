@@ -31,7 +31,6 @@ import {
     useRef,
     useState,
 } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { ProductCard } from '../components/common/product-card';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
@@ -41,7 +40,7 @@ import { homepageModuleEntries } from '../homepage-module-order';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { DEFAULT_HERO_FALLBACK_IMAGE } from '../storefront-images';
-import { routeNavigateOptions } from '../storefront-router';
+import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     BrandLogo,
     dualCardTemplateSetting,
@@ -200,7 +199,7 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
                     const isClaimed = coupon.claimed;
-                    const canClaim = coupon.claimable;
+                    const canClaim = coupon.claimable && !coupon.claimed;
 
                     return (
                         <div
@@ -269,8 +268,8 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
                                         <span className="coupon-btn-text-wrap">
                                             {isZh ? (
                                                 <>
-                                                    <span>{isClaimed ? '再领' : '立即'}</span>
-                                                    <span>{isClaimed ? '一张' : '领取'}</span>
+                                                    <span>立即</span>
+                                                    <span>领取</span>
                                                 </>
                                             ) : (
                                                 <span>Claim</span>
@@ -295,6 +294,7 @@ interface HomePageProps {
     heroAutoplayIntervalSeconds: number;
     configuredBlockTypes: Array<StorefrontContentBlock['type']>;
     coupons: StorefrontCouponCampaign[];
+    claimedCampaignIds: string[];
     flashSales: StorefrontFlashSale[];
     systemAnnouncements: StorefrontSystemAnnouncement[];
     bestSellerProducts: Product[];
@@ -336,6 +336,7 @@ export function HomePage() {
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         coupons,
+        claimedCampaignIds,
         flashSales,
         systemAnnouncements,
         bestSellerProducts,
@@ -478,7 +479,11 @@ export function HomePage() {
             ? defaultNoticeItem
             : noticeItems.find(item => item.id === openNoticeId);
     const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
-    const campaignCouponCards = couponCardsFromCampaigns(coupons, language, market.currencyCode);
+    const claimedCampaignIdSet = new Set(claimedCampaignIds);
+    const customerAwareCoupons = coupons.map(coupon =>
+        claimedCampaignIdSet.has(coupon.id) ? { ...coupon, claimed: true, claimable: false } : coupon,
+    );
+    const campaignCouponCards = couponCardsFromCampaigns(customerAwareCoupons, language, market.currencyCode);
     const couponCards = campaignCouponCards.filter(
         (coupon, index, items) =>
             items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,

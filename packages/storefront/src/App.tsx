@@ -301,7 +301,6 @@ export function App() {
         maxPrice: maximumPrice || undefined,
     };
     const toastTimer = useRef<number | null>(null);
-    const couponApplicationAttempts = useRef(new Set<string>());
     const locale = localeFor(language, market);
     const text = uiCopy[language];
     const isZh = language === 'zh';
@@ -412,6 +411,18 @@ export function App() {
         refetchInterval: customer ? 60_000 : false,
     });
     const myCoupons = customerCouponsQuery.data ?? [];
+    const customerCouponUsageRecordsQuery = useQuery({
+        queryKey: storefrontQueryKeys.customerCouponUsageRecords(
+            market.code,
+            vendureLanguageCode,
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.myCouponUsageRecords(signal),
+        enabled: Boolean(customer),
+        staleTime: 0,
+        refetchInterval: customer ? 60_000 : false,
+    });
+    const couponUsageRecords = customerCouponUsageRecordsQuery.data ?? [];
     const claimedCampaignIds = Array.from(new Set(myCoupons.map(coupon => coupon.campaignId)));
     const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
     const recommendationsBlock = contentBlocks.find(block => block.type === 'RECOMMENDATIONS');
@@ -590,7 +601,7 @@ export function App() {
         if (!customer) return;
         await queryClient.invalidateQueries({
             queryKey: storefrontQueryKeys.customerScope(market.code, vendureLanguageCode, customer.id),
-            refetchType: 'none',
+            refetchType: 'active',
         });
     }, [customer, market.code, queryClient, vendureLanguageCode]);
     const productQuery = useQuery({
@@ -729,7 +740,6 @@ export function App() {
             return;
         }
         setStorefrontCode(nextStorefrontCode);
-        couponApplicationAttempts.current.clear();
         setFavoriteProductIds(
             readStoredStrings(
                 scopedStorageKey(FAVORITE_PRODUCT_STORAGE_KEY, nextStorefrontCode),
@@ -1007,18 +1017,7 @@ export function App() {
                 await queryClient.invalidateQueries({
                     queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
                 });
-                if ((cart?.totalQuantity ?? 0) > 0) {
-                    await api.applyCustomerCoupon(claimedCoupon.id);
-                    await refreshCart();
-                    await queryClient.invalidateQueries({ queryKey: customerCouponQueryKey });
-                    notify(isZh ? '优惠券已领取并使用' : 'Coupon claimed and applied');
-                } else {
-                    notify(
-                        isZh
-                            ? '优惠券已领取，加入商品后可在结算页使用'
-                            : 'Coupon claimed. Use it after adding an item.',
-                    );
-                }
+                notify(isZh ? '优惠券领取成功' : 'Coupon claimed');
                 return null;
             } catch (requestError) {
                 return requestError instanceof Error ? requestError.message : text.loadError;
@@ -1028,7 +1027,6 @@ export function App() {
         },
         [
             api,
-            cart?.totalQuantity,
             customer,
             customerCouponQueryKey,
             isZh,
@@ -1036,7 +1034,6 @@ export function App() {
             navigate,
             notify,
             queryClient,
-            refreshCart,
             text.loadError,
             vendureLanguageCode,
         ],
@@ -1052,7 +1049,7 @@ export function App() {
                     refreshCart(),
                     queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
                 ]);
-                notify(isZh ? '优惠券已移除' : 'Coupon removed');
+                notify(isZh ? '已取消使用优惠券' : 'Coupon unapplied');
                 return null;
             } catch (requestError) {
                 return requestError instanceof Error ? requestError.message : text.loadError;
@@ -1062,36 +1059,6 @@ export function App() {
         },
         [api, customerCouponQueryKey, isZh, notify, queryClient, refreshCart, text.loadError],
     );
-
-    useEffect(() => {
-        if (!cart || cart.totalQuantity < 1) return;
-        const autoAttemptKey = `${cart.id}:auto`;
-        if (couponApplicationAttempts.current.has(autoAttemptKey)) return;
-        const pendingCoupon = myCoupons.find(coupon => {
-            const attemptKey = `${cart.id}:${coupon.id}`;
-            return coupon.usable && !couponApplicationAttempts.current.has(attemptKey);
-        });
-        if (!pendingCoupon) return;
-
-        let cancelled = false;
-        const applyPendingCoupon = async () => {
-            const attemptKey = `${cart.id}:${pendingCoupon.id}`;
-            couponApplicationAttempts.current.add(autoAttemptKey);
-            couponApplicationAttempts.current.add(attemptKey);
-            const nextError = await applyCoupon(pendingCoupon.id);
-            if (nextError && !cancelled) {
-                notify(
-                    isZh
-                        ? `“${pendingCoupon.campaignName}”暂不满足使用条件`
-                        : `“${pendingCoupon.campaignName}” is not eligible for this cart`,
-                );
-            }
-        };
-        void applyPendingCoupon();
-        return () => {
-            cancelled = true;
-        };
-    }, [applyCoupon, cart, isZh, myCoupons, notify]);
 
     const reopenPendingOrder = useCallback(
         async (order: Order) => {
@@ -1499,6 +1466,7 @@ export function App() {
         customerLoadError,
         customerQuery,
         myCoupons,
+        couponUsageRecords,
         currentCheckoutOrder,
         completedOrder,
         activeCollectionId,

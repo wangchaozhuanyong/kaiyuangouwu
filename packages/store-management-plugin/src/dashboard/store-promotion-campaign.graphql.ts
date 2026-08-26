@@ -116,17 +116,44 @@ export const createStoreFlashSaleMutation = gql`
 `;
 
 export const setStorePromotionEnabledMutation = gql`
-    mutation SetStorePromotionEnabled($id: ID!, $enabled: Boolean!) {
-        setStorePromotionEnabled(id: $id, enabled: $enabled) {
+    mutation SetStorePromotionEnabled($id: ID!, $enabled: Boolean!, $password: String!) {
+        setStorePromotionEnabled(id: $id, enabled: $enabled, password: $password) {
             id
             enabled
         }
     }
 `;
 
+export const updateStorePromotionNameMutation = gql`
+    mutation UpdateStorePromotionName($id: ID!, $name: String!) {
+        updateStorePromotionName(id: $id, name: $name) {
+            id
+            name
+        }
+    }
+`;
+
+export const stopStoreCouponIssuanceMutation = gql`
+    mutation StopStoreCouponIssuance($id: ID!, $password: String!) {
+        stopStoreCouponIssuance(id: $id, password: $password) {
+            id
+            claimEndsAt
+        }
+    }
+`;
+
+export const revokeStoreCouponCampaignOutstandingMutation = gql`
+    mutation RevokeStoreCouponCampaignOutstanding($id: ID!, $password: String!, $reason: String) {
+        revokeStoreCouponCampaignOutstanding(id: $id, password: $password, reason: $reason) {
+            campaignId
+            affectedCount
+        }
+    }
+`;
+
 export const deleteStorePromotionMutation = gql`
-    mutation DeleteStorePromotion($id: ID!) {
-        deleteStorePromotion(id: $id) {
+    mutation DeleteStorePromotion($id: ID!, $password: String!) {
+        deleteStorePromotion(id: $id, password: $password) {
             result
             message
         }

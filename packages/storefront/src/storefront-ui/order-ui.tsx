@@ -15,18 +15,18 @@ export function customerCouponStatusLabel(
     const labels =
         language === 'zh'
             ? {
-                  AVAILABLE: '可使用',
-                  LOCKED: '已用于当前订单',
+                  AVAILABLE: '未使用',
+                  LOCKED: '订单占用中',
                   USED: '已核销',
-                  RETURNED: '退款已返还',
+                  RETURNED: '已返还，未使用',
                   EXPIRED: '已过期',
                   REVOKED: '已撤销',
               }
             : {
                   AVAILABLE: 'Available',
-                  LOCKED: 'Applied',
+                  LOCKED: 'Reserved by order',
                   USED: 'Used',
-                  RETURNED: 'Returned',
+                  RETURNED: 'Returned, unused',
                   EXPIRED: 'Expired',
                   REVOKED: 'Revoked',
               };

@@ -157,21 +157,61 @@ describe('StorePromotionCampaignService', () => {
         const input = harness.createPromotion.mock.calls[0][1];
         expect(JSON.parse(input.actions[0].arguments[0].value)).toHaveLength(101);
     });
+
+    it('refuses to delete a coupon campaign after coupons have been issued', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({ promotions: [promotion], issuedCount: 3 });
+
+        await expect(harness.service.delete(ctx, promotion.id)).rejects.toThrow('已经发放 3 张');
+        expect(harness.softDeletePromotion).not.toHaveBeenCalled();
+    });
+
+    it('renames a coupon campaign without rewriting immutable usage records', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({ promotions: [promotion] });
+
+        await expect(harness.service.updateName(ctx, promotion.id, '新名称')).resolves.toEqual({
+            id: promotion.id,
+            name: '新名称',
+        });
+        expect(harness.updatePromotion).toHaveBeenCalledWith(
+            ctx,
+            expect.objectContaining({
+                id: promotion.id,
+                translations: [expect.objectContaining({ name: '新名称' })],
+            }),
+        );
+        expect(harness.updateEntity).toHaveBeenCalledTimes(1);
+    });
 });
 
-function createHarness({ variants = [], promotions = [] }: { variants?: any[]; promotions?: any[] } = {}) {
+function createHarness({
+    variants = [],
+    promotions = [],
+    issuedCount = 0,
+}: {
+    variants?: any[];
+    promotions?: any[];
+    issuedCount?: number;
+} = {}) {
     const createPromotion = vi.fn((_ctx: unknown, input: CreatePromotionInput) => promotionFromInput(input));
     const findAllPromotions = vi.fn((_ctx: unknown, options?: { skip?: number; take?: number }) => {
         const skip = options?.skip ?? 0;
         const take = options?.take ?? promotions.length;
         return { items: promotions.slice(skip, skip + take), totalItems: promotions.length };
     });
+    const softDeletePromotion = vi.fn();
+    const updatePromotion = vi.fn((_ctx: unknown, input: any) => ({
+        ...(promotions.find(promotion => promotion.id === input.id) ?? {}),
+        id: input.id,
+        name: input.translations[0].name,
+    }));
     const promotionService = {
         findAll: findAllPromotions,
         findOne: vi.fn((_ctx: unknown, id: string) => promotions.find(promotion => promotion.id === id)),
         createPromotion,
-        updatePromotion: vi.fn(),
-        softDeletePromotion: vi.fn(),
+        updatePromotion,
+        softDeletePromotion,
     };
     const getVariantsByProductId = vi.fn(
         (_ctx: unknown, _productId: string, options?: { skip?: number; take?: number }) => {
@@ -186,11 +226,14 @@ function createHarness({ variants = [], promotions = [] }: { variants?: any[]; p
             variants.find(variant => String(variant.id) === String(id)),
         ),
     };
+    const updateEntity = vi.fn();
     const connection = {
         findByIdsInChannel: vi.fn(() => []),
         getRepository: vi.fn(() => ({
             save: vi.fn((entity: unknown) => entity),
             find: vi.fn(() => []),
+            count: vi.fn(() => issuedCount),
+            update: updateEntity,
         })),
     };
     const customerService = {
@@ -200,6 +243,9 @@ function createHarness({ variants = [], promotions = [] }: { variants?: any[]; p
         createPromotion,
         findAllPromotions,
         getVariantsByProductId,
+        softDeletePromotion,
+        updateEntity,
+        updatePromotion,
         service: new StorePromotionCampaignService(
             connection as any,
             promotionService as any,
@@ -207,6 +253,22 @@ function createHarness({ variants = [], promotions = [] }: { variants?: any[]; p
             customerService as any,
             { assetOptions: { assetStorageStrategy: {} } } as any,
         ),
+    };
+}
+
+function couponPromotion() {
+    return {
+        id: 'coupon-1',
+        name: '已发放优惠券',
+        description: '优惠券',
+        enabled: true,
+        startsAt: null,
+        endsAt: null,
+        couponCode: 'CPN_123',
+        usageLimit: null,
+        perCustomerUsageLimit: null,
+        conditions: [],
+        actions: [{ code: 'order_fixed_discount', args: { discount: 1_000 } }],
     };
 }
 
