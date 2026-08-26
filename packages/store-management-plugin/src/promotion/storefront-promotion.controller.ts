@@ -128,7 +128,7 @@ export class StorefrontPromotionController {
                 "style-src 'self' 'unsafe-inline' https:",
                 "script-src 'none'",
                 `script-src-elem 'sha256-${PROMOTION_VISUAL_SCRIPT_SHA256}' https://static.cloudflareinsights.com`,
-                'connect-src https://cloudflareinsights.com',
+                "connect-src 'self' https://cloudflareinsights.com",
             ].join('; '),
         );
     }

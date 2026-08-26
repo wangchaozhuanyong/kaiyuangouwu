@@ -19,7 +19,7 @@ function responseMock() {
 }
 
 describe('StorefrontPromotionController', () => {
-    it('allows only the trusted visual renderer and Cloudflare Insights scripts', async () => {
+    it('allows the trusted renderer and same-origin Cloudflare Insights telemetry', async () => {
         const request = { ctx: {}, host: 'shop.example.com' };
         const accessService = {
             resolveRequest: vi.fn(() => Promise.resolve(request)),
@@ -43,7 +43,7 @@ describe('StorefrontPromotionController', () => {
         expect(contentSecurityPolicy).toContain(
             `script-src-elem 'sha256-${PROMOTION_VISUAL_SCRIPT_SHA256}' https://static.cloudflareinsights.com`,
         );
-        expect(contentSecurityPolicy).toContain('connect-src https://cloudflareinsights.com');
+        expect(contentSecurityPolicy).toContain("connect-src 'self' https://cloudflareinsights.com");
     });
 
     it('does not issue an entry cookie without a valid signed proof', async () => {
