@@ -313,6 +313,10 @@ interface HomePageProps {
     onCategorySelect: (collection: CollectionSummary) => void;
     onAdd: (variant: ProductVariant) => void;
     onToggleLanguage: () => void;
+    availableCurrencyCodes: string[];
+    currencySelectorEnabled: boolean;
+    currencyLoading: boolean;
+    onCurrencyChange: (currencyCode: string) => void;
     onNotifications: () => void;
     onToast?: (message: string) => void;
     onClaimCoupon: (campaignId: string) => Promise<string | null>;
@@ -350,6 +354,10 @@ export function HomePage() {
         onCategorySelect,
         onAdd,
         onToggleLanguage,
+        availableCurrencyCodes,
+        currencySelectorEnabled,
+        currencyLoading,
+        onCurrencyChange,
         onNotifications,
         onToast,
         onClaimCoupon,
@@ -744,6 +752,22 @@ export function HomePage() {
                     <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
                 </button>
                 <div className="topbar-actions">
+                    {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (
+                        <select
+                            className="currency-select"
+                            value={market.currencyCode}
+                            disabled={currencyLoading}
+                            onChange={event => onCurrencyChange(event.target.value)}
+                            aria-label={isZh ? '选择结算币种' : 'Choose settlement currency'}
+                            title={isZh ? '选择结算币种' : 'Choose settlement currency'}
+                        >
+                            {availableCurrencyCodes.map(currencyCode => (
+                                <option key={currencyCode} value={currencyCode}>
+                                    {currencyCode}
+                                </option>
+                            ))}
+                        </select>
+                    ) : null}
                     <button
                         className="language-button"
                         type="button"

@@ -33,6 +33,33 @@ const commonTypes = gql`
         REVOKED
     }
 
+    enum StoreCurrencyRateMode {
+        AUTO
+        MANUAL
+    }
+
+    enum StoreCurrencyRoundingMode {
+        CENT
+        TENTH
+        WHOLE
+    }
+
+    type StoreCurrencyConfiguration {
+        channelId: ID!
+        channelCode: String!
+        defaultCurrencyCode: CurrencyCode!
+        availableCurrencyCodes: [CurrencyCode!]!
+        selectorEnabled: Boolean!
+        rateMode: StoreCurrencyRateMode!
+        cnyToMyrRate: Float!
+        markupPercent: Float!
+        roundingMode: StoreCurrencyRoundingMode!
+        rateSource: String
+        rateUpdatedAt: DateTime
+        pricesUpdatedAt: DateTime
+        syncedPriceCount: Int!
+    }
+
     type StoreCustomerCoupon {
         id: ID!
         campaignId: ID!
@@ -179,6 +206,16 @@ export const adminApiExtensions = gql`
         estimateMinDays: Int!
         estimateMaxDays: Int!
         blockedPostalPrefixes: String!
+    }
+
+    input UpdateStoreCurrencyConfigurationInput {
+        defaultCurrencyCode: CurrencyCode!
+        availableCurrencyCodes: [CurrencyCode!]!
+        selectorEnabled: Boolean!
+        rateMode: StoreCurrencyRateMode!
+        cnyToMyrRate: Float!
+        markupPercent: Float!
+        roundingMode: StoreCurrencyRoundingMode!
     }
 
     type SystemAnnouncement implements Node {
@@ -401,6 +438,7 @@ export const adminApiExtensions = gql`
         storeProfiles: [StoreProfile!]!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
+        myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
@@ -416,6 +454,11 @@ export const adminApiExtensions = gql`
         updateMyStoreCommerceConfiguration(
             input: UpdateMyStoreCommerceConfigurationInput!
         ): StoreCommerceConfiguration!
+        updateMyStoreCurrencyConfiguration(
+            input: UpdateStoreCurrencyConfigurationInput!
+        ): StoreCurrencyConfiguration!
+        refreshMyStoreExchangeRate: StoreCurrencyConfiguration!
+        syncMyStoreCurrencyPrices: StoreCurrencyConfiguration!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
         saveStorefrontPromotionDraft(input: UpdateStorefrontPromotionDraftInput!): StorefrontPromotionPage!
         publishStorefrontPromotionPage: StorefrontPromotionPage!
@@ -493,6 +536,7 @@ export const shopApiExtensions = gql`
 
     extend type Query {
         storefrontBranding: StorefrontBranding!
+        storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
         activeStorefrontFlashSales: [StoreFlashSale!]!

@@ -336,3 +336,32 @@ export interface UpdateMyStoreCommerceConfigurationInput {
     estimateMaxDays: number;
     blockedPostalPrefixes: string;
 }
+
+export type StoreCurrencyRateMode = 'AUTO' | 'MANUAL';
+export type StoreCurrencyRoundingMode = 'CENT' | 'TENTH' | 'WHOLE';
+
+export interface StoreCurrencyConfiguration {
+    channelId: ID;
+    channelCode: string;
+    defaultCurrencyCode: CurrencyCode;
+    availableCurrencyCodes: CurrencyCode[];
+    selectorEnabled: boolean;
+    rateMode: StoreCurrencyRateMode;
+    cnyToMyrRate: number;
+    markupPercent: number;
+    roundingMode: StoreCurrencyRoundingMode;
+    rateSource: string | null;
+    rateUpdatedAt: Date | null;
+    pricesUpdatedAt: Date | null;
+    syncedPriceCount: number;
+}
+
+export interface UpdateStoreCurrencyConfigurationInput {
+    defaultCurrencyCode: CurrencyCode;
+    availableCurrencyCodes: CurrencyCode[];
+    selectorEnabled: boolean;
+    rateMode: StoreCurrencyRateMode;
+    cnyToMyrRate: number;
+    markupPercent: number;
+    roundingMode: StoreCurrencyRoundingMode;
+}

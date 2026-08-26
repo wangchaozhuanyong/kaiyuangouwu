@@ -18,6 +18,7 @@ export type {
 export { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service.js';
 export { StoreActivationReadinessService } from './store-activation-readiness.service.js';
 export { StoreCommerceSettingsService } from './store-commerce-settings.service.js';
+export { StoreCurrencySettingsService, convertMinorPrice } from './store-currency-settings.service.js';
 export { StoreManagementPlugin } from './store-management.plugin.js';
 export { StoreProfileService } from './store-profile.service.js';
 export { StoreProvisioningService, storeAdministratorPermissions } from './store-provisioning.service.js';
@@ -37,6 +38,9 @@ export type {
     StoreCommerceConfiguration,
     StoreCouponCampaignKind,
     StoreCouponCampaignView,
+    StoreCurrencyConfiguration,
+    StoreCurrencyRateMode,
+    StoreCurrencyRoundingMode,
     StoreFlashSaleItemView,
     StoreFlashSaleView,
     StoreProfileStatus,
@@ -46,6 +50,7 @@ export type {
     SystemAnnouncementPublicView,
     UpdateMyStoreCommerceConfigurationInput,
     UpdateMyStoreProfileInput,
+    UpdateStoreCurrencyConfigurationInput,
     UpdateStoreProfileInput,
     UpdateStorefrontPromotionDraftInput,
     UpdateSystemAnnouncementInput,

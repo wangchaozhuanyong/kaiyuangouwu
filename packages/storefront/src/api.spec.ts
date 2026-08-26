@@ -84,6 +84,10 @@ describe('ShopApi storefront mutations', () => {
             expect.stringContaining('languageCode=en'),
             expect.objectContaining({ method: 'POST' }),
         );
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining('currencyCode=CNY'),
+            expect.objectContaining({ method: 'POST' }),
+        );
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('storefrontContent');
         expect(request.query).toContain('storefrontContentSettings');
@@ -93,6 +97,35 @@ describe('ShopApi storefront mutations', () => {
         expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
             'vendure-token': 'cn-mainland',
         });
+    });
+
+    it('switches the active checkout order to the selected settlement currency', async () => {
+        const order = {
+            __typename: 'Order',
+            id: 'order-1',
+            code: 'ORDER-1',
+            state: 'AddingItems',
+            totalQuantity: 1,
+            subTotalWithTax: 5991,
+            shippingWithTax: 0,
+            totalWithTax: 5991,
+            currencyCode: 'MYR',
+            lines: [],
+            discounts: [],
+            taxSummary: [],
+            couponCodes: [],
+            customFields: {},
+        };
+        const fetchMock = mockGraphQlResponse({ setCurrencyCodeForOrder: order });
+
+        await expect(new ShopApi(market).setCurrencyForOrder('MYR')).resolves.toEqual(order);
+
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.query).toContain('setCurrencyCodeForOrder');
+        expect(request.variables).toEqual({ currencyCode: 'MYR' });
     });
 
     it('falls back to a five-second carousel interval when settings are absent', async () => {

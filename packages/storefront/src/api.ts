@@ -25,6 +25,7 @@ import {
     StorefrontContentBlock,
     StorefrontContentResponse,
     StorefrontCouponCampaign,
+    StorefrontCurrencyConfiguration,
     StorefrontFlashSale,
     StorefrontReview,
     StorefrontReviewCandidate,
@@ -433,6 +434,7 @@ export class ShopApi {
             activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl' | 'description'>;
             availableCountries: StorefrontConfig['availableCountries'];
             storefrontBranding: { logoUrl: string | null; description: string };
+            storefrontCurrencyConfiguration: StorefrontCurrencyConfiguration;
         }>(
             `
             query StorefrontConfig {
@@ -453,6 +455,13 @@ export class ShopApi {
                     logoUrl
                     description
                 }
+                storefrontCurrencyConfiguration {
+                    defaultCurrencyCode
+                    availableCurrencyCodes
+                    selectorEnabled
+                    cnyToMyrRate
+                    rateUpdatedAt
+                }
             }
         `,
             undefined,
@@ -463,6 +472,7 @@ export class ShopApi {
             availableCountries: result.availableCountries,
             logoUrl: result.storefrontBranding?.logoUrl ?? null,
             description: result.storefrontBranding?.description ?? '',
+            currencyConfiguration: result.storefrontCurrencyConfiguration,
         };
     }
 
@@ -1615,6 +1625,22 @@ export class ShopApi {
         return this.assertOrder(result.setOrderShippingMethod);
     }
 
+    async setCurrencyForOrder(currencyCode: string): Promise<Order> {
+        const result = await this.request<{ setCurrencyCodeForOrder: Order & ErrorResult }>(
+            `
+                mutation SetStorefrontOrderCurrency($currencyCode: CurrencyCode!) {
+                    setCurrencyCodeForOrder(currencyCode: $currencyCode) {
+                        __typename
+                        ... on Order { ${orderFields} }
+                        ... on ErrorResult { errorCode message }
+                    }
+                }
+            `,
+            { currencyCode },
+        );
+        return this.assertOrder(result.setCurrencyCodeForOrder);
+    }
+
     async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
         const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
             `
@@ -1667,7 +1693,9 @@ export class ShopApi {
             headers.authorization = `Bearer ${this.authToken}`;
         }
         const languageSeparator = API_URL.includes('?') ? '&' : '?';
-        const requestUrl = `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}`;
+        const requestUrl =
+            `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}` +
+            `&currencyCode=${encodeURIComponent(this.market.currencyCode)}`;
         const response = await fetch(requestUrl, {
             method: 'POST',
             credentials: 'include',

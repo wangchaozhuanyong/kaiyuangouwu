@@ -441,10 +441,19 @@ export interface StorefrontConfig {
     }>;
     logoUrl?: string | null;
     description?: string | null;
+    currencyConfiguration?: StorefrontCurrencyConfiguration;
     customFields: {
         storefrontNameZh?: string | null;
         storefrontNameEn?: string | null;
     };
+}
+
+export interface StorefrontCurrencyConfiguration {
+    defaultCurrencyCode: string;
+    availableCurrencyCodes: string[];
+    selectorEnabled: boolean;
+    cnyToMyrRate: number;
+    rateUpdatedAt?: string | null;
 }
 
 export type StorefrontContentBlockType =

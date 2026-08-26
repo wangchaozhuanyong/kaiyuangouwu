@@ -424,7 +424,7 @@ img {
 }
 
 .home-topbar {
-    grid-template-columns: max-content minmax(80px, 1fr) 86px;
+    grid-template-columns: minmax(0, max-content) minmax(80px, 1fr) max-content;
     gap: 5px;
 }
 
@@ -527,6 +527,7 @@ img {
 
 .brand {
     width: max-content;
+    min-width: 0;
     max-width: calc(36px + 8px + 8em);
     height: 44px;
     padding: 0;
@@ -535,6 +536,7 @@ img {
     display: flex;
     align-items: center;
     gap: 8px;
+    overflow: hidden;
     text-align: left;
     cursor: pointer;
 }
@@ -567,13 +569,16 @@ img.fatal-error-mark {
 }
 
 .brand strong {
-    flex: none;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
     font-size: 18px;
     font-weight: 800;
     line-height: 1.2;
     color: #0f172a;
     letter-spacing: -0.02em;
     white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .search-trigger {
@@ -612,9 +617,32 @@ img.fatal-error-mark {
 }
 
 .topbar-actions {
-    display: grid;
-    grid-template-columns: 40px 40px;
+    display: flex;
+    align-items: center;
     gap: 6px;
+}
+
+.currency-select {
+    width: 64px;
+    height: 40px;
+    padding: 0 7px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+}
+
+.currency-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.currency-select:disabled {
+    cursor: wait;
+    opacity: 0.6;
 }
 
 .language-button,
@@ -8463,7 +8491,7 @@ img.fatal-error-mark {
     }
 
     .home-topbar {
-        grid-template-columns: max-content minmax(70px, 1fr) 80px;
+        grid-template-columns: minmax(0, max-content) minmax(70px, 1fr) max-content;
         gap: 4px;
     }
 
@@ -8486,7 +8514,6 @@ img.fatal-error-mark {
     }
 
     .topbar-actions {
-        grid-template-columns: 38px 38px;
         gap: 4px;
     }
 
@@ -8494,6 +8521,12 @@ img.fatal-error-mark {
     .notice-button {
         width: 38px;
         height: 38px;
+    }
+
+    .currency-select {
+        width: 58px;
+        height: 38px;
+        padding: 0 5px;
     }
 
     .quick-grid button > span {

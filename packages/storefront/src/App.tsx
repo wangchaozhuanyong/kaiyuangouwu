@@ -70,6 +70,7 @@ export const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
 export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
 export const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 export const STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY = 'storefront-language-preference-v2';
+export const STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY = 'storefront-currency-preference-v1';
 export const FAVORITE_PRODUCT_LIMIT = 100;
 export const RECENT_PRODUCT_LIMIT = 20;
 
@@ -107,6 +108,31 @@ export function writeManualLanguage(marketCode: string, language: StorefrontLang
         );
     } catch {
         // A disabled localStorage must not prevent language changes.
+    }
+}
+
+export function readStoredCurrency(market: MarketConfig, available?: readonly string[]): string {
+    try {
+        const stored = localStorage.getItem(
+            scopedStorageKey(STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY, market.code),
+        );
+        if (stored && (!available || available.includes(stored))) return stored;
+    } catch {
+        // A disabled localStorage must not prevent the storefront from loading.
+    }
+    return available?.includes(market.currencyCode)
+        ? market.currencyCode
+        : (available?.[0] ?? market.currencyCode);
+}
+
+export function writeStoredCurrency(marketCode: string, currencyCode: string): void {
+    try {
+        localStorage.setItem(
+            scopedStorageKey(STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY, marketCode),
+            currencyCode,
+        );
+    } catch {
+        // The in-memory choice still works for this page lifetime.
     }
 }
 
@@ -226,8 +252,9 @@ export function App() {
         language: StorefrontLanguage;
     }>(() => {
         const initialMarket = enabledMarkets[0];
+        const currencyCode = readStoredCurrency(initialMarket);
         return {
-            market: initialMarket,
+            market: { ...initialMarket, currencyCode },
             language: readStoredLanguage(initialMarket),
         };
     });
@@ -239,6 +266,8 @@ export function App() {
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [storefrontDescription, setStorefrontDescription] = useState('');
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
+    const [availableCurrencyCodes, setAvailableCurrencyCodes] = useState<string[]>([]);
+    const [currencySelectorEnabled, setCurrencySelectorEnabled] = useState(false);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
     const [cartLoading, setCartLoading] = useState(false);
@@ -657,8 +686,18 @@ export function App() {
         const config = configQuery.data;
         if (!config) return;
         const nextStorefrontCode = config.code;
-        const nextMarket = marketForStorefrontConfig(config, market);
+        const configuredMarket = marketForStorefrontConfig(config, market);
+        const currencyConfiguration = config.currencyConfiguration;
+        const nextAvailableCurrencyCodes = currencyConfiguration?.availableCurrencyCodes.length
+            ? currencyConfiguration.availableCurrencyCodes
+            : [configuredMarket.currencyCode];
+        const selectedCurrency = nextAvailableCurrencyCodes.includes(market.currencyCode)
+            ? market.currencyCode
+            : readStoredCurrency(configuredMarket, nextAvailableCurrencyCodes);
+        const nextMarket = { ...configuredMarket, currencyCode: selectedCurrency };
         setAvailableCountries(config.availableCountries);
+        setAvailableCurrencyCodes(nextAvailableCurrencyCodes);
+        setCurrencySelectorEnabled(currencyConfiguration?.selectorEnabled === true);
         if (
             nextMarket.code !== market.code ||
             nextMarket.defaultLanguageCode !== market.defaultLanguageCode ||
@@ -1320,6 +1359,55 @@ export function App() {
             return { ...currentContext, language: nextLanguage };
         });
 
+    const switchCurrency = useCallback(
+        async (currencyCode: string) => {
+            if (
+                currencyCode === market.currencyCode ||
+                !availableCurrencyCodes.includes(currencyCode) ||
+                cartLoading
+            ) {
+                return;
+            }
+            setCartLoading(true);
+            setCartError(null);
+            try {
+                if (cart?.checkoutOrder) {
+                    const updatedOrder = await api.setCurrencyForOrder(currencyCode);
+                    setCheckoutOrder(updatedOrder);
+                }
+                writeStoredCurrency(market.code, currencyCode);
+                setStorefrontContext(current => ({
+                    ...current,
+                    market: { ...current.market, currencyCode },
+                }));
+                queryClient.removeQueries({ queryKey: ['storefront', market.code] });
+                notify(
+                    language === 'zh'
+                        ? `已切换为 ${currencyCode} 价格`
+                        : `Prices switched to ${currencyCode}`,
+                );
+            } catch (requestError) {
+                const message = requestError instanceof Error ? requestError.message : text.loadError;
+                setCartError(message);
+                notify(message);
+            } finally {
+                setCartLoading(false);
+            }
+        },
+        [
+            api,
+            availableCurrencyCodes,
+            cart?.checkoutOrder,
+            cartLoading,
+            language,
+            market.code,
+            market.currencyCode,
+            notify,
+            queryClient,
+            text.loadError,
+        ],
+    );
+
     const updateCategory = useCallback(
         (
             updates: Partial<
@@ -1377,6 +1465,8 @@ export function App() {
         storefrontCode,
         logoUrl,
         availableCountries,
+        availableCurrencyCodes,
+        currencySelectorEnabled,
         addingVariantId,
         claimedCampaignIds,
         cart,
@@ -1415,6 +1505,7 @@ export function App() {
         goBack,
         notify,
         toggleLanguage,
+        switchCurrency,
         updateCategory,
         openContentTarget,
         refetchStorefront,

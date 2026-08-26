@@ -40,6 +40,12 @@ import { StorefrontPromotionService } from './promotion/storefront-promotion.ser
 import { StoreActivationReadinessService } from './store-activation-readiness.service';
 import { StoreCommerceSettingsResolver } from './store-commerce-settings.resolver';
 import { StoreCommerceSettingsService } from './store-commerce-settings.service';
+import {
+    StoreCurrencySettingsAdminResolver,
+    StoreCurrencySettingsShopResolver,
+} from './store-currency-settings.resolver';
+import { StoreCurrencySettingsService } from './store-currency-settings.service';
+import { syncAutomaticStoreCurrencyPricesTask } from './store-currency-tasks';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
 import { StoreProvisioningResolver } from './store-provisioning.resolver';
@@ -74,6 +80,7 @@ import { StorefrontPromotionPluginOptions } from './types';
         StoreProfileService,
         StorefrontActivationService,
         StoreCommerceSettingsService,
+        StoreCurrencySettingsService,
         StoreProvisioningService,
         StorefrontEntryMiddleware,
         StorefrontPromotionAccessService,
@@ -114,6 +121,7 @@ import { StorefrontPromotionPluginOptions } from './types';
             }
         }
         config.schedulerOptions.tasks.push(reconcileStoreCouponsTask);
+        config.schedulerOptions.tasks.push(syncAutomaticStoreCurrencyPricesTask);
         return config;
     },
     adminApiExtensions: {
@@ -123,6 +131,7 @@ import { StorefrontPromotionPluginOptions } from './types';
             StoreProvisioningResolver,
             StoreProfileAdminResolver,
             StoreCommerceSettingsResolver,
+            StoreCurrencySettingsAdminResolver,
             StorefrontPromotionAdminResolver,
             StorePromotionCampaignAdminResolver,
             StoreCouponOrderResolver,
@@ -133,6 +142,7 @@ import { StorefrontPromotionPluginOptions } from './types';
         schema: shopApiExtensions,
         resolvers: [
             StorefrontBrandingShopResolver,
+            StoreCurrencySettingsShopResolver,
             StorePromotionCampaignShopResolver,
             SystemAnnouncementShopResolver,
         ],

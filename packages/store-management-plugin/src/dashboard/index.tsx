@@ -5,6 +5,7 @@ import { MerchantPasswordGate } from './merchant-password-gate';
 import { myStoreProfileRoute } from './my-store-profile-page';
 import { storeCommerceSettingsRoute } from './store-commerce-settings-page';
 import { StoreCouponOrderBlock } from './store-coupon-order-block';
+import { storeCurrencySettingsRoute } from './store-currency-settings-page';
 import { storeManagementRoute } from './store-management-page';
 import {
     storeCouponCampaignRoute,
@@ -19,6 +20,7 @@ defineDashboardExtension({
     routes: [
         myStoreProfileRoute,
         storeCommerceSettingsRoute,
+        storeCurrencySettingsRoute,
         storeManagementRoute,
         storeProvisioningRoute,
         storefrontPromotionRoute,
