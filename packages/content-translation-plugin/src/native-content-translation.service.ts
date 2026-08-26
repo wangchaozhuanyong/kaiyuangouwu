@@ -308,6 +308,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         });
         const statesByField = new Map(existingStates.map(state => [state.fieldPath, state]));
         const manualFields = new Set<string>();
+        const staleFields = new Set<string>();
         for (const field of definition.fields) {
             const state = statesByField.get(field.path);
             const currentHash = contentTranslationInternals.hash(String(target?.[field.path] ?? ''));
@@ -322,10 +323,8 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             }
             if (targetWasCleared) continue;
             if (state?.locked) {
-                if (state.sourceHash !== sourceHash) {
-                    throw new UserInputError(
-                        `The Chinese field "${field.path}" changed; update its manually edited English value too`,
-                    );
+                if (state.sourceHash !== sourceHash || state.status === 'STALE') {
+                    staleFields.add(field.path);
                 }
                 manualFields.add(field.path);
                 continue;
@@ -392,6 +391,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
 
         for (const field of definition.fields) {
             const isManual = manualFields.has(field.path);
+            const isStale = staleFields.has(field.path);
             await this.translations.recordState(ctx, {
                 channelId: ctx.channelId,
                 entityType,
@@ -399,7 +399,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 fieldPath: field.path,
                 sourceText: String(source[field.path] ?? ''),
                 translatedText: String(nextTarget[field.path] ?? ''),
-                status: isManual ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                status: isStale ? 'STALE' : isManual ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
                 origin: isManual ? 'MANUAL' : 'AUTO',
                 locked: isManual,
             });

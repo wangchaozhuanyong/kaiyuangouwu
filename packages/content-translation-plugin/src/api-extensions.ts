@@ -63,6 +63,7 @@ export const adminApiExtensions = gql`
 
     extend type Query {
         contentTranslationAudit(channelId: ID): ContentTranslationAudit!
+        contentTranslationStaleCount: Int!
     }
 
     extend type Mutation {

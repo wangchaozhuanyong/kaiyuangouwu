@@ -7,5 +7,5 @@
         "rootDir": "./src"
     },
     "files": ["./src/index.ts"],
-    "exclude": ["./src/**/*.spec.ts"]
+    "exclude": ["./src/**/*.spec.ts", "./src/dashboard"]
 }

@@ -93,4 +93,24 @@ describe('ContentTranslationService localized fields', () => {
             ]),
         });
     });
+
+    it('counts stale translations in the active channel', async () => {
+        const repository = {
+            count: vi.fn(async () => 3),
+        };
+        const service = new ContentTranslationService({ getRepository: vi.fn(() => repository) } as any, {
+            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+
+        await expect(service.countStale({ channelId: 'channel-1' } as any)).resolves.toBe(3);
+        expect(repository.count).toHaveBeenCalledWith({
+            where: {
+                channelId: 'channel-1',
+                status: 'STALE',
+            },
+        });
+    });
 });
