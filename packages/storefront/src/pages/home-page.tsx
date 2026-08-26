@@ -28,6 +28,7 @@ import type { RouteState } from '../storefront-router';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from '../hero-theme';
 import { selectManagedProducts } from '../home-merchandising';
+import { homepageModuleEntries } from '../homepage-module-order';
 import { storefrontWebpUrl } from '../responsive-image';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
@@ -79,7 +80,6 @@ interface HomepageCouponHubProps {
     block?: StorefrontContentBlock;
     coupons: StorefrontCouponCard[];
     language: StorefrontLanguage;
-    claimedCampaignIds: string[];
     loading: boolean;
     onClaim: (campaignId: string) => Promise<string | null>;
     onToast?: (message: string) => void;
@@ -152,20 +152,12 @@ export function NoticeDetailSheet({
     );
 }
 
-function HomepageCouponHub({
-    block,
-    coupons,
-    language,
-    claimedCampaignIds,
-    loading,
-    onClaim,
-    onToast,
-}: HomepageCouponHubProps) {
+function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast }: HomepageCouponHubProps) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const handleClaim = async (coupon: StorefrontCouponCard) => {
-        if (claimedCampaignIds.includes(coupon.campaignId) || claimingId) return;
+        if (!coupon.claimable || claimingId) return;
         setClaimingId(coupon.id);
         const error = await onClaim(coupon.campaignId);
         setClaimingId(null);
@@ -195,12 +187,13 @@ function HomepageCouponHub({
 
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
-                    const isClaimed = claimedCampaignIds.includes(coupon.campaignId);
+                    const isClaimed = coupon.claimed;
+                    const canClaim = coupon.claimable;
 
                     return (
                         <div
                             key={coupon.id}
-                            className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${isClaimed ? 'is-claimed' : ''}`}
+                            className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${!canClaim ? 'is-claimed' : ''}`}
                             role="listitem"
                         >
                             <div className="coupon-ticket-main">
@@ -234,11 +227,11 @@ function HomepageCouponHub({
                             <div className="coupon-ticket-action">
                                 <button
                                     type="button"
-                                    className={`coupon-claim-btn ${isClaimed ? 'is-claimed' : ''}`}
+                                    className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}`}
                                     onClick={() => void handleClaim(coupon)}
-                                    disabled={isClaimed || loading || claimingId !== null}
+                                    disabled={!canClaim || loading || claimingId !== null}
                                     aria-label={
-                                        isClaimed
+                                        !canClaim
                                             ? isZh
                                                 ? `已领取 ${coupon.title}`
                                                 : `Claimed ${coupon.title}`
@@ -247,17 +240,25 @@ function HomepageCouponHub({
                                               : `Claim ${coupon.title}`
                                     }
                                 >
-                                    {isClaimed ? (
+                                    {!canClaim ? (
                                         <span className="coupon-btn-text-wrap">
                                             <Check size={12} strokeWidth={2.8} aria-hidden="true" />
-                                            <span>{isZh ? '已领' : 'Got'}</span>
+                                            <span>
+                                                {isZh
+                                                    ? isClaimed
+                                                        ? '已领'
+                                                        : '已领完'
+                                                    : isClaimed
+                                                      ? 'Got'
+                                                      : 'Ended'}
+                                            </span>
                                         </span>
                                     ) : (
                                         <span className="coupon-btn-text-wrap">
                                             {isZh ? (
                                                 <>
-                                                    <span>立即</span>
-                                                    <span>领取</span>
+                                                    <span>{isClaimed ? '再领' : '立即'}</span>
+                                                    <span>{isClaimed ? '一张' : '领取'}</span>
                                                 </>
                                             ) : (
                                                 <span>Claim</span>
@@ -296,7 +297,6 @@ interface HomePageProps {
     storefrontDescription: string;
     logoUrl: string | null;
     addingVariantId: string | null;
-    claimedCampaignIds: string[];
     couponLoading: boolean;
     onCategorySelect: (collection: CollectionSummary) => void;
     onAdd: (variant: ProductVariant) => void;
@@ -334,7 +334,6 @@ export function HomePage() {
         storefrontDescription,
         logoUrl,
         addingVariantId,
-        claimedCampaignIds,
         couponLoading,
         onCategorySelect,
         onAdd,
@@ -358,13 +357,16 @@ export function HomePage() {
     const coreCategoriesBlock = contentBlocks.find(block => block.type === 'CORE_CATEGORIES');
     const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
     const bestSellersTitle = bestSellersBlock?.title || (isZh ? '热门商品' : 'Best sellers');
-    const managedSections = contentBlocks.filter(
-        block =>
-            ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'SUPPORT', 'CUSTOM'].includes(block.type) &&
-            !(
-                block.type === 'FEATURED_COLLECTION' &&
-                block.title.trim().toLocaleLowerCase() === bestSellersTitle.trim().toLocaleLowerCase()
-            ),
+    const homepageModules = homepageModuleEntries(contentBlocks, configuredBlockTypes);
+    const homepageModuleOrder = (type: StorefrontContentBlock['type'], blockId?: string) =>
+        homepageModules.findIndex(entry =>
+            type === 'CUSTOM' ? entry.type === 'CUSTOM' && entry.block?.id === blockId : entry.type === type,
+        );
+    const hasHomepageModule = (type: StorefrontContentBlock['type']) => homepageModuleOrder(type) >= 0;
+    const managedSections = homepageModules.flatMap(entry =>
+        entry.block && ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'CUSTOM'].includes(entry.type)
+            ? [entry.block]
+            : [],
     );
     const managedContentProductPool = Array.from(
         new Map([...products, ...managedContentProducts].map(product => [product.id, product])).values(),
@@ -451,15 +453,6 @@ export function HomePage() {
         openNoticeId === defaultNoticeItem.id
             ? defaultNoticeItem
             : noticeItems.find(item => item.id === openNoticeId);
-    const showNotice =
-        noticeItems.length > 0 || Boolean(noticeBlock) || !configuredBlockTypes.includes('NOTICE');
-    const showTrustBar = Boolean(trustBlock) || !configuredBlockTypes.includes('TRUST_BAR');
-    const showQuickLinks = Boolean(quickBlock) || !configuredBlockTypes.includes('QUICK_LINKS');
-    const showCoupons = Boolean(couponBlock) || !configuredBlockTypes.includes('COUPONS');
-    const showFlashSale = Boolean(flashSaleBlock) || !configuredBlockTypes.includes('FLASH_SALE');
-    const showBestSellers = Boolean(bestSellersBlock) || !configuredBlockTypes.includes('BEST_SELLERS');
-    const showRecommendations =
-        Boolean(recommendationsBlock) || !configuredBlockTypes.includes('RECOMMENDATIONS');
     const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
     const campaignCouponCards = couponCardsFromCampaigns(coupons, language, market.currencyCode);
     const couponCards = campaignCouponCards.filter(
@@ -720,25 +713,6 @@ export function HomePage() {
                 </div>
             </header>
 
-            {showNotice ? (
-                <button
-                    className="notice-strip"
-                    type="button"
-                    aria-haspopup="dialog"
-                    aria-expanded={Boolean(openNoticeItem)}
-                    aria-label={
-                        isZh
-                            ? `查看公告全文：${activeNoticeItem.title}`
-                            : `Read full notice: ${activeNoticeItem.title}`
-                    }
-                    onClick={() => setOpenNoticeId(activeNoticeItem.id)}
-                >
-                    <Bell aria-hidden="true" />
-                    <span key={activeNoticeItem.id}>{activeNoticeItem.summary}</span>
-                    <ChevronRight aria-hidden="true" />
-                </button>
-            ) : null}
-
             {openNoticeItem ? (
                 <NoticeDetailSheet
                     item={openNoticeItem}
@@ -775,286 +749,349 @@ export function HomePage() {
                 />
             ) : (
                 <>
-                    <div className="home-intro-grid">
-                        {heroCount > 0 && (
-                            <section
-                                className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
-                                style={heroStyle}
-                                role="region"
-                                aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
-                                aria-roledescription={isZh ? '轮播' : 'carousel'}
-                                onMouseEnter={() => setHeroInteractionPaused(true)}
-                                onMouseLeave={() => setHeroInteractionPaused(false)}
-                                onFocus={() => setHeroInteractionPaused(true)}
-                                onBlur={event => {
-                                    if (!event.currentTarget.contains(event.relatedTarget)) {
-                                        setHeroInteractionPaused(false);
-                                    }
-                                }}
-                                onPointerDown={beginHeroSwipe}
-                                onPointerMove={moveHeroSwipe}
-                                onPointerUp={event => finishHeroSwipe(event)}
-                                onPointerCancel={event => finishHeroSwipe(event, true)}
-                                onDragStart={event => event.preventDefault()}
+                    <div className="homepage-modules">
+                        {hasHomepageModule('NOTICE') ? (
+                            <button
+                                className="notice-strip"
+                                style={{ order: homepageModuleOrder('NOTICE') }}
+                                type="button"
+                                aria-haspopup="dialog"
+                                aria-expanded={Boolean(openNoticeItem)}
+                                aria-label={
+                                    isZh
+                                        ? `查看公告全文：${activeNoticeItem.title}`
+                                        : `Read full notice: ${activeNoticeItem.title}`
+                                }
+                                onClick={() => setOpenNoticeId(activeNoticeItem.id)}
                             >
-                                {/* Full-bleed Rich 3D High-End Visual Background with Fallback */}
-                                <button
-                                    type="button"
-                                    className="hero-rich-image-link"
-                                    onClick={handleHeroImageOpen}
-                                    aria-label={`${isZh ? '查看推荐内容' : 'Open featured content'}：${
-                                        managedHero?.title || hero?.name || storefrontName
-                                    }`}
-                                >
-                                    <SafeImage
-                                        src={heroImage}
-                                        fallbackSrc={heroFallbackImage}
-                                        alt={
-                                            managedHero?.title ||
-                                            (isZh ? '云桥 AI 精选' : 'CloudBridge Featured')
+                                <Bell aria-hidden="true" />
+                                <span key={activeNoticeItem.id}>{activeNoticeItem.summary}</span>
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                        ) : null}
+                        <div className="home-intro-grid">
+                            {hasHomepageModule('HERO') && heroCount > 0 && (
+                                <section
+                                    className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
+                                    style={{ ...heroStyle, order: homepageModuleOrder('HERO') }}
+                                    role="region"
+                                    aria-label={managedHero?.title || (isZh ? '精选推荐' : 'Featured')}
+                                    aria-roledescription={isZh ? '轮播' : 'carousel'}
+                                    onMouseEnter={() => setHeroInteractionPaused(true)}
+                                    onMouseLeave={() => setHeroInteractionPaused(false)}
+                                    onFocus={() => setHeroInteractionPaused(true)}
+                                    onBlur={event => {
+                                        if (!event.currentTarget.contains(event.relatedTarget)) {
+                                            setHeroInteractionPaused(false);
                                         }
-                                        className="hero-rich-backdrop"
-                                        imageKind="hero"
-                                        loading="eager"
-                                    />
-                                </button>
-                                <div className="hero-rich-overlay-shade" />
-
-                                {/* Dynamic Content Overlay with 3D Cyber Layout */}
-                                {(() => {
-                                    const defaultTitle = hero?.name || storefrontName;
-                                    const title =
-                                        managedHero?.title && !/^首页(图片)?轮播/i.test(managedHero.title)
-                                            ? managedHero.title
-                                            : defaultTitle;
-
-                                    const defaultSubtitle = isZh ? '本店精选商品' : 'Selected by this store';
-                                    const subtitle = managedHero?.subtitle || defaultSubtitle;
-
-                                    const defaultDesc = isZh
-                                        ? '商品价格、库存和交付信息以详情页与结算页为准'
-                                        : 'See the product and checkout pages for current price, stock and delivery details';
-                                    const body =
-                                        managedHero?.body || trimText(hero?.description, 45) || defaultDesc;
-
-                                    const defaultCta = isZh ? '查看详情' : 'View details';
-                                    const ctaLabel = managedHero?.ctaLabel || defaultCta;
-                                    const defaultStats = [
-                                        {
-                                            value: String(products.length),
-                                            label: isZh ? '本页精选' : 'Featured now',
-                                        },
-                                        {
-                                            value: String(hero?.variants.length ?? 0),
-                                            label: isZh ? '可选规格' : 'Options',
-                                        },
-                                        {
-                                            value: isZh ? '实时' : 'Live',
-                                            label: isZh ? '价格库存' : 'Price & stock',
-                                        },
-                                    ];
-                                    const stats = managedHero?.items.length
-                                        ? managedHero.items.slice(0, 3).map(item => ({
-                                              value: item.label,
-                                              label: item.description,
-                                          }))
-                                        : defaultStats;
-
-                                    return (
-                                        <div className={`hero-rich-content ${isVipTheme ? 'is-vip' : ''}`}>
-                                            <div
-                                                className={`hero-rich-pill ${isVipTheme ? 'is-vip-pill' : ''}`}
-                                            >
-                                                {isVipTheme ? (
-                                                    <ShieldCheck aria-hidden="true" />
-                                                ) : (
-                                                    <Zap aria-hidden="true" />
-                                                )}
-                                                <span>{subtitle}</span>
-                                            </div>
-                                            <h1 className="hero-rich-title">{title}</h1>
-                                            <p className="hero-rich-desc">{body}</p>
-
-                                            <div className="hero-rich-stats-row">
-                                                {stats.map((stat, index) => (
-                                                    <div
-                                                        className={`hero-stat-badge${isVipTheme ? ' is-vip' : ''}`}
-                                                        key={`${stat.value}-${index}`}
-                                                    >
-                                                        <span className="stat-num">{stat.value}</span>
-                                                        <span className="stat-lbl">{stat.label}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                className={`hero-rich-cta-btn ${isVipTheme ? 'is-vip-btn' : ''}`}
-                                                onClick={openActiveHero}
-                                            >
-                                                {ctaLabel}
-                                                <ChevronRight aria-hidden="true" />
-                                            </button>
-                                        </div>
-                                    );
-                                })()}
-                                {heroCount > 1 && (
-                                    <div
-                                        className="hero-pagination"
-                                        aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
-                                    >
-                                        {managedHeroes.map((item, index) => (
-                                            <button
-                                                type="button"
-                                                key={item.id}
-                                                className={`hero-dot ${index === heroIndex ? 'is-active' : ''}`}
-                                                aria-label={
-                                                    isZh ? `第${index + 1}张广告` : `Promotion ${index + 1}`
-                                                }
-                                                aria-current={index === heroIndex}
-                                                onClick={() => selectHeroManually(index)}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                                <span
-                                    className="visually-hidden"
-                                    aria-live={heroAutoplayStopped ? 'polite' : 'off'}
+                                    }}
+                                    onPointerDown={beginHeroSwipe}
+                                    onPointerMove={moveHeroSwipe}
+                                    onPointerUp={event => finishHeroSwipe(event)}
+                                    onPointerCancel={event => finishHeroSwipe(event, true)}
+                                    onDragStart={event => event.preventDefault()}
                                 >
-                                    {heroAutoplayStopped
-                                        ? isZh
-                                            ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
-                                            : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
-                                        : ''}
-                                </span>
-                            </section>
+                                    {/* Full-bleed Rich 3D High-End Visual Background with Fallback */}
+                                    <button
+                                        type="button"
+                                        className="hero-rich-image-link"
+                                        onClick={handleHeroImageOpen}
+                                        aria-label={`${isZh ? '查看推荐内容' : 'Open featured content'}：${
+                                            managedHero?.title || hero?.name || storefrontName
+                                        }`}
+                                    >
+                                        <SafeImage
+                                            src={heroImage}
+                                            fallbackSrc={heroFallbackImage}
+                                            alt={
+                                                managedHero?.title ||
+                                                (isZh ? '云桥 AI 精选' : 'CloudBridge Featured')
+                                            }
+                                            className="hero-rich-backdrop"
+                                            imageKind="hero"
+                                            loading="eager"
+                                        />
+                                    </button>
+                                    <div className="hero-rich-overlay-shade" />
+
+                                    {/* Dynamic Content Overlay with 3D Cyber Layout */}
+                                    {(() => {
+                                        const defaultTitle = hero?.name || storefrontName;
+                                        const title =
+                                            managedHero?.title && !/^首页(图片)?轮播/i.test(managedHero.title)
+                                                ? managedHero.title
+                                                : defaultTitle;
+
+                                        const defaultSubtitle = isZh
+                                            ? '本店精选商品'
+                                            : 'Selected by this store';
+                                        const subtitle = managedHero?.subtitle || defaultSubtitle;
+
+                                        const defaultDesc = isZh
+                                            ? '商品价格、库存和交付信息以详情页与结算页为准'
+                                            : 'See the product and checkout pages for current price, stock and delivery details';
+                                        const body =
+                                            managedHero?.body ||
+                                            trimText(hero?.description, 45) ||
+                                            defaultDesc;
+
+                                        const defaultCta = isZh ? '查看详情' : 'View details';
+                                        const ctaLabel = managedHero?.ctaLabel || defaultCta;
+                                        const defaultStats = [
+                                            {
+                                                value: String(products.length),
+                                                label: isZh ? '本页精选' : 'Featured now',
+                                            },
+                                            {
+                                                value: String(hero?.variants.length ?? 0),
+                                                label: isZh ? '可选规格' : 'Options',
+                                            },
+                                            {
+                                                value: isZh ? '实时' : 'Live',
+                                                label: isZh ? '价格库存' : 'Price & stock',
+                                            },
+                                        ];
+                                        const stats = managedHero?.items.length
+                                            ? managedHero.items.slice(0, 3).map(item => ({
+                                                  value: item.label,
+                                                  label: item.description,
+                                              }))
+                                            : defaultStats;
+
+                                        return (
+                                            <div
+                                                className={`hero-rich-content ${isVipTheme ? 'is-vip' : ''}`}
+                                            >
+                                                <div
+                                                    className={`hero-rich-pill ${isVipTheme ? 'is-vip-pill' : ''}`}
+                                                >
+                                                    {isVipTheme ? (
+                                                        <ShieldCheck aria-hidden="true" />
+                                                    ) : (
+                                                        <Zap aria-hidden="true" />
+                                                    )}
+                                                    <span>{subtitle}</span>
+                                                </div>
+                                                <h1 className="hero-rich-title">{title}</h1>
+                                                <p className="hero-rich-desc">{body}</p>
+
+                                                <div className="hero-rich-stats-row">
+                                                    {stats.map((stat, index) => (
+                                                        <div
+                                                            className={`hero-stat-badge${isVipTheme ? ' is-vip' : ''}`}
+                                                            key={`${stat.value}-${index}`}
+                                                        >
+                                                            <span className="stat-num">{stat.value}</span>
+                                                            <span className="stat-lbl">{stat.label}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    className={`hero-rich-cta-btn ${isVipTheme ? 'is-vip-btn' : ''}`}
+                                                    onClick={openActiveHero}
+                                                >
+                                                    {ctaLabel}
+                                                    <ChevronRight aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+                                    {heroCount > 1 && (
+                                        <div
+                                            className="hero-pagination"
+                                            aria-label={isZh ? '轮播广告' : 'Promotion carousel'}
+                                        >
+                                            {managedHeroes.map((item, index) => (
+                                                <button
+                                                    type="button"
+                                                    key={item.id}
+                                                    className={`hero-dot ${index === heroIndex ? 'is-active' : ''}`}
+                                                    aria-label={
+                                                        isZh
+                                                            ? `第${index + 1}张广告`
+                                                            : `Promotion ${index + 1}`
+                                                    }
+                                                    aria-current={index === heroIndex}
+                                                    onClick={() => selectHeroManually(index)}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                    <span
+                                        className="visually-hidden"
+                                        aria-live={heroAutoplayStopped ? 'polite' : 'off'}
+                                    >
+                                        {heroAutoplayStopped
+                                            ? isZh
+                                                ? `自动轮播已停止，当前为第 ${heroIndex + 1} 张广告`
+                                                : `Autoplay stopped. Promotion ${heroIndex + 1} is active.`
+                                            : ''}
+                                    </span>
+                                </section>
+                            )}
+
+                            {hasHomepageModule('TRUST_BAR') ? (
+                                <div
+                                    className="home-trust-bar"
+                                    style={{ order: homepageModuleOrder('TRUST_BAR') }}
+                                    aria-label={isZh ? '服务信息' : 'Service information'}
+                                >
+                                    {trustItems.map((label, index) => {
+                                        const TrustIcon = trustIcons[index % trustIcons.length];
+                                        return (
+                                            <div className="home-trust-item" key={`${label}-${index}`}>
+                                                <TrustIcon className="trust-icon" aria-hidden="true" />
+                                                <span>{label}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
+
+                            {hasHomepageModule('QUICK_LINKS') ? (
+                                <nav
+                                    className={`quick-grid quick-grid-${quickLinks.length}`}
+                                    style={{ order: homepageModuleOrder('QUICK_LINKS') }}
+                                    aria-label={isZh ? '快捷分类' : 'Quick categories'}
+                                >
+                                    {quickLinks.map(item => (
+                                        <button
+                                            type="button"
+                                            key={item.id}
+                                            onClick={item.onClick}
+                                            disabled={item.disabled}
+                                        >
+                                            <span>{item.icon}</span>
+                                            <b>{item.label}</b>
+                                        </button>
+                                    ))}
+                                </nav>
+                            ) : null}
+                        </div>
+
+                        {hasHomepageModule('COUPONS') && couponCards.length > 0 && (
+                            <div
+                                className="homepage-module-shell"
+                                style={{ order: homepageModuleOrder('COUPONS') }}
+                            >
+                                <HomepageCouponHub
+                                    block={couponBlock}
+                                    coupons={couponCards}
+                                    language={language}
+                                    loading={couponLoading}
+                                    onClaim={onClaimCoupon}
+                                    onToast={onToast}
+                                />
+                            </div>
                         )}
 
-                        {showTrustBar ? (
+                        {coreCategoriesBlock ? (
                             <div
-                                className="home-trust-bar"
-                                aria-label={isZh ? '服务信息' : 'Service information'}
+                                className="homepage-module-shell"
+                                style={{ order: homepageModuleOrder('CORE_CATEGORIES') }}
                             >
-                                {trustItems.map((label, index) => {
-                                    const TrustIcon = trustIcons[index % trustIcons.length];
-                                    return (
-                                        <div className="home-trust-item" key={`${label}-${index}`}>
-                                            <TrustIcon className="trust-icon" aria-hidden="true" />
-                                            <span>{label}</span>
-                                        </div>
-                                    );
-                                })}
+                                <HomeDualCategoryShowcase
+                                    language={language}
+                                    block={coreCategoriesBlock}
+                                    onContentTarget={onContentTarget}
+                                />
                             </div>
                         ) : null}
 
-                        {showQuickLinks ? (
-                            <nav
-                                className={`quick-grid quick-grid-${quickLinks.length}`}
-                                aria-label={isZh ? '快捷分类' : 'Quick categories'}
+                        {managedSections.map(block => (
+                            <div
+                                key={block.id}
+                                className="homepage-module-shell"
+                                style={{ order: homepageModuleOrder(block.type, block.id) }}
                             >
-                                {quickLinks.map(item => (
-                                    <button
-                                        type="button"
-                                        key={item.id}
-                                        onClick={item.onClick}
-                                        disabled={item.disabled}
-                                    >
-                                        <span>{item.icon}</span>
-                                        <b>{item.label}</b>
-                                    </button>
-                                ))}
-                            </nav>
+                                <ManagedContentSection
+                                    block={block}
+                                    products={managedContentProductPool}
+                                    onContentTarget={onContentTarget}
+                                />
+                            </div>
+                        ))}
+
+                        {!products.length && (
+                            <div className="homepage-module-shell" style={{ order: homepageModules.length }}>
+                                <EmptyState
+                                    icon={<ShoppingBag />}
+                                    title={isZh ? '暂无在售商品' : 'No products are available'}
+                                    detail={
+                                        isZh
+                                            ? '商家在管理后台上架商品后会显示在这里'
+                                            : 'Products will appear here after the merchant publishes them'
+                                    }
+                                />
+                            </div>
+                        )}
+
+                        {hasHomepageModule('FLASH_SALE') && flashSaleItems.length ? (
+                            <div
+                                className="homepage-module-shell"
+                                style={{ order: homepageModuleOrder('FLASH_SALE') }}
+                            >
+                                <FlashSaleSection
+                                    title={flashSaleBlock?.title || (isZh ? '限时秒杀' : 'Flash sale')}
+                                    subtitle={flashSaleBlock?.subtitle || flashSales[0]?.name}
+                                    items={flashSaleItems}
+                                    locale={locale}
+                                    language={language}
+                                    endsAt={flashSales[0]?.endsAt ?? null}
+                                    onMore={() => navigateTo({ name: 'flash-sale' })}
+                                    onProduct={productId => navigateTo({ name: 'product', id: productId })}
+                                />
+                            </div>
+                        ) : null}
+
+                        {hasHomepageModule('BEST_SELLERS') && bestSellerProducts.length ? (
+                            <div
+                                className="homepage-module-shell"
+                                style={{ order: homepageModuleOrder('BEST_SELLERS') }}
+                            >
+                                <ProductSection
+                                    title={bestSellersTitle}
+                                    subtitle={bestSellersBlock?.subtitle}
+                                    action={isZh ? '更多' : 'More'}
+                                    onAction={() => navigateTo({ name: 'category', sort: 'sales' })}
+                                    products={bestSellerProducts}
+                                    market={market}
+                                    locale={locale}
+                                    addingVariantId={addingVariantId}
+                                    onProduct={product => navigateTo({ name: 'product', id: product.id })}
+                                    onAdd={onAdd}
+                                />
+                            </div>
+                        ) : null}
+
+                        {hasHomepageModule('RECOMMENDATIONS') && recommendationProducts.length ? (
+                            <div
+                                className="homepage-module-shell"
+                                style={{ order: homepageModuleOrder('RECOMMENDATIONS') }}
+                            >
+                                <ProductSection
+                                    title={
+                                        recommendationsBlock?.title ||
+                                        (isZh ? '猜你喜欢' : 'You may also like')
+                                    }
+                                    subtitle={
+                                        recommendationsBlock?.subtitle ||
+                                        (isZh ? '继续发现合适的好物' : 'Keep discovering')
+                                    }
+                                    action={isZh ? '更多' : 'More'}
+                                    onAction={() => navigateTo({ name: 'recommendations' })}
+                                    products={recommendationProducts}
+                                    market={market}
+                                    locale={locale}
+                                    addingVariantId={addingVariantId}
+                                    onProduct={product => navigateTo({ name: 'product', id: product.id })}
+                                    onAdd={onAdd}
+                                />
+                            </div>
                         ) : null}
                     </div>
-
-                    {showCoupons && couponCards.length > 0 && (
-                        <HomepageCouponHub
-                            block={couponBlock}
-                            coupons={couponCards}
-                            language={language}
-                            claimedCampaignIds={claimedCampaignIds}
-                            loading={couponLoading}
-                            onClaim={onClaimCoupon}
-                            onToast={onToast}
-                        />
-                    )}
-
-                    {coreCategoriesBlock ? (
-                        <HomeDualCategoryShowcase
-                            language={language}
-                            block={coreCategoriesBlock}
-                            onContentTarget={onContentTarget}
-                        />
-                    ) : null}
-
-                    {managedSections.map(block => (
-                        <ManagedContentSection
-                            key={block.id}
-                            block={block}
-                            products={managedContentProductPool}
-                            onContentTarget={onContentTarget}
-                        />
-                    ))}
-
-                    {!products.length && (
-                        <EmptyState
-                            icon={<ShoppingBag />}
-                            title={isZh ? '暂无在售商品' : 'No products are available'}
-                            detail={
-                                isZh
-                                    ? '商家在管理后台上架商品后会显示在这里'
-                                    : 'Products will appear here after the merchant publishes them'
-                            }
-                        />
-                    )}
-
-                    {showFlashSale && flashSaleItems.length ? (
-                        <FlashSaleSection
-                            title={flashSaleBlock?.title || (isZh ? '限时秒杀' : 'Flash sale')}
-                            subtitle={flashSaleBlock?.subtitle || flashSales[0]?.name}
-                            items={flashSaleItems}
-                            locale={locale}
-                            language={language}
-                            endsAt={flashSales[0]?.endsAt ?? null}
-                            onMore={() => navigateTo({ name: 'flash-sale' })}
-                            onProduct={productId => navigateTo({ name: 'product', id: productId })}
-                        />
-                    ) : null}
-
-                    {showBestSellers && bestSellerProducts.length ? (
-                        <ProductSection
-                            title={bestSellersTitle}
-                            subtitle={bestSellersBlock?.subtitle}
-                            action={isZh ? '更多' : 'More'}
-                            onAction={() => navigateTo({ name: 'category', sort: 'sales' })}
-                            products={bestSellerProducts}
-                            market={market}
-                            locale={locale}
-                            addingVariantId={addingVariantId}
-                            onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                            onAdd={onAdd}
-                        />
-                    ) : null}
-
-                    {showRecommendations && recommendationProducts.length ? (
-                        <ProductSection
-                            title={recommendationsBlock?.title || (isZh ? '猜你喜欢' : 'You may also like')}
-                            subtitle={
-                                recommendationsBlock?.subtitle ||
-                                (isZh ? '继续发现合适的好物' : 'Keep discovering')
-                            }
-                            action={isZh ? '更多' : 'More'}
-                            onAction={() => navigateTo({ name: 'recommendations' })}
-                            products={recommendationProducts}
-                            market={market}
-                            locale={locale}
-                            addingVariantId={addingVariantId}
-                            onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                            onAdd={onAdd}
-                        />
-                    ) : null}
-
-                    <HomeTrustGuaranteeStrip language={language} />
 
                     {showFooter ? (
                         <LegalFooter

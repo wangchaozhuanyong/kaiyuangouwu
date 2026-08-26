@@ -6,7 +6,11 @@ import { myStoreProfileRoute } from './my-store-profile-page';
 import { storeCommerceSettingsRoute } from './store-commerce-settings-page';
 import { StoreCouponOrderBlock } from './store-coupon-order-block';
 import { storeManagementRoute } from './store-management-page';
-import { storePromotionCampaignRoute } from './store-promotion-campaign-page';
+import {
+    storeCouponCampaignRoute,
+    storeFlashSaleRoute,
+    storePromotionCampaignRoute,
+} from './store-promotion-campaign-page';
 import { storeProvisioningRoute } from './store-provisioning-page';
 import { storefrontPromotionRoute } from './storefront-promotion-page';
 import { systemAnnouncementRoute } from './system-announcement-page';
@@ -18,6 +22,8 @@ defineDashboardExtension({
         storeManagementRoute,
         storeProvisioningRoute,
         storefrontPromotionRoute,
+        storeCouponCampaignRoute,
+        storeFlashSaleRoute,
         storePromotionCampaignRoute,
         systemAnnouncementRoute,
     ],

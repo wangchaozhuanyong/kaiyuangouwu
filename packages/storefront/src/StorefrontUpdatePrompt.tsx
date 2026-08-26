@@ -1,5 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import type { StorefrontLanguage } from './types';
 
 import {
     STOREFRONT_VERSION_CHECK_INTERVAL_MS,
@@ -7,7 +8,24 @@ import {
     fetchStorefrontAssetFingerprint,
 } from './storefront-version';
 
-export function StorefrontUpdatePrompt() {
+const storefrontUpdateCopy = {
+    zh: {
+        title: '发现新版本',
+        description: '刷新即可使用最新内容',
+        action: '立即刷新',
+    },
+    en: {
+        title: 'Update available',
+        description: 'Refresh to use the latest version',
+        action: 'Refresh now',
+    },
+} satisfies Record<StorefrontLanguage, { title: string; description: string; action: string }>;
+
+export function getStorefrontUpdateCopy(language: StorefrontLanguage) {
+    return storefrontUpdateCopy[language];
+}
+
+export function StorefrontUpdatePrompt({ language }: { language: StorefrontLanguage }) {
     const [updateAvailable, setUpdateAvailable] = useState(false);
 
     useEffect(() => {
@@ -54,16 +72,23 @@ export function StorefrontUpdatePrompt() {
     }, []);
 
     if (!updateAvailable) return null;
+    const copy = getStorefrontUpdateCopy(language);
 
     return (
-        <aside className="storefront-update-prompt" role="status" aria-live="polite">
-            <div>
-                <strong>前台已有新版本</strong>
-                <span>New version available</span>
+        <aside
+            className="storefront-update-prompt"
+            role="status"
+            aria-live="polite"
+            aria-labelledby="storefront-update-title"
+            aria-describedby="storefront-update-description"
+        >
+            <div className="storefront-update-copy">
+                <strong id="storefront-update-title">{copy.title}</strong>
+                <span id="storefront-update-description">{copy.description}</span>
             </div>
             <button type="button" onClick={() => window.location.reload()}>
                 <RefreshCw aria-hidden="true" />
-                立即刷新
+                {copy.action}
             </button>
         </aside>
     );

@@ -12,6 +12,8 @@ export interface StorefrontCouponCard {
     description: string;
     tag: string;
     theme: StorefrontCouponTheme;
+    claimed: boolean;
+    claimable: boolean;
 }
 
 const NON_PRODUCTION_COUPON_PATTERN =
@@ -38,6 +40,8 @@ export function couponCardsFromBlock(
                 description: item.description.trim() || block.body.trim(),
                 tag: defaultTag,
                 theme: couponThemes[index % couponThemes.length],
+                claimed: false,
+                claimable: true,
             };
         });
 }
@@ -72,6 +76,8 @@ export function couponCardsFromCampaigns(
             description: threshold,
             tag: campaignKindLabel(coupon.kind, language),
             theme: couponThemes[index % couponThemes.length],
+            claimed: coupon.claimed,
+            claimable: coupon.claimable,
         };
     });
 }

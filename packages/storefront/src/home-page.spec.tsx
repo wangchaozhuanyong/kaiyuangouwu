@@ -194,6 +194,7 @@ describe('HomePage hero carousel', () => {
 describe('HomePage notices', () => {
     it('keeps a notice without a link clickable so the full content can be opened', () => {
         const markup = renderHome({
+            configuredBlockTypes: baseProps.configuredBlockTypes.filter(type => type !== 'NOTICE'),
             systemAnnouncements: [
                 {
                     id: 'notice-1',

@@ -6,7 +6,6 @@ import { createRoot } from 'react-dom/client';
 import { restorePublicQueryCache, storefrontQueryClient, watchPublicQueryCache } from './query-client';
 import { router } from './router';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
-import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 import './styles.css';
 
 const rootElement = document.getElementById('root');
@@ -25,7 +24,6 @@ try {
 createRoot(rootElement).render(
     <StrictMode>
         <QueryClientProvider client={storefrontQueryClient}>
-            <StorefrontUpdatePrompt />
             <StorefrontErrorBoundary>
                 <RouterProvider router={router} />
             </StorefrontErrorBoundary>

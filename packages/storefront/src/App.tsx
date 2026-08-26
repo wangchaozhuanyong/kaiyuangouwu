@@ -45,6 +45,7 @@ import {
 import { readStoredStrings, scopedStorageKey } from './storefront-storage';
 import { StorefrontContext } from './StorefrontContext';
 import { cacheLogoUrl } from './StorefrontErrorBoundary';
+import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 import {
     ActiveCustomer,
     CreateAfterSalesRequestInput,
@@ -1527,6 +1528,7 @@ export function App() {
                         {toast}
                     </div>
                 )}
+                <StorefrontUpdatePrompt language={language} />
             </div>
         </StorefrontContext.Provider>
     );

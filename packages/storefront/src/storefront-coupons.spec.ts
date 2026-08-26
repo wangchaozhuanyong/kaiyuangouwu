@@ -105,6 +105,8 @@ describe('storefront coupons', () => {
                 unit: '¥',
                 unitBefore: true,
                 description: '满 ¥100 可用',
+                claimed: false,
+                claimable: true,
             }),
             expect.objectContaining({
                 campaignId: 'campaign-2',
@@ -113,6 +115,32 @@ describe('storefront coupons', () => {
                 tag: '分类折扣券',
             }),
         ]);
+    });
+
+    it('keeps server claimability separate from whether the customer has claimed before', () => {
+        const [card] = couponCardsFromCampaigns(
+            [
+                {
+                    id: 'repeatable-campaign',
+                    name: '可重复领取',
+                    kind: 'ORDER_FIXED',
+                    startsAt: null,
+                    endsAt: null,
+                    claimStartsAt: null,
+                    claimEndsAt: null,
+                    minimumSpend: 0,
+                    discountAmount: 500,
+                    discountRate: null,
+                    remainingIssueCount: 10,
+                    claimed: true,
+                    claimable: true,
+                },
+            ],
+            'zh',
+            'CNY',
+        );
+
+        expect(card).toMatchObject({ claimed: true, claimable: true });
     });
 
     it('hides test campaigns and invalid no-op discounts', () => {

@@ -139,12 +139,12 @@ export function CouponsRoutePage() {
         <RouteGate name="coupons">
             <PageContext
                 value={{
-                    order: runtime.cart?.checkoutOrder ?? null,
                     coupons: runtime.activeCoupons,
                     myCoupons: runtime.myCoupons,
                     currencyCode: runtime.market.currencyCode,
                     language: runtime.language,
                     loading: runtime.cartLoading,
+                    cartHasItems: (runtime.cart?.totalQuantity ?? 0) > 0,
                     onClaim: runtime.claimCoupon,
                     onApply: runtime.applyCoupon,
                     onRemove: runtime.removeCoupon,

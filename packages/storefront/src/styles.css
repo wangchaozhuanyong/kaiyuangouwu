@@ -771,6 +771,20 @@ img.fatal-error-mark {
     display: block;
 }
 
+.homepage-modules {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.homepage-modules > .home-intro-grid {
+    display: contents;
+}
+
+.homepage-module-shell {
+    min-width: 0;
+}
+
 .hero {
     --hero-overlay-color: #090d16;
     --hero-overlay-strong: rgba(9, 13, 22, 0.92);
@@ -4181,6 +4195,44 @@ img.fatal-error-mark {
     background: white;
 }
 
+.coupon-center-tabs {
+    margin: 12px 14px 0;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: white;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.coupon-center-tabs button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 6px 4px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 12px;
+}
+
+.coupon-center-tabs button.is-active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: var(--font-weight-semibold);
+}
+
+.coupon-center-tabs small {
+    font-family: var(--font-numeric);
+    font-size: 10px;
+}
+
 .coupon-center-available {
     margin: 12px 14px 0;
     padding: 16px;
@@ -4287,6 +4339,11 @@ img.fatal-error-mark {
     margin-top: 12px;
 }
 
+.coupon-center-error {
+    display: block;
+    margin: 12px 14px 0;
+}
+
 .coupon-center-cart-link {
     width: 100%;
     min-height: 46px;
@@ -4305,6 +4362,12 @@ img.fatal-error-mark {
 
 .coupon-center-cart-link svg {
     width: 17px;
+}
+
+.coupon-center-cart-link-standalone {
+    width: calc(100% - 28px);
+    margin: 12px 14px 0;
+    padding: 12px 2px 0;
 }
 
 .review-center-loading,
@@ -7220,7 +7283,8 @@ img.fatal-error-mark {
     .list-skeleton i,
     .list-skeleton b,
     .review-center-loading span,
-    .product-review-loading span {
+    .product-review-loading span,
+    .storefront-update-prompt {
         animation: none;
     }
 }
@@ -7270,70 +7334,97 @@ img.fatal-error-mark {
     left: 50%;
     bottom: calc(var(--bottom-navigation-height) + 20px + var(--safe-bottom));
     z-index: calc(var(--layer-toast) + 1);
-    width: min(calc(100% - 24px), 440px);
-    min-height: 64px;
+    width: min(calc(100% - 24px), 420px);
+    min-height: 72px;
     transform: translateX(-50%);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 16px;
-    background: rgba(15, 23, 42, 0.96);
-    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.26);
-    color: #ffffff;
+    border: 1px solid rgba(226, 232, 240, 0.92);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow:
+        0 18px 42px rgba(51, 65, 85, 0.18),
+        0 2px 8px rgba(51, 65, 85, 0.08);
+    color: var(--text);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    padding: 12px 12px 12px 16px;
-    backdrop-filter: blur(16px);
+    gap: 12px;
+    padding: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(18px) saturate(1.1);
     animation: toast-in 180ms ease-out;
 }
 
-.storefront-update-prompt > div {
+.storefront-update-prompt::before {
+    width: 3px;
+    position: absolute;
+    inset: 10px auto 10px 0;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent);
+    content: '';
+}
+
+.storefront-update-copy {
     min-width: 0;
     display: grid;
-    gap: 2px;
+    gap: 3px;
+    padding-left: 4px;
 }
 
 .storefront-update-prompt strong {
-    font-size: 14px;
-    line-height: 1.35;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    letter-spacing: -0.01em;
 }
 
 .storefront-update-prompt span {
-    color: #cbd5e1;
-    font-size: 11px;
-    line-height: 1.35;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    text-wrap: pretty;
 }
 
 .storefront-update-prompt button {
-    min-width: 104px;
-    min-height: 42px;
+    min-width: 100px;
+    min-height: 44px;
+    flex: 0 0 auto;
     border: 0;
-    border-radius: 12px;
-    background: #ffffff;
-    color: #0f172a;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #ffffff;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    padding: 0 14px;
+    gap: 6px;
+    padding: 0 13px;
     font: inherit;
     font-size: 13px;
-    font-weight: 800;
+    font-weight: var(--font-weight-bold);
+    line-height: 1;
     cursor: pointer;
+    box-shadow: 0 5px 14px rgba(211, 60, 48, 0.22);
 }
 
 .storefront-update-prompt button:hover {
-    background: #f1f5f9;
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.storefront-update-prompt button:active {
+    transform: translateY(1px) scale(0.98);
 }
 
 .storefront-update-prompt button:focus-visible {
-    outline: 3px solid rgba(255, 255, 255, 0.42);
-    outline-offset: 2px;
+    outline: 3px solid rgba(211, 60, 48, 0.24);
+    outline-offset: 3px;
 }
 
 .storefront-update-prompt svg {
     width: 16px;
     height: 16px;
+    stroke-width: 2.25;
 }
 
 .sheet-layer {
@@ -7704,7 +7795,8 @@ img.fatal-error-mark {
         text-align: left;
     }
 
-    .home-page > .notice-strip {
+    .home-page > .notice-strip,
+    .homepage-modules > .notice-strip {
         margin-top: 16px;
         margin-bottom: 0;
         padding-right: 20px;
