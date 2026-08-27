@@ -95,6 +95,8 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /VENDURE_DEPLOYMENT_ID/u);
     assert.match(runbook, /sync-storefront-media\.mjs --dry-run/u);
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
+    assert.match(runbook, /sync-auth-visuals\.mjs --dry-run/u);
+    assert.match(runbook, /sync-auth-visuals\.mjs --apply --allow-remote/u);
 });
 
 void test('production release retention runs only after the verified marker changes', async () => {

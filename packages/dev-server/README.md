@@ -217,6 +217,32 @@ Remote writes require both flags. Existing asset records are not deleted: an unc
 reused by its SHA-256 tag, while a changed file creates a new asset and moves the configured
 bindings to it. This makes the command safe to repeat and keeps rollback assets available.
 
+## Publishing login and registration visuals
+
+Login and registration copy, tags, and palette use the separate reviewed manifest in
+`scripts/sync-auth-visuals.mjs`. The publisher resolves `auth-login-visual` and
+`auth-register-visual` by exact code and type, preserves their current image asset or image URL,
+and verifies that the Admin API and Shop API return the same values in Chinese and English.
+
+Preview the exact Channels, blocks, current image bindings, and planned field changes without
+writing:
+
+```bash
+bun run sync:auth-visuals -- --dry-run
+```
+
+Apply locally, or use the additional remote-write guard in a reviewed production release:
+
+```bash
+bun run sync:auth-visuals -- --apply
+bun run sync:auth-visuals -- --apply --allow-remote
+```
+
+Set `AUTH_VISUAL_CHANNEL_CODES` in the release environment when it differs from
+`STOREFRONT_MEDIA_CHANNEL_CODES`. Authentication uses the same environment-only Admin API
+credentials or short-lived `VENDURE_ADMIN_BEARER_TOKEN` as the media publisher. Repeating the
+command is safe: blocks already matching the manifest are reported as `noop` and are not mutated.
+
 ## Repairing reviewed inventory inheritance targets
 
 New product variants save `trackInventory=INHERIT`, but existing variants which already contain an
