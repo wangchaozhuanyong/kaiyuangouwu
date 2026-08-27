@@ -17,28 +17,28 @@ export class StorefrontUsdtPaymentIntent extends VendureEntity {
     }
 
     @ManyToOne(() => Channel, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'channelId' })
+    @JoinColumn({ name: 'channelId', foreignKeyConstraintName: 'FK_storefront_usdt_intent_channel' })
     channel: Channel;
 
     @EntityId()
     channelId: ID;
 
     @ManyToOne(() => Order, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'orderId' })
+    @JoinColumn({ name: 'orderId', foreignKeyConstraintName: 'FK_storefront_usdt_intent_order' })
     order: Order;
 
     @EntityId()
     orderId: ID;
 
     @ManyToOne(() => StorefrontUsdtCheckoutQuote, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'quoteId' })
+    @JoinColumn({ name: 'quoteId', foreignKeyConstraintName: 'FK_storefront_usdt_intent_quote' })
     quote: StorefrontUsdtCheckoutQuote;
 
     @EntityId()
     quoteId: ID;
 
     @ManyToOne(() => Payment, { nullable: true, onDelete: 'SET NULL' })
-    @JoinColumn({ name: 'paymentId' })
+    @JoinColumn({ name: 'paymentId', foreignKeyConstraintName: 'FK_storefront_usdt_intent_payment' })
     payment: Payment | null;
 
     @EntityId({ nullable: true })

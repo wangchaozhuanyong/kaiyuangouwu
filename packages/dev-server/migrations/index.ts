@@ -48,6 +48,7 @@ import { NormalizeStorefrontExchangeRate1787770800000 } from './1787770800000-no
 import { AddReferralRebate1787774400000 } from './1787774400000-add-referral-rebate';
 import { AddStorefrontUsdtDisplay1787778000000 } from './1787778000000-add-storefront-usdt-display';
 import { AddUsdtTrc20Payments1787781600000 } from './1787781600000-add-usdt-trc20-payments';
+import { AlignUsdtTrc20Schema1787785200000 } from './1787785200000-align-usdt-trc20-schema';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -100,4 +101,5 @@ export const devServerMigrations = [
     AddReferralRebate1787774400000,
     AddStorefrontUsdtDisplay1787778000000,
     AddUsdtTrc20Payments1787781600000,
+    AlignUsdtTrc20Schema1787785200000,
 ];

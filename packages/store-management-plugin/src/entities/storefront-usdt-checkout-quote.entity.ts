@@ -10,14 +10,14 @@ export class StorefrontUsdtCheckoutQuote extends VendureEntity {
     }
 
     @ManyToOne(() => Channel, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'channelId' })
+    @JoinColumn({ name: 'channelId', foreignKeyConstraintName: 'FK_storefront_usdt_quote_channel' })
     channel: Channel;
 
     @EntityId()
     channelId: ID;
 
     @ManyToOne(() => Order, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'orderId' })
+    @JoinColumn({ name: 'orderId', foreignKeyConstraintName: 'FK_storefront_usdt_quote_order' })
     order: Order;
 
     @EntityId()
