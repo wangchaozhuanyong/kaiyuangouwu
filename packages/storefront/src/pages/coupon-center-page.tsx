@@ -197,6 +197,7 @@ export function CouponCenterPage() {
                                             </button>
                                         )
                                     }
+                                    meta={customerCouponValidity(coupon, language)}
                                 />
                             );
                         })}
@@ -406,6 +407,13 @@ function campaignValidity(campaign: StorefrontCouponCampaign, language: Storefro
         return [relative, starts, ends].filter(Boolean).join(isZh ? '，' : ', ');
     }
     return usageWindow;
+}
+
+function customerCouponValidity(coupon: StoreCustomerCoupon, language: StorefrontLanguage): string {
+    const isZh = language === 'zh';
+    const locale = isZh ? 'zh-CN' : 'en-US';
+    const validity = dateWindow(coupon.validFrom, coupon.validUntil, locale, isZh);
+    return `${validity} · ${couponScopeLabel(coupon.campaignKind, language)}`;
 }
 
 function couponUsageRecord(record: StoreCouponUsageRecord, language: StorefrontLanguage): string {

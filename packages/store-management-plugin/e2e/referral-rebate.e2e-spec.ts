@@ -33,11 +33,10 @@ const externalPaymentHandler = new PaymentMethodHandler({
 const passthroughTranslationProvider: ContentTranslationProvider = {
     name: 'referral-e2e-passthrough',
     isConfigured: () => true,
-    translate: request =>
-        Promise.resolve({
-            provider: 'referral-e2e-passthrough',
-            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-        }),
+    translate: async request => ({
+        provider: 'referral-e2e-passthrough',
+        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+    }),
 };
 
 const config = mergeConfig(testConfig(), {

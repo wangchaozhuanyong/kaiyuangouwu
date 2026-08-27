@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ShopApi } from './api';
 import { LogisticsPage, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
-import { ActiveCustomer, MarketConfig, Order } from './types';
+import { ActiveCustomer, MarketConfig, Order, StorefrontLanguage } from './types';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
@@ -65,7 +65,7 @@ const customer: ActiveCustomer = {
     orders: { items: [order], totalItems: 1 },
 };
 
-function renderOrders(cachedOrders?: Order[]) {
+function renderOrders(cachedOrders?: Order[], language: StorefrontLanguage = 'zh') {
     const client = createStorefrontQueryClient();
     if (cachedOrders) {
         client.setQueryData(
@@ -84,7 +84,7 @@ function renderOrders(cachedOrders?: Order[]) {
         customer,
         market,
         locale: market.locale,
-        language: 'zh' as const,
+        language,
         storefrontName: '测试商城',
         initialTab: 'all' as const,
         onBack: vi.fn(),
@@ -119,6 +119,17 @@ function renderLogistics(cachedOrders?: Order[]) {
 }
 
 describe('OrdersPage route query', () => {
+    it('uses compact professional English labels for the five order filters', () => {
+        const markup = renderOrders(undefined, 'en');
+
+        expect(markup).toContain('>Unpaid</button>');
+        expect(markup).toContain('>Processing</button>');
+        expect(markup).toContain('>Shipped</button>');
+        expect(markup).toContain('>Returns</button>');
+        expect(markup).not.toContain('After-sales');
+        expect(markup).not.toContain('To receive');
+    });
+
     it('shows a stable loading state instead of flashing the empty state on first entry', () => {
         const markup = renderOrders();
 

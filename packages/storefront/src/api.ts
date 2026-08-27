@@ -35,6 +35,7 @@ import {
     StorefrontReviewCandidate,
     StorefrontReviewList,
     StorefrontSystemAnnouncement,
+    StorefrontUsdtCheckoutQuote,
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
@@ -170,16 +171,6 @@ const orderFields = `
     }
 `;
 
-const referralWalletFields = `
-    id
-    createdAt
-    updatedAt
-    currencyCode
-    availableBalance
-    pendingBalance
-    reservedBalance
-`;
-
 const customerCouponFields = `
     id
     campaignId
@@ -200,6 +191,16 @@ const customerCouponFields = `
     usedOrderId
     returnCount
     usable
+`;
+
+const referralWalletFields = `
+    id
+    createdAt
+    updatedAt
+    currencyCode
+    availableBalance
+    pendingBalance
+    reservedBalance
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order
@@ -476,6 +477,13 @@ export class ShopApi {
                     selectorEnabled
                     cnyToMyrRate
                     rateUpdatedAt
+                    usdtDisplayEnabled
+                    usdtMarkupPercent
+                    cnyPerUsdtRate
+                    myrPerUsdtRate
+                    usdtRateSource
+                    usdtRateUpdatedAt
+                    usdtRateAvailable
                 }
             }
         `,
@@ -1821,6 +1829,38 @@ export class ShopApi {
         return result.eligiblePaymentMethods.filter(
             method => method.code !== 'referral-balance' && method.code !== 'referral-balance-payment',
         );
+    }
+
+    async createUsdtCheckoutQuote(signal?: AbortSignal): Promise<StorefrontUsdtCheckoutQuote> {
+        const result = await this.request<{
+            createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote;
+        }>(
+            `
+                mutation CreateStorefrontUsdtCheckoutQuote {
+                    createStorefrontUsdtCheckoutQuote {
+                        id
+                        fiatCurrencyCode
+                        fiatAmount
+                        fiatPerUsdtRate
+                        markupPercent
+                        usdtAmount
+                        source
+                        network
+                        tokenContractAddress
+                        receivingAddress
+                        receivingAddressFingerprint
+                        paymentStatus
+                        transactionId
+                        settledAt
+                        createdAt
+                        expiresAt
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.createStorefrontUsdtCheckoutQuote;
     }
 
     async addPaymentToOrder(method: string, metadata: Record<string, unknown> = {}): Promise<Order> {

@@ -1,7 +1,6 @@
 import { Switch } from '@/vdb/components/ui/switch.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useLingui } from '@lingui/react/macro';
-import { ResultOf } from 'gql.tada';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -11,6 +10,7 @@ export interface CollectionVisibilityValue {
     id: string;
     isPrivate: boolean;
 }
+
 interface CollectionVisibilitySwitchProps {
     collection: CollectionVisibilityValue & { name: string };
     onVisibilityUpdated: (value: CollectionVisibilityValue) => void;
@@ -36,7 +36,7 @@ export function CollectionVisibilitySwitch({
         try {
             const result = (await api.mutate(updateCollectionDocument, {
                 input: { id: collection.id, isPrivate: !checked },
-            })) as ResultOf<typeof updateCollectionDocument>;
+            })) as { updateCollection: { id: string; isPrivate: boolean } };
             const updatedValue = {
                 id: result.updateCollection.id,
                 isPrivate: result.updateCollection.isPrivate,

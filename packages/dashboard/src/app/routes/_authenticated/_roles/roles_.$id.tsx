@@ -1,6 +1,20 @@
 import { ChannelSelector } from '@/vdb/components/shared/channel-selector.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
+import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/vdb/components/ui/alert-dialog.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
@@ -17,6 +31,7 @@ import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-lo
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { FormEvent, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { PermissionsTableGrid } from './components/permissions-table-grid.js';
 import { createRoleDocument, roleDetailDocument, updateRoleDocument } from './roles.graphql.js';
@@ -43,12 +58,18 @@ function RoleDetailPage() {
     const navigate = useNavigate();
     const creatingNewEntity = params.id === NEW_ENTITY_PATH;
     const { t } = useLingui();
+    const [passwordConfirmationOpen, setPasswordConfirmationOpen] = useState(false);
+    const [password, setPassword] = useState('');
+    const confirmedPasswordRef = useRef('');
+    const pendingFormRef = useRef<HTMLFormElement | null>(null);
+    const allowNextSubmitRef = useRef(false);
 
     const { form, submitHandler, entity, isPending, resetForm } = useDetailPage({
         pageId,
         queryDocument: roleDetailDocument,
         createDocument: createRoleDocument,
         updateDocument: updateRoleDocument,
+        getUpdateRequestHeaders: () => sensitiveActionHeaders(confirmedPasswordRef.current),
         setValuesForUpdate: entity => {
             return {
                 id: entity.id,
@@ -60,6 +81,7 @@ function RoleDetailPage() {
         },
         params: { id: params.id },
         onSuccess: async data => {
+            confirmedPasswordRef.current = '';
             toast.success(creatingNewEntity ? t`Successfully created role` : t`Successfully updated role`);
             resetForm();
             if (creatingNewEntity) {
@@ -67,14 +89,40 @@ function RoleDetailPage() {
             }
         },
         onError: err => {
+            confirmedPasswordRef.current = '';
             toast.error(creatingNewEntity ? t`Failed to create role` : t`Failed to update role`, {
                 description: err instanceof Error ? err.message : t`Unknown error`,
             });
         },
     });
 
+    const securedSubmitHandler = (event: FormEvent<HTMLFormElement>) => {
+        if (creatingNewEntity || allowNextSubmitRef.current) {
+            allowNextSubmitRef.current = false;
+            submitHandler(event);
+            return;
+        }
+        event.preventDefault();
+        pendingFormRef.current = event.currentTarget;
+        setPasswordConfirmationOpen(true);
+    };
+
+    const handlePasswordDialogChange = (open: boolean) => {
+        setPasswordConfirmationOpen(open);
+        if (!open) setPassword('');
+    };
+
+    const handleConfirmUpdate = () => {
+        if (!password) return;
+        confirmedPasswordRef.current = password;
+        allowNextSubmitRef.current = true;
+        setPasswordConfirmationOpen(false);
+        setPassword('');
+        pendingFormRef.current?.requestSubmit();
+    };
+
     return (
-        <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
+        <Page pageId={pageId} form={form} submitHandler={securedSubmitHandler} entity={entity}>
             <PageTitle>{creatingNewEntity ? <Trans>New role</Trans> : (entity?.description ?? '')}</PageTitle>
             <PageActionBar>
                 <ActionBarItem itemId="save-button" requiresPermission={['UpdateAdministrator']}>
@@ -138,6 +186,38 @@ function RoleDetailPage() {
                     </div>
                 </PageBlock>
             </PageLayout>
+            <AlertDialog open={passwordConfirmationOpen} onOpenChange={handlePasswordDialogChange}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            <Trans>Confirm role changes</Trans>
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            <Trans>
+                                Changing role permissions can immediately affect administrator access. Enter
+                                your current password to continue.
+                            </Trans>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <SensitiveActionPasswordField
+                        value={password}
+                        onChange={setPassword}
+                        disabled={isPending}
+                    />
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => handlePasswordDialogChange(false)}>
+                            <Trans>Cancel</Trans>
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            type="button"
+                            onClick={handleConfirmUpdate}
+                            disabled={!password || isPending}
+                        >
+                            <Trans>Update role</Trans>
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Page>
     );
 }

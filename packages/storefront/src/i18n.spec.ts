@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    compactUiCopy,
     defaultStorefrontLanguageFor,
     detectSystemLanguage,
     languageCodeFor,
@@ -13,6 +14,36 @@ import {
     serializeManualStorefrontLanguagePreference,
     supportedStorefrontLanguages,
 } from './i18n';
+
+describe('compact storefront copy', () => {
+    it('uses standard customer-facing order terms instead of literal translations', () => {
+        expect(compactUiCopy.en.orders).toMatchObject({
+            unpaid: 'Unpaid',
+            processing: 'Processing',
+            shipped: 'Shipped',
+            returns: 'Returns',
+            all: 'All',
+        });
+    });
+
+    it('keeps icon-grid labels within the agreed compact copy budget', () => {
+        const englishLabels = [
+            ...Object.values(compactUiCopy.en.home),
+            ...Object.values(compactUiCopy.en.trust),
+            ...Object.values(compactUiCopy.en.services),
+            compactUiCopy.en.orders.all,
+            compactUiCopy.en.orders.unpaid,
+            compactUiCopy.en.orders.processing,
+            compactUiCopy.en.orders.shipped,
+            compactUiCopy.en.orders.returns,
+        ];
+
+        expect(englishLabels.every(label => label.length <= 10 && !label.includes(' '))).toBe(true);
+        expect(Object.values(compactUiCopy.zh.trust).every(label => Array.from(label).length <= 4)).toBe(
+            true,
+        );
+    });
+});
 
 describe('storefront market configuration', () => {
     afterEach(() => vi.unstubAllGlobals());

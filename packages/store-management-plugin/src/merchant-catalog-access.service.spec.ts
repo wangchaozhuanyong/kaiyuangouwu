@@ -119,6 +119,24 @@ describe('MerchantCatalogAccessService', () => {
         ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
+    it('requires merchants to use the managed promotion mutations', async () => {
+        const { service } = createService();
+
+        for (const fieldName of [
+            'createPromotion',
+            'updatePromotion',
+            'deletePromotion',
+            'deletePromotions',
+        ]) {
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Mutation', fieldName, {
+                    id: 'promotion-a',
+                    input: { id: 'promotion-a' },
+                }),
+            ).rejects.toBeInstanceOf(ForbiddenError);
+        }
+    });
+
     it('reserves payments, refunds, cancellation and order administration for the platform', async () => {
         const { service } = createService();
 

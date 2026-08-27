@@ -12,6 +12,8 @@ test.describe('Tax Rates', () => {
         listTitle: 'Tax Rates',
         newButtonLabel: 'New Tax Rate',
         newPageTitle: 'New tax rate',
+        createPresentation: 'drawer',
+        editPresentation: 'drawer',
         createFields: [
             { label: 'Name', value: 'E2E Test Rate' },
             { label: 'Rate', value: '15', type: 'number' },

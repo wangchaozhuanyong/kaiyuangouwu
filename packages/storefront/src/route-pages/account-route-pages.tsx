@@ -7,6 +7,9 @@ import { RoutePageContext as PageContext, RouteGate, useRouteRuntime as useRunti
 const AccountPage = lazy(() =>
     import('../pages/account-page').then(module => ({ default: module.AccountPage })),
 );
+const AnnouncementsPage = lazy(() =>
+    import('../pages/announcements-page').then(module => ({ default: module.AnnouncementsPage })),
+);
 const BrowsingHistoryPage = lazy(() =>
     import('../pages/browsing-history-page').then(module => ({ default: module.BrowsingHistoryPage })),
 );
@@ -38,7 +41,7 @@ export function AccountRoutePage() {
                     storefrontName: runtime.storefrontName,
                     logoUrl: runtime.logoUrl,
                     favoriteProductCount: runtime.favoriteProductIds.length,
-                    recentProductCount: runtime.recentProductIds.length,
+                    announcementCount: runtime.systemAnnouncements.length,
                     couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
                         ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),
                     ).length,
@@ -57,6 +60,24 @@ export function AccountRoutePage() {
                 <AccountPage />
             </PageContext>
         </RouteGate>
+    );
+}
+
+export function AnnouncementsRoutePage() {
+    const runtime = useRuntime();
+    return (
+        <PageContext
+            value={{
+                announcements: runtime.systemAnnouncements,
+                loading: runtime.contentQuery.isLoading && runtime.contentQuery.data === undefined,
+                error: runtime.contentError,
+                language: runtime.language,
+                onBack: runtime.goBack,
+                onRetry: () => void runtime.contentQuery.refetch(),
+            }}
+        >
+            <AnnouncementsPage />
+        </PageContext>
     );
 }
 

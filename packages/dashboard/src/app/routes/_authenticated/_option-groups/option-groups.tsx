@@ -1,4 +1,3 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
@@ -30,9 +29,7 @@ function OptionGroupListPage() {
             }}
             customizeColumns={{
                 name: {
-                    cell: ({ row }) => (
-                        <DetailPageButton id={row.original.id} label={row.original.name} />
-                    ),
+                    cell: ({ row }) => <span>{row.original.name}</span>,
                 },
                 productCount: {
                     header: () => <Trans>Products</Trans>,
@@ -60,12 +57,13 @@ function OptionGroupListPage() {
                     },
                 ],
             ]}
+            primaryRowAction={{
+                label: <Trans>Manage</Trans>,
+                href: row => `./${row.original.id}`,
+            }}
             route={Route}
         >
-            <ActionBarItem
-                itemId="create-button"
-                requiresPermission={['CreateProduct', 'CreateCatalog']}
-            >
+            <ActionBarItem itemId="create-button" requiresPermission={['CreateProduct', 'CreateCatalog']}>
                 <Button render={<Link to="./new" />}>
                     <PlusIcon className="mr-2 h-4 w-4" />
                     <Trans>New Option Group</Trans>

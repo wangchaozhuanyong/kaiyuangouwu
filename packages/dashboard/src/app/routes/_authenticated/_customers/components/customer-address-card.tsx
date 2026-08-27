@@ -1,16 +1,9 @@
 import { ResultOf } from '@/vdb/graphql/graphql.js';
 
 import { ConfirmationDialog } from '@/vdb/components/shared/confirmation-dialog.js';
+import { EntityEditorSheet } from '@/vdb/components/shared/entity-editor-sheet.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/vdb/components/ui/dialog.js';
 import { api } from '@/vdb/graphql/api.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
@@ -56,6 +49,7 @@ export function CustomerAddressCard({
         onSuccess: () => {
             toast.success(t`Address updated successfully`);
             onUpdate?.();
+            setOpen(false);
         },
         onError: error => {
             toast.error(t`Failed to update address`);
@@ -83,7 +77,6 @@ export function CustomerAddressCard({
                 customFields: values.customFields,
             },
         } as any);
-        setOpen(false);
     };
 
     return (
@@ -120,31 +113,30 @@ export function CustomerAddressCard({
             {(editable || deletable) && (
                 <div className="flex gap-4 mt-3 pt-3 border-t border-border">
                     {editable && (
-                        <Dialog open={open} onOpenChange={setOpen}>
-                            <DialogTrigger
-                                render={
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label={t`Edit Address`}
-                                    />
-                                }
-                            >
+                        <>
+                            <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
                                 <EditIcon className="w-4 h-4" />
-                            </DialogTrigger>
-                            <DialogContent className="max-h-[90vh] overflow-y-auto">
-                                <DialogHeader>
-                                    <DialogTitle>
-                                        <Trans>Edit Address</Trans>
-                                    </DialogTitle>
-                                    <DialogDescription>
-                                        <Trans>Edit the address details below.</Trans>
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <CustomerAddressForm address={address} onSubmit={onSubmit} />
-                            </DialogContent>
-                        </Dialog>
+                                <Trans>Edit Address</Trans>
+                            </Button>
+                            <EntityEditorSheet
+                                open={open}
+                                title={<Trans>Edit Address</Trans>}
+                                description={<Trans>Edit the address details below.</Trans>}
+                                loadingLabel={<Trans>Loading address...</Trans>}
+                                onOpenChange={setOpen}
+                            >
+                                {({ setDirty, requestClose }) => (
+                                    <div className="p-6">
+                                        <CustomerAddressForm
+                                            address={address}
+                                            onSubmit={onSubmit}
+                                            onCancel={requestClose}
+                                            onDirtyChange={setDirty}
+                                        />
+                                    </div>
+                                )}
+                            </EntityEditorSheet>
+                        </>
                     )}
                     {deletable && (
                         <ConfirmationDialog

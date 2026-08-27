@@ -1,5 +1,4 @@
 import { ChannelCodeLabel } from '@/vdb/components/shared/channel-code-label.js';
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { RoleCodeLabel } from '@/vdb/components/shared/role-code-label.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
@@ -36,13 +35,7 @@ function RoleListPage() {
             customizeColumns={{
                 code: {
                     cell: ({ row }) => {
-                        return (
-                            <DetailPageButton
-                                id={row.original.id}
-                                label={<RoleCodeLabel code={row.original.code} />}
-                                disabled={SYSTEM_ROLES.includes(row.original.code)}
-                            />
-                        );
+                        return <RoleCodeLabel code={row.original.code} />;
                     },
                 },
                 permissions: {
@@ -76,6 +69,11 @@ function RoleListPage() {
                         );
                     },
                 },
+            }}
+            primaryRowAction={{
+                label: <Trans>Manage permissions</Trans>,
+                href: row => `./${row.original.id}`,
+                disabled: row => SYSTEM_ROLES.includes(row.original.code),
             }}
             bulkActions={[
                 {

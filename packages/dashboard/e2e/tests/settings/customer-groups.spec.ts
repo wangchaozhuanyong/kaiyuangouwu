@@ -12,6 +12,7 @@ test.describe('Customer Groups', () => {
         listTitle: 'Customer Groups',
         newButtonLabel: 'New Customer Group',
         newPageTitle: 'New customer group',
+        createPresentation: 'drawer',
         createFields: [{ label: 'Name', value: 'E2E Test Group' }],
         updateFields: [{ label: 'Name', value: 'E2E Test Group Updated' }],
         hasBulkDelete: true,

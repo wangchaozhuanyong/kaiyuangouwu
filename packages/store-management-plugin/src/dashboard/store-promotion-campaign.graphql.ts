@@ -99,6 +99,22 @@ export const storePromotionProductsQuery = gql`
     }
 `;
 
+export const storeCouponDailyReportQuery = gql`
+    query StoreCouponDailyReport($from: DateTime!, $to: DateTime!, $campaignId: ID) {
+        storeCouponDailyReport(from: $from, to: $to, campaignId: $campaignId) {
+            date
+            claimedCount
+            redeemedCount
+            refundedCount
+            returnedCount
+            expiredCount
+            revokedCount
+            discountAmountTotal
+            assistedRevenueTotal
+        }
+    }
+`;
+
 export const createStoreCouponCampaignMutation = gql`
     mutation CreateStoreCouponCampaign($input: CreateStoreCouponCampaignInput!) {
         createStoreCouponCampaign(input: $input) {
@@ -225,6 +241,18 @@ export interface StoreCouponLedgerRecord {
     note: string | null;
 }
 
+export interface StoreCouponDailyMetricRecord {
+    date: string;
+    claimedCount: number;
+    redeemedCount: number;
+    refundedCount: number;
+    returnedCount: number;
+    expiredCount: number;
+    revokedCount: number;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
+}
+
 export interface StoreFlashSaleRecord {
     id: string;
     name: string;
@@ -247,6 +275,10 @@ export interface StorePromotionCampaignsResult {
     storeCouponLedger: { items: StoreCouponLedgerRecord[]; totalItems: number };
     storeFlashSales: StoreFlashSaleRecord[];
     collections: { items: Array<{ id: string; name: string }> };
+}
+
+export interface StoreCouponDailyReportResult {
+    storeCouponDailyReport: StoreCouponDailyMetricRecord[];
 }
 
 export interface StorePromotionProductRecord {

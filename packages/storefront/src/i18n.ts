@@ -202,3 +202,79 @@ export const uiCopy = {
         unavailable: 'This feature is not available yet',
     },
 } as const;
+
+/**
+ * Short, customer-facing labels for space-constrained navigation surfaces.
+ * Keep these separate from API states and longer explanatory copy: compact UI
+ * labels should be localized for the available space rather than translated word-for-word.
+ */
+export const compactUiCopy = {
+    zh: {
+        orders: {
+            title: '我的订单',
+            viewAll: '查看全部',
+            all: '全部',
+            unpaid: '待付款',
+            processing: '待发货',
+            shipped: '待收货',
+            returns: '售后',
+            due: '应付',
+        },
+        home: {
+            catalog: '全部商品',
+            featured: '本周精选',
+            cart: '购物车',
+            orders: '订单',
+        },
+        trust: {
+            tracking: '订单可查',
+            pricing: '价格透明',
+            security: '账户安全',
+            support: '客服支持',
+        },
+        services: {
+            favorites: '我的收藏',
+            coupons: '优惠券',
+            announcements: '网站公告',
+            addresses: '地址管理',
+            messages: '消息通知',
+            reviews: '评价中心',
+            support: '客服中心',
+            store: '店铺首页',
+        },
+    },
+    en: {
+        orders: {
+            title: 'My orders',
+            viewAll: 'View all',
+            all: 'All',
+            unpaid: 'Unpaid',
+            processing: 'Processing',
+            shipped: 'Shipped',
+            returns: 'Returns',
+            due: 'Due',
+        },
+        home: {
+            catalog: 'Catalog',
+            featured: 'Featured',
+            cart: 'Cart',
+            orders: 'Orders',
+        },
+        trust: {
+            tracking: 'Tracking',
+            pricing: 'Pricing',
+            security: 'Security',
+            support: 'Support',
+        },
+        services: {
+            favorites: 'Favorites',
+            coupons: 'Coupons',
+            announcements: 'Notices',
+            addresses: 'Addresses',
+            messages: 'Messages',
+            reviews: 'Reviews',
+            support: 'Support',
+            store: 'Store',
+        },
+    },
+} as const satisfies Record<StorefrontLanguage, object>;

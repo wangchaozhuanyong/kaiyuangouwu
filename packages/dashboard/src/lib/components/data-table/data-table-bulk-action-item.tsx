@@ -27,6 +27,9 @@ export interface DataTableBulkActionItemProps {
     label: React.ReactNode;
     icon?: LucideIcon;
     confirmationText?: React.ReactNode;
+    confirmationFields?: React.ReactNode;
+    confirmDisabled?: boolean;
+    onConfirmationOpenChange?: (open: boolean) => void;
     onClick: () => void;
     className?: string;
     requiresPermission?: string[];
@@ -69,6 +72,9 @@ export function DataTableBulkActionItem({
     label,
     icon: Icon,
     confirmationText,
+    confirmationFields,
+    confirmDisabled,
+    onConfirmationOpenChange,
     className,
     onClick,
     requiresPermission,
@@ -79,6 +85,11 @@ export function DataTableBulkActionItem({
     const { hasPermissions } = usePermissions();
     const userHasPermission = hasPermissions(requiresPermission ?? []);
 
+    const handleOpenChange = (open: boolean) => {
+        setIsOpen(open);
+        onConfirmationOpenChange?.(open);
+    };
+
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
@@ -86,24 +97,24 @@ export function DataTableBulkActionItem({
             return;
         }
         if (confirmationText) {
-            setIsOpen(true);
+            handleOpenChange(true);
         } else {
             onClick?.();
         }
     };
 
     const handleConfirm = () => {
-        setIsOpen(false);
+        handleOpenChange(false);
         onClick?.();
     };
 
     const handleCancel = () => {
-        setIsOpen(false);
+        handleOpenChange(false);
     };
 
     if (confirmationText) {
         return (
-            <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+            <AlertDialog open={isOpen} onOpenChange={handleOpenChange}>
                 <AlertDialogTrigger
                     nativeButton={false}
                     render={
@@ -124,11 +135,12 @@ export function DataTableBulkActionItem({
                         </AlertDialogTitle>
                         <AlertDialogDescription>{confirmationText}</AlertDialogDescription>
                     </AlertDialogHeader>
+                    {confirmationFields}
                     <AlertDialogFooter>
                         <AlertDialogCancel onClick={handleCancel}>
                             <Trans>Cancel</Trans>
                         </AlertDialogCancel>
-                        <AlertDialogAction onClick={handleConfirm}>
+                        <AlertDialogAction onClick={handleConfirm} disabled={confirmDisabled}>
                             <Trans>Continue</Trans>
                         </AlertDialogAction>
                     </AlertDialogFooter>

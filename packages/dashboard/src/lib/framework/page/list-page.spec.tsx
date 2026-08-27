@@ -42,11 +42,13 @@ describe('ListPage prop forwarding', () => {
 
     it('forwards table presentation options to PaginatedListDataTable', () => {
         const transformQueryKey = (queryKey: any[]) => [...queryKey, 'extra'];
+        const primaryRowAction = { label: 'Edit', href: (row: any) => `./${row.original.id}` };
 
         renderToStaticMarkup(
             <ListPage
                 {...baseProps}
                 transformQueryKey={transformQueryKey}
+                primaryRowAction={primaryRowAction}
                 disableViewOptions={true}
                 simpleToolbar={true}
                 // false is the non-default value, so this asserts the value is really forwarded
@@ -58,6 +60,7 @@ describe('ListPage prop forwarding', () => {
 
         expect(captured.props).toBeDefined();
         expect(captured.props?.transformQueryKey).toBe(transformQueryKey);
+        expect(captured.props?.primaryRowAction).toBe(primaryRowAction);
         expect(captured.props?.disableViewOptions).toBe(true);
         expect(captured.props?.simpleToolbar).toBe(true);
         expect(captured.props?.includeSelectionColumn).toBe(false);

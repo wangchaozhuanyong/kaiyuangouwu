@@ -41,7 +41,7 @@ function createService(access: StoreAdministratorAccess | null = null, currentPa
         configService as any,
         passwordCipher as any,
     );
-    return { accessRepository, administratorService, service };
+    return { accessRepository, administratorService, passwordCipher, service };
 }
 
 function pendingAccess() {
@@ -54,6 +54,88 @@ function pendingAccess() {
 }
 
 describe('MerchantInitialPasswordService', () => {
+    it('requires the current password before a sensitive operation', async () => {
+        const accepted = createService(null, true);
+        await expect(
+            accepted.service.assertCurrentPassword({ activeUserId: 'user-1' } as any, 'Current123!'),
+        ).resolves.toBeUndefined();
+
+        const rejected = createService(null, false);
+        await expect(
+            rejected.service.assertCurrentPassword({ activeUserId: 'user-1' } as any, 'wrong'),
+        ).rejects.toThrow('当前账号密码不正确');
+    });
+
+    it('requires the current password for protected core admin deletions', async () => {
+        const accepted = createService(null, true);
+        await expect(
+            accepted.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'deleteCollections',
+                'Current123!',
+            ),
+        ).resolves.toBeUndefined();
+
+        const rejected = createService(null, false);
+        await expect(
+            rejected.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'deleteProducts',
+                undefined,
+            ),
+        ).rejects.toThrow('当前账号密码不正确');
+    });
+
+    it('does not require a password for ordinary edits or low-risk deletions', async () => {
+        const { service, passwordCipher } = createService(null, false);
+        const ctx = { activeUserId: 'user-1', apiType: 'admin' } as any;
+
+        await expect(
+            service.assertSensitiveAdminMutation(ctx, 'updateProduct', undefined),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertSensitiveAdminMutation(ctx, 'deleteCustomerAddress', undefined),
+        ).resolves.toBeUndefined();
+        expect(passwordCipher.check).not.toHaveBeenCalled();
+    });
+
+    it.each(['refundOrder', 'settleRefund', 'cancelOrder', 'updateRole', 'rotateApiKey'])(
+        'requires the current password for %s',
+        async fieldName => {
+            const rejected = createService(null, false);
+            await expect(
+                rejected.service.assertSensitiveAdminMutation(
+                    { activeUserId: 'user-1', apiType: 'admin' } as any,
+                    fieldName,
+                    undefined,
+                ),
+            ).rejects.toThrow('当前账号密码不正确');
+        },
+    );
+
+    it('requires the current password only when a bulk product update changes enabled state', async () => {
+        const protectedUpdate = createService(null, false);
+        await expect(
+            protectedUpdate.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'updateProducts',
+                undefined,
+                { input: [{ id: 'product-1', enabled: false }] },
+            ),
+        ).rejects.toThrow('当前账号密码不正确');
+
+        const ordinaryUpdate = createService(null, false);
+        await expect(
+            ordinaryUpdate.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'updateProductVariants',
+                undefined,
+                { input: [{ id: 'variant-1', facetValueIds: ['facet-value-1'] }] },
+            ),
+        ).resolves.toBeUndefined();
+        expect(ordinaryUpdate.passwordCipher.check).not.toHaveBeenCalled();
+    });
+
     it('blocks unrelated Admin API root fields while the temporary password is active', async () => {
         const { service } = createService(pendingAccess());
         const ctx = { apiType: 'admin', activeUserId: 'user-1' } as any;

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { HomePage, NoticeDetailSheet } from './pages/home-page';
+import { buildHomeNoticeItems, HomePage, NoticeDetailSheet } from './pages/home-page';
 import { StorefrontContext } from './StorefrontContext';
 import { MarketConfig, Product, StorefrontContentBlock } from './types';
 
@@ -94,6 +94,22 @@ const coreCategoriesBlock: StorefrontContentBlock = {
             description: '后台设置的数字说明',
         },
     ],
+};
+
+const categoryAdBlock: StorefrontContentBlock = {
+    ...heroBlock,
+    id: 'category-ad-1',
+    code: 'homepage-category-ad',
+    type: 'CATEGORY_AD',
+    imageUrl: '/assets/category-ad.jpg',
+    targetType: 'COLLECTION',
+    targetValue: 'collection-1',
+    title: '分类广告',
+    subtitle: '右侧副标题',
+    body: '',
+    ctaLabel: '不应显示的按钮文案',
+    settings: { displayCount: 4, selectedProductIds: [] },
+    items: [],
 };
 
 const trustBarBlock: StorefrontContentBlock = {
@@ -216,22 +232,19 @@ describe('HomePage localized trust bar layout', () => {
         expect(markup).not.toContain('home-trust-bar has-long-copy');
     });
 
-    it('uses a wrapping layout for longer English labels', () => {
+    it('uses professional compact English labels without forcing a wrapping layout', () => {
         const markup = renderHome({
             contentBlocks: [trustBarBlock],
             language: 'en',
             locale: 'en-MY',
         });
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
-        expect(markup).toContain('class="home-trust-bar has-long-copy"');
-        expect(markup).toContain('class="home-trust-label">Trackable orders</span>');
-        expect(stylesheet).toMatch(
-            /\.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
-        );
-        expect(stylesheet).toMatch(
-            /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
-        );
+        expect(markup).toContain('class="home-trust-bar"');
+        expect(markup).not.toContain('home-trust-bar has-long-copy');
+        expect(markup).toContain('class="home-trust-label">Tracking</span>');
+        expect(markup).toContain('class="home-trust-label">Pricing</span>');
+        expect(markup).toContain('class="home-trust-label">Security</span>');
+        expect(markup).toContain('class="home-trust-label">Support</span>');
     });
 
     it('uses a wrapping layout for long merchant-managed labels in any language', () => {
@@ -251,12 +264,120 @@ describe('HomePage localized trust bar layout', () => {
             ],
         };
         const markup = renderHome({ contentBlocks: [managedTrustBlock] });
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
         expect(markup).toContain('class="home-trust-bar has-long-copy"');
+        expect(stylesheet).toMatch(
+            /\.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
+        );
+        expect(stylesheet).toMatch(
+            /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
+        );
+    });
+});
+
+describe('HomePage desktop intro layout', () => {
+    const positionedHeroBlock = { ...heroBlock, position: 1 };
+    const positionedTrustBlock = { ...trustBarBlock, position: 2 };
+    const quickLinksBlock: StorefrontContentBlock = {
+        ...heroBlock,
+        id: 'quick-links-1',
+        code: 'homepage-quick-links',
+        type: 'QUICK_LINKS',
+        position: 3,
+        imageUrl: null,
+        items: [],
+    };
+
+    it('uses the desktop composition only for adjacent modules in canonical order', () => {
+        const markup = renderHome({
+            contentBlocks: [positionedHeroBlock, positionedTrustBlock, quickLinksBlock],
+        });
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('class="home-intro-grid is-desktop-grouped"');
+        expect(stylesheet).toMatch(
+            /\.homepage-modules > \.home-intro-grid\.is-desktop-grouped\s*\{[^}]*display:\s*grid;/,
+        );
+    });
+
+    it('keeps merchant-reordered intro modules out of the desktop composition', () => {
+        const markup = renderHome({
+            contentBlocks: [
+                positionedHeroBlock,
+                { ...quickLinksBlock, position: 2 },
+                { ...positionedTrustBlock, position: 3 },
+            ],
+        });
+
+        expect(markup).toContain('class="home-intro-grid"');
+        expect(markup).not.toContain('class="home-intro-grid is-desktop-grouped"');
     });
 });
 
 describe('HomePage notices', () => {
+    it('does not rotate a single system announcement into the legacy notice placeholder', () => {
+        const noticeBlock: StorefrontContentBlock = {
+            ...heroBlock,
+            id: 'notice-block',
+            code: 'homepage-notice',
+            type: 'NOTICE',
+            imageUrl: null,
+            title: '公告',
+            subtitle: '',
+            body: '',
+            ctaLabel: '',
+            items: [],
+        };
+
+        const items = buildHomeNoticeItems(
+            [
+                {
+                    id: 'notice-1',
+                    title: '配送公告',
+                    content: '周末订单将在周一发货。',
+                    linkUrl: null,
+                    startsAt: null,
+                    endsAt: null,
+                },
+            ],
+            noticeBlock,
+            'zh',
+        );
+
+        expect(items).toHaveLength(1);
+        expect(items[0]?.id).toBe('system-notice-1');
+        expect(items[0]?.summary).toContain('配送公告');
+        expect(items[0]?.summary).not.toBe('公告');
+    });
+
+    it('preserves the backend order when multiple system announcements rotate', () => {
+        const items = buildHomeNoticeItems(
+            [
+                {
+                    id: 'newer',
+                    title: '最新公告',
+                    content: '最新内容',
+                    linkUrl: null,
+                    startsAt: null,
+                    endsAt: null,
+                },
+                {
+                    id: 'older',
+                    title: '较早公告',
+                    content: '较早内容',
+                    linkUrl: null,
+                    startsAt: null,
+                    endsAt: null,
+                },
+            ],
+            undefined,
+            'zh',
+        );
+
+        expect(items.map(item => item.id)).toEqual(['system-newer', 'system-older']);
+    });
+
     it('keeps a notice without a link clickable so the full content can be opened', () => {
         const markup = renderHome({
             configuredBlockTypes: baseProps.configuredBlockTypes.filter(type => type !== 'NOTICE'),
@@ -329,5 +450,74 @@ describe('HomePage core category cards', () => {
         });
 
         expect(markup).toContain('data-card-template="tech-duo"');
+    });
+});
+
+describe('HomePage category promotion', () => {
+    it('places the subtitle at the end of the heading and omits the CTA copy', () => {
+        const markup = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],
+            contentBlocks: [categoryAdBlock],
+        });
+
+        expect(markup).toContain('class="section-header-end-subtitle">右侧副标题</p>');
+        expect(markup).not.toContain('不应显示的按钮文案');
+    });
+});
+
+describe('HomePage featured collection', () => {
+    const featuredProduct: Product = {
+        ...product,
+        name: 'Codex-Plus成品号',
+        description: '这是一段会在移动端限制为两行的商品描述。',
+        collections: [{ id: 'collection-1', name: 'GPT-Plus', slug: 'gpt-plus', parentId: '' }],
+        variants: [
+            {
+                id: 'variant-1',
+                name: 'Codex-Plus成品号',
+                sku: 'CODEX-PLUS',
+                priceWithTax: 14000,
+                currencyCode: 'CNY',
+                stockLevel: 'IN_STOCK',
+                featuredAsset: null,
+                product: { id: product.id, name: product.name, featuredAsset: null },
+                customFields: { fulfillmentType: 'digital' },
+            },
+        ],
+    };
+    const featuredCollectionBlock: StorefrontContentBlock = {
+        ...heroBlock,
+        id: 'featured-collection-1',
+        code: 'homepage-featured-collection',
+        type: 'FEATURED_COLLECTION',
+        position: 4,
+        imageUrl: null,
+        title: '推荐集合',
+        subtitle: '',
+        body: '',
+        ctaLabel: '',
+        settings: { displayCount: 4, selectedProductIds: [featuredProduct.id] },
+        items: [],
+    };
+
+    it('labels the horizontal product track and keeps the compact mobile layout rules', () => {
+        const markup = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION'],
+            contentBlocks: [featuredCollectionBlock],
+            managedContentProducts: [featuredProduct],
+        });
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('aria-label="推荐集合，左右滑动查看更多商品"');
+        expect(markup).toContain('Codex-Plus成品号');
+        expect(stylesheet).toMatch(
+            /\.featured-collection-intro\s*\{[^}]*min-height:\s*156px;[^}]*padding:\s*20px;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.featured-collection-track\s*\{[^}]*grid-auto-columns:\s*clamp\(248px, calc\(100vw - 64px\), 360px\);[^}]*scroll-snap-type:\s*inline mandatory;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.featured-collection-product-copy small\s*\{[^}]*-webkit-line-clamp:\s*2;/,
+        );
     });
 });

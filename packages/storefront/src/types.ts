@@ -533,6 +533,32 @@ export interface StorefrontCurrencyConfiguration {
     selectorEnabled: boolean;
     cnyToMyrRate: number;
     rateUpdatedAt?: string | null;
+    usdtDisplayEnabled: boolean;
+    usdtMarkupPercent: number;
+    cnyPerUsdtRate: number | null;
+    myrPerUsdtRate: number | null;
+    usdtRateSource: string | null;
+    usdtRateUpdatedAt: string | null;
+    usdtRateAvailable: boolean;
+}
+
+export interface StorefrontUsdtCheckoutQuote {
+    id: string;
+    fiatCurrencyCode: string;
+    fiatAmount: number;
+    fiatPerUsdtRate: number;
+    markupPercent: number;
+    usdtAmount: number;
+    source: string;
+    network: string;
+    tokenContractAddress: string;
+    receivingAddress: string;
+    receivingAddressFingerprint: string;
+    paymentStatus: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED';
+    transactionId: string | null;
+    settledAt: string | null;
+    createdAt: string;
+    expiresAt: string;
 }
 
 export type StorefrontContentBlockType =

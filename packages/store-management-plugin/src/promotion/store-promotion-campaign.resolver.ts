@@ -37,6 +37,17 @@ export class StorePromotionCampaignAdminResolver {
         return this.lifecycleService.findLedger(ctx, options);
     }
 
+    @Query()
+    @Allow(Permission.ReadPromotion)
+    storeCouponDailyReport(
+        @Ctx() ctx: RequestContext,
+        @Args('from') from: Date,
+        @Args('to') to: Date,
+        @Args('campaignId') campaignId?: ID,
+    ) {
+        return this.campaignService.dailyCouponReport(ctx, from, to, campaignId);
+    }
+
     @Transaction()
     @Mutation()
     @Allow(Permission.CreatePromotion)

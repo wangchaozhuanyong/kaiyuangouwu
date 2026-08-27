@@ -3,10 +3,15 @@ import { TrashIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { DataTableBulkActionItem } from '@/vdb/components/data-table/data-table-bulk-action-item.js';
+import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
 import { getMutationName } from '@/vdb/framework/document-introspection/get-document-structure.js';
 import { api } from '@/vdb/graphql/api.js';
 import { usePaginatedList } from '@/vdb/hooks/use-paginated-list.js';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { useState } from 'react';
 
 import { type BulkActionEntityName, getBulkActionEntityLabel } from './bulk-action-entity-labels.js';
 
@@ -87,9 +92,11 @@ export function DeleteBulkAction({
     const { i18n, t } = useLingui();
     const entityName = getBulkActionEntityLabel(i18n, entityKey);
     const queryClient = useQueryClient();
+    const [password, setPassword] = useState('');
 
-    const { mutate } = useMutation({
-        mutationFn: api.mutate(mutationDocument),
+    const { mutate, isPending } = useMutation({
+        mutationFn: ({ ids, password: currentPassword }: { ids: string[]; password: string }) =>
+            api.mutate(mutationDocument, { ids }, sensitiveActionHeaders(currentPassword)),
         onSuccess: (result: any) => {
             let deleted = 0;
             let failed = 0;
@@ -143,12 +150,13 @@ export function DeleteBulkAction({
             }
             toast.error(t`Failed to delete ${selection.length} ${entityName}: ${message}`);
         },
+        onSettled: () => setPassword(''),
     });
 
     return (
         <DataTableBulkActionItem
             requiresPermission={requiredPermissions}
-            onClick={() => mutate({ ids: selection.map(s => s.id) })}
+            onClick={() => mutate({ ids: selection.map(s => s.id), password })}
             label={<Trans>Delete</Trans>}
             confirmationText={
                 confirmationText ?? (
@@ -157,6 +165,13 @@ export function DeleteBulkAction({
                     </Trans>
                 )
             }
+            confirmationFields={
+                <SensitiveActionPasswordField value={password} onChange={setPassword} disabled={isPending} />
+            }
+            confirmDisabled={!password || isPending}
+            onConfirmationOpenChange={open => {
+                if (!open && !isPending) setPassword('');
+            }}
             icon={TrashIcon}
         />
     );

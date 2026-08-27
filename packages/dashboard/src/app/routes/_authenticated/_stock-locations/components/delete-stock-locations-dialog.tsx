@@ -2,6 +2,10 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 
+import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import {
     Dialog,
@@ -41,6 +45,7 @@ export function DeleteStockLocationsDialog({
 }: Readonly<DeleteStockLocationsDialogProps>) {
     const { t } = useLingui();
     const [transferTarget, setTransferTarget] = useState<string>('');
+    const [password, setPassword] = useState('');
     const count = selection.length;
     const selectLabelId = useId();
     // Defined once so the `items` map and the `SelectItem` children can't drift apart.
@@ -49,6 +54,7 @@ export function DeleteStockLocationsDialog({
     // The dialog stays mounted, so a choice from a previous delete would otherwise persist. Reset
     // it each time the dialog opens, so a stale target (possibly one now being deleted) can't be sent.
     useEffect(() => {
+        setPassword('');
         if (open) {
             setTransferTarget('');
         }
@@ -90,7 +96,13 @@ export function DeleteStockLocationsDialog({
     };
 
     const { mutate, isPending } = useMutation({
-        mutationFn: api.mutate(deleteStockLocationsDocument),
+        mutationFn: ({
+            input,
+            password: currentPassword,
+        }: {
+            input: Array<{ id: string; transferToLocationId?: string }>;
+            password: string;
+        }) => api.mutate(deleteStockLocationsDocument, { input }, sensitiveActionHeaders(currentPassword)),
         onSuccess: (result: ResultOf<typeof deleteStockLocationsDocument>) => {
             const results = result.deleteStockLocations;
             const failed = results.filter(r => r.result !== 'DELETED');
@@ -149,6 +161,7 @@ export function DeleteStockLocationsDialog({
         const transferToLocationId = transferTarget === DISCARD ? undefined : transferTarget;
         mutate({
             input: selection.map(s => ({ id: s.id, transferToLocationId })),
+            password,
         });
     };
 
@@ -204,6 +217,11 @@ export function DeleteStockLocationsDialog({
                             </SelectContent>
                         </Select>
                     </div>
+                    <SensitiveActionPasswordField
+                        value={password}
+                        onChange={setPassword}
+                        disabled={isPending}
+                    />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -212,7 +230,7 @@ export function DeleteStockLocationsDialog({
                     <Button
                         variant="destructive"
                         onClick={handleDelete}
-                        disabled={!transferTarget || isPending}
+                        disabled={!transferTarget || !password || isPending}
                     >
                         <Trans>Delete</Trans>
                     </Button>

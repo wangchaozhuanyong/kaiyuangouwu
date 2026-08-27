@@ -128,6 +128,35 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ currencyCode: 'MYR' });
     });
 
+    it('creates a server-locked USDT checkout quote', async () => {
+        const quote = {
+            id: 'quote-1',
+            fiatCurrencyCode: 'CNY',
+            fiatAmount: 10_000,
+            fiatPerUsdtRate: 7.2,
+            markupPercent: 1,
+            usdtAmount: 14.027823,
+            source: 'Binance P2P',
+            network: 'TRC20',
+            tokenContractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+            receivingAddress: 'TReceivingAddress',
+            receivingAddressFingerprint: 'a'.repeat(64),
+            paymentStatus: 'PENDING',
+            transactionId: null,
+            settledAt: null,
+            createdAt: '2026-08-26T00:00:00.000Z',
+            expiresAt: '2026-08-26T00:10:00.000Z',
+        };
+        const fetchMock = mockGraphQlResponse({ createStorefrontUsdtCheckoutQuote: quote });
+
+        await expect(new ShopApi(market).createUsdtCheckoutQuote()).resolves.toEqual(quote);
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        expect(request.query).toContain('createStorefrontUsdtCheckoutQuote');
+        expect(request.query).toContain('usdtAmount');
+        expect(request.query).toContain('receivingAddressFingerprint');
+        expect(request.query).toContain('paymentStatus');
+    });
+
     it('falls back to a five-second carousel interval when settings are absent', async () => {
         mockGraphQlResponse({ storefrontContent: [] });
 
@@ -400,14 +429,6 @@ describe('ShopApi storefront mutations', () => {
                     isEligible: true,
                     eligibilityMessage: null,
                 },
-                {
-                    id: 'payment-referral',
-                    code: 'referral-balance',
-                    name: '邀请返利余额',
-                    description: '',
-                    isEligible: true,
-                    eligibilityMessage: null,
-                },
             ],
         });
 
@@ -574,7 +595,7 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
-    it('registers a customer with an optional referral attribution', async () => {
+    it('registers a customer with the complete account input', async () => {
         const fetchMock = mockGraphQlResponse({
             registerCustomerWithReferral: { __typename: 'Success', success: true },
         });
@@ -586,15 +607,15 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
-            'INVITE123',
-            'LINK',
+            'INVITE88',
+            'POSTER',
         );
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
             query: string;
             variables: Record<string, unknown>;
         };
-        expect(request.query).toContain('registerCustomerWithReferral');
+        expect(request.query).toContain('registerCustomerWithReferral(input: $input');
         expect(request.variables).toEqual({
             input: {
                 emailAddress: 'customer@example.com',
@@ -602,8 +623,8 @@ describe('ShopApi storefront mutations', () => {
                 lastName: 'Customer',
                 password: 'secure-password',
             },
-            inviteCode: 'INVITE123',
-            source: 'LINK',
+            inviteCode: 'INVITE88',
+            source: 'POSTER',
         });
     });
 
