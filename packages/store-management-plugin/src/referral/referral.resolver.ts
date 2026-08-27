@@ -1,7 +1,8 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction, UserInputError } from '@vendure/core';
+import type { Response } from 'express';
 
 import {
     adjustReferralBalancePermission,
@@ -61,8 +62,14 @@ export class ReferralShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Public)
-    recordStorefrontVisit(@Ctx() ctx: RequestContext) {
-        return this.referralService.recordVisit(ctx);
+    async recordStorefrontVisit(
+        @Ctx() ctx: RequestContext,
+        @Context('res') res: Response,
+        @Args('visitorId') visitorId?: string,
+    ) {
+        const result = await this.referralService.recordVisit(ctx, visitorId);
+        if (result.setCookie) res.append('Set-Cookie', result.setCookie);
+        return { recorded: result.recorded };
     }
 }
 

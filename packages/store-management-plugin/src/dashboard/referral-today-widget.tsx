@@ -29,7 +29,7 @@ export function ReferralTodayWidget() {
         <DashboardBaseWidget
             id="referral-today-widget"
             title="今日客户与邀请数据"
-            description="北京时间口径；客户和访客均去重"
+            description="北京时间口径；访客按账号或匿名设备去重"
             actions={
                 <div className="flex gap-1">
                     <Button

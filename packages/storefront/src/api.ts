@@ -1281,13 +1281,14 @@ export class ShopApi {
         return result.useMyReferralBalance;
     }
 
-    async recordStorefrontVisit(): Promise<boolean> {
+    async recordStorefrontVisit(visitorId?: string | null): Promise<boolean> {
         const result = await this.request<{ recordStorefrontVisit: { recorded: boolean } }>(
             `
-                mutation RecordStorefrontVisit {
-                    recordStorefrontVisit { recorded }
+                mutation RecordStorefrontVisit($visitorId: String) {
+                    recordStorefrontVisit(visitorId: $visitorId) { recorded }
                 }
             `,
+            { visitorId: visitorId ?? null },
         );
         return result.recordStorefrontVisit.recorded;
     }
