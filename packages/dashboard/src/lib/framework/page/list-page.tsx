@@ -8,7 +8,6 @@ import {
     ListQueryShape,
     PaginatedListDataTable,
     PaginatedListRefresherRegisterFn,
-    PrimaryRowAction,
     RowAction,
 } from '@/vdb/components/shared/paginated-list-data-table.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
@@ -16,7 +15,6 @@ import { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { AnyRoute, AnyRouter, useNavigate } from '@tanstack/react-router';
 import { ColumnFiltersState, SortingState, Table } from '@tanstack/react-table';
 import { TableOptions } from '@tanstack/table-core';
-import { useEffect } from 'react';
 
 import { BulkActionsInput } from '@/vdb/framework/extension-api/types/index.js';
 import {
@@ -316,8 +314,6 @@ export interface ListPageProps<
      * ```
      */
     facetedFilters?: FacetedFilterConfig<T>;
-    /** The common row action shown directly in the actions column. */
-    primaryRowAction?: PrimaryRowAction<ListQueryFields<T>>;
     /**
      * @description
      * Allows you to specify additional "actions" that will be made available in the "actions" column.
@@ -538,7 +534,6 @@ export function ListPage<
     searchPlaceholder,
     facetedFilters,
     children,
-    primaryRowAction,
     rowActions,
     transformData,
     transformQueryKey,
@@ -557,19 +552,6 @@ export function ListPage<
     const navigate = useNavigate<AnyRouter>({ from: route.fullPath });
     const { setTableSettings, settings } = useUserSettings();
     const tableSettings = pageId ? settings.tableSettings?.[pageId] : undefined;
-    const scrollStorageKey = `vdb:list-scroll:${pageId ?? route.fullPath}`;
-
-    useEffect(() => {
-        const savedScrollPosition = window.sessionStorage.getItem(scrollStorageKey);
-        if (savedScrollPosition) {
-            window.requestAnimationFrame(() => {
-                window.scrollTo({ top: Number(savedScrollPosition), behavior: 'auto' });
-            });
-        }
-        return () => {
-            window.sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
-        };
-    }, [scrollStorageKey]);
 
     const pagination = {
         page: routeSearch.page ? Number.parseInt(routeSearch.page) : 1,
@@ -655,7 +637,6 @@ export function ListPage<
             }
         },
         facetedFilters,
-        primaryRowAction,
         rowActions,
         bulkActions,
         setTableOptions,

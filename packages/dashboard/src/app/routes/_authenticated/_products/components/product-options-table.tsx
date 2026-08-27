@@ -1,15 +1,15 @@
+import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { PaginatedListDataTable } from '@/vdb/components/shared/paginated-list-data-table.js';
 import { Button } from '@/vdb/components/ui/button.js';
-import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
-import { usePage } from '@/vdb/hooks/use-page.js';
-import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans } from '@lingui/react/macro';
+import { Link } from '@tanstack/react-router';
 import { ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { PlusIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { deleteProductOptionDocument } from '../product-option-groups.graphql.js';
-import { ProductOptionEditorSheet } from './product-option-editor-sheet.js';
+import { usePage } from '@/vdb/hooks/use-page.js';
+import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 
 export const productOptionListDocument = graphql(`
     query ProductOptionList($options: ProductOptionListOptions, $groupId: ID) {
@@ -49,20 +49,9 @@ export function ProductOptionsTable({
     const [pageSize, setPageSize] = useState(10);
     const [filters, setFilters] = useState<ColumnFiltersState>([]);
     const refreshRef = useRef<() => void>(() => {});
-    const [selectedOption, setSelectedOption] = useState<{ id: string; name?: string }>();
 
     return (
         <>
-            <div className="mb-4 flex justify-end">
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setSelectedOption({ id: NEW_ENTITY_PATH })}
-                >
-                    <PlusIcon />
-                    <Trans>Add product option</Trans>
-                </Button>
-            </div>
             <PaginatedListDataTable
                 listQuery={productOptionListDocument}
                 deleteMutation={deleteProductOptionDocument}
@@ -116,34 +105,27 @@ export function ProductOptionsTable({
                 }}
                 customizeColumns={{
                     name: {
-                        cell: ({ row }) => <span>{row.original.name}</span>,
+                        cell: ({ row }) => (
+                            <DetailPageButton
+                                id={row.original.id}
+                                label={row.original.name}
+                                href={
+                                    getOptionHref
+                                        ? getOptionHref(row.original.id)
+                                        : `options/${row.original.id}`
+                                }
+                                search={linkSearch}
+                            />
+                        ),
                     },
                 }}
-                primaryRowAction={{
-                    label: <Trans>Edit</Trans>,
-                    onClick: row => setSelectedOption({ id: row.original.id, name: row.original.name }),
-                }}
             />
-            <ProductOptionEditorSheet
-                open={Boolean(selectedOption)}
-                groupId={productOptionGroupId}
-                optionId={selectedOption?.id}
-                optionName={selectedOption?.name}
-                fullPageHref={
-                    selectedOption
-                        ? selectedOption.id === NEW_ENTITY_PATH
-                            ? (newOptionHref ?? './options/new')
-                            : (getOptionHref?.(selectedOption.id) ?? `options/${selectedOption.id}`)
-                        : undefined
-                }
-                linkSearch={linkSearch}
-                onOpenChange={open => {
-                    if (!open) {
-                        setSelectedOption(undefined);
-                        refreshRef.current();
-                    }
-                }}
-            />
+            <div className="mt-4">
+                <Button render={<Link to={newOptionHref ?? './options/new'} search={linkSearch} />} variant="outline">
+                    <PlusIcon />
+                    <Trans>Add product option</Trans>
+                </Button>
+            </div>
         </>
     );
 }

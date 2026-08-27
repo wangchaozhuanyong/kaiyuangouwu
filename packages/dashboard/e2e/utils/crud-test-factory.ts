@@ -33,10 +33,6 @@ export interface CrudTestConfig {
     hasSearch?: boolean;
     /** The title shown on the new entity page, e.g. 'New tax category'. */
     newPageTitle: string;
-    /** Whether creation opens a full page or an in-context drawer. Defaults to `page`. */
-    createPresentation?: 'page' | 'drawer';
-    /** Whether editing opens a full page or an in-context drawer. Defaults to `page`. */
-    editPresentation?: 'page' | 'drawer';
     /** Runs after fillFields in the create flow (e.g. for slug debounce waits). */
     afterFillCreate?: (page: Page, detail: BaseDetailPage) => Promise<void>;
     /** Runs after fillFields in the update flow. Falls back to afterFillCreate if not provided. */
@@ -72,8 +68,6 @@ export function createCrudTestSuite(config: CrudTestConfig) {
         hasRowDelete = false,
         hasSearch = true,
         newPageTitle,
-        createPresentation = 'page',
-        editPresentation = 'page',
     } = config;
 
     const searchTerm = config.searchTerm ?? (createFields.find(f => f.type !== 'switch')?.value as string);
@@ -148,14 +142,6 @@ export function createCrudTestSuite(config: CrudTestConfig) {
             await listPage.clickNewButton();
             if (config.afterOpenCreate) {
                 await config.afterOpenCreate(page);
-            } else if (createPresentation === 'drawer') {
-                const drawer = page.getByRole('dialog');
-                await expect(drawer).toBeVisible();
-                await expect(
-                    page.getByTestId('page-heading').filter({ hasText: newPageTitle }),
-                ).toBeVisible();
-                await expect(drawer.getByRole('button', { name: 'Save and add another' })).toBeVisible();
-                expect(new URL(page.url()).pathname).toBe(listPath);
             } else {
                 await expect(page).toHaveURL(new RegExp(`${listPath}/new`));
             }
@@ -171,26 +157,13 @@ export function createCrudTestSuite(config: CrudTestConfig) {
                 return;
             }
             const detail = getDetailPage(page);
-            if (createPresentation === 'drawer') {
-                const listPage = getListPage(page);
-                await listPage.goto();
-                await listPage.expectLoaded();
-                await listPage.clickNewButton();
-                await expect(page.getByRole('dialog')).toBeVisible();
-            } else {
-                await detail.gotoNew();
-            }
+            await detail.gotoNew();
             await detail.expectNewPageLoaded();
             await detail.fillFields(createFields);
             await config.afterFillCreate?.(page, detail);
             await detail.clickCreate();
             await detail.expectSuccessToast(/created/i);
-            if (createPresentation === 'drawer') {
-                await expect(page.getByRole('dialog')).toBeHidden();
-                expect(new URL(page.url()).pathname).toBe(listPath);
-            } else {
-                await detail.expectNavigatedToExisting();
-            }
+            await detail.expectNavigatedToExisting();
         });
 
         // ──────────────────────────────────────────────
@@ -219,12 +192,7 @@ export function createCrudTestSuite(config: CrudTestConfig) {
             await listPage.expectLoaded();
             await narrowList(listPage, searchTerm);
             await listPage.clickEntity(searchTerm);
-            if (editPresentation === 'drawer') {
-                await expect(page.getByRole('dialog')).toBeVisible();
-                expect(new URL(page.url()).pathname).toBe(listPath);
-            } else {
-                await expect(page).toHaveURL(new RegExp(`${listPath}/[^/]+$`));
-            }
+            await expect(page).toHaveURL(new RegExp(`${listPath}/[^/]+$`));
         });
 
         // ──────────────────────────────────────────────
@@ -238,12 +206,7 @@ export function createCrudTestSuite(config: CrudTestConfig) {
             await listPage.expectLoaded();
             await narrowList(listPage, searchTerm);
             await listPage.clickEntity(searchTerm);
-            if (editPresentation === 'drawer') {
-                await expect(page.getByRole('dialog')).toBeVisible();
-                expect(new URL(page.url()).pathname).toBe(listPath);
-            } else {
-                await expect(page).toHaveURL(new RegExp(`${listPath}/[^/]+$`));
-            }
+            await expect(page).toHaveURL(new RegExp(`${listPath}/[^/]+$`));
 
             // Update the fields
             const detail = getDetailPage(page);
@@ -251,9 +214,6 @@ export function createCrudTestSuite(config: CrudTestConfig) {
             await (config.afterFillUpdate ?? config.afterFillCreate)?.(page, detail);
             await detail.clickUpdate();
             await detail.expectSuccessToast(/updated/i);
-            if (editPresentation === 'drawer') {
-                await expect(page.getByRole('dialog')).toBeHidden();
-            }
         });
 
         // ──────────────────────────────────────────────
@@ -320,22 +280,13 @@ export function createCrudTestSuite(config: CrudTestConfig) {
             test(`should delete a ${entityName} via row action`, async ({ page }) => {
                 // First create a throwaway entity to delete
                 const detail = getDetailPage(page);
-                if (createPresentation === 'drawer') {
-                    const listPage = getListPage(page);
-                    await listPage.goto();
-                    await listPage.expectLoaded();
-                    await listPage.clickNewButton();
-                } else {
-                    await detail.gotoNew();
-                }
+                await detail.gotoNew();
                 await detail.expectNewPageLoaded();
                 await detail.fillFields(createFields);
                 await config.afterFillCreate?.(page, detail);
                 await detail.clickCreate();
                 await detail.expectSuccessToast(/created/i);
-                if (createPresentation === 'page') {
-                    await detail.expectNavigatedToExisting();
-                }
+                await detail.expectNavigatedToExisting();
 
                 // Go back to list, find it, delete via row action
                 const listPage = getListPage(page);

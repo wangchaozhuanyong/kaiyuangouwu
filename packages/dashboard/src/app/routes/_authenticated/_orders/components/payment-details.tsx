@@ -1,10 +1,9 @@
 import { JsonViewer } from '@/vdb/components/data-display/json-viewer.js';
 import { LabeledData } from '@/vdb/components/labeled-data.js';
-import { sensitiveActionHeaders } from '@/vdb/components/shared/sensitive-action-password.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/vdb/components/ui/collapsible.js';
 import { api } from '@/vdb/graphql/api.js';
-import { ResultOf, VariablesOf } from '@/vdb/graphql/graphql.js';
+import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { usePermissions } from '@/vdb/hooks/use-permissions.js';
@@ -88,13 +87,7 @@ export function PaymentDetails({ payment, currencyCode, onSuccess }: Readonly<Pa
     });
 
     const settleRefundMutation = useMutation({
-        mutationFn: ({
-            variables,
-            password,
-        }: {
-            variables: VariablesOf<typeof settleRefundDocument>;
-            password: string;
-        }) => api.mutate(settleRefundDocument, variables, sensitiveActionHeaders(password)),
+        mutationFn: api.mutate(settleRefundDocument),
         onSuccess: (result: ResultOf<typeof settleRefundDocument>) => {
             if (result.settleRefund.__typename === 'Refund') {
                 toast.success(t`Refund settled successfully`);
@@ -126,16 +119,13 @@ export function PaymentDetails({ payment, currencyCode, onSuccess }: Readonly<Pa
         setSettleRefundDialogOpen(true);
     };
 
-    const handleSettleRefundConfirm = (transactionId: string, password: string) => {
+    const handleSettleRefundConfirm = (transactionId: string) => {
         if (selectedRefundId) {
             settleRefundMutation.mutate({
-                variables: {
-                    input: {
-                        id: selectedRefundId,
-                        transactionId,
-                    },
+                input: {
+                    id: selectedRefundId,
+                    transactionId,
                 },
-                password,
             });
         }
     };

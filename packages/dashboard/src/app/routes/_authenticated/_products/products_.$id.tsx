@@ -33,7 +33,6 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
 import { GenerateVariantsPanel } from './components/generate-variants-panel.js';
-import { ProductCollectionsPanel } from './components/product-collections-panel.js';
 import { ProductFulfillmentTypePanel } from './components/product-fulfillment-type-panel.js';
 import { ProductOptionGroupBadge } from './components/product-option-group-badge.js';
 import { ProductVariantsTable } from './components/product-variants-table.js';
@@ -384,16 +383,31 @@ function ProductDetailPage() {
                         title={<Trans>Product groups</Trans>}
                         description={
                             <Trans>
-                                Choose product groups directly. Existing automatic rules continue to apply.
+                                Group membership is calculated from each product group's filter rules.
                             </Trans>
                         }
                     >
-                        <ProductCollectionsPanel
-                            key={entity.id}
-                            productId={entity.id}
-                            collections={entity.collections}
-                            onMembershipRefresh={refreshEntity}
-                        />
+                        {entity.collections.length > 0 ? (
+                            <div className="mb-3 flex flex-wrap gap-1.5">
+                                {entity.collections.map(collection => (
+                                    <Button
+                                        key={collection.id}
+                                        render={<Link to={`/collections/${collection.id}`} />}
+                                        variant="outline"
+                                        size="sm"
+                                    >
+                                        {collection.name}
+                                    </Button>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="mb-3 text-sm text-muted-foreground">
+                                <Trans>This product is not currently included in a product group.</Trans>
+                            </p>
+                        )}
+                        <Button render={<Link to="/collections" />} variant="outline" size="sm">
+                            <Trans>Manage product groups</Trans>
+                        </Button>
                     </PageBlock>
                 )}
                 {channels.length > 1 && entity && (

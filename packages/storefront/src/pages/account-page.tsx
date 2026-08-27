@@ -7,11 +7,12 @@ import {
     ChevronRight,
     CircleCheck,
     ClipboardList,
+    Clock3,
+    Footprints,
     Gift,
     Headphones,
     Heart,
     MapPin,
-    Megaphone,
     Navigation,
     Package,
     RotateCcw,
@@ -23,14 +24,13 @@ import {
     WalletCards,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
-import { compactUiCopy, languageCodeFor } from '../i18n';
+import { languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { isReferralClientFeatureEnabled } from '../referral-client-feature';
 import { ACCOUNT_RECOMMENDATION_CREST_IMAGE } from '../storefront-images';
-import { routeNavigateOptions } from '../storefront-router';
+import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
@@ -57,7 +57,7 @@ interface AccountPageProps {
     storefrontName: string;
     logoUrl: string | null;
     favoriteProductCount: number;
-    announcementCount: number;
+    recentProductCount: number;
     couponCount: number;
     addingVariantId: string | null;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
@@ -83,7 +83,7 @@ export function AccountPage() {
         storefrontName,
         logoUrl,
         favoriteProductCount,
-        announcementCount,
+        recentProductCount,
         couponCount,
         addingVariantId,
         onContentTarget,
@@ -91,7 +91,6 @@ export function AccountPage() {
         onLogout,
     } = useStorefront<AccountPageProps>();
     const isZh = language === 'zh';
-    const compactCopy = compactUiCopy[language];
     const orders = customer?.orders.items ?? [];
     const countsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerOrderCounts(
@@ -250,16 +249,16 @@ export function AccountPage() {
                             <button
                                 type="button"
                                 className="flex flex-col items-center gap-0.5 rounded-xl border border-[#eef2f6] bg-slate-50 px-1 pb-1.5 pt-2 shadow-[0_1px_3px_rgba(15,23,42,0.02)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:shadow-[0_2px_6px_rgba(15,23,42,0.05)] active:scale-95"
-                                onClick={() => navigateTo({ name: 'announcements' })}
+                                onClick={() => navigateTo({ name: 'history' })}
                             >
                                 <span className="relative grid size-8 place-items-center rounded-[10px] border border-slate-200/90 bg-white text-blue-500 shadow-[0_1px_4px_rgba(15,23,42,0.04)] [&_svg]:size-4">
-                                    <Megaphone aria-hidden="true" />
+                                    <Footprints aria-hidden="true" />
                                 </span>
                                 <b className="mt-[3px] text-[17px] font-extrabold leading-[1.1] tabular-nums text-slate-900">
-                                    {announcementCount}
+                                    {recentProductCount}
                                 </b>
                                 <span className="text-[11px] font-semibold tracking-[0.01em] text-slate-500">
-                                    {isZh ? '网站公告' : 'Notices'}
+                                    {isZh ? '浏览足迹' : 'Footprint'}
                                 </span>
                             </button>
 
@@ -309,7 +308,7 @@ export function AccountPage() {
                                     <span>
                                         {isZh
                                             ? '登录后享受会员特权与专属优惠'
-                                            : 'Sign in for member benefits and offers'}
+                                            : 'Sign in to enjoy member perks & discounts'}
                                     </span>
                                 </div>
                             </div>
@@ -335,41 +334,41 @@ export function AccountPage() {
             </section>
 
             <section
-                className={`${accountSectionClass} ${compactSectionHeaderClass} [&_nav]:mt-1 [&_nav]:grid [&_nav]:grid-cols-5 [&_nav]:gap-0.5 [&_nav>button]:flex [&_nav>button]:min-h-[52px] [&_nav>button]:min-w-0 [&_nav>button]:flex-col [&_nav>button]:items-center [&_nav>button]:justify-center [&_nav>button]:gap-1 [&_nav>button]:rounded-lg [&_nav>button]:border-0 [&_nav>button]:bg-transparent [&_nav>button]:px-0.5 [&_nav>button]:py-1 hover:[&_nav>button]:bg-[var(--soft)] [&_nav>button>span]:relative [&_nav>button>span]:grid [&_nav>button>span]:size-[26px] [&_nav>button>span]:place-items-center [&_nav>button>span]:text-slate-800 [&_nav>button>span_svg]:size-5 [&_nav>button>span_svg]:stroke-[1.8] [&_nav>button>span_b]:absolute [&_nav>button>span_b]:-right-2 [&_nav>button>span_b]:-top-1 [&_nav>button>span_b]:grid [&_nav>button>span_b]:h-4 [&_nav>button>span_b]:min-w-4 [&_nav>button>span_b]:place-items-center [&_nav>button>span_b]:rounded-full [&_nav>button>span_b]:border-2 [&_nav>button>span_b]:border-white [&_nav>button>span_b]:bg-[var(--danger)] [&_nav>button>span_b]:px-1 [&_nav>button>span_b]:text-[10px] [&_nav>button>span_b]:font-semibold [&_nav>button>span_b]:leading-3 [&_nav>button>span_b]:text-white [&_nav>button_small]:max-w-full [&_nav>button_small]:whitespace-nowrap [&_nav>button_small]:text-[10.5px] [&_nav>button_small]:font-medium [&_nav>button_small]:tracking-[-0.01em] [&_nav>button_small]:text-[var(--text)] min-[371px]:[&_nav>button_small]:text-xs [&_nav>button:nth-child(1)>span_svg]:text-amber-500 [&_nav>button:nth-child(2)>span_svg]:text-sky-600 [&_nav>button:nth-child(3)>span_svg]:text-indigo-600 [&_nav>button:nth-child(4)>span_svg]:text-rose-600 [&_nav>button:nth-child(5)>span_svg]:text-teal-600`}
+                className={`${accountSectionClass} ${compactSectionHeaderClass} [&_nav]:mt-1 [&_nav]:grid [&_nav]:grid-cols-5 [&_nav]:gap-0.5 [&_nav>button]:flex [&_nav>button]:min-h-[52px] [&_nav>button]:min-w-0 [&_nav>button]:flex-col [&_nav>button]:items-center [&_nav>button]:justify-center [&_nav>button]:gap-1 [&_nav>button]:rounded-lg [&_nav>button]:border-0 [&_nav>button]:bg-transparent [&_nav>button]:px-0.5 [&_nav>button]:py-1 hover:[&_nav>button]:bg-[var(--soft)] [&_nav>button>span]:relative [&_nav>button>span]:grid [&_nav>button>span]:size-[26px] [&_nav>button>span]:place-items-center [&_nav>button>span]:text-slate-800 [&_nav>button>span_svg]:size-5 [&_nav>button>span_svg]:stroke-[1.8] [&_nav>button>span_b]:absolute [&_nav>button>span_b]:-right-2 [&_nav>button>span_b]:-top-1 [&_nav>button>span_b]:grid [&_nav>button>span_b]:h-4 [&_nav>button>span_b]:min-w-4 [&_nav>button>span_b]:place-items-center [&_nav>button>span_b]:rounded-full [&_nav>button>span_b]:border-2 [&_nav>button>span_b]:border-white [&_nav>button>span_b]:bg-[var(--danger)] [&_nav>button>span_b]:px-1 [&_nav>button>span_b]:text-[10px] [&_nav>button>span_b]:font-semibold [&_nav>button>span_b]:leading-3 [&_nav>button>span_b]:text-white [&_nav>button_small]:max-w-full [&_nav>button_small]:overflow-hidden [&_nav>button_small]:text-ellipsis [&_nav>button_small]:whitespace-nowrap [&_nav>button_small]:text-xs [&_nav>button_small]:font-medium [&_nav>button_small]:text-[var(--text)] [&_nav>button:nth-child(1)>span_svg]:text-amber-500 [&_nav>button:nth-child(2)>span_svg]:text-sky-600 [&_nav>button:nth-child(3)>span_svg]:text-indigo-600 [&_nav>button:nth-child(4)>span_svg]:text-rose-600 [&_nav>button:nth-child(5)>span_svg]:text-teal-600`}
             >
                 <SectionHeader
-                    title={compactCopy.orders.title}
-                    action={compactCopy.orders.viewAll}
+                    title={isZh ? '我的订单' : 'My orders'}
+                    action={isZh ? '全部订单' : 'All orders'}
                     onAction={() => navigateTo({ name: 'orders', tab: 'all' })}
                 />
-                <nav className="account-order-shortcuts">
+                <nav>
                     <AccountShortcut
                         icon={<WalletCards />}
-                        label={compactCopy.orders.unpaid}
+                        label={isZh ? '待付款' : 'To pay'}
                         count={counts.pending}
                         onClick={() => navigateTo({ name: 'orders', tab: 'pending' })}
                     />
                     <AccountShortcut
                         icon={<Package />}
-                        label={compactCopy.orders.processing}
+                        label={isZh ? '待发货' : 'To ship'}
                         count={counts.shipping}
                         onClick={() => navigateTo({ name: 'orders', tab: 'shipping' })}
                     />
                     <AccountShortcut
                         icon={<Truck />}
-                        label={compactCopy.orders.shipped}
+                        label={isZh ? '待收货' : 'To receive'}
                         count={counts.receiving}
                         onClick={() => navigateTo({ name: 'orders', tab: 'receiving' })}
                     />
                     <AccountShortcut
                         icon={<RotateCcw />}
-                        label={compactCopy.orders.returns}
+                        label={isZh ? '退款/售后' : 'After-sales'}
                         count={activeAfterSalesCount}
                         onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
                     />
                     <AccountShortcut
                         icon={<ClipboardList />}
-                        label={compactCopy.orders.all}
+                        label={isZh ? '全部订单' : 'All orders'}
                         count={0}
                         onClick={() => navigateTo({ name: 'orders', tab: 'all' })}
                     />
@@ -427,50 +426,64 @@ export function AccountPage() {
             )}
 
             <section className={accountSectionClass} aria-label={isZh ? '常用服务' : 'Services'}>
-                <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-all hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button:nth-child(1)>span]:bg-rose-50 [&>button:nth-child(1)>span]:text-rose-500 [&>button:nth-child(2)>span]:bg-red-50 [&>button:nth-child(2)>span]:text-red-500 [&>button:nth-child(3)>span]:bg-amber-50 [&>button:nth-child(3)>span]:text-amber-500 [&>button:nth-child(4)>span]:bg-emerald-50 [&>button:nth-child(4)>span]:text-emerald-500 [&>button:nth-child(5)>span]:bg-sky-50 [&>button:nth-child(5)>span]:text-sky-500 [&>button:nth-child(6)>span]:bg-indigo-50 [&>button:nth-child(6)>span]:text-indigo-500 [&>button:nth-child(7)>span]:bg-violet-50 [&>button:nth-child(7)>span]:text-violet-500 [&>button:nth-child(8)>span]:bg-slate-100 [&>button:nth-child(8)>span]:text-slate-600 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
+                <div className="grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-all hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button:nth-child(1)>span]:bg-rose-50 [&>button:nth-child(1)>span]:text-rose-500 [&>button:nth-child(2)>span]:bg-red-50 [&>button:nth-child(2)>span]:text-red-500 [&>button:nth-child(3)>span]:bg-amber-50 [&>button:nth-child(3)>span]:text-amber-500 [&>button:nth-child(4)>span]:bg-emerald-50 [&>button:nth-child(4)>span]:text-emerald-500 [&>button:nth-child(5)>span]:bg-sky-50 [&>button:nth-child(5)>span]:text-sky-500 [&>button:nth-child(6)>span]:bg-indigo-50 [&>button:nth-child(6)>span]:text-indigo-500 [&>button:nth-child(7)>span]:bg-violet-50 [&>button:nth-child(7)>span]:text-violet-500 [&>button:nth-child(8)>span]:bg-slate-100 [&>button:nth-child(8)>span]:text-slate-600 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
                     <ServiceButton
                         icon={<Heart />}
-                        label={compactCopy.services.favorites}
-                        badge={favoriteProductCount > 0 ? String(favoriteProductCount) : undefined}
+                        label={
+                            favoriteProductCount
+                                ? isZh
+                                    ? `收藏 ${favoriteProductCount}`
+                                    : `Favorites ${favoriteProductCount}`
+                                : isZh
+                                  ? '我的收藏'
+                                  : 'Favorites'
+                        }
                         onClick={() => navigateTo({ name: 'favorites' })}
                     />
                     <ServiceButton
                         icon={<TicketPercent />}
-                        label={compactCopy.services.coupons}
+                        label={isZh ? '优惠券' : 'Coupons'}
                         badge={couponCount > 0 ? String(couponCount) : undefined}
                         onClick={() => navigateTo({ name: 'coupons' })}
                     />
                     <ServiceButton
-                        icon={<Megaphone />}
-                        label={compactCopy.services.announcements}
-                        badge={announcementCount > 0 ? String(announcementCount) : undefined}
-                        onClick={() => navigateTo({ name: 'announcements' })}
+                        icon={<Clock3 />}
+                        label={
+                            recentProductCount
+                                ? isZh
+                                    ? `足迹 ${recentProductCount}`
+                                    : `History ${recentProductCount}`
+                                : isZh
+                                  ? '浏览足迹'
+                                  : 'History'
+                        }
+                        onClick={() => navigateTo({ name: 'history' })}
                     />
                     <ServiceButton
                         icon={<MapPin />}
-                        label={compactCopy.services.addresses}
+                        label={isZh ? '地址管理' : 'Addresses'}
                         onClick={() =>
                             customer ? navigateTo({ name: 'addresses' }) : navigateTo({ name: 'login' })
                         }
                     />
                     <ServiceButton
                         icon={<Bell />}
-                        label={compactCopy.services.messages}
+                        label={isZh ? '消息通知' : 'Notifications'}
                         onClick={() => navigateTo({ name: 'notifications' })}
                     />
                     <ServiceButton
                         icon={<CircleCheck />}
-                        label={compactCopy.services.reviews}
+                        label={isZh ? '评价中心' : 'Reviews'}
                         onClick={() => navigateTo({ name: 'reviews' })}
                     />
                     <ServiceButton
                         icon={<Headphones />}
-                        label={compactCopy.services.support}
+                        label={isZh ? '客服中心' : 'Support'}
                         onClick={() => navigateTo({ name: 'support' })}
                     />
                     <ServiceButton
                         icon={<Store />}
-                        label={compactCopy.services.store}
+                        label={isZh ? '店铺首页' : 'Store home'}
                         onClick={() => navigateTo({ name: 'home' })}
                     />
                 </div>

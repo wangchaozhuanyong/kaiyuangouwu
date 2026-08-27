@@ -404,12 +404,7 @@ export function RegisterPage({
                 return;
             }
             await api.registerCustomerAccount(
-                {
-                    emailAddress,
-                    firstName,
-                    lastName,
-                    password,
-                },
+                { emailAddress, firstName, lastName, password },
                 submittedInviteCode || undefined,
                 submittedInviteCode ? inviteSource : undefined,
             );
@@ -1104,7 +1099,7 @@ function AuthLayout({
                         {language === 'zh' ? '智联云端 · 桥接未来' : 'Cloud intelligence · Bridging tomorrow'}
                     </small>
                 </div>
-                {heroMessage && (
+                {heroMessage ? (
                     <div className="auth-hero-message">
                         <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>
                         <h2>{heroMessage.title}</h2>
@@ -1115,7 +1110,7 @@ function AuthLayout({
                             ))}
                         </div>
                     </div>
-                )}
+                ) : null}
             </section>
             <section className="login-content">
                 <div className="auth-card-content">{children}</div>

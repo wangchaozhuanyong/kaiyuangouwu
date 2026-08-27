@@ -73,8 +73,6 @@ test.describe('Stock Locations', () => {
         listTitle: 'Stock Locations',
         newButtonLabel: 'New Stock Location',
         newPageTitle: 'New stock location',
-        createPresentation: 'drawer',
-        editPresentation: 'drawer',
         createFields: [
             { label: 'Name', value: 'E2E Test Warehouse' },
             { label: 'Description', value: 'A test warehouse for e2e testing' },

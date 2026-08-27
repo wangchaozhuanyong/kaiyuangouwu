@@ -1,4 +1,4 @@
-import { NavMenuConfig } from '@vendure/dashboard';
+import { NavMenuConfig, NavMenuItem } from '@vendure/dashboard';
 
 const platformSettingsItemIds = new Set([
     'channels',
@@ -7,20 +7,18 @@ const platformSettingsItemIds = new Set([
     'shipping-methods',
     'zones',
 ]);
-const managedReplacementItemIds = new Set(['promotions']);
 
 export function restrictPlatformNavigation(config: NavMenuConfig): NavMenuConfig {
     return {
         sections: config.sections.map(section => {
-            if (!('items' in section)) {
+            if (section.id !== 'settings' || !('items' in section)) {
                 return section;
             }
             return {
                 ...section,
                 items: section.items?.map(item =>
-                    (section.id === 'settings' && platformSettingsItemIds.has(item.id)) ||
-                    managedReplacementItemIds.has(item.id)
-                        ? { ...item, requiresPermission: ['CreateChannel'] }
+                    platformSettingsItemIds.has(item.id)
+                        ? ({ ...item, requiresPermission: ['CreateChannel'] } as NavMenuItem)
                         : item,
                 ),
             };

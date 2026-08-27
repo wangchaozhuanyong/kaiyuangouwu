@@ -58,50 +58,6 @@ const commonTypes = gql`
         rateUpdatedAt: DateTime
         pricesUpdatedAt: DateTime
         syncedPriceCount: Int!
-        usdtDisplayEnabled: Boolean!
-        usdtMarkupPercent: Float!
-        cnyPerUsdtRate: Float
-        myrPerUsdtRate: Float
-        usdtRateSource: String
-        usdtRateUpdatedAt: DateTime
-        usdtRateAvailable: Boolean!
-        usdtPaymentConfigured: Boolean!
-        usdtPaymentNetwork: String!
-        usdtReceivingAddressMasked: String
-        usdtReceivingAddressFingerprint: String
-    }
-
-    type StorefrontUsdtCheckoutQuote {
-        id: ID!
-        fiatCurrencyCode: String!
-        fiatAmount: Money!
-        fiatPerUsdtRate: Float!
-        markupPercent: Float!
-        usdtAmount: Float!
-        source: String!
-        network: String!
-        tokenContractAddress: String!
-        receivingAddress: String!
-        receivingAddressFingerprint: String!
-        paymentStatus: String!
-        transactionId: String
-        settledAt: DateTime
-        createdAt: DateTime!
-        expiresAt: DateTime!
-    }
-
-    type StoreUsdtPaymentIntent {
-        id: ID!
-        orderId: ID!
-        orderCode: String!
-        network: String!
-        expectedUsdtAmount: Float!
-        status: String!
-        transactionId: String
-        failureReason: String
-        createdAt: DateTime!
-        expiresAt: DateTime!
-        settledAt: DateTime
     }
 
     type StoreCustomerCoupon {
@@ -124,24 +80,6 @@ const commonTypes = gql`
         usedOrderId: ID
         returnCount: Int!
         usable: Boolean!
-    }
-
-    type StoreCouponUsageRecord {
-        id: ID!
-        customerCouponId: ID!
-        campaignId: ID!
-        campaignName: String!
-        campaignKind: StoreCouponCampaignKind!
-        status: String!
-        currencyCode: CurrencyCode!
-        minimumSpend: Money!
-        discountAmount: Money
-        discountRate: Float
-        savedAmount: Money!
-        usedAt: DateTime!
-        refundedAt: DateTime
-        orderId: ID!
-        orderCode: String!
     }
 
     type ReferralProgram {
@@ -185,6 +123,24 @@ const commonTypes = gql`
         note: String
         customerName: String
         customerEmail: String
+    }
+
+    type StoreCouponUsageRecord {
+        id: ID!
+        customerCouponId: ID!
+        campaignId: ID!
+        campaignName: String!
+        campaignKind: StoreCouponCampaignKind!
+        status: String!
+        currencyCode: CurrencyCode!
+        minimumSpend: Money!
+        discountAmount: Money
+        discountRate: Float
+        savedAmount: Money!
+        usedAt: DateTime!
+        refundedAt: DateTime
+        orderId: ID!
+        orderCode: String!
     }
 `;
 
@@ -321,8 +277,6 @@ export const adminApiExtensions = gql`
         cnyToMyrRate: Float!
         markupPercent: Float!
         roundingMode: StoreCurrencyRoundingMode!
-        usdtDisplayEnabled: Boolean!
-        usdtMarkupPercent: Float!
     }
 
     type SystemAnnouncement implements Node {
@@ -484,18 +438,6 @@ export const adminApiExtensions = gql`
         eventType: StoreCouponLedgerEventType
     }
 
-    type StoreCouponDailyMetric {
-        date: String!
-        claimedCount: Int!
-        redeemedCount: Int!
-        refundedCount: Int!
-        returnedCount: Int!
-        expiredCount: Int!
-        revokedCount: Int!
-        discountAmountTotal: Money!
-        assistedRevenueTotal: Money!
-    }
-
     type StoreCouponOrderAllocation {
         id: ID!
         customerCouponId: ID!
@@ -550,16 +492,6 @@ export const adminApiExtensions = gql`
     type StorePromotionToggleResult {
         id: ID!
         enabled: Boolean!
-    }
-
-    type StorePromotionNameResult {
-        id: ID!
-        name: String!
-    }
-
-    type StoreCouponCampaignActionResult {
-        campaignId: ID!
-        affectedCount: Int!
     }
 
     input UpdateReferralProgramInput {
@@ -728,18 +660,26 @@ export const adminApiExtensions = gql`
         note: String
     }
 
+    type StorePromotionNameResult {
+        id: ID!
+        name: String!
+    }
+
+    type StoreCouponCampaignActionResult {
+        campaignId: ID!
+        affectedCount: Int!
+    }
+
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
         myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
-        myStoreUsdtPaymentIntents: [StoreUsdtPaymentIntent!]!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
         storeCouponLedger(options: StoreCouponLedgerListOptions): StoreCouponLedgerEntryList!
-        storeCouponDailyReport(from: DateTime!, to: DateTime!, campaignId: ID): [StoreCouponDailyMetric!]!
         storeFlashSales: [StoreFlashSale!]!
         systemAnnouncements: [SystemAnnouncement!]!
         referralProgram: ReferralProgram!
@@ -764,7 +704,6 @@ export const adminApiExtensions = gql`
         ): StoreCurrencyConfiguration!
         refreshMyStoreExchangeRate: StoreCurrencyConfiguration!
         syncMyStoreCurrencyPrices: StoreCurrencyConfiguration!
-        refreshMyStoreUsdtRate: StoreCurrencyConfiguration!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
         saveStorefrontPromotionDraft(input: UpdateStorefrontPromotionDraftInput!): StorefrontPromotionPage!
         publishStorefrontPromotionPage: StorefrontPromotionPage!
@@ -907,7 +846,6 @@ export const shopApiExtensions = gql`
     }
 
     extend type Mutation {
-        createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
         applyStorefrontCoupon(id: ID!): StoreCustomerCoupon!
         removeStorefrontCoupon(id: ID!): StoreCustomerCoupon!

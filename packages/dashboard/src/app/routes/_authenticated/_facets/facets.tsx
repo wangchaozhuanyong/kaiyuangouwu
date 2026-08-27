@@ -1,3 +1,4 @@
+import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { FacetValueChip } from '@/vdb/components/shared/facet-value-chip.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
@@ -32,7 +33,7 @@ function FacetListPage() {
             }}
             customizeColumns={{
                 name: {
-                    cell: ({ row }) => <span>{row.original.name}</span>,
+                    cell: ({ row }) => <DetailPageButton id={row.original.id} label={row.original.name} />,
                 },
                 isPrivate: {
                     header: () => <Trans>Visibility</Trans>,
@@ -105,10 +106,6 @@ function FacetListPage() {
                     },
                 ],
             ]}
-            primaryRowAction={{
-                label: <Trans>Manage</Trans>,
-                href: row => `./${row.original.id}`,
-            }}
             route={Route}
         >
             <ActionBarItem itemId="create-button" requiresPermission={['CreateFacet', 'CreateCatalog']}>

@@ -9,8 +9,6 @@ export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
 export { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity.js';
-export { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity.js';
-export { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity.js';
 export { SystemAnnouncement } from './entities/system-announcement.entity.js';
 export { MerchantCatalogAccessService } from './merchant-catalog-access.service.js';
 export {
@@ -33,11 +31,7 @@ export {
 export { ReferralService } from './referral/referral.service.js';
 export { StoreActivationReadinessService } from './store-activation-readiness.service.js';
 export { StoreCommerceSettingsService } from './store-commerce-settings.service.js';
-export {
-    StoreCurrencySettingsService,
-    calculateUsdtCheckoutAmount,
-    convertMinorPrice,
-} from './store-currency-settings.service.js';
+export { StoreCurrencySettingsService, convertMinorPrice } from './store-currency-settings.service.js';
 export { StoreManagementPlugin } from './store-management.plugin.js';
 export { StoreProfileService } from './store-profile.service.js';
 export { StoreProvisioningService, storeAdministratorPermissions } from './store-provisioning.service.js';
@@ -66,7 +60,6 @@ export type {
     StorefrontPromotionContentType,
     StorefrontPromotionPageView,
     StorefrontPromotionPluginOptions,
-    StorefrontUsdtCheckoutQuoteView,
     SystemAnnouncementPublicView,
     UpdateMyStoreCommerceConfigurationInput,
     UpdateMyStoreProfileInput,

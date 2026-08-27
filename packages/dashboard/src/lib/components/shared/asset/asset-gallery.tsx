@@ -159,8 +159,6 @@ export interface AssetGalleryProps {
      * Keep this disabled in picker dialogs so selecting an asset cannot navigate away.
      */
     showDetailLinks?: boolean;
-    /** Opens an in-context editor instead of navigating to the detail route. */
-    onEditAsset?: (asset: Asset) => void;
 }
 
 /**
@@ -198,7 +196,6 @@ export function AssetGallery({
     viewMode = 'grid',
     onViewModeChange,
     showDetailLinks = false,
-    onEditAsset,
 }: AssetGalleryProps) {
     const { t } = useLingui();
 
@@ -497,7 +494,6 @@ export function AssetGallery({
                         handleSelect={handleSelect}
                         toggleAssetSelection={toggleAssetSelection}
                         showDetailLinks={showDetailLinks}
-                        onEditAsset={onEditAsset}
                     />
                 ) : (
                     <AssetGridView
@@ -508,7 +504,6 @@ export function AssetGallery({
                         handleSelect={handleSelect}
                         toggleAssetSelection={toggleAssetSelection}
                         showDetailLinks={showDetailLinks}
-                        onEditAsset={onEditAsset}
                     />
                 )}
             </div>
@@ -672,7 +667,6 @@ interface AssetViewProps {
     handleSelect: (asset: Asset, event: React.MouseEvent | React.KeyboardEvent) => void;
     toggleAssetSelection: (asset: Asset) => void;
     showDetailLinks: boolean;
-    onEditAsset?: (asset: Asset) => void;
 }
 
 function AssetEmptyState() {
@@ -691,7 +685,6 @@ function AssetGridView({
     handleSelect,
     toggleAssetSelection,
     showDetailLinks,
-    onEditAsset,
 }: Readonly<AssetViewProps>) {
     const { t } = useLingui();
     if (isLoading) {
@@ -759,31 +752,16 @@ function AssetGridView({
                             />
                         </div>
                     )}
-                    {showDetailLinks &&
-                        (onEditAsset ? (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="absolute bottom-1.5 right-1.5 z-10 h-7 bg-background/95 px-2 text-xs shadow-sm"
-                                aria-label={t`Edit ${asset.name}`}
-                                onClick={event => {
-                                    event.stopPropagation();
-                                    onEditAsset(asset);
-                                }}
-                            >
-                                <Trans>Edit</Trans>
-                            </Button>
-                        ) : (
-                            <Link
-                                to={`/assets/${asset.id}`}
-                                className="absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md border bg-background/95 px-1.5 py-1 text-xs font-medium shadow-sm hover:bg-accent"
-                                aria-label={t`Edit ${asset.name}`}
-                            >
-                                <Trans>Edit</Trans>
-                                <ChevronRight className="h-3.5 w-3.5" />
-                            </Link>
-                        ))}
+                    {showDetailLinks && (
+                        <Link
+                            to={`/assets/${asset.id}`}
+                            className="absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md border bg-background/95 px-1.5 py-1 text-xs font-medium shadow-sm hover:bg-accent"
+                            aria-label={t`Edit ${asset.name}`}
+                        >
+                            <Trans>Edit</Trans>
+                            <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                    )}
                 </div>
             ))}
         </div>
@@ -798,7 +776,6 @@ function AssetListView({
     handleSelect,
     toggleAssetSelection,
     showDetailLinks,
-    onEditAsset,
 }: Readonly<AssetViewProps>) {
     const { t } = useLingui();
     const { formatDate } = useLocalFormat();
@@ -871,7 +848,19 @@ function AssetListView({
                                     className="h-9 w-9 rounded object-cover"
                                 />
                             </TableCell>
-                            <TableCell className="font-medium">{asset.name}</TableCell>
+                            <TableCell className="font-medium">
+                                {showDetailLinks ? (
+                                    <Link
+                                        to={`/assets/${asset.id}`}
+                                        className="hover:underline"
+                                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                    >
+                                        {asset.name}
+                                    </Link>
+                                ) : (
+                                    asset.name
+                                )}
+                            </TableCell>
                             <TableCell>
                                 <Badge variant="secondary" className="text-xs font-normal">
                                     {asset.type.toLowerCase()}
@@ -887,29 +876,16 @@ function AssetListView({
                                 {formatDate(asset.createdAt)}
                             </TableCell>
                             <TableCell>
-                                {showDetailLinks &&
-                                    (onEditAsset ? (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={event => {
-                                                event.stopPropagation();
-                                                onEditAsset(asset);
-                                            }}
-                                        >
-                                            <Trans>Edit</Trans>
-                                        </Button>
-                                    ) : (
-                                        <Link
-                                            to={`/assets/${asset.id}`}
-                                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                                            className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-                                        >
-                                            <Trans>Edit</Trans>
-                                            <ChevronRight className="h-4 w-4" />
-                                        </Link>
-                                    ))}
+                                {showDetailLinks && (
+                                    <Link
+                                        to={`/assets/${asset.id}`}
+                                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    >
+                                        <Trans>Edit</Trans>
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Link>
+                                )}
                             </TableCell>
                         </TableRow>
                     ))}

@@ -13,62 +13,6 @@ import {
 
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 
-const passwordProtectedAdminMutations = new Set([
-    'cancelOrder',
-    'deleteAdministrator',
-    'deleteAdministrators',
-    'deleteApiKey',
-    'deleteApiKeys',
-    'deleteAsset',
-    'deleteAssets',
-    'deleteChannel',
-    'deleteChannels',
-    'deleteCollection',
-    'deleteCollections',
-    'deleteCountry',
-    'deleteCountries',
-    'deleteCustomer',
-    'deleteCustomers',
-    'deleteCustomerGroup',
-    'deleteCustomerGroups',
-    'deleteFacet',
-    'deleteFacets',
-    'deleteFacetValue',
-    'deleteFacetValues',
-    'deletePaymentMethod',
-    'deletePaymentMethods',
-    'deleteProduct',
-    'deleteProducts',
-    'deleteProductOption',
-    'deleteProductOptionGroup',
-    'deleteProductOptionGroups',
-    'deleteProductVariant',
-    'deleteProductVariants',
-    'deletePromotion',
-    'deletePromotions',
-    'deleteProvince',
-    'deleteRole',
-    'deleteRoles',
-    'deleteSeller',
-    'deleteSellers',
-    'deleteShippingMethod',
-    'deleteShippingMethods',
-    'deleteStockLocation',
-    'deleteStockLocations',
-    'deleteTaxCategory',
-    'deleteTaxCategories',
-    'deleteTaxRate',
-    'deleteTaxRates',
-    'deleteZone',
-    'deleteZones',
-    'refundOrder',
-    'rotateApiKey',
-    'settleRefund',
-    'updateRole',
-]);
-
-const passwordProtectedEnabledMutations = new Set(['updateProducts', 'updateProductVariants']);
-
 const allowedRootFields = new Set([
     'Query.activeAdministrator',
     'Query.me',
@@ -143,22 +87,6 @@ export class MerchantInitialPasswordService {
         }
     }
 
-    async assertSensitiveAdminMutation(
-        ctx: RequestContext,
-        fieldName: string,
-        password: string | undefined,
-        args?: Record<string, unknown>,
-    ): Promise<void> {
-        if (
-            ctx.apiType !== 'admin' ||
-            !ctx.activeUserId ||
-            !this.isPasswordProtectedMutation(fieldName, args)
-        ) {
-            return;
-        }
-        await this.assertCurrentPassword(ctx, password ?? '');
-    }
-
     async assertRootFieldAccess(ctx: RequestContext, parentType: string, fieldName: string): Promise<void> {
         if (
             ctx.apiType !== 'admin' ||
@@ -180,21 +108,6 @@ export class MerchantInitialPasswordService {
             .getRepository(ctx, StoreAdministratorAccess)
             .findOne({ where: { userId: ctx.activeUserId } });
         return access?.mustChangePassword === true;
-    }
-
-    private isPasswordProtectedMutation(fieldName: string, args?: Record<string, unknown>): boolean {
-        if (passwordProtectedAdminMutations.has(fieldName)) {
-            return true;
-        }
-        if (!passwordProtectedEnabledMutations.has(fieldName) || !Array.isArray(args?.input)) {
-            return false;
-        }
-        return args.input.some(
-            input =>
-                typeof input === 'object' &&
-                input !== null &&
-                Object.prototype.hasOwnProperty.call(input, 'enabled'),
-        );
     }
 
     private async validatePassword(ctx: RequestContext, password: string): Promise<void> {

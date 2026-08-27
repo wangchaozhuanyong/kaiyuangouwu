@@ -83,22 +83,16 @@ export function ReferralPosterModal({
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
-    const availableStyles = referralPosterStyles.filter(posterStyle => templates.includes(posterStyle.id));
+    const availableStyles = referralPosterStyles.filter(item => templates.includes(item.id));
     const styles = availableStyles.length ? availableStyles : referralPosterStyles;
     const [selectedId, setSelectedId] = useState(
-        styles.some(posterStyle => posterStyle.id === defaultTemplate) ? defaultTemplate : styles[0].id,
+        styles.some(item => item.id === defaultTemplate) ? defaultTemplate : styles[0].id,
     );
     const [qrCodeUrl, setQrCodeUrl] = useState('');
     const [downloading, setDownloading] = useState(false);
     const [copied, setCopied] = useState(false);
     const style = styles.find(item => item.id === selectedId) ?? styles[0];
     const shareUrl = referralShareUrl(inviteCode, 'POSTER');
-    const templateButtonClass = (templateId: string) =>
-        `rounded-xl border px-1 py-2 text-[11px] font-bold ${
-            selectedId === templateId
-                ? 'border-red-500 bg-red-50 text-red-700'
-                : 'border-slate-200 text-slate-600'
-        }`;
 
     useEffect(() => {
         let cancelled = false;
@@ -290,7 +284,12 @@ export function ReferralPosterModal({
                         <button
                             key={item.id}
                             type="button"
-                            className={templateButtonClass(item.id)}
+                            className={[
+                                'rounded-xl border px-1 py-2 text-[11px] font-bold',
+                                selectedId === item.id
+                                    ? 'border-red-500 bg-red-50 text-red-700'
+                                    : 'border-slate-200 text-slate-600',
+                            ].join(' ')}
                             onClick={() => setSelectedId(item.id)}
                         >
                             {isZh ? item.nameZh : item.nameEn}

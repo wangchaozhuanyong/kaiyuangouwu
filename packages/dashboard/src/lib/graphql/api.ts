@@ -127,21 +127,15 @@ function mutate(document: RequestDocument): (variables: Variables) => Promise<un
 function mutate<T, V extends Variables = Variables>(
     document: TypedDocumentNode<T, V>,
     variables: V,
-    requestHeaders?: HeadersInit,
 ): Promise<T>;
-function mutate(
-    document: RequestDocument,
-    variables: Variables,
-    requestHeaders?: HeadersInit,
-): Promise<unknown>;
+function mutate(document: RequestDocument, variables: Variables): Promise<unknown>;
 function mutate<T, V extends Variables = Variables>(
     document: RequestDocument | TypedDocumentNode<T, V>,
     maybeVariables?: V,
-    requestHeaders?: HeadersInit,
 ): Promise<T> | ((variables: V) => Promise<T>) {
     const documentString = typeof document === 'string' ? document : print(document);
     if (maybeVariables) {
-        return awesomeClient.request(documentString, maybeVariables, { headers: requestHeaders }) as any;
+        return awesomeClient.request(documentString, maybeVariables) as any;
     } else {
         return (variables: V): Promise<T> => {
             return awesomeClient.request(documentString, variables) as any;

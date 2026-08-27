@@ -59,7 +59,6 @@ export function PaymentRoutePage() {
                     order={runtime.currentCheckoutOrder}
                     customer={runtime.customer}
                     market={runtime.market}
-                    displayCurrencyCode={runtime.displayCurrencyCode}
                     locale={runtime.locale}
                     language={runtime.language}
                     onCancel={(order: Order) => void runtime.reopenPendingOrder(order)}

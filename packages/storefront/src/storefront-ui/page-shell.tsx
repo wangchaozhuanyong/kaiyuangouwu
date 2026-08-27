@@ -35,7 +35,6 @@ export function asyncRouteTitle(routeName: RouteName, language: StorefrontLangua
         'order-detail': isZh ? '订单详情' : 'Order details',
         addresses: isZh ? '地址管理' : 'Addresses',
         'account-security': isZh ? '账户与安全' : 'Account and security',
-        announcements: isZh ? '网站公告' : 'Website notices',
         notifications: isZh ? '消息通知' : 'Notifications',
         coupons: isZh ? '优惠券' : 'Coupons',
         referral: isZh ? '邀请返利' : 'Referral rewards',
@@ -194,7 +193,6 @@ export function SectionHeader({
     action,
     onAction,
     icon,
-    subtitlePlacement = 'below',
 }: {
     title?: string;
     subtitle?: string;
@@ -202,13 +200,11 @@ export function SectionHeader({
     action?: string;
     onAction?: () => void;
     icon?: ReactNode;
-    subtitlePlacement?: 'below' | 'end';
 }) {
     const resolvedIcon = icon ?? getSectionIcon(title);
-    const subtitleAtEnd = subtitlePlacement === 'end';
     return (
-        <header className={`section-header${subtitleAtEnd ? ' has-end-subtitle' : ''}`}>
-            {(title || (subtitle && !subtitleAtEnd)) && (
+        <header className="section-header">
+            {(title || subtitle) && (
                 <div className="section-header-title-lockup">
                     <div className="section-header-title-row">
                         {resolvedIcon && (
@@ -218,10 +214,9 @@ export function SectionHeader({
                         )}
                         {title && <h2>{title}</h2>}
                     </div>
-                    {subtitle && !subtitleAtEnd ? <p>{subtitle}</p> : null}
+                    {subtitle && <p>{subtitle}</p>}
                 </div>
             )}
-            {subtitle && subtitleAtEnd ? <p className="section-header-end-subtitle">{subtitle}</p> : null}
             {centerLabel &&
                 (title ? (
                     <span className="section-header-center-label">{centerLabel}</span>

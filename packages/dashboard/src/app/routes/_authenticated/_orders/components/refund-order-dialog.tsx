@@ -1,4 +1,3 @@
-import { SensitiveActionPasswordField } from '@/vdb/components/shared/sensitive-action-password.js';
 import { VendureImage } from '@/vdb/components/shared/vendure-image.js';
 import { Alert, AlertDescription } from '@/vdb/components/ui/alert.js';
 import { Button } from '@/vdb/components/ui/button.js';
@@ -13,7 +12,13 @@ import {
 } from '@/vdb/components/ui/dialog.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { Label } from '@/vdb/components/ui/label.js';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/vdb/components/ui/select.js';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/vdb/components/ui/select.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -23,7 +28,11 @@ import { uiConfig } from 'virtual:vendure-ui-config';
 
 import { useRefundOrder } from '../hooks/use-refund-order.js';
 import { Order } from '../utils/order-types.js';
-import { getMaxRefundableQuantity, getRefundableQuantity, lineCanBeRefunded } from '../utils/order-utils.js';
+import {
+    getMaxRefundableQuantity,
+    getRefundableQuantity,
+    lineCanBeRefunded,
+} from '../utils/order-utils.js';
 
 interface RefundOrderDialogProps {
     readonly order: Order;
@@ -40,10 +49,8 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
         const { getTranslatedRefundReason } = useDynamicTranslations();
         const { formatCurrency, toMajorUnits, toMinorUnits } = useLocalFormat();
         const [open, setOpen] = useState(false);
-        const [password, setPassword] = useState('');
 
         const refund = useRefundOrder(order, () => {
-            setPassword('');
             setOpen(false);
             onSuccess?.();
         });
@@ -51,7 +58,6 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
         useImperativeHandle(ref, () => ({
             open: () => {
                 refund.resetState();
-                setPassword('');
                 setOpen(true);
             },
         }));
@@ -59,22 +65,11 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
         const { refundReasons } = uiConfig.orders;
 
         const handleClose = () => {
-            setPassword('');
             setOpen(false);
         };
 
-        const handleOpenChange = (nextOpen: boolean) => {
-            setOpen(nextOpen);
-            if (!nextOpen) setPassword('');
-        };
-
-        const handleRefund = async () => {
-            await refund.handleSubmit(password);
-            setPassword('');
-        };
-
         return (
-            <Dialog open={open} onOpenChange={handleOpenChange}>
+            <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="!max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
@@ -165,11 +160,7 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
                                                             data-testid="refund-quantity"
                                                             onChange={e => {
                                                                 const value = Math.min(
-                                                                    Math.max(
-                                                                        0,
-                                                                        Number.parseInt(e.target.value, 10) ||
-                                                                            0,
-                                                                    ),
+                                                                    Math.max(0, Number.parseInt(e.target.value, 10) || 0),
                                                                     maxRefundable,
                                                                 );
                                                                 refund.onRefundQuantityChange(line.id, value);
@@ -206,9 +197,7 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
                                     {order.shippingLines.map(shippingLine => (
                                         <div key={shippingLine.id} className="flex items-center gap-2">
                                             <Checkbox
-                                                checked={refund.refundShippingLineIds.includes(
-                                                    shippingLine.id,
-                                                )}
+                                                checked={refund.refundShippingLineIds.includes(shippingLine.id)}
                                                 onCheckedChange={() =>
                                                     refund.toggleShippingRefund(shippingLine.id)
                                                 }
@@ -233,13 +222,9 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
                                 <Trans>Reason</Trans>
                             </Label>
                             <Select
-                                items={Object.fromEntries(
-                                    refundReasons.map(r => [r.value, getTranslatedRefundReason(r.label)]),
-                                )}
+                                items={Object.fromEntries(refundReasons.map(r => [r.value, getTranslatedRefundReason(r.label)]))}
                                 value={refund.selectedReason}
-                                onValueChange={value => {
-                                    if (value != null) refund.setSelectedReason(value);
-                                }}
+                                onValueChange={(value) => { if (value != null) refund.setSelectedReason(value) }}
                             >
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder={t`Select a reason...`} />
@@ -299,10 +284,7 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
                                 />
                                 <span className="text-muted-foreground">{order.currencyCode}</span>
                                 <span className="text-muted-foreground text-sm">
-                                    <Trans>
-                                        (max:{' '}
-                                        {formatCurrency(refund.totalRefundableAmount, order.currencyCode)})
-                                    </Trans>
+                                    <Trans>(max: {formatCurrency(refund.totalRefundableAmount, order.currencyCode)})</Trans>
                                 </span>
                             </div>
                         </div>
@@ -346,9 +328,7 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
                                                         onChange={e =>
                                                             refund.onPaymentAmountChange(
                                                                 payment.id,
-                                                                toMinorUnits(
-                                                                    Number.parseFloat(e.target.value) || 0,
-                                                                ),
+                                                                toMinorUnits(Number.parseFloat(e.target.value) || 0),
                                                             )
                                                         }
                                                         className="w-24"
@@ -376,12 +356,6 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
                                 ))}
                             </div>
                         )}
-
-                        <SensitiveActionPasswordField
-                            value={password}
-                            onChange={setPassword}
-                            disabled={refund.isSubmitting}
-                        />
                     </div>
 
                     <DialogFooter>
@@ -389,8 +363,8 @@ export const RefundOrderDialog = forwardRef<RefundOrderDialogRef, RefundOrderDia
                             <Trans>Cancel</Trans>
                         </Button>
                         <Button
-                            onClick={() => void handleRefund()}
-                            disabled={!refund.canSubmit || !password || refund.isSubmitting}
+                            onClick={() => void refund.handleSubmit()}
+                            disabled={!refund.canSubmit || refund.isSubmitting}
                         >
                             {refund.isSubmitting ? (
                                 <Trans>Processing...</Trans>

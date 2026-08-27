@@ -33,7 +33,7 @@ const couponPaymentHandler = new PaymentMethodHandler({
 const translationProvider: ContentTranslationProvider = {
     name: 'coupon-e2e-passthrough',
     isConfigured: () => true,
-    translate: async request => ({
+    translate: request => ({
         provider: 'coupon-e2e-passthrough',
         translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
     }),
@@ -83,7 +83,7 @@ const CREATE_COUPON = gql`
 
 const REGISTER = gql`
     mutation CouponE2ERegister($input: RegisterCustomerInput!) {
-        registerCustomerWithReferral(input: $input) {
+        registerCustomerAccount(input: $input) {
             __typename
             ... on Success {
                 success
@@ -361,7 +361,7 @@ describe('coupon lifecycle closed loop', () => {
         });
         productVariantId = variants.createProductVariants[0].id;
 
-        const createdCampaign = await adminClient.query(CREATE_COUPON, {
+        const campaignResult = await adminClient.query(CREATE_COUPON, {
             input: {
                 name: '满100减10测试券',
                 kind: 'ORDER_FIXED',
@@ -374,9 +374,9 @@ describe('coupon lifecycle closed loop', () => {
                 returnOnFullRefund: true,
             },
         });
-        campaignId = createdCampaign.createStoreCouponCampaign.id;
-        couponCode = createdCampaign.createStoreCouponCampaign.couponCode;
-        expect(createdCampaign.createStoreCouponCampaign).toMatchObject({
+        campaignId = campaignResult.createStoreCouponCampaign.id;
+        couponCode = campaignResult.createStoreCouponCampaign.couponCode;
+        expect(campaignResult.createStoreCouponCampaign).toMatchObject({
             perCustomerClaimLimit: 1,
             returnOnFullRefund: true,
         });
@@ -389,7 +389,7 @@ describe('coupon lifecycle closed loop', () => {
                 password: 'CouponPass123!',
             },
         });
-        assertSuccess(registered.registerCustomerWithReferral);
+        assertSuccess(registered.registerCustomerAccount);
         await shopClient.asUserWithCredentials('coupon-e2e@example.com', 'CouponPass123!');
     }, TEST_SETUP_TIMEOUT_MS);
 

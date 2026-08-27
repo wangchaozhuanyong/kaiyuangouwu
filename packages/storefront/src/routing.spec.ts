@@ -102,7 +102,6 @@ describe('storefront routing', () => {
 
     it('opens account service, coupon, and review routes', () => {
         expect(routeFromHash('#/favorites').name).toBe('favorites');
-        expect(routeFromHash('#/announcements').name).toBe('announcements');
         expect(routeFromHash('#/logistics').name).toBe('logistics');
         expect(routeFromHash('#/support').name).toBe('support');
         expect(routeFromHash('#/coupons').name).toBe('coupons');

@@ -191,10 +191,8 @@ const FRAGMENT_SHADER_SOURCE = `
         vec4 orbit4 = renderOrbit(p, a4, 0.2, 0.8, 0.021, time * 0.11, mineralTeal);
         vec4 orbit5 = renderOrbit(p, a5, 0.58, 0.66, 0.014, -time * 0.09, glassBlue);
         vec4 orbitComposite = orbit0 + orbit1 + orbit2 + orbit3 + orbit4 + orbit5;
-        float coreQuietZone = smoothstep(0.18, 0.35, radius);
-        float orbitWeight = mix(0.52, 0.9, coreQuietZone);
-        color += orbitComposite.rgb * orbitWeight;
-        alpha = max(alpha, clamp(orbitComposite.a * mix(0.58, 0.92, coreQuietZone), 0.0, 1.0));
+        color += orbitComposite.rgb;
+        alpha = max(alpha, clamp(orbitComposite.a, 0.0, 1.0));
 
         vec4 node0 = renderNode(p, a0, 0.28, 0.73, time * 0.2 + 0.55, 0.078, iceBlue);
         vec4 node1 = renderNode(p, a1, 0.38, 0.74, -time * 0.15 + 2.3, 0.07, mineralTeal);
@@ -340,17 +338,10 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
     if (!(stage instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return;
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const compactMotion = window.matchMedia('(max-width: 620px), (pointer: coarse)');
     const pointer = { x: 0, y: 0, targetX: 0, targetY: 0, energy: 0 };
     let frame = 0;
-    let documentVisible = !document.hidden;
-    let stageVisible = true;
-    let lastFrameTime = 0;
+    let visible = !document.hidden;
     let renderFrame = () => undefined;
-    const shouldAnimate = () => documentVisible && stageVisible && !reducedMotion.matches;
-    const syncMotionState = () => {
-        stage.dataset.motion = reducedMotion.matches ? 'reduced' : shouldAnimate() ? 'running' : 'paused';
-    };
 
     const updatePointer = event => {
         const bounds = stage.getBoundingClientRect();
@@ -444,7 +435,7 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
         gl.clearColor(0, 0, 0, 0);
 
         renderFrame = (time, force = false) => {
-            if (!force && !shouldAnimate()) return;
+            if (!force && (!visible || reducedMotion.matches)) return;
             pointer.x += (pointer.targetX - pointer.x) * 0.045;
             pointer.y += (pointer.targetY - pointer.y) * 0.045;
             pointer.energy += (0 - pointer.energy) * 0.025;
@@ -469,8 +460,7 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
         const context = canvas.getContext('2d');
         if (!context) return;
 
-        renderFrame = (time, force = false) => {
-            if (!force && !shouldAnimate()) return;
+        renderFrame = time => {
             const width = canvas.width;
             const height = canvas.height;
             const scale = Math.min(width, height);
@@ -598,47 +588,21 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
     if (!startWebGl()) startCanvasFallback();
 
     const animate = time => {
-        const minimumFrameInterval = compactMotion.matches ? 1000 / 36 : 0;
-        if (minimumFrameInterval === 0 || time - lastFrameTime >= minimumFrameInterval) {
-            lastFrameTime = time;
-            renderFrame(time);
-        }
-        if (shouldAnimate()) frame = requestAnimationFrame(animate);
+        renderFrame(time);
+        if (!reducedMotion.matches) frame = requestAnimationFrame(animate);
     };
 
     const restart = () => {
         cancelAnimationFrame(frame);
         resizeCanvas();
-        lastFrameTime = 0;
-        syncMotionState();
-        if (shouldAnimate()) frame = requestAnimationFrame(animate);
+        if (!reducedMotion.matches && visible) frame = requestAnimationFrame(animate);
     };
 
     const resizeObserver = new ResizeObserver(resizeCanvas);
     resizeObserver.observe(canvas);
     reducedMotion.addEventListener('change', restart);
-    compactMotion.addEventListener('change', restart);
-    if ('IntersectionObserver' in window) {
-        const intersectionObserver = new IntersectionObserver(
-            entries => {
-                stageVisible = entries.some(entry => entry.isIntersecting);
-                restart();
-            },
-            { rootMargin: '120px 0px', threshold: 0.01 },
-        );
-        intersectionObserver.observe(stage);
-    }
-    canvas.addEventListener('webglcontextlost', event => {
-        event.preventDefault();
-        cancelAnimationFrame(frame);
-        stage.dataset.motion = 'paused';
-    });
-    canvas.addEventListener('webglcontextrestored', () => {
-        if (!startWebGl()) startCanvasFallback();
-        restart();
-    });
     document.addEventListener('visibilitychange', () => {
-        documentVisible = !document.hidden;
+        visible = !document.hidden;
         restart();
     });
 

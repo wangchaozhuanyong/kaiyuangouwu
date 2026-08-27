@@ -15,6 +15,12 @@ import {
     Button,
     ChannelCodeLabel,
     DashboardRouteDefinition,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
     ImageSizeHint,
     Input,
     Label,
@@ -26,24 +32,16 @@ import {
     PageLayout,
     PageTitle,
     ProductMultiSelectorDialog,
-    RelationSelector,
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
     Separator,
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
     Skeleton,
     Switch,
     Textarea,
     api,
-    collectionRelationConfig,
     toast,
     useChannel,
     useMutation,
@@ -69,7 +67,7 @@ import {
     TriangleAlert,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { applyCoreCategoryDefaults, dualCardTemplateId, dualCardTemplates } from './dual-card-templates';
 import {
@@ -205,8 +203,6 @@ const zhCopy = {
     chooseTarget: '请选择跳转目标',
     targetProductHint: '按商品名称搜索，选中后自动保存真实商品 ID。',
     targetProductMissing: '找不到该商品，可能已删除或不属于当前店铺。',
-    selectTargetCategory: '搜索并选择分类',
-    targetCategoryHint: '按分类名称搜索，选中后自动保存真实分类 ID。',
     pageTargetHint: '直接选择常用客户端页面；仅在特殊情况下使用自定义路径。',
     supportTargetHint: '默认进入客服中心；也可配置在线客服链接、电话或邮箱。',
     customTarget: '自定义路径或链接',
@@ -356,8 +352,6 @@ const enCopy: typeof zhCopy = {
     chooseTarget: 'Choose a target',
     targetProductHint: 'Search by product name. The saved target uses the real product ID automatically.',
     targetProductMissing: 'This product could not be found. It may be deleted or unavailable in this store.',
-    selectTargetCategory: 'Search and select a category',
-    targetCategoryHint: 'Search by category name. The saved target uses the real category ID automatically.',
     pageTargetHint: 'Choose a common storefront page, or use a custom path only when needed.',
     supportTargetHint: 'Open the support center by default, or use a custom support URL, phone, or email.',
     customTarget: 'Custom path or link',
@@ -1876,17 +1870,6 @@ function BlockEditor({
     onSave: (draft: ContentBlock) => void;
 }>) {
     const [advancedMode, setAdvancedMode] = useState(false);
-    const initialDraftRef = useRef('');
-    const initialDraftKeyRef = useRef<string | undefined>(undefined);
-    const draftKey = draft ? `${draft.id ?? 'new'}:${draft.type}` : undefined;
-    if (draft && draftKey !== initialDraftKeyRef.current) {
-        initialDraftKeyRef.current = draftKey;
-        initialDraftRef.current = JSON.stringify(draft);
-    }
-    if (!draft) {
-        initialDraftKeyRef.current = undefined;
-        initialDraftRef.current = '';
-    }
     const previewTranslation = useMemo(
         () => (draft ? preferredBlockTranslation(draft, isZh) : null),
         [draft, isZh],
@@ -1914,13 +1897,6 @@ function BlockEditor({
 
     const update = <K extends keyof ContentBlock>(key: K, value: ContentBlock[K]) =>
         onChange({ ...draft, [key]: value });
-    const requestClose = () => {
-        const isDirty = initialDraftRef.current !== JSON.stringify(draft);
-        if (isDirty && !window.confirm(isZh ? '有未保存的修改，确定放弃吗？' : 'Discard unsaved changes?')) {
-            return;
-        }
-        onClose();
-    };
     const updateTranslation = (languageCode: 'zh_Hans' | 'en', patch: Partial<ContentBlockTranslation>) =>
         update(
             'translations',
@@ -1930,12 +1906,12 @@ function BlockEditor({
         );
 
     return (
-        <Sheet open onOpenChange={open => !open && requestClose()}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[88vw] sm:max-w-[1440px]">
-                <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
+        <Dialog open onOpenChange={open => !open && onClose()}>
+            <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1180px,96vw)]">
+                <DialogHeader className="shrink-0 border-b px-6 py-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                            <SheetTitle>
+                            <DialogTitle>
                                 {lockedType === 'HERO'
                                     ? draft.id
                                         ? text.updateCarouselSlideTitle
@@ -1943,8 +1919,8 @@ function BlockEditor({
                                     : draft.id
                                       ? text.updateTitle
                                       : text.createTitle}
-                            </SheetTitle>
-                            <SheetDescription className="mt-1">{text.editorDescription}</SheetDescription>
+                            </DialogTitle>
+                            <DialogDescription className="mt-1">{text.editorDescription}</DialogDescription>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                             {fixedTemplate ? <Badge variant="outline">{text.fixedTemplate}</Badge> : null}
@@ -1972,7 +1948,7 @@ function BlockEditor({
                         </div>
                     </div>
                     <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
-                </SheetHeader>
+                </DialogHeader>
                 <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
                     <div className="min-w-0 space-y-7 px-6 py-5 lg:overflow-y-auto">
                         <section className="space-y-4">
@@ -2242,8 +2218,7 @@ function BlockEditor({
                                                     />
                                                 </Field>
                                             ) : null}
-                                            {draft.type !== 'CATEGORY_AD' &&
-                                            (advancedMode || visibleTextFields.cta) ? (
+                                            {advancedMode || visibleTextFields.cta ? (
                                                 <Field label={text.cta}>
                                                     <Input
                                                         value={translation.ctaLabel}
@@ -2437,16 +2412,16 @@ function BlockEditor({
                         </div>
                     </aside>
                 </div>
-                <SheetFooter className="shrink-0 border-t px-6 py-4">
-                    <Button type="button" variant="outline" disabled={saving} onClick={requestClose}>
+                <DialogFooter className="shrink-0 border-t px-6 py-4">
+                    <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
                         {text.cancel}
                     </Button>
                     <Button type="button" disabled={saving} onClick={() => onSave(draft)}>
                         {saving ? text.saving : text.save}
                     </Button>
-                </SheetFooter>
-            </SheetContent>
-        </Sheet>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -2464,15 +2439,20 @@ function CategoryPromotionEditorPreview({
 
     return (
         <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2 px-0.5">
-                <h4 className="min-w-0 truncate text-sm font-bold">
-                    {translation?.title || (isZh ? '分类精选' : 'Category edit')}
-                </h4>
-                {translation?.subtitle ? (
-                    <span className="min-w-0 truncate text-right text-[9px] text-muted-foreground">
-                        {translation.subtitle}
-                    </span>
-                ) : null}
+            <div className="flex items-end justify-between gap-2 px-0.5">
+                <div className="min-w-0">
+                    <h4 className="truncate text-sm font-bold">
+                        {translation?.title || (isZh ? '分类精选' : 'Category edit')}
+                    </h4>
+                    {translation?.subtitle ? (
+                        <p className="mt-1 truncate text-[9px] text-muted-foreground">
+                            {translation.subtitle}
+                        </p>
+                    ) : null}
+                </div>
+                <span className="shrink-0 text-[9px] text-muted-foreground">
+                    {translation?.ctaLabel || (isZh ? '查看全部 →' : 'View all →')}
+                </span>
             </div>
             <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-muted">
                 {draft.imageUrl ? (
@@ -3080,19 +3060,6 @@ function TargetValueEditor({
         );
     }
 
-    if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
-        return (
-            <Field label={text.targetValue} hint={text.targetCategoryHint}>
-                <RelationSelector
-                    config={collectionRelationConfig}
-                    value={value ?? undefined}
-                    selectorLabel={text.selectTargetCategory}
-                    onChange={next => onChange(typeof next === 'string' ? next : null)}
-                />
-            </Field>
-        );
-    }
-
     if (targetType === 'PAGE') {
         return (
             <Field label={text.targetValue} hint={text.pageTargetHint}>
@@ -3313,7 +3280,7 @@ function simpleTextFieldsForType(type: ContentBlockType): {
     return {
         subtitle: ['HERO', 'CATEGORY_AD', 'STORY'].includes(type),
         body: ['HERO', 'NOTICE', 'STORY', 'LEGAL', 'SUPPORT'].includes(type),
-        cta: ['HERO', 'FEATURED_COLLECTION', 'STORY'].includes(type),
+        cta: ['HERO', 'CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY'].includes(type),
     };
 }
 
@@ -3599,7 +3566,7 @@ function blockInput(block: ContentBlock) {
                 title: title.trim(),
                 subtitle: subtitle.trim(),
                 body: body.trim(),
-                ctaLabel: block.type === 'CATEGORY_AD' ? '' : ctaLabel.trim(),
+                ctaLabel: ctaLabel.trim(),
             }))
             .filter(translation => Boolean(translation.title)),
         items: block.items.map((item, index) => ({

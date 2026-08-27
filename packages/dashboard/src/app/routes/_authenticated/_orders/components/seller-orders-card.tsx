@@ -1,12 +1,10 @@
+import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
-import { Button } from '@/vdb/components/ui/button.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { getTypeForState, stateTypeToBadgeVariant } from '@/vdb/utils/state-type.js';
-import { Trans } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { sellerOrdersDocument } from '../orders.graphql.js';
 import { getSeller } from '../utils/order-utils.js';
 
@@ -44,21 +42,10 @@ export function SellerOrdersCard({ orderId }: Readonly<SellerOrdersCardProps>) {
                 return (
                     <div key={sellerOrder.id} className="p-3 -mx-3 pb-6 transition-colors">
                         <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <span className="font-medium">{sellerOrder.code}</span>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    render={
-                                        <Link
-                                            to={`/orders/${orderId}/seller-orders/${sellerOrder.id}`}
-                                            preload={false}
-                                        />
-                                    }
-                                >
-                                    <Trans>View</Trans>
-                                </Button>
-                            </div>
+                            <DetailPageButton
+                                label={sellerOrder.code}
+                                href={`/orders/${orderId}/seller-orders/${sellerOrder.id}`}
+                            />
                             <div className="text-sm font-medium">
                                 {formatCurrency(sellerOrder.totalWithTax, sellerOrder.currencyCode)}
                             </div>
@@ -67,9 +54,7 @@ export function SellerOrdersCard({ orderId }: Readonly<SellerOrdersCardProps>) {
                             <div className="flex gap-2">
                                 {seller && <Badge variant={'secondary'}>{seller.name}</Badge>}
                             </div>
-                            <Badge variant={stateTypeToBadgeVariant(getTypeForState(sellerOrder.state))}>
-                                {getTranslatedOrderState(sellerOrder.state)}
-                            </Badge>
+                            <Badge variant={stateTypeToBadgeVariant(getTypeForState(sellerOrder.state))}>{getTranslatedOrderState(sellerOrder.state)}</Badge>
                         </div>
                     </div>
                 );

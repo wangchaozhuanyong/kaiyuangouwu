@@ -531,8 +531,8 @@ export function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLang
                     <RotateCcw aria-hidden="true" />
                 </div>
                 <div className="trust-text">
-                    <strong>{isZh ? '售后入口' : 'Returns'}</strong>
-                    <small>{isZh ? '可在订单内提交申请' : 'Request a return from an order'}</small>
+                    <strong>{isZh ? '售后入口' : 'After-sales'}</strong>
+                    <small>{isZh ? '可在订单内提交申请' : 'Request support from an order'}</small>
                 </div>
             </div>
         </section>
@@ -577,14 +577,9 @@ export function ManagedContentSection({
             <SectionHeader
                 title={block.title}
                 subtitle={block.subtitle}
-                subtitlePlacement={block.type === 'CATEGORY_AD' ? 'end' : 'below'}
-                action={
-                    block.type !== 'CATEGORY_AD' && blockHasTarget ? block.ctaLabel || undefined : undefined
-                }
+                action={blockHasTarget ? block.ctaLabel || undefined : undefined}
                 onAction={
-                    block.type !== 'CATEGORY_AD' && blockHasTarget
-                        ? () => onContentTarget(block.targetType, block.targetValue)
-                        : undefined
+                    blockHasTarget ? () => onContentTarget(block.targetType, block.targetValue) : undefined
                 }
             />
             {block.body && <p className="managed-content-body">{block.body}</p>}

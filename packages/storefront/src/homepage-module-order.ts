@@ -26,12 +26,6 @@ export interface HomepageModuleEntry {
     virtual: boolean;
 }
 
-const desktopIntroModuleTypes = [
-    'HERO',
-    'TRUST_BAR',
-    'QUICK_LINKS',
-] as const satisfies readonly FixedHomepageModuleType[];
-
 const defaults: ReadonlyArray<{
     type: FixedHomepageModuleType;
     position: number;
@@ -95,21 +89,6 @@ export function homepageModuleEntries(
     return [...entries, ...customEntries].sort(
         (a, b) => a.position - b.position || defaultIndex(a.type) - defaultIndex(b.type),
     );
-}
-
-/**
- * The desktop hero/sidebar composition is only safe when its three modules are
- * adjacent and keep the intended visual order. Any merchant reordering falls
- * back to full-width modules so the persisted homepage order remains exact.
- */
-export function desktopIntroModuleOrder(entries: HomepageModuleEntry[]): number | null {
-    const startIndex = entries.findIndex(entry => entry.type === desktopIntroModuleTypes[0]);
-    if (startIndex < 0) return null;
-
-    const isCanonicalGroup = desktopIntroModuleTypes.every(
-        (type, offset) => entries[startIndex + offset]?.type === type,
-    );
-    return isCanonicalGroup ? startIndex : null;
 }
 
 function defaultIndex(type: HomepageModuleEntry['type']): number {

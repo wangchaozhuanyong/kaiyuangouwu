@@ -19,8 +19,6 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { smartParseAddressText } from './address-parser';
 import { ShopApi } from './api';
-import { compactUiCopy } from './i18n';
-import { formatDisplayMoney } from './money-display';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
@@ -86,7 +84,6 @@ export function CheckoutPage({
     const navigateTo = (route: CheckoutRoute, replace = false) =>
         void navigate({ ...routeNavigateOptions(route), replace } as never);
     const isZh = language === 'zh';
-    const compactCopy = compactUiCopy[language];
     const directPurchase = mode === 'purchase';
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
@@ -789,7 +786,7 @@ export function CheckoutPage({
                     </span>
                     <span>
                         <RotateCcw />
-                        {compactCopy.orders.returns}
+                        {isZh ? '售后支持' : 'After-sales'}
                     </span>
                 </section>
                 {formError && <InlineError message={formError} />}
@@ -953,7 +950,7 @@ function CheckoutItemsGroup({
                                             : 'Processed by the merchant after payment with order and email updates'
                                         : isZh
                                           ? '配送与售后信息以订单为准'
-                                          : 'Returns available'}
+                                          : 'After-sales support'}
                             </em>
                         </div>
                         <span className={checkoutPageClassName('checkout-line-meta')}>
@@ -1352,7 +1349,12 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
     return <SafeImage src={src} alt={alt} imageKind="thumbnail" loading="lazy" decoding="async" />;
 }
 function formatMoney(value: number, currency: string, locale: string) {
-    return formatDisplayMoney(value, currency, locale);
+    return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    }).format(value / 100);
 }
 function addressText(address: CustomerAddress) {
     return [address.province, address.city, address.streetLine1, address.streetLine2, address.postalCode]

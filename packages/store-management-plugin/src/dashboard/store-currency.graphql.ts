@@ -15,17 +15,6 @@ const storeCurrencyConfigurationFields = gql`
         rateUpdatedAt
         pricesUpdatedAt
         syncedPriceCount
-        usdtDisplayEnabled
-        usdtMarkupPercent
-        cnyPerUsdtRate
-        myrPerUsdtRate
-        usdtRateSource
-        usdtRateUpdatedAt
-        usdtRateAvailable
-        usdtPaymentConfigured
-        usdtPaymentNetwork
-        usdtReceivingAddressMasked
-        usdtReceivingAddressFingerprint
     }
 `;
 
@@ -34,19 +23,6 @@ export const myStoreCurrencyConfigurationQuery = gql`
     query MyStoreCurrencyConfiguration {
         myStoreCurrencyConfiguration {
             ...StoreCurrencyConfigurationFields
-        }
-        myStoreUsdtPaymentIntents {
-            id
-            orderId
-            orderCode
-            network
-            expectedUsdtAmount
-            status
-            transactionId
-            failureReason
-            createdAt
-            expiresAt
-            settledAt
         }
     }
 `;
@@ -78,15 +54,6 @@ export const syncMyStoreCurrencyPricesMutation = gql`
     }
 `;
 
-export const refreshMyStoreUsdtRateMutation = gql`
-    ${storeCurrencyConfigurationFields}
-    mutation RefreshMyStoreUsdtRate {
-        refreshMyStoreUsdtRate {
-            ...StoreCurrencyConfigurationFields
-        }
-    }
-`;
-
 export type CurrencyRateMode = 'AUTO' | 'MANUAL';
 export type CurrencyRoundingMode = 'CENT' | 'TENTH' | 'WHOLE';
 
@@ -104,36 +71,10 @@ export interface StoreCurrencyConfigurationRecord {
     rateUpdatedAt: string | null;
     pricesUpdatedAt: string | null;
     syncedPriceCount: number;
-    usdtDisplayEnabled: boolean;
-    usdtMarkupPercent: number;
-    cnyPerUsdtRate: number | null;
-    myrPerUsdtRate: number | null;
-    usdtRateSource: string | null;
-    usdtRateUpdatedAt: string | null;
-    usdtRateAvailable: boolean;
-    usdtPaymentConfigured: boolean;
-    usdtPaymentNetwork: string;
-    usdtReceivingAddressMasked: string | null;
-    usdtReceivingAddressFingerprint: string | null;
 }
 
 export interface MyStoreCurrencyConfigurationResult {
     myStoreCurrencyConfiguration: StoreCurrencyConfigurationRecord;
-    myStoreUsdtPaymentIntents: StoreUsdtPaymentIntentRecord[];
-}
-
-export interface StoreUsdtPaymentIntentRecord {
-    id: string;
-    orderId: string;
-    orderCode: string;
-    network: string;
-    expectedUsdtAmount: number;
-    status: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED';
-    transactionId: string | null;
-    failureReason: string | null;
-    createdAt: string;
-    expiresAt: string;
-    settledAt: string | null;
 }
 
 export interface UpdateStoreCurrencyConfigurationResult {
@@ -146,8 +87,4 @@ export interface RefreshStoreExchangeRateResult {
 
 export interface SyncStoreCurrencyPricesResult {
     syncMyStoreCurrencyPrices: StoreCurrencyConfigurationRecord;
-}
-
-export interface RefreshStoreUsdtRateResult {
-    refreshMyStoreUsdtRate: StoreCurrencyConfigurationRecord;
 }

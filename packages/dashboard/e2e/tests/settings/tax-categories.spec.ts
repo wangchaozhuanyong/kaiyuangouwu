@@ -15,8 +15,6 @@ test.describe('Tax Categories', () => {
         listTitle: 'Tax Categories',
         newButtonLabel: 'New Tax Category',
         newPageTitle: 'New tax category',
-        createPresentation: 'drawer',
-        editPresentation: 'drawer',
         createFields: [{ label: 'Name', value: 'E2E Test Tax' }],
         updateFields: [{ label: 'Name', value: 'E2E Test Tax Updated' }],
         hasBulkDelete: true,

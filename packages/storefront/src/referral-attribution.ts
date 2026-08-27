@@ -40,12 +40,13 @@ export function readReferralAttribution(
         if (!value) return null;
         const parsed = JSON.parse(value) as Partial<StoredReferralAttribution>;
         const code = normalizeReferralCode(parsed.code);
-        const capturedAt = parsed.capturedAt;
-        if (!code || typeof capturedAt !== 'number' || !Number.isFinite(capturedAt)) return null;
+        if (!code || typeof parsed.capturedAt !== 'number' || !Number.isFinite(parsed.capturedAt)) {
+            return null;
+        }
         return {
             code,
             source: parsed.source === 'POSTER' ? 'POSTER' : parsed.source === 'CODE' ? 'CODE' : 'LINK',
-            capturedAt,
+            capturedAt: parsed.capturedAt,
         };
     } catch {
         return null;

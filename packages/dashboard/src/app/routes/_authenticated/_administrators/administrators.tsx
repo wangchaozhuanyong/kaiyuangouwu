@@ -1,3 +1,4 @@
+import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { RoleCodeLabel } from '@/vdb/components/shared/role-code-label.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
@@ -42,7 +43,12 @@ function AdministratorListPage() {
                 name: {
                     meta: { dependencies: ['id', 'firstName', 'lastName'] },
                     header: () => <Trans>Name</Trans>,
-                    cell: ({ row }) => <span>{`${row.original.firstName} ${row.original.lastName}`}</span>,
+                    cell: ({ row }) => (
+                        <DetailPageButton
+                            id={row.original.id}
+                            label={`${row.original.firstName} ${row.original.lastName}`}
+                        />
+                    ),
                 },
                 roles: {
                     meta: { dependencies: ['user'] },
@@ -75,7 +81,6 @@ function AdministratorListPage() {
                 name: true,
             }}
             defaultColumnOrder={['name', 'emailAddress', 'roles']}
-            primaryRowAction={{ label: <Trans>Edit</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[
                 {
                     component: DeleteAdministratorsBulkAction,

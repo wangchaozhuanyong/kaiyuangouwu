@@ -4,25 +4,15 @@ import { Allow, Ctx, Permission, RequestContext, Transaction } from '@vendure/co
 import { storeProfilePermission } from './constants';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
 import { UpdateStoreCurrencyConfigurationInput } from './types';
-import { UsdtPaymentService } from './usdt/usdt-payment.service';
 
 @Resolver()
 export class StoreCurrencySettingsAdminResolver {
-    constructor(
-        private readonly currencySettings: StoreCurrencySettingsService,
-        private readonly usdtPayments: UsdtPaymentService,
-    ) {}
+    constructor(private readonly currencySettings: StoreCurrencySettingsService) {}
 
     @Query()
     @Allow(storeProfilePermission.Read)
     myStoreCurrencyConfiguration(@Ctx() ctx: RequestContext) {
         return this.currencySettings.get(ctx);
-    }
-
-    @Query()
-    @Allow(storeProfilePermission.Read)
-    myStoreUsdtPaymentIntents(@Ctx() ctx: RequestContext) {
-        return this.usdtPayments.listForChannel(ctx);
     }
 
     @Transaction()
@@ -48,13 +38,6 @@ export class StoreCurrencySettingsAdminResolver {
     syncMyStoreCurrencyPrices(@Ctx() ctx: RequestContext) {
         return this.currencySettings.syncPrices(ctx);
     }
-
-    @Transaction()
-    @Mutation()
-    @Allow(storeProfilePermission.Update)
-    refreshMyStoreUsdtRate(@Ctx() ctx: RequestContext) {
-        return this.currencySettings.refreshUsdtRate(ctx);
-    }
 }
 
 @Resolver()
@@ -65,12 +48,5 @@ export class StoreCurrencySettingsShopResolver {
     @Allow(Permission.Public)
     storefrontCurrencyConfiguration(@Ctx() ctx: RequestContext) {
         return this.currencySettings.getPublic(ctx);
-    }
-
-    @Transaction()
-    @Mutation()
-    @Allow(Permission.Owner)
-    createStorefrontUsdtCheckoutQuote(@Ctx() ctx: RequestContext) {
-        return this.currencySettings.createCheckoutUsdtQuote(ctx);
     }
 }

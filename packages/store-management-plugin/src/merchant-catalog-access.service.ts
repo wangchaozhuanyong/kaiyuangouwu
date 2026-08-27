@@ -70,13 +70,6 @@ const platformOrderMutations = new Set([
     'deleteOrderNote',
 ]);
 
-const managedPromotionMutations = new Set([
-    'createPromotion',
-    'updatePromotion',
-    'deletePromotion',
-    'deletePromotions',
-]);
-
 interface CatalogMutationInput {
     assetId?: ID;
     assetIds?: ID[];
@@ -123,9 +116,6 @@ export class MerchantCatalogAccessService {
             return;
         }
         if (channelTransferMutations.has(fieldName)) {
-            throw new ForbiddenError();
-        }
-        if (managedPromotionMutations.has(fieldName)) {
             throw new ForbiddenError();
         }
         if (this.isPlatformOrderMutation(fieldName)) {
@@ -264,7 +254,7 @@ export class MerchantCatalogAccessService {
         if (Array.isArray(input)) {
             return input as CatalogMutationInput[];
         }
-        return input && typeof input === 'object' ? [input] : [];
+        return input && typeof input === 'object' ? [input as CatalogMutationInput] : [];
     }
 
     private async assertExclusiveCatalogEntities(

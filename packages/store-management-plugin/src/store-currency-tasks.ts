@@ -1,7 +1,6 @@
 import { ScheduledTask } from '@vendure/core';
 
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
-import { UsdtPaymentService } from './usdt/usdt-payment.service';
 
 /**
  * The Vendure runtime sets TZ=Asia/Shanghai before the scheduler starts, so this
@@ -14,25 +13,5 @@ export const syncAutomaticStoreCurrencyPricesTask = new ScheduledTask({
     timeout: '10m',
     async execute({ injector, scheduledContext }) {
         return injector.get(StoreCurrencySettingsService).syncAllAutomaticPrices(scheduledContext);
-    },
-});
-
-export const refreshStoreUsdtRatesTask = new ScheduledTask({
-    id: 'refresh-store-usdt-rates',
-    description: 'Refresh the Binance and OKX P2P merchant median CNY/USDT rate every five minutes',
-    schedule: '*/5 * * * *',
-    timeout: '2m',
-    async execute({ injector, scheduledContext }) {
-        return injector.get(StoreCurrencySettingsService).refreshAllEnabledUsdtRates(scheduledContext);
-    },
-});
-
-export const reconcileStoreUsdtPaymentsTask = new ScheduledTask({
-    id: 'reconcile-store-usdt-payments',
-    description: 'Discover solidified USDT-TRC20 transfers and settle matching Vendure orders',
-    schedule: '* * * * *',
-    timeout: '2m',
-    async execute({ injector, scheduledContext }) {
-        return injector.get(UsdtPaymentService).scanPendingPayments(scheduledContext);
     },
 });

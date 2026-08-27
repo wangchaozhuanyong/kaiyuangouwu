@@ -105,14 +105,7 @@ function DraggableRow<TData>({ row, isDragDisabled, getRowCanDrag }: Readonly<Dr
                 .getVisibleCells()
                 .filter(cell => cell.column.id !== '__drag_handle__')
                 .map(cell => (
-                    <TableCell
-                        key={cell.id}
-                        className={cn(
-                            'h-12',
-                            cell.column.id === 'actions' &&
-                                'sticky right-0 z-10 w-px whitespace-nowrap border-l bg-card',
-                        )}
-                    >
+                    <TableCell key={cell.id} className="h-12">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                 ))}
@@ -236,7 +229,6 @@ export function DataTable<TData>({
         defaultColumnVisibility ?? {},
     );
     const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
-    const searchInputRef = useRef<HTMLInputElement>(null);
     const prevSearchTermRef = useRef(searchTerm);
     const prevColumnFiltersRef = useRef(columnFilters);
 
@@ -350,21 +342,6 @@ export function DataTable<TData>({
         prevColumnFiltersRef.current = columnFilters;
     }, [columnFilters]);
 
-    useEffect(() => {
-        if (!onSearchTermChange) return;
-        const handleSearchShortcut = (event: KeyboardEvent) => {
-            const target = event.target as HTMLElement | null;
-            const isTyping =
-                target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
-            if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey && !isTyping) {
-                event.preventDefault();
-                searchInputRef.current?.focus();
-            }
-        };
-        document.addEventListener('keydown', handleSearchShortcut);
-        return () => document.removeEventListener('keydown', handleSearchShortcut);
-    }, [onSearchTermChange]);
-
     const handleSearchChange = (value: string) => {
         setSearchTerm(value);
         onSearchTermChange?.(value);
@@ -404,9 +381,7 @@ export function DataTable<TData>({
                         <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                             {onSearchTermChange && (
                                 <Input
-                                    ref={searchInputRef}
                                     data-testid="dt-search-input"
-                                    aria-keyshortcuts="/"
                                     placeholder={searchPlaceholder ?? t`Search or filter...`}
                                     value={searchTerm}
                                     onChange={event => handleSearchChange(event.target.value)}
@@ -526,13 +501,7 @@ export function DataTable<TData>({
                                     <TableRow key={headerGroup.id}>
                                         {headerGroup.headers.map(header => {
                                             return (
-                                                <TableHead
-                                                    key={header.id}
-                                                    className={cn(
-                                                        header.column.id === 'actions' &&
-                                                            'sticky right-0 z-20 w-px whitespace-nowrap border-l bg-card',
-                                                    )}
-                                                >
+                                                <TableHead key={header.id}>
                                                     {header.isPlaceholder
                                                         ? null
                                                         : flexRender(
@@ -653,14 +622,7 @@ export function DataTable<TData>({
                                                         className="animate-in fade-in duration-100"
                                                     >
                                                         {row.getVisibleCells().map(cell => (
-                                                            <TableCell
-                                                                key={cell.id}
-                                                                className={cn(
-                                                                    'h-12',
-                                                                    cell.column.id === 'actions' &&
-                                                                        'sticky right-0 z-10 w-px whitespace-nowrap border-l bg-card',
-                                                                )}
-                                                            >
+                                                            <TableCell key={cell.id} className="h-12">
                                                                 {flexRender(
                                                                     cell.column.columnDef.cell,
                                                                     cell.getContext(),

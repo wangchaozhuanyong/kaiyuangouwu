@@ -4,7 +4,6 @@ import { WifiOff } from 'lucide-react';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from './api';
-import { categoryTargetSelection } from './category-navigation';
 import { BottomNavigation } from './components/common/bottom-navigation';
 import { normalizeHeroAutoplayIntervalSeconds } from './hero-carousel';
 import { buildBestSellerProducts, buildRecommendationProducts } from './home-merchandising';
@@ -19,7 +18,6 @@ import {
     uiCopy,
 } from './i18n';
 import { offlineLoadError, QueryLoadState, resolveQueryLoadState } from './loading-state';
-import { configureMoneyDisplay } from './money-display';
 import { orderStatusRefreshInterval } from './order-refresh';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -74,8 +72,6 @@ export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
 export const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
 export const STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY = 'storefront-language-preference-v2';
 export const STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY = 'storefront-currency-preference-v1';
-export const STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY =
-    'storefront-settlement-currency-preference-v1';
 export const FAVORITE_PRODUCT_LIMIT = 100;
 export const RECENT_PRODUCT_LIMIT = 20;
 
@@ -134,32 +130,6 @@ export function writeStoredCurrency(marketCode: string, currencyCode: string): v
     try {
         localStorage.setItem(
             scopedStorageKey(STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY, marketCode),
-            currencyCode,
-        );
-    } catch {
-        // The in-memory choice still works for this page lifetime.
-    }
-}
-
-export function readStoredSettlementCurrency(market: MarketConfig, available?: readonly string[]): string {
-    try {
-        const stored = localStorage.getItem(
-            scopedStorageKey(STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY, market.code),
-        );
-        if (stored && stored !== 'USDT' && (!available || available.includes(stored))) return stored;
-    } catch {
-        // A disabled localStorage must not prevent the storefront from loading.
-    }
-    return available?.includes(market.currencyCode)
-        ? market.currencyCode
-        : (available?.[0] ?? market.currencyCode);
-}
-
-export function writeStoredSettlementCurrency(marketCode: string, currencyCode: string): void {
-    if (currencyCode === 'USDT') return;
-    try {
-        localStorage.setItem(
-            scopedStorageKey(STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY, marketCode),
             currencyCode,
         );
     } catch {
@@ -283,15 +253,12 @@ export function App() {
         language: StorefrontLanguage;
     }>(() => {
         const initialMarket = enabledMarkets[0];
-        const currencyCode = readStoredSettlementCurrency(initialMarket);
+        const currencyCode = readStoredCurrency(initialMarket);
         return {
             market: { ...initialMarket, currencyCode },
             language: readStoredLanguage(initialMarket),
         };
     });
-    const [displayCurrencyCode, setDisplayCurrencyCode] = useState(() =>
-        readStoredCurrency(enabledMarkets[0]),
-    );
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
     const [storefrontNames, setStorefrontNames] =
@@ -369,13 +336,6 @@ export function App() {
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
-        refetchInterval: 60_000,
-    });
-    configureMoneyDisplay({
-        displayCurrencyCode,
-        cnyPerUsdtRate: configQuery.data?.currencyConfiguration?.cnyPerUsdtRate ?? null,
-        myrPerUsdtRate: configQuery.data?.currencyConfiguration?.myrPerUsdtRate ?? null,
-        usdtMarkupPercent: configQuery.data?.currencyConfiguration?.usdtMarkupPercent ?? 0,
     });
     const contentQuery = useQuery({
         queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
@@ -641,7 +601,7 @@ export function App() {
         if (!customer) return;
         await queryClient.invalidateQueries({
             queryKey: storefrontQueryKeys.customerScope(market.code, vendureLanguageCode, customer.id),
-            refetchType: 'none',
+            refetchType: 'active',
         });
     }, [customer, market.code, queryClient, vendureLanguageCode]);
     const productQuery = useQuery({
@@ -757,25 +717,16 @@ export function App() {
         const nextStorefrontCode = config.code;
         const configuredMarket = marketForStorefrontConfig(config, market);
         const currencyConfiguration = config.currencyConfiguration;
-        const settlementCurrencyCodes = currencyConfiguration?.availableCurrencyCodes.length
+        const nextAvailableCurrencyCodes = currencyConfiguration?.availableCurrencyCodes.length
             ? currencyConfiguration.availableCurrencyCodes
             : [configuredMarket.currencyCode];
-        const nextAvailableCurrencyCodes = [
-            ...settlementCurrencyCodes,
-            ...(currencyConfiguration?.usdtDisplayEnabled && currencyConfiguration.usdtRateAvailable
-                ? ['USDT']
-                : []),
-        ];
-        const selectedDisplayCurrency = readStoredCurrency(configuredMarket, nextAvailableCurrencyCodes);
-        const selectedSettlementCurrency =
-            selectedDisplayCurrency === 'USDT'
-                ? readStoredSettlementCurrency(configuredMarket, settlementCurrencyCodes)
-                : selectedDisplayCurrency;
-        const nextMarket = { ...configuredMarket, currencyCode: selectedSettlementCurrency };
+        const selectedCurrency = nextAvailableCurrencyCodes.includes(market.currencyCode)
+            ? market.currencyCode
+            : readStoredCurrency(configuredMarket, nextAvailableCurrencyCodes);
+        const nextMarket = { ...configuredMarket, currencyCode: selectedCurrency };
         setAvailableCountries(config.availableCountries);
         setAvailableCurrencyCodes(nextAvailableCurrencyCodes);
         setCurrencySelectorEnabled(currencyConfiguration?.selectorEnabled === true);
-        setDisplayCurrencyCode(selectedDisplayCurrency);
         if (
             nextMarket.code !== market.code ||
             nextMarket.defaultLanguageCode !== market.defaultLanguageCode ||
@@ -992,10 +943,9 @@ export function App() {
                 return;
             }
             if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
-                const target = categoryTargetSelection(collections, value);
-                setActiveCollectionId(target.collectionId);
-                setActiveChildId(target.childId);
-                navigate({ name: 'category', ...target });
+                setActiveCollectionId(value);
+                setActiveChildId(value);
+                navigate({ name: 'category', collectionId: value, childId: value });
                 return;
             }
             if (targetType === 'SEARCH') {
@@ -1026,7 +976,7 @@ export function App() {
                 window.open(value, '_blank', 'noopener,noreferrer');
             }
         },
-        [collections, navigate],
+        [navigate],
     );
 
     const applyCoupon = useCallback(
@@ -1198,7 +1148,7 @@ export function App() {
                     refetchType: 'none',
                 });
             }
-            notify(isZh ? '售后申请已提交' : 'Return request submitted');
+            notify(isZh ? '售后申请已提交' : 'After-sales request submitted');
             navigate({ name: 'orders', tab: 'service' });
         },
         [api, customer, isZh, market.code, navigate, notify, queryClient, vendureLanguageCode],
@@ -1268,7 +1218,6 @@ export function App() {
             addresses: isZh ? '地址管理' : 'Addresses',
             'account-security': isZh ? '账户与安全' : 'Account and security',
             favorites: isZh ? '我的收藏' : 'My favorites',
-            announcements: isZh ? '网站公告' : 'Website notices',
             history: isZh ? '浏览足迹' : 'Browsing history',
             notifications: isZh ? '消息通知' : 'Notifications',
             coupons: isZh ? '优惠券' : 'Coupons',
@@ -1399,7 +1348,7 @@ export function App() {
     const switchCurrency = useCallback(
         async (currencyCode: string) => {
             if (
-                currencyCode === displayCurrencyCode ||
+                currencyCode === market.currencyCode ||
                 !availableCurrencyCodes.includes(currencyCode) ||
                 cartLoading
             ) {
@@ -1408,20 +1357,16 @@ export function App() {
             setCartLoading(true);
             setCartError(null);
             try {
-                if (currencyCode !== 'USDT' && cart?.checkoutOrder && currencyCode !== market.currencyCode) {
+                if (cart?.checkoutOrder) {
                     const updatedOrder = await api.setCurrencyForOrder(currencyCode);
                     setCheckoutOrder(updatedOrder);
                 }
                 writeStoredCurrency(market.code, currencyCode);
-                writeStoredSettlementCurrency(market.code, currencyCode);
-                setDisplayCurrencyCode(currencyCode);
-                if (currencyCode !== 'USDT' && currencyCode !== market.currencyCode) {
-                    setStorefrontContext(current => ({
-                        ...current,
-                        market: { ...current.market, currencyCode },
-                    }));
-                    queryClient.removeQueries({ queryKey: ['storefront', market.code] });
-                }
+                setStorefrontContext(current => ({
+                    ...current,
+                    market: { ...current.market, currencyCode },
+                }));
+                queryClient.removeQueries({ queryKey: ['storefront', market.code] });
                 notify(
                     language === 'zh'
                         ? `已切换为 ${currencyCode} 价格`
@@ -1440,7 +1385,6 @@ export function App() {
             availableCurrencyCodes,
             cart?.checkoutOrder,
             cartLoading,
-            displayCurrencyCode,
             language,
             market.code,
             market.currencyCode,
@@ -1509,7 +1453,6 @@ export function App() {
         availableCountries,
         availableCurrencyCodes,
         currencySelectorEnabled,
-        displayCurrencyCode,
         addingVariantId,
         claimedCampaignIds,
         cart,

@@ -1,15 +1,15 @@
+import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { PaginatedListDataTable } from '@/vdb/components/shared/paginated-list-data-table.js';
 import { Button } from '@/vdb/components/ui/button.js';
-import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { Link } from '@tanstack/react-router';
 import { SortingState } from '@tanstack/react-table';
 import { PlusIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { DeleteFacetValuesBulkAction } from './facet-value-bulk-actions.js';
-import { FacetValueEditorSheet } from './facet-value-editor-sheet.js';
 
 const pageId = 'facet-values-table';
 
@@ -32,23 +32,15 @@ export const facetValueListDocument = graphql(`
 export interface FacetValuesTableProps {
     facetId: string;
     registerRefresher?: (refresher: () => void) => void;
-    onEditFacetValue?: (facetValue: { id: string; name: string }) => void;
-    onAddFacetValue?: () => void;
 }
 
-export function FacetValuesTable({
-    facetId,
-    registerRefresher,
-    onEditFacetValue,
-    onAddFacetValue,
-}: Readonly<FacetValuesTableProps>) {
+export function FacetValuesTable({ facetId, registerRefresher }: Readonly<FacetValuesTableProps>) {
     const { t } = useLingui();
     const [sorting, setSorting] = useState<SortingState>([]);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const { setTableSettings, settings } = useUserSettings();
     const refreshRef = useRef<() => void>(() => {});
-    const [selectedFacetValue, setSelectedFacetValue] = useState<{ id: string; name?: string }>();
 
     const tableSettings = pageId ? settings.tableSettings?.[pageId] : undefined;
     const defaultVisibility = {
@@ -64,22 +56,6 @@ export function FacetValuesTable({
 
     return (
         <>
-            <div className="mb-4 flex justify-end">
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                        if (onAddFacetValue) {
-                            onAddFacetValue();
-                        } else {
-                            setSelectedFacetValue({ id: NEW_ENTITY_PATH });
-                        }
-                    }}
-                >
-                    <PlusIcon />
-                    <Trans>Add facet value</Trans>
-                </Button>
-            </div>
             <PaginatedListDataTable
                 listQuery={addCustomFields(facetValueListDocument)}
                 page={page}
@@ -135,18 +111,13 @@ export function FacetValuesTable({
                 customizeColumns={{
                     name: {
                         header: t`Name`,
-                        cell: ({ row }) => <span>{row.original.name}</span>,
-                    },
-                }}
-                primaryRowAction={{
-                    label: <Trans>Edit</Trans>,
-                    onClick: row => {
-                        const facetValue = { id: row.original.id, name: row.original.name };
-                        if (onEditFacetValue) {
-                            onEditFacetValue(facetValue);
-                        } else {
-                            setSelectedFacetValue(facetValue);
-                        }
+                        cell: ({ row }) => (
+                            <DetailPageButton
+                                id={row.original.id}
+                                label={row.original.name}
+                                href={`/facets/${facetId}/values/${row.original.id}`}
+                            />
+                        ),
                     },
                 }}
                 bulkActions={[
@@ -155,20 +126,12 @@ export function FacetValuesTable({
                     },
                 ]}
             />
-            {!onEditFacetValue && !onAddFacetValue && (
-                <FacetValueEditorSheet
-                    open={Boolean(selectedFacetValue)}
-                    facetId={facetId}
-                    facetValueId={selectedFacetValue?.id}
-                    facetValueName={selectedFacetValue?.name}
-                    onOpenChange={open => {
-                        if (!open) {
-                            setSelectedFacetValue(undefined);
-                            refreshRef.current();
-                        }
-                    }}
-                />
-            )}
+            <div className="mt-4">
+                <Button render={<Link to={`/facets/${facetId}/values/new`} />} variant="outline">
+                    <PlusIcon />
+                    <Trans>Add facet value</Trans>
+                </Button>
+            </div>
         </>
     );
 }

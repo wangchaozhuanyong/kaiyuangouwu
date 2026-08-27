@@ -4,6 +4,10 @@ import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { createCrudTestSuite } from '../../utils/crud-test-factory.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
+// Every suite in this file mutates the same collection tree. Running them in
+// parallel can make a list refresh race with another suite's create/delete.
+test.describe.configure({ mode: 'serial' });
+
 // #4388 — When navigating to a collection detail page and back, the previously
 // expanded collection rows should be re-expanded. The fix persists expanded IDs
 // in the URL (?expanded=1,2) so the tree is restored on re-mount.
@@ -231,7 +235,7 @@ test('deletes a product group from the list row actions', async ({ page }) => {
     await client.login();
     const suffix = Date.now();
     const collectionName = `E2E Row Delete ${suffix}`;
-    const { createCollection } = await client.gql(
+    await client.gql(
         `mutation ($input: CreateCollectionInput!) {
             createCollection(input: $input) { id }
         }`,
@@ -249,32 +253,20 @@ test('deletes a product group from the list row actions', async ({ page }) => {
             },
         },
     );
-    const collectionId = createCollection.id as string;
 
-    try {
-        await page.goto('/collections');
-        await page.getByPlaceholder('Search product group names...').fill(collectionName);
+    await page.goto('/collections');
+    await page.getByPlaceholder('Search product group names...').fill(collectionName);
 
-        const row = page.locator('tbody tr').filter({ has: page.getByText(collectionName) });
-        await expect(row).toBeVisible({ timeout: 10_000 });
-        await row.getByRole('button', { name: 'Delete', exact: true }).click();
+    const row = page.locator('tbody tr').filter({ has: page.getByText(collectionName) });
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.getByRole('button', { name: 'Delete', exact: true }).click();
 
-        const dialog = page.getByRole('alertdialog');
-        await expect(dialog.getByText('Confirm deletion')).toBeVisible();
-        await dialog.getByRole('button', { name: 'Delete' }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog.getByText('Confirm deletion')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Delete' }).click();
 
-        await expect(page.getByText('Deleted successfully')).toBeVisible({ timeout: 10_000 });
-        await expect(row).toBeHidden();
-    } finally {
-        const { collection } = await client.gql(`query ($id: ID!) { collection(id: $id) { id } }`, {
-            id: collectionId,
-        });
-        if (collection) {
-            await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
-                id: collectionId,
-            });
-        }
-    }
+    await expect(page.getByText('Deleted successfully')).toBeVisible({ timeout: 10_000 });
+    await expect(row).toBeHidden();
 });
 
 createCrudTestSuite({

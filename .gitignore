@@ -406,14 +406,7 @@ plans/
 
 # Local visual QA evidence (not part of production artifacts)
 /design-qa.md
-/audits/
-/category-ad-*.png
-/featured-collection-*.png
-/support-qr-*.png
-/packages/storefront/audits/
-/packages/storefront/design-qa.md
 /packages/storefront/design-qa/
-/packages/storefront/.tanstack/tmp/
 backups/
 **/.angular/cache/
 playwright-report/

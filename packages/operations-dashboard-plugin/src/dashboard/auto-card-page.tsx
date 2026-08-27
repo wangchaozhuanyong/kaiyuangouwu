@@ -39,18 +39,7 @@ import {
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import {
-    AlertTriangle,
-    ExternalLink,
-    Eye,
-    KeyRound,
-    Plus,
-    RefreshCw,
-    RotateCcw,
-    Save,
-    Trash2,
-    Upload,
-} from 'lucide-react';
+import { AlertTriangle, Eye, KeyRound, Plus, RefreshCw, RotateCcw, Save, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -185,7 +174,6 @@ const messages = {
     noPool: msg({ id: 'operations.autoCard.noPool', message: 'No credentials have been added yet.' }),
     deliveries: msg({ id: 'operations.autoCard.deliveries', message: 'Delivery records' }),
     order: msg({ id: 'operations.autoCard.order', message: 'Order' }),
-    viewOrder: msg({ id: 'operations.autoCard.viewOrder', message: 'View order' }),
     recipient: msg({ id: 'operations.autoCard.recipient', message: 'Delivery email' }),
     attempts: msg({ id: 'operations.autoCard.attempts', message: 'Attempts' }),
     retry: msg({ id: 'operations.autoCard.retry', message: 'Resend same credentials' }),
@@ -1011,7 +999,15 @@ function DeliveryTable({
                     {deliveries.map(delivery => (
                         <TableRow key={delivery.id}>
                             <TableCell>
-                                <div className="font-medium">#{delivery.order.code}</div>
+                                <a
+                                    className="font-medium text-primary hover:underline"
+                                    href={new URL(
+                                        `orders/${encodeURIComponent(delivery.order.id)}`,
+                                        document.baseURI,
+                                    ).toString()}
+                                >
+                                    #{delivery.order.code}
+                                </a>
                                 <div className="text-xs text-muted-foreground">
                                     {delivery.productName} × {delivery.quantity}
                                 </div>
@@ -1027,27 +1023,10 @@ function DeliveryTable({
                             </TableCell>
                             <TableCell className="tabular-nums">{delivery.attemptCount}</TableCell>
                             <TableCell>
-                                <div className="flex flex-wrap gap-1">
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        render={
-                                            <a
-                                                href={new URL(
-                                                    `orders/${encodeURIComponent(delivery.order.id)}`,
-                                                    document.baseURI,
-                                                ).toString()}
-                                            />
-                                        }
-                                    >
-                                        <ExternalLink className="size-4" aria-hidden="true" />
-                                        {text.viewOrder}
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => onRetry(delivery.id)}>
-                                        <RotateCcw className="size-4" aria-hidden="true" />
-                                        {text.retry}
-                                    </Button>
-                                </div>
+                                <Button size="sm" variant="outline" onClick={() => onRetry(delivery.id)}>
+                                    <RotateCcw className="size-4" />
+                                    {text.retry}
+                                </Button>
                             </TableCell>
                         </TableRow>
                     ))}

@@ -664,11 +664,6 @@ msgstr "Valid rows"
 
 #. js-lingui-explicit-id
 #: src/dashboard/auto-card-page.tsx
-msgid "operations.autoCard.viewOrder"
-msgstr "View order"
-
-#. js-lingui-explicit-id
-#: src/dashboard/auto-card-page.tsx
 msgid "operations.autoCard.waiting"
 msgstr "Waiting for stock"
 

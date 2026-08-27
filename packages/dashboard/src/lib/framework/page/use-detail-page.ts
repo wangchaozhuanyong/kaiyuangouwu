@@ -104,10 +104,6 @@ export interface DetailPageOptions<
     transformCreateInput?: (input: VariablesOf<C>[VarNameCreate]) => VariablesOf<C>[VarNameCreate];
     transformUpdateInput?: (input: VariablesOf<U>[VarNameUpdate]) => VariablesOf<U>[VarNameUpdate];
     /**
-     * Optional request headers added only to update mutations.
-     */
-    getUpdateRequestHeaders?: () => HeadersInit | undefined;
-    /**
      * @description
      * Refines the auto-generated Zod schema for this page's form. Use this to declare the
      * fields the user must actually fill in.
@@ -290,7 +286,6 @@ export function useDetailPage<
         setValuesForUpdate,
         transformCreateInput,
         transformUpdateInput,
-        getUpdateRequestHeaders,
         extendSchema,
         params,
         entityField,
@@ -311,7 +306,8 @@ export function useDetailPage<
     const entityQueryField = entityField ?? getQueryName(extendedDetailQuery);
 
     const entity = (detailQuery?.data as any)?.[entityQueryField] as
-        DetailPageEntity<T, EntityField> | undefined;
+        | DetailPageEntity<T, EntityField>
+        | undefined;
 
     // Redirect to the list if the entity is no longer found in the active
     // channel (e.g. after a channel switch).
@@ -333,10 +329,7 @@ export function useDetailPage<
     });
 
     const updateMutation = useMutation({
-        mutationFn: updateDocument
-            ? (variables: VariablesOf<U>) =>
-                  api.mutate(updateDocument, variables, getUpdateRequestHeaders?.())
-            : undefined,
+        mutationFn: updateDocument ? api.mutate(updateDocument) : undefined,
         onSuccess: async data => {
             if (updateDocument) {
                 const updateMutationName = getMutationName(updateDocument);
@@ -364,7 +357,7 @@ export function useDetailPage<
                 createMutation.mutate({ input: finalInput });
             } else {
                 const finalInput = transformUpdateInput?.(filteredValues) ?? filteredValues;
-                updateMutation.mutate({ input: finalInput } as VariablesOf<U>);
+                updateMutation.mutate({ input: finalInput });
             }
         },
     });

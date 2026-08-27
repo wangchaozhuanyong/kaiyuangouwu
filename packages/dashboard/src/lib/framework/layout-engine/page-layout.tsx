@@ -2,7 +2,6 @@ import { PageHelpButton } from '@/vdb/components/help/page-help-button.js';
 import { CustomFieldsForm } from '@/vdb/components/shared/custom-fields-form.js';
 import { NavigationConfirmation } from '@/vdb/components/shared/navigation-confirmation.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
-import { Badge } from '@/vdb/components/ui/badge.js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/vdb/components/ui/card.js';
 import { Form } from '@/vdb/components/ui/form.js';
 import { Skeleton } from '@/vdb/components/ui/skeleton.js';
@@ -32,7 +31,7 @@ import {
 } from '@/vdb/components/ui/dropdown-menu.js';
 import { PageBlockContext } from '@/vdb/framework/layout-engine/page-block-provider.js';
 import { PageContext, PageContextValue } from '@/vdb/framework/layout-engine/page-provider.js';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { Trans } from '@lingui/react/macro';
 import { getDashboardActionBarItems, getDashboardPageBlocks } from './layout-extensions.js';
 import { LocationWrapper } from './location-wrapper.js';
 
@@ -109,14 +108,7 @@ export function Page({ children, pageId, entity, form, submitHandler, ...props }
 
     const pageHeader = (
         <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 shrink items-center gap-2">
-                {pageTitle ?? <div />}
-                {form?.formState.isDirty && (
-                    <Badge variant="warning" className="shrink-0">
-                        <Trans>Unsaved</Trans>
-                    </Badge>
-                )}
-            </div>
+            <div className="min-w-0 shrink">{pageTitle ?? <div />}</div>
             <div className="flex shrink-0 items-center gap-2">
                 <PageHelpButton pageId={pageId} />
                 {pageActionBar}
@@ -175,36 +167,11 @@ export function PageContentWithOptionalForm({
     pageContent: React.ReactNode;
     submitHandler?: any;
 }) {
-    const formElementRef = React.useRef<HTMLFormElement>(null);
-
-    React.useEffect(() => {
-        if (!form) return;
-        const handleSaveShortcut = (event: KeyboardEvent) => {
-            if (event.repeat) return;
-            const isSave = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's';
-            const isSubmit = (event.metaKey || event.ctrlKey) && event.key === 'Enter';
-            if (!isSave && !isSubmit) return;
-            event.preventDefault();
-            if (form.formState.isDirty && form.formState.isValid && !form.formState.isSubmitting) {
-                formElementRef.current?.requestSubmit();
-            }
-        };
-        document.addEventListener('keydown', handleSaveShortcut);
-        return () => document.removeEventListener('keydown', handleSaveShortcut);
-    }, [form, form?.formState.isDirty, form?.formState.isSubmitting, form?.formState.isValid]);
-
     return form ? (
         <Form {...form}>
             <NavigationConfirmation form={form} />
-            <form
-                ref={formElementRef}
-                onSubmit={submitHandler}
-                className="space-y-4"
-                aria-keyshortcuts="Control+S Meta+S Control+Enter Meta+Enter"
-            >
-                <div className="sticky top-0 z-30 -mx-2 border-b bg-background/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-                    {pageHeader}
-                </div>
+            <form onSubmit={submitHandler} className="space-y-4">
+                {pageHeader}
                 {pageContent}
             </form>
         </Form>
@@ -266,7 +233,6 @@ function getBlockColumn(child: React.ReactElement<PageBlockProps>): 'main' | 'si
  */
 export function PageLayout({ children, className, sidePosition = 'right' }: Readonly<PageLayoutProps>) {
     const page = usePage();
-    const { t } = useLingui();
     const isMobile = useIsMobile();
     // Separate blocks into categories
     const childArray: React.ReactElement<PageBlockProps>[] = [];
@@ -375,40 +341,9 @@ export function PageLayout({ children, className, sidePosition = 'right' }: Read
     const sideBlocks = finalChildArray.filter(
         child => isPageBlock(child) && getBlockColumn(child) === 'side',
     );
-    const sectionLinks = page.form
-        ? finalChildArray
-              .filter(child => isPageBlock(child) && child.props.blockId && child.props.title)
-              .map(child => ({ blockId: child.props.blockId!, title: child.props.title! }))
-        : [];
-
-    const sectionNavigation =
-        sectionLinks.length >= 3 ? (
-            <nav
-                aria-label={t`Page sections`}
-                className="sticky top-14 z-20 flex gap-1 overflow-x-auto rounded-md border bg-background/95 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80"
-            >
-                {sectionLinks.map(section => (
-                    <Button
-                        key={section.blockId}
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        onClick={() =>
-                            document
-                                .getElementById(`page-block-${section.blockId}`)
-                                ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                        }
-                    >
-                        {section.title}
-                    </Button>
-                ))}
-            </nav>
-        ) : null;
 
     return (
         <div className={cn('w-full space-y-4', className, '@container/layout')}>
-            {sectionNavigation}
             {isMobile ? (
                 <div className="space-y-4">{finalChildArray}</div>
             ) : (
@@ -1007,14 +942,7 @@ export function PageBlock({
     return (
         <PageBlockContext.Provider value={contextValue}>
             <LocationWrapper>
-                <Card
-                    id={blockId ? `page-block-${blockId}` : undefined}
-                    className={cn(
-                        '@container w-full scroll-mt-32',
-                        className,
-                        'animate-in fade-in duration-300',
-                    )}
-                >
+                <Card className={cn('@container  w-full', className, 'animate-in fade-in duration-300')}>
                     {title || description ? (
                         <CardHeader>
                             {title && <CardTitle>{title}</CardTitle>}
@@ -1048,12 +976,7 @@ export function FullWidthPageBlock({
     return (
         <PageBlockContext.Provider value={contextValue}>
             <LocationWrapper>
-                <div
-                    id={blockId ? `page-block-${blockId}` : undefined}
-                    className={cn('w-full scroll-mt-32', className, 'animate-in fade-in duration-300')}
-                >
-                    {children}
-                </div>
+                <div className={cn('w-full', className, 'animate-in fade-in duration-300')}>{children}</div>
             </LocationWrapper>
         </PageBlockContext.Provider>
     );

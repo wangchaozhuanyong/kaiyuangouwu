@@ -26,7 +26,7 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
-import { compactUiCopy, languageCodeFor } from './i18n';
+import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -82,7 +82,6 @@ export function OrdersPage({
     const navigate = useNavigate();
     const navigateTo = (route: OrderRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
-    const compactCopy = compactUiCopy[language];
     const [tab, setTab] = useState<OrderTab>(initialTab);
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchInput, setSearchInput] = useState('');
@@ -144,7 +143,7 @@ export function OrdersPage({
                 ),
                 current => current?.map(item => (item.id === cancelled.id ? cancelled : item)) ?? [cancelled],
             );
-            onNotify(isZh ? '售后申请已撤销' : 'Return request cancelled');
+            onNotify(isZh ? '售后申请已撤销' : 'After-sales request cancelled');
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
@@ -171,11 +170,11 @@ export function OrdersPage({
                     : 'Could not load orders'
                 : '';
     const tabs: Array<{ id: OrderTab; label: string }> = [
-        { id: 'all', label: compactCopy.orders.all },
-        { id: 'pending', label: compactCopy.orders.unpaid },
-        { id: 'shipping', label: compactCopy.orders.processing },
-        { id: 'receiving', label: compactCopy.orders.shipped },
-        { id: 'service', label: compactCopy.orders.returns },
+        { id: 'all', label: isZh ? '全部' : 'All' },
+        { id: 'pending', label: isZh ? '待付款' : 'To pay' },
+        { id: 'shipping', label: isZh ? '待发货' : 'To ship' },
+        { id: 'receiving', label: isZh ? '待收货' : 'To receive' },
+        { id: 'service', label: isZh ? '售后' : 'After-sales' },
     ];
 
     useEffect(() => setTab(initialTab), [initialTab]);
@@ -183,7 +182,7 @@ export function OrdersPage({
     return (
         <main className={orderPageClassName('page subpage orders-page')}>
             <SubHeader
-                title={compactCopy.orders.title}
+                title={isZh ? '我的订单' : 'My orders'}
                 language={language}
                 onBack={onBack}
                 action={
@@ -507,7 +506,7 @@ export function LogisticsPage({
                     </div>
                     <div className={orderPageClassName('service-strip-item')}>
                         <Sparkles size={13} />
-                        <span>{isZh ? '售后入口可查' : 'Returns available'}</span>
+                        <span>{isZh ? '售后入口可查' : 'After-sales'}</span>
                     </div>
                 </div>
             </div>
@@ -752,7 +751,7 @@ function AfterSalesList({
     return (
         <section
             className={orderPageClassName('after-sales-list')}
-            aria-label={isZh ? '售后申请' : 'Return requests'}
+            aria-label={isZh ? '售后申请' : 'After-sales requests'}
         >
             {requests.map(request => (
                 <article
@@ -984,7 +983,7 @@ export function OrderDetailPage({
                                           : 'Digital · automatic delivery'
                                       : isZh
                                         ? '普通商品 · 售后支持'
-                                        : 'Physical · returns available'}
+                                        : 'Physical · after-sales'}
                             </em>
                         </div>
                         <span>
@@ -1466,7 +1465,6 @@ function OrderCard({
     onBuyAgain: () => void;
 }) {
     const isZh = language === 'zh';
-    const compactCopy = compactUiCopy[language];
     const isPendingPayment = ['AddingItems', 'ArrangingPayment'].includes(order.state);
     const isPaidOrShipping = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
     const isShipped = ['Shipped', 'PartiallyShipped'].includes(order.state);
@@ -1522,7 +1520,7 @@ function OrderCard({
                             {isZh ? '商品信息' : 'Product details'}
                         </span>
                         <span className={orderPageClassName('order-product-tag')}>
-                            {isZh ? '售后入口' : 'Returns'}
+                            {isZh ? '售后入口' : 'After-sales'}
                         </span>
                     </div>
                 </div>
@@ -1543,7 +1541,7 @@ function OrderCard({
                         {isZh ? `共 ${order.totalQuantity} 件` : `${order.totalQuantity} items`}
                     </span>
                     <span className={orderPageClassName('order-total-label')}>
-                        {isPendingPayment ? compactCopy.orders.due : isZh ? '实付' : 'Total'}
+                        {isPendingPayment ? (isZh ? '应付' : 'To pay') : isZh ? '实付' : 'Total'}
                     </span>
                     <strong className={orderPageClassName('order-total-amount')}>
                         {formatMoney(order.totalWithTax, order.currencyCode, locale)}

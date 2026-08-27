@@ -1,9 +1,6 @@
 import { CreatePromotionInput } from '@vendure/common/lib/generated-types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
-import { CouponOrderAllocation } from '../entities/coupon-order-allocation.entity';
-
 import { StorePromotionCampaignService } from './store-promotion-campaign.service';
 
 const ctx = {
@@ -169,7 +166,7 @@ describe('StorePromotionCampaignService', () => {
         expect(harness.softDeletePromotion).not.toHaveBeenCalled();
     });
 
-    it('renames a coupon campaign and its customer-facing snapshots', async () => {
+    it('renames a coupon campaign without rewriting immutable usage records', async () => {
         const promotion = couponPromotion();
         const harness = createHarness({ promotions: [promotion] });
 
@@ -184,83 +181,7 @@ describe('StorePromotionCampaignService', () => {
                 translations: [expect.objectContaining({ name: '新名称' })],
             }),
         );
-        expect(harness.updateEntity).toHaveBeenCalledTimes(2);
-    });
-
-    it('rejects invalid or excessively large coupon report ranges before querying', async () => {
-        const harness = createHarness();
-
-        await expect(
-            harness.service.dailyCouponReport(
-                ctx,
-                new Date('2026-08-26T00:00:00.000Z'),
-                new Date('2026-08-26T00:00:00.000Z'),
-            ),
-        ).rejects.toThrow('结束时间必须晚于开始时间');
-        await expect(
-            harness.service.dailyCouponReport(
-                ctx,
-                new Date('2025-01-01T00:00:00.000Z'),
-                new Date('2026-08-26T00:00:00.000Z'),
-            ),
-        ).rejects.toThrow('最多支持 366 天');
-    });
-
-    it('merges daily coupon lifecycle, redemption, and refund metrics', async () => {
-        const harness = createHarness({
-            reportRows: {
-                ledger: [
-                    {
-                        date: '2026-08-25',
-                        claimedCount: '4',
-                        returnedCount: '1',
-                        expiredCount: '2',
-                        revokedCount: '0',
-                    },
-                ],
-                usage: [
-                    {
-                        date: '2026-08-25',
-                        redeemedCount: '3',
-                        discountAmountTotal: '600',
-                        assistedRevenueTotal: '9000',
-                    },
-                ],
-                refund: [{ date: '2026-08-26', refundedCount: '1' }],
-            },
-        });
-
-        await expect(
-            harness.service.dailyCouponReport(
-                ctx,
-                new Date('2026-08-25T00:00:00.000Z'),
-                new Date('2026-08-27T00:00:00.000Z'),
-                'campaign-1',
-            ),
-        ).resolves.toEqual([
-            {
-                date: '2026-08-25',
-                claimedCount: 4,
-                redeemedCount: 3,
-                refundedCount: 0,
-                returnedCount: 1,
-                expiredCount: 2,
-                revokedCount: 0,
-                discountAmountTotal: 600,
-                assistedRevenueTotal: 9000,
-            },
-            {
-                date: '2026-08-26',
-                claimedCount: 0,
-                redeemedCount: 0,
-                refundedCount: 1,
-                returnedCount: 0,
-                expiredCount: 0,
-                revokedCount: 0,
-                discountAmountTotal: 0,
-                assistedRevenueTotal: 0,
-            },
-        ]);
+        expect(harness.updateEntity).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -268,16 +189,10 @@ function createHarness({
     variants = [],
     promotions = [],
     issuedCount = 0,
-    reportRows,
 }: {
     variants?: any[];
     promotions?: any[];
     issuedCount?: number;
-    reportRows?: {
-        ledger: any[];
-        usage: any[];
-        refund: any[];
-    };
 } = {}) {
     const createPromotion = vi.fn((_ctx: unknown, input: CreatePromotionInput) => promotionFromInput(input));
     const findAllPromotions = vi.fn((_ctx: unknown, options?: { skip?: number; take?: number }) => {
@@ -312,36 +227,13 @@ function createHarness({
         ),
     };
     const updateEntity = vi.fn();
-    let allocationReportQuery = 0;
-    const queryBuilder = (rows: any[]) => {
-        const builder = {
-            select: vi.fn().mockReturnThis(),
-            addSelect: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            andWhere: vi.fn().mockReturnThis(),
-            groupBy: vi.fn().mockReturnThis(),
-            getRawMany: vi.fn().mockResolvedValue(rows),
-        };
-        return builder;
-    };
     const connection = {
         findByIdsInChannel: vi.fn(() => []),
-        getRepository: vi.fn((_ctx, entity) => ({
-            save: vi.fn((value: unknown) => value),
+        getRepository: vi.fn(() => ({
+            save: vi.fn((entity: unknown) => entity),
             find: vi.fn(() => []),
             count: vi.fn(() => issuedCount),
             update: updateEntity,
-            createQueryBuilder:
-                entity === CouponLedgerEntry
-                    ? () => queryBuilder(reportRows?.ledger ?? [])
-                    : entity === CouponOrderAllocation
-                      ? () =>
-                            queryBuilder(
-                                allocationReportQuery++ === 0
-                                    ? (reportRows?.usage ?? [])
-                                    : (reportRows?.refund ?? []),
-                            )
-                      : undefined,
         })),
     };
     const customerService = {

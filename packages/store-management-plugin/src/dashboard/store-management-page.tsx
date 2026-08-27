@@ -8,6 +8,12 @@ import {
     Badge,
     Button,
     DashboardRouteDefinition,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
     ImageSizeHint,
     Input,
     Label,
@@ -21,12 +27,6 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
     Skeleton,
     Textarea,
     api,
@@ -46,7 +46,7 @@ import {
     Store,
     X,
 } from 'lucide-react';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 
 import {
     StoreProfileRecord,
@@ -437,217 +437,198 @@ function ProfileEditor({
     onSave: () => void;
 }>) {
     const [editEnglish, setEditEnglish] = useState(false);
-    const initialDraftRef = useRef('');
-    const initialDraftIdRef = useRef<string | undefined>(undefined);
-    if (draft && draft.id !== initialDraftIdRef.current) {
-        initialDraftIdRef.current = draft.id;
-        initialDraftRef.current = JSON.stringify(draft);
-    }
-    if (!draft) {
-        initialDraftIdRef.current = undefined;
-        initialDraftRef.current = '';
-    }
     useEffect(() => setEditEnglish(false), [draft?.id]);
     if (!draft) return null;
     const update = <K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) =>
         onChange({ ...draft, [field]: value });
-    const requestClose = () => {
-        const isDirty = initialDraftRef.current !== JSON.stringify(draft);
-        if (isDirty && !window.confirm(isZh ? '有未保存的修改，确定放弃吗？' : 'Discard unsaved changes?')) {
-            return;
-        }
-        onClose();
-    };
     return (
         <>
-            <Sheet open onOpenChange={open => !open && requestClose()}>
-                <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
-                    <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
-                        <SheetTitle>{text.editTitle}</SheetTitle>
-                        <SheetDescription>{text.editDescription}</SheetDescription>
-                    </SheetHeader>
-                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                        <div className="grid gap-5 sm:grid-cols-2">
-                            <Field label={text.status} htmlFor="profile-status">
-                                <Select
-                                    value={draft.status}
-                                    onValueChange={value => update('status', value as StoreProfileStatus)}
+            <Dialog open onOpenChange={open => !open && onClose()}>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{text.editTitle}</DialogTitle>
+                        <DialogDescription>{text.editDescription}</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-5 py-2 sm:grid-cols-2">
+                        <Field label={text.status} htmlFor="profile-status">
+                            <Select
+                                value={draft.status}
+                                onValueChange={value => update('status', value as StoreProfileStatus)}
+                            >
+                                <SelectTrigger id="profile-status" className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="DRAFT">{text.draft}</SelectItem>
+                                    <SelectItem value="ACTIVE">{text.active}</SelectItem>
+                                    <SelectItem value="SUSPENDED">{text.suspended}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </Field>
+                        <Field label={text.sortOrder} htmlFor="profile-sort-order">
+                            <Input
+                                id="profile-sort-order"
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={draft.sortOrder}
+                                onChange={event => update('sortOrder', event.target.value)}
+                            />
+                        </Field>
+                        <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">{text.translationHelp}</p>
+                            <div className="flex shrink-0 rounded-md border bg-background p-1">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={editEnglish ? 'ghost' : 'secondary'}
+                                    onClick={() => setEditEnglish(false)}
                                 >
-                                    <SelectTrigger id="profile-status" className="w-full">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="DRAFT">{text.draft}</SelectItem>
-                                        <SelectItem value="ACTIVE">{text.active}</SelectItem>
-                                        <SelectItem value="SUSPENDED">{text.suspended}</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </Field>
-                            <Field label={text.sortOrder} htmlFor="profile-sort-order">
-                                <Input
-                                    id="profile-sort-order"
-                                    type="number"
-                                    min={0}
-                                    step={1}
-                                    value={draft.sortOrder}
-                                    onChange={event => update('sortOrder', event.target.value)}
-                                />
-                            </Field>
-                            <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-xs text-muted-foreground">{text.translationHelp}</p>
-                                <div className="flex shrink-0 rounded-md border bg-background p-1">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={editEnglish ? 'ghost' : 'secondary'}
-                                        onClick={() => setEditEnglish(false)}
-                                    >
-                                        {text.commonMode}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={editEnglish ? 'secondary' : 'ghost'}
-                                        onClick={() => setEditEnglish(true)}
-                                    >
-                                        {text.englishReview}
-                                    </Button>
-                                </div>
+                                    {text.commonMode}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={editEnglish ? 'secondary' : 'ghost'}
+                                    onClick={() => setEditEnglish(true)}
+                                >
+                                    {text.englishReview}
+                                </Button>
                             </div>
-                            <Field
-                                label={text.storefrontNameZh}
-                                htmlFor="profile-name-zh"
-                                className={editEnglish ? undefined : 'sm:col-span-2'}
-                            >
+                        </div>
+                        <Field
+                            label={text.storefrontNameZh}
+                            htmlFor="profile-name-zh"
+                            className={editEnglish ? undefined : 'sm:col-span-2'}
+                        >
+                            <Input
+                                id="profile-name-zh"
+                                value={draft.storefrontNameZh}
+                                onChange={event => update('storefrontNameZh', event.target.value)}
+                            />
+                        </Field>
+                        {editEnglish ? (
+                            <Field label={text.storefrontNameEn} htmlFor="profile-name-en">
                                 <Input
-                                    id="profile-name-zh"
-                                    value={draft.storefrontNameZh}
-                                    onChange={event => update('storefrontNameZh', event.target.value)}
+                                    id="profile-name-en"
+                                    value={draft.storefrontNameEn}
+                                    onChange={event => update('storefrontNameEn', event.target.value)}
                                 />
                             </Field>
-                            {editEnglish ? (
-                                <Field label={text.storefrontNameEn} htmlFor="profile-name-en">
-                                    <Input
-                                        id="profile-name-en"
-                                        value={draft.storefrontNameEn}
-                                        onChange={event => update('storefrontNameEn', event.target.value)}
-                                    />
-                                </Field>
-                            ) : null}
-                            <Field
-                                label={text.descriptionZh}
-                                htmlFor="profile-description-zh"
-                                className={editEnglish ? undefined : 'sm:col-span-2'}
-                            >
+                        ) : null}
+                        <Field
+                            label={text.descriptionZh}
+                            htmlFor="profile-description-zh"
+                            className={editEnglish ? undefined : 'sm:col-span-2'}
+                        >
+                            <Textarea
+                                id="profile-description-zh"
+                                rows={4}
+                                maxLength={800}
+                                value={draft.descriptionZh}
+                                onChange={event => update('descriptionZh', event.target.value)}
+                            />
+                        </Field>
+                        {editEnglish ? (
+                            <Field label={text.descriptionEn} htmlFor="profile-description-en">
                                 <Textarea
-                                    id="profile-description-zh"
+                                    id="profile-description-en"
                                     rows={4}
                                     maxLength={800}
-                                    value={draft.descriptionZh}
-                                    onChange={event => update('descriptionZh', event.target.value)}
+                                    value={draft.descriptionEn}
+                                    onChange={event => update('descriptionEn', event.target.value)}
                                 />
                             </Field>
-                            {editEnglish ? (
-                                <Field label={text.descriptionEn} htmlFor="profile-description-en">
-                                    <Textarea
-                                        id="profile-description-en"
-                                        rows={4}
-                                        maxLength={800}
-                                        value={draft.descriptionEn}
-                                        onChange={event => update('descriptionEn', event.target.value)}
-                                    />
-                                </Field>
-                            ) : null}
-                            <p className="text-xs text-muted-foreground sm:col-span-2">
-                                {text.publicDescriptionHelp}
-                            </p>
-                            <div className="space-y-2 sm:col-span-2">
-                                <Label htmlFor="profile-internal-note">{text.internalNote}</Label>
-                                <Textarea
-                                    id="profile-internal-note"
-                                    rows={4}
-                                    maxLength={2000}
-                                    value={draft.internalNote}
-                                    onChange={event => update('internalNote', event.target.value)}
-                                />
-                                <p className="text-xs text-muted-foreground">{text.internalNoteHelp}</p>
+                        ) : null}
+                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                            {text.publicDescriptionHelp}
+                        </p>
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="profile-internal-note">{text.internalNote}</Label>
+                            <Textarea
+                                id="profile-internal-note"
+                                rows={4}
+                                maxLength={2000}
+                                value={draft.internalNote}
+                                onChange={event => update('internalNote', event.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">{text.internalNoteHelp}</p>
+                        </div>
+                        <div className="space-y-3 border-t pt-4 sm:col-span-2">
+                            <div>
+                                <Label>{text.readiness}</Label>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {draft.activationReadiness.ready ? text.ready : text.notReady}
+                                </p>
                             </div>
-                            <div className="space-y-3 border-t pt-4 sm:col-span-2">
-                                <div>
-                                    <Label>{text.readiness}</Label>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        {draft.activationReadiness.ready ? text.ready : text.notReady}
-                                    </p>
-                                </div>
-                                <ul className="grid gap-2 sm:grid-cols-2">
-                                    {draft.activationReadiness.checks.map(check => (
-                                        <li key={check.code} className="flex items-start gap-2 text-sm">
-                                            {check.ready ? (
-                                                <Check
-                                                    className="mt-0.5 size-4 shrink-0 text-success"
-                                                    aria-hidden="true"
-                                                />
-                                            ) : (
-                                                <CircleAlert
-                                                    className="mt-0.5 size-4 shrink-0 text-destructive"
-                                                    aria-hidden="true"
-                                                />
-                                            )}
-                                            <span>{isZh ? check.message : check.messageEn}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                            <div className="space-y-2 sm:col-span-2">
-                                <Label>{text.logo}</Label>
-                                <ImageSizeHint guidance="logo" />
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                                        {draft.logoAsset ? (
-                                            <img
-                                                className="size-16 object-cover"
-                                                src={draft.logoAsset.preview}
-                                                alt=""
+                            <ul className="grid gap-2 sm:grid-cols-2">
+                                {draft.activationReadiness.checks.map(check => (
+                                    <li key={check.code} className="flex items-start gap-2 text-sm">
+                                        {check.ready ? (
+                                            <Check
+                                                className="mt-0.5 size-4 shrink-0 text-success"
+                                                aria-hidden="true"
                                             />
                                         ) : (
-                                            <Store className="size-6" aria-hidden="true" />
+                                            <CircleAlert
+                                                className="mt-0.5 size-4 shrink-0 text-destructive"
+                                                aria-hidden="true"
+                                            />
                                         )}
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => onAssetPickerOpen(true)}
-                                    >
-                                        <ImagePlus className="size-4" aria-hidden="true" />
-                                        {text.selectLogo}
-                                    </Button>
-                                    {draft.logoAsset && (
-                                        <Button
-                                            type="button"
-                                            size="icon"
-                                            variant="ghost"
-                                            title={text.clearLogo}
-                                            aria-label={text.clearLogo}
-                                            onClick={() => update('logoAsset', null)}
-                                        >
-                                            <X className="size-4" aria-hidden="true" />
-                                        </Button>
+                                        <span>{isZh ? check.message : check.messageEn}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label>{text.logo}</Label>
+                            <ImageSizeHint guidance="logo" />
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                                    {draft.logoAsset ? (
+                                        <img
+                                            className="size-16 object-cover"
+                                            src={draft.logoAsset.preview}
+                                            alt=""
+                                        />
+                                    ) : (
+                                        <Store className="size-6" aria-hidden="true" />
                                     )}
                                 </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => onAssetPickerOpen(true)}
+                                >
+                                    <ImagePlus className="size-4" aria-hidden="true" />
+                                    {text.selectLogo}
+                                </Button>
+                                {draft.logoAsset && (
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        title={text.clearLogo}
+                                        aria-label={text.clearLogo}
+                                        onClick={() => update('logoAsset', null)}
+                                    >
+                                        <X className="size-4" aria-hidden="true" />
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <SheetFooter className="shrink-0 border-t px-6 py-4">
-                        <Button type="button" variant="outline" onClick={requestClose} disabled={pending}>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
                             {text.cancel}
                         </Button>
                         <Button type="button" onClick={onSave} disabled={pending}>
                             {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
                             {pending ? text.saving : text.save}
                         </Button>
-                    </SheetFooter>
-                </SheetContent>
-            </Sheet>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             <AssetPickerDialog
                 open={assetPickerOpen}
                 onClose={() => onAssetPickerOpen(false)}

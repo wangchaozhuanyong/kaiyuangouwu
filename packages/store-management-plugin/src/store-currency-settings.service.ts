@@ -5,7 +5,6 @@ import {
     CurrencyCode,
     EventBus,
     isGraphQlErrorResult,
-    OrderService,
     ProductVariant,
     ProductVariantPrice,
     ProductVariantPriceEvent,
@@ -14,26 +13,17 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { LessThan, MoreThan } from 'typeorm';
 
-import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
-import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 import {
     StoreCurrencyConfiguration,
     StoreCurrencyRateMode,
     StoreCurrencyRoundingMode,
-    StorefrontUsdtCheckoutQuoteView,
     UpdateStoreCurrencyConfigurationInput,
 } from './types';
-import { UsdtOtcRateService } from './usdt-otc-rate.service';
-import { UsdtPaymentService } from './usdt/usdt-payment.service';
 
 const SUPPORTED_CURRENCIES = [CurrencyCode.CNY, CurrencyCode.MYR] as const;
 const BNM_EXCHANGE_RATE_URL = 'https://api.bnm.gov.my/public/exchange-rate/CNY?session=1200&quote=rm';
 const BNM_RATE_SOURCE = 'Bank Negara Malaysia';
-const USDT_RATE_MAX_AGE_MS = 15 * 60 * 1000;
-const USDT_CHECKOUT_QUOTE_TTL_MS = 10 * 60 * 1000;
-const USDT_QUOTE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface CurrencyChannelFields {
     currencySelectorEnabled?: boolean | null;
@@ -45,11 +35,6 @@ interface CurrencyChannelFields {
     currencyRateUpdatedAt?: Date | string | null;
     currencyPricesUpdatedAt?: Date | string | null;
     currencySyncedPriceCount?: number | null;
-    usdtDisplayEnabled?: boolean | null;
-    usdtRateMarkupBps?: number | null;
-    cnyPerUsdtRate?: number | null;
-    usdtRateSource?: string | null;
-    usdtRateUpdatedAt?: Date | string | null;
 }
 
 interface BnmExchangeRateResponse {
@@ -73,9 +58,6 @@ export class StoreCurrencySettingsService {
         private readonly channelService: ChannelService,
         private readonly eventBus: EventBus,
         private readonly requestContextService: RequestContextService,
-        private readonly usdtOtcRateService: UsdtOtcRateService,
-        private readonly orderService: OrderService,
-        private readonly usdtPaymentService: UsdtPaymentService,
     ) {}
 
     async get(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
@@ -83,10 +65,7 @@ export class StoreCurrencySettingsService {
     }
 
     getPublic(ctx: RequestContext): StoreCurrencyConfiguration {
-        return {
-            ...this.toConfiguration(ctx.channel),
-            ...publicCurrencySelection(ctx.channel),
-        };
+        return this.toConfiguration(ctx.channel);
     }
 
     async update(
@@ -107,92 +86,10 @@ export class StoreCurrencySettingsService {
                 cnyToMyrRate: normalized.cnyToMyrRate,
                 currencyRateMarkupBps: Math.round(normalized.markupPercent * 100),
                 currencyRoundingMode: normalized.roundingMode,
-                usdtDisplayEnabled: normalized.usdtDisplayEnabled,
-                usdtRateMarkupBps: Math.round(normalized.usdtMarkupPercent * 100),
             },
         });
         if (isGraphQlErrorResult(updated)) throw new UserInputError(updated.message);
         return this.toConfiguration(updated);
-    }
-
-    async refreshUsdtRate(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
-        const channel = await this.getActiveChannel(ctx);
-        const snapshot = await this.usdtOtcRateService.fetchCnyRate();
-        const customFields = channel.customFields as CurrencyChannelFields;
-        const updated = await this.channelService.update(ctx, {
-            id: channel.id,
-            customFields: {
-                ...customFields,
-                cnyPerUsdtRate: snapshot.cnyPerUsdtRate,
-                usdtRateSource: snapshot.source,
-                usdtRateUpdatedAt: snapshot.updatedAt,
-            },
-        });
-        if (isGraphQlErrorResult(updated)) throw new UserInputError(updated.message);
-        return this.toConfiguration(updated);
-    }
-
-    async createCheckoutUsdtQuote(ctx: RequestContext): Promise<StorefrontUsdtCheckoutQuoteView> {
-        const activeOrderId = ctx.session?.activeOrderId;
-        if (!activeOrderId) throw new UserInputError('当前没有可结算订单');
-        const order = await this.orderService.findOne(ctx, activeOrderId, ['payments']);
-        if (!order || !['AddingItems', 'ArrangingPayment'].includes(order.state)) {
-            throw new UserInputError('当前订单状态不能生成 USDT 报价');
-        }
-        if (order.currencyCode !== CurrencyCode.CNY && order.currencyCode !== CurrencyCode.MYR) {
-            throw new UserInputError('USDT 报价目前仅支持 CNY 和 MYR 订单');
-        }
-        const configuration = await this.get(ctx);
-        if (!configuration.usdtRateAvailable) {
-            throw new UserInputError('USDT 报价已过期，请等待系统更新后重试');
-        }
-        const fiatPerUsdtRate =
-            order.currencyCode === CurrencyCode.CNY
-                ? configuration.cnyPerUsdtRate
-                : configuration.myrPerUsdtRate;
-        if (!fiatPerUsdtRate) throw new UserInputError('当前订单币种缺少 USDT 报价');
-
-        const coveredAmount = (order.payments ?? [])
-            .filter(payment => payment.state === 'Authorized' || payment.state === 'Settled')
-            .reduce((total, payment) => total + payment.amount, 0);
-        const fiatAmount = Math.max(0, order.totalWithTax - coveredAmount);
-        if (!fiatAmount) throw new UserInputError('当前订单已无待支付金额');
-
-        const repository = this.connection.getRepository(ctx, StorefrontUsdtCheckoutQuote);
-        const current = await repository.findOne({
-            where: {
-                orderId: order.id,
-                fiatCurrencyCode: order.currencyCode,
-                fiatAmount,
-                expiresAt: MoreThan(new Date()),
-            },
-            order: { createdAt: 'DESC' },
-        });
-        if (current) {
-            const existingIntent = await this.ensureCheckoutPaymentIntent(ctx, current);
-            return this.toCheckoutQuoteView(current, existingIntent);
-        }
-
-        const usdtAmount = calculateUsdtCheckoutAmount(
-            fiatAmount,
-            fiatPerUsdtRate,
-            configuration.usdtMarkupPercent,
-        );
-        const quote = await repository.save(
-            new StorefrontUsdtCheckoutQuote({
-                channelId: ctx.channelId,
-                orderId: order.id,
-                fiatCurrencyCode: order.currencyCode,
-                fiatAmount,
-                fiatPerUsdtRate,
-                markupBps: Math.round(configuration.usdtMarkupPercent * 100),
-                usdtAmount: usdtAmount.toFixed(6),
-                source: configuration.usdtRateSource ?? 'USDT OTC',
-                expiresAt: new Date(Date.now() + USDT_CHECKOUT_QUOTE_TTL_MS),
-            }),
-        );
-        const intent = await this.ensureCheckoutPaymentIntent(ctx, quote);
-        return this.toCheckoutQuoteView(quote, intent);
     }
 
     async refreshRate(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
@@ -347,55 +244,6 @@ export class StoreCurrencySettingsService {
         return results;
     }
 
-    async refreshAllEnabledUsdtRates(ctx: RequestContext): Promise<StoreCurrencyAutomaticSyncResult[]> {
-        await this.connection.getRepository(ctx, StorefrontUsdtCheckoutQuote).delete({
-            expiresAt: LessThan(new Date(Date.now() - USDT_QUOTE_RETENTION_MS)),
-        });
-        const pageSize = 100;
-        let skip = 0;
-        let totalItems = 0;
-        const channels: Channel[] = [];
-
-        do {
-            const page = await this.channelService.findAll(ctx, { skip, take: pageSize });
-            channels.push(...page.items);
-            totalItems = page.totalItems;
-            if (!page.items.length) break;
-            skip += page.items.length;
-        } while (skip < totalItems);
-
-        const enabledChannels = channels.filter(channel => this.toConfiguration(channel).usdtDisplayEnabled);
-        if (!enabledChannels.length) return [];
-
-        const snapshot = await this.usdtOtcRateService.fetchCnyRate();
-        const results: StoreCurrencyAutomaticSyncResult[] = [];
-        for (const channel of enabledChannels) {
-            const channelContext = await this.requestContextService.create({
-                apiType: 'admin',
-                channelOrToken: channel,
-            });
-            const customFields = channel.customFields as CurrencyChannelFields;
-            const updated = await this.channelService.update(channelContext, {
-                id: channel.id,
-                customFields: {
-                    ...customFields,
-                    cnyPerUsdtRate: snapshot.cnyPerUsdtRate,
-                    usdtRateSource: snapshot.source,
-                    usdtRateUpdatedAt: snapshot.updatedAt,
-                },
-            });
-            if (isGraphQlErrorResult(updated)) {
-                throw new Error(`${channel.code}: ${updated.message}`);
-            }
-            results.push({
-                channelCode: channel.code,
-                syncedPriceCount: snapshot.sampledAdvertisementCount,
-                rate: snapshot.cnyPerUsdtRate,
-            });
-        }
-        return results;
-    }
-
     private async getActiveChannel(ctx: RequestContext): Promise<Channel> {
         const channel = await this.channelService.findOne(ctx, ctx.channelId);
         if (!channel) throw new UserInputError('当前店铺不存在');
@@ -404,7 +252,6 @@ export class StoreCurrencySettingsService {
 
     private toConfiguration(channel: Channel): StoreCurrencyConfiguration {
         const customFields = channel.customFields as CurrencyChannelFields;
-        const usdtPayment = this.usdtPaymentService.walletStatus();
         const availableCurrencyCodes = channel.availableCurrencyCodes.filter(isSupportedCurrency);
         const defaultCurrencyCode = isSupportedCurrency(channel.defaultCurrencyCode)
             ? channel.defaultCurrencyCode
@@ -412,8 +259,6 @@ export class StoreCurrencySettingsService {
         if (!availableCurrencyCodes.includes(defaultCurrencyCode)) {
             availableCurrencyCodes.unshift(defaultCurrencyCode);
         }
-        const cnyPerUsdtRate = nullablePositiveNumber(customFields.cnyPerUsdtRate);
-        const usdtRateUpdatedAt = nullableDate(customFields.usdtRateUpdatedAt);
         return {
             channelId: channel.id,
             channelCode: channel.code,
@@ -428,58 +273,6 @@ export class StoreCurrencySettingsService {
             rateUpdatedAt: nullableDate(customFields.currencyRateUpdatedAt),
             pricesUpdatedAt: nullableDate(customFields.currencyPricesUpdatedAt),
             syncedPriceCount: Math.max(0, Math.round(finiteNumber(customFields.currencySyncedPriceCount, 0))),
-            usdtDisplayEnabled: customFields.usdtDisplayEnabled === true,
-            usdtMarkupPercent: finiteNumber(customFields.usdtRateMarkupBps, 0) / 100,
-            cnyPerUsdtRate,
-            myrPerUsdtRate: cnyPerUsdtRate
-                ? cnyPerUsdtRate * positiveNumber(customFields.cnyToMyrRate, 0.6)
-                : null,
-            usdtRateSource: customFields.usdtRateSource?.trim() || null,
-            usdtRateUpdatedAt,
-            usdtRateAvailable:
-                customFields.usdtDisplayEnabled === true &&
-                cnyPerUsdtRate !== null &&
-                usdtRateUpdatedAt !== null &&
-                Date.now() - usdtRateUpdatedAt.getTime() <= USDT_RATE_MAX_AGE_MS,
-            usdtPaymentConfigured: usdtPayment.configured,
-            usdtPaymentNetwork: usdtPayment.network,
-            usdtReceivingAddressMasked: usdtPayment.receivingAddressMasked,
-            usdtReceivingAddressFingerprint: usdtPayment.receivingAddressFingerprint,
-        };
-    }
-
-    private async ensureCheckoutPaymentIntent(
-        ctx: RequestContext,
-        quote: StorefrontUsdtCheckoutQuote,
-    ): Promise<StorefrontUsdtPaymentIntent> {
-        try {
-            return await this.usdtPaymentService.ensureIntent(ctx, quote);
-        } catch (error) {
-            throw new UserInputError(error instanceof Error ? error.message : 'USDT-TRC20 收款暂不可用');
-        }
-    }
-
-    private toCheckoutQuoteView(
-        quote: StorefrontUsdtCheckoutQuote,
-        intent: StorefrontUsdtPaymentIntent,
-    ): StorefrontUsdtCheckoutQuoteView {
-        return {
-            id: quote.id,
-            fiatCurrencyCode: quote.fiatCurrencyCode,
-            fiatAmount: quote.fiatAmount,
-            fiatPerUsdtRate: quote.fiatPerUsdtRate,
-            markupPercent: quote.markupBps / 100,
-            usdtAmount: Number(intent.expectedUsdtAmount),
-            source: quote.source,
-            network: intent.network,
-            tokenContractAddress: intent.tokenContractAddress,
-            receivingAddress: intent.receivingAddress,
-            receivingAddressFingerprint: intent.receivingAddressFingerprint,
-            paymentStatus: intent.status,
-            transactionId: intent.transactionId,
-            settledAt: intent.settledAt,
-            createdAt: quote.createdAt,
-            expiresAt: quote.expiresAt,
         };
     }
 }
@@ -495,30 +288,6 @@ export function convertMinorPrice(
     const raw = price * exchangeFactor * (1 + markupPercent / 100);
     const step = roundingMode === 'WHOLE' ? 100 : roundingMode === 'TENTH' ? 10 : 1;
     return Math.max(0, Math.round(raw / step) * step);
-}
-
-export function calculateUsdtCheckoutAmount(
-    fiatMinorAmount: number,
-    fiatPerUsdtRate: number,
-    markupPercent: number,
-): number {
-    if (!Number.isFinite(fiatMinorAmount) || fiatMinorAmount <= 0) return 0;
-    if (!Number.isFinite(fiatPerUsdtRate) || fiatPerUsdtRate <= 0) return 0;
-    const markupFactor = 1 + Math.max(0, markupPercent) / 100;
-    return Math.ceil((fiatMinorAmount / 100 / fiatPerUsdtRate) * markupFactor * 10_000) / 10_000;
-}
-
-export function publicCurrencySelection(
-    channel: Pick<Channel, 'defaultCurrencyCode' | 'availableCurrencyCodes'>,
-): Pick<StoreCurrencyConfiguration, 'defaultCurrencyCode' | 'availableCurrencyCodes'> {
-    const availableCurrencyCodes = Array.from(new Set(channel.availableCurrencyCodes));
-    if (!availableCurrencyCodes.includes(channel.defaultCurrencyCode)) {
-        availableCurrencyCodes.unshift(channel.defaultCurrencyCode);
-    }
-    return {
-        defaultCurrencyCode: channel.defaultCurrencyCode,
-        availableCurrencyCodes,
-    };
 }
 
 function normalizeInput(input: UpdateStoreCurrencyConfigurationInput): UpdateStoreCurrencyConfigurationInput {
@@ -537,24 +306,12 @@ function normalizeInput(input: UpdateStoreCurrencyConfigurationInput): UpdateSto
     if (!Number.isFinite(input.markupPercent) || input.markupPercent < -20 || input.markupPercent > 100) {
         throw new UserInputError('汇率加价范围为 -20% 至 100%');
     }
-    if (
-        !Number.isFinite(input.usdtMarkupPercent) ||
-        input.usdtMarkupPercent < 0 ||
-        input.usdtMarkupPercent > 20
-    ) {
-        throw new UserInputError('USDT 报价加价范围为 0% 至 20%');
-    }
     return {
         ...input,
         availableCurrencyCodes,
         rateMode: normalizeRateMode(input.rateMode),
         roundingMode: normalizeRoundingMode(input.roundingMode),
     };
-}
-
-function nullablePositiveNumber(value: unknown): number | null {
-    const number = Number(value);
-    return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function isSupportedCurrency(value: CurrencyCode): value is CurrencyCode.CNY | CurrencyCode.MYR {

@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AccountSecurityRouteImport } from './routes/account-security'
 import { Route as AddressesRouteImport } from './routes/addresses'
-import { Route as AnnouncementsRouteImport } from './routes/announcements'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CategoryRouteImport } from './routes/category'
 import { Route as CheckoutRouteImport } from './routes/checkout'
@@ -61,11 +60,6 @@ const AccountSecurityRoute = AccountSecurityRouteImport.update({
 const AddressesRoute = AddressesRouteImport.update({
   id: '/addresses',
   path: '/addresses',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AnnouncementsRoute = AnnouncementsRouteImport.update({
-  id: '/announcements',
-  path: '/announcements',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CartRoute = CartRouteImport.update({
@@ -214,7 +208,6 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/account-security': typeof AccountSecurityRoute
   '/addresses': typeof AddressesRoute
-  '/announcements': typeof AnnouncementsRoute
   '/cart': typeof CartRoute
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
@@ -249,7 +242,6 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/account-security': typeof AccountSecurityRoute
   '/addresses': typeof AddressesRoute
-  '/announcements': typeof AnnouncementsRoute
   '/cart': typeof CartRoute
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
@@ -285,7 +277,6 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/account-security': typeof AccountSecurityRoute
   '/addresses': typeof AddressesRoute
-  '/announcements': typeof AnnouncementsRoute
   '/cart': typeof CartRoute
   '/category': typeof CategoryRoute
   '/checkout': typeof CheckoutRoute
@@ -322,7 +313,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/account-security'
     | '/addresses'
-    | '/announcements'
     | '/cart'
     | '/category'
     | '/checkout'
@@ -357,7 +347,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/account-security'
     | '/addresses'
-    | '/announcements'
     | '/cart'
     | '/category'
     | '/checkout'
@@ -392,7 +381,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/account-security'
     | '/addresses'
-    | '/announcements'
     | '/cart'
     | '/category'
     | '/checkout'
@@ -428,7 +416,6 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   AccountSecurityRoute: typeof AccountSecurityRoute
   AddressesRoute: typeof AddressesRoute
-  AnnouncementsRoute: typeof AnnouncementsRoute
   CartRoute: typeof CartRoute
   CategoryRoute: typeof CategoryRoute
   CheckoutRoute: typeof CheckoutRoute
@@ -487,13 +474,6 @@ declare module '@tanstack/react-router' {
       path: '/addresses'
       fullPath: '/addresses'
       preLoaderRoute: typeof AddressesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/announcements': {
-      id: '/announcements'
-      path: '/announcements'
-      fullPath: '/announcements'
-      preLoaderRoute: typeof AnnouncementsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cart': {
@@ -700,7 +680,6 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   AccountSecurityRoute: AccountSecurityRoute,
   AddressesRoute: AddressesRoute,
-  AnnouncementsRoute: AnnouncementsRoute,
   CartRoute: CartRoute,
   CategoryRoute: CategoryRoute,
   CheckoutRoute: CheckoutRoute,

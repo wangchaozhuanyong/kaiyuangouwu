@@ -12,8 +12,6 @@ test.describe('Countries', () => {
         listTitle: 'Countries',
         newButtonLabel: 'Add Country',
         newPageTitle: 'New country',
-        createPresentation: 'drawer',
-        editPresentation: 'drawer',
         createFields: [
             { label: 'Name', value: 'E2E Testland' },
             { label: 'Code', value: 'E2' },

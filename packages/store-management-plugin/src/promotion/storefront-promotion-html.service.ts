@@ -6,7 +6,6 @@ import MarkdownIt from 'markdown-it';
 import { StorefrontPromotionContentType } from '../types';
 
 import { DEFAULT_PROMOTION_TEMPLATE, DEFAULT_PROMOTION_TEMPLATE_VERSION } from './default-promotion-template';
-import { normalizePromotionEntryDestination } from './promotion-entry-destination';
 import { PROMOTION_VISUAL_SCRIPT } from './promotion-visual-script';
 
 export const MAX_PROMOTION_SOURCE_BYTES = 60_000;
@@ -18,30 +17,7 @@ export interface StorefrontPromotionBindings {
     'store.heroImageUrl': string;
     'store.currentYear': string;
     'store.language': string;
-    'store.featuredProduct1Id': string;
-    'store.featuredProduct1Name': string;
-    'store.featuredProduct1Description': string;
-    'store.featuredProduct1PriceLabel': string;
-    'store.featuredProduct1ImageUrl': string;
-    'store.featuredProduct2Id': string;
-    'store.featuredProduct2Name': string;
-    'store.featuredProduct2Description': string;
-    'store.featuredProduct2PriceLabel': string;
-    'store.featuredProduct2ImageUrl': string;
-    'store.featuredProduct3Id': string;
-    'store.featuredProduct3Name': string;
-    'store.featuredProduct3Description': string;
-    'store.featuredProduct3PriceLabel': string;
-    'store.featuredProduct3ImageUrl': string;
 }
-
-const PROMOTION_IMAGE_BINDINGS: ReadonlyArray<keyof StorefrontPromotionBindings> = [
-    'store.logoUrl',
-    'store.heroImageUrl',
-    'store.featuredProduct1ImageUrl',
-    'store.featuredProduct2ImageUrl',
-    'store.featuredProduct3ImageUrl',
-];
 
 interface RenderPromotionInput {
     contentType: StorefrontPromotionContentType;
@@ -142,7 +118,7 @@ export class StorefrontPromotionHtmlService {
         const withTokens = this.replaceTokens(source, input.bindings);
         const $ = load(withTokens, { xml: false });
         const trustedImageUrls = new Set(
-            PROMOTION_IMAGE_BINDINGS.map(key => input.bindings[key]).filter(Boolean),
+            [input.bindings['store.logoUrl'], input.bindings['store.heroImageUrl']].filter(Boolean),
         );
 
         this.sanitizeDocument($, trustedImageUrls);
@@ -209,16 +185,6 @@ export class StorefrontPromotionHtmlService {
     }
 
     private applyBindings($: ReturnType<typeof load>, bindings: StorefrontPromotionBindings): void {
-        $('[data-bind-empty]').each((_index, element) => {
-            const node = $(element);
-            const key = node.attr('data-bind-empty') as keyof StorefrontPromotionBindings | undefined;
-            if (key && bindings[key]) node.remove();
-        });
-        $('[data-bind-visible]').each((_index, element) => {
-            const node = $(element);
-            const key = node.attr('data-bind-visible') as keyof StorefrontPromotionBindings | undefined;
-            if (!key || !bindings[key]) node.remove();
-        });
         $('[data-bind-text]').each((_index, element) => {
             const node = $(element);
             const key = node.attr('data-bind-text') as keyof StorefrontPromotionBindings | undefined;
@@ -251,13 +217,6 @@ export class StorefrontPromotionHtmlService {
                 node.attr('style', `${current};background-image:url("${value.replace(/["\\]/g, '')}")`);
             }
         });
-        $('[data-bind-entry-product]').each((_index, element) => {
-            const node = $(element);
-            const key = node.attr('data-bind-entry-product') as keyof StorefrontPromotionBindings | undefined;
-            const productId = key ? bindings[key] : '';
-            node.attr('data-store-entry-target', normalizePromotionEntryDestination(`product:${productId}`));
-            node.removeAttr('data-bind-entry-product');
-        });
     }
 
     private normalizeEntryForm($: ReturnType<typeof load>, entryTicket: string): void {
@@ -268,17 +227,11 @@ export class StorefrontPromotionHtmlService {
         }
         forms.each((_index, element) => {
             const form = $(element);
-            const destination = normalizePromotionEntryDestination(form.attr('data-store-entry-target'));
             form.attr('method', 'post');
             form.attr('action', '/promo/enter');
             form.removeAttr('target');
             if (form.find('input[name="ticket"]').length === 0) {
                 form.prepend(`<input type="hidden" name="ticket" value="${this.escapeHtml(entryTicket)}">`);
-            }
-            if (destination !== 'home') {
-                form.prepend(
-                    `<input type="hidden" name="destination" value="${this.escapeHtml(destination)}">`,
-                );
             }
             if (form.find('button[type="submit"], input[type="submit"]').length === 0) {
                 form.append('<button type="submit">进入主网站</button>');

@@ -360,7 +360,7 @@ export function ProductDetailPage() {
                             : 'Non-refundable after delivery'
                         : isZh
                           ? '售后支持'
-                          : 'Returns support'}
+                          : 'After-sales support'}
                 </span>
             </section>
             <ProductReviewsSection api={api} productId={product.id} market={market} language={language} />

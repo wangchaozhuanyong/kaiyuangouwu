@@ -1,9 +1,16 @@
 import { CustomerGroupChip } from '@/vdb/components/shared/customer-group-chip.js';
 import { CustomerGroupSelector } from '@/vdb/components/shared/customer-group-selector.js';
-import { EntityEditorSheet } from '@/vdb/components/shared/entity-editor-sheet.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
 import { Button } from '@/vdb/components/ui/button.js';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/vdb/components/ui/dialog.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
@@ -215,32 +222,30 @@ function CustomerDetailPage() {
                                 ))}
                             </DetailFormGrid>
 
-                            <Button type="button" variant="outline" onClick={() => setNewAddressOpen(true)}>
-                                <Plus className="w-4 h-4" /> <Trans>Add new address</Trans>
-                            </Button>
-                            <EntityEditorSheet
-                                open={newAddressOpen}
-                                title={<Trans>Add new address</Trans>}
-                                description={<Trans>Add a new address to the customer.</Trans>}
-                                loadingLabel={<Trans>Loading address...</Trans>}
-                                onOpenChange={setNewAddressOpen}
-                            >
-                                {({ setDirty, requestClose }) => (
-                                    <div className="p-6">
-                                        <CustomerAddressForm
-                                            onSubmit={values => {
-                                                const { id, ...input } = values;
-                                                createAddress({
-                                                    customerId: entity.id,
-                                                    input,
-                                                });
-                                            }}
-                                            onCancel={requestClose}
-                                            onDirtyChange={setDirty}
-                                        />
-                                    </div>
-                                )}
-                            </EntityEditorSheet>
+                            <Dialog open={newAddressOpen} onOpenChange={setNewAddressOpen}>
+                                <DialogTrigger render={<Button variant="outline" />}>
+                                    <Plus className="w-4 h-4" /> <Trans>Add new address</Trans>
+                                </DialogTrigger>
+                                <DialogContent className="max-h-[90vh] overflow-y-auto">
+                                    <DialogHeader>
+                                        <DialogTitle>
+                                            <Trans>Add new address</Trans>
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            <Trans>Add a new address to the customer.</Trans>
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <CustomerAddressForm
+                                        onSubmit={values => {
+                                            const { id, ...input } = values;
+                                            createAddress({
+                                                customerId: entity.id,
+                                                input,
+                                            });
+                                        }}
+                                    />
+                                </DialogContent>
+                            </Dialog>
                         </PageBlock>
 
                         <PageBlock column="main" blockId="orders" title={<Trans>Orders</Trans>}>

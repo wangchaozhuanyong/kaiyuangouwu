@@ -22,7 +22,6 @@ import {
 import { randomUUID } from 'node:crypto';
 import { In } from 'typeorm';
 
-import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from '../entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
@@ -31,7 +30,6 @@ import {
     CreateStoreFlashSaleInput,
     StoreCouponCampaignKind,
     StoreCouponCampaignView,
-    StoreCouponDailyMetricView,
     StoreFlashSaleItemView,
     StoreFlashSaleView,
     StorePromotionNameView,
@@ -121,102 +119,6 @@ export class StorePromotionCampaignService {
                     (!coupon.claimEndsAt || coupon.claimEndsAt > now),
             )
             .slice(0, 50);
-    }
-
-    async dailyCouponReport(
-        ctx: RequestContext,
-        fromInput: Date,
-        toInput: Date,
-        campaignId?: ID,
-    ): Promise<StoreCouponDailyMetricView[]> {
-        const from = this.validDate(fromInput, '报表开始时间');
-        const to = this.validDate(toInput, '报表结束时间');
-        if (from >= to) {
-            throw new UserInputError('报表结束时间必须晚于开始时间');
-        }
-        if (to.getTime() - from.getTime() > 366 * 24 * 60 * 60 * 1_000) {
-            throw new UserInputError('单次报表查询最多支持 366 天');
-        }
-
-        const ledgerQuery = this.connection
-            .getRepository(ctx, CouponLedgerEntry)
-            .createQueryBuilder('ledger')
-            .select('DATE(ledger.createdAt)', 'date')
-            .addSelect("SUM(CASE WHEN ledger.eventType = 'CLAIMED' THEN 1 ELSE 0 END)", 'claimedCount')
-            .addSelect("SUM(CASE WHEN ledger.eventType = 'RETURNED' THEN 1 ELSE 0 END)", 'returnedCount')
-            .addSelect("SUM(CASE WHEN ledger.eventType = 'EXPIRED' THEN 1 ELSE 0 END)", 'expiredCount')
-            .addSelect("SUM(CASE WHEN ledger.eventType = 'REVOKED' THEN 1 ELSE 0 END)", 'revokedCount')
-            .where('ledger.channelId = :channelId', { channelId: ctx.channelId })
-            .andWhere('ledger.createdAt >= :from AND ledger.createdAt < :to', { from, to })
-            .groupBy('DATE(ledger.createdAt)');
-        const usageQuery = this.connection
-            .getRepository(ctx, CouponOrderAllocation)
-            .createQueryBuilder('allocation')
-            .select('DATE(allocation.usedAt)', 'date')
-            .addSelect('COUNT(DISTINCT allocation.orderId)', 'redeemedCount')
-            .addSelect('COALESCE(SUM(allocation.discountAmountWithTax), 0)', 'discountAmountTotal')
-            .addSelect('COALESCE(SUM(allocation.orderTotalWithTax), 0)', 'assistedRevenueTotal')
-            .where('allocation.channelId = :channelId', { channelId: ctx.channelId })
-            .andWhere("allocation.status IN ('USED', 'REFUNDED')")
-            .andWhere('allocation.usedAt >= :from AND allocation.usedAt < :to', { from, to })
-            .groupBy('DATE(allocation.usedAt)');
-        const refundQuery = this.connection
-            .getRepository(ctx, CouponOrderAllocation)
-            .createQueryBuilder('allocation')
-            .select('DATE(allocation.refundedAt)', 'date')
-            .addSelect('COUNT(DISTINCT allocation.orderId)', 'refundedCount')
-            .where('allocation.channelId = :channelId', { channelId: ctx.channelId })
-            .andWhere("allocation.status = 'REFUNDED'")
-            .andWhere('allocation.refundedAt >= :from AND allocation.refundedAt < :to', { from, to })
-            .groupBy('DATE(allocation.refundedAt)');
-        if (campaignId != null) {
-            ledgerQuery.andWhere('ledger.promotionId = :campaignId', { campaignId });
-            usageQuery.andWhere('allocation.promotionId = :campaignId', { campaignId });
-            refundQuery.andWhere('allocation.promotionId = :campaignId', { campaignId });
-        }
-
-        const [ledgerRows, usageRows, refundRows] = await Promise.all([
-            ledgerQuery.getRawMany<{
-                date: string | Date;
-                claimedCount: string;
-                returnedCount: string;
-                expiredCount: string;
-                revokedCount: string;
-            }>(),
-            usageQuery.getRawMany<{
-                date: string | Date;
-                redeemedCount: string;
-                discountAmountTotal: string;
-                assistedRevenueTotal: string;
-            }>(),
-            refundQuery.getRawMany<{ date: string | Date; refundedCount: string }>(),
-        ]);
-        const daily = new Map<string, StoreCouponDailyMetricView>();
-        const metricFor = (value: string | Date) => {
-            const date = reportDateKey(value);
-            const existing = daily.get(date);
-            if (existing) return existing;
-            const metric = emptyDailyCouponMetric(date);
-            daily.set(date, metric);
-            return metric;
-        };
-        for (const row of ledgerRows) {
-            const metric = metricFor(row.date);
-            metric.claimedCount = Number(row.claimedCount);
-            metric.returnedCount = Number(row.returnedCount);
-            metric.expiredCount = Number(row.expiredCount);
-            metric.revokedCount = Number(row.revokedCount);
-        }
-        for (const row of usageRows) {
-            const metric = metricFor(row.date);
-            metric.redeemedCount = Number(row.redeemedCount);
-            metric.discountAmountTotal = Number(row.discountAmountTotal);
-            metric.assistedRevenueTotal = Number(row.assistedRevenueTotal);
-        }
-        for (const row of refundRows) {
-            metricFor(row.date).refundedCount = Number(row.refundedCount);
-        }
-        return [...daily.values()].sort((left, right) => left.date.localeCompare(right.date));
     }
 
     async createCoupon(
@@ -401,14 +303,9 @@ export class StorePromotionCampaignService {
             throw new UserInputError(result.message);
         }
         if (this.toCouponView(promotion)) {
-            await Promise.all([
-                this.connection
-                    .getRepository(ctx, CustomerCoupon)
-                    .update({ channelId: ctx.channelId, promotionId: id }, { campaignName: name }),
-                this.connection
-                    .getRepository(ctx, CouponOrderAllocation)
-                    .update({ channelId: ctx.channelId, promotionId: id }, { campaignName: name }),
-            ]);
+            await this.connection
+                .getRepository(ctx, CustomerCoupon)
+                .update({ channelId: ctx.channelId, promotionId: id }, { campaignName: name });
         }
         return { id: result.id, name: result.name };
     }
@@ -867,27 +764,6 @@ function emptyCampaignStats() {
         revokedCount: 0,
         redeemedOrderCount: 0,
         refundedOrderCount: 0,
-        discountAmountTotal: 0,
-        assistedRevenueTotal: 0,
-    };
-}
-
-function reportDateKey(value: string | Date): string {
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) throw new UserInputError('优惠券日报日期格式不正确');
-    return date.toISOString().slice(0, 10);
-}
-
-function emptyDailyCouponMetric(date: string): StoreCouponDailyMetricView {
-    return {
-        date,
-        claimedCount: 0,
-        redeemedCount: 0,
-        refundedCount: 0,
-        returnedCount: 0,
-        expiredCount: 0,
-        revokedCount: 0,
         discountAmountTotal: 0,
         assistedRevenueTotal: 0,
     };

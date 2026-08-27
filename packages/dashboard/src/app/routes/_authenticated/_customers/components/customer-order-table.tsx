@@ -1,9 +1,10 @@
 import { Money } from '@/vdb/components/data-display/money.js';
 import { PaginatedListDataTable } from '@/vdb/components/shared/paginated-list-data-table.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
+import { Button } from '@/vdb/components/ui/button.js';
 import { useDynamicTranslations } from '@/vdb/hooks/use-dynamic-translations.js';
 import { getTypeForState, stateTypeToBadgeVariant } from '@/vdb/utils/state-type.js';
-import { Trans } from '@lingui/react/macro';
+import { Link } from '@tanstack/react-router';
 import { ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { useState } from 'react';
 import { customerOrderListDocument } from '../customers.graphql.js';
@@ -69,10 +70,17 @@ export function CustomerOrderTable({ customerId }: Readonly<CustomerOrderTablePr
                 },
                 code: {
                     header: getTranslatedFieldName('code'),
-                    cell: ({ cell }) => <span>{cell.getValue() as string}</span>,
+                    cell: ({ cell, row }) => {
+                        const value = cell.getValue() as string;
+                        const id = row.original.id;
+                        return (
+                            <Button render={<Link to={`/orders/${id}`} />} variant="ghost">
+                                {value}
+                            </Button>
+                        );
+                    },
                 },
             }}
-            primaryRowAction={{ label: <Trans>View</Trans>, href: row => `/orders/${row.original.id}` }}
             page={page}
             itemsPerPage={pageSize}
             sorting={sorting}

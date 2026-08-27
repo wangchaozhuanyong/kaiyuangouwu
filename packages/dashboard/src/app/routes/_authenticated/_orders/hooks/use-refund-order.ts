@@ -1,6 +1,4 @@
-import { sensitiveActionHeaders } from '@/vdb/components/shared/sensitive-action-password.js';
 import { api } from '@/vdb/graphql/api.js';
-import { VariablesOf } from '@/vdb/graphql/graphql.js';
 import { useLocalFormat } from '@/vdb/hooks/use-local-format.js';
 import { useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
@@ -52,7 +50,7 @@ export interface UseRefundOrderReturn {
     recalculateRefundTotal: () => number;
 
     // Actions
-    handleSubmit: (password: string) => Promise<void>;
+    handleSubmit: () => Promise<void>;
     resetState: () => void;
 }
 
@@ -72,23 +70,11 @@ export function useRefundOrder(order: Order, onSuccess?: () => void): UseRefundO
     const reason = selectedReason === 'other' ? customReason : selectedReason;
 
     const cancelOrderMutation = useMutation({
-        mutationFn: ({
-            variables,
-            password,
-        }: {
-            variables: VariablesOf<typeof cancelOrderDocument>;
-            password: string;
-        }) => api.mutate(cancelOrderDocument, variables, sensitiveActionHeaders(password)),
+        mutationFn: api.mutate(cancelOrderDocument),
     });
 
     const refundOrderMutation = useMutation({
-        mutationFn: ({
-            variables,
-            password,
-        }: {
-            variables: VariablesOf<typeof refundOrderDocument>;
-            password: string;
-        }) => api.mutate(refundOrderDocument, variables, sensitiveActionHeaders(password)),
+        mutationFn: api.mutate(refundOrderDocument),
     });
 
     const resetState = useCallback(() => {
@@ -252,7 +238,7 @@ export function useRefundOrder(order: Order, onSuccess?: () => void): UseRefundO
         return Object.values(lineSelections).some(line => line.quantity > 0 && line.cancel);
     }, [lineSelections]);
 
-    const handleSubmit = async (password: string) => {
+    const handleSubmit = async () => {
         setIsSubmitting(true);
 
         try {
@@ -261,15 +247,12 @@ export function useRefundOrder(order: Order, onSuccess?: () => void): UseRefundO
 
             if (isCancelling && cancelLines.length > 0) {
                 const cancelResult = await cancelOrderMutation.mutateAsync({
-                    variables: {
-                        input: {
-                            orderId: order.id,
-                            lines: cancelLines,
-                            reason,
-                            cancelShipping: refundShippingLineIds.length > 0,
-                        },
+                    input: {
+                        orderId: order.id,
+                        lines: cancelLines,
+                        reason,
+                        cancelShipping: refundShippingLineIds.length > 0,
                     },
-                    password,
                 });
 
                 if (cancelResult.cancelOrder.__typename !== 'Order') {
@@ -287,17 +270,14 @@ export function useRefundOrder(order: Order, onSuccess?: () => void): UseRefundO
 
             for (const payment of paymentsToRefund) {
                 const refundResult = await refundOrderMutation.mutateAsync({
-                    variables: {
-                        input: {
-                            lines: refundLines,
-                            reason,
-                            paymentId: payment.id,
-                            amount: payment.amountToRefund,
-                            shipping: 0,
-                            adjustment: 0,
-                        },
+                    input: {
+                        lines: refundLines,
+                        reason,
+                        paymentId: payment.id,
+                        amount: payment.amountToRefund,
+                        shipping: 0,
+                        adjustment: 0,
                     },
-                    password,
                 });
 
                 if (refundResult.refundOrder.__typename !== 'Refund') {

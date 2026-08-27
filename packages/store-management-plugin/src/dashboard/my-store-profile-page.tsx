@@ -25,18 +25,7 @@ import {
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import {
-    Check,
-    CircleAlert,
-    ExternalLink,
-    Globe2,
-    ImagePlus,
-    LoaderCircle,
-    RefreshCw,
-    Save,
-    Store,
-    X,
-} from 'lucide-react';
+import { Check, CircleAlert, Globe2, ImagePlus, LoaderCircle, RefreshCw, Save, Store, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -82,7 +71,6 @@ const zhCopy = {
     merchant: '商家主体',
     code: '店铺编码',
     domain: '当前主域名',
-    visitStore: '访问店铺',
     noDomain: '尚未验证主域名',
     active: '已上线',
     draft: '草稿',
@@ -119,7 +107,6 @@ const enCopy: typeof zhCopy = {
     merchant: 'Merchant',
     code: 'Store code',
     domain: 'Primary domain',
-    visitStore: 'Visit store',
     noDomain: 'No verified primary domain',
     active: 'Active',
     draft: 'Draft',
@@ -422,19 +409,14 @@ function StoreOperation({
                 <dd className="mt-1 flex min-w-0 items-center gap-1">
                     <Globe2 className="size-3.5 shrink-0" aria-hidden="true" />
                     {profile.primaryDomain ? (
-                        <>
-                            <span className="min-w-0 flex-1 truncate">{profile.primaryDomain}</span>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                render={
-                                    <a href={profile.storefrontUrl ?? '#'} target="_blank" rel="noreferrer" />
-                                }
-                            >
-                                <ExternalLink className="size-4" aria-hidden="true" />
-                                {text.visitStore}
-                            </Button>
-                        </>
+                        <a
+                            className="truncate hover:underline"
+                            href={profile.storefrontUrl ?? '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            {profile.primaryDomain}
+                        </a>
                     ) : (
                         <span className="text-muted-foreground">{text.noDomain}</span>
                     )}

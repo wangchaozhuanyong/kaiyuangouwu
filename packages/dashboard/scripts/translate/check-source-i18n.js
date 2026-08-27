@@ -16,7 +16,10 @@ const pluginDashboardRoots = fs
     .filter(entry => entry.isDirectory())
     .map(entry => path.join(packagesRoot, entry.name, 'src', 'dashboard'))
     .filter(root => fs.existsSync(root));
-const sourceRoots = [path.join(dashboardRoot, 'src'), ...pluginDashboardRoots];
+const sourceRoots = [
+    path.join(dashboardRoot, 'src'),
+    ...pluginDashboardRoots,
+];
 const manualBilingualRoots = pluginDashboardRoots.filter(
     root => !root.includes(`${path.sep}operations-dashboard-plugin${path.sep}`),
 );
@@ -26,15 +29,11 @@ const visibleAttributes = new Set(['aria-label', 'alt', 'placeholder', 'title'])
 const visibleProperties = new Set(['description', 'label', 'message', 'placeholder', 'title']);
 const technicalLiterals = new Set([
     'API',
-    'CNY',
-    'CNY/USDT',
     'GraphQL',
     'ID',
     'ID:',
     'JSON',
     'Logo',
-    'MYR',
-    'MYR/USDT',
     'SKU',
     'SKU:',
     'URL',

@@ -372,10 +372,14 @@ export class ReferralService implements OnApplicationBootstrap {
         const anonymousHash = normalizedVisitorId
             ? visitorHash(`${ctx.channelId.toString()}:anonymous:${normalizedVisitorId}`)
             : null;
-        const canonicalHash = customer
-            ? visitorHash(`${ctx.channelId.toString()}:customer:${customer.id.toString()}`)
-            : anonymousHash;
-        if (!canonicalHash) return { recorded: false };
+        let canonicalHash: string;
+        if (customer) {
+            canonicalHash = visitorHash(`${ctx.channelId.toString()}:customer:${customer.id.toString()}`);
+        } else if (anonymousHash) {
+            canonicalHash = anonymousHash;
+        } else {
+            return { recorded: false };
+        }
         if (customer && anonymousHash && anonymousHash !== canonicalHash) {
             await repository.delete({
                 channelId: ctx.channelId,

@@ -1,4 +1,5 @@
 import { ChannelCodeLabel } from '@/vdb/components/shared/channel-code-label.js';
+import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
@@ -45,7 +46,12 @@ function ChannelListPage() {
                 code: {
                     header: () => <Trans>Store name</Trans>,
                     cell: ({ row }) => {
-                        return <ChannelCodeLabel code={row.original.code} />;
+                        return (
+                            <DetailPageButton
+                                id={row.original.id}
+                                label={<ChannelCodeLabel code={row.original.code} />}
+                            />
+                        );
                     },
                 },
                 seller: {
@@ -65,7 +71,9 @@ function ChannelListPage() {
                 },
                 token: {
                     header: () => <Trans>Store API token</Trans>,
-                    cell: () => <span className="text-muted-foreground">••••••••</span>,
+                    cell: ({ row }) => (
+                        <DetailPageButton id={row.original.id} label={<Trans>View details</Trans>} />
+                    ),
                 },
             }}
             additionalColumns={{
@@ -93,7 +101,6 @@ function ChannelListPage() {
                 'defaultLanguageCode',
                 'token',
             ]}
-            primaryRowAction={{ label: <Trans>Edit</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[
                 {
                     component: DeleteChannelsBulkAction,

@@ -1,4 +1,5 @@
 import { BooleanDisplayBadge } from '@/vdb/components/data-display/boolean.js';
+import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { RichTextDescriptionCell } from '@/vdb/components/shared/table-cell/order-table-cell-components.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
@@ -52,7 +53,7 @@ function PromotionListPage() {
             }}
             customizeColumns={{
                 name: {
-                    cell: ({ row }) => <span>{row.original.name}</span>,
+                    cell: ({ row }) => <DetailPageButton id={row.original.id} label={row.original.name} />,
                 },
                 enabled: {
                     cell: ({ row }) => <BooleanDisplayBadge value={row.original.enabled} />,
@@ -61,7 +62,6 @@ function PromotionListPage() {
                     cell: RichTextDescriptionCell,
                 },
             }}
-            primaryRowAction={{ label: <Trans>Edit</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[
                 [
                     {

@@ -1,5 +1,3 @@
-import { setupI18n } from '@lingui/core';
-import { I18nProvider } from '@lingui/react';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +13,6 @@ import { PageContext } from './page-provider.js';
 const useIsMobileMock = vi.hoisted(() => vi.fn(() => false));
 const useCopyToClipboardMock = vi.hoisted(() => vi.fn(() => [null, vi.fn()]));
 const hasPermissionsMock = vi.hoisted(() => vi.fn((_perms: string[]) => true));
-const i18n = setupI18n({ locale: 'en', messages: { en: { 'Page sections': 'Page sections' } } });
 
 vi.mock('@/vdb/hooks/use-mobile.js', () => ({
     useIsMobile: useIsMobileMock,
@@ -76,8 +73,7 @@ function renderPageLayout(
     {
         isDesktop = true,
         sidePosition = 'right',
-        hasForm = false,
-    }: { isDesktop?: boolean; sidePosition?: 'left' | 'right'; hasForm?: boolean } = {},
+    }: { isDesktop?: boolean; sidePosition?: 'left' | 'right' } = {},
 ) {
     useIsMobileMock.mockReturnValue(!isDesktop);
     const noop = () => undefined;
@@ -108,15 +104,11 @@ function renderPageLayout(
     } as UserSettingsContextType;
 
     return renderToStaticMarkup(
-        <I18nProvider i18n={i18n}>
-            <UserSettingsContext.Provider value={contextValue}>
-                <PageContext.Provider
-                    value={{ pageId: 'customer-list', form: hasForm ? ({} as any) : undefined }}
-                >
-                    <PageLayout sidePosition={sidePosition}>{children}</PageLayout>
-                </PageContext.Provider>
-            </UserSettingsContext.Provider>
-        </I18nProvider>,
+        <UserSettingsContext.Provider value={contextValue}>
+            <PageContext.Provider value={{ pageId: 'customer-list' }}>
+                <PageLayout sidePosition={sidePosition}>{children}</PageLayout>
+            </PageContext.Provider>
+        </UserSettingsContext.Provider>,
     );
 }
 
@@ -159,13 +151,11 @@ function renderActionBar(
     } as UserSettingsContextType;
 
     return renderToStaticMarkup(
-        <I18nProvider i18n={i18n}>
-            <UserSettingsContext.Provider value={contextValue}>
-                <PageContext.Provider value={{ pageId: 'customer-list' }}>
-                    <PageActionBar>{children}</PageActionBar>
-                </PageContext.Provider>
-            </UserSettingsContext.Provider>
-        </I18nProvider>,
+        <UserSettingsContext.Provider value={contextValue}>
+            <PageContext.Provider value={{ pageId: 'customer-list' }}>
+                <PageActionBar>{children}</PageActionBar>
+            </PageContext.Provider>
+        </UserSettingsContext.Provider>,
     );
 }
 
@@ -278,28 +268,6 @@ describe('PageLayout', () => {
         );
 
         expect(getRenderedBlockIds(markup)).toEqual(['page-block-side', 'page-block-main']);
-    });
-
-    it('renders section navigation and block anchors for long form pages', () => {
-        const markup = renderPageLayout(
-            <>
-                <PageBlock column="main" blockId="details" title="Details">
-                    details
-                </PageBlock>
-                <PageBlock column="main" blockId="prices" title="Prices">
-                    prices
-                </PageBlock>
-                <PageBlock column="side" blockId="settings" title="Settings">
-                    settings
-                </PageBlock>
-            </>,
-            { hasForm: true },
-        );
-
-        expect(markup).toContain('aria-label="Page sections"');
-        expect(markup).toContain('id="page-block-details"');
-        expect(markup).toContain('id="page-block-prices"');
-        expect(markup).toContain('id="page-block-settings"');
     });
 
     it("won't render blocks without required permissions", () => {

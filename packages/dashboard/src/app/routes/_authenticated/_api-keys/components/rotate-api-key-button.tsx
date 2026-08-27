@@ -1,15 +1,11 @@
-import {
-    sensitiveActionHeaders,
-    SensitiveActionPasswordField,
-} from '@/vdb/components/shared/sensitive-action-password.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
 } from '@/vdb/components/ui/dialog.js';
 import { api } from '@/vdb/graphql/api.js';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -26,12 +22,10 @@ interface RotateApiKeyButtonProps {
 
 export function RotateApiKeyButton({ apiKeyId, onSuccess }: RotateApiKeyButtonProps) {
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [password, setPassword] = useState('');
     const { t } = useLingui();
 
     const rotateMutation = useMutation({
-        mutationFn: (currentPassword: string) =>
-            api.mutate(rotateApiKeyDocument, { id: apiKeyId }, sensitiveActionHeaders(currentPassword)),
+        mutationFn: () => api.mutate(rotateApiKeyDocument, { id: apiKeyId }),
         onSuccess: data => {
             setConfirmOpen(false);
             onSuccess(data.rotateApiKey.apiKey);
@@ -42,13 +36,7 @@ export function RotateApiKeyButton({ apiKeyId, onSuccess }: RotateApiKeyButtonPr
                 description: err instanceof Error ? err.message : t`Unknown error`,
             });
         },
-        onSettled: () => setPassword(''),
     });
-
-    const handleOpenChange = (open: boolean) => {
-        setConfirmOpen(open);
-        if (!open) setPassword('');
-    };
 
     return (
         <>
@@ -57,32 +45,25 @@ export function RotateApiKeyButton({ apiKeyId, onSuccess }: RotateApiKeyButtonPr
                 <Trans>Rotate Key</Trans>
             </Button>
 
-            <Dialog open={confirmOpen} onOpenChange={handleOpenChange}>
+            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>
-                            <Trans>Rotate API Key</Trans>
-                        </DialogTitle>
+                        <DialogTitle><Trans>Rotate API Key</Trans></DialogTitle>
                         <DialogDescription>
                             <Trans>
-                                Rotating this key will immediately invalidate the current key. Any
-                                integrations using it will stop working until updated with the new key.
+                                Rotating this key will immediately invalidate the current key.
+                                Any integrations using it will stop working until updated with the new key.
                             </Trans>
                         </DialogDescription>
                     </DialogHeader>
-                    <SensitiveActionPasswordField
-                        value={password}
-                        onChange={setPassword}
-                        disabled={rotateMutation.isPending}
-                    />
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                        <Button variant="outline" onClick={() => setConfirmOpen(false)}>
                             <Trans>Cancel</Trans>
                         </Button>
                         <Button
                             variant="destructive"
-                            onClick={() => rotateMutation.mutate(password)}
-                            disabled={!password || rotateMutation.isPending}
+                            onClick={() => rotateMutation.mutate()}
+                            disabled={rotateMutation.isPending}
                         >
                             <Trans>Rotate Key</Trans>
                         </Button>

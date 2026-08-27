@@ -15,7 +15,6 @@ export type RouteName =
     | 'addresses'
     | 'account-security'
     | 'favorites'
-    | 'announcements'
     | 'history'
     | 'notifications'
     | 'coupons'
@@ -86,7 +85,6 @@ const routePaths: Record<RouteName, string> = {
     addresses: '/addresses',
     'account-security': '/account-security',
     favorites: '/favorites',
-    announcements: '/announcements',
     history: '/history',
     notifications: '/notifications',
     coupons: '/coupons',

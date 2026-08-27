@@ -163,23 +163,6 @@ export interface RowAction<T> {
     onClick?: (row: Row<T>) => void;
 }
 
-/**
- * The action that is displayed directly in a list row. Use this for the most
- * common next step, such as editing or managing the entity. Less common actions
- * belong in {@link RowAction} and remain available from the overflow menu.
- */
-export interface PrimaryRowAction<T> {
-    label: React.ReactNode | ((row: Row<T>) => React.ReactNode);
-    icon?: React.ComponentType<{ className?: string }>;
-    href?: string | ((row: Row<T>) => string);
-    onClick?: (row: Row<T>) => void;
-    disabled?: boolean | ((row: Row<T>) => boolean);
-    hidden?: (row: Row<T>) => boolean;
-    ariaLabel?: string | ((row: Row<T>) => string);
-    title?: string | ((row: Row<T>) => string);
-    requiresPermission?: string[];
-}
-
 export type PaginatedListRefresherRegisterFn = (refreshFn: () => void) => void;
 
 /**
@@ -229,7 +212,6 @@ export interface PaginatedListDataTableProps<
     onFilterChange: (table: Table<any>, filters: ColumnFiltersState) => void;
     onColumnVisibilityChange?: (table: Table<any>, columnVisibility: VisibilityState) => void;
     facetedFilters?: FacetedFilterConfig<T>;
-    primaryRowAction?: PrimaryRowAction<PaginatedListItemFields<T>>;
     rowActions?: RowAction<PaginatedListItemFields<T>>[];
     bulkActions?: BulkActionsInput;
     disableViewOptions?: boolean;
@@ -411,7 +393,6 @@ export function PaginatedListDataTable<
     onFilterChange,
     onColumnVisibilityChange,
     facetedFilters,
-    primaryRowAction,
     rowActions,
     bulkActions,
     disableViewOptions,
@@ -459,7 +440,6 @@ export function PaginatedListDataTable<
     const { columns, customFieldColumnNames } = useGeneratedColumns({
         fields,
         customizeColumns,
-        primaryRowAction,
         rowActions,
         bulkActions,
         deleteMutation,
