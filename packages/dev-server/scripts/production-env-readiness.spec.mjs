@@ -141,7 +141,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('database-engine'));
     assert.ok(blockers.has('database-connection'));
     assert.ok(blockers.has('digital-delivery'));
-    assert.ok(blockers.has('image-generation-private-storage'));
+    assert.ok(blockers.has('image-generation-storage'));
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
     assert.ok(blockers.has('storefront-promotion-gate'));
@@ -224,7 +224,7 @@ void test('blocks a missing or placeholder auto-card encryption key', () => {
     }
 });
 
-void test('blocks unsafe AI image private storage configuration for server and worker', () => {
+void test('blocks unsafe AI image storage configuration for server and worker', () => {
     for (const role of ['server', 'worker']) {
         const report = evaluateProductionEnvironment(
             readyEnvironment({
@@ -238,7 +238,7 @@ void test('blocks unsafe AI image private storage configuration for server and w
         assert.equal(report.ready, false);
         assert.equal(
             report.checks.some(
-                check => check.id === 'image-generation-private-storage' && check.status === 'blocker',
+                check => check.id === 'image-generation-storage' && check.status === 'blocker',
             ),
             true,
         );
