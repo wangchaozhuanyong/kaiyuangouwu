@@ -6,6 +6,8 @@ import test from 'node:test';
 
 import {
     assertSafeOutputPath,
+    copyAuthVisualReleaseInput,
+    copyInventoryRepairReleaseInput,
     copyStorefrontMediaReleaseInputs,
     ensureRuntimeRootPermissions,
     pruneDeniedRuntimePackages,
@@ -58,17 +60,36 @@ void test('runtime artifact root is readable and traversable by the web server',
     }
 });
 
-void test('runtime artifact includes release publishers and every media manifest image', async () => {
+void test('runtime artifact includes the media publisher and every manifest image', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-storefront-media-'));
     try {
         await copyStorefrontMediaReleaseInputs(fixtureRoot);
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs'));
-        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
         for (const entry of storefrontMediaManifest) {
             const relativePath = path.relative(repositoryRoot, entry.file);
             const copied = await readFile(path.join(fixtureRoot, relativePath));
             assert.ok(copied.byteLength > 0, `Missing copied media: ${entry.key}`);
         }
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('runtime artifact includes the reviewed auth visual publisher', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-auth-visuals-'));
+    try {
+        await copyAuthVisualReleaseInput(fixtureRoot);
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-auth-visuals.mjs'));
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('runtime artifact includes the reviewed inventory repair publisher', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-inventory-repair-'));
+    try {
+        await copyInventoryRepairReleaseInput(fixtureRoot);
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
     } finally {
         await rm(fixtureRoot, { recursive: true, force: true });
     }

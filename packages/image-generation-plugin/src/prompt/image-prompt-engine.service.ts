@@ -1,4 +1,3 @@
-import type { ImagePromptSpec, ImageReferenceMode, OptimizeImagePromptInput } from '../types';
 import { Injectable } from '@nestjs/common';
 import {
     Customer,
@@ -8,6 +7,7 @@ import {
     UserInputError,
 } from '@vendure/core';
 import { MoreThanOrEqual } from 'typeorm';
+import type { ImagePromptSpec, ImageReferenceMode, OptimizeImagePromptInput } from '../types';
 
 import { MAX_PROMPT_LENGTH } from '../constants';
 import { ImageModelConfig } from '../entities/image-model-config.entity';

@@ -180,6 +180,139 @@ test('dry-run resolves the backend targets without sending mutations', async () 
     );
 });
 
+test('an existing Admin API bearer session can authenticate the publisher', async () => {
+    const requests = [];
+    const fetchImpl = async (_url, init) => {
+        const request = JSON.parse(init.body);
+        requests.push({ request, headers: init.headers });
+        if (request.query.includes('StorefrontMediaCurrentUser')) {
+            return Response.json({
+                data: {
+                    me: {
+                        id: 'admin-1',
+                        channels: [{ id: 'channel-1', code: 'cn-mainland', token: 'channel-token' }],
+                    },
+                },
+            });
+        }
+        if (request.query.includes('StorefrontMediaContentBlocks')) {
+            return Response.json({ data: { storefrontContentBlocks: [] } });
+        }
+        if (request.query.includes('StorefrontMediaProductVariant')) {
+            return Response.json({
+                data: {
+                    productVariants: {
+                        items: [
+                            {
+                                id: 'variant-6',
+                                sku: 'gpt-plus-苹果开通',
+                                product: { id: 'product-1', name: 'Codex Plus' },
+                            },
+                        ],
+                    },
+                },
+            });
+        }
+        if (request.query.includes('StorefrontMediaAsset')) {
+            return Response.json({ data: { assets: { items: [] } } });
+        }
+        throw new Error(`Unexpected GraphQL request: ${request.query}`);
+    };
+
+    await syncStorefrontMedia({
+        apiOrigin: 'http://127.0.0.1:3000',
+        adminBearerToken: 'existing-admin-session',
+        channelCodes: ['cn-mainland'],
+        apply: false,
+        fetchImpl,
+        manifest: [storefrontMediaManifest[0]],
+    });
+
+    assert.equal(
+        requests.some(({ request }) => request.query.includes('StorefrontMediaLogin')),
+        false,
+    );
+    assert.equal(requests[0].headers.authorization, 'Bearer existing-admin-session');
+});
+
+test('asset upload does not request the nullable translated name field', async () => {
+    let uploadOperations;
+    const fetchImpl = async (_url, init) => {
+        if (init.body instanceof FormData) {
+            uploadOperations = JSON.parse(init.body.get('operations'));
+            return Response.json({
+                data: {
+                    createAssets: [
+                        {
+                            id: 'asset-25',
+                            preview: 'preview/codex-plus.png',
+                            source: 'source/codex-plus.png',
+                        },
+                    ],
+                },
+            });
+        }
+        const request = JSON.parse(init.body);
+        if (request.query.includes('StorefrontMediaLogin')) {
+            return new Response(
+                JSON.stringify({
+                    data: {
+                        login: {
+                            id: 'admin-1',
+                            channels: [{ id: 'channel-1', code: 'cn-mainland', token: 'channel-token' }],
+                        },
+                    },
+                }),
+                { headers: { 'content-type': 'application/json', 'vendure-auth-token': 'auth-token' } },
+            );
+        }
+        if (request.query.includes('StorefrontMediaContentBlocks')) {
+            return Response.json({ data: { storefrontContentBlocks: [] } });
+        }
+        if (request.query.includes('StorefrontMediaProductVariant')) {
+            return Response.json({
+                data: {
+                    productVariants: {
+                        items: [
+                            {
+                                id: 'variant-6',
+                                sku: 'gpt-plus-苹果开通',
+                                product: { id: 'product-1', name: 'Codex Plus' },
+                            },
+                        ],
+                    },
+                },
+            });
+        }
+        if (request.query.includes('StorefrontMediaAsset')) {
+            return Response.json({ data: { assets: { items: [] } } });
+        }
+        if (request.query.includes('AssignStorefrontMediaAsset')) {
+            return Response.json({ data: { assignAssetsToChannel: { id: 'asset-25' } } });
+        }
+        if (request.query.includes('UpdateStorefrontMediaProduct')) {
+            return Response.json({ data: { updateProduct: { id: 'product-1' } } });
+        }
+        if (request.query.includes('UpdateStorefrontMediaVariant')) {
+            return Response.json({ data: { updateProductVariant: { id: 'variant-6' } } });
+        }
+        throw new Error(`Unexpected GraphQL request: ${request.query}`);
+    };
+
+    const result = await syncStorefrontMedia({
+        apiOrigin: 'http://127.0.0.1:3000',
+        username: 'admin',
+        password: 'secret',
+        channelCodes: ['cn-mainland'],
+        apply: true,
+        fetchImpl,
+        manifest: [storefrontMediaManifest[0]],
+    });
+
+    assert.equal(result.results[0].assetId, 'asset-25');
+    assert.doesNotMatch(uploadOperations.query, /^\s*name\s*$/mu);
+});
+
 test('only localhost origins count as local writes', () => {
     assert.equal(isLocalApiOrigin('http://127.0.0.1:3000'), true);
     assert.equal(isLocalApiOrigin('https://vendure.localhost'), true);

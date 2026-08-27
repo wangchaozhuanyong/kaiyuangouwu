@@ -15,14 +15,14 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - The standard media publisher is `packages/dev-server/scripts/sync-storefront-media.mjs`. Extend its manifest or create an equally reviewed, tested, idempotent Admin API publisher when another managed data type is introduced.
 - Never simulate synchronization with client-only filename matching, hidden URL replacement maps, hard-coded asset overrides, or duplicated managed content. Bundled client assets are allowed only as explicit empty-state or unavailable-backend fallbacks.
 - Every Admin API publisher must:
-  - default to read-only validation or `--dry-run`, with writes requiring an explicit `--apply` flag;
-  - require an additional explicit production/remote-write guard such as `--allow-remote`;
-  - read credentials and target Channels from environment variables, never command arguments, source files, or logs;
-  - resolve products by stable SKU and managed content by stable code/type, and fail before writes when a target is missing or ambiguous;
-  - upload assets with deterministic logical tags plus a content hash, reuse unchanged assets, and remain safe to repeat;
-  - bind the same Vendure asset IDs/settings to the Dashboard-managed entity consumed by the Shop API;
-  - avoid deleting historical assets or user data during a normal publish so rollback remains possible;
-  - report a reviewable summary of planned/applied targets without exposing secrets.
+    - default to read-only validation or `--dry-run`, with writes requiring an explicit `--apply` flag;
+    - require an additional explicit production/remote-write guard such as `--allow-remote`;
+    - read credentials and target Channels from environment variables, never command arguments, source files, or logs;
+    - resolve products by stable SKU and managed content by stable code/type, and fail before writes when a target is missing or ambiguous;
+    - upload assets with deterministic logical tags plus a content hash, reuse unchanged assets, and remain safe to repeat;
+    - bind the same Vendure asset IDs/settings to the Dashboard-managed entity consumed by the Shop API;
+    - avoid deleting historical assets or user data during a normal publish so rollback remains possible;
+    - report a reviewable summary of planned/applied targets without exposing secrets.
 - Production release order is mandatory: start the candidate API, wait for health, run the publisher in dry-run mode, review exact Channel/SKU/content targets, run `--apply --allow-remote`, verify Admin API/Dashboard and Shop API/client resolve the same asset IDs and values, and only then promote the storefront candidate. A sync or verification failure stops the release.
 - Pure presentation changes such as CSS spacing may ship with the client build. If the value is editable or represents catalog/content data, it belongs in Vendure and must use the Admin API publishing path above.
 - Any task that changes managed storefront data or its publisher must update relevant manifests/config examples/runbook instructions and run publisher tests, storefront tests, and the relevant production build checks.

@@ -110,26 +110,6 @@ describe('product image navigation layers', () => {
         expect(stylesheet).toMatch(/\.row-add\s*\{[^}]*z-index:\s*20;/);
     });
 
-    it('keeps list-row prices inline instead of applying copy layout to nested price spans', () => {
-        const markup = renderToStaticMarkup(
-            <ProductRow
-                product={digitalProduct}
-                market={market}
-                locale={market.locale}
-                language="zh"
-                adding={false}
-                onOpen={vi.fn()}
-                onAdd={vi.fn()}
-            />,
-        );
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-
-        expect(markup).toContain('price-lockup');
-        expect(stylesheet).toMatch(/\.price-lockup\s*\{[^}]*display:\s*inline-flex;/);
-        expect(stylesheet).toMatch(/\.product-row-desc,\s*\.product-row-badge\s*\{/);
-        expect(stylesheet).not.toMatch(/\.product-row\s+span\s*,\s*\.product-row\s+small\s*\{/);
-    });
-
     it('does not use the internal SKU as customer-facing fallback copy', () => {
         const productWithoutDescription = { ...digitalProduct, description: '' };
         const cardMarkup = renderToStaticMarkup(
@@ -156,5 +136,25 @@ describe('product image navigation layers', () => {
 
         expect(cardMarkup).not.toContain('CHATGPT-PLUS');
         expect(rowMarkup).not.toContain('CHATGPT-PLUS');
+    });
+
+    it('keeps list-row prices inline instead of applying copy layout to nested price spans', () => {
+        const markup = renderToStaticMarkup(
+            <ProductRow
+                product={digitalProduct}
+                market={market}
+                locale={market.locale}
+                language="zh"
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('price-lockup');
+        expect(stylesheet).toMatch(/\.price-lockup\s*\{[^}]*display:\s*inline-flex;/);
+        expect(stylesheet).toMatch(/\.product-row-desc,\s*\.product-row-badge\s*\{/);
+        expect(stylesheet).not.toMatch(/\.product-row\s+span\s*,\s*\.product-row\s+small\s*\{/);
     });
 });

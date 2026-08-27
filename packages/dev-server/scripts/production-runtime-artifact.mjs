@@ -51,11 +51,12 @@ const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/dev-server/dist/dashboard/index.html',
     'packages/dev-server/email-templates/order-confirmation/body.hbs',
     'packages/content-translation-plugin/dist/index.js',
+    'packages/image-generation-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
-    'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
-    'packages/image-generation-plugin/dist/index.js',
+    'packages/dev-server/scripts/sync-auth-visuals.mjs',
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
+    'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
 ]);
 
 function isPathInside(parent, candidate) {
@@ -209,13 +210,10 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
 }
 
 export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
-    const releaseScripts = ['sync-storefront-media.mjs', 'repair-inventory-inheritance.mjs'];
-    for (const scriptName of releaseScripts) {
-        const scriptSource = path.join(repositoryRoot, 'packages/dev-server/scripts', scriptName);
-        const scriptDestination = path.join(stagingRoot, 'packages/dev-server/scripts', scriptName);
-        await mkdir(path.dirname(scriptDestination), { recursive: true });
-        await cp(scriptSource, scriptDestination);
-    }
+    const scriptSource = path.join(repositoryRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs');
+    const scriptDestination = path.join(stagingRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs');
+    await mkdir(path.dirname(scriptDestination), { recursive: true });
+    await cp(scriptSource, scriptDestination);
 
     for (const entry of storefrontMediaManifest) {
         const relativePath = path.relative(repositoryRoot, entry.file);
@@ -226,6 +224,26 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         await mkdir(path.dirname(destination), { recursive: true });
         await cp(entry.file, destination);
     }
+}
+
+export async function copyAuthVisualReleaseInput(stagingRoot) {
+    const scriptSource = path.join(repositoryRoot, 'packages/dev-server/scripts/sync-auth-visuals.mjs');
+    const scriptDestination = path.join(stagingRoot, 'packages/dev-server/scripts/sync-auth-visuals.mjs');
+    await mkdir(path.dirname(scriptDestination), { recursive: true });
+    await cp(scriptSource, scriptDestination);
+}
+
+export async function copyInventoryRepairReleaseInput(stagingRoot) {
+    const scriptSource = path.join(
+        repositoryRoot,
+        'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
+    );
+    const scriptDestination = path.join(
+        stagingRoot,
+        'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
+    );
+    await mkdir(path.dirname(scriptDestination), { recursive: true });
+    await cp(scriptSource, scriptDestination);
 }
 
 /**
@@ -241,9 +259,10 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
         engines: rootManifest.engines,
         scripts: {
             migrate: 'node packages/dev-server/dist/run-migrations.js',
+            'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',
+            'sync:auth-visuals': 'node packages/dev-server/scripts/sync-auth-visuals.mjs',
             'repair:inventory-inheritance':
                 'node packages/dev-server/scripts/repair-inventory-inheritance.mjs',
-            'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',
             'start:server': 'node packages/dev-server/dist/index.js',
             'start:worker': 'node packages/dev-server/dist/index-worker.js',
             verify: 'node verify-runtime.mjs',
@@ -316,6 +335,8 @@ export async function buildRuntimeArtifact({
         await pruneInstallerWorkspace(stagingRoot);
         await copyRuntimeBuildOutputs(stagingRoot);
         await copyStorefrontMediaReleaseInputs(stagingRoot);
+        await copyAuthVisualReleaseInput(stagingRoot);
+        await copyInventoryRepairReleaseInput(stagingRoot);
 
         const metadata = {
             artifactFormat: 1,

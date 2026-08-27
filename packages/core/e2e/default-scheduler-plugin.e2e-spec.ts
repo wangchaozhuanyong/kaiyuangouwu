@@ -151,7 +151,7 @@ describe('Default scheduler plugin', () => {
 
         // Manual trigger inside the window: must run.
         await adminClient.query(runTaskDocument, { id: 'hold-test-job-manual' });
-        await wait(300);
+        await pollUntil(() => holdSpyManual.mock.calls.length >= 2, { timeout: 3_000 });
         expect(holdSpyManual).toHaveBeenCalledTimes(2);
 
         // Control: cron path inside the same window must still be blocked.

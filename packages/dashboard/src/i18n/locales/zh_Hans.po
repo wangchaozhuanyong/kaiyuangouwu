@@ -1525,10 +1525,9 @@ msgctxt "current channel"
 msgid "Current store"
 msgstr "当前店铺"
 
-#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
-msgid "Delivered to the checkout email after payment; no shipping or stock."
-msgstr "付款后发送至结账邮箱，无需配送和库存。"
+#~ msgid "Delivered to the checkout email after payment; no shipping or stock."
+#~ msgstr "付款后发送至结账邮箱，无需配送和库存。"
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Every 5 seconds"
@@ -2406,6 +2405,10 @@ msgstr "新建税务分类"
 #: src/app/routes/_authenticated/_orders/hooks/use-refund-order.ts
 msgid "Partial refund completed"
 msgstr "部分退款已完成"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Only the active store's default-currency price is editable. Other storefront currencies are calculated from the configured exchange rate in real time."
+msgstr "仅可编辑当前店铺的默认币种价格，其他前台币种价格会根据配置的汇率实时计算。"
 
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Set custom fields"
@@ -6301,6 +6304,11 @@ msgstr "高度"
 msgid "Assign {entityType} to channels"
 msgstr "将{entityType}分配到店铺"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+msgid "Delivered to the checkout email after payment; no shipping is required."
+msgstr "付款后发送至结账邮箱，无需配送。"
+
 #: src/app/routes/_authenticated/_orders/components/order-modification-preview-dialog.tsx
 msgid "A refund of {formattedDiff} is required. Select payment amounts and enter a note to proceed."
 msgstr "需要退款 {formattedDiff}。选择付款金额并输入备注以继续。"
@@ -6824,8 +6832,8 @@ msgid "Failed to update customer group"
 msgstr "更新客户组失败"
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-msgid "Not tracked"
-msgstr "不跟踪库存"
+#~ msgid "Not tracked"
+#~ msgstr "不跟踪库存"
 
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Payment metadata"
@@ -7306,6 +7314,10 @@ msgstr "删除"
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 msgid "Failed to update customer"
 msgstr "更新客户失败"
+
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+msgid "Inventory tracking follows the global setting by default."
+msgstr "库存跟踪默认遵循全局设置。"
 
 #: src/app/routes/_authenticated/_zones/components/zone-bulk-actions.tsx
 msgid "Are you sure you want to remove {countryCount} countries/regions from this zone?"

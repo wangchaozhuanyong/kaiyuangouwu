@@ -777,7 +777,9 @@ function AfterSalesList({
                         {request.items.map(item => (
                             <span key={item.id}>
                                 <strong>{item.productName}</strong>
-                                <small>{isZh ? '数量' : 'Qty'} × {item.quantity}</small>
+                                <small>
+                                    {isZh ? '数量' : 'Qty'} × {item.quantity}
+                                </small>
                             </span>
                         ))}
                     </div>

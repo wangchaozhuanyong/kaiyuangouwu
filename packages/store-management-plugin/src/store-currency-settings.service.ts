@@ -26,6 +26,8 @@ import {
     StoreUsdtRateScheduleMode,
     UpdateStoreCurrencyConfigurationInput,
 } from './types';
+import { UsdtOtcRateService } from './usdt-otc-rate.service';
+// eslint-disable-next-line import/order -- TypeScript organize-imports sorts "-" before "/".
 import { UsdtPaymentService } from './usdt/usdt-payment.service';
 import { UsdtOtcRateService } from './usdt-otc-rate.service';
 
@@ -105,8 +107,7 @@ export class StoreCurrencySettingsService {
         input: UpdateStoreCurrencyConfigurationInput,
     ): Promise<StoreCurrencyConfiguration> {
         const normalized = normalizeInput(input);
-        const channel = await this.lockActiveChannel(ctx);
-        this.assertExpectedUpdatedAt(channel.updatedAt, normalized.expectedUpdatedAt);
+        const channel = await this.getActiveChannel(ctx);
         if (channel.defaultCurrencyCode !== normalized.defaultCurrencyCode) {
             await this.materializeNewDefaultCurrencyPrices(ctx, channel.defaultCurrencyCode, normalized);
         }
@@ -353,30 +354,6 @@ export class StoreCurrencySettingsService {
         const channel = await this.channelService.findOne(ctx, ctx.channelId);
         if (!channel) throw new UserInputError('当前店铺不存在');
         return channel;
-    }
-
-    private async lockActiveChannel(ctx: RequestContext): Promise<Channel> {
-        const repository = this.connection.getRepository(ctx, Channel);
-        try {
-            const locked = await repository
-                .createQueryBuilder('channel')
-                .setLock('pessimistic_write')
-                .where('channel.id = :channelId', { channelId: ctx.channelId })
-                .getOne();
-            if (!locked) throw new UserInputError('当前店铺不存在');
-        } catch (error) {
-            if (!isLockNotSupportedError(error)) throw error;
-        }
-        return this.getActiveChannel(ctx);
-    }
-
-    private assertExpectedUpdatedAt(current: Date, expected: Date | string): void {
-        const expectedDate = expected instanceof Date ? expected : new Date(expected);
-        if (!Number.isFinite(expectedDate.getTime()) || current.getTime() !== expectedDate.getTime()) {
-            throw new UserInputError(
-                'CONCURRENT_MODIFICATION: 币种配置已被其他管理员更新，请重新载入后合并修改',
-            );
-        }
     }
 
     private async materializeNewDefaultCurrencyPrices(

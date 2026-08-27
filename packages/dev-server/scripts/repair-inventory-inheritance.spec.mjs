@@ -89,6 +89,47 @@ test('production apply requires the guard even through loopback', async () => {
     );
 });
 
+test('a bearer token can reuse an authenticated Admin API session without logging in', async () => {
+    const requests = [];
+    const fetchImpl = async (_url, init) => {
+        const request = JSON.parse(init.body);
+        requests.push({ request, headers: init.headers });
+        if (request.query.includes('InventoryInheritanceCurrentUser')) {
+            assert.equal(init.headers.authorization, 'Bearer admin-session-token');
+            return Response.json({
+                data: {
+                    me: {
+                        id: 'admin-1',
+                        channels: [{ id: 'channel-1', code: 'cn-mainland', token: 'cn-token' }],
+                    },
+                },
+            });
+        }
+        if (request.query.includes('InventoryInheritanceVariant')) {
+            return Response.json({
+                data: {
+                    productVariants: { items: [variant('variant-a', request.variables.sku, 'FALSE')] },
+                },
+            });
+        }
+        throw new Error(`Unexpected GraphQL request: ${request.query}`);
+    };
+
+    const result = await repairInventoryInheritance({
+        apiOrigin: 'http://127.0.0.1:3000',
+        adminBearerToken: 'admin-session-token',
+        channelCodes: ['cn-mainland'],
+        skus: ['sku-a'],
+        fetchImpl,
+    });
+
+    assert.equal(result.variants[0].action, 'update');
+    assert.equal(
+        requests.some(({ request }) => request.query.includes('InventoryInheritanceLogin')),
+        false,
+    );
+});
+
 test('dry-run resolves all Channels and never sends a mutation', async () => {
     const requests = [];
     const fetchImpl = async (_url, init) => {

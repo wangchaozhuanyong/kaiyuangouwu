@@ -1,7 +1,7 @@
-import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
-import type { SafeProviderUrlService } from '../security/safe-provider-url.service';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
+import type { SafeProviderUrlService } from '../security/safe-provider-url.service';
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 

@@ -429,6 +429,8 @@ const enCopy: typeof zhCopy = {
 };
 
 const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
+    NAVIGATION: { zh: '客户端导航', en: 'Storefront navigation' },
+    CLIENT_PLUGINS: { zh: '客户端插件', en: 'Storefront plugins' },
     HERO: { zh: '首页主视觉', en: 'Hero' },
     NOTICE: { zh: '公告', en: 'Notice' },
     QUICK_LINKS: { zh: '快捷入口', en: 'Quick links' },
@@ -1949,35 +1951,39 @@ function BlockEditor({
         );
 
     return (
-        <>
-            <UnsavedChangesConfirmation when={isDirty} />
-            <Sheet open onOpenChange={open => !open && requestClose()}>
-                <SheetContent
-                    className={
-                        '@container/editor flex max-w-none flex-col gap-0 overflow-hidden p-0 ' +
-                        'data-[side=right]:w-full data-[side=right]:sm:w-[88vw] ' +
-                        'data-[side=right]:sm:max-w-[1440px]'
-                    }
-                >
-                    <SheetHeader className="shrink-0 border-b px-4 py-4 pr-14 text-left @md/editor:px-6 @md/editor:pr-14">
-                        <div className="flex flex-col gap-3 @4xl/editor:flex-row @4xl/editor:items-start @4xl/editor:justify-between">
-                            <div className="min-w-0">
-                                <SheetTitle>
-                                    {lockedType === 'HERO'
-                                        ? draft.id
-                                            ? text.updateCarouselSlideTitle
-                                            : text.createCarouselSlideTitle
-                                        : draft.id
-                                          ? text.updateTitle
-                                          : text.createTitle}
-                                </SheetTitle>
-                                <SheetDescription className="mt-1">{text.editorDescription}</SheetDescription>
-                            </div>
-                            <div className="flex min-w-0 flex-wrap items-center gap-2 @4xl/editor:shrink-0">
-                                {fixedTemplate ? <Badge variant="outline">{text.fixedTemplate}</Badge> : null}
-                                <div
-                                    className="grid min-w-0 flex-1 grid-cols-2 rounded-md border bg-muted/30 p-1 @2xl/editor:flex @2xl/editor:flex-none"
-                                    aria-label={text.simpleModeHint}
+        <Sheet open onOpenChange={open => !open && requestClose()}>
+            <SheetContent
+                className={
+                    '@container/editor flex max-w-none flex-col gap-0 overflow-hidden p-0 ' +
+                    'data-[side=right]:w-full data-[side=right]:sm:w-[88vw] ' +
+                    'data-[side=right]:sm:max-w-[1440px]'
+                }
+            >
+                <SheetHeader className="shrink-0 border-b px-4 py-4 pr-14 text-left @md/editor:px-6 @md/editor:pr-14">
+                    <div className="flex flex-col gap-3 @4xl/editor:flex-row @4xl/editor:items-start @4xl/editor:justify-between">
+                        <div className="min-w-0">
+                            <SheetTitle>
+                                {lockedType === 'HERO'
+                                    ? draft.id
+                                        ? text.updateCarouselSlideTitle
+                                        : text.createCarouselSlideTitle
+                                    : draft.id
+                                      ? text.updateTitle
+                                      : text.createTitle}
+                            </SheetTitle>
+                            <SheetDescription className="mt-1">{text.editorDescription}</SheetDescription>
+                        </div>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2 @4xl/editor:shrink-0">
+                            {fixedTemplate ? <Badge variant="outline">{text.fixedTemplate}</Badge> : null}
+                            <div
+                                className="grid min-w-0 flex-1 grid-cols-2 rounded-md border bg-muted/30 p-1 @2xl/editor:flex @2xl/editor:flex-none"
+                                aria-label={text.simpleModeHint}
+                            >
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={advancedMode ? 'ghost' : 'secondary'}
+                                    onClick={() => setAdvancedMode(false)}
                                 >
                                     <Button
                                         type="button"
@@ -1998,133 +2004,30 @@ function BlockEditor({
                                 </div>
                             </div>
                         </div>
-                        <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
-                    </SheetHeader>
-                    <div className="grid min-h-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto @5xl/editor:grid-cols-[minmax(0,1fr)_360px] @5xl/editor:overflow-hidden">
-                        <div className="@container/editor-form min-w-0 space-y-7 px-4 py-5 @md/editor:px-6 @5xl/editor:overflow-y-auto">
-                            <section className="space-y-4">
-                                <h3 className="text-sm font-medium">{text.basic}</h3>
-                                <div className="grid gap-4 @md/editor-form:grid-cols-2">
-                                    {!fixedTemplate ? (
-                                        <Field label={text.internalName} hint={text.internalNameHint}>
-                                            <Input
-                                                value={draft.internalName}
-                                                onChange={event => update('internalName', event.target.value)}
-                                            />
-                                        </Field>
-                                    ) : null}
-                                    {!lockedType ? (
-                                        <Field label={text.type}>
-                                            <Select
-                                                value={draft.type}
-                                                onValueChange={value => {
-                                                    if (!value) return;
-                                                    const type = value;
-                                                    const nextDraft = {
-                                                        ...draft,
-                                                        type,
-                                                        layoutVariant: defaultLayoutForType(type),
-                                                    };
-                                                    onChange(
-                                                        type === 'CORE_CATEGORIES'
-                                                            ? applyCoreCategoryDefaults(nextDraft)
-                                                            : nextDraft,
-                                                    );
-                                                    if (type === 'CUSTOM') setAdvancedMode(true);
-                                                }}
-                                            >
-                                                <SelectTrigger className="w-full min-w-0">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {blockTypes
-                                                        .filter(type => type !== 'HERO')
-                                                        .map(type => (
-                                                            <SelectItem key={type} value={type}>
-                                                                {isZh
-                                                                    ? blockTypeLabels[type].zh
-                                                                    : blockTypeLabels[type].en}
-                                                            </SelectItem>
-                                                        ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </Field>
-                                    ) : null}
-                                    {advancedMode ? (
-                                        <Field label={text.code} hint={text.codeHint}>
-                                            <Input
-                                                value={draft.code}
-                                                autoCapitalize="none"
-                                                spellCheck={false}
-                                                onChange={event => update('code', event.target.value)}
-                                            />
-                                        </Field>
-                                    ) : null}
-                                    {advancedMode ? (
-                                        <Field label={text.position}>
-                                            <Input
-                                                type="number"
-                                                min={0}
-                                                value={draft.position}
-                                                onChange={event =>
-                                                    update('position', Number(event.target.value) || 0)
-                                                }
-                                            />
-                                        </Field>
-                                    ) : null}
-                                    {!fixedTemplate ? (
-                                        <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
-                                            <div className="min-w-0">
-                                                <Label>{text.status}</Label>
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    {text.statusHint}
-                                                </p>
-                                            </div>
-                                            <Switch
-                                                className="shrink-0"
-                                                checked={draft.enabled}
-                                                onCheckedChange={value => update('enabled', value)}
-                                            />
-                                        </div>
-                                    ) : null}
-                                    {advancedMode ? (
-                                        <>
-                                            <Field label={text.startsAt}>
-                                                <Input
-                                                    type="datetime-local"
-                                                    value={toLocalDateTime(draft.startsAt)}
-                                                    onChange={event =>
-                                                        update(
-                                                            'startsAt',
-                                                            fromLocalDateTime(event.target.value),
-                                                        )
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label={text.endsAt}>
-                                                <Input
-                                                    type="datetime-local"
-                                                    value={toLocalDateTime(draft.endsAt)}
-                                                    onChange={event =>
-                                                        update(
-                                                            'endsAt',
-                                                            fromLocalDateTime(event.target.value),
-                                                        )
-                                                    }
-                                                />
-                                            </Field>
-                                        </>
-                                    ) : null}
-                                    {advancedMode || previewUsesBlockImage(draft.type) ? (
-                                        <AssetSelectionField
-                                            className="@md/editor-form:col-span-2"
-                                            label={text.imageAsset}
-                                            asset={draft.imageAsset}
-                                            fallbackUrl={draft.imageUrl}
-                                            imageGuidance={blockImageGuidance(draft.type)}
-                                            text={text}
-                                            onChange={asset =>
-                                                onChange({
+                    </div>
+                    <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
+                </SheetHeader>
+                <div className="grid min-h-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto @5xl/editor:grid-cols-[minmax(0,1fr)_360px] @5xl/editor:overflow-hidden">
+                    <div className="@container/editor-form min-w-0 space-y-7 px-4 py-5 @md/editor:px-6 @5xl/editor:overflow-y-auto">
+                        <section className="space-y-4">
+                            <h3 className="text-sm font-medium">{text.basic}</h3>
+                            <div className="grid gap-4 @md/editor-form:grid-cols-2">
+                                {!fixedTemplate ? (
+                                    <Field label={text.internalName} hint={text.internalNameHint}>
+                                        <Input
+                                            value={draft.internalName}
+                                            onChange={event => update('internalName', event.target.value)}
+                                        />
+                                    </Field>
+                                ) : null}
+                                {!lockedType ? (
+                                    <Field label={text.type}>
+                                        <Select
+                                            value={draft.type}
+                                            onValueChange={value => {
+                                                if (!value) return;
+                                                const type = value;
+                                                const nextDraft = {
                                                     ...draft,
                                                     imageAsset: asset,
                                                     imageAssetId: asset?.id ?? null,
@@ -2132,14 +2035,171 @@ function BlockEditor({
                                                 })
                                             }
                                         />
-                                    ) : null}
-                                    {advancedMode ? (
-                                        <>
-                                            <Field
-                                                label={text.imageUrl}
-                                                hint={text.imageHint}
-                                                className="@md/editor-form:col-span-2"
-                                            >
+                                    </Field>
+                                ) : null}
+                                {!fixedTemplate ? (
+                                    <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+                                        <div className="min-w-0">
+                                            <Label>{text.status}</Label>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {text.statusHint}
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            className="shrink-0"
+                                            checked={draft.enabled}
+                                            onCheckedChange={value => update('enabled', value)}
+                                        />
+                                    </div>
+                                ) : null}
+                                {advancedMode ? (
+                                    <>
+                                        <Field label={text.startsAt}>
+                                            <Input
+                                                type="datetime-local"
+                                                value={toLocalDateTime(draft.startsAt)}
+                                                onChange={event =>
+                                                    update('startsAt', fromLocalDateTime(event.target.value))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label={text.endsAt}>
+                                            <Input
+                                                type="datetime-local"
+                                                value={toLocalDateTime(draft.endsAt)}
+                                                onChange={event =>
+                                                    update('endsAt', fromLocalDateTime(event.target.value))
+                                                }
+                                            />
+                                        </Field>
+                                    </>
+                                ) : null}
+                                {advancedMode || previewUsesBlockImage(draft.type) ? (
+                                    <AssetSelectionField
+                                        className="@md/editor-form:col-span-2"
+                                        label={text.imageAsset}
+                                        asset={draft.imageAsset}
+                                        fallbackUrl={draft.imageUrl}
+                                        imageGuidance={blockImageGuidance(draft.type)}
+                                        text={text}
+                                        onChange={asset =>
+                                            onChange({
+                                                ...draft,
+                                                imageAsset: asset,
+                                                imageAssetId: asset?.id ?? null,
+                                                imageUrl: asset?.preview ?? null,
+                                            })
+                                        }
+                                    />
+                                ) : null}
+                                {advancedMode ? (
+                                    <>
+                                        <Field
+                                            label={text.imageUrl}
+                                            hint={text.imageHint}
+                                            className="@md/editor-form:col-span-2"
+                                        >
+                                            <Input
+                                                inputMode="url"
+                                                value={draft.imageUrl ?? ''}
+                                                onChange={event =>
+                                                    onChange({
+                                                        ...draft,
+                                                        imageAsset: null,
+                                                        imageAssetId: null,
+                                                        imageUrl: event.target.value || null,
+                                                    })
+                                                }
+                                            />
+                                            <ImageSizeHint guidance={blockImageGuidance(draft.type)} />
+                                        </Field>
+                                        {draft.type !== 'CORE_CATEGORIES' && draft.type !== 'HERO' ? (
+                                            <>
+                                                <Field label={text.backgroundColor}>
+                                                    <ColorInput
+                                                        value={draft.backgroundColor}
+                                                        ariaLabel={text.backgroundColor}
+                                                        onChange={value => update('backgroundColor', value)}
+                                                    />
+                                                </Field>
+                                                <Field label={text.textColor}>
+                                                    <ColorInput
+                                                        value={draft.textColor}
+                                                        ariaLabel={text.textColor}
+                                                        onChange={value => update('textColor', value)}
+                                                    />
+                                                </Field>
+                                            </>
+                                        ) : null}
+                                    </>
+                                ) : null}
+                                {advancedMode ||
+                                lockedType === 'HERO' ||
+                                simpleBlockNeedsTarget(draft.type) ? (
+                                    <>
+                                        <Field label={text.targetType}>
+                                            <TargetSelect
+                                                value={draft.targetType}
+                                                isZh={isZh}
+                                                onChange={value =>
+                                                    onChange({
+                                                        ...draft,
+                                                        targetType: value,
+                                                        targetValue: targetValueAfterTypeChange(
+                                                            draft.targetType,
+                                                            draft.targetValue,
+                                                            value,
+                                                        ),
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <TargetValueEditor
+                                            targetType={draft.targetType}
+                                            value={draft.targetValue}
+                                            isZh={isZh}
+                                            text={text}
+                                            onChange={value => update('targetValue', value)}
+                                        />
+                                    </>
+                                ) : null}
+                            </div>
+                        </section>
+
+                        {draft.type === 'HERO' ? (
+                            <>
+                                <Separator />
+                                <HeroThemeSettings draft={draft} text={text} onChange={onChange} />
+                            </>
+                        ) : null}
+
+                        {(!advancedMode ||
+                            draft.type === 'CORE_CATEGORIES' ||
+                            draft.type === 'CATEGORY_AD') &&
+                        simpleModuleHasSettings(draft.type) ? (
+                            <>
+                                <Separator />
+                                <ModuleSpecificSettings
+                                    draft={draft}
+                                    isZh={isZh}
+                                    text={text}
+                                    onChange={onChange}
+                                />
+                            </>
+                        ) : null}
+
+                        <Separator />
+                        <section className="space-y-4">
+                            <h3 className="text-sm font-medium">{text.translations}</h3>
+                            <div className="grid gap-5 @2xl/editor-form:grid-cols-2">
+                                {translationLanguages.map(languageCode => {
+                                    const translation = getBlockTranslation(draft, languageCode);
+                                    return (
+                                        <div key={languageCode} className="space-y-3 border-l-2 pl-4">
+                                            <h4 className="text-sm font-medium">
+                                                {languageCode === 'zh_Hans' ? text.chinese : text.english}
+                                            </h4>
+                                            <Field label={text.blockTitle}>
                                                 <Input
                                                     inputMode="url"
                                                     value={draft.imageUrl ?? ''}
@@ -2336,163 +2396,186 @@ function BlockEditor({
                                                         ),
                                                     )
                                                 }
-                                                onRemove={() =>
-                                                    update(
-                                                        'items',
-                                                        draft.items.filter(
-                                                            (_, currentIndex) => currentIndex !== index,
-                                                        ),
-                                                    )
-                                                }
-                                            />
-                                        ))}
-                                    </section>
-                                </>
-                            ) : null}
-                        </div>
-
-                        <aside className="min-w-0 border-t bg-muted/30 px-4 py-5 @md/editor:px-5 @5xl/editor:overflow-y-auto @5xl/editor:border-l @5xl/editor:border-t-0">
-                            <h3 className="mb-4 text-sm font-medium">{text.preview}</h3>
-                            <div className="mx-auto w-full max-w-[300px] overflow-hidden rounded-[8px] border bg-background shadow-sm">
-                                <div className="flex h-7 items-center justify-center border-b bg-muted text-[10px] text-muted-foreground">
-                                    390 x 844
-                                </div>
-                                <div
-                                    className="relative min-h-[420px] overflow-hidden p-4"
-                                    style={{
-                                        backgroundColor:
-                                            draft.type === 'HERO'
-                                                ? '#f8fafc'
-                                                : draft.backgroundColor || '#ffffff',
-                                        color:
-                                            draft.type === 'HERO' ? '#111827' : draft.textColor || '#111827',
-                                    }}
-                                >
-                                    {draft.type === 'HERO' ? (
-                                        <HeroEditorPreview
-                                            draft={draft}
-                                            translation={previewTranslation}
+                                            >
+                                                <Plus className="size-4" aria-hidden="true" />
+                                                {text.addItem}
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                    {draft.items.map((item, index) => (
+                                        <ItemEditor
+                                            key={item.id ?? `new-${index}`}
+                                            item={item}
+                                            index={index}
+                                            blockType={draft.type}
+                                            advancedMode={advancedMode}
                                             isZh={isZh}
-                                        />
-                                    ) : draft.type === 'CATEGORY_AD' ? (
-                                        <CategoryPromotionEditorPreview
-                                            draft={draft}
-                                            translation={previewTranslation}
-                                            isZh={isZh}
-                                        />
-                                    ) : draft.type === 'FEATURED_COLLECTION' ? (
-                                        <FeaturedCollectionEditorPreview
-                                            draft={draft}
-                                            translation={previewTranslation}
-                                            isZh={isZh}
-                                        />
-                                    ) : draft.type === 'STORY' ? (
-                                        <StoryEditorPreview
-                                            draft={draft}
-                                            translation={previewTranslation}
-                                            isZh={isZh}
-                                        />
-                                    ) : (
-                                        <>
-                                            {previewUsesBlockImage(draft.type) ? (
-                                                draft.imageUrl ? (
-                                                    <img
-                                                        className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
-                                                        src={draft.imageUrl}
-                                                        alt=""
-                                                    />
-                                                ) : (
-                                                    <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
-                                                        <ImageIcon
-                                                            className="size-5 opacity-50"
-                                                            aria-hidden="true"
-                                                        />
-                                                    </div>
+                                            text={text}
+                                            onChange={next =>
+                                                update(
+                                                    'items',
+                                                    draft.items.map((current, currentIndex) =>
+                                                        currentIndex === index ? next : current,
+                                                    ),
                                                 )
-                                            ) : null}
-                                            {previewTranslation?.title ? (
-                                                <>
-                                                    <h4 className="text-lg font-semibold">
-                                                        {previewTranslation.title}
-                                                    </h4>
-                                                    {previewTranslation.subtitle && (
-                                                        <p className="mt-1 text-sm opacity-75">
-                                                            {previewTranslation.subtitle}
-                                                        </p>
-                                                    )}
-                                                    {previewTranslation.body && (
-                                                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-                                                            {previewTranslation.body}
-                                                        </p>
-                                                    )}
-                                                    {previewTranslation.ctaLabel && (
-                                                        <div className="mt-4 inline-flex min-h-9 items-center border border-current px-3 text-sm font-medium">
-                                                            {previewTranslation.ctaLabel}
-                                                        </div>
-                                                    )}
-                                                    {draft.items.length > 0 && (
-                                                        <div className="mt-5 grid grid-cols-2 gap-2">
-                                                            {draft.items.slice(0, 4).map((item, index) => {
-                                                                const itemTranslation =
-                                                                    preferredItemTranslation(item, isZh);
-                                                                return (
-                                                                    <div
-                                                                        key={item.id ?? index}
-                                                                        className="border border-current/15 p-2"
-                                                                    >
-                                                                        {item.imageUrl ? (
-                                                                            <img
-                                                                                className="mb-2 aspect-square w-full rounded object-cover"
-                                                                                src={item.imageUrl}
-                                                                                alt=""
-                                                                            />
-                                                                        ) : null}
-                                                                        <div className="text-xs font-medium">
-                                                                            {itemTranslation.label ||
-                                                                                `${text.item} ${index + 1}`}
-                                                                        </div>
-                                                                        <div className="mt-1 line-clamp-2 text-[11px] opacity-65">
-                                                                            {itemTranslation.description}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <div className="flex min-h-44 items-center justify-center text-center text-sm opacity-60">
-                                                    {text.previewEmpty}
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        </aside>
+                                            }
+                                            onRemove={() =>
+                                                update(
+                                                    'items',
+                                                    draft.items.filter(
+                                                        (_, currentIndex) => currentIndex !== index,
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                    ))}
+                                </section>
+                            </>
+                        ) : null}
                     </div>
-                    <SheetFooter className="shrink-0 flex-row gap-3 border-t px-4 py-3 @md/editor:justify-end @md/editor:px-6 @md/editor:py-4">
-                        <Button
-                            className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
-                            type="button"
-                            variant="outline"
-                            disabled={saving}
-                            onClick={requestClose}
-                        >
-                            {text.cancel}
-                        </Button>
-                        <Button
-                            className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
-                            type="button"
-                            disabled={saving}
-                            onClick={() => onSave(draft)}
-                        >
-                            {saving ? text.saving : text.save}
-                        </Button>
-                    </SheetFooter>
-                </SheetContent>
-            </Sheet>
-        </>
+
+                    <aside className="min-w-0 border-t bg-muted/30 px-4 py-5 @md/editor:px-5 @5xl/editor:overflow-y-auto @5xl/editor:border-l @5xl/editor:border-t-0">
+                        <h3 className="mb-4 text-sm font-medium">{text.preview}</h3>
+                        <div className="mx-auto w-full max-w-[300px] overflow-hidden rounded-[8px] border bg-background shadow-sm">
+                            <div className="flex h-7 items-center justify-center border-b bg-muted text-[10px] text-muted-foreground">
+                                390 x 844
+                            </div>
+                            <div
+                                className="relative min-h-[420px] overflow-hidden p-4"
+                                style={{
+                                    backgroundColor:
+                                        draft.type === 'HERO'
+                                            ? '#f8fafc'
+                                            : draft.backgroundColor || '#ffffff',
+                                    color: draft.type === 'HERO' ? '#111827' : draft.textColor || '#111827',
+                                }}
+                            >
+                                {draft.type === 'HERO' ? (
+                                    <HeroEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
+                                ) : draft.type === 'CATEGORY_AD' ? (
+                                    <CategoryPromotionEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
+                                ) : draft.type === 'FEATURED_COLLECTION' ? (
+                                    <FeaturedCollectionEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
+                                ) : draft.type === 'STORY' ? (
+                                    <StoryEditorPreview
+                                        draft={draft}
+                                        translation={previewTranslation}
+                                        isZh={isZh}
+                                    />
+                                ) : (
+                                    <>
+                                        {previewUsesBlockImage(draft.type) ? (
+                                            draft.imageUrl ? (
+                                                <img
+                                                    className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
+                                                    src={draft.imageUrl}
+                                                    alt=""
+                                                />
+                                            ) : (
+                                                <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
+                                                    <ImageIcon
+                                                        className="size-5 opacity-50"
+                                                        aria-hidden="true"
+                                                    />
+                                                </div>
+                                            )
+                                        ) : null}
+                                        {previewTranslation?.title ? (
+                                            <>
+                                                <h4 className="text-lg font-semibold">
+                                                    {previewTranslation.title}
+                                                </h4>
+                                                {previewTranslation.subtitle && (
+                                                    <p className="mt-1 text-sm opacity-75">
+                                                        {previewTranslation.subtitle}
+                                                    </p>
+                                                )}
+                                                {previewTranslation.body && (
+                                                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+                                                        {previewTranslation.body}
+                                                    </p>
+                                                )}
+                                                {previewTranslation.ctaLabel && (
+                                                    <div className="mt-4 inline-flex min-h-9 items-center border border-current px-3 text-sm font-medium">
+                                                        {previewTranslation.ctaLabel}
+                                                    </div>
+                                                )}
+                                                {draft.items.length > 0 && (
+                                                    <div className="mt-5 grid grid-cols-2 gap-2">
+                                                        {draft.items.slice(0, 4).map((item, index) => {
+                                                            const itemTranslation = preferredItemTranslation(
+                                                                item,
+                                                                isZh,
+                                                            );
+                                                            return (
+                                                                <div
+                                                                    key={item.id ?? index}
+                                                                    className="border border-current/15 p-2"
+                                                                >
+                                                                    {item.imageUrl ? (
+                                                                        <img
+                                                                            className="mb-2 aspect-square w-full rounded object-cover"
+                                                                            src={item.imageUrl}
+                                                                            alt=""
+                                                                        />
+                                                                    ) : null}
+                                                                    <div className="text-xs font-medium">
+                                                                        {itemTranslation.label ||
+                                                                            `${text.item} ${index + 1}`}
+                                                                    </div>
+                                                                    <div className="mt-1 line-clamp-2 text-[11px] opacity-65">
+                                                                        {itemTranslation.description}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="flex min-h-44 items-center justify-center text-center text-sm opacity-60">
+                                                {text.previewEmpty}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+                <SheetFooter className="shrink-0 flex-row gap-3 border-t px-4 py-3 @md/editor:justify-end @md/editor:px-6 @md/editor:py-4">
+                    <Button
+                        className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
+                        type="button"
+                        variant="outline"
+                        disabled={saving}
+                        onClick={requestClose}
+                    >
+                        {text.cancel}
+                    </Button>
+                    <Button
+                        className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
+                        type="button"
+                        disabled={saving}
+                        onClick={() => onSave(draft)}
+                    >
+                        {saving ? text.saving : text.save}
+                    </Button>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
     );
 }
 

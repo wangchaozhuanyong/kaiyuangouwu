@@ -23,7 +23,6 @@ import {
     TabsContent,
     TabsList,
     TabsTrigger,
-    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -272,7 +271,8 @@ function StoreCurrencySettingsPage() {
                                                 </span>
                                                 <div className="mt-1 flex flex-wrap items-center gap-2">
                                                     <strong className="text-xl tabular-nums">
-                                                        1 CNY = {draft.cnyToMyrRate.toFixed(4)} MYR
+                                                        {/* i18n-audit-ignore -- Fixed ISO currency notation. */}
+                                                        {'1 CNY ='} {draft.cnyToMyrRate.toFixed(4)} MYR
                                                     </strong>
                                                     <Badge variant="outline">
                                                         {draft.rateMode === 'AUTO' ? '自动' : '手动'}
@@ -379,7 +379,9 @@ function StoreCurrencySettingsPage() {
                                                     {configuration?.cnyPerUsdtRate?.toFixed(4) ?? '暂无'}
                                                 </strong>
                                                 <span className="text-sm text-muted-foreground tabular-nums">
-                                                    / RM {configuration?.myrPerUsdtRate?.toFixed(4) ?? '暂无'}
+                                                    {/* i18n-audit-ignore -- Fixed ISO currency notation. */}
+                                                    {'/ RM'}{' '}
+                                                    {configuration?.myrPerUsdtRate?.toFixed(4) ?? '暂无'}
                                                 </span>
                                                 <Badge
                                                     variant={

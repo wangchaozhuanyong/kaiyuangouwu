@@ -1525,10 +1525,9 @@ msgctxt "current channel"
 msgid "Current store"
 msgstr "Current store"
 
-#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
-msgid "Delivered to the checkout email after payment; no shipping or stock."
-msgstr "Delivered to the checkout email after payment; no shipping or stock."
+#~ msgid "Delivered to the checkout email after payment; no shipping or stock."
+#~ msgstr "Delivered to the checkout email after payment; no shipping or stock."
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Every 5 seconds"
@@ -2406,6 +2405,10 @@ msgstr "New tax category"
 #: src/app/routes/_authenticated/_orders/hooks/use-refund-order.ts
 msgid "Partial refund completed"
 msgstr "Partial refund completed"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Only the active store's default-currency price is editable. Other storefront currencies are calculated from the configured exchange rate in real time."
+msgstr "Only the active store's default-currency price is editable. Other storefront currencies are calculated from the configured exchange rate in real time."
 
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Set custom fields"
@@ -6301,6 +6304,11 @@ msgstr "Height"
 msgid "Assign {entityType} to channels"
 msgstr "Assign {entityType} to sales channels"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+msgid "Delivered to the checkout email after payment; no shipping is required."
+msgstr "Delivered to the checkout email after payment; no shipping is required."
+
 #: src/app/routes/_authenticated/_orders/components/order-modification-preview-dialog.tsx
 msgid "A refund of {formattedDiff} is required. Select payment amounts and enter a note to proceed."
 msgstr "A refund of {formattedDiff} is required. Select payment amounts and enter a note to proceed."
@@ -6824,8 +6832,8 @@ msgid "Failed to update customer group"
 msgstr "Failed to update customer group"
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-msgid "Not tracked"
-msgstr "Not tracked"
+#~ msgid "Not tracked"
+#~ msgstr "Not tracked"
 
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Payment metadata"
@@ -7306,6 +7314,10 @@ msgstr "Remove"
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 msgid "Failed to update customer"
 msgstr "Failed to update customer"
+
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+msgid "Inventory tracking follows the global setting by default."
+msgstr "Inventory tracking follows the global setting by default."
 
 #: src/app/routes/_authenticated/_zones/components/zone-bulk-actions.tsx
 msgid "Are you sure you want to remove {countryCount} countries/regions from this zone?"

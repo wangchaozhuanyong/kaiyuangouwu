@@ -421,6 +421,7 @@ describe('referral rebate closed loop', () => {
             },
             customerCount: 0,
         });
+        shopClient.setRequestHeader('user-agent', 'Mozilla/5.0 Referral E2E Browser');
         await adminClient.asSuperAdmin();
         adminClient.setRequestHeader(
             'x-vendure-sensitive-action-password',
@@ -464,6 +465,9 @@ describe('referral rebate closed loop', () => {
         const disabled = await shopClient.query(PROGRAM);
         expect(disabled.referralProgram.enabled).toBe(false);
         const adminProgram = await adminClient.query(PROGRAM);
+
+        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0001' });
+        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0002' });
 
         await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0001' });
         await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0002' });
@@ -626,7 +630,7 @@ describe('referral rebate closed loop', () => {
         );
         expect(reports.referralBalanceAudit.items).toEqual([]);
         expect(reports.referralTodayMetrics).toMatchObject({
-            visitorCount: 1,
+            visitorCount: 2,
             newCustomerCount: 2,
             consumerCount: 2,
             firstTimeConsumerCount: 2,

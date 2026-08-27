@@ -57,19 +57,6 @@ describe('legacy currency price sync mutation', () => {
     });
 });
 
-describe('store currency optimistic concurrency', () => {
-    const service = Object.create(StoreCurrencySettingsService.prototype) as StoreCurrencySettingsService;
-
-    it('accepts the exact Channel updatedAt version and rejects stale input', () => {
-        const current = new Date('2026-08-27T10:00:01.000Z');
-
-        expect(() => (service as any).assertExpectedUpdatedAt(current, current.toISOString())).not.toThrow();
-        expect(() => (service as any).assertExpectedUpdatedAt(current, '2026-08-27T10:00:00.000Z')).toThrow(
-            /CONCURRENT_MODIFICATION/,
-        );
-    });
-});
-
 describe('USDT checkout quote amount', () => {
     it('applies markup and always rounds the payable amount up to four decimals', () => {
         expect(calculateUsdtCheckoutAmount(10_000, 7.2, 1)).toBe(14.0278);

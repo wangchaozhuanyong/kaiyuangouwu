@@ -18,7 +18,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { STOREFRONT_PROMOTION_OPTIONS } from '../constants';
@@ -47,7 +47,7 @@ import {
     referralPosterTemplates,
     ReferralWithdrawalStatus,
 } from './referral.constants';
-import { storefrontClientIp } from './storefront-client-ip';
+import { resolveStorefrontVisitorIdentity } from './storefront-visitor-identity';
 
 const INVITE_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const MAX_PAGE_SIZE = 200;
@@ -464,22 +464,79 @@ export class ReferralService implements OnApplicationBootstrap {
         return { order: paymentResult, wallet: refreshedWallet, amount };
     }
 
-    async recordVisit(ctx: RequestContext) {
-        const clientIp = storefrontClientIp(ctx.req);
-        if (!clientIp) return { recorded: false };
+    async recordVisit(ctx: RequestContext, visitorId?: string | null) {
+        const channelId = ctx.channelId.toString();
+        const identity = resolveStorefrontVisitorIdentity({
+            req: ctx.req,
+            channelId,
+            visitorId,
+            signingSecret: this.promotionOptions.signingSecret,
+        });
+        if (!identity) return { recorded: false, setCookie: null };
         let customer: Customer | undefined;
         if (ctx.activeUserId) customer = await this.customerService.findOneByUserId(ctx, ctx.activeUserId);
         const businessDate = businessDateKey(new Date());
         const repository = this.connection.getRepository(ctx, StorefrontDailyVisitor);
-        const visitorKeyHash = createHmac('sha256', this.promotionOptions.signingSecret)
-            .update(`${ctx.channelId.toString()}:ip:${clientIp}`)
-            .digest('hex');
+        const visitorKeyHash = this.secureVisitorHash(
+            channelId,
+            customer ? `customer:${customer.id.toString()}` : identity.keyMaterial,
+        );
+        const aliasHashes = new Set<string>();
+        if (identity.visitorId) {
+            aliasHashes.add(this.secureVisitorHash(channelId, `device:${identity.visitorId}`));
+            aliasHashes.add(legacyVisitorHash(`${channelId}:anonymous:${identity.visitorId}`));
+        }
+        if (identity.clientIp) {
+            aliasHashes.add(this.secureVisitorHash(channelId, `ip:${identity.clientIp}`));
+        }
+        if (customer) {
+            aliasHashes.add(legacyVisitorHash(`${channelId}:customer:${customer.id.toString()}`));
+        }
+        aliasHashes.delete(visitorKeyHash);
+        const hashes = [visitorKeyHash, ...aliasHashes];
+        const visitorWhere = hashes.map(hash => ({
+            channelId: ctx.channelId,
+            businessDate,
+            visitorKeyHash: hash,
+        }));
+        let rows = await repository.find({
+            where: visitorWhere,
+        });
+        for (const row of [...rows].sort((left, right) => String(left.id).localeCompare(String(right.id)))) {
+            await this.lockRow(ctx, StorefrontDailyVisitor, row.id);
+        }
+        if (rows.length) {
+            rows = await repository.find({
+                where: visitorWhere,
+            });
+        }
         const now = new Date();
-        const incrementExisting = async () => {
-            const visitCountColumn = repository.metadata.findColumnWithPropertyName('visitCount');
-            if (!visitCountColumn) throw new Error('StorefrontDailyVisitor.visitCount column is missing');
-            const escapedVisitCount = repository.manager.connection.driver.escape(
-                visitCountColumn.databaseName,
+        const primary = rows.find(row => row.visitorKeyHash === visitorKeyHash) ?? rows[0];
+        if (primary) {
+            primary.visitorKeyHash = visitorKeyHash;
+            primary.firstSeenAt = new Date(
+                Math.min(...rows.map(row => row.firstSeenAt.getTime()), primary.firstSeenAt.getTime()),
+            );
+            primary.lastSeenAt = new Date(
+                Math.max(now.getTime(), ...rows.map(row => row.lastSeenAt.getTime())),
+            );
+            primary.visitCount = rows.reduce((total, row) => total + row.visitCount, 0) + 1;
+            primary.customerId = customer?.id ?? primary.customerId;
+            await repository.save(primary, { reload: false });
+            const duplicates = rows.filter(row => row.id !== primary.id);
+            if (duplicates.length) await repository.remove(duplicates);
+        } else {
+            await repository.save(
+                new StorefrontDailyVisitor({
+                    channelId: ctx.channelId,
+                    customerId: customer?.id ?? null,
+                    businessDate,
+                    visitorKeyHash,
+                    firstSeenAt: now,
+                    lastSeenAt: now,
+                    visitCount: 1,
+                }),
+                { reload: false },
             );
             return repository
                 .createQueryBuilder()
@@ -517,7 +574,13 @@ export class ReferralService implements OnApplicationBootstrap {
                 if (!raced.affected) throw error;
             }
         }
-        return { recorded: true };
+        return { recorded: true, setCookie: identity.setCookie };
+    }
+
+    private secureVisitorHash(channelId: string, keyMaterial: string): string {
+        return createHmac('sha256', this.promotionOptions.signingSecret)
+            .update(`${channelId}:${keyMaterial}`)
+            .digest('hex');
     }
 
     async createWithdrawal(ctx: RequestContext, input: CreateReferralWithdrawalInput) {
@@ -785,11 +848,6 @@ export class ReferralService implements OnApplicationBootstrap {
 
     async todayMetrics(ctx: RequestContext) {
         const { businessDate, start, end } = businessDayRange(new Date());
-        // Vendure's base createdAt/updatedAt columns are database-generated UTC values stored in
-        // timestamp-without-time-zone columns. Pass UTC wall-clock strings for those columns so a
-        // non-UTC Node.js process does not shift the business-day boundary during driver encoding.
-        const utcStart = utcDatabaseTimestamp(start);
-        const utcEnd = utcDatabaseTimestamp(end);
         const orders = await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('referralOrder')
@@ -799,8 +857,8 @@ export class ReferralService implements OnApplicationBootstrap {
             .innerJoin(
                 'referralOrder.payments',
                 'settledTodayPayment',
-                'settledTodayPayment.state = :settledPaymentState AND settledTodayPayment.updatedAt >= :utcStart AND settledTodayPayment.updatedAt < :utcEnd',
-                { settledPaymentState: 'Settled', utcStart, utcEnd },
+                'settledTodayPayment.state = :settledPaymentState AND settledTodayPayment.updatedAt >= :start AND settledTodayPayment.updatedAt < :end',
+                { settledPaymentState: 'Settled', start, end },
             )
             .leftJoinAndSelect('referralOrder.payments', 'metricPayment')
             .leftJoinAndSelect('metricPayment.refunds', 'metricRefund')
@@ -862,8 +920,8 @@ export class ReferralService implements OnApplicationBootstrap {
                         channelId: ctx.channelId,
                     })
                     .innerJoin('customer.user', 'customerUser')
-                    .where('customerUser.createdAt >= :utcStart', { utcStart })
-                    .andWhere('customerUser.createdAt < :utcEnd', { utcEnd })
+                    .where('customerUser.createdAt >= :start', { start })
+                    .andWhere('customerUser.createdAt < :end', { end })
                     .getCount(),
                 this.connection.getRepository(ctx, StorefrontDailyVisitor).count({
                     where: { channelId: ctx.channelId, businessDate },
@@ -1634,6 +1692,10 @@ function generateInviteCode(): string {
 
 function normalizeInviteCode(value?: string | null): string {
     return (value ?? '').trim().toUpperCase().replace(/\s+/g, '').slice(0, 12);
+}
+
+function legacyVisitorHash(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
 }
 
 function businessDateKey(value: Date): string {

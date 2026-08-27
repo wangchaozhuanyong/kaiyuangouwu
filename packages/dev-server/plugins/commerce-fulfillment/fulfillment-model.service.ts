@@ -1,13 +1,5 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
-import { GlobalFlag } from '@vendure/common/lib/generated-types';
-import {
-    EventBus,
-    OrderLine,
-    OrderLineEvent,
-    ProductVariant,
-    ProductVariantEvent,
-    TransactionalConnection,
-} from '@vendure/core';
+import { EventBus, OrderLine, OrderLineEvent, TransactionalConnection } from '@vendure/core';
 
 @Injectable()
 export class FulfillmentModelService implements OnApplicationBootstrap {
@@ -18,31 +10,10 @@ export class FulfillmentModelService implements OnApplicationBootstrap {
 
     onApplicationBootstrap(): void {
         this.eventBus.registerBlockingEventHandler({
-            event: ProductVariantEvent,
-            id: 'commerce-fulfillment-sync-digital-inventory',
-            handler: event => this.syncDigitalInventory(event),
-        });
-        this.eventBus.registerBlockingEventHandler({
             event: OrderLineEvent,
             id: 'commerce-fulfillment-snapshot-order-line-type',
             handler: event => this.snapshotOrderLineType(event),
         });
-    }
-
-    private async syncDigitalInventory(event: ProductVariantEvent): Promise<void> {
-        if (event.type === 'deleted') {
-            return;
-        }
-        const digitalVariants = event.entity.filter(
-            variant => variant.customFields?.fulfillmentType === 'digital',
-        );
-        for (const variant of digitalVariants) {
-            if (variant.trackInventory === GlobalFlag.FALSE) {
-                continue;
-            }
-            variant.trackInventory = GlobalFlag.FALSE;
-            await this.connection.getRepository(event.ctx, ProductVariant).save(variant, { reload: false });
-        }
     }
 
     private async snapshotOrderLineType(event: OrderLineEvent): Promise<void> {

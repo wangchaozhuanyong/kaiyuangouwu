@@ -1,9 +1,11 @@
+import { BriefcaseBusiness, Puzzle, Sparkles } from 'lucide-react';
 import type { RouteState } from '../storefront-router';
 import type { StorefrontContentBlock, StorefrontLanguage } from '../types';
-import { BriefcaseBusiness, Puzzle, Sparkles } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { useStorefront } from '../StorefrontContext';
+
+import './business-services-page.css';
 
 interface BusinessServicesPageProps {
     contentBlocks: StorefrontContentBlock[];

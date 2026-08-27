@@ -204,7 +204,9 @@ bun run sync:storefront-media -- --apply
 ```
 
 For a production release, set `VENDURE_API_ORIGIN`, `SUPERADMIN_USERNAME`,
-`SUPERADMIN_PASSWORD`, and `STOREFRONT_MEDIA_CHANNEL_CODES` in the release environment, then run
+`SUPERADMIN_PASSWORD`, and `STOREFRONT_MEDIA_CHANNEL_CODES` in the release environment. If the
+configured password has been rotated, provide an existing short-lived Admin API session through
+`VENDURE_ADMIN_BEARER_TOKEN` instead. Then run
 the sync after the API is healthy and before the new storefront is promoted:
 
 ```bash
@@ -215,15 +217,41 @@ Remote writes require both flags. Existing asset records are not deleted: an unc
 reused by its SHA-256 tag, while a changed file creates a new asset and moves the configured
 bindings to it. This makes the command safe to repeat and keeps rollback assets available.
 
+## Publishing login and registration visuals
+
+Login and registration copy, tags, and palette use the separate reviewed manifest in
+`scripts/sync-auth-visuals.mjs`. The publisher resolves `auth-login-visual` and
+`auth-register-visual` by exact code and type, preserves their current image asset or image URL,
+and verifies that the Admin API and Shop API return the same values in Chinese and English.
+
+Preview the exact Channels, blocks, current image bindings, and planned field changes without
+writing:
+
+```bash
+bun run sync:auth-visuals -- --dry-run
+```
+
+Apply locally, or use the additional remote-write guard in a reviewed production release:
+
+```bash
+bun run sync:auth-visuals -- --apply
+bun run sync:auth-visuals -- --apply --allow-remote
+```
+
+Set `AUTH_VISUAL_CHANNEL_CODES` in the release environment when it differs from
+`STOREFRONT_MEDIA_CHANNEL_CODES`. Authentication uses the same environment-only Admin API
+credentials or short-lived `VENDURE_ADMIN_BEARER_TOKEN` as the media publisher. Repeating the
+command is safe: blocks already matching the manifest are reported as `noop` and are not mutated.
+
 ## Repairing reviewed inventory inheritance targets
 
-New product variants now save `trackInventory=INHERIT`, but existing variants which already contain
-an explicit `FALSE` are not changed automatically. For a reviewed one-time repair, set the exact
+New product variants save `trackInventory=INHERIT`, but existing variants which already contain an
+explicit `FALSE` are not changed automatically. For a reviewed one-time repair, set the exact
 Channel codes and stable SKUs in environment variables. The command refuses missing or ambiguous
 SKUs, leaves existing `INHERIT` values unchanged, and refuses to replace an explicit `TRUE` value.
 
 ```bash
-INVENTORY_REPAIR_CHANNEL_CODES=cn-mainland,my-malaysia \
+INVENTORY_REPAIR_CHANNEL_CODES=__default_channel__ \
 INVENTORY_INHERIT_SKUS=reviewed-sku-a,reviewed-sku-b \
 bun run repair:inventory-inheritance -- --dry-run
 ```
@@ -236,8 +264,9 @@ bun run repair:inventory-inheritance -- --apply --allow-remote
 ```
 
 Credentials and targets are read only from environment variables; they are never accepted as CLI
-arguments. Unset `INVENTORY_REPAIR_CHANNEL_CODES` and `INVENTORY_INHERIT_SKUS` after the one-time
-repair.
+arguments. If the configured password is not the active Dashboard credential, a short-lived
+authenticated Admin API session may be supplied as `VENDURE_ADMIN_BEARER_TOKEN`. Never print or
+persist that token. Unset all three repair variables after the one-time repair.
 
 ## Testing custom ui extension compilation
 

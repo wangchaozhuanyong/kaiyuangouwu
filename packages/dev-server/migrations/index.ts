@@ -48,7 +48,7 @@ import { NormalizeStorefrontExchangeRate1787770800000 } from './1787770800000-no
 import { AddReferralRebate1787774400000 } from './1787774400000-add-referral-rebate';
 import { AddStorefrontUsdtDisplay1787778000000 } from './1787778000000-add-storefront-usdt-display';
 import { AddUsdtTrc20Payments1787781600000 } from './1787781600000-add-usdt-trc20-payments';
-import { AddReferralPosterTemplates1787785200000 } from './1787785200000-add-referral-poster-templates';
+import { AlignUsdtTrc20Schema1787785200000 } from './1787785200000-align-usdt-trc20-schema';
 import { AddUsdtRateSchedule1787788800000 } from './1787788800000-add-usdt-rate-schedule';
 import { AddImageGeneration1787792400000 } from './1787792400000-add-image-generation';
 
@@ -103,7 +103,7 @@ export const devServerMigrations = [
     AddReferralRebate1787774400000,
     AddStorefrontUsdtDisplay1787778000000,
     AddUsdtTrc20Payments1787781600000,
-    AddReferralPosterTemplates1787785200000,
+    AlignUsdtTrc20Schema1787785200000,
     AddUsdtRateSchedule1787788800000,
     AddImageGeneration1787792400000,
 ];

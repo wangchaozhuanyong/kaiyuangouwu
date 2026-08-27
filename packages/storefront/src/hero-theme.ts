@@ -1,5 +1,6 @@
 import type { StorefrontContentBlock } from './types';
 import type { CSSProperties } from 'react';
+import type { StorefrontContentBlock } from './types';
 
 import {
     HERO_CLOUD_BRIDGE_FALLBACK_IMAGE,

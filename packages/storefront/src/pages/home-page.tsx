@@ -904,7 +904,9 @@ export function HomePage() {
                                             fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
                                         />
                                     </button>
-                                    {showHeroImageOverlay ? <div className="hero-rich-overlay-shade" /> : null}
+                                    {showHeroImageOverlay ? (
+                                        <div className="hero-rich-overlay-shade" />
+                                    ) : null}
 
                                     {/* Dynamic Content Overlay with 3D Cyber Layout */}
                                     {(() => {

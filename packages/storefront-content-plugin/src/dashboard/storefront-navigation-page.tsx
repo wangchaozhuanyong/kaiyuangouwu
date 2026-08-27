@@ -21,7 +21,6 @@ import {
     SelectTrigger,
     SelectValue,
     Skeleton,
-    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -49,7 +48,6 @@ import {
     createStorefrontContentBlockMutation,
     storefrontContentBlocksQuery,
     updateStorefrontContentBlockMutation,
-    versionedContentBlockUpdate,
 } from './storefront-content.graphql';
 import {
     MAX_NAVIGATION_ITEMS,
@@ -60,6 +58,7 @@ import {
     navigationDraftIsValid,
     navigationTargetOptions,
 } from './storefront-navigation-config';
+import { UnsavedChangesConfirmation } from './unsaved-changes-confirmation';
 
 export const storefrontNavigationRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -103,7 +102,7 @@ function StorefrontNavigationPage() {
             const input = navigationBlockInput(block);
             return block.id
                 ? api.mutate(updateStorefrontContentBlockMutation, {
-                      input: versionedContentBlockUpdate(block, input),
+                      input: { id: block.id, ...input },
                   })
                 : api.mutate(createStorefrontContentBlockMutation, { input });
         },

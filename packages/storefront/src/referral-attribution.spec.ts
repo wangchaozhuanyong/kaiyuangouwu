@@ -5,6 +5,7 @@ import {
     captureReferralAttribution,
     normalizeReferralCode,
     readReferralAttribution,
+    storefrontVisitorId,
 } from './referral-attribution';
 
 function memoryStorage() {
@@ -41,5 +42,27 @@ describe('referral attribution', () => {
     it('does not access browser globals during server-side rendering', () => {
         expect(captureReferralAttribution()).toBeNull();
         expect(readReferralAttribution()).toBeNull();
+        expect(storefrontVisitorId()).toBeNull();
+    });
+
+    it('reuses one anonymous device id and survives unavailable storage', () => {
+        const storage = memoryStorage();
+        expect(storefrontVisitorId(storage, () => 'visitor-device-id-00000001')).toBe(
+            'visitor-device-id-00000001',
+        );
+        expect(storefrontVisitorId(storage, () => 'visitor-device-id-00000002')).toBe(
+            'visitor-device-id-00000001',
+        );
+        expect(
+            storefrontVisitorId(
+                {
+                    getItem: () => {
+                        throw new Error('storage blocked');
+                    },
+                    setItem: () => undefined,
+                },
+                () => 'visitor-device-id-00000003',
+            ),
+        ).toBeNull();
     });
 });

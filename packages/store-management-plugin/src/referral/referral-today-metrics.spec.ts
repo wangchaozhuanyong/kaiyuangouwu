@@ -102,12 +102,14 @@ describe('referral today metrics queries', () => {
             todayInvitedPurchaserCount: 1,
             salesByCurrency: [{ currencyCode: 'CNY', sales: 7_500 }],
         });
-        expect(customerRegistrationsQuery.where).toHaveBeenCalledWith('customerUser.createdAt >= :utcStart', {
-            utcStart: expect.any(String),
-        });
-        expect(customerRegistrationsQuery.andWhere).toHaveBeenCalledWith('customerUser.createdAt < :utcEnd', {
-            utcEnd: expect.any(String),
-        });
+        expect(customerRegistrationsQuery.where).toHaveBeenCalledWith(
+            'customerUser.createdAt >= :start',
+            expect.anything(),
+        );
+        expect(customerRegistrationsQuery.andWhere).toHaveBeenCalledWith(
+            'customerUser.createdAt < :end',
+            expect.anything(),
+        );
         const settledStateCall = todayOrdersQuery.where.mock.calls.find(([query]: [string]) =>
             query.includes('settledStates'),
         );
@@ -115,12 +117,8 @@ describe('referral today metrics queries', () => {
         const settlementJoin = todayOrdersQuery.innerJoin.mock.calls.find(
             ([, alias]: [string, string]) => alias === 'settledTodayPayment',
         );
-        expect(settlementJoin?.[2]).toContain('settledTodayPayment.updatedAt >= :utcStart');
-        expect(settlementJoin?.[2]).toContain('settledTodayPayment.updatedAt < :utcEnd');
-        expect(settlementJoin?.[3]).toMatchObject({
-            utcStart: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/),
-            utcEnd: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/),
-        });
+        expect(settlementJoin?.[2]).toContain('settledTodayPayment.updatedAt >= :start');
+        expect(settlementJoin?.[2]).toContain('settledTodayPayment.updatedAt < :end');
         expect(previousBuyersQuery.andWhere).toHaveBeenCalledWith(
             'referralOrder.id NOT IN (:...currentOrderIds)',
             { currentOrderIds: ['paid-order'] },

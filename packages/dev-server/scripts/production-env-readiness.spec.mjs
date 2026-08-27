@@ -41,7 +41,7 @@ function readyEnvironment(overrides = {}) {
         DIGITAL_DELIVERY_SIGNING_SECRET: '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b',
         DIGITAL_DELIVERY_LINK_TTL_SECONDS: '300',
         IMAGE_GENERATION_STORAGE_ROOT: '/srv/vendure/image-generation-private',
-        IMAGE_GENERATION_DOWNLOAD_SECRET: 'image-download-secret-that-is-longer-than-thirty-two-characters',
+        IMAGE_GENERATION_DOWNLOAD_SECRET: 'image-download-key-that-is-longer-than-thirty-two-characters',
         IMAGE_GENERATION_MASTER_KEY: 'image-master-key-that-is-longer-than-thirty-two-characters',
         VENDURE_EMAIL_FROM: 'Store <orders@shop.test>',
         SMTP_HOST: 'smtp.resend.com',
@@ -141,7 +141,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('database-engine'));
     assert.ok(blockers.has('database-connection'));
     assert.ok(blockers.has('digital-delivery'));
-    assert.ok(blockers.has('image-generation-private-storage'));
+    assert.ok(blockers.has('image-generation-storage'));
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
     assert.ok(blockers.has('storefront-promotion-gate'));

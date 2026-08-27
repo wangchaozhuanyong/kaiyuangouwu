@@ -150,12 +150,8 @@ export class StorefrontContentService {
         input: CreateStorefrontContentBlockInput,
     ): Promise<StorefrontContentBlock> {
         const normalized = this.validateBlockInput(input);
-        if (normalized.type === 'NAVIGATION') {
-            this.validateNavigationItems(input.items ?? []);
-        }
-        if (normalized.type === 'CLIENT_PLUGINS') {
-            this.validateClientPluginItems(input.items ?? []);
-        }
+        if (normalized.type === 'NAVIGATION') this.validateNavigationItems(input.items ?? []);
+        if (normalized.type === 'CLIENT_PLUGINS') this.validateClientPluginItems(input.items ?? []);
         this.validateAuthVisual(normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
@@ -211,31 +207,6 @@ export class StorefrontContentService {
                 })),
             items: input.items,
         });
-        if (next.type === 'NAVIGATION') {
-            this.validateNavigationItems(
-                input.items ??
-                    block.items.map(item => ({
-                        enabled: item.enabled,
-                        position: item.position,
-                        targetType: item.targetType,
-                        targetValue: item.targetValue,
-                        translations: [],
-                    })),
-            );
-        }
-        if (next.type === 'CLIENT_PLUGINS') {
-            this.validateClientPluginItems(
-                input.items ??
-                    block.items.map(item => ({
-                        enabled: item.enabled,
-                        position: item.position,
-                        targetType: item.targetType,
-                        targetValue: item.targetValue,
-                        settings: item.settings,
-                        translations: [],
-                    })),
-            );
-        }
         this.validateAuthVisual(
             next,
             input.items ??
@@ -255,6 +226,25 @@ export class StorefrontContentService {
                     })),
                 })),
         );
+        const effectiveItems =
+            input.items ??
+            block.items.map(item => ({
+                id: item.id,
+                enabled: item.enabled,
+                position: item.position,
+                imageAssetId: item.imageAssetId,
+                imageUrl: item.imageUrl,
+                targetType: item.targetType,
+                targetValue: item.targetValue,
+                settings: item.settings,
+                translations: item.translations.map(translation => ({
+                    languageCode: translation.languageCode,
+                    label: translation.label,
+                    description: translation.description,
+                })),
+            }));
+        if (next.type === 'NAVIGATION') this.validateNavigationItems(effectiveItems);
+        if (next.type === 'CLIENT_PLUGINS') this.validateClientPluginItems(effectiveItems);
         await this.assertUniqueCode(ctx, next.code, block.id);
         const requestedImageUrl =
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
@@ -409,12 +399,8 @@ export class StorefrontContentService {
         block: StorefrontContentBlock,
         inputs: StorefrontContentItemInput[],
     ): Promise<void> {
-        if (block.type === 'NAVIGATION') {
-            this.validateNavigationItems(inputs);
-        }
-        if (block.type === 'CLIENT_PLUGINS') {
-            this.validateClientPluginItems(inputs);
-        }
+        if (block.type === 'NAVIGATION') this.validateNavigationItems(inputs);
+        if (block.type === 'CLIENT_PLUGINS') this.validateClientPluginItems(inputs);
         const existing = await this.connection.getRepository(ctx, StorefrontContentItem).find({
             where: { blockId: block.id },
             relations: { imageAsset: true, translations: true },
@@ -926,9 +912,7 @@ export class StorefrontContentService {
             if (typeof pluginCode !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pluginCode)) {
                 throw new UserInputError('客户端插件编码格式不正确');
             }
-            if (pluginCodes.has(pluginCode)) {
-                throw new UserInputError('同一个客户端插件不能重复添加');
-            }
+            if (pluginCodes.has(pluginCode)) throw new UserInputError('同一个客户端插件不能重复添加');
             if (!storefrontClientPluginCodes.includes(pluginCode)) {
                 throw new UserInputError('客户端插件尚未在平台发布');
             }
@@ -939,7 +923,7 @@ export class StorefrontContentService {
                     placement as (typeof storefrontClientPluginPlacements)[number],
                 )
             ) {
-                throw new UserInputError('客户端插件包含不支持的分类页位置');
+                throw new UserInputError('客户端插件包含不支持的显示位置');
             }
             if (categoryScope !== 'ALL' && categoryScope !== 'SELECTED') {
                 throw new UserInputError('客户端插件分类显示范围不正确');

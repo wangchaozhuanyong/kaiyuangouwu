@@ -31,10 +31,11 @@ process.env.IMAGE_GENERATION_MASTER_KEY = 'image-generation-e2e-master-key-over-
 const translationProvider: ContentTranslationProvider = {
     name: 'image-generation-e2e-translation',
     isConfigured: () => true,
-    translate: request => Promise.resolve({
-        provider: 'image-generation-e2e-translation',
-        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-    }),
+    translate: request =>
+        Promise.resolve({
+            provider: 'image-generation-e2e-translation',
+            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+        }),
 };
 
 const config = mergeConfig(testConfig(), {

@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
 // Orders use a multi-step draft flow rather than a single CRUD form.
@@ -241,7 +242,7 @@ test.describe('Orders', () => {
         // Delete the draft without configuring it
         await page.getByRole('button', { name: /Delete draft/i }).click();
         // Confirm the deletion dialog — AlertDialog uses "Continue" as the action button
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
         // Should navigate back to the orders list (URL may include query params)
         await expect(page).not.toHaveURL(/\/draft\//, { timeout: 15_000 });
         await expect(page.getByTestId('page-heading')).toBeVisible();
@@ -735,8 +736,7 @@ test.describe('Orders', () => {
             }
 
             // Submit the refund
-            const refundButton = dialog.getByRole('button', { name: /Refund/i }).last();
-            await refundButton.click();
+            await confirmSensitiveAction(dialog, /Refund/i);
 
             // Wait for success
             await expect(

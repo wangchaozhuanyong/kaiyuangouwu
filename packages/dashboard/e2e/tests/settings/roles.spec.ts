@@ -2,6 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 
 // Roles have a permissions grid and channel multi-select that don't fit
 // the standard CRUD factory. System roles (SuperAdmin, Customer) have
@@ -86,6 +87,7 @@ test.describe('Roles', () => {
         const dp = detailPage(page);
         await dp.fillInput('Description', 'E2E Updated Role');
         await dp.clickUpdate();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'), 'Update role');
         await dp.expectSuccessToast(/Successfully updated role/);
     });
 
@@ -105,7 +107,7 @@ test.describe('Roles', () => {
         await testRoleRow.getByRole('checkbox').click();
         await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
         await lp.expectSuccessToast();
 
         await expect(lp.getRows().filter({ hasText: 'E2E Updated Role' })).toHaveCount(0);

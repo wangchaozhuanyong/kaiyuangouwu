@@ -9,6 +9,8 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 
+import { CustomerCoupon } from '../entities/customer-coupon.entity';
+
 let connection: TransactionalConnection;
 
 export const customerCouponEntitlement = new PromotionCondition({
@@ -24,10 +26,10 @@ export const customerCouponEntitlement = new PromotionCondition({
     async check(ctx, order, _args, promotion) {
         if (!order.customerId) return false;
         const now = new Date();
-        const row = await connection.rawConnection
-            .createQueryBuilder()
+        const row = await connection
+            .getRepository(ctx, CustomerCoupon)
+            .createQueryBuilder('coupon')
             .select('coupon.id', 'id')
-            .from('customer_coupon', 'coupon')
             .where('coupon.channelId = :channelId', { channelId: ctx.channelId })
             .andWhere('coupon.customerId = :customerId', { customerId: order.customerId })
             .andWhere('coupon.promotionId = :promotionId', { promotionId: promotion.id })

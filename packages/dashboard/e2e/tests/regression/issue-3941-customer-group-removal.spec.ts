@@ -2,6 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 
 // Regression: https://github.com/vendurehq/vendure/issues/3941
 // Fix PR: https://github.com/vendurehq/vendure/pull/4346
@@ -70,7 +71,7 @@ test.describe('Issue #3941: Customer group member removal', () => {
 
         await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Remove from group', { exact: true }).click();
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
 
         // Singular form — asserts the message is pluralised, not "Removed 1 customers".
         await expect(page.getByText('Removed 1 customer from group')).toBeVisible({ timeout: 5_000 });
@@ -88,7 +89,7 @@ test.describe('Issue #3941: Customer group member removal', () => {
         await row.getByRole('checkbox').click();
         await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
         await lp.expectSuccessToast();
     });
 });

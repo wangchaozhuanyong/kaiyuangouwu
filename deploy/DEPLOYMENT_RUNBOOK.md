@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-25
+最后核对：2026-08-27
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -26,6 +26,9 @@
 - 服务器源码与加密环境文件目录：`/var/www/kaiyuangouwu`
 - 不可变运行产物/回滚目录：`/var/www/kaiyuangouwu-releases`
 - 当前运行产物指针：`/var/www/kaiyuangouwu-current`（只能指向上述发布目录中已验证的候选目录）
+- 发布保留策略：`current-sha` 成功更新后，由 `vendure-production-release-retention.path`
+  自动保留当前运行产物和最近两个更早的回滚产物；其余严格匹配发布命名规则的旧目录与 `.tar.gz`
+  归档才允许删除，校验文件、部署记录、数据库备份和应用日志不参与清理。
 - Vendure 上游：`127.0.0.1:3002`
 - PM2 进程：`vendure-api`、`vendure-worker`
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
@@ -201,28 +204,7 @@ curl -fsS http://127.0.0.1:3002/health
 pm2 save
 ```
 
-API 健康后、切换 Storefront 稳定指针前，从同一个候选产物执行经过审核的数据修复与发布命令；每项都必须先只读预演、核对目标，再允许写入。
-
-本次库存继承修复发布还必须在图片发布前处理经过审核的旧 SKU。只把确认是历史后台错误写成
-`trackInventory=FALSE` 的稳定 SKU 放入环境变量；不要用“全部数字商品”之类的动态筛选。先预演并逐项核对
-SKU、variant ID、Channel 和当前值，再显式写入。脚本会拒绝缺失/重复 SKU 和当前为 `TRUE` 的变体，且不会
-修改未列入清单的商品：
-
-```bash
-cd "${CANDIDATE}"
-export INVENTORY_REPAIR_CHANNEL_CODES=cn-mainland,my-malaysia
-export INVENTORY_INHERIT_SKUS=reviewed-sku-a,reviewed-sku-b
-VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
-    node packages/dev-server/scripts/repair-inventory-inheritance.mjs --dry-run
-VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
-    node packages/dev-server/scripts/repair-inventory-inheritance.mjs --apply --allow-remote
-unset INVENTORY_REPAIR_CHANNEL_CODES INVENTORY_INHERIT_SKUS
-```
-
-凭据继续从已安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 读取，不得写入命令或发布记录。
-预演目标不正确或写入后没有返回 `INHERIT` 时立即停止发布。
-
-然后执行店铺图片发布：
+API 健康后、切换 Storefront 稳定指针前，先从同一个候选产物执行店铺图片发布。第一条只读核对 SKU、内容块与 Channel，通过后才允许第二条写入：
 
 ```bash
 cd "${CANDIDATE}"
@@ -232,7 +214,39 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
     node packages/dev-server/scripts/sync-storefront-media.mjs --apply --allow-remote
 ```
 
-命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。
+命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；若后台密码已独立变更，也可通过进程环境临时注入现有的短期 `VENDURE_ADMIN_BEARER_TOKEN`。不得把凭据写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。
+
+登录与注册主视觉的文案、标签和配色使用独立 Admin API 发布器。脚本只更新这些后台可编辑字段，明确保留当前图片资产 ID 或图片 URL；预演会列出精确 Channel、稳定内容块 code/type、当前图片绑定和字段差异，写入后同时核对 Admin API 与 Shop API 的中英文结果：
+
+```bash
+cd "${CANDIDATE}"
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+    node packages/dev-server/scripts/sync-auth-visuals.mjs --dry-run
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+    node packages/dev-server/scripts/sync-auth-visuals.mjs --apply --allow-remote
+```
+
+Channel 从 `AUTH_VISUAL_CHANNEL_CODES` 读取；未单独设置时继承 `STOREFRONT_MEDIA_CHANNEL_CODES`。认证只允许使用发布 shell 已加载的后台凭据或短期 `VENDURE_ADMIN_BEARER_TOKEN`，不得放入命令参数、源码或日志。任一 code 缺失、类型不符、图片绑定变化或前后台结果不一致都必须停止发布。
+
+API 健康后、切换 Storefront 稳定指针前，处理经过审核的旧库存继承数据。只把确认是历史后台
+错误写成 `trackInventory=FALSE` 的稳定 SKU 放入环境变量；先预演并逐项核对 SKU、variant ID、
+Channel 和当前值，再显式写入。脚本会拒绝缺失/重复 SKU、当前为 `TRUE` 的变体以及未授权的
+远程写入：
+
+```bash
+cd "${CANDIDATE}"
+export INVENTORY_REPAIR_CHANNEL_CODES=__default_channel__
+export INVENTORY_INHERIT_SKUS=reviewed-sku-a,reviewed-sku-b
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+    node packages/dev-server/scripts/repair-inventory-inheritance.mjs --dry-run
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+    node packages/dev-server/scripts/repair-inventory-inheritance.mjs --apply --allow-remote
+unset INVENTORY_REPAIR_CHANNEL_CODES INVENTORY_INHERIT_SKUS
+```
+
+凭据从已安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 读取；若后台密码已独立变更，也可
+通过进程环境临时注入现有的短期 `VENDURE_ADMIN_BEARER_TOKEN`。凭据不得写入参数、日志或发布记录，
+操作后必须立即取消环境变量。预演目标不正确或写入后没有返回 `INHERIT` 时立即停止发布。
 
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 
@@ -263,9 +277,48 @@ sudo -n systemctl reload nginx
 6. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 7. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
 8. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功。
-9. 从候选产物预演并执行本次审核过的库存继承修复，再预演并执行店铺图片同步；两者写入都必须使用 `--apply --allow-remote`，成功后才原子切换 `kaiyuangouwu-current`。
+9. 从候选产物依次预演并执行店铺图片同步、登录/注册主视觉同步与本次审核过的库存继承修复；确认 Admin API 与 Shop API 结果一致后，再原子切换 `kaiyuangouwu-current`。
 10. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 11. 撤销临时 SSH 规则，仅保留原有固定规则；候选和回滚包按需保留，不删除用户数据。
+12. 原子更新 `current-sha` 后确认 `vendure-production-release-retention.path` 已触发且 service 成功；
+    清理过程使用同一个生产部署锁，并固定保留当前版本和最近两个更早的回滚版本。
+
+### 发布产物自动保留
+
+首次启用时，从已提交且验证过的发布提交安装脚本和 systemd 单元：
+
+```bash
+sudo -n install -o root -g root -m 0755 \
+    deploy/systemd/vendure-production-release-retention.cjs \
+    /usr/local/sbin/vendure-production-release-retention
+sudo -n install -o root -g root -m 0644 \
+    deploy/systemd/vendure-production-release-retention.service \
+    /etc/systemd/system/vendure-production-release-retention.service
+sudo -n install -o root -g root -m 0644 \
+    deploy/systemd/vendure-production-release-retention.path \
+    /etc/systemd/system/vendure-production-release-retention.path
+sudo -n systemctl daemon-reload
+sudo -n systemctl enable --now vendure-production-release-retention.path
+```
+
+脚本默认是 dry-run。人工检查时仍需持有生产部署锁；实际删除还必须显式设置写入保护变量：
+
+```bash
+flock --exclusive --wait 300 /run/lock/vendure-production-deploy.lock \
+    node /usr/local/sbin/vendure-production-release-retention --dry-run
+VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE=1 \
+    flock --exclusive --wait 300 /run/lock/vendure-production-deploy.lock \
+    node /usr/local/sbin/vendure-production-release-retention --apply
+```
+
+执行前脚本会重新验证稳定指针、完整 `current-sha`、PM2 中 API/Worker 的在线状态及运行目录。
+任一状态不一致会停止，不删除任何内容。自动任务的结果使用以下命令核对：
+
+```bash
+systemctl status vendure-production-release-retention.path --no-pager
+systemctl status vendure-production-release-retention.service --no-pager
+journalctl -u vendure-production-release-retention.service --since '30 minutes ago' --no-pager
+```
 
 ## 上线验收
 

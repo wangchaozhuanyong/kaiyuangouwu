@@ -432,8 +432,9 @@ export function App() {
     const customer = customerQuery.data ?? null;
 
     useEffect(() => {
-        void api.recordStorefrontVisit().catch(() => undefined);
-    }, [api]);
+        const visitorId = storefrontVisitorId();
+        void api.recordStorefrontVisit(visitorId).catch(() => undefined);
+    }, [api, customer?.id]);
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         market.code,
         vendureLanguageCode,

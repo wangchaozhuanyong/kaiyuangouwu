@@ -23,6 +23,19 @@ const LOGIN_MUTATION = `
     }
 `;
 
+const CURRENT_USER_QUERY = `
+    query InventoryInheritanceCurrentUser {
+        me {
+            id
+            channels {
+                id
+                code
+                token
+            }
+        }
+    }
+`;
+
 const PRODUCT_VARIANT_QUERY = `
     query InventoryInheritanceVariant($sku: String!) {
         productVariants(options: { take: 2, filter: { sku: { eq: $sku } } }) {
@@ -108,6 +121,16 @@ async function login(fetchImpl, apiOrigin, username, password) {
     return { authToken, channels: result.data.login.channels };
 }
 
+async function authenticate(fetchImpl, apiOrigin, username, password, adminBearerToken) {
+    if (!adminBearerToken) return login(fetchImpl, apiOrigin, username, password);
+
+    const result = await graphql(fetchImpl, apiOrigin, CURRENT_USER_QUERY, undefined, {
+        authorization: `Bearer ${adminBearerToken}`,
+    });
+    assert.ok(result.data.me, 'VENDURE_ADMIN_BEARER_TOKEN is invalid or expired');
+    return { authToken: adminBearerToken, channels: result.data.me.channels };
+}
+
 async function loadVariant(fetchImpl, apiOrigin, authToken, channel, sku) {
     const result = await graphql(
         fetchImpl,
@@ -174,6 +197,7 @@ export async function repairInventoryInheritance({
     apiOrigin,
     username,
     password,
+    adminBearerToken,
     channelCodes,
     skus,
     apply = false,
@@ -182,7 +206,10 @@ export async function repairInventoryInheritance({
     fetchImpl = fetch,
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN is required');
-    assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
+    assert.ok(
+        adminBearerToken || (username && password),
+        'VENDURE_ADMIN_BEARER_TOKEN or SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required',
+    );
     assert.ok(channelCodes?.length > 0, 'INVENTORY_REPAIR_CHANNEL_CODES is required');
     assert.ok(skus?.length > 0, 'INVENTORY_INHERIT_SKUS is required');
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
@@ -190,7 +217,7 @@ export async function repairInventoryInheritance({
     }
 
     const normalizedOrigin = apiOrigin.replace(/\/$/u, '');
-    const session = await login(fetchImpl, normalizedOrigin, username, password);
+    const session = await authenticate(fetchImpl, normalizedOrigin, username, password, adminBearerToken);
     const channelsByCode = new Map(session.channels.map(channel => [channel.code, channel]));
     const selectedChannels = channelCodes.map(code => {
         const channel = channelsByCode.get(code);
@@ -261,6 +288,7 @@ function environmentConfiguration() {
         apiOrigin,
         username: process.env.SUPERADMIN_USERNAME,
         password: process.env.SUPERADMIN_PASSWORD,
+        adminBearerToken: process.env.VENDURE_ADMIN_BEARER_TOKEN,
         channelCodes,
         skus,
     };
@@ -272,8 +300,8 @@ if (isMain) {
     const configuration = environmentConfiguration();
     if (options.validate) {
         assert.ok(
-            configuration.username && configuration.password,
-            'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required',
+            configuration.adminBearerToken || (configuration.username && configuration.password),
+            'VENDURE_ADMIN_BEARER_TOKEN or SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required',
         );
         process.stdout.write(
             `${JSON.stringify(
