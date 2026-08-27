@@ -1,0 +1,10 @@
+{
+    "code": "illustration",
+    "required": ["subject"],
+    "defaults": {
+        "composition": "readable silhouette and clear visual hierarchy",
+        "lighting": "coherent stylized lighting",
+        "style": "intentional editorial illustration"
+    },
+    "avoid": ["unrequested text", "muddy hierarchy", "accidental signature", "visual clutter"]
+}
