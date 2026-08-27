@@ -61,8 +61,8 @@ export class ReferralShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Public)
-    recordStorefrontVisit(@Ctx() ctx: RequestContext, @Args('visitorId') visitorId?: string) {
-        return this.referralService.recordVisit(ctx, visitorId);
+    recordStorefrontVisit(@Ctx() ctx: RequestContext) {
+        return this.referralService.recordVisit(ctx);
     }
 }
 

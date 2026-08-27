@@ -70,6 +70,18 @@ export class SimpleGraphQLClient {
 
     /**
      * @description
+     * Sets or removes a header to be included in each request.
+     */
+    setRequestHeader(name: string, value: string | null) {
+        if (value === null) {
+            delete this.headers[name];
+        } else {
+            this.headers[name] = value;
+        }
+    }
+
+    /**
+     * @description
      * Returns the authToken currently being used.
      */
     getAuthToken(): string {

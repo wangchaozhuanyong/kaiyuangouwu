@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import {
@@ -17,9 +17,10 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
+import { STOREFRONT_PROMOTION_OPTIONS } from '../constants';
 import { ReferralAccount } from '../entities/referral-account.entity';
 import { ReferralBalanceUse } from '../entities/referral-balance-use.entity';
 import { ReferralLedgerEntry } from '../entities/referral-ledger-entry.entity';
@@ -29,6 +30,7 @@ import { ReferralReward } from '../entities/referral-reward.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 import { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 import { StorefrontDailyVisitor } from '../entities/storefront-daily-visitor.entity';
+import { StorefrontPromotionPluginOptions } from '../types';
 
 import {
     calculateEligibleReferralRefund,
@@ -36,12 +38,14 @@ import {
     calculateReferralReward,
     referralRewardStatusAfterClawback,
 } from './referral-calculation';
+import { REFERRAL_METRIC_SETTLED_ORDER_STATES, settledOrderNetTotal } from './referral-metrics';
 import { createReferralPaymentProof } from './referral-payment-proof';
 import {
     REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
     referralPosterTemplates,
     ReferralWithdrawalStatus,
 } from './referral.constants';
+import { storefrontClientIp } from './storefront-client-ip';
 
 const INVITE_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const MAX_PAGE_SIZE = 200;
@@ -97,6 +101,8 @@ export class ReferralService implements OnApplicationBootstrap {
         private readonly orderService: OrderService,
         private readonly eventBus: EventBus,
         private readonly requestContextService: RequestContextService,
+        @Inject(STOREFRONT_PROMOTION_OPTIONS)
+        private readonly promotionOptions: Required<StorefrontPromotionPluginOptions>,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -105,7 +111,7 @@ export class ReferralService implements OnApplicationBootstrap {
             id: 'referral-reward-on-payment-settled',
             handler: event => {
                 if (event.toState === 'PaymentSettled') {
-                    return this.rewardSettledOrder(event.ctx, event.order.id);
+                    return this.rewardSettledOrder(event.ctx, event.order.id, event.createdAt);
                 }
                 if (event.toState === 'Cancelled') {
                     return this.handleCancelledOrder(event.ctx, event.order.id);
@@ -362,29 +368,18 @@ export class ReferralService implements OnApplicationBootstrap {
         return { order: paymentResult, wallet: refreshedWallet, amount };
     }
 
-    async recordVisit(ctx: RequestContext, visitorId?: string | null) {
-        const normalizedVisitorId = normalizeVisitorId(visitorId);
+    async recordVisit(ctx: RequestContext) {
+        const clientIp = storefrontClientIp(ctx.req);
+        if (!clientIp) return { recorded: false };
         let customer: Customer | undefined;
         if (ctx.activeUserId) customer = await this.customerService.findOneByUserId(ctx, ctx.activeUserId);
-        if (!customer && !normalizedVisitorId) return { recorded: false };
         const businessDate = businessDateKey(new Date());
         const repository = this.connection.getRepository(ctx, StorefrontDailyVisitor);
-        const anonymousHash = normalizedVisitorId
-            ? visitorHash(`${ctx.channelId.toString()}:anonymous:${normalizedVisitorId}`)
-            : null;
-        const canonicalHash = customer
-            ? visitorHash(`${ctx.channelId.toString()}:customer:${customer.id.toString()}`)
-            : anonymousHash;
-        if (!canonicalHash) return { recorded: false };
-        if (customer && anonymousHash && anonymousHash !== canonicalHash) {
-            await repository.delete({
-                channelId: ctx.channelId,
-                businessDate,
-                visitorKeyHash: anonymousHash,
-            });
-        }
+        const visitorKeyHash = createHmac('sha256', this.promotionOptions.signingSecret)
+            .update(`${ctx.channelId.toString()}:ip:${clientIp}`)
+            .digest('hex');
         const existing = await repository.findOne({
-            where: { channelId: ctx.channelId, businessDate, visitorKeyHash: canonicalHash },
+            where: { channelId: ctx.channelId, businessDate, visitorKeyHash },
         });
         const now = new Date();
         if (existing) {
@@ -398,7 +393,7 @@ export class ReferralService implements OnApplicationBootstrap {
                     channelId: ctx.channelId,
                     customerId: customer?.id ?? null,
                     businessDate,
-                    visitorKeyHash: canonicalHash,
+                    visitorKeyHash,
                     firstSeenAt: now,
                     lastSeenAt: now,
                     visitCount: 1,
@@ -667,23 +662,23 @@ export class ReferralService implements OnApplicationBootstrap {
 
     async todayMetrics(ctx: RequestContext) {
         const { businessDate, start, end } = businessDayRange(new Date());
-        const successfulStates = [
-            'PaymentAuthorized',
-            'PaymentSettled',
-            'PartiallyShipped',
-            'Shipped',
-            'PartiallyDelivered',
-            'Delivered',
-        ];
         const orders = await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('referralOrder')
             .innerJoin('referralOrder.channels', 'orderChannel', 'orderChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
-            .where('referralOrder.orderPlacedAt >= :start', { start })
-            .andWhere('referralOrder.orderPlacedAt < :end', { end })
-            .andWhere('referralOrder.state IN (:...successfulStates)', { successfulStates })
+            .innerJoin(
+                'referralOrder.payments',
+                'settledTodayPayment',
+                'settledTodayPayment.state = :settledPaymentState AND settledTodayPayment.updatedAt >= :start AND settledTodayPayment.updatedAt < :end',
+                { settledPaymentState: 'Settled', start, end },
+            )
+            .leftJoinAndSelect('referralOrder.payments', 'metricPayment')
+            .leftJoinAndSelect('metricPayment.refunds', 'metricRefund')
+            .where('referralOrder.state IN (:...settledStates)', {
+                settledStates: REFERRAL_METRIC_SETTLED_ORDER_STATES,
+            })
             .select([
                 'referralOrder.id',
                 'referralOrder.customerId',
@@ -691,10 +686,23 @@ export class ReferralService implements OnApplicationBootstrap {
                 'referralOrder.subTotalWithTax',
                 'referralOrder.shippingWithTax',
                 'referralOrder.orderPlacedAt',
+                'metricPayment.id',
+                'metricPayment.amount',
+                'metricPayment.state',
+                'metricPayment.updatedAt',
+                'metricRefund.id',
+                'metricRefund.total',
+                'metricRefund.state',
             ])
             .getMany();
+        const netOrders = orders
+            .map(order => ({ order, netTotal: settledOrderNetTotal(order) }))
+            .filter(item => item.netTotal > 0);
+        const netOrderIds = netOrders.map(({ order }) => order.id.toString());
         const buyerIds = Array.from(
-            new Set(orders.flatMap(order => (order.customerId ? [order.customerId.toString()] : []))),
+            new Set(
+                netOrders.flatMap(({ order }) => (order.customerId ? [order.customerId.toString()] : [])),
+            ),
         );
         let returningCustomerIds = new Set<string>();
         if (buyerIds.length) {
@@ -705,8 +713,13 @@ export class ReferralService implements OnApplicationBootstrap {
                     channelId: ctx.channelId,
                 })
                 .where('referralOrder.customerId IN (:...buyerIds)', { buyerIds })
+                .andWhere('referralOrder.id NOT IN (:...currentOrderIds)', {
+                    currentOrderIds: netOrderIds,
+                })
                 .andWhere('referralOrder.orderPlacedAt < :start', { start })
-                .andWhere('referralOrder.state IN (:...successfulStates)', { successfulStates })
+                .andWhere('referralOrder.state IN (:...settledStates)', {
+                    settledStates: REFERRAL_METRIC_SETTLED_ORDER_STATES,
+                })
                 .select('referralOrder.customerId', 'customerId')
                 .distinct(true)
                 .getRawMany<{ customerId: string | number }>();
@@ -721,8 +734,8 @@ export class ReferralService implements OnApplicationBootstrap {
                         channelId: ctx.channelId,
                     })
                     .innerJoin('customer.user', 'customerUser')
-                    .where('customer.createdAt >= :start', { start })
-                    .andWhere('customer.createdAt < :end', { end })
+                    .where('customerUser.createdAt >= :start', { start })
+                    .andWhere('customerUser.createdAt < :end', { end })
                     .getCount(),
                 this.connection.getRepository(ctx, StorefrontDailyVisitor).count({
                     where: { channelId: ctx.channelId, businessDate },
@@ -743,8 +756,8 @@ export class ReferralService implements OnApplicationBootstrap {
                     .getCount(),
             ]);
         const salesByCurrency = Array.from(
-            orders.reduce((totals, order) => {
-                totals.set(order.currencyCode, (totals.get(order.currencyCode) ?? 0) + order.totalWithTax);
+            netOrders.reduce((totals, { order, netTotal }) => {
+                totals.set(order.currencyCode, (totals.get(order.currencyCode) ?? 0) + netTotal);
                 return totals;
             }, new Map<CurrencyCode, number>()),
             ([currencyCode, sales]) => ({ currencyCode, sales }),
@@ -756,7 +769,7 @@ export class ReferralService implements OnApplicationBootstrap {
             consumerCount: buyerIds.length,
             firstTimeConsumerCount: buyerIds.filter(id => !returningCustomerIds.has(id)).length,
             returningConsumerCount: buyerIds.filter(id => returningCustomerIds.has(id)).length,
-            orderCount: orders.length,
+            orderCount: netOrders.length,
             todayInvitedCount,
             todayInvitedPurchaserCount,
             salesByCurrency,
@@ -859,13 +872,7 @@ export class ReferralService implements OnApplicationBootstrap {
         return { auditedWallets: wallets.length, items };
     }
 
-    private async rewardSettledOrder(ctx: RequestContext, orderId: ID): Promise<void> {
-        const config = await this.getConfig(ctx);
-        if (!config.enabled) return;
-        const existing = await this.connection.getRepository(ctx, ReferralReward).findOne({
-            where: { channelId: ctx.channelId, orderId },
-        });
-        if (existing) return;
+    private async rewardSettledOrder(ctx: RequestContext, orderId: ID, settledAt: Date): Promise<void> {
         const order = await this.orderService.findOne(ctx, orderId, [
             'customer',
             'payments',
@@ -878,11 +885,17 @@ export class ReferralService implements OnApplicationBootstrap {
         });
         if (!relationship) return;
         if (!relationship.firstPaidOrderAt) {
-            relationship.firstPaidOrderAt = order.orderPlacedAt ?? new Date();
+            relationship.firstPaidOrderAt = settledAt;
             await this.connection.getRepository(ctx, ReferralRelationship).save(relationship, {
                 reload: false,
             });
         }
+        const config = await this.getConfig(ctx);
+        if (!config.enabled) return;
+        const existing = await this.connection.getRepository(ctx, ReferralReward).findOne({
+            where: { channelId: ctx.channelId, orderId },
+        });
+        if (existing) return;
         if (config.rewardRateBps <= 0) return;
 
         const productNet = Math.max(0, order.totalWithTax - order.shippingWithTax);
@@ -1388,15 +1401,6 @@ function generateInviteCode(): string {
 
 function normalizeInviteCode(value?: string | null): string {
     return (value ?? '').trim().toUpperCase().replace(/\s+/g, '').slice(0, 12);
-}
-
-function normalizeVisitorId(value?: string | null): string | null {
-    const normalized = (value ?? '').trim();
-    return /^[A-Za-z0-9_-]{16,128}$/.test(normalized) ? normalized : null;
-}
-
-function visitorHash(value: string): string {
-    return createHash('sha256').update(value).digest('hex');
 }
 
 function businessDateKey(value: Date): string {
