@@ -65,10 +65,23 @@ export interface UpdateStorefrontContentBlockInput extends Partial<
     Omit<StorefrontContentBlockFieldsInput, 'translations' | 'items'>
 > {
     id: ID;
+    expectedUpdatedAt: Date;
     translations?: StorefrontContentBlockTranslationInput[] | null;
     items?: StorefrontContentItemInput[] | null;
 }
 
 export interface UpdateStorefrontContentSettingsInput {
     heroAutoplayIntervalSeconds: number;
+}
+
+export interface StorefrontContentBlockVersionInput {
+    id: ID;
+    expectedUpdatedAt: Date;
+}
+
+export interface ApplyStorefrontContentChangesInput {
+    expectedBlocks: StorefrontContentBlockVersionInput[];
+    creates: CreateStorefrontContentBlockInput[];
+    updates: UpdateStorefrontContentBlockInput[];
+    orderedCodes?: string[] | null;
 }

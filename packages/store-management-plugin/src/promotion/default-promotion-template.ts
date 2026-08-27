@@ -1,4 +1,4 @@
-export const DEFAULT_PROMOTION_TEMPLATE_VERSION = 6;
+export const DEFAULT_PROMOTION_TEMPLATE_VERSION = 7;
 
 export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
 <html lang="{{store.language}}">
@@ -9,7 +9,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
     <meta property="og:type" content="website">
     <meta property="og:title" content="{{store.name}}">
     <meta property="og:description" content="{{store.description}}">
-    <meta property="og:image" content="{{store.heroImageUrl}}">
+    <meta property="og:image" content="{{store.shareImageUrl}}">
     <title>{{store.name}}</title>
     <style>
         :root {

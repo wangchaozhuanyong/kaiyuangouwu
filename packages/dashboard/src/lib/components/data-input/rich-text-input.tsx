@@ -1,7 +1,12 @@
 import { DashboardFormComponentProps } from '@/vdb/framework/form-engine/form-engine-types.js';
 import { isFieldDisabled } from '@/vdb/framework/form-engine/utils.js';
-import { useMemo } from 'react';
-import { RichTextEditor } from '../shared/rich-text-editor/rich-text-editor.js';
+import { lazy, Suspense, useMemo } from 'react';
+
+const RichTextEditor = lazy(() =>
+    import('../shared/rich-text-editor/rich-text-editor.js').then(module => ({
+        default: module.RichTextEditor,
+    })),
+);
 
 /**
  * @description
@@ -26,7 +31,23 @@ export function RichTextInput({
         [placeholder],
     );
 
-    return <RichTextEditor value={value} onChange={onChange} disabled={readOnly} placeholder={strippedPlaceholder} />;
+    return (
+        <Suspense
+            fallback={
+                <div
+                    className="min-h-16 w-full rounded-md border bg-muted/30"
+                    aria-busy="true"
+                />
+            }
+        >
+            <RichTextEditor
+                value={value}
+                onChange={onChange}
+                disabled={readOnly}
+                placeholder={strippedPlaceholder}
+            />
+        </Suspense>
+    );
 }
 
 RichTextInput.metadata = {

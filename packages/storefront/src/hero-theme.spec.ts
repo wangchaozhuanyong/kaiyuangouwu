@@ -1,8 +1,13 @@
+import type { StorefrontContentBlock } from './types';
 import { describe, expect, it } from 'vitest';
 
-import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from './hero-theme';
+import {
+    builtInHeroFallbackImage,
+    builtInHeroImage,
+    heroThemeStyle,
+    heroUsesImageOverlay,
+} from './hero-theme';
 import { HERO_CLOUD_BRIDGE_FALLBACK_IMAGE, HERO_CLOUD_BRIDGE_IMAGE } from './storefront-images';
-import type { StorefrontContentBlock } from './types';
 
 function hero(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
     return {
@@ -79,5 +84,10 @@ describe('hero theme', () => {
 
         expect(style['--hero-stat-background']).toBe('rgba(255, 255, 255, 0.74)');
         expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255, 0.86)');
+    });
+
+    it('keeps CloudBridge artwork unfiltered while preserving overlays for other themes', () => {
+        expect(heroUsesImageOverlay(hero({ settings: { themePreset: 'cloudbridge-bright' } }))).toBe(false);
+        expect(heroUsesImageOverlay(hero())).toBe(true);
     });
 });

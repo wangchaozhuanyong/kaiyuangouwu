@@ -66,4 +66,16 @@ describe('ListPage prop forwarding', () => {
         expect(captured.props?.includeSelectionColumn).toBe(false);
         expect(captured.props?.includeActionsColumn).toBe(false);
     });
+
+    it('renders optional task guidance before the list table', () => {
+        const html = renderToStaticMarkup(
+            <ListPage
+                {...baseProps}
+                description={<div data-testid="list-guidance">Choose a reusable template</div>}
+            />,
+        );
+
+        expect(html).toContain('data-testid="list-guidance"');
+        expect(html).toContain('Choose a reusable template');
+    });
 });

@@ -3,6 +3,7 @@ import { gql } from 'graphql-tag';
 const referralProgramFields = gql`
     fragment ReferralProgramFields on ReferralProgram {
         channelId
+        updatedAt
         enabled
         rewardRate
         releaseDelayDays
@@ -12,6 +13,46 @@ const referralProgramFields = gql`
         attributionWindowDays
         defaultPosterTemplate
         posterTemplates
+        posterTemplateConfigs {
+            id
+            createdAt
+            updatedAt
+            name
+            enabled
+            position
+            layoutVariant
+            posterBackgroundAsset {
+                id
+                name
+                preview
+                source
+                width
+                height
+                mimeType
+            }
+            shareBackgroundAsset {
+                id
+                name
+                preview
+                source
+                width
+                height
+                mimeType
+            }
+            titleZh
+            titleEn
+            headlineZh
+            headlineEn
+            rewardTextZh
+            rewardTextEn
+            siteIntroZh
+            siteIntroEn
+            serviceTextZh
+            serviceTextEn
+            foregroundColor
+            accentColor
+            overlayOpacity
+        }
     }
 `;
 
@@ -29,6 +70,76 @@ export const updateReferralProgramMutation = gql`
     mutation UpdateReferralProgramAdmin($input: UpdateReferralProgramInput!) {
         updateReferralProgram(input: $input) {
             ...ReferralProgramFields
+        }
+    }
+`;
+
+const referralPosterTemplateFields = gql`
+    fragment ReferralPosterTemplateFields on ReferralPosterTemplate {
+        id
+        createdAt
+        updatedAt
+        name
+        enabled
+        position
+        layoutVariant
+        posterBackgroundAsset {
+            id
+            name
+            preview
+            source
+            width
+            height
+            mimeType
+        }
+        shareBackgroundAsset {
+            id
+            name
+            preview
+            source
+            width
+            height
+            mimeType
+        }
+        titleZh
+        titleEn
+        headlineZh
+        headlineEn
+        rewardTextZh
+        rewardTextEn
+        siteIntroZh
+        siteIntroEn
+        serviceTextZh
+        serviceTextEn
+        foregroundColor
+        accentColor
+        overlayOpacity
+    }
+`;
+
+export const createReferralPosterTemplateMutation = gql`
+    ${referralPosterTemplateFields}
+    mutation CreateReferralPosterTemplateAdmin($input: CreateReferralPosterTemplateInput!) {
+        createReferralPosterTemplate(input: $input) {
+            ...ReferralPosterTemplateFields
+        }
+    }
+`;
+
+export const updateReferralPosterTemplateMutation = gql`
+    ${referralPosterTemplateFields}
+    mutation UpdateReferralPosterTemplateAdmin($input: UpdateReferralPosterTemplateInput!) {
+        updateReferralPosterTemplate(input: $input) {
+            ...ReferralPosterTemplateFields
+        }
+    }
+`;
+
+export const deleteReferralPosterTemplateMutation = gql`
+    mutation DeleteReferralPosterTemplateAdmin($id: ID!) {
+        deleteReferralPosterTemplate(id: $id) {
+            result
+            message
         }
     }
 `;
@@ -194,6 +305,18 @@ export const referralCustomerLookupQuery = gql`
     }
 `;
 
+export const referralCustomerWalletsQuery = gql`
+    query ReferralCustomerWalletsAdmin($customerId: ID!) {
+        referralCustomerWallets(customerId: $customerId) {
+            id
+            currencyCode
+            availableBalance
+            pendingBalance
+            reservedBalance
+        }
+    }
+`;
+
 export const createReferralWithdrawalMutation = gql`
     mutation CreateReferralWithdrawalAdmin($input: CreateReferralWithdrawalInput!) {
         createReferralWithdrawal(input: $input) {
@@ -268,6 +391,7 @@ export const adjustReferralBalanceMutation = gql`
 
 export interface ReferralProgramRecord {
     channelId: string;
+    updatedAt: string;
     enabled: boolean;
     rewardRate: number;
     releaseDelayDays: number;
@@ -277,6 +401,42 @@ export interface ReferralProgramRecord {
     attributionWindowDays: number;
     defaultPosterTemplate: string;
     posterTemplates: string[];
+    posterTemplateConfigs: ReferralPosterTemplateRecord[];
+}
+
+export interface ReferralPosterAssetRecord {
+    id: string;
+    name: string;
+    preview: string;
+    source: string;
+    width: number;
+    height: number;
+    mimeType: string;
+}
+
+export interface ReferralPosterTemplateRecord {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    name: string;
+    enabled: boolean;
+    position: number;
+    layoutVariant: string;
+    posterBackgroundAsset: ReferralPosterAssetRecord | null;
+    shareBackgroundAsset: ReferralPosterAssetRecord | null;
+    titleZh: string;
+    titleEn: string;
+    headlineZh: string;
+    headlineEn: string;
+    rewardTextZh: string;
+    rewardTextEn: string;
+    siteIntroZh: string;
+    siteIntroEn: string;
+    serviceTextZh: string;
+    serviceTextEn: string;
+    foregroundColor: string;
+    accentColor: string;
+    overlayOpacity: number;
 }
 
 export interface ReferralRelationshipRecord {
@@ -415,4 +575,12 @@ export interface ReferralCustomerRecord {
     firstName: string;
     lastName: string;
     emailAddress: string;
+}
+
+export interface ReferralCustomerWalletRecord {
+    id: string;
+    currencyCode: string;
+    availableBalance: number;
+    pendingBalance: number;
+    reservedBalance: number;
 }

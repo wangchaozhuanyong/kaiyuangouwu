@@ -59,6 +59,10 @@ export interface ListPageProps<
      */
     title: string | React.ReactElement;
     /**
+     * Optional task guidance shown between the page header and the list table.
+     */
+    description?: React.ReactNode;
+    /**
      * @description
      * This DocumentNode of the list query, i.e. a query that fetches
      * PaginatedList data with "items" and "totalItems", such as:
@@ -525,6 +529,7 @@ export function ListPage<
 >({
     pageId,
     title,
+    description,
     listQuery,
     deleteMutation,
     transformVariables,
@@ -672,6 +677,7 @@ export function ListPage<
         <Page pageId={pageId}>
             <PageTitle>{title}</PageTitle>
             <PageActionBar>{children}</PageActionBar>
+            {description}
             <PageLayout>
                 <FullWidthPageBlock blockId="list-table">
                     <PaginatedListDataTable

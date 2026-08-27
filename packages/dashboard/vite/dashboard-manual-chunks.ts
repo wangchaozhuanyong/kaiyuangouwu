@@ -31,12 +31,18 @@ export function dashboardManualChunks(id: string): string | undefined {
     const normalizedId = id.replace(/\\/g, '/');
     if (
         normalizedId.includes('/packages/dashboard/src/lib/components/data-table/') ||
-        normalizedId.includes('/packages/dashboard/src/lib/framework/form-engine/') ||
-        normalizedId.includes('/packages/dashboard/src/lib/components/shared/rich-text-editor/')
+        normalizedId.includes('/packages/dashboard/src/lib/framework/form-engine/')
     ) {
-        // These subsystems import one another, so keep their application code
-        // together while their heavy third-party dependencies are split below.
+        // These subsystems import one another, so keep their application code together.
         return 'dashboard-framework';
+    }
+    if (
+        normalizedId.includes('/node_modules/react/') ||
+        normalizedId.includes('/node_modules/react-dom/') ||
+        normalizedId.includes('/node_modules/react-is/') ||
+        normalizedId.includes('/node_modules/scheduler/')
+    ) {
+        return 'vendor-react';
     }
     if (normalizedId.includes('/node_modules/@vendure-io/ui/src/components/ui/chart.')) {
         return 'vendor-charts';

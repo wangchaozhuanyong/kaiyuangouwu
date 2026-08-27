@@ -1,7 +1,8 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import {
+    Asset,
     Customer,
     CustomerService,
     EventBus,
@@ -17,18 +18,21 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
+import { STOREFRONT_PROMOTION_OPTIONS } from '../constants';
 import { ReferralAccount } from '../entities/referral-account.entity';
 import { ReferralBalanceUse } from '../entities/referral-balance-use.entity';
 import { ReferralLedgerEntry } from '../entities/referral-ledger-entry.entity';
+import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
 import { ReferralProgramConfig } from '../entities/referral-program-config.entity';
 import { ReferralRelationship } from '../entities/referral-relationship.entity';
 import { ReferralReward } from '../entities/referral-reward.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 import { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 import { StorefrontDailyVisitor } from '../entities/storefront-daily-visitor.entity';
+import { StorefrontPromotionPluginOptions } from '../types';
 
 import {
     calculateEligibleReferralRefund,
@@ -36,17 +40,20 @@ import {
     calculateReferralReward,
     referralRewardStatusAfterClawback,
 } from './referral-calculation';
+import { REFERRAL_METRIC_SETTLED_ORDER_STATES, settledOrderNetTotal } from './referral-metrics';
 import { createReferralPaymentProof } from './referral-payment-proof';
 import {
     REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
     referralPosterTemplates,
     ReferralWithdrawalStatus,
 } from './referral.constants';
+import { storefrontClientIp } from './storefront-client-ip';
 
 const INVITE_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const MAX_PAGE_SIZE = 200;
 
 export interface UpdateReferralProgramInput {
+    expectedUpdatedAt: Date;
     enabled: boolean;
     rewardRate: number;
     releaseDelayDays: number;
@@ -55,6 +62,32 @@ export interface UpdateReferralProgramInput {
     allowBalanceSpend: boolean;
     attributionWindowDays: number;
     defaultPosterTemplate: string;
+}
+
+export interface SaveReferralPosterTemplateInput {
+    name: string;
+    enabled: boolean;
+    position: number;
+    layoutVariant: string;
+    posterBackgroundAssetId?: ID | null;
+    shareBackgroundAssetId?: ID | null;
+    titleZh: string;
+    titleEn: string;
+    headlineZh: string;
+    headlineEn: string;
+    rewardTextZh: string;
+    rewardTextEn: string;
+    siteIntroZh: string;
+    siteIntroEn: string;
+    serviceTextZh: string;
+    serviceTextEn: string;
+    foregroundColor: string;
+    accentColor: string;
+    overlayOpacity: number;
+}
+
+export interface UpdateReferralPosterTemplateInput extends SaveReferralPosterTemplateInput {
+    id: ID;
 }
 
 export interface CreateReferralWithdrawalInput {
@@ -97,6 +130,8 @@ export class ReferralService implements OnApplicationBootstrap {
         private readonly orderService: OrderService,
         private readonly eventBus: EventBus,
         private readonly requestContextService: RequestContextService,
+        @Inject(STOREFRONT_PROMOTION_OPTIONS)
+        private readonly promotionOptions: Required<StorefrontPromotionPluginOptions>,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -105,7 +140,7 @@ export class ReferralService implements OnApplicationBootstrap {
             id: 'referral-reward-on-payment-settled',
             handler: event => {
                 if (event.toState === 'PaymentSettled') {
-                    return this.rewardSettledOrder(event.ctx, event.order.id);
+                    return this.rewardSettledOrder(event.ctx, event.order.id, event.createdAt);
                 }
                 if (event.toState === 'Cancelled') {
                     return this.handleCancelledOrder(event.ctx, event.order.id);
@@ -125,17 +160,20 @@ export class ReferralService implements OnApplicationBootstrap {
 
     async publicProgram(ctx: RequestContext) {
         const config = await this.getConfig(ctx);
-        return this.configView(config);
+        return this.configView(ctx, config, false);
     }
 
     async adminProgram(ctx: RequestContext) {
         const config = await this.getOrCreateConfig(ctx);
-        return this.configView(config);
+        return this.configView(ctx, config, true);
     }
 
     async updateProgram(ctx: RequestContext, input: UpdateReferralProgramInput) {
         this.validateProgramInput(input);
-        const config = await this.getOrCreateConfig(ctx);
+        await this.validateDefaultPosterTemplate(ctx, input.defaultPosterTemplate);
+        const existing = await this.getOrCreateConfig(ctx);
+        const config = await this.lockConfigOrThrow(ctx, existing.id);
+        this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
         config.enabled = input.enabled;
         config.rewardRateBps = Math.round(input.rewardRate * 100);
         config.releaseDelayDays = input.releaseDelayDays;
@@ -145,7 +183,71 @@ export class ReferralService implements OnApplicationBootstrap {
         config.attributionWindowDays = input.attributionWindowDays;
         config.defaultPosterTemplate = input.defaultPosterTemplate;
         await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
-        return this.configView(config);
+        return this.configView(ctx, config, true);
+    }
+
+    async createPosterTemplate(ctx: RequestContext, input: SaveReferralPosterTemplateInput) {
+        const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
+        const existingTemplateCount = await repository.count({ where: { channelId: ctx.channelId } });
+        const values = await this.normalizePosterTemplateInput(ctx, input);
+        const saved = await repository.save(
+            repository.create({
+                ...values,
+                channelId: ctx.channelId,
+            }),
+        );
+        if (existingTemplateCount === 0 && saved.enabled) {
+            const config = await this.getOrCreateConfig(ctx);
+            config.defaultPosterTemplate = saved.id.toString();
+            await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
+        }
+        return this.posterTemplateById(ctx, saved.id);
+    }
+
+    async updatePosterTemplate(ctx: RequestContext, input: UpdateReferralPosterTemplateInput) {
+        const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
+        const template = await repository.findOne({
+            where: { id: input.id, channelId: ctx.channelId },
+        });
+        if (!template) throw new UserInputError('找不到该邀请海报模板');
+        Object.assign(template, await this.normalizePosterTemplateInput(ctx, input));
+        await repository.save(template, { reload: false });
+        if (!template.enabled) {
+            const config = await this.getOrCreateConfig(ctx);
+            if (config.defaultPosterTemplate === template.id.toString()) {
+                const replacement = await repository
+                    .createQueryBuilder('posterTemplate')
+                    .where('posterTemplate.channelId = :channelId', { channelId: ctx.channelId })
+                    .andWhere('posterTemplate.enabled = :enabled', { enabled: true })
+                    .andWhere('posterTemplate.id != :id', { id: template.id })
+                    .orderBy('posterTemplate.position', 'ASC')
+                    .addOrderBy('posterTemplate.id', 'ASC')
+                    .getOne();
+                config.defaultPosterTemplate = replacement?.id.toString() ?? 'BRAND_MINIMAL';
+                await this.connection
+                    .getRepository(ctx, ReferralProgramConfig)
+                    .save(config, { reload: false });
+            }
+        }
+        return this.posterTemplateById(ctx, template.id);
+    }
+
+    async deletePosterTemplate(ctx: RequestContext, id: ID) {
+        const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
+        const template = await repository.findOne({ where: { id, channelId: ctx.channelId } });
+        if (!template) return { result: 'NOT_DELETED', message: '找不到该邀请海报模板' };
+        const config = await this.getOrCreateConfig(ctx);
+        const wasDefault = config.defaultPosterTemplate === template.id.toString();
+        await repository.remove(template);
+        if (wasDefault) {
+            const replacement = await repository.findOne({
+                where: { channelId: ctx.channelId, enabled: true },
+                order: { position: 'ASC', id: 'ASC' },
+            });
+            config.defaultPosterTemplate = replacement?.id.toString() ?? 'BRAND_MINIMAL';
+            await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
+        }
+        return { result: 'DELETED' };
     }
 
     async validateInviteCode(ctx: RequestContext, code?: string | null): Promise<boolean> {
@@ -362,49 +464,58 @@ export class ReferralService implements OnApplicationBootstrap {
         return { order: paymentResult, wallet: refreshedWallet, amount };
     }
 
-    async recordVisit(ctx: RequestContext, visitorId?: string | null) {
-        const normalizedVisitorId = normalizeVisitorId(visitorId);
+    async recordVisit(ctx: RequestContext) {
+        const clientIp = storefrontClientIp(ctx.req);
+        if (!clientIp) return { recorded: false };
         let customer: Customer | undefined;
         if (ctx.activeUserId) customer = await this.customerService.findOneByUserId(ctx, ctx.activeUserId);
-        if (!customer && !normalizedVisitorId) return { recorded: false };
         const businessDate = businessDateKey(new Date());
         const repository = this.connection.getRepository(ctx, StorefrontDailyVisitor);
-        const anonymousHash = normalizedVisitorId
-            ? visitorHash(`${ctx.channelId.toString()}:anonymous:${normalizedVisitorId}`)
-            : null;
-        const canonicalHash = customer
-            ? visitorHash(`${ctx.channelId.toString()}:customer:${customer.id.toString()}`)
-            : anonymousHash;
-        if (!canonicalHash) return { recorded: false };
-        if (customer && anonymousHash && anonymousHash !== canonicalHash) {
-            await repository.delete({
-                channelId: ctx.channelId,
-                businessDate,
-                visitorKeyHash: anonymousHash,
-            });
-        }
-        const existing = await repository.findOne({
-            where: { channelId: ctx.channelId, businessDate, visitorKeyHash: canonicalHash },
-        });
+        const visitorKeyHash = createHmac('sha256', this.promotionOptions.signingSecret)
+            .update(`${ctx.channelId.toString()}:ip:${clientIp}`)
+            .digest('hex');
         const now = new Date();
-        if (existing) {
-            existing.lastSeenAt = now;
-            existing.visitCount += 1;
-            existing.customerId = customer?.id ?? existing.customerId;
-            await repository.save(existing, { reload: false });
-        } else {
-            await repository.save(
-                new StorefrontDailyVisitor({
-                    channelId: ctx.channelId,
-                    customerId: customer?.id ?? null,
-                    businessDate,
-                    visitorKeyHash: canonicalHash,
-                    firstSeenAt: now,
-                    lastSeenAt: now,
-                    visitCount: 1,
-                }),
-                { reload: false },
+        const incrementExisting = async () => {
+            const visitCountColumn = repository.metadata.findColumnWithPropertyName('visitCount');
+            if (!visitCountColumn) throw new Error('StorefrontDailyVisitor.visitCount column is missing');
+            const escapedVisitCount = repository.manager.connection.driver.escape(
+                visitCountColumn.databaseName,
             );
+            return repository
+                .createQueryBuilder()
+                .update(StorefrontDailyVisitor)
+                .set({
+                    lastSeenAt: now,
+                    visitCount: () => `${escapedVisitCount} + 1`,
+                    ...(customer ? { customerId: customer.id } : {}),
+                })
+                .where('channelId = :channelId', { channelId: ctx.channelId })
+                .andWhere('businessDate = :businessDate', { businessDate })
+                .andWhere('visitorKeyHash = :visitorKeyHash', { visitorKeyHash })
+                .execute();
+        };
+        const updated = await incrementExisting();
+        if (!updated.affected) {
+            try {
+                await repository.save(
+                    new StorefrontDailyVisitor({
+                        channelId: ctx.channelId,
+                        customerId: customer?.id ?? null,
+                        businessDate,
+                        visitorKeyHash,
+                        firstSeenAt: now,
+                        lastSeenAt: now,
+                        visitCount: 1,
+                    }),
+                    { reload: false },
+                );
+            } catch (error) {
+                // Another request may have inserted the same unique visitor
+                // between our UPDATE and INSERT. Increment that row instead of
+                // losing the visit or surfacing a unique-constraint error.
+                const raced = await incrementExisting();
+                if (!raced.affected) throw error;
+            }
         }
         return { recorded: true };
     }
@@ -665,25 +776,37 @@ export class ReferralService implements OnApplicationBootstrap {
         return { totalItems, items: items.map(item => this.withdrawalView(item, item.customer)) };
     }
 
+    async adminCustomerWallets(ctx: RequestContext, customerId: ID) {
+        return this.connection.getRepository(ctx, ReferralWallet).find({
+            where: { channelId: ctx.channelId, customerId },
+            order: { currencyCode: 'ASC' },
+        });
+    }
+
     async todayMetrics(ctx: RequestContext) {
         const { businessDate, start, end } = businessDayRange(new Date());
-        const successfulStates = [
-            'PaymentAuthorized',
-            'PaymentSettled',
-            'PartiallyShipped',
-            'Shipped',
-            'PartiallyDelivered',
-            'Delivered',
-        ];
+        // Vendure's base createdAt/updatedAt columns are database-generated UTC values stored in
+        // timestamp-without-time-zone columns. Pass UTC wall-clock strings for those columns so a
+        // non-UTC Node.js process does not shift the business-day boundary during driver encoding.
+        const utcStart = utcDatabaseTimestamp(start);
+        const utcEnd = utcDatabaseTimestamp(end);
         const orders = await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('referralOrder')
             .innerJoin('referralOrder.channels', 'orderChannel', 'orderChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
-            .where('referralOrder.orderPlacedAt >= :start', { start })
-            .andWhere('referralOrder.orderPlacedAt < :end', { end })
-            .andWhere('referralOrder.state IN (:...successfulStates)', { successfulStates })
+            .innerJoin(
+                'referralOrder.payments',
+                'settledTodayPayment',
+                'settledTodayPayment.state = :settledPaymentState AND settledTodayPayment.updatedAt >= :utcStart AND settledTodayPayment.updatedAt < :utcEnd',
+                { settledPaymentState: 'Settled', utcStart, utcEnd },
+            )
+            .leftJoinAndSelect('referralOrder.payments', 'metricPayment')
+            .leftJoinAndSelect('metricPayment.refunds', 'metricRefund')
+            .where('referralOrder.state IN (:...settledStates)', {
+                settledStates: REFERRAL_METRIC_SETTLED_ORDER_STATES,
+            })
             .select([
                 'referralOrder.id',
                 'referralOrder.customerId',
@@ -691,10 +814,23 @@ export class ReferralService implements OnApplicationBootstrap {
                 'referralOrder.subTotalWithTax',
                 'referralOrder.shippingWithTax',
                 'referralOrder.orderPlacedAt',
+                'metricPayment.id',
+                'metricPayment.amount',
+                'metricPayment.state',
+                'metricPayment.updatedAt',
+                'metricRefund.id',
+                'metricRefund.total',
+                'metricRefund.state',
             ])
             .getMany();
+        const netOrders = orders
+            .map(order => ({ order, netTotal: settledOrderNetTotal(order) }))
+            .filter(item => item.netTotal > 0);
+        const netOrderIds = netOrders.map(({ order }) => order.id.toString());
         const buyerIds = Array.from(
-            new Set(orders.flatMap(order => (order.customerId ? [order.customerId.toString()] : []))),
+            new Set(
+                netOrders.flatMap(({ order }) => (order.customerId ? [order.customerId.toString()] : [])),
+            ),
         );
         let returningCustomerIds = new Set<string>();
         if (buyerIds.length) {
@@ -705,8 +841,13 @@ export class ReferralService implements OnApplicationBootstrap {
                     channelId: ctx.channelId,
                 })
                 .where('referralOrder.customerId IN (:...buyerIds)', { buyerIds })
+                .andWhere('referralOrder.id NOT IN (:...currentOrderIds)', {
+                    currentOrderIds: netOrderIds,
+                })
                 .andWhere('referralOrder.orderPlacedAt < :start', { start })
-                .andWhere('referralOrder.state IN (:...successfulStates)', { successfulStates })
+                .andWhere('referralOrder.state IN (:...settledStates)', {
+                    settledStates: REFERRAL_METRIC_SETTLED_ORDER_STATES,
+                })
                 .select('referralOrder.customerId', 'customerId')
                 .distinct(true)
                 .getRawMany<{ customerId: string | number }>();
@@ -721,8 +862,8 @@ export class ReferralService implements OnApplicationBootstrap {
                         channelId: ctx.channelId,
                     })
                     .innerJoin('customer.user', 'customerUser')
-                    .where('customer.createdAt >= :start', { start })
-                    .andWhere('customer.createdAt < :end', { end })
+                    .where('customerUser.createdAt >= :utcStart', { utcStart })
+                    .andWhere('customerUser.createdAt < :utcEnd', { utcEnd })
                     .getCount(),
                 this.connection.getRepository(ctx, StorefrontDailyVisitor).count({
                     where: { channelId: ctx.channelId, businessDate },
@@ -743,8 +884,8 @@ export class ReferralService implements OnApplicationBootstrap {
                     .getCount(),
             ]);
         const salesByCurrency = Array.from(
-            orders.reduce((totals, order) => {
-                totals.set(order.currencyCode, (totals.get(order.currencyCode) ?? 0) + order.totalWithTax);
+            netOrders.reduce((totals, { order, netTotal }) => {
+                totals.set(order.currencyCode, (totals.get(order.currencyCode) ?? 0) + netTotal);
                 return totals;
             }, new Map<CurrencyCode, number>()),
             ([currencyCode, sales]) => ({ currencyCode, sales }),
@@ -756,7 +897,7 @@ export class ReferralService implements OnApplicationBootstrap {
             consumerCount: buyerIds.length,
             firstTimeConsumerCount: buyerIds.filter(id => !returningCustomerIds.has(id)).length,
             returningConsumerCount: buyerIds.filter(id => returningCustomerIds.has(id)).length,
-            orderCount: orders.length,
+            orderCount: netOrders.length,
             todayInvitedCount,
             todayInvitedPurchaserCount,
             salesByCurrency,
@@ -859,13 +1000,7 @@ export class ReferralService implements OnApplicationBootstrap {
         return { auditedWallets: wallets.length, items };
     }
 
-    private async rewardSettledOrder(ctx: RequestContext, orderId: ID): Promise<void> {
-        const config = await this.getConfig(ctx);
-        if (!config.enabled) return;
-        const existing = await this.connection.getRepository(ctx, ReferralReward).findOne({
-            where: { channelId: ctx.channelId, orderId },
-        });
-        if (existing) return;
+    private async rewardSettledOrder(ctx: RequestContext, orderId: ID, settledAt: Date): Promise<void> {
         const order = await this.orderService.findOne(ctx, orderId, [
             'customer',
             'payments',
@@ -878,11 +1013,17 @@ export class ReferralService implements OnApplicationBootstrap {
         });
         if (!relationship) return;
         if (!relationship.firstPaidOrderAt) {
-            relationship.firstPaidOrderAt = order.orderPlacedAt ?? new Date();
+            relationship.firstPaidOrderAt = settledAt;
             await this.connection.getRepository(ctx, ReferralRelationship).save(relationship, {
                 reload: false,
             });
         }
+        const config = await this.getConfig(ctx);
+        if (!config.enabled) return;
+        const existing = await this.connection.getRepository(ctx, ReferralReward).findOne({
+            where: { channelId: ctx.channelId, orderId },
+        });
+        if (existing) return;
         if (config.rewardRateBps <= 0) return;
 
         const productNet = Math.max(0, order.totalWithTax - order.shippingWithTax);
@@ -1180,9 +1321,50 @@ export class ReferralService implements OnApplicationBootstrap {
         return this.connection.getRepository(ctx, ReferralProgramConfig).save(config);
     }
 
-    private configView(config: ReferralProgramConfig) {
+    private async lockConfigOrThrow(ctx: RequestContext, id: ID): Promise<ReferralProgramConfig> {
+        const repository = this.connection.getRepository(ctx, ReferralProgramConfig);
+        if (supportsReferralPessimisticLock(this.connection.rawConnection.options.type)) {
+            try {
+                const locked = await repository
+                    .createQueryBuilder('config')
+                    .setLock('pessimistic_write')
+                    .where('config.id = :id', { id })
+                    .andWhere('config.channelId = :channelId', { channelId: ctx.channelId })
+                    .getOne();
+                if (!locked) throw new UserInputError('邀请返利配置不存在');
+            } catch (error) {
+                if (!isLockNotSupportedError(error)) throw error;
+            }
+        }
+        const config = await repository.findOne({ where: { id, channelId: ctx.channelId } });
+        if (!config) throw new UserInputError('邀请返利配置不存在');
+        return config;
+    }
+
+    private assertExpectedUpdatedAt(current: Date, expected: Date | string): void {
+        const expectedDate = expected instanceof Date ? expected : new Date(expected);
+        if (!Number.isFinite(expectedDate.getTime()) || current.getTime() !== expectedDate.getTime()) {
+            throw new UserInputError(
+                'CONCURRENT_MODIFICATION: 邀请返利配置已被其他管理员更新，请重新载入后合并修改',
+            );
+        }
+    }
+
+    private async configView(ctx: RequestContext, config: ReferralProgramConfig, includeDisabled: boolean) {
+        const posterTemplateConfigs = await this.connection.getRepository(ctx, ReferralPosterTemplate).find({
+            where: {
+                channelId: ctx.channelId,
+                ...(includeDisabled ? {} : { enabled: true }),
+            },
+            relations: {
+                posterBackgroundAsset: true,
+                shareBackgroundAsset: true,
+            },
+            order: { position: 'ASC', id: 'ASC' },
+        });
         return {
             channelId: config.channelId,
+            updatedAt: config.updatedAt,
             enabled: config.enabled,
             rewardRate: config.rewardRateBps / 100,
             releaseDelayDays: config.releaseDelayDays,
@@ -1192,6 +1374,7 @@ export class ReferralService implements OnApplicationBootstrap {
             attributionWindowDays: config.attributionWindowDays,
             defaultPosterTemplate: config.defaultPosterTemplate,
             posterTemplates: [...referralPosterTemplates],
+            posterTemplateConfigs,
         };
     }
 
@@ -1218,13 +1401,81 @@ export class ReferralService implements OnApplicationBootstrap {
         if (
             !Number.isInteger(input.attributionWindowDays) ||
             input.attributionWindowDays < 1 ||
-            input.attributionWindowDays > 90
+            input.attributionWindowDays > 365
         ) {
-            throw new UserInputError('邀请来源有效期必须在1至90天之间');
+            throw new UserInputError('邀请来源有效期必须在1至365天之间');
         }
-        if (!referralPosterTemplates.includes(input.defaultPosterTemplate as never)) {
-            throw new UserInputError('默认海报模板无效');
+    }
+
+    private async validateDefaultPosterTemplate(ctx: RequestContext, id: string): Promise<void> {
+        if (referralPosterTemplates.includes(id as never)) return;
+        const template = await this.connection.getRepository(ctx, ReferralPosterTemplate).findOne({
+            where: { id, channelId: ctx.channelId, enabled: true },
+        });
+        if (!template) throw new UserInputError('默认海报模板无效或已停用');
+    }
+
+    private async normalizePosterTemplateInput(ctx: RequestContext, input: SaveReferralPosterTemplateInput) {
+        if (!Number.isInteger(input.position) || input.position < 0 || input.position > 100_000) {
+            throw new UserInputError('模板排序必须是0至100000之间的整数');
         }
+        if (input.layoutVariant !== 'STANDARD_CENTER') {
+            throw new UserInputError('海报版式无效');
+        }
+        if (
+            !Number.isInteger(input.overlayOpacity) ||
+            input.overlayOpacity < 0 ||
+            input.overlayOpacity > 80
+        ) {
+            throw new UserInputError('遮罩透明度必须在0至80之间');
+        }
+        const posterBackgroundAsset = await this.assetForChannel(ctx, input.posterBackgroundAssetId);
+        const shareBackgroundAsset = await this.assetForChannel(ctx, input.shareBackgroundAssetId);
+        return {
+            name: requiredText(input.name, '模板名称', 128),
+            enabled: input.enabled,
+            position: input.position,
+            layoutVariant: input.layoutVariant,
+            posterBackgroundAssetId: posterBackgroundAsset?.id ?? null,
+            shareBackgroundAssetId: shareBackgroundAsset?.id ?? null,
+            titleZh: requiredText(input.titleZh, '中文小标题', 80),
+            titleEn: requiredText(input.titleEn, '英文小标题', 80),
+            headlineZh: requiredText(input.headlineZh, '中文主标题', 180),
+            headlineEn: requiredText(input.headlineEn, '英文主标题', 180),
+            rewardTextZh: requiredText(input.rewardTextZh, '中文奖励文案', 220),
+            rewardTextEn: requiredText(input.rewardTextEn, '英文奖励文案', 220),
+            siteIntroZh: clippedText(input.siteIntroZh, 260),
+            siteIntroEn: clippedText(input.siteIntroEn, 260),
+            serviceTextZh: clippedText(input.serviceTextZh, 260),
+            serviceTextEn: clippedText(input.serviceTextEn, 260),
+            foregroundColor: posterColor(input.foregroundColor, '主文字颜色'),
+            accentColor: posterColor(input.accentColor, '强调颜色'),
+            overlayOpacity: input.overlayOpacity,
+        };
+    }
+
+    private async assetForChannel(ctx: RequestContext, id?: ID | null): Promise<Asset | null> {
+        if (id == null || id === '') return null;
+        const asset = await this.connection
+            .getRepository(ctx, Asset)
+            .createQueryBuilder('asset')
+            .innerJoin('asset.channels', 'assetChannel', 'assetChannel.id = :channelId', {
+                channelId: ctx.channelId,
+            })
+            .where('asset.id = :id', { id })
+            .getOne();
+        if (!asset) throw new UserInputError('图片不存在或不属于当前店铺');
+        if (!asset.mimeType?.startsWith('image/')) throw new UserInputError('海报背景必须是图片');
+        return asset;
+    }
+
+    private async posterTemplateById(ctx: RequestContext, id: ID): Promise<ReferralPosterTemplate> {
+        const template = await this.connection.getRepository(ctx, ReferralPosterTemplate).findOne({
+            where: { id, channelId: ctx.channelId },
+            relations: { posterBackgroundAsset: true, shareBackgroundAsset: true },
+        });
+        if (!template) throw new UserInputError('找不到该邀请海报模板');
+        return template;
     }
 
     private async activeCustomer(ctx: RequestContext): Promise<Customer> {
@@ -1363,12 +1614,7 @@ export class ReferralService implements OnApplicationBootstrap {
                 .where('lockedRow.id = :id', { id })
                 .getOne();
         } catch (error) {
-            if (
-                !(error instanceof LockNotSupportedOnGivenDriverError) &&
-                (error as { name?: string } | null)?.name !== 'LockNotSupportedOnGivenDriverError'
-            ) {
-                throw error;
-            }
+            if (!isLockNotSupportedError(error)) throw error;
         }
     }
 
@@ -1390,15 +1636,6 @@ function normalizeInviteCode(value?: string | null): string {
     return (value ?? '').trim().toUpperCase().replace(/\s+/g, '').slice(0, 12);
 }
 
-function normalizeVisitorId(value?: string | null): string | null {
-    const normalized = (value ?? '').trim();
-    return /^[A-Za-z0-9_-]{16,128}$/.test(normalized) ? normalized : null;
-}
-
-function visitorHash(value: string): string {
-    return createHash('sha256').update(value).digest('hex');
-}
-
 function businessDateKey(value: Date): string {
     const parts = Object.fromEntries(
         new Intl.DateTimeFormat('en', {
@@ -1418,6 +1655,10 @@ function businessDayRange(value: Date): { businessDate: string; start: Date; end
     const businessDate = businessDateKey(value);
     const start = new Date(`${businessDate}T00:00:00+08:00`);
     return { businessDate, start, end: new Date(start.getTime() + 86_400_000) };
+}
+
+function utcDatabaseTimestamp(value: Date): string {
+    return value.toISOString().replace('T', ' ').replace('Z', '');
 }
 
 function customerName(customer: Customer): string {
@@ -1451,6 +1692,18 @@ function optionalText(value: string | null | undefined, maxLength: number): stri
     return normalized ? normalized.slice(0, maxLength) : null;
 }
 
+function clippedText(value: string | null | undefined, maxLength: number): string {
+    return (value?.trim() ?? '').slice(0, maxLength);
+}
+
+function posterColor(value: string, label: string): string {
+    const normalized = value.trim().toUpperCase();
+    if (!/^#[0-9A-F]{6}$/.test(normalized)) {
+        throw new UserInputError(`${label}必须使用 #RRGGBB 格式`);
+    }
+    return normalized;
+}
+
 function pageSize(value: number): number {
     return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(value || 100)));
 }
@@ -1466,4 +1719,13 @@ export function supportsReferralPessimisticLock(driverType: unknown): boolean {
         'oracle',
         'postgres',
     ]).has(String(driverType));
+}
+
+function isLockNotSupportedError(error: unknown): boolean {
+    return (
+        error instanceof LockNotSupportedOnGivenDriverError ||
+        (error instanceof Error &&
+            (error.name === 'LockNotSupportedOnGivenDriverError' ||
+                error.message.toLowerCase().includes('locking not supported')))
+    );
 }

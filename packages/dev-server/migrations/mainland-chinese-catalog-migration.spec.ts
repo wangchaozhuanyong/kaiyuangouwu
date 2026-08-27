@@ -5,7 +5,7 @@ import { AddMainlandChineseCatalogContent1786515300000 } from './1786515300000-a
 
 describe('AddMainlandChineseCatalogContent migration', () => {
     it('only inserts named translations when the English base translation exists', async () => {
-        const query = vi.fn(async () => undefined);
+        const query = vi.fn().mockResolvedValue(undefined);
         const queryRunner = {
             connection: { options: { type: 'mysql' } },
             query,
@@ -18,7 +18,7 @@ describe('AddMainlandChineseCatalogContent migration', () => {
         );
 
         expect(variantInsert?.[0]).toContain('FROM "product_variant_translation" source');
-        expect(variantInsert?.[0]).toContain("source.languageCode = 'en'");
-        expect(variantInsert?.[0]).toContain('baseId = source.baseId');
+        expect(variantInsert?.[0]).toContain("source.\"languageCode\" = 'en'");
+        expect(variantInsert?.[0]).toContain('existing."baseId" = source."baseId"');
     });
 });

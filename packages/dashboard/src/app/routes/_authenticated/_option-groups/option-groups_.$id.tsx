@@ -25,6 +25,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, ParsedLocation, useLocation, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { ProductOptionsTable } from '../_products/components/product-options-table.js';
+import { SharedOptionGroupWarning } from '../_products/components/shared-option-group-warning.js';
 import {
     createProductOptionGroupDocument,
     productIdNameDocument,
@@ -178,31 +179,41 @@ function OptionGroupDetailPage() {
                             label={<Trans>Name</Trans>}
                             render={({ field }) => <Input {...field} />}
                         />
-                        <FormFieldWrapper
-                            control={form.control}
-                            name="code"
-                            label={<Trans>Code</Trans>}
-                            render={({ field }) => (
-                                <SlugInput
-                                    fieldName="code"
-                                    watchFieldName="name"
-                                    entityName="ProductOptionGroup"
-                                    entityId={entity?.id}
-                                    {...field}
-                                />
-                            )}
-                        />
                     </DetailFormGrid>
+                    <details className="rounded-md border bg-muted/20 px-4 py-3">
+                        <summary className="cursor-pointer text-sm font-medium">
+                            <Trans>Details and configuration</Trans>
+                        </summary>
+                        <div className="mt-4">
+                            <FormFieldWrapper
+                                control={form.control}
+                                name="code"
+                                label={<Trans>Code</Trans>}
+                                render={({ field }) => (
+                                    <SlugInput
+                                        fieldName="code"
+                                        watchFieldName="name"
+                                        entityName="ProductOptionGroup"
+                                        entityId={entity?.id}
+                                        {...field}
+                                    />
+                                )}
+                            />
+                        </div>
+                    </details>
                 </PageBlock>
                 <CustomFieldsPageBlock column="main" entityType="ProductOptionGroup" control={form.control} />
                 {entity && (
-                    <PageBlock column="main" blockId="product-options" title={<Trans>Product Options</Trans>}>
-                        <ProductOptionsTable
-                            productOptionGroupId={entity.id}
-                            getOptionHref={optionId => `/option-groups/${entity.id}/options/${optionId}`}
-                            newOptionHref={`/option-groups/${entity.id}/options/new`}
-                            linkSearch={search.from === 'product' ? search : undefined}
-                        />
+                    <PageBlock column="main" blockId="product-options" title={<Trans>Option Values</Trans>}>
+                        <div className="space-y-4">
+                            <SharedOptionGroupWarning productCount={entity.productCount} />
+                            <ProductOptionsTable
+                                productOptionGroupId={entity.id}
+                                getOptionHref={optionId => `/option-groups/${entity.id}/options/${optionId}`}
+                                newOptionHref={`/option-groups/${entity.id}/options/new`}
+                                linkSearch={search.from === 'product' ? search : undefined}
+                            />
+                        </div>
                     </PageBlock>
                 )}
                 {entity && (

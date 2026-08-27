@@ -29,7 +29,7 @@ export function ProductOptionEditorSheet({
     return (
         <EntityEditorSheet
             open={open}
-            title={isNew ? t`Add product option` : t`Edit ${optionName ?? t`product option`}`}
+            title={isNew ? t`Add option value` : t`Edit ${optionName ?? t`product option`}`}
             description={t`Edit the product option without leaving the option group`}
             loadingLabel={t`Loading product option...`}
             onOpenChange={onOpenChange}

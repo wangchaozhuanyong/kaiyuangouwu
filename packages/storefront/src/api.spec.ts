@@ -93,6 +93,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('storefrontContentSettings');
         expect(request.query).toContain('activeStorefrontCoupons');
         expect(request.query).toContain('activeStorefrontFlashSales');
+        expect(request.query).not.toMatch(/activeStorefrontFlashSales\s*\{\s*id\s+name\b/u);
         expect(request.query).toContain('activeSystemAnnouncements');
         expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
             'vendure-token': 'cn-mainland',

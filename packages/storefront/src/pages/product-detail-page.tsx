@@ -1,3 +1,4 @@
+import type { RouteState } from '../storefront-router';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import {
     CircleCheck,
@@ -10,7 +11,6 @@ import {
     Truck,
 } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
@@ -280,7 +280,6 @@ export function ProductDetailPage() {
             <section className="detail-options">
                 <header>
                     <strong>{isZh ? '选择规格' : 'Choose an option'}</strong>
-                    <span>{variant?.sku}</span>
                 </header>
                 <div>
                     {product.variants.map(item => (
@@ -367,7 +366,6 @@ export function ProductDetailPage() {
             <section className="detail-block detail-params">
                 <header>
                     <strong>{isZh ? '商品参数' : 'Product details'}</strong>
-                    <span>{variant?.sku}</span>
                 </header>
                 <dl>
                     <div>

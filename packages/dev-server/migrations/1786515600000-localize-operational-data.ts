@@ -31,26 +31,30 @@ const regionNameOverrides: Readonly<Record<string, string>> = {
 export class LocalizeOperationalData1786515600000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         await this.enableAnsiIdentifierQuotes(queryRunner);
+        const [firstParameter, secondParameter] = this.placeholders(queryRunner, 2);
         for (const [original, localized] of globalNames.taxCategory) {
-            await queryRunner.query(`UPDATE "tax_category" SET "name" = ? WHERE "name" = ?`, [
-                localized,
-                original,
-            ]);
+            await queryRunner.query(
+                `UPDATE "tax_category" SET "name" = ${firstParameter} WHERE "name" = ${secondParameter}`,
+                [localized, original],
+            );
         }
         for (const [original, localized] of globalNames.stockLocation) {
-            await queryRunner.query(`UPDATE "stock_location" SET "name" = ? WHERE "name" = ?`, [
-                localized,
-                original,
-            ]);
+            await queryRunner.query(
+                `UPDATE "stock_location" SET "name" = ${firstParameter} WHERE "name" = ${secondParameter}`,
+                [localized, original],
+            );
         }
         for (const [original, localized] of globalNames.zone) {
-            await queryRunner.query(`UPDATE "zone" SET "name" = ? WHERE "name" = ?`, [localized, original]);
+            await queryRunner.query(
+                `UPDATE "zone" SET "name" = ${firstParameter} WHERE "name" = ${secondParameter}`,
+                [localized, original],
+            );
         }
         for (const [original, localized] of globalNames.role) {
-            await queryRunner.query(`UPDATE "role" SET "description" = ? WHERE "description" = ?`, [
-                localized,
-                original,
-            ]);
+            await queryRunner.query(
+                `UPDATE "role" SET "description" = ${firstParameter} WHERE "description" = ${secondParameter}`,
+                [localized, original],
+            );
         }
         await queryRunner.query(`
             UPDATE "administrator"
@@ -87,16 +91,17 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
             SET "name" = 'Standard Payment',
                 "description" = 'Default payment method for local testing.'
             WHERE "languageCode" = 'en'
-              AND "baseId" = (SELECT id FROM payment_method WHERE code = 'standard-payment')
+              AND "baseId" = (SELECT "id" FROM "payment_method" WHERE "code" = 'standard-payment')
         `);
         await queryRunner.query(`
             INSERT INTO "payment_method_translation" ("languageCode", "name", "description", "baseId")
             SELECT 'zh_Hans', '标准支付', '用于本地测试的默认支付方式。', id
-            FROM payment_method
-            WHERE code = 'standard-payment'
+            FROM "payment_method"
+            WHERE "code" = 'standard-payment'
               AND NOT EXISTS (
-                  SELECT 1 FROM payment_method_translation
-                  WHERE languageCode = 'zh_Hans' AND baseId = payment_method.id
+                  SELECT 1 FROM "payment_method_translation"
+                  WHERE "languageCode" = 'zh_Hans'
+                    AND "baseId" = "payment_method"."id"
               )
         `);
 
@@ -109,11 +114,11 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
         await queryRunner.query(`
             INSERT INTO "promotion_translation" ("languageCode", "name", "description", "baseId")
             SELECT 'zh_Hans', '示例促销（已停用）', '用于配置测试的已停用示例促销。', id
-            FROM promotion
-            WHERE id = 1
+            FROM "promotion"
+            WHERE "id" = 1
               AND NOT EXISTS (
-                  SELECT 1 FROM promotion_translation
-                  WHERE languageCode = 'zh_Hans' AND baseId = promotion.id
+                  SELECT 1 FROM "promotion_translation"
+                  WHERE "languageCode" = 'zh_Hans' AND "baseId" = "promotion"."id"
               )
         `);
 
@@ -126,15 +131,16 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
             if (!name || name === code) {
                 continue;
             }
+            const [nameParameter, codeParameter] = this.placeholders(queryRunner, 2);
             await queryRunner.query(
                 `
                     INSERT INTO "region_translation" ("languageCode", "name", "baseId")
-                    SELECT 'zh_Hans', ?, id
-                    FROM region
-                    WHERE code = ?
+                    SELECT 'zh_Hans', ${nameParameter}, "id"
+                    FROM "region"
+                    WHERE "code" = ${codeParameter}
                       AND NOT EXISTS (
-                          SELECT 1 FROM region_translation
-                          WHERE languageCode = 'zh_Hans' AND baseId = region.id
+                          SELECT 1 FROM "region_translation"
+                          WHERE "languageCode" = 'zh_Hans' AND "baseId" = "region"."id"
                       )
                 `,
                 [name, code],
@@ -144,26 +150,30 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
 
     public async down(queryRunner: QueryRunner): Promise<void> {
         await this.enableAnsiIdentifierQuotes(queryRunner);
+        const [firstParameter, secondParameter] = this.placeholders(queryRunner, 2);
         for (const [original, localized] of globalNames.taxCategory) {
-            await queryRunner.query(`UPDATE "tax_category" SET "name" = ? WHERE "name" = ?`, [
-                original,
-                localized,
-            ]);
+            await queryRunner.query(
+                `UPDATE "tax_category" SET "name" = ${firstParameter} WHERE "name" = ${secondParameter}`,
+                [original, localized],
+            );
         }
         for (const [original, localized] of globalNames.stockLocation) {
-            await queryRunner.query(`UPDATE "stock_location" SET "name" = ? WHERE "name" = ?`, [
-                original,
-                localized,
-            ]);
+            await queryRunner.query(
+                `UPDATE "stock_location" SET "name" = ${firstParameter} WHERE "name" = ${secondParameter}`,
+                [original, localized],
+            );
         }
         for (const [original, localized] of globalNames.zone) {
-            await queryRunner.query(`UPDATE "zone" SET "name" = ? WHERE "name" = ?`, [original, localized]);
+            await queryRunner.query(
+                `UPDATE "zone" SET "name" = ${firstParameter} WHERE "name" = ${secondParameter}`,
+                [original, localized],
+            );
         }
         for (const [original, localized] of globalNames.role) {
-            await queryRunner.query(`UPDATE "role" SET "description" = ? WHERE "description" = ?`, [
-                original,
-                localized,
-            ]);
+            await queryRunner.query(
+                `UPDATE "role" SET "description" = ${firstParameter} WHERE "description" = ${secondParameter}`,
+                [original, localized],
+            );
         }
         await queryRunner.query(`
             UPDATE "administrator"
@@ -197,7 +207,7 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
         await queryRunner.query(`
             DELETE FROM "payment_method_translation"
             WHERE "languageCode" = 'zh_Hans'
-              AND "baseId" = (SELECT id FROM payment_method WHERE code = 'standard-payment')
+              AND "baseId" = (SELECT "id" FROM "payment_method" WHERE "code" = 'standard-payment')
         `);
         await queryRunner.query(`
             UPDATE "payment_method_translation"
@@ -225,5 +235,12 @@ export class LocalizeOperationalData1786515600000 implements MigrationInterface 
                 `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'ANSI_QUOTES')`,
             );
         }
+    }
+
+    private placeholders(queryRunner: QueryRunner, count: number): string[] {
+        if (['postgres', 'cockroachdb'].includes(queryRunner.connection.options.type)) {
+            return Array.from({ length: count }, (_, index) => `$${index + 1}`);
+        }
+        return Array.from({ length: count }, () => '?');
     }
 }

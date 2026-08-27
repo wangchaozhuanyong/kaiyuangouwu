@@ -139,6 +139,7 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).not.toContain('name="lastName"');
         expect(markup).not.toContain('收货地址');
         expect(markup).not.toContain('下一步，选择配送');
+        expect(markup).not.toContain('DIGITAL-TEMPLATE');
     });
 
     it('prefers the order email while allowing a logged-in customer to edit it', () => {

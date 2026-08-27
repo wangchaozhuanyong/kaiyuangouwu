@@ -378,7 +378,6 @@ export function SwipeableCartLine({
                         <ChevronLeft aria-hidden="true" />
                     </button>
                     <strong>{variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item')}</strong>
-                    <small>{variant?.sku}</small>
                     <div className="cart-line-purchase-row">
                         <b>
                             {variant

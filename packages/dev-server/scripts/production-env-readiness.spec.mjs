@@ -40,6 +40,9 @@ function readyEnvironment(overrides = {}) {
         DIGITAL_DELIVERY_ROOT: '/srv/vendure/digital-delivery',
         DIGITAL_DELIVERY_SIGNING_SECRET: '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b',
         DIGITAL_DELIVERY_LINK_TTL_SECONDS: '300',
+        IMAGE_GENERATION_STORAGE_ROOT: '/srv/vendure/image-generation-private',
+        IMAGE_GENERATION_DOWNLOAD_SECRET: 'image-download-secret-that-is-longer-than-thirty-two-characters',
+        IMAGE_GENERATION_MASTER_KEY: 'image-master-key-that-is-longer-than-thirty-two-characters',
         VENDURE_EMAIL_FROM: 'Store <orders@shop.test>',
         SMTP_HOST: 'smtp.resend.com',
         SMTP_PORT: '465',
@@ -81,7 +84,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 31, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 32, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -110,6 +113,9 @@ void test('blocks local services, placeholders, unsafe routing and default crede
             DB_NAME: 'vendure-dev',
             DIGITAL_DELIVERY_ROOT: './digital-delivery-assets',
             DIGITAL_DELIVERY_SIGNING_SECRET: 'replace-with-a-secret',
+            IMAGE_GENERATION_STORAGE_ROOT: './image-generation-private',
+            IMAGE_GENERATION_DOWNLOAD_SECRET: 'replace-with-a-secret',
+            IMAGE_GENERATION_MASTER_KEY: 'replace-with-a-secret',
             SMTP_HOST: 'smtp.example.com',
             STORE_DOMAIN_CNAME_TARGET: 'stores.example.com',
             STORE_DOMAIN_ROUTING_MODE: 'prefer-domain',
@@ -135,6 +141,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('database-engine'));
     assert.ok(blockers.has('database-connection'));
     assert.ok(blockers.has('digital-delivery'));
+    assert.ok(blockers.has('image-generation-private-storage'));
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
     assert.ok(blockers.has('storefront-promotion-gate'));
@@ -197,7 +204,7 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 32, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 33, manual: 0, blocker: 0 });
 });
 
 void test('blocks a missing or placeholder auto-card encryption key', () => {
@@ -211,6 +218,27 @@ void test('blocks a missing or placeholder auto-card encryption key', () => {
         assert.equal(
             report.checks.some(
                 check => check.id === 'auto-card-encryption-key' && check.status === 'blocker',
+            ),
+            true,
+        );
+    }
+});
+
+void test('blocks unsafe AI image private storage configuration for server and worker', () => {
+    for (const role of ['server', 'worker']) {
+        const report = evaluateProductionEnvironment(
+            readyEnvironment({
+                IMAGE_GENERATION_STORAGE_ROOT: './image-generation-private',
+                IMAGE_GENERATION_DOWNLOAD_SECRET: 'replace-with-a-secret',
+                IMAGE_GENERATION_MASTER_KEY: '',
+            }),
+            role,
+            confirmedControls,
+        );
+        assert.equal(report.ready, false);
+        assert.equal(
+            report.checks.some(
+                check => check.id === 'image-generation-private-storage' && check.status === 'blocker',
             ),
             true,
         );

@@ -78,7 +78,7 @@ msgstr "新税率"
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Assign an existing option group or create a new one"
-msgstr "分配现有规格组或创建新的规格组"
+msgstr "填写规格名称和值，或复用已有规格模板"
 
 #: src/app/routes/_authenticated/_roles/roles_.$id.tsx
 #: src/app/routes/_authenticated/_roles/roles_.$id.tsx
@@ -822,7 +822,7 @@ msgstr "已成功从店铺中删除 {selectionLength} {entityType}"
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Add option value"
-msgstr "添加选项值"
+msgstr "添加规格值"
 
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
@@ -1877,7 +1877,7 @@ msgstr "支付状态已成功更新"
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Create new"
-msgstr "新建"
+msgstr "新建规格"
 
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
 msgid "Refund total"
@@ -3402,7 +3402,7 @@ msgstr "请先保存表格中待提交的修改，再打开编辑器"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Size, colour, etc."
-msgstr "大小、颜色等"
+msgstr "套餐、时长、颜色等可选项"
 
 #: src/lib/components/shared/facet-value-selector.tsx
 #: src/lib/components/shared/facet-value-selector.tsx
@@ -3475,7 +3475,7 @@ msgstr "已选择 {0} 个"
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Search option groups..."
-msgstr "搜索规格组..."
+msgstr "搜索规格模板..."
 
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 msgid "Modify order"
@@ -3544,7 +3544,7 @@ msgstr "删除列"
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Assign existing"
-msgstr "分配现有"
+msgstr "复用模板"
 
 #: src/app/routes/_authenticated/_products/components/assign-all-products-dialog.tsx
 msgid "Counting products..."
@@ -3845,7 +3845,7 @@ msgstr "筛选属性值"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Product Options"
-msgstr "商品选项"
+msgstr "销售规格"
 
 #: src/lib/components/shared/country-selector.tsx
 msgid "Select country"
@@ -4071,7 +4071,7 @@ msgstr "修改角色权限会立即影响管理员访问范围。请输入当前
 
 #: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
 msgid "Option group name (Simplified Chinese)"
-msgstr "规格组名称（简体中文）"
+msgstr "规格名称"
 
 #. placeholder {0}: addedSurcharges.length
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
@@ -4695,7 +4695,7 @@ msgstr "未找到此订单的符合条件的配送方式。"
 #: src/app/routes/_authenticated/_products/components/product-option-editor-sheet.tsx
 #: src/app/routes/_authenticated/_products/components/product-options-table.tsx
 msgid "Add product option"
-msgstr "添加商品选项"
+msgstr "添加规格值"
 
 #: src/app/routes/_authenticated/_orders/components/order-table-totals.tsx
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
@@ -5215,7 +5215,7 @@ msgstr "订单收入"
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Add option group"
-msgstr "添加规格组"
+msgstr "添加销售规格"
 
 #. placeholder {0}: formatCurrency(refund.amountToRefundTotal, order.currencyCode)
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
@@ -5339,7 +5339,7 @@ msgstr "营销中心"
 #: src/app/common/bulk-action-entity-labels.ts
 #: src/lib/framework/defaults.ts
 msgid "nav.optionGroups"
-msgstr "规格组"
+msgstr "规格模板库"
 
 #. js-lingui-explicit-id
 #: src/lib/framework/defaults.ts
@@ -5828,7 +5828,7 @@ msgstr "设置哪些店铺可以销售此商品。"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Product with options"
-msgstr "带选项的商品"
+msgstr "多规格商品"
 
 #. placeholder {0}: filteredTags.length
 #: src/app/routes/_authenticated/_assets/components/asset-tag-filter.tsx
@@ -6484,7 +6484,7 @@ msgstr "已验证"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 msgid "New option group"
-msgstr "新建规格组"
+msgstr "新建规格模板"
 
 #: src/app/routes/_authenticated/_products/components/product-bulk-actions.tsx
 msgid "Failed to disable products"
@@ -6993,7 +6993,7 @@ msgstr "请填写完整收货地址，包括邮政编码和联系电话"
 
 #: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
 msgid "Option Values"
-msgstr "选项值"
+msgstr "规格值"
 
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 msgid "Preview changes"
@@ -7454,7 +7454,7 @@ msgstr "搜索商品分类..."
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Add option group to product"
-msgstr "将规格组添加到商品"
+msgstr "添加销售规格"
 
 #. placeholder {0}: asset.name
 #: src/lib/components/shared/asset/asset-preview-dialog.tsx
@@ -7522,11 +7522,11 @@ msgstr "创建子分类"
 
 #: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
 msgid "Add Option"
-msgstr "添加选项"
+msgstr "添加规格"
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Save option group"
-msgstr "保存规格组"
+msgstr "创建规格"
 
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "This setting will be saved on every SKU created below."
@@ -7779,7 +7779,7 @@ msgstr "字段说明"
 
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "No option groups found"
-msgstr "未找到规格组"
+msgstr "暂无可复用的规格模板"
 
 #: src/lib/components/data-input/product-multi-selector-input.tsx
 msgid "No items found"
@@ -8591,7 +8591,7 @@ msgstr "已复制 {count} 个{entityName}"
 
 #: src/app/routes/_authenticated/_option-groups/option-groups.tsx
 msgid "New Option Group"
-msgstr "新建规格组"
+msgstr "新建规格模板"
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx

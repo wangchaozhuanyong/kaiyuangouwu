@@ -9,6 +9,7 @@ createCrudTestSuite({
     newPageTitle: 'New option group',
     createFields: [{ label: 'Name', value: 'E2E Test Material' }],
     afterFillCreate: async (page, detail) => {
+        await page.getByText('Details and configuration', { exact: true }).click();
         // Click the "Edit slug manually" button to unlock the Code field,
         // then fill it explicitly. This avoids timing issues with the
         // SlugInput's async auto-generation via API + useEffect.

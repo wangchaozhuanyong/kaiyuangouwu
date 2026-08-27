@@ -1,5 +1,5 @@
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { CalendarDays, Check, ChevronRight, MapPin, TicketPercent } from 'lucide-react';
+import { Badge, CalendarDays, Check, ChevronRight, MapPin, TicketPercent } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 
 import {
@@ -104,18 +104,6 @@ export function CouponCenterPage() {
                                   : 'Current coupon activities'
                         }
                     >
-                        <header className="coupon-center-panel-title">
-                            <TicketPercent aria-hidden="true" />
-                            <strong>
-                                {activeTab === 'UNCLAIMED'
-                                    ? isZh
-                                        ? '未领取优惠券'
-                                        : 'Unclaimed coupons'
-                                    : isZh
-                                      ? '当前优惠券活动'
-                                      : 'Current coupon activities'}
-                            </strong>
-                        </header>
                         <div className="coupon-center-ticket-list">
                             {visibleCampaignCards.map(card => {
                                 const campaign = customerAwareCampaigns.find(
@@ -125,7 +113,7 @@ export function CouponCenterPage() {
                                 const canClaim = !campaign.claimed && campaign.claimable;
                                 const actionLabel = campaign.claimed
                                     ? isZh
-                                        ? '已领取'
+                                        ? '已领'
                                         : 'Claimed'
                                     : campaign.claimable
                                       ? isZh
@@ -134,34 +122,47 @@ export function CouponCenterPage() {
                                       : isZh
                                         ? '已领完'
                                         : 'Unavailable';
-                                return (
+                                const action = (
+                                    <button
+                                        type="button"
+                                        className={`${
+                                            activeTab === 'ACTIVITIES'
+                                                ? 'coupon-activity-action'
+                                                : 'coupon-claim-btn'
+                                        }${canClaim ? '' : ' is-claimed'}`}
+                                        disabled={!canClaim || loading || claimingId !== null}
+                                        onClick={() => void claim(campaign.id)}
+                                    >
+                                        <span className="coupon-btn-text-wrap">
+                                            <span>
+                                                {activeTab === 'UNCLAIMED' && actionLabel === '立即领取'
+                                                    ? '领取'
+                                                    : actionLabel}
+                                            </span>
+                                            {campaign.claimed ? (
+                                                <Check size={13} aria-hidden="true" />
+                                            ) : canClaim ? (
+                                                <ChevronRight size={15} aria-hidden="true" />
+                                            ) : null}
+                                        </span>
+                                    </button>
+                                );
+                                return activeTab === 'ACTIVITIES' ? (
+                                    <ActivityCoupon
+                                        key={card.id}
+                                        card={card}
+                                        campaign={campaign}
+                                        language={language}
+                                        muted={!canClaim}
+                                        action={action}
+                                    />
+                                ) : (
                                     <CouponTicket
                                         key={card.id}
                                         card={card}
                                         muted={!canClaim}
-                                        action={
-                                            <button
-                                                type="button"
-                                                className={`coupon-claim-btn${canClaim ? '' : ' is-claimed'}`}
-                                                disabled={!canClaim || loading || claimingId !== null}
-                                                onClick={() => void claim(campaign.id)}
-                                            >
-                                                <span className="coupon-btn-text-wrap">
-                                                    {campaign.claimed ? (
-                                                        <Check size={12} aria-hidden="true" />
-                                                    ) : null}
-                                                    <span>{actionLabel}</span>
-                                                </span>
-                                            </button>
-                                        }
-                                        details={
-                                            activeTab === 'ACTIVITIES' ? (
-                                                <CampaignInstructions
-                                                    campaign={campaign}
-                                                    language={language}
-                                                />
-                                            ) : undefined
-                                        }
+                                        action={action}
+                                        meta={campaignValidity(campaign, language)}
                                     />
                                 );
                             })}
@@ -193,6 +194,7 @@ export function CouponCenterPage() {
                                             >
                                                 <span className="coupon-btn-text-wrap">
                                                     <span>{isZh ? '去使用' : 'Shop now'}</span>
+                                                    <ChevronRight size={15} aria-hidden="true" />
                                                 </span>
                                             </button>
                                         )
@@ -254,13 +256,11 @@ function CouponTicket({
     muted,
     action,
     meta,
-    details,
 }: {
     card: StorefrontCouponCard;
     muted?: boolean;
     action: ReactNode;
     meta?: string;
-    details?: ReactNode;
 }) {
     return (
         <article className="coupon-center-ticket-item">
@@ -272,9 +272,9 @@ function CouponTicket({
                 <div className="coupon-ticket-main">
                     <div className="coupon-ticket-top">
                         <span className="coupon-ticket-tag">{card.tag}</span>
-                        <strong className="coupon-center-ticket-title">{card.title}</strong>
                     </div>
-                    <div className="coupon-ticket-value">
+                    <div className={`coupon-ticket-value${card.unitBefore ? ' is-unit-before' : ''}`}>
+                        <Badge className="coupon-ticket-seal" aria-hidden="true" />
                         {card.unitBefore ? (
                             <>
                                 <small className="coupon-unit">{card.unit}</small>
@@ -290,14 +290,52 @@ function CouponTicket({
                     <p className="coupon-ticket-desc">{card.description}</p>
                     {meta ? <small className="coupon-center-ticket-meta">{meta}</small> : null}
                 </div>
-                <div className="coupon-ticket-divider" aria-hidden="true">
-                    <span className="coupon-notch coupon-notch-top" />
-                    <span className="coupon-notch-line" />
-                    <span className="coupon-notch coupon-notch-bottom" />
-                </div>
                 <div className="coupon-ticket-action">{action}</div>
             </div>
-            {details}
+        </article>
+    );
+}
+
+function ActivityCoupon({
+    card,
+    campaign,
+    language,
+    muted,
+    action,
+}: {
+    card: StorefrontCouponCard;
+    campaign: StorefrontCouponCampaign;
+    language: StorefrontLanguage;
+    muted?: boolean;
+    action: ReactNode;
+}) {
+    return (
+        <article className={`coupon-activity-card coupon-ticket-${card.theme}${muted ? ' is-claimed' : ''}`}>
+            <div className="coupon-activity-hero">
+                <div className="coupon-activity-topline">
+                    <span className="coupon-activity-tag">{card.tag}</span>
+                    {action}
+                </div>
+                <div className={`coupon-activity-value${card.unitBefore ? ' is-unit-before' : ''}`}>
+                    {card.unitBefore ? (
+                        <>
+                            <small>{card.unit}</small>
+                            <strong>{card.value}</strong>
+                        </>
+                    ) : (
+                        <>
+                            <strong>{card.value}</strong>
+                            {card.unit ? <small>{card.unit}</small> : null}
+                        </>
+                    )}
+                </div>
+                <p>
+                    <strong>{card.title}</strong>
+                    <span aria-hidden="true"> · </span>
+                    <span>{card.description}</span>
+                </p>
+            </div>
+            <CampaignInstructions campaign={campaign} language={language} />
         </article>
     );
 }
@@ -311,8 +349,11 @@ function CampaignInstructions({
 }) {
     const isZh = language === 'zh';
     return (
-        <div className="coupon-center-instructions">
-            <strong>{isZh ? '使用说明' : 'Usage details'}</strong>
+        <div
+            className="coupon-center-instructions"
+            role="group"
+            aria-label={isZh ? '使用说明' : 'Usage details'}
+        >
             <dl>
                 <div>
                     <dt>
@@ -412,8 +453,7 @@ function campaignValidity(campaign: StorefrontCouponCampaign, language: Storefro
 function customerCouponValidity(coupon: StoreCustomerCoupon, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
     const locale = isZh ? 'zh-CN' : 'en-US';
-    const validity = dateWindow(coupon.validFrom, coupon.validUntil, locale, isZh);
-    return `${validity} · ${couponScopeLabel(coupon.campaignKind, language)}`;
+    return dateWindow(coupon.validFrom, coupon.validUntil, locale, isZh);
 }
 
 function couponUsageRecord(record: StoreCouponUsageRecord, language: StorefrontLanguage): string {

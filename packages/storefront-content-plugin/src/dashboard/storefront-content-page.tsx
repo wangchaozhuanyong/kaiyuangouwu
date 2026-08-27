@@ -42,6 +42,7 @@ import {
     Skeleton,
     Switch,
     Textarea,
+    UnsavedChangesConfirmation,
     api,
     collectionRelationConfig,
     toast,
@@ -91,13 +92,15 @@ import {
     ContentTargetType,
     StorefrontContentBlocksResult,
     StorefrontContentTargetProductResult,
+    applyStorefrontContentChangesMutation,
+    contentBlockVersions,
     createStorefrontContentBlockMutation,
     deleteStorefrontContentBlockMutation,
-    reorderStorefrontContentBlocksMutation,
     storefrontContentBlocksQuery,
     storefrontContentTargetProductQuery,
     updateStorefrontContentBlockMutation,
     updateStorefrontContentSettingsMutation,
+    versionedContentBlockUpdate,
 } from './storefront-content.graphql';
 import { prepareSupportDraft } from './support-settings';
 import { SupportSettingsEditor } from './support-settings-editor';
@@ -442,6 +445,8 @@ const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
     SUPPORT: { zh: '客服配置', en: 'Support' },
     AUTH_LOGIN: { zh: '登录页视觉', en: 'Login visual' },
     AUTH_REGISTER: { zh: '注册页视觉', en: 'Registration visual' },
+    NAVIGATION: { zh: '客户端导航', en: 'Storefront navigation' },
+    CLIENT_PLUGINS: { zh: '客户端插件配置', en: 'Storefront client plugins' },
     CUSTOM: { zh: '高级自定义模块', en: 'Custom block' },
 };
 
@@ -553,7 +558,9 @@ function StorefrontSiteContentPage() {
         mutationFn: (block: ContentBlock) => {
             const input = blockInput(block);
             return block.id
-                ? api.mutate(updateStorefrontContentBlockMutation, { input: { id: block.id, ...input } })
+                ? api.mutate(updateStorefrontContentBlockMutation, {
+                      input: versionedContentBlockUpdate(block, input),
+                  })
                 : api.mutate(createStorefrontContentBlockMutation, { input });
         },
         onSuccess: async () => {
@@ -568,23 +575,19 @@ function StorefrontSiteContentPage() {
             const matching = blocks
                 .filter(block => block.type === type)
                 .sort((a, b) => a.position - b.position);
-            if (!matching.length) {
-                await api.mutate(createStorefrontContentBlockMutation, {
-                    input: blockInput({ ...globalContentDraft(type, blocks.length), enabled }),
-                });
-                return;
-            }
-            await Promise.all(
-                matching.flatMap((block, index) =>
-                    block.id
-                        ? [
-                              api.mutate(updateStorefrontContentBlockMutation, {
-                                  input: { id: block.id, enabled: index === 0 ? enabled : false },
-                              }),
-                          ]
-                        : [],
-                ),
-            );
+            await api.mutate(applyStorefrontContentChangesMutation, {
+                input: {
+                    expectedBlocks: contentBlockVersions(blocks),
+                    creates: matching.length
+                        ? []
+                        : [blockInput({ ...globalContentDraft(type, blocks.length), enabled })],
+                    updates: matching.map((block, index) =>
+                        versionedContentBlockUpdate(block, {
+                            enabled: index === 0 ? enabled : false,
+                        }),
+                    ),
+                },
+            });
         },
         onSuccess: refresh,
         onError: error => toast.error(errorMessage(error)),
@@ -776,7 +779,9 @@ function StorefrontCarouselPage() {
         mutationFn: (block: ContentBlock) => {
             const input = blockInput({ ...block, type: 'HERO' });
             return block.id
-                ? api.mutate(updateStorefrontContentBlockMutation, { input: { id: block.id, ...input } })
+                ? api.mutate(updateStorefrontContentBlockMutation, {
+                      input: versionedContentBlockUpdate(block, input),
+                  })
                 : api.mutate(createStorefrontContentBlockMutation, { input });
         },
         onSuccess: async (_, block) => {
@@ -787,13 +792,23 @@ function StorefrontCarouselPage() {
         onError: error => toast.error(errorMessage(error)),
     });
     const quickUpdateMutation = useMutation({
-        mutationFn: (input: { id: string; enabled: boolean }) =>
-            api.mutate(updateStorefrontContentBlockMutation, { input }),
+        mutationFn: ({ block, enabled }: { block: ContentBlock; enabled: boolean }) =>
+            api.mutate(updateStorefrontContentBlockMutation, {
+                input: versionedContentBlockUpdate(block, { enabled }),
+            }),
         onSuccess: refresh,
         onError: error => toast.error(errorMessage(error)),
     });
     const reorderMutation = useMutation({
-        mutationFn: (ids: string[]) => api.mutate(reorderStorefrontContentBlocksMutation, { ids }),
+        mutationFn: (ids: string[]) =>
+            api.mutate(applyStorefrontContentChangesMutation, {
+                input: {
+                    expectedBlocks: contentBlockVersions(allBlocks),
+                    creates: [],
+                    updates: [],
+                    orderedCodes: orderedBlockCodes(ids, allBlocks),
+                },
+            }),
         onSuccess: async () => {
             toast.success(text.carouselReordered);
             await refresh();
@@ -961,7 +976,7 @@ function StorefrontCarouselPage() {
                                     onEdit={() => setDraft(cloneBlock(slide))}
                                     onToggle={() =>
                                         slide.id &&
-                                        quickUpdateMutation.mutate({ id: slide.id, enabled: !slide.enabled })
+                                        quickUpdateMutation.mutate({ block: slide, enabled: !slide.enabled })
                                     }
                                     onDelete={() => setDeleteTarget(slide)}
                                 />
@@ -1045,7 +1060,9 @@ function StorefrontContentPage() {
         mutationFn: (block: ContentBlock) => {
             const input = blockInput(block);
             return block.id
-                ? api.mutate(updateStorefrontContentBlockMutation, { input: { id: block.id, ...input } })
+                ? api.mutate(updateStorefrontContentBlockMutation, {
+                      input: versionedContentBlockUpdate(block, input),
+                  })
                 : api.mutate(createStorefrontContentBlockMutation, { input });
         },
         onSuccess: async (_, block) => {
@@ -1057,31 +1074,29 @@ function StorefrontContentPage() {
     });
     const toggleMutation = useMutation({
         mutationFn: async ({ entry, enabled }: { entry: HomepageLayoutEntry; enabled: boolean }) => {
-            if (!entry.blocks.length) {
-                if (!isFixedHomepageModuleType(entry.type) || entry.type === 'HERO') return;
-                const block = fixedModuleDraft(entry.type, entry.position);
-                await api.mutate(createStorefrontContentBlockMutation, {
-                    input: blockInput({ ...block, enabled }),
-                });
+            if (!entry.blocks.length && (!isFixedHomepageModuleType(entry.type) || entry.type === 'HERO')) {
                 return;
             }
-            await Promise.all(
-                entry.blocks.flatMap((block, index) =>
-                    block.id
-                        ? [
-                              api.mutate(updateStorefrontContentBlockMutation, {
-                                  input: {
-                                      id: block.id,
-                                      enabled:
-                                          entry.descriptor?.allowsMultipleRecords || index === 0
-                                              ? enabled
-                                              : false,
-                                  },
-                              }),
-                          ]
-                        : [],
-                ),
-            );
+            const create =
+                entry.blocks.length === 0
+                    ? [
+                          blockInput({
+                              ...fixedModuleDraft(entry.type as FixedHomepageModuleType, entry.position),
+                              enabled,
+                          }),
+                      ]
+                    : [];
+            await api.mutate(applyStorefrontContentChangesMutation, {
+                input: {
+                    expectedBlocks: contentBlockVersions(allBlocks),
+                    creates: create,
+                    updates: entry.blocks.map((block, index) =>
+                        versionedContentBlockUpdate(block, {
+                            enabled: entry.descriptor?.allowsMultipleRecords || index === 0 ? enabled : false,
+                        }),
+                    ),
+                },
+            });
         },
         onSuccess: refresh,
         onError: error => toast.error(errorMessage(error)),
@@ -1092,31 +1107,35 @@ function StorefrontContentPage() {
                 | { kind: 'move'; entryKey: string; direction: -1 | 1 }
                 | { kind: 'drop'; entryKey: string; targetKey: string },
         ) => {
-            let currentBlocks = (await api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery))
-                .storefrontContentBlocks;
+            const currentBlocks = (
+                await api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery)
+            ).storefrontContentBlocks;
             const currentEntries = homepageLayoutEntries(currentBlocks);
             const missingFixedModules = currentEntries.filter(
                 (entry): entry is HomepageLayoutEntry & { type: FixedHomepageModuleType } =>
                     entry.fixed && entry.type !== 'HERO' && entry.blocks.length === 0,
             );
 
-            for (const entry of missingFixedModules) {
-                await api.mutate(createStorefrontContentBlockMutation, {
-                    input: blockInput(fixedModuleDraft(entry.type, entry.position)),
-                });
-            }
-            if (missingFixedModules.length) {
-                currentBlocks = (await api.query<StorefrontContentBlocksResult>(storefrontContentBlocksQuery))
-                    .storefrontContentBlocks;
-            }
-
-            const entries = homepageLayoutEntries(currentBlocks);
+            const missingBlocks = missingFixedModules.map(entry =>
+                fixedModuleDraft(entry.type, entry.position),
+            );
+            const simulatedBlocks = [...currentBlocks, ...missingBlocks.map(withPendingBlockId)].sort(
+                (a, b) => a.position - b.position || a.code.localeCompare(b.code),
+            );
+            const entries = homepageLayoutEntries(simulatedBlocks);
             const ids =
                 change.kind === 'move'
-                    ? reorderedHomepageBlockIds(entries, change.entryKey, change.direction, currentBlocks)
-                    : movedHomepageBlockIds(entries, change.entryKey, change.targetKey, currentBlocks);
+                    ? reorderedHomepageBlockIds(entries, change.entryKey, change.direction, simulatedBlocks)
+                    : movedHomepageBlockIds(entries, change.entryKey, change.targetKey, simulatedBlocks);
             if (ids.length) {
-                await api.mutate(reorderStorefrontContentBlocksMutation, { ids });
+                await api.mutate(applyStorefrontContentChangesMutation, {
+                    input: {
+                        expectedBlocks: contentBlockVersions(currentBlocks),
+                        creates: missingBlocks.map(blockInput),
+                        updates: [],
+                        orderedCodes: orderedBlockCodes(ids, simulatedBlocks),
+                    },
+                });
             }
         },
         onSuccess: async () => {
@@ -1914,8 +1933,8 @@ function BlockEditor({
 
     const update = <K extends keyof ContentBlock>(key: K, value: ContentBlock[K]) =>
         onChange({ ...draft, [key]: value });
+    const isDirty = initialDraftRef.current !== JSON.stringify(draft);
     const requestClose = () => {
-        const isDirty = initialDraftRef.current !== JSON.stringify(draft);
         if (isDirty && !window.confirm(isZh ? '有未保存的修改，确定放弃吗？' : 'Discard unsaved changes?')) {
             return;
         }
@@ -1930,523 +1949,550 @@ function BlockEditor({
         );
 
     return (
-        <Sheet open onOpenChange={open => !open && requestClose()}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[88vw] sm:max-w-[1440px]">
-                <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <SheetTitle>
-                                {lockedType === 'HERO'
-                                    ? draft.id
-                                        ? text.updateCarouselSlideTitle
-                                        : text.createCarouselSlideTitle
-                                    : draft.id
-                                      ? text.updateTitle
-                                      : text.createTitle}
-                            </SheetTitle>
-                            <SheetDescription className="mt-1">{text.editorDescription}</SheetDescription>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                            {fixedTemplate ? <Badge variant="outline">{text.fixedTemplate}</Badge> : null}
-                            <div
-                                className="flex rounded-md border bg-muted/30 p-1"
-                                aria-label={text.simpleModeHint}
-                            >
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={advancedMode ? 'ghost' : 'secondary'}
-                                    onClick={() => setAdvancedMode(false)}
+        <>
+            <UnsavedChangesConfirmation when={isDirty} />
+            <Sheet open onOpenChange={open => !open && requestClose()}>
+                <SheetContent
+                    className={
+                        '@container/editor flex max-w-none flex-col gap-0 overflow-hidden p-0 ' +
+                        'data-[side=right]:w-full data-[side=right]:sm:w-[88vw] ' +
+                        'data-[side=right]:sm:max-w-[1440px]'
+                    }
+                >
+                    <SheetHeader className="shrink-0 border-b px-4 py-4 pr-14 text-left @md/editor:px-6 @md/editor:pr-14">
+                        <div className="flex flex-col gap-3 @4xl/editor:flex-row @4xl/editor:items-start @4xl/editor:justify-between">
+                            <div className="min-w-0">
+                                <SheetTitle>
+                                    {lockedType === 'HERO'
+                                        ? draft.id
+                                            ? text.updateCarouselSlideTitle
+                                            : text.createCarouselSlideTitle
+                                        : draft.id
+                                          ? text.updateTitle
+                                          : text.createTitle}
+                                </SheetTitle>
+                                <SheetDescription className="mt-1">{text.editorDescription}</SheetDescription>
+                            </div>
+                            <div className="flex min-w-0 flex-wrap items-center gap-2 @4xl/editor:shrink-0">
+                                {fixedTemplate ? <Badge variant="outline">{text.fixedTemplate}</Badge> : null}
+                                <div
+                                    className="grid min-w-0 flex-1 grid-cols-2 rounded-md border bg-muted/30 p-1 @2xl/editor:flex @2xl/editor:flex-none"
+                                    aria-label={text.simpleModeHint}
                                 >
-                                    {text.simpleMode}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={advancedMode ? 'secondary' : 'ghost'}
-                                    onClick={() => setAdvancedMode(true)}
-                                >
-                                    {text.advancedMode}
-                                </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={advancedMode ? 'ghost' : 'secondary'}
+                                        onClick={() => setAdvancedMode(false)}
+                                    >
+                                        {text.simpleMode}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={advancedMode ? 'secondary' : 'ghost'}
+                                        onClick={() => setAdvancedMode(true)}
+                                    >
+                                        {text.advancedMode}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
-                </SheetHeader>
-                <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
-                    <div className="min-w-0 space-y-7 px-6 py-5 lg:overflow-y-auto">
-                        <section className="space-y-4">
-                            <h3 className="text-sm font-medium">{text.basic}</h3>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                {!fixedTemplate ? (
-                                    <Field label={text.internalName} hint={text.internalNameHint}>
-                                        <Input
-                                            value={draft.internalName}
-                                            onChange={event => update('internalName', event.target.value)}
-                                        />
-                                    </Field>
-                                ) : null}
-                                {!lockedType ? (
-                                    <Field label={text.type}>
-                                        <Select
-                                            value={draft.type}
-                                            onValueChange={value => {
-                                                if (!value) return;
-                                                const type = value;
-                                                const nextDraft = {
+                        <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
+                    </SheetHeader>
+                    <div className="grid min-h-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto @5xl/editor:grid-cols-[minmax(0,1fr)_360px] @5xl/editor:overflow-hidden">
+                        <div className="@container/editor-form min-w-0 space-y-7 px-4 py-5 @md/editor:px-6 @5xl/editor:overflow-y-auto">
+                            <section className="space-y-4">
+                                <h3 className="text-sm font-medium">{text.basic}</h3>
+                                <div className="grid gap-4 @md/editor-form:grid-cols-2">
+                                    {!fixedTemplate ? (
+                                        <Field label={text.internalName} hint={text.internalNameHint}>
+                                            <Input
+                                                value={draft.internalName}
+                                                onChange={event => update('internalName', event.target.value)}
+                                            />
+                                        </Field>
+                                    ) : null}
+                                    {!lockedType ? (
+                                        <Field label={text.type}>
+                                            <Select
+                                                value={draft.type}
+                                                onValueChange={value => {
+                                                    if (!value) return;
+                                                    const type = value;
+                                                    const nextDraft = {
+                                                        ...draft,
+                                                        type,
+                                                        layoutVariant: defaultLayoutForType(type),
+                                                    };
+                                                    onChange(
+                                                        type === 'CORE_CATEGORIES'
+                                                            ? applyCoreCategoryDefaults(nextDraft)
+                                                            : nextDraft,
+                                                    );
+                                                    if (type === 'CUSTOM') setAdvancedMode(true);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-full min-w-0">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {blockTypes
+                                                        .filter(type => type !== 'HERO')
+                                                        .map(type => (
+                                                            <SelectItem key={type} value={type}>
+                                                                {isZh
+                                                                    ? blockTypeLabels[type].zh
+                                                                    : blockTypeLabels[type].en}
+                                                            </SelectItem>
+                                                        ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                    ) : null}
+                                    {advancedMode ? (
+                                        <Field label={text.code} hint={text.codeHint}>
+                                            <Input
+                                                value={draft.code}
+                                                autoCapitalize="none"
+                                                spellCheck={false}
+                                                onChange={event => update('code', event.target.value)}
+                                            />
+                                        </Field>
+                                    ) : null}
+                                    {advancedMode ? (
+                                        <Field label={text.position}>
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                value={draft.position}
+                                                onChange={event =>
+                                                    update('position', Number(event.target.value) || 0)
+                                                }
+                                            />
+                                        </Field>
+                                    ) : null}
+                                    {!fixedTemplate ? (
+                                        <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+                                            <div className="min-w-0">
+                                                <Label>{text.status}</Label>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {text.statusHint}
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                className="shrink-0"
+                                                checked={draft.enabled}
+                                                onCheckedChange={value => update('enabled', value)}
+                                            />
+                                        </div>
+                                    ) : null}
+                                    {advancedMode ? (
+                                        <>
+                                            <Field label={text.startsAt}>
+                                                <Input
+                                                    type="datetime-local"
+                                                    value={toLocalDateTime(draft.startsAt)}
+                                                    onChange={event =>
+                                                        update(
+                                                            'startsAt',
+                                                            fromLocalDateTime(event.target.value),
+                                                        )
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field label={text.endsAt}>
+                                                <Input
+                                                    type="datetime-local"
+                                                    value={toLocalDateTime(draft.endsAt)}
+                                                    onChange={event =>
+                                                        update(
+                                                            'endsAt',
+                                                            fromLocalDateTime(event.target.value),
+                                                        )
+                                                    }
+                                                />
+                                            </Field>
+                                        </>
+                                    ) : null}
+                                    {advancedMode || previewUsesBlockImage(draft.type) ? (
+                                        <AssetSelectionField
+                                            className="@md/editor-form:col-span-2"
+                                            label={text.imageAsset}
+                                            asset={draft.imageAsset}
+                                            fallbackUrl={draft.imageUrl}
+                                            imageGuidance={blockImageGuidance(draft.type)}
+                                            text={text}
+                                            onChange={asset =>
+                                                onChange({
                                                     ...draft,
-                                                    type,
-                                                    layoutVariant: defaultLayoutForType(type),
-                                                };
-                                                onChange(
-                                                    type === 'CORE_CATEGORIES'
-                                                        ? applyCoreCategoryDefaults(nextDraft)
-                                                        : nextDraft,
-                                                );
-                                                if (type === 'CUSTOM') setAdvancedMode(true);
-                                            }}
-                                        >
-                                            <SelectTrigger className="w-full min-w-0">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {blockTypes
-                                                    .filter(type => type !== 'HERO')
-                                                    .map(type => (
-                                                        <SelectItem key={type} value={type}>
-                                                            {isZh
-                                                                ? blockTypeLabels[type].zh
-                                                                : blockTypeLabels[type].en}
-                                                        </SelectItem>
-                                                    ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </Field>
-                                ) : null}
-                                {advancedMode ? (
-                                    <Field label={text.code} hint={text.codeHint}>
-                                        <Input
-                                            value={draft.code}
-                                            autoCapitalize="none"
-                                            spellCheck={false}
-                                            onChange={event => update('code', event.target.value)}
-                                        />
-                                    </Field>
-                                ) : null}
-                                {advancedMode ? (
-                                    <Field label={text.position}>
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            value={draft.position}
-                                            onChange={event =>
-                                                update('position', Number(event.target.value) || 0)
+                                                    imageAsset: asset,
+                                                    imageAssetId: asset?.id ?? null,
+                                                    imageUrl: asset?.preview ?? null,
+                                                })
                                             }
                                         />
-                                    </Field>
-                                ) : null}
-                                {!fixedTemplate ? (
-                                    <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
-                                        <div className="min-w-0">
-                                            <Label>{text.status}</Label>
-                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                {text.statusHint}
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            className="shrink-0"
-                                            checked={draft.enabled}
-                                            onCheckedChange={value => update('enabled', value)}
-                                        />
-                                    </div>
-                                ) : null}
-                                {advancedMode ? (
-                                    <>
-                                        <Field label={text.startsAt}>
-                                            <Input
-                                                type="datetime-local"
-                                                value={toLocalDateTime(draft.startsAt)}
-                                                onChange={event =>
-                                                    update('startsAt', fromLocalDateTime(event.target.value))
-                                                }
-                                            />
-                                        </Field>
-                                        <Field label={text.endsAt}>
-                                            <Input
-                                                type="datetime-local"
-                                                value={toLocalDateTime(draft.endsAt)}
-                                                onChange={event =>
-                                                    update('endsAt', fromLocalDateTime(event.target.value))
-                                                }
-                                            />
-                                        </Field>
-                                    </>
-                                ) : null}
-                                {advancedMode || previewUsesBlockImage(draft.type) ? (
-                                    <AssetSelectionField
-                                        className="sm:col-span-2"
-                                        label={text.imageAsset}
-                                        asset={draft.imageAsset}
-                                        fallbackUrl={draft.imageUrl}
-                                        imageGuidance={blockImageGuidance(draft.type)}
-                                        text={text}
-                                        onChange={asset =>
-                                            onChange({
-                                                ...draft,
-                                                imageAsset: asset,
-                                                imageAssetId: asset?.id ?? null,
-                                                imageUrl: asset?.preview ?? null,
-                                            })
-                                        }
-                                    />
-                                ) : null}
-                                {advancedMode ? (
-                                    <>
-                                        <Field
-                                            label={text.imageUrl}
-                                            hint={text.imageHint}
-                                            className="sm:col-span-2"
-                                        >
-                                            <Input
-                                                inputMode="url"
-                                                value={draft.imageUrl ?? ''}
-                                                onChange={event =>
-                                                    onChange({
-                                                        ...draft,
-                                                        imageAsset: null,
-                                                        imageAssetId: null,
-                                                        imageUrl: event.target.value || null,
-                                                    })
-                                                }
-                                            />
-                                            <ImageSizeHint guidance={blockImageGuidance(draft.type)} />
-                                        </Field>
-                                        {draft.type !== 'CORE_CATEGORIES' && draft.type !== 'HERO' ? (
-                                            <>
-                                                <Field label={text.backgroundColor}>
-                                                    <ColorInput
-                                                        value={draft.backgroundColor}
-                                                        ariaLabel={text.backgroundColor}
-                                                        onChange={value => update('backgroundColor', value)}
-                                                    />
-                                                </Field>
-                                                <Field label={text.textColor}>
-                                                    <ColorInput
-                                                        value={draft.textColor}
-                                                        ariaLabel={text.textColor}
-                                                        onChange={value => update('textColor', value)}
-                                                    />
-                                                </Field>
-                                            </>
-                                        ) : null}
-                                    </>
-                                ) : null}
-                                {advancedMode ||
-                                lockedType === 'HERO' ||
-                                simpleBlockNeedsTarget(draft.type) ? (
-                                    <>
-                                        <Field label={text.targetType}>
-                                            <TargetSelect
-                                                value={draft.targetType}
-                                                isZh={isZh}
-                                                onChange={value =>
-                                                    onChange({
-                                                        ...draft,
-                                                        targetType: value,
-                                                        targetValue: targetValueAfterTypeChange(
-                                                            draft.targetType,
-                                                            draft.targetValue,
-                                                            value,
-                                                        ),
-                                                    })
-                                                }
-                                            />
-                                        </Field>
-                                        <TargetValueEditor
-                                            targetType={draft.targetType}
-                                            value={draft.targetValue}
-                                            isZh={isZh}
-                                            text={text}
-                                            onChange={value => update('targetValue', value)}
-                                        />
-                                    </>
-                                ) : null}
-                            </div>
-                        </section>
-
-                        {draft.type === 'HERO' ? (
-                            <>
-                                <Separator />
-                                <HeroThemeSettings draft={draft} text={text} onChange={onChange} />
-                            </>
-                        ) : null}
-
-                        {(!advancedMode ||
-                            draft.type === 'CORE_CATEGORIES' ||
-                            draft.type === 'CATEGORY_AD') &&
-                        simpleModuleHasSettings(draft.type) ? (
-                            <>
-                                <Separator />
-                                <ModuleSpecificSettings
-                                    draft={draft}
-                                    isZh={isZh}
-                                    text={text}
-                                    onChange={onChange}
-                                />
-                            </>
-                        ) : null}
-
-                        <Separator />
-                        <section className="space-y-4">
-                            <h3 className="text-sm font-medium">{text.translations}</h3>
-                            <div className="grid gap-5 xl:grid-cols-2">
-                                {translationLanguages.map(languageCode => {
-                                    const translation = getBlockTranslation(draft, languageCode);
-                                    return (
-                                        <div key={languageCode} className="space-y-3 border-l-2 pl-4">
-                                            <h4 className="text-sm font-medium">
-                                                {languageCode === 'zh_Hans' ? text.chinese : text.english}
-                                            </h4>
-                                            <Field label={text.blockTitle}>
+                                    ) : null}
+                                    {advancedMode ? (
+                                        <>
+                                            <Field
+                                                label={text.imageUrl}
+                                                hint={text.imageHint}
+                                                className="@md/editor-form:col-span-2"
+                                            >
                                                 <Input
-                                                    value={translation.title}
+                                                    inputMode="url"
+                                                    value={draft.imageUrl ?? ''}
                                                     onChange={event =>
-                                                        updateTranslation(languageCode, {
-                                                            title: event.target.value,
+                                                        onChange({
+                                                            ...draft,
+                                                            imageAsset: null,
+                                                            imageAssetId: null,
+                                                            imageUrl: event.target.value || null,
+                                                        })
+                                                    }
+                                                />
+                                                <ImageSizeHint guidance={blockImageGuidance(draft.type)} />
+                                            </Field>
+                                            {draft.type !== 'CORE_CATEGORIES' && draft.type !== 'HERO' ? (
+                                                <>
+                                                    <Field label={text.backgroundColor}>
+                                                        <ColorInput
+                                                            value={draft.backgroundColor}
+                                                            ariaLabel={text.backgroundColor}
+                                                            onChange={value =>
+                                                                update('backgroundColor', value)
+                                                            }
+                                                        />
+                                                    </Field>
+                                                    <Field label={text.textColor}>
+                                                        <ColorInput
+                                                            value={draft.textColor}
+                                                            ariaLabel={text.textColor}
+                                                            onChange={value => update('textColor', value)}
+                                                        />
+                                                    </Field>
+                                                </>
+                                            ) : null}
+                                        </>
+                                    ) : null}
+                                    {advancedMode ||
+                                    lockedType === 'HERO' ||
+                                    simpleBlockNeedsTarget(draft.type) ? (
+                                        <>
+                                            <Field label={text.targetType}>
+                                                <TargetSelect
+                                                    value={draft.targetType}
+                                                    isZh={isZh}
+                                                    onChange={value =>
+                                                        onChange({
+                                                            ...draft,
+                                                            targetType: value,
+                                                            targetValue: targetValueAfterTypeChange(
+                                                                draft.targetType,
+                                                                draft.targetValue,
+                                                                value,
+                                                            ),
                                                         })
                                                     }
                                                 />
                                             </Field>
-                                            {advancedMode || visibleTextFields.subtitle ? (
-                                                <Field label={text.subtitle}>
+                                            <TargetValueEditor
+                                                targetType={draft.targetType}
+                                                value={draft.targetValue}
+                                                isZh={isZh}
+                                                text={text}
+                                                onChange={value => update('targetValue', value)}
+                                            />
+                                        </>
+                                    ) : null}
+                                </div>
+                            </section>
+
+                            {draft.type === 'HERO' ? (
+                                <>
+                                    <Separator />
+                                    <HeroThemeSettings draft={draft} text={text} onChange={onChange} />
+                                </>
+                            ) : null}
+
+                            {(!advancedMode ||
+                                draft.type === 'CORE_CATEGORIES' ||
+                                draft.type === 'CATEGORY_AD') &&
+                            simpleModuleHasSettings(draft.type) ? (
+                                <>
+                                    <Separator />
+                                    <ModuleSpecificSettings
+                                        draft={draft}
+                                        isZh={isZh}
+                                        text={text}
+                                        onChange={onChange}
+                                    />
+                                </>
+                            ) : null}
+
+                            <Separator />
+                            <section className="space-y-4">
+                                <h3 className="text-sm font-medium">{text.translations}</h3>
+                                <div className="grid gap-5 @2xl/editor-form:grid-cols-2">
+                                    {translationLanguages.map(languageCode => {
+                                        const translation = getBlockTranslation(draft, languageCode);
+                                        return (
+                                            <div key={languageCode} className="space-y-3 border-l-2 pl-4">
+                                                <h4 className="text-sm font-medium">
+                                                    {languageCode === 'zh_Hans' ? text.chinese : text.english}
+                                                </h4>
+                                                <Field label={text.blockTitle}>
                                                     <Input
-                                                        value={translation.subtitle}
+                                                        value={translation.title}
                                                         onChange={event =>
                                                             updateTranslation(languageCode, {
-                                                                subtitle: event.target.value,
+                                                                title: event.target.value,
                                                             })
                                                         }
                                                     />
                                                 </Field>
-                                            ) : null}
-                                            {advancedMode || visibleTextFields.body ? (
-                                                <Field label={text.body}>
-                                                    <Textarea
-                                                        rows={4}
-                                                        value={translation.body}
-                                                        onChange={event =>
-                                                            updateTranslation(languageCode, {
-                                                                body: event.target.value,
-                                                            })
-                                                        }
-                                                    />
-                                                </Field>
-                                            ) : null}
-                                            {draft.type !== 'CATEGORY_AD' &&
-                                            (advancedMode || visibleTextFields.cta) ? (
-                                                <Field label={text.cta}>
-                                                    <Input
-                                                        value={translation.ctaLabel}
-                                                        onChange={event =>
-                                                            updateTranslation(languageCode, {
-                                                                ctaLabel: event.target.value,
-                                                            })
-                                                        }
-                                                    />
-                                                </Field>
+                                                {advancedMode || visibleTextFields.subtitle ? (
+                                                    <Field label={text.subtitle}>
+                                                        <Input
+                                                            value={translation.subtitle}
+                                                            onChange={event =>
+                                                                updateTranslation(languageCode, {
+                                                                    subtitle: event.target.value,
+                                                                })
+                                                            }
+                                                        />
+                                                    </Field>
+                                                ) : null}
+                                                {advancedMode || visibleTextFields.body ? (
+                                                    <Field label={text.body}>
+                                                        <Textarea
+                                                            rows={4}
+                                                            value={translation.body}
+                                                            onChange={event =>
+                                                                updateTranslation(languageCode, {
+                                                                    body: event.target.value,
+                                                                })
+                                                            }
+                                                        />
+                                                    </Field>
+                                                ) : null}
+                                                {draft.type !== 'CATEGORY_AD' &&
+                                                (advancedMode || visibleTextFields.cta) ? (
+                                                    <Field label={text.cta}>
+                                                        <Input
+                                                            value={translation.ctaLabel}
+                                                            onChange={event =>
+                                                                updateTranslation(languageCode, {
+                                                                    ctaLabel: event.target.value,
+                                                                })
+                                                            }
+                                                        />
+                                                    </Field>
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+
+                            {advancedMode || simpleModuleUsesItems(draft.type) ? (
+                                <>
+                                    <Separator />
+                                    <section className="space-y-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <h3 className="text-sm font-medium">{text.items}</h3>
+                                            {draft.type !== 'CORE_CATEGORIES' || draft.items.length < 2 ? (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        update('items', [
+                                                            ...draft.items,
+                                                            newItem(draft.items.length, draft.type),
+                                                        ])
+                                                    }
+                                                >
+                                                    <Plus className="size-4" aria-hidden="true" />
+                                                    {text.addItem}
+                                                </Button>
                                             ) : null}
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        </section>
-
-                        {advancedMode || simpleModuleUsesItems(draft.type) ? (
-                            <>
-                                <Separator />
-                                <section className="space-y-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <h3 className="text-sm font-medium">{text.items}</h3>
-                                        {draft.type !== 'CORE_CATEGORIES' || draft.items.length < 2 ? (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    update('items', [
-                                                        ...draft.items,
-                                                        newItem(draft.items.length, draft.type),
-                                                    ])
+                                        {draft.items.map((item, index) => (
+                                            <ItemEditor
+                                                key={item.id ?? `new-${index}`}
+                                                item={item}
+                                                index={index}
+                                                blockType={draft.type}
+                                                advancedMode={advancedMode}
+                                                isZh={isZh}
+                                                text={text}
+                                                onChange={next =>
+                                                    update(
+                                                        'items',
+                                                        draft.items.map((current, currentIndex) =>
+                                                            currentIndex === index ? next : current,
+                                                        ),
+                                                    )
                                                 }
-                                            >
-                                                <Plus className="size-4" aria-hidden="true" />
-                                                {text.addItem}
-                                            </Button>
-                                        ) : null}
-                                    </div>
-                                    {draft.items.map((item, index) => (
-                                        <ItemEditor
-                                            key={item.id ?? `new-${index}`}
-                                            item={item}
-                                            index={index}
-                                            blockType={draft.type}
-                                            advancedMode={advancedMode}
-                                            isZh={isZh}
-                                            text={text}
-                                            onChange={next =>
-                                                update(
-                                                    'items',
-                                                    draft.items.map((current, currentIndex) =>
-                                                        currentIndex === index ? next : current,
-                                                    ),
-                                                )
-                                            }
-                                            onRemove={() =>
-                                                update(
-                                                    'items',
-                                                    draft.items.filter(
-                                                        (_, currentIndex) => currentIndex !== index,
-                                                    ),
-                                                )
-                                            }
-                                        />
-                                    ))}
-                                </section>
-                            </>
-                        ) : null}
-                    </div>
-
-                    <aside className="min-w-0 border-t bg-muted/30 px-5 py-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
-                        <h3 className="mb-4 text-sm font-medium">{text.preview}</h3>
-                        <div className="mx-auto w-full max-w-[300px] overflow-hidden rounded-[8px] border bg-background shadow-sm">
-                            <div className="flex h-7 items-center justify-center border-b bg-muted text-[10px] text-muted-foreground">
-                                390 x 844
-                            </div>
-                            <div
-                                className="relative min-h-[420px] overflow-hidden p-4"
-                                style={{
-                                    backgroundColor:
-                                        draft.type === 'HERO'
-                                            ? '#f8fafc'
-                                            : draft.backgroundColor || '#ffffff',
-                                    color: draft.type === 'HERO' ? '#111827' : draft.textColor || '#111827',
-                                }}
-                            >
-                                {draft.type === 'HERO' ? (
-                                    <HeroEditorPreview
-                                        draft={draft}
-                                        translation={previewTranslation}
-                                        isZh={isZh}
-                                    />
-                                ) : draft.type === 'CATEGORY_AD' ? (
-                                    <CategoryPromotionEditorPreview
-                                        draft={draft}
-                                        translation={previewTranslation}
-                                        isZh={isZh}
-                                    />
-                                ) : draft.type === 'FEATURED_COLLECTION' ? (
-                                    <FeaturedCollectionEditorPreview
-                                        draft={draft}
-                                        translation={previewTranslation}
-                                        isZh={isZh}
-                                    />
-                                ) : draft.type === 'STORY' ? (
-                                    <StoryEditorPreview
-                                        draft={draft}
-                                        translation={previewTranslation}
-                                        isZh={isZh}
-                                    />
-                                ) : (
-                                    <>
-                                        {previewUsesBlockImage(draft.type) ? (
-                                            draft.imageUrl ? (
-                                                <img
-                                                    className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
-                                                    src={draft.imageUrl}
-                                                    alt=""
-                                                />
-                                            ) : (
-                                                <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
-                                                    <ImageIcon
-                                                        className="size-5 opacity-50"
-                                                        aria-hidden="true"
-                                                    />
-                                                </div>
-                                            )
-                                        ) : null}
-                                        {previewTranslation?.title ? (
-                                            <>
-                                                <h4 className="text-lg font-semibold">
-                                                    {previewTranslation.title}
-                                                </h4>
-                                                {previewTranslation.subtitle && (
-                                                    <p className="mt-1 text-sm opacity-75">
-                                                        {previewTranslation.subtitle}
-                                                    </p>
-                                                )}
-                                                {previewTranslation.body && (
-                                                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-                                                        {previewTranslation.body}
-                                                    </p>
-                                                )}
-                                                {previewTranslation.ctaLabel && (
-                                                    <div className="mt-4 inline-flex min-h-9 items-center border border-current px-3 text-sm font-medium">
-                                                        {previewTranslation.ctaLabel}
-                                                    </div>
-                                                )}
-                                                {draft.items.length > 0 && (
-                                                    <div className="mt-5 grid grid-cols-2 gap-2">
-                                                        {draft.items.slice(0, 4).map((item, index) => {
-                                                            const itemTranslation = preferredItemTranslation(
-                                                                item,
-                                                                isZh,
-                                                            );
-                                                            return (
-                                                                <div
-                                                                    key={item.id ?? index}
-                                                                    className="border border-current/15 p-2"
-                                                                >
-                                                                    {item.imageUrl ? (
-                                                                        <img
-                                                                            className="mb-2 aspect-square w-full rounded object-cover"
-                                                                            src={item.imageUrl}
-                                                                            alt=""
-                                                                        />
-                                                                    ) : null}
-                                                                    <div className="text-xs font-medium">
-                                                                        {itemTranslation.label ||
-                                                                            `${text.item} ${index + 1}`}
-                                                                    </div>
-                                                                    <div className="mt-1 line-clamp-2 text-[11px] opacity-65">
-                                                                        {itemTranslation.description}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <div className="flex min-h-44 items-center justify-center text-center text-sm opacity-60">
-                                                {text.previewEmpty}
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
+                                                onRemove={() =>
+                                                    update(
+                                                        'items',
+                                                        draft.items.filter(
+                                                            (_, currentIndex) => currentIndex !== index,
+                                                        ),
+                                                    )
+                                                }
+                                            />
+                                        ))}
+                                    </section>
+                                </>
+                            ) : null}
                         </div>
-                    </aside>
-                </div>
-                <SheetFooter className="shrink-0 border-t px-6 py-4">
-                    <Button type="button" variant="outline" disabled={saving} onClick={requestClose}>
-                        {text.cancel}
-                    </Button>
-                    <Button type="button" disabled={saving} onClick={() => onSave(draft)}>
-                        {saving ? text.saving : text.save}
-                    </Button>
-                </SheetFooter>
-            </SheetContent>
-        </Sheet>
+
+                        <aside className="min-w-0 border-t bg-muted/30 px-4 py-5 @md/editor:px-5 @5xl/editor:overflow-y-auto @5xl/editor:border-l @5xl/editor:border-t-0">
+                            <h3 className="mb-4 text-sm font-medium">{text.preview}</h3>
+                            <div className="mx-auto w-full max-w-[300px] overflow-hidden rounded-[8px] border bg-background shadow-sm">
+                                <div className="flex h-7 items-center justify-center border-b bg-muted text-[10px] text-muted-foreground">
+                                    390 x 844
+                                </div>
+                                <div
+                                    className="relative min-h-[420px] overflow-hidden p-4"
+                                    style={{
+                                        backgroundColor:
+                                            draft.type === 'HERO'
+                                                ? '#f8fafc'
+                                                : draft.backgroundColor || '#ffffff',
+                                        color:
+                                            draft.type === 'HERO' ? '#111827' : draft.textColor || '#111827',
+                                    }}
+                                >
+                                    {draft.type === 'HERO' ? (
+                                        <HeroEditorPreview
+                                            draft={draft}
+                                            translation={previewTranslation}
+                                            isZh={isZh}
+                                        />
+                                    ) : draft.type === 'CATEGORY_AD' ? (
+                                        <CategoryPromotionEditorPreview
+                                            draft={draft}
+                                            translation={previewTranslation}
+                                            isZh={isZh}
+                                        />
+                                    ) : draft.type === 'FEATURED_COLLECTION' ? (
+                                        <FeaturedCollectionEditorPreview
+                                            draft={draft}
+                                            translation={previewTranslation}
+                                            isZh={isZh}
+                                        />
+                                    ) : draft.type === 'STORY' ? (
+                                        <StoryEditorPreview
+                                            draft={draft}
+                                            translation={previewTranslation}
+                                            isZh={isZh}
+                                        />
+                                    ) : (
+                                        <>
+                                            {previewUsesBlockImage(draft.type) ? (
+                                                draft.imageUrl ? (
+                                                    <img
+                                                        className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
+                                                        src={draft.imageUrl}
+                                                        alt=""
+                                                    />
+                                                ) : (
+                                                    <div className="mb-4 flex aspect-[16/9] items-center justify-center rounded-md border border-dashed bg-background/50">
+                                                        <ImageIcon
+                                                            className="size-5 opacity-50"
+                                                            aria-hidden="true"
+                                                        />
+                                                    </div>
+                                                )
+                                            ) : null}
+                                            {previewTranslation?.title ? (
+                                                <>
+                                                    <h4 className="text-lg font-semibold">
+                                                        {previewTranslation.title}
+                                                    </h4>
+                                                    {previewTranslation.subtitle && (
+                                                        <p className="mt-1 text-sm opacity-75">
+                                                            {previewTranslation.subtitle}
+                                                        </p>
+                                                    )}
+                                                    {previewTranslation.body && (
+                                                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+                                                            {previewTranslation.body}
+                                                        </p>
+                                                    )}
+                                                    {previewTranslation.ctaLabel && (
+                                                        <div className="mt-4 inline-flex min-h-9 items-center border border-current px-3 text-sm font-medium">
+                                                            {previewTranslation.ctaLabel}
+                                                        </div>
+                                                    )}
+                                                    {draft.items.length > 0 && (
+                                                        <div className="mt-5 grid grid-cols-2 gap-2">
+                                                            {draft.items.slice(0, 4).map((item, index) => {
+                                                                const itemTranslation =
+                                                                    preferredItemTranslation(item, isZh);
+                                                                return (
+                                                                    <div
+                                                                        key={item.id ?? index}
+                                                                        className="border border-current/15 p-2"
+                                                                    >
+                                                                        {item.imageUrl ? (
+                                                                            <img
+                                                                                className="mb-2 aspect-square w-full rounded object-cover"
+                                                                                src={item.imageUrl}
+                                                                                alt=""
+                                                                            />
+                                                                        ) : null}
+                                                                        <div className="text-xs font-medium">
+                                                                            {itemTranslation.label ||
+                                                                                `${text.item} ${index + 1}`}
+                                                                        </div>
+                                                                        <div className="mt-1 line-clamp-2 text-[11px] opacity-65">
+                                                                            {itemTranslation.description}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <div className="flex min-h-44 items-center justify-center text-center text-sm opacity-60">
+                                                    {text.previewEmpty}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+                    <SheetFooter className="shrink-0 flex-row gap-3 border-t px-4 py-3 @md/editor:justify-end @md/editor:px-6 @md/editor:py-4">
+                        <Button
+                            className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
+                            type="button"
+                            variant="outline"
+                            disabled={saving}
+                            onClick={requestClose}
+                        >
+                            {text.cancel}
+                        </Button>
+                        <Button
+                            className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
+                            type="button"
+                            disabled={saving}
+                            onClick={() => onSave(draft)}
+                        >
+                            {saving ? text.saving : text.save}
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        </>
     );
 }
 
@@ -2642,6 +2688,7 @@ function HeroEditorPreview({
         settings.buttonTextColor,
         CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
     );
+    const showImageOverlay = settings.themePreset !== 'cloudbridge-bright';
     const imageBackground = draft.imageUrl
         ? `url("${draft.imageUrl.replace(/"/g, '%22')}") center / cover no-repeat`
         : 'linear-gradient(135deg, #f4fbff 0%, #67e8f9 43%, #818cf8 72%, #c084fc 100%)';
@@ -2661,12 +2708,14 @@ function HeroEditorPreview({
                         aria-hidden="true"
                     />
                 ) : null}
-                <div
-                    className="absolute inset-0"
-                    style={{
-                        background: `linear-gradient(90deg, ${overlayStrong} 0%, ${overlayMedium} 48%, transparent 100%)`,
-                    }}
-                />
+                {showImageOverlay ? (
+                    <div
+                        className="absolute inset-0"
+                        style={{
+                            background: `linear-gradient(90deg, ${overlayStrong} 0%, ${overlayMedium} 48%, transparent 100%)`,
+                        }}
+                    />
+                ) : null}
                 <div className="absolute inset-0 flex w-[68%] flex-col justify-between p-3">
                     <span
                         className="self-start rounded-full border px-2 py-0.5 text-[7px] font-semibold"
@@ -2793,10 +2842,10 @@ function ItemEditor({
                     <X />
                 </IconButton>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 @md/editor-form:grid-cols-2">
                 {advancedMode || simpleItemUsesImage(blockType) ? (
                     <AssetSelectionField
-                        className="sm:col-span-2"
+                        className="@md/editor-form:col-span-2"
                         label={text.imageAsset}
                         asset={item.imageAsset}
                         fallbackUrl={item.imageUrl}
@@ -3574,6 +3623,22 @@ function preferredBlockTranslation(block: ContentBlock, isZh: boolean) {
 
 function preferredItemTranslation(item: ContentItem, isZh: boolean) {
     return getItemTranslation(item, isZh ? 'zh_Hans' : 'en');
+}
+
+function withPendingBlockId(block: ContentBlock): ContentBlock {
+    return { ...block, id: `pending:${block.code}` };
+}
+
+function orderedBlockCodes(ids: string[], blocks: ContentBlock[]): string[] {
+    const codeById = new Map(blocks.flatMap(block => (block.id ? [[block.id, block.code] as const] : [])));
+    const codes = ids.flatMap(id => {
+        const code = codeById.get(id);
+        return code ? [code] : [];
+    });
+    if (codes.length !== ids.length) {
+        throw new Error('区块排序信息不完整，请刷新页面后重试');
+    }
+    return codes;
 }
 
 function blockInput(block: ContentBlock) {

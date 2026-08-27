@@ -37,6 +37,6 @@ export class ReferralProgramConfig extends VendureEntity {
     @Column('int', { default: 30 })
     attributionWindowDays: number;
 
-    @Column({ type: 'varchar', length: 32, default: 'BRAND_MINIMAL' })
+    @Column({ type: 'varchar', length: 64, default: 'BRAND_MINIMAL' })
     defaultPosterTemplate: string;
 }

@@ -1,0 +1,15 @@
+{
+    "code": "reference-edit",
+    "required": ["subject", "preserve"],
+    "defaults": {
+        "composition": "preserve requested reference structure unless explicitly changed",
+        "lighting": "match the requested target scene",
+        "style": "high-fidelity controlled edit"
+    },
+    "avoid": [
+        "unrequested identity change",
+        "unrequested logo change",
+        "product shape drift",
+        "lost fine details"
+    ]
+}

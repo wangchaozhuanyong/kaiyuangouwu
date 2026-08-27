@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { categoryTargetSelection, centeredHorizontalScrollLeft } from './category-navigation';
@@ -55,5 +56,30 @@ describe('category navigation scrolling', () => {
                 { offsetLeft: 160, offsetWidth: 70 },
             ),
         ).toBe(0);
+    });
+});
+
+describe('category navigation responsive spacing', () => {
+    const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+    it('uses one compact row for the desktop category header', () => {
+        expect(stylesheet).toMatch(/\.category-topbar\s*\{[^}]*height:\s*72px;[^}]*padding:\s*0 32px;/);
+        expect(stylesheet).toMatch(
+            /\.category-topbar > \.search-trigger\s*\{[^}]*top:\s*14px;[^}]*right:\s*32px;[^}]*left:\s*calc\(50% \+ 226px\);/,
+        );
+    });
+
+    it('keeps the desktop navigation stack and content height calculations aligned', () => {
+        expect(stylesheet).toMatch(/\.category-page\s*\{[^}]*--category-content-sticky-top:\s*153px;/);
+        expect(stylesheet).toMatch(/\.primary-category-switcher\s*\{[^}]*height:\s*80px;/);
+        expect(
+            stylesheet.match(/min-height:\s*calc\(100dvh - var\(--category-content-sticky-top\)\);/g),
+        ).toHaveLength(3);
+    });
+
+    it('does not reserve an empty third column on narrow mobile screens', () => {
+        expect(stylesheet).toMatch(
+            /@media \(max-width:\s*370px\)[\s\S]*?\.category-topbar\s*\{[^}]*grid-template-columns:\s*max-content minmax\(0, 1fr\);[^}]*gap:\s*8px;/,
+        );
     });
 });

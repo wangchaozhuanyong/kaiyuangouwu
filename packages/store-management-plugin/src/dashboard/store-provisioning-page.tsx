@@ -18,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
     Skeleton,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useMutation,
@@ -203,6 +204,9 @@ function StoreProvisioningPage() {
 
     return (
         <Page pageId="store-provisioning">
+            <UnsavedChangesConfirmation
+                when={!result && JSON.stringify(draft) !== JSON.stringify(emptyDraft)}
+            />
             <PageTitle>{text.title}</PageTitle>
             <PageActionBar>
                 {!result && (

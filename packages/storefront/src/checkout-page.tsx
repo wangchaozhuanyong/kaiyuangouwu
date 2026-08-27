@@ -937,7 +937,6 @@ function CheckoutItemsGroup({
                         <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
                         <div>
                             <strong>{line.productVariant.name}</strong>
-                            <small>{line.productVariant.sku}</small>
                             <em>
                                 {line.productVariant.customFields.digitalDeliveryMode === 'auto_card'
                                     ? isZh

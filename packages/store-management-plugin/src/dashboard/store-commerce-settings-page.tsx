@@ -21,6 +21,7 @@ import {
     Skeleton,
     Switch,
     Textarea,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -40,6 +41,7 @@ import {
 } from './store-commerce.graphql';
 
 interface CommerceDraft {
+    expectedUpdatedAt: string;
     pricesIncludeTax: boolean;
     countryCode: string;
     taxRate: number;
@@ -207,9 +209,13 @@ function StoreCommerceSettingsPage() {
         }
         mutation.mutate(draft);
     };
+    const isDirty = Boolean(
+        draft && configuration && JSON.stringify(draft) !== JSON.stringify(toDraft(configuration)),
+    );
 
     return (
         <Page pageId="store-commerce-settings">
+            <UnsavedChangesConfirmation when={isDirty} />
             <PageTitle>{text.title}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
@@ -604,6 +610,7 @@ function ConfigurationSkeleton() {
 
 function toDraft(configuration: StoreCommerceConfigurationRecord): CommerceDraft {
     return {
+        expectedUpdatedAt: configuration.updatedAt,
         pricesIncludeTax: configuration.pricesIncludeTax,
         countryCode: configuration.countryCode ?? '',
         taxRate: configuration.taxRate,

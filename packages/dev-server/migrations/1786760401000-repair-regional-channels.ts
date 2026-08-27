@@ -70,6 +70,7 @@ export class RepairRegionalChannels1786760401000 implements MigrationInterface {
     }
 
     private async createChannel(queryRunner: QueryRunner, channel: RegionalChannel): Promise<void> {
+        const parameters = this.placeholders(queryRunner, 8);
         await queryRunner.query(
             `
                 INSERT INTO "channel" (
@@ -92,13 +93,13 @@ export class RepairRegionalChannels1786760401000 implements MigrationInterface {
                 SELECT
                     CURRENT_TIMESTAMP,
                     CURRENT_TIMESTAMP,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
+                    ${parameters[0]},
+                    ${parameters[1]},
+                    ${parameters[2]},
+                    ${parameters[3]},
+                    ${parameters[4]},
+                    ${parameters[5]},
+                    ${parameters[6]},
                     source."trackInventory",
                     source."outOfStockThreshold",
                     source."pricesIncludeTax",
@@ -108,7 +109,7 @@ export class RepairRegionalChannels1786760401000 implements MigrationInterface {
                 FROM "channel" source
                 WHERE source."code" = '__default_channel__'
                   AND NOT EXISTS (
-                      SELECT 1 FROM "channel" existing WHERE existing."code" = ?
+                      SELECT 1 FROM "channel" existing WHERE existing."code" = ${parameters[7]}
                   )
             `,
             [
@@ -151,6 +152,10 @@ export class RepairRegionalChannels1786760401000 implements MigrationInterface {
         targetChannelCode: string,
         currencyCode: string,
     ): Promise<void> {
+        const [currencyParameter, channelParameter, existingCurrencyParameter] = this.placeholders(
+            queryRunner,
+            3,
+        );
         await queryRunner.query(
             `
                 INSERT INTO "product_variant_price" (
@@ -159,10 +164,10 @@ export class RepairRegionalChannels1786760401000 implements MigrationInterface {
                     "price",
                     "variantId"
                 )
-                SELECT ?, target."id", source."price", source."variantId"
+                SELECT ${currencyParameter}, target."id", source."price", source."variantId"
                 FROM "product_variant_price" source
                 JOIN "channel" source_channel ON source_channel."id" = source."channelId"
-                JOIN "channel" target ON target."code" = ?
+                JOIN "channel" target ON target."code" = ${channelParameter}
                 WHERE source_channel."code" = '__default_channel__'
                   AND source."currencyCode" = 'USD'
                   AND NOT EXISTS (
@@ -170,7 +175,7 @@ export class RepairRegionalChannels1786760401000 implements MigrationInterface {
                       FROM "product_variant_price" existing
                       WHERE existing."channelId" = target."id"
                         AND existing."variantId" = source."variantId"
-                        AND existing."currencyCode" = ?
+                        AND existing."currencyCode" = ${existingCurrencyParameter}
                   )
             `,
             [currencyCode, targetChannelCode, currencyCode],
@@ -179,6 +184,13 @@ export class RepairRegionalChannels1786760401000 implements MigrationInterface {
 
     private isMysql(queryRunner: QueryRunner): boolean {
         return ['mysql', 'mariadb'].includes(queryRunner.connection.options.type);
+    }
+
+    private placeholders(queryRunner: QueryRunner, count: number): string[] {
+        if (['postgres', 'cockroachdb'].includes(queryRunner.connection.options.type)) {
+            return Array.from({ length: count }, (_, index) => `$${index + 1}`);
+        }
+        return Array.from({ length: count }, () => '?');
     }
 
     private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {

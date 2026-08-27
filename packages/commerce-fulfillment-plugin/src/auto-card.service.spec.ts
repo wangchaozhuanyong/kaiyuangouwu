@@ -55,6 +55,15 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         findOne: vi.fn().mockResolvedValue(delivery),
         save: vi.fn((value: any) => Promise.resolve(value)),
     };
+    const deliveryLockBuilder = {
+        setLock: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        getOne: vi.fn().mockResolvedValue(delivery),
+    };
+    Object.assign(deliveryRepository, {
+        createQueryBuilder: vi.fn().mockReturnValue(deliveryLockBuilder),
+    });
     const poolRepository = {
         createQueryBuilder: vi.fn().mockReturnValue(poolBuilder),
     };
@@ -88,7 +97,16 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         channel: { id: 'channel-1' },
         activeUserId: 'admin-1',
     } as any;
-    return { service, ctx, delivery, events, poolBuilder, deliveryRepository, eventBus };
+    return {
+        service,
+        ctx,
+        delivery,
+        events,
+        poolBuilder,
+        deliveryLockBuilder,
+        deliveryRepository,
+        eventBus,
+    };
 }
 
 describe('AutoCardService allocation invariants', () => {
@@ -170,5 +188,33 @@ describe('AutoCardService allocation invariants', () => {
         expect(sent.attemptCount).toBe(1);
         expect(test.deliveryRepository.save).not.toHaveBeenCalled();
         expect(test.events.at(-1)).toMatchObject({ type: 'EMAIL_FAILED' });
+    });
+
+    it('locks manual retries and rejects a duplicate request that is already queued', async () => {
+        const allocated = {
+            id: 'delivery-1',
+            state: 'ALLOCATED',
+            quantity: 1,
+            lastError: null,
+            lastDispatchedAt: null,
+            poolItems: [{ id: 'pool-1' }],
+            config: { id: 'config-1' },
+            order: { id: 'order-1' },
+            orderLine: autoCardLine(1),
+            events: [],
+        };
+        const test = createHarness({ delivery: allocated });
+
+        await test.service.retryDelivery(test.ctx, allocated.id);
+
+        expect(test.deliveryLockBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
+        expect(test.eventBus.publish).toHaveBeenCalledTimes(1);
+        expect(test.events.map(event => event.type)).toEqual(['MANUAL_RETRY', 'EMAIL_QUEUED']);
+
+        await expect(test.service.retryDelivery(test.ctx, allocated.id)).rejects.toThrow(
+            '重发请求已进入邮件队列，请勿重复提交',
+        );
+        expect(test.eventBus.publish).toHaveBeenCalledTimes(1);
+        expect(test.events.map(event => event.type)).toEqual(['MANUAL_RETRY', 'EMAIL_QUEUED']);
     });
 });

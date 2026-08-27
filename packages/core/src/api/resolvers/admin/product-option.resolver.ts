@@ -1,5 +1,6 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import {
+    CreateProductOptionGroupInput,
     DeletionResponse,
     MutationAssignProductOptionGroupsToChannelArgs,
     MutationCreateProductOptionArgs,
@@ -17,14 +18,16 @@ import {
     QueryProductOptionsArgs,
     RemoveProductOptionGroupFromChannelResult,
 } from '@vendure/common/lib/generated-types';
-import { PaginatedList } from '@vendure/common/lib/shared-types';
+import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 
 import { ErrorResultUnion } from '../../../common/error/error-result';
+import { ForbiddenError } from '../../../common/error/errors';
 import { Translated } from '../../../common/types/locale-types';
-import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
 import { ProductOption } from '../../../entity/product-option/product-option.entity';
+import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
 import { ProductOptionGroupService } from '../../../service/services/product-option-group.service';
 import { ProductOptionService } from '../../../service/services/product-option.service';
+import { ProductService } from '../../../service/services/product.service';
 import { RequestContext } from '../../common/request-context';
 import { Allow } from '../../decorators/allow.decorator';
 import { RelationPaths, Relations } from '../../decorators/relations.decorator';
@@ -36,6 +39,7 @@ export class ProductOptionResolver {
     constructor(
         private productOptionGroupService: ProductOptionGroupService,
         private productOptionService: ProductOptionService,
+        private productService: ProductService,
     ) {}
 
     @Query()
@@ -74,6 +78,27 @@ export class ProductOptionResolver {
                 group.options.push(newOption);
             }
         }
+        return group;
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.CreateCatalog, Permission.CreateProduct)
+    async createProductOptionGroupForProduct(
+        @Ctx() ctx: RequestContext,
+        @Args('productId') productId: ID,
+        @Args('expectedUpdatedAt') expectedUpdatedAt: Date,
+        @Args('input') input: CreateProductOptionGroupInput,
+    ): Promise<Translated<ProductOptionGroup>> {
+        if (!ctx.userHasPermissions([Permission.UpdateCatalog, Permission.UpdateProduct])) {
+            throw new ForbiddenError();
+        }
+        const group = await this.productOptionGroupService.create(ctx, input);
+        for (const option of input.options ?? []) {
+            const newOption = await this.productOptionService.create(ctx, group, option);
+            group.options.push(newOption);
+        }
+        await this.productService.addOptionGroupToProduct(ctx, productId, group.id, expectedUpdatedAt);
         return group;
     }
 

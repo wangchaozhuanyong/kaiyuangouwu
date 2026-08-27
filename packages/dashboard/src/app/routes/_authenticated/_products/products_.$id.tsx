@@ -37,11 +37,11 @@ import { ProductCollectionsPanel } from './components/product-collections-panel.
 import { ProductFulfillmentTypePanel } from './components/product-fulfillment-type-panel.js';
 import { ProductOptionGroupBadge } from './components/product-option-group-badge.js';
 import { ProductVariantsTable } from './components/product-variants-table.js';
-import { useRemoveOptionGroup } from './hooks/use-remove-option-group.js';
 import {
     assignProductsToChannelDocument,
     createProductDocument,
     productDetailDocument,
+    removeOptionGroupsFromProductDocument,
     removeProductsFromChannelDocument,
     updateProductDocument,
     withProductVariantCustomFields,
@@ -66,12 +66,14 @@ export const Route = createFileRoute('/_authenticated/_products/products_/$id')(
 
 function NoVariantsPrompt({
     productId,
+    productUpdatedAt,
     productName,
     productTranslations,
     onOptionGroupCreated,
     onVariantCreated,
 }: Readonly<{
     productId: string;
+    productUpdatedAt: string;
     productName: string;
     productTranslations: Array<{ languageCode: string; name: string }>;
     onOptionGroupCreated: () => void;
@@ -109,6 +111,7 @@ function NoVariantsPrompt({
             </button>
             <AddOptionGroupDialog
                 productId={productId}
+                productUpdatedAt={productUpdatedAt}
                 existingGroupIds={[]}
                 onSuccess={onOptionGroupCreated}
                 trigger={
@@ -159,6 +162,7 @@ function ProductDetailPage() {
         setValuesForUpdate: entity => {
             return {
                 id: entity.id,
+                expectedUpdatedAt: entity.updatedAt,
                 enabled: entity.enabled,
                 featuredAssetId: entity.featuredAsset?.id,
                 assetIds: entity.assets.map(asset => asset.id),
@@ -192,27 +196,16 @@ function ProductDetailPage() {
         },
     });
 
-    // The empty-string fallback only ever applies before `entity` has loaded;
-    // `removeAllOptionGroups` is reachable exclusively from the onBack handler below,
-    // which is rendered only once `entity` exists, so the real id is always used.
-    const { removeOptionGroupAsync } = useRemoveOptionGroup(entity?.id ?? '');
-
-    // Batch-removes every option group when the user backs out of variant setup. This is
-    // reached only while the product has zero variants, so ProductOptionInUseError cannot
-    // realistically fire here — the branch is kept as a defensive guard. Note the loop is
-    // not transactional: a mid-list failure leaves earlier groups already removed.
-    const removeAllOptionGroups = async (optionGroups: Array<{ id: string }>) => {
+    const removeAllOptionGroups = async (
+        product: { id: string; updatedAt: string },
+        optionGroups: Array<{ id: string }>,
+    ) => {
         try {
-            for (const group of optionGroups) {
-                const result = await removeOptionGroupAsync(group.id);
-                if (result.__typename === 'ProductOptionInUseError') {
-                    toast.error(t`Could not remove option group`, {
-                        description: result.message,
-                    });
-                    refreshEntity();
-                    return;
-                }
-            }
+            await api.mutate(removeOptionGroupsFromProductDocument, {
+                productId: product.id,
+                optionGroupIds: optionGroups.map(group => group.id),
+                expectedUpdatedAt: product.updatedAt,
+            });
             refreshEntity();
         } catch (error) {
             toast.error(t`Failed to remove option groups`, {
@@ -325,6 +318,7 @@ function ProductDetailPage() {
                         {entity.optionGroups.length === 0 ? (
                             <NoVariantsPrompt
                                 productId={entity.id}
+                                productUpdatedAt={entity.updatedAt}
                                 productName={entity.name}
                                 productTranslations={entity.translations}
                                 onOptionGroupCreated={() => refreshEntity()}
@@ -338,7 +332,7 @@ function ProductDetailPage() {
                                 optionGroups={entity.optionGroups}
                                 onSuccess={() => refreshEntity()}
                                 onBack={{
-                                    handler: () => removeAllOptionGroups(entity.optionGroups),
+                                    handler: () => removeAllOptionGroups(entity, entity.optionGroups),
                                     confirmation: {
                                         title: t`Remove option groups?`,
                                         description: t`This will remove all option groups from this product and return to the variant setup choice.`,
@@ -349,7 +343,12 @@ function ProductDetailPage() {
                     </PageBlock>
                 )}
                 {entity && entity.optionGroups.length > 0 && (
-                    <PageBlock column="side" blockId="option-groups" title={<Trans>Product Options</Trans>}>
+                    <PageBlock
+                        column="side"
+                        blockId="option-groups"
+                        title={<Trans>Product Options</Trans>}
+                        description={<Trans>Size, colour, etc.</Trans>}
+                    >
                         <div className="flex flex-wrap gap-1.5 mb-3">
                             {entity.optionGroups.map(g => (
                                 <ProductOptionGroupBadge
@@ -363,6 +362,7 @@ function ProductDetailPage() {
                         </div>
                         <AddOptionGroupDialog
                             productId={entity.id}
+                            productUpdatedAt={entity.updatedAt}
                             existingGroupIds={entity.optionGroups.map(g => g.id)}
                             onSuccess={() => refreshEntity()}
                         />

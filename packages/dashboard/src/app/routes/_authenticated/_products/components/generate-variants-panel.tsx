@@ -20,6 +20,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { createProductVariantsDocument } from '../products.graphql.js';
+import { getNewVariantInventoryInput } from './product-fulfillment-type.js';
 
 interface OptionGroup {
     id: string;
@@ -214,9 +215,7 @@ export function GenerateVariantsPanel({
                     productId,
                     sku: data.sku,
                     price: Number(data.price),
-                    stockOnHand: formValues.fulfillmentType === 'physical' ? Number(data.stock) : 0,
-                    trackInventory:
-                        formValues.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
+                    ...getNewVariantInventoryInput(Number(data.stock)),
                     customFields: {
                         fulfillmentType: formValues.fulfillmentType,
                         ...(formValues.fulfillmentType === 'digital'
@@ -424,20 +423,16 @@ export function GenerateVariantsPanel({
                             <TableHead>
                                 <Trans>Price</Trans>
                             </TableHead>
-                            {fulfillmentType === 'physical' && (
-                                <TableHead>
-                                    <Trans>Stock on Hand</Trans>
-                                </TableHead>
-                            )}
+                            <TableHead>
+                                <Trans>Stock on Hand</Trans>
+                            </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredVariants.length === 0 && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={
-                                        (showVariantTools ? 4 : 2) + (fulfillmentType === 'physical' ? 1 : 0)
-                                    }
+                                    colSpan={showVariantTools ? 5 : 3}
                                     className="text-center text-muted-foreground py-8"
                                 >
                                     <Trans>No variants match the current filter.</Trans>
@@ -506,28 +501,26 @@ export function GenerateVariantsPanel({
                                     />
                                 </TableCell>
 
-                                {fulfillmentType === 'physical' && (
-                                    <TableCell>
-                                        <Controller
-                                            control={form.control}
-                                            name={`variants.${variant.id}.stock`}
-                                            render={({ field, fieldState }) => (
-                                                <Field data-invalid={fieldState.invalid || undefined}>
-                                                    <Input
-                                                        {...field}
-                                                        type="number"
-                                                        min="0"
-                                                        step="1"
-                                                        data-testid="variant-stock-input"
-                                                    />
-                                                    {fieldState.invalid && (
-                                                        <FieldError errors={[fieldState.error]} />
-                                                    )}
-                                                </Field>
-                                            )}
-                                        />
-                                    </TableCell>
-                                )}
+                                <TableCell>
+                                    <Controller
+                                        control={form.control}
+                                        name={`variants.${variant.id}.stock`}
+                                        render={({ field, fieldState }) => (
+                                            <Field data-invalid={fieldState.invalid || undefined}>
+                                                <Input
+                                                    {...field}
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    data-testid="variant-stock-input"
+                                                />
+                                                {fieldState.invalid && (
+                                                    <FieldError errors={[fieldState.error]} />
+                                                )}
+                                            </Field>
+                                        )}
+                                    />
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

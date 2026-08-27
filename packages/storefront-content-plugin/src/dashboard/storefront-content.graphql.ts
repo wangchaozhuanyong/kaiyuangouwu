@@ -104,6 +104,18 @@ export const storefrontContentBlocksQuery = gql`
     }
 `;
 
+export const storefrontClientPluginCollectionsQuery = gql`
+    query StorefrontClientPluginCollections {
+        collections(options: { take: 200, sort: { name: ASC } }) {
+            items {
+                id
+                name
+                parentId
+            }
+        }
+    }
+`;
+
 export const storefrontContentTargetProductQuery = gql`
     query StorefrontContentTargetProduct($id: ID!) {
         product(id: $id) {
@@ -130,6 +142,16 @@ export const updateStorefrontContentBlockMutation = gql`
     mutation UpdateStorefrontContentBlock($input: UpdateStorefrontContentBlockInput!) {
         updateStorefrontContentBlock(input: $input) {
             id
+        }
+    }
+`;
+
+export const applyStorefrontContentChangesMutation = gql`
+    mutation ApplyStorefrontContentChanges($input: ApplyStorefrontContentChangesInput!) {
+        applyStorefrontContentChanges(input: $input) {
+            id
+            updatedAt
+            position
         }
     }
 `;
@@ -177,6 +199,8 @@ export type ContentBlockType =
     | 'SUPPORT'
     | 'AUTH_LOGIN'
     | 'AUTH_REGISTER'
+    | 'NAVIGATION'
+    | 'CLIENT_PLUGINS'
     | 'CUSTOM';
 
 export type ContentLayoutVariant =
@@ -218,6 +242,7 @@ export interface ContentItem {
 
 export interface ContentBlock {
     id?: string;
+    updatedAt?: string;
     code: string;
     internalName: string;
     type: ContentBlockType;
@@ -250,6 +275,18 @@ export interface StorefrontContentBlocksResult {
     storefrontContentBlocks: ContentBlock[];
 }
 
+export interface StorefrontClientPluginCollection {
+    id: string;
+    name: string;
+    parentId: string;
+}
+
+export interface StorefrontClientPluginCollectionsResult {
+    collections: {
+        items: StorefrontClientPluginCollection[];
+    };
+}
+
 export interface StorefrontContentTargetProductResult {
     product: {
         id: string;
@@ -257,4 +294,29 @@ export interface StorefrontContentTargetProductResult {
         slug: string;
         featuredAsset: { id: string; preview: string } | null;
     } | null;
+}
+
+export function versionedContentBlockUpdate<T extends Record<string, unknown>>(
+    block: Pick<ContentBlock, 'id' | 'updatedAt'>,
+    fields: T,
+): T & { id: string; expectedUpdatedAt: string } {
+    if (!block.id || !block.updatedAt) {
+        throw new Error('缺少内容版本信息，请刷新页面后重试');
+    }
+    return {
+        ...fields,
+        id: block.id,
+        expectedUpdatedAt: block.updatedAt,
+    };
+}
+
+export function contentBlockVersions(
+    blocks: ContentBlock[],
+): Array<{ id: string; expectedUpdatedAt: string }> {
+    return blocks.map(block => {
+        if (!block.id || !block.updatedAt) {
+            throw new Error('缺少内容版本信息，请刷新页面后重试');
+        }
+        return { id: block.id, expectedUpdatedAt: block.updatedAt };
+    });
 }

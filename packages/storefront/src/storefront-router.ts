@@ -1,6 +1,6 @@
 import { FulfillmentType, ProductSearchSort } from './types';
 
-export type MainPage = 'home' | 'category' | 'cart' | 'account';
+export type MainPage = 'home' | 'category' | 'services' | 'cart' | 'account';
 export type RouteName =
     | MainPage
     | 'product'
@@ -24,6 +24,7 @@ export type RouteName =
     | 'recommendations'
     | 'support'
     | 'reviews'
+    | 'image-studio'
     | 'login'
     | 'register'
     | 'verify-account'
@@ -49,7 +50,7 @@ export interface RouteState {
     maxPrice?: string;
 }
 
-export const rootPages: MainPage[] = ['home', 'category', 'cart', 'account'];
+export const rootPages: MainPage[] = ['home', 'category', 'services', 'cart', 'account'];
 export const orderTabs: OrderTab[] = ['all', 'pending', 'shipping', 'receiving', 'service'];
 export const customerResolvedRoutes: RouteName[] = [
     'account',
@@ -66,12 +67,14 @@ export const customerResolvedRoutes: RouteName[] = [
     'account-security',
     'notifications',
     'reviews',
+    'image-studio',
 ];
 export const cartResolvedRoutes: RouteName[] = ['cart', 'purchase', 'checkout', 'payment', 'coupons'];
 
 const routePaths: Record<RouteName, string> = {
     home: '/',
     category: '/category',
+    services: '/services',
     cart: '/cart',
     account: '/account',
     product: '/product',
@@ -95,6 +98,7 @@ const routePaths: Record<RouteName, string> = {
     recommendations: '/recommendations',
     support: '/support',
     reviews: '/reviews',
+    'image-studio': '/image-studio',
     login: '/login',
     register: '/register',
     'verify-account': '/verify-account',

@@ -28,22 +28,27 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { optionGroupListDocument } from '../../_option-groups/option-groups.graphql.js';
-import { addOptionGroupToProductDocument, createProductOptionGroupDocument } from '../products.graphql.js';
+import {
+    addOptionGroupToProductDocument,
+    createProductOptionGroupForProductDocument,
+} from '../products.graphql.js';
 import { createOptionGroupSchema, OptionGroup, SingleOptionGroupEditor } from './option-groups-editor.js';
 
 export function AddOptionGroupDialog({
     productId,
+    productUpdatedAt,
     existingGroupIds,
     onSuccess,
     trigger,
 }: Readonly<{
     productId: string;
+    productUpdatedAt: string;
     existingGroupIds?: string[];
     onSuccess?: () => void;
     trigger?: React.ReactElement;
 }>) {
     const [open, setOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<string>('existing');
+    const [activeTab, setActiveTab] = useState<string>('new');
     const { t } = useLingui();
     const optionGroupSchema = useMemo(() => createOptionGroupSchema(t), [t]);
 
@@ -57,7 +62,7 @@ export function AddOptionGroupDialog({
     });
 
     const createOptionGroupMutation = useMutation({
-        mutationFn: api.mutate(createProductOptionGroupDocument),
+        mutationFn: api.mutate(createProductOptionGroupForProductDocument),
     });
 
     const addOptionGroupToProductMutation = useMutation({
@@ -70,6 +75,7 @@ export function AddOptionGroupDialog({
             await addOptionGroupToProductMutation.mutateAsync({
                 productId,
                 optionGroupId,
+                expectedUpdatedAt: productUpdatedAt,
             });
             toast.success(t`Successfully assigned option group`);
             setOpen(false);
@@ -83,7 +89,9 @@ export function AddOptionGroupDialog({
 
     const handleCreateNew = form.handleSubmit(async formValue => {
         try {
-            const createResult = await createOptionGroupMutation.mutateAsync({
+            await createOptionGroupMutation.mutateAsync({
+                productId,
+                expectedUpdatedAt: productUpdatedAt,
                 input: {
                     code: `option-group-${Date.now().toString(36)}`,
                     translations: [
@@ -104,13 +112,6 @@ export function AddOptionGroupDialog({
                 },
             });
 
-            if (createResult?.createProductOptionGroup) {
-                await addOptionGroupToProductMutation.mutateAsync({
-                    productId,
-                    optionGroupId: createResult.createProductOptionGroup.id,
-                });
-            }
-
             toast.success(t`Successfully created option group`);
             setOpen(false);
             onSuccess?.();
@@ -128,7 +129,7 @@ export function AddOptionGroupDialog({
                 setOpen(isOpen);
                 if (!isOpen) {
                     form.reset();
-                    setActiveTab('existing');
+                    setActiveTab('new');
                 }
             }}
         >
@@ -139,7 +140,7 @@ export function AddOptionGroupDialog({
                     render={<Button variant="outline" size="sm" type="button" className="w-full gap-2" />}
                 >
                     <Plus className="h-4 w-4" />
-                    <Trans>Add option group</Trans>
+                    <Trans>Add Option</Trans>
                 </DialogTrigger>
             )}
             <DialogContent className="sm:max-w-2xl">
@@ -153,22 +154,15 @@ export function AddOptionGroupDialog({
                 </DialogHeader>
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="existing">
-                            <Link className="mr-2 h-4 w-4" />
-                            <Trans>Assign existing</Trans>
-                        </TabsTrigger>
                         <TabsTrigger value="new">
                             <Plus className="mr-2 h-4 w-4" />
                             <Trans>Create new</Trans>
                         </TabsTrigger>
+                        <TabsTrigger value="existing">
+                            <Link className="mr-2 h-4 w-4" />
+                            <Trans>Assign existing</Trans>
+                        </TabsTrigger>
                     </TabsList>
-                    <TabsContent value="existing">
-                        <OptionGroupSearch
-                            existingGroupIds={existingGroupIds}
-                            onSelect={handleAssignExisting}
-                            isPending={addOptionGroupToProductMutation.isPending}
-                        />
-                    </TabsContent>
                     <TabsContent value="new">
                         <div className="space-y-4">
                             <Form {...form}>
@@ -188,6 +182,13 @@ export function AddOptionGroupDialog({
                                 <Trans>Save option group</Trans>
                             </Button>
                         </DialogFooter>
+                    </TabsContent>
+                    <TabsContent value="existing">
+                        <OptionGroupSearch
+                            existingGroupIds={existingGroupIds}
+                            onSelect={handleAssignExisting}
+                            isPending={addOptionGroupToProductMutation.isPending}
+                        />
                     </TabsContent>
                 </Tabs>
             </DialogContent>
@@ -255,7 +256,22 @@ function OptionGroupSearch({
                         >
                             <div>
                                 <div className="font-medium">{group.name}</div>
-                                <div className="text-sm text-muted-foreground">{group.code}</div>
+                                {group.options.length > 0 ? (
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                        {group.options.slice(0, 4).map(option => (
+                                            <Badge key={option.id} variant="outline" className="font-normal">
+                                                {option.name}
+                                            </Badge>
+                                        ))}
+                                        {group.options.length > 4 && (
+                                            <Badge variant="outline" className="font-normal">
+                                                +{group.options.length - 4}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="mt-1 text-sm text-muted-foreground">—</div>
+                                )}
                             </div>
                             {isAlreadyAssigned && (
                                 <Badge variant="secondary" className="ml-2">

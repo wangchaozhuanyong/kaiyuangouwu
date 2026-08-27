@@ -1,115 +1,210 @@
 /* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
 import { Link } from '@tanstack/react-router';
 import clsx from 'clsx';
-import { House, LayoutGrid, ShoppingCart, UserRound } from 'lucide-react';
-import { ReactNode } from 'react';
+import {
+    Bell,
+    BriefcaseBusiness,
+    Headphones,
+    Heart,
+    History,
+    House,
+    LayoutGrid,
+    Megaphone,
+    ReceiptText,
+    Search,
+    ShoppingCart,
+    Star,
+    TicketPercent,
+    UserRound,
+} from 'lucide-react';
+import { ComponentType, CSSProperties } from 'react';
 import { twMerge } from 'tailwind-merge';
-import type { MainPage } from '../../storefront-router';
 
-import { StorefrontLanguage } from '../../types';
+import { rootPages, RouteName } from '../../storefront-router';
+import { StorefrontContentBlock, StorefrontLanguage } from '../../types';
 
 function cn(...classes: Array<string | undefined | null | false>) {
     return twMerge(clsx(classes));
 }
 
+export const navigationTargetRoutes = {
+    '/': 'home',
+    '/category': 'category',
+    '/services': 'services',
+    '/search': 'search',
+    '/cart': 'cart',
+    '/account': 'account',
+    '/orders': 'orders',
+    '/coupons': 'coupons',
+    '/favorites': 'favorites',
+    '/history': 'history',
+    '/notifications': 'notifications',
+    '/announcements': 'announcements',
+    '/support': 'support',
+    '/reviews': 'reviews',
+} as const satisfies Record<string, RouteName>;
+
+export type NavigationTargetPath = keyof typeof navigationTargetRoutes;
+
+export interface BottomNavigationItem {
+    key: string;
+    label: string;
+    target: NavigationTargetPath;
+    routeName: RouteName;
+    iconUrl: string | null;
+    activeColor: string;
+}
+
+const activeColors = ['#EF4444', '#3B82F6', '#F59E0B', '#10B981', '#8B5CF6'] as const;
+
+const targetIcons: Record<
+    NavigationTargetPath,
+    ComponentType<{ className?: string; style?: CSSProperties }>
+> = {
+    '/': House,
+    '/category': LayoutGrid,
+    '/services': BriefcaseBusiness,
+    '/search': Search,
+    '/cart': ShoppingCart,
+    '/account': UserRound,
+    '/orders': ReceiptText,
+    '/coupons': TicketPercent,
+    '/favorites': Heart,
+    '/history': History,
+    '/notifications': Bell,
+    '/announcements': Megaphone,
+    '/support': Headphones,
+    '/reviews': Star,
+};
+
+function isNavigationTargetPath(value: string | null): value is NavigationTargetPath {
+    return value != null && Object.prototype.hasOwnProperty.call(navigationTargetRoutes, value);
+}
+
+function defaultNavigationItems(language: StorefrontLanguage): BottomNavigationItem[] {
+    const isZh = language === 'zh';
+    return [
+        { key: 'default-home', label: isZh ? '首页' : 'Home', target: '/', routeName: 'home' },
+        {
+            key: 'default-category',
+            label: isZh ? '商品' : 'Shop',
+            target: '/category',
+            routeName: 'category',
+        },
+        {
+            key: 'default-services',
+            label: isZh ? '商业服务' : 'Services',
+            target: '/services',
+            routeName: 'services',
+        },
+        { key: 'default-cart', label: isZh ? '购物车' : 'Cart', target: '/cart', routeName: 'cart' },
+        {
+            key: 'default-account',
+            label: isZh ? '我的' : 'Account',
+            target: '/account',
+            routeName: 'account',
+        },
+    ].map((item, index) => ({
+        ...item,
+        iconUrl: null,
+        activeColor: activeColors[index],
+    })) as BottomNavigationItem[];
+}
+
+export function resolveBottomNavigationItems(
+    navigationBlock: StorefrontContentBlock | undefined,
+    language: StorefrontLanguage,
+): BottomNavigationItem[] {
+    const configured = navigationBlock?.items
+        .filter(item => item.enabled && isNavigationTargetPath(item.targetValue) && item.label.trim())
+        .slice(0, 5)
+        .map((item, index) => ({
+            key: item.id || 'configured-' + index,
+            label: item.label.trim(),
+            target: item.targetValue as NavigationTargetPath,
+            routeName: navigationTargetRoutes[item.targetValue as NavigationTargetPath],
+            iconUrl: item.imageUrl,
+            activeColor: activeColors[index],
+        }));
+    return configured?.length ? configured : defaultNavigationItems(language);
+}
+
+export function shouldShowBottomNavigation(
+    activeRoute: RouteName,
+    navigationBlock: StorefrontContentBlock | undefined,
+): boolean {
+    if (rootPages.includes(activeRoute as (typeof rootPages)[number])) return true;
+    if (!navigationBlock) return false;
+    return navigationBlock.items.some(
+        item =>
+            item.enabled &&
+            isNavigationTargetPath(item.targetValue) &&
+            navigationTargetRoutes[item.targetValue] === activeRoute,
+    );
+}
+
+function groupedActiveRoute(route: RouteName): RouteName {
+    if (route === 'product' || route === 'search') return 'category';
+    if (route === 'purchase' || route === 'checkout' || route === 'payment') return 'cart';
+    if (rootPages.includes(route as (typeof rootPages)[number])) return route;
+    return 'account';
+}
+
 export function BottomNavigation({
-    active,
+    activeRoute,
     cartQuantity,
     language,
+    navigationBlock,
 }: {
-    active: MainPage;
+    activeRoute: RouteName;
     cartQuantity: number;
     language: StorefrontLanguage;
+    navigationBlock?: StorefrontContentBlock;
 }) {
     const isZh = language === 'zh';
-    const items: Array<{
-        id: MainPage;
-        label: string;
-        activeColor: string;
-        icon: (isActive: boolean) => ReactNode;
-    }> = [
-        {
-            id: 'home',
-            label: isZh ? '首页' : 'Home',
-            activeColor: '#EF4444', // text-red-500
-            icon: isActive => (
-                <House
-                    className={cn(
-                        'w-6 h-6 transition-transform duration-200',
-                        isActive
-                            ? 'text-red-500 scale-[1.15] drop-shadow-[0_2px_6px_rgba(239,68,68,0.35)]'
-                            : 'text-slate-500',
-                    )}
-                />
-            ),
-        },
-        {
-            id: 'category',
-            label: isZh ? '商品' : 'Shop',
-            activeColor: '#3B82F6', // text-blue-500
-            icon: isActive => (
-                <LayoutGrid
-                    className={cn(
-                        'w-6 h-6 transition-transform duration-200',
-                        isActive
-                            ? 'text-blue-500 scale-[1.15] drop-shadow-[0_2px_6px_rgba(59,130,246,0.35)]'
-                            : 'text-slate-500',
-                    )}
-                />
-            ),
-        },
-        {
-            id: 'cart',
-            label: isZh ? '购物车' : 'Cart',
-            activeColor: '#F59E0B', // text-amber-500
-            icon: isActive => (
-                <ShoppingCart
-                    className={cn(
-                        'w-6 h-6 transition-transform duration-200',
-                        isActive
-                            ? 'text-amber-500 scale-[1.15] drop-shadow-[0_2px_6px_rgba(245,158,11,0.35)]'
-                            : 'text-slate-500',
-                    )}
-                />
-            ),
-        },
-        {
-            id: 'account',
-            label: isZh ? '我的' : 'Account',
-            activeColor: '#10B981', // text-emerald-500
-            icon: isActive => (
-                <UserRound
-                    className={cn(
-                        'w-6 h-6 transition-transform duration-200',
-                        isActive
-                            ? 'text-emerald-500 scale-[1.15] drop-shadow-[0_2px_6px_rgba(16,185,129,0.35)]'
-                            : 'text-slate-500',
-                    )}
-                />
-            ),
-        },
-    ];
+    const items = resolveBottomNavigationItems(navigationBlock, language);
+    const exactActiveItem = items.find(item => item.routeName === activeRoute);
+    const activeItemRoute = exactActiveItem?.routeName ?? groupedActiveRoute(activeRoute);
 
     return (
         <nav
-            className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-4 border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md sm:top-0 sm:bottom-auto sm:h-[72px] sm:max-w-[420px] sm:border-t-0 sm:bg-transparent"
+            className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md sm:top-0 sm:bottom-auto sm:h-[72px] sm:max-w-[420px] sm:border-t-0 sm:bg-transparent sm:shadow-none sm:backdrop-blur-none"
+            style={{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }}
             aria-label={isZh ? '主导航' : 'Main navigation'}
         >
             {items.map(item => {
-                const isActive = active === item.id;
+                const isActive = activeItemRoute === item.routeName;
+                const Icon = targetIcons[item.target];
                 return (
                     <Link
-                        key={item.id}
+                        key={item.key}
                         className={cn(
                             'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-slate-500 transition-transform active:scale-95 sm:gap-[3px] sm:hover:bg-slate-100 sm:hover:text-slate-900',
                             isActive && 'font-bold text-slate-900 sm:hover:bg-transparent',
                         )}
                         aria-current={isActive ? 'page' : undefined}
-                        to={item.id === 'home' ? '/' : `/${item.id}`}
+                        to={item.target}
                     >
                         <span className="relative flex h-[24px] w-[26px] items-center justify-center">
-                            {item.icon(isActive)}
-                            {item.id === 'cart' && cartQuantity > 0 && (
+                            {item.iconUrl ? (
+                                <img
+                                    className={cn(
+                                        'size-6 object-contain transition-transform duration-200',
+                                        isActive && 'scale-[1.15] drop-shadow-sm',
+                                    )}
+                                    src={item.iconUrl}
+                                    alt=""
+                                />
+                            ) : (
+                                <Icon
+                                    className={cn(
+                                        'size-6 transition-transform duration-200',
+                                        isActive && 'scale-[1.15] drop-shadow-sm',
+                                    )}
+                                    style={{ color: isActive ? item.activeColor : '#64748B' }}
+                                />
+                            )}
+                            {item.routeName === 'cart' && cartQuantity > 0 && (
                                 <b className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-white bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
                                     {cartQuantity > 99 ? '99+' : cartQuantity}
                                 </b>

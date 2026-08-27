@@ -7,11 +7,16 @@ import { useWidgetFilters } from '@/vdb/hooks/use-widget-filters.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
+
 import { DashboardBaseWidget } from '../base-widget.js';
-import { MetricsChart } from './chart.js';
+
 import { metricLabelDate } from './metric-date.js';
 import { orderChartDataQuery } from './metrics-widget.graphql.js';
+
+const MetricsChart = lazy(() =>
+    import('./chart.js').then(module => ({ default: module.MetricsChart })),
+);
 
 enum DATA_TYPES {
     OrderCount = 'OrderCount',
@@ -94,7 +99,7 @@ export function MetricsWidget() {
                         size="icon"
                         aria-label={t`Refresh business trends`}
                         title={t`Refresh business trends`}
-                        onClick={() => refetch()}
+                        onClick={() => void refetch()}
                     >
                         <RefreshCw className={isRefetching ? 'animate-rotate' : ''} />
                     </Button>
@@ -115,22 +120,37 @@ export function MetricsWidget() {
                             <Trans>Check the connection and try again</Trans>
                         </p>
                     </div>
-                    <Button variant="outline" onClick={() => refetch()}>
+                    <Button variant="outline" onClick={() => void refetch()}>
                         <Trans>Try again</Trans>
                     </Button>
                 </div>
             ) : hasMetricData && chartData ? (
-                <MetricsChart
-                    formatValue={value => {
-                        if (dataType === DATA_TYPES.OrderCount) {
-                            return value;
-                        }
+                <Suspense
+                    fallback={
+                        <div
+                            className="flex h-full items-center justify-center text-sm text-muted-foreground"
+                            aria-busy="true"
+                        >
+                            <Trans>Loading business trends...</Trans>
+                        </div>
+                    }
+                >
+                    <MetricsChart
+                        formatValue={value => {
+                            if (dataType === DATA_TYPES.OrderCount) {
+                                return value;
+                            }
 
-                        return formatCurrency(value, activeChannel?.defaultCurrencyCode ?? 'USD', 0);
-                    }}
-                    chartData={chartData.values}
-                    dataLabel={dataTypeLabel}
-                />
+                            return formatCurrency(
+                                value,
+                                activeChannel?.defaultCurrencyCode ?? 'USD',
+                                0,
+                            );
+                        }}
+                        chartData={chartData.values}
+                        dataLabel={dataTypeLabel}
+                    />
+                </Suspense>
             ) : (
                 <div className="flex h-full flex-col items-center justify-center text-center">
                     <p className="font-medium">

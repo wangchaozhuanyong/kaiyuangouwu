@@ -1,7 +1,8 @@
 import { AnyRoute, createRoute, createRouter, RouterOptions } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { ErrorPage } from '../../components/shared/error-page.js';
 import { AUTHENTICATED_ROUTE_PREFIX } from '../../constants.js';
+import { usePermissions } from '../../hooks/use-permissions.js';
 import { useDashboardExtensions } from '../extension-api/use-dashboard-extensions.js';
 import { extensionRoutes } from './page-api.js';
 
@@ -70,7 +71,15 @@ export const useExtendedRouter = (
                     getParentRoute: () => authenticatedRoute,
                     loader: config.loader,
                     validateSearch: config.validateSearch,
-                    component: () => config.component(newRoute),
+                    component: () => (
+                        <ExtensionRoutePermissionGuard
+                            requires={
+                                config.requiresPermission ?? config.navMenuItem?.requiresPermission ?? []
+                            }
+                        >
+                            {config.component(newRoute)}
+                        </ExtensionRoutePermissionGuard>
+                    ),
                     errorComponent: ({ error }) => <ErrorPage message={error.message} />,
                 });
                 newAuthenticatedRoutes.push(newRoute);
@@ -130,6 +139,18 @@ export const useExtendedRouter = (
         return createExtendedRouter(routerOptions, extendedRouteTree);
     }, [baseRouteTree, routerOptions, extensionsLoaded]);
 };
+
+function ExtensionRoutePermissionGuard({
+    requires,
+    children,
+}: Readonly<{ requires: string | string[]; children: ReactNode }>) {
+    const { hasPermissions } = usePermissions();
+    const permissions = Array.isArray(requires) ? requires : [requires];
+    if (!hasPermissions(permissions)) {
+        return <ErrorPage message="You do not have permission to access this page." />;
+    }
+    return children;
+}
 
 /**
  * Helper to create a router with extended route tree, handling some

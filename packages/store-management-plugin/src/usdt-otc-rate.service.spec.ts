@@ -12,7 +12,7 @@ describe('USDT OTC merchant quote selection', () => {
         vi.unstubAllGlobals();
     });
 
-    it('uses qualified merchant sell ads and removes price outliers', () => {
+    it('uses qualified merchant USDT acquisition ads and removes price outliers', () => {
         const reliableMerchant = {
             userType: 'merchant',
             monthOrderCount: 100,
@@ -46,11 +46,11 @@ describe('USDT OTC merchant quote selection', () => {
         expect(median([7.3, 7.1, 7.2, 7.4])).toBeCloseTo(7.25);
     });
 
-    it('uses only reliable OKX merchants selling official CNY/USDT offers', () => {
+    it('uses only reliable OKX merchants buying official CNY/USDT offers', () => {
         const reliableMerchant = {
             baseCurrency: 'usdt',
             quoteCurrency: 'cny',
-            side: 'sell',
+            side: 'buy',
             creatorType: 'certified',
             completedOrderQuantity: 100,
             completedRate: '0.99',
@@ -81,6 +81,9 @@ describe('USDT OTC merchant quote selection', () => {
         expect(snapshot.cnyPerUsdtRate).toBeCloseTo(7.2);
         expect(snapshot.sampledAdvertisementCount).toBe(6);
         expect(snapshot.source).toContain('Binance P2P + OKX P2P');
+        expect(snapshot.source).toContain('认证商家收购 USDT');
+        expect(vi.mocked(fetch).mock.calls[0]?.[0]).toEqual(expect.stringContaining('tradeType=SELL'));
+        expect(vi.mocked(fetch).mock.calls[1]?.[0]).toEqual(expect.stringContaining('side=buy'));
     });
 
     it('keeps using one healthy source when the other source is temporarily unavailable', async () => {
@@ -144,10 +147,10 @@ function okxPayload(prices: number[]) {
     return {
         code: 0,
         data: {
-            sell: prices.map(price => ({
+            buy: prices.map(price => ({
                 baseCurrency: 'usdt',
                 quoteCurrency: 'cny',
-                side: 'sell',
+                side: 'buy',
                 price: String(price),
                 creatorType: 'certified',
                 completedOrderQuantity: 100,

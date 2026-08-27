@@ -32,6 +32,7 @@ import {
     SheetTitle,
     Skeleton,
     Switch,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -1133,7 +1134,7 @@ function CouponEditor({
     onSaved: () => Promise<void>;
 }) {
     const [draft, setDraft] = useState<CouponDraft>(() => newCouponDraft());
-    const requestClose = useDraftCloseGuard(open, draft, onClose);
+    const { requestClose, isDirty } = useDraftCloseGuard(open, draft, onClose);
     const [productPickerOpen, setProductPickerOpen] = useState(false);
     const mutation = useMutation({
         mutationFn: (value: CouponDraft) =>
@@ -1164,223 +1165,226 @@ function CouponEditor({
     };
 
     return (
-        <Sheet open={open} onOpenChange={value => !value && requestClose()}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
-                <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
-                    <SheetTitle>新建优惠券</SheetTitle>
-                    <SheetDescription>
-                        设置优惠规则后，客户可在商城客户端领取；系统会自动生成内部识别码。
-                    </SheetDescription>
-                </SheetHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField label="优惠券名称">
-                            <Input
-                                value={draft.name}
-                                onChange={event => update('name', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="优惠券类型">
-                            <Select
-                                value={draft.kind}
-                                onValueChange={value => value && update('kind', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {(Object.keys(couponKindLabels) as StoreCouponKind[]).map(kind => (
-                                        <SelectItem key={kind} value={kind}>
-                                            {couponKindLabels[kind]}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </FormField>
-                        <FormField label="最低消费金额" hint="0 表示无门槛，金额单位为店铺币种。">
-                            <Input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={draft.minimumSpend}
-                                onChange={event => update('minimumSpend', event.target.value)}
-                            />
-                        </FormField>
-                        {draft.kind === 'ORDER_FIXED' ? (
-                            <FormField label="减免金额">
+        <>
+            <UnsavedChangesConfirmation when={isDirty} />
+            <Sheet open={open} onOpenChange={value => !value && requestClose()}>
+                <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
+                    <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
+                        <SheetTitle>新建优惠券</SheetTitle>
+                        <SheetDescription>
+                            设置优惠规则后，客户可在商城客户端领取；系统会自动生成内部识别码。
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <FormField label="优惠券名称">
+                                <Input
+                                    value={draft.name}
+                                    onChange={event => update('name', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="优惠券类型">
+                                <Select
+                                    value={draft.kind}
+                                    onValueChange={value => value && update('kind', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {(Object.keys(couponKindLabels) as StoreCouponKind[]).map(kind => (
+                                            <SelectItem key={kind} value={kind}>
+                                                {couponKindLabels[kind]}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </FormField>
+                            <FormField label="最低消费金额" hint="0 表示无门槛，金额单位为店铺币种。">
                                 <Input
                                     type="number"
-                                    min={0.01}
+                                    min={0}
                                     step="0.01"
-                                    value={draft.discountAmount}
-                                    onChange={event => update('discountAmount', event.target.value)}
+                                    value={draft.minimumSpend}
+                                    onChange={event => update('minimumSpend', event.target.value)}
                                 />
                             </FormField>
-                        ) : (
-                            <FormField label="享受折扣" hint="例如 8.5 表示按 8.5 折结算。">
+                            {draft.kind === 'ORDER_FIXED' ? (
+                                <FormField label="减免金额">
+                                    <Input
+                                        type="number"
+                                        min={0.01}
+                                        step="0.01"
+                                        value={draft.discountAmount}
+                                        onChange={event => update('discountAmount', event.target.value)}
+                                    />
+                                </FormField>
+                            ) : (
+                                <FormField label="享受折扣" hint="例如 8.5 表示按 8.5 折结算。">
+                                    <Input
+                                        type="number"
+                                        min={0.1}
+                                        max={9.9}
+                                        step="0.1"
+                                        value={draft.discountRate}
+                                        onChange={event => update('discountRate', event.target.value)}
+                                    />
+                                </FormField>
+                            )}
+                            {draft.kind === 'COLLECTION_PERCENTAGE' ? (
+                                <FormField label="适用分类" className="sm:col-span-2">
+                                    <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border p-3">
+                                        {collections.map(collection => (
+                                            <Button
+                                                key={collection.id}
+                                                type="button"
+                                                size="sm"
+                                                variant={
+                                                    draft.collectionIds.includes(collection.id)
+                                                        ? 'default'
+                                                        : 'outline'
+                                                }
+                                                onClick={() => toggleCollection(collection.id)}
+                                            >
+                                                {collection.name}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </FormField>
+                            ) : null}
+                            {draft.kind === 'PRODUCT_PERCENTAGE' ? (
+                                <FormField
+                                    label="适用商品"
+                                    className="sm:col-span-2"
+                                    hint="选择器支持按分类筛选。"
+                                >
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setProductPickerOpen(true)}
+                                    >
+                                        <Plus className="size-4" />
+                                        已选择 {draft.productIds.length} 个商品
+                                    </Button>
+                                    <ProductMultiSelectorDialog
+                                        mode="product"
+                                        initialSelectionIds={draft.productIds}
+                                        onSelectionChange={ids => update('productIds', ids)}
+                                        open={productPickerOpen}
+                                        onOpenChange={setProductPickerOpen}
+                                    />
+                                </FormField>
+                            ) : null}
+                            <FormField label="优惠可用开始时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.startsAt}
+                                    onChange={event => update('startsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="优惠可用结束时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.endsAt}
+                                    onChange={event => update('endsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="总使用次数" hint="留空表示不限制。">
                                 <Input
                                     type="number"
-                                    min={0.1}
-                                    max={9.9}
-                                    step="0.1"
-                                    value={draft.discountRate}
-                                    onChange={event => update('discountRate', event.target.value)}
+                                    min={1}
+                                    value={draft.usageLimit}
+                                    onChange={event => update('usageLimit', event.target.value)}
                                 />
                             </FormField>
-                        )}
-                        {draft.kind === 'COLLECTION_PERCENTAGE' ? (
-                            <FormField label="适用分类" className="sm:col-span-2">
-                                <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border p-3">
-                                    {collections.map(collection => (
-                                        <Button
-                                            key={collection.id}
-                                            type="button"
-                                            size="sm"
-                                            variant={
-                                                draft.collectionIds.includes(collection.id)
-                                                    ? 'default'
-                                                    : 'outline'
-                                            }
-                                            onClick={() => toggleCollection(collection.id)}
-                                        >
-                                            {collection.name}
-                                        </Button>
-                                    ))}
+                            <FormField label="每位客户可用次数" hint="留空表示不限制。">
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={draft.perCustomerUsageLimit}
+                                    onChange={event => update('perCustomerUsageLimit', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="领取开始时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.claimStartsAt}
+                                    onChange={event => update('claimStartsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="领取结束时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.claimEndsAt}
+                                    onChange={event => update('claimEndsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="领取后有效天数" hint="留空则有效至活动结束。">
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={draft.validityDays}
+                                    onChange={event => update('validityDays', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="发放总量" hint="留空表示不限制领取数量。">
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={draft.issueLimit}
+                                    onChange={event => update('issueLimit', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="每位客户领取限制">
+                                <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm">
+                                    每个活动限领 1 张
                                 </div>
                             </FormField>
-                        ) : null}
-                        {draft.kind === 'PRODUCT_PERCENTAGE' ? (
-                            <FormField
-                                label="适用商品"
-                                className="sm:col-span-2"
-                                hint="选择器支持按分类筛选。"
-                            >
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setProductPickerOpen(true)}
+                            <FormField label="叠加规则">
+                                <Select
+                                    value={draft.stackPolicy}
+                                    onValueChange={value => value && update('stackPolicy', value)}
                                 >
-                                    <Plus className="size-4" />
-                                    已选择 {draft.productIds.length} 个商品
-                                </Button>
-                                <ProductMultiSelectorDialog
-                                    mode="product"
-                                    initialSelectionIds={draft.productIds}
-                                    onSelectionChange={ids => update('productIds', ids)}
-                                    open={productPickerOpen}
-                                    onOpenChange={setProductPickerOpen}
-                                />
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="EXCLUSIVE">不可与其他优惠券叠加</SelectItem>
+                                        <SelectItem value="STACKABLE">允许叠加</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </FormField>
-                        ) : null}
-                        <FormField label="优惠可用开始时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.startsAt}
-                                onChange={event => update('startsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="优惠可用结束时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.endsAt}
-                                onChange={event => update('endsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="总使用次数" hint="留空表示不限制。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.usageLimit}
-                                onChange={event => update('usageLimit', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="每位客户可用次数" hint="留空表示不限制。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.perCustomerUsageLimit}
-                                onChange={event => update('perCustomerUsageLimit', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="领取开始时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.claimStartsAt}
-                                onChange={event => update('claimStartsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="领取结束时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.claimEndsAt}
-                                onChange={event => update('claimEndsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="领取后有效天数" hint="留空则有效至活动结束。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.validityDays}
-                                onChange={event => update('validityDays', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="发放总量" hint="留空表示不限制领取数量。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.issueLimit}
-                                onChange={event => update('issueLimit', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="每位客户领取限制">
-                            <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm">
-                                每个活动限领 1 张
-                            </div>
-                        </FormField>
-                        <FormField label="叠加规则">
-                            <Select
-                                value={draft.stackPolicy}
-                                onValueChange={value => value && update('stackPolicy', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="EXCLUSIVE">不可与其他优惠券叠加</SelectItem>
-                                    <SelectItem value="STACKABLE">允许叠加</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </FormField>
-                        <FormField label="取消订单返券">
-                            <div className="flex h-9 items-center justify-between rounded-md border px-3">
-                                <span className="text-sm">订单取消后恢复可用</span>
-                                <Switch
-                                    checked={draft.returnOnCancellation}
-                                    onCheckedChange={value => update('returnOnCancellation', value)}
-                                />
-                            </div>
-                        </FormField>
-                        <FormField label="全额退款返券">
-                            <div className="flex h-9 items-center justify-between rounded-md border px-3">
-                                <span className="text-sm">退款结算后恢复可用</span>
-                                <Switch
-                                    checked={draft.returnOnFullRefund}
-                                    onCheckedChange={value => update('returnOnFullRefund', value)}
-                                />
-                            </div>
-                        </FormField>
+                            <FormField label="取消订单返券">
+                                <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                                    <span className="text-sm">订单取消后恢复可用</span>
+                                    <Switch
+                                        checked={draft.returnOnCancellation}
+                                        onCheckedChange={value => update('returnOnCancellation', value)}
+                                    />
+                                </div>
+                            </FormField>
+                            <FormField label="全额退款返券">
+                                <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                                    <span className="text-sm">退款结算后恢复可用</span>
+                                    <Switch
+                                        checked={draft.returnOnFullRefund}
+                                        onCheckedChange={value => update('returnOnFullRefund', value)}
+                                    />
+                                </div>
+                            </FormField>
+                        </div>
                     </div>
-                </div>
-                <SheetFooter className="shrink-0 border-t px-6 py-4">
-                    <Button variant="outline" onClick={requestClose}>
-                        取消
-                    </Button>
-                    <Button disabled={mutation.isPending} onClick={submit}>
-                        {mutation.isPending ? '正在创建' : '创建优惠券'}
-                    </Button>
-                </SheetFooter>
-            </SheetContent>
-        </Sheet>
+                    <SheetFooter className="shrink-0 border-t px-6 py-4">
+                        <Button variant="outline" onClick={requestClose}>
+                            取消
+                        </Button>
+                        <Button disabled={mutation.isPending} onClick={submit}>
+                            {mutation.isPending ? '正在创建' : '创建优惠券'}
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        </>
     );
 }
 
@@ -1393,11 +1397,12 @@ function FlashSaleEditor({
     onClose: () => void;
     onSaved: () => Promise<void>;
 }) {
+    const { activeChannel } = useChannel();
     const [draft, setDraft] = useState<FlashSaleDraft>(() => newFlashSaleDraft());
-    const requestClose = useDraftCloseGuard(open, draft, onClose);
+    const { requestClose, isDirty } = useDraftCloseGuard(open, draft, onClose);
     const [productPickerOpen, setProductPickerOpen] = useState(false);
     const productQuery = useQuery({
-        queryKey: ['store-promotion-products', draft.productIds],
+        queryKey: ['store-promotion-products', activeChannel?.id, draft.productIds],
         queryFn: () =>
             api.query<StorePromotionProductsResult>(storePromotionProductsQuery, {
                 ids: draft.productIds,
@@ -1428,133 +1433,143 @@ function FlashSaleEditor({
     };
 
     return (
-        <Sheet open={open} onOpenChange={value => !value && requestClose()}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[82vw] sm:max-w-[1200px]">
-                <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
-                    <SheetTitle>新建限时秒杀</SheetTitle>
-                    <SheetDescription>
-                        先批量设置降价百分比，需要时再给某个规格填写单独秒杀价。
-                    </SheetDescription>
-                </SheetHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField label="活动名称" className="sm:col-span-2">
-                            <Input
-                                value={draft.name}
-                                onChange={event => update('name', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField
-                            label="秒杀商品"
-                            className="sm:col-span-2"
-                            hint="选择器支持先按分类筛选商品。"
-                        >
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setProductPickerOpen(true)}
+        <>
+            <UnsavedChangesConfirmation when={isDirty} />
+            <Sheet open={open} onOpenChange={value => !value && requestClose()}>
+                <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[82vw] sm:max-w-[1200px]">
+                    <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
+                        <SheetTitle>新建限时秒杀</SheetTitle>
+                        <SheetDescription>
+                            先批量设置降价百分比，需要时再给某个规格填写单独秒杀价。
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <FormField
+                                label="活动名称"
+                                className="sm:col-span-2"
+                                hint="仅供管理后台识别，不会展示在客户端。"
                             >
-                                <Plus className="size-4" />
-                                已选择 {draft.productIds.length} 个商品
-                            </Button>
-                            <ProductMultiSelectorDialog
-                                mode="product"
-                                initialSelectionIds={draft.productIds}
-                                onSelectionChange={ids => update('productIds', ids)}
-                                open={productPickerOpen}
-                                onOpenChange={setProductPickerOpen}
-                            />
-                        </FormField>
-                        <FormField label="批量降价百分比" hint="例如 20 表示统一降价 20%。">
-                            <Input
-                                type="number"
-                                min={0}
-                                max={99}
-                                step="1"
-                                value={draft.percentageOff}
-                                onChange={event => update('percentageOff', event.target.value)}
-                            />
-                        </FormField>
-                        <div />
-                        <FormField label="开始时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.startsAt}
-                                onChange={event => update('startsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="结束时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.endsAt}
-                                onChange={event => update('endsAt', event.target.value)}
-                            />
-                        </FormField>
-                    </div>
-                    {products.length ? (
-                        <div className="space-y-3 border-t pt-4">
-                            <h3 className="text-sm font-medium">单独规格秒杀价（可选）</h3>
-                            {products.flatMap(product =>
-                                product.variants.map(variant => (
-                                    <div
-                                        key={variant.id}
-                                        className="grid items-center gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_140px]"
-                                    >
-                                        <div className="min-w-0">
-                                            <strong className="block truncate text-sm">{product.name}</strong>
-                                            <span className="text-xs text-muted-foreground">
-                                                {variant.name} · 原价{' '}
-                                                {formatMoney(variant.priceWithTax, variant.currencyCode)}
-                                            </span>
-                                        </div>
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            step="0.01"
-                                            placeholder="单独秒杀价"
-                                            value={draft.variantPrices[variant.id] ?? ''}
-                                            onChange={event =>
-                                                update('variantPrices', {
-                                                    ...draft.variantPrices,
-                                                    [variant.id]: event.target.value,
-                                                })
-                                            }
-                                        />
-                                    </div>
-                                )),
-                            )}
+                                <Input
+                                    value={draft.name}
+                                    onChange={event => update('name', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField
+                                label="秒杀商品"
+                                className="sm:col-span-2"
+                                hint="选择器支持先按分类筛选商品。"
+                            >
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setProductPickerOpen(true)}
+                                >
+                                    <Plus className="size-4" />
+                                    已选择 {draft.productIds.length} 个商品
+                                </Button>
+                                <ProductMultiSelectorDialog
+                                    mode="product"
+                                    initialSelectionIds={draft.productIds}
+                                    onSelectionChange={ids => update('productIds', ids)}
+                                    open={productPickerOpen}
+                                    onOpenChange={setProductPickerOpen}
+                                />
+                            </FormField>
+                            <FormField label="批量降价百分比" hint="例如 20 表示统一降价 20%。">
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={99}
+                                    step="1"
+                                    value={draft.percentageOff}
+                                    onChange={event => update('percentageOff', event.target.value)}
+                                />
+                            </FormField>
+                            <div />
+                            <FormField label="开始时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.startsAt}
+                                    onChange={event => update('startsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="结束时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.endsAt}
+                                    onChange={event => update('endsAt', event.target.value)}
+                                />
+                            </FormField>
                         </div>
-                    ) : null}
-                </div>
-                <SheetFooter className="shrink-0 border-t px-6 py-4">
-                    <Button variant="outline" onClick={requestClose}>
-                        取消
-                    </Button>
-                    <Button disabled={mutation.isPending} onClick={submit}>
-                        {mutation.isPending ? '正在创建' : '创建秒杀'}
-                    </Button>
-                </SheetFooter>
-            </SheetContent>
-        </Sheet>
+                        {products.length ? (
+                            <div className="space-y-3 border-t pt-4">
+                                <h3 className="text-sm font-medium">单独规格秒杀价（可选）</h3>
+                                {products.flatMap(product =>
+                                    product.variants.map(variant => (
+                                        <div
+                                            key={variant.id}
+                                            className="grid items-center gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_140px]"
+                                        >
+                                            <div className="min-w-0">
+                                                <strong className="block truncate text-sm">
+                                                    {product.name}
+                                                </strong>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {variant.name} · 原价{' '}
+                                                    {formatMoney(variant.priceWithTax, variant.currencyCode)}
+                                                </span>
+                                            </div>
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                placeholder="单独秒杀价"
+                                                value={draft.variantPrices[variant.id] ?? ''}
+                                                onChange={event =>
+                                                    update('variantPrices', {
+                                                        ...draft.variantPrices,
+                                                        [variant.id]: event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    )),
+                                )}
+                            </div>
+                        ) : null}
+                    </div>
+                    <SheetFooter className="shrink-0 border-t px-6 py-4">
+                        <Button variant="outline" onClick={requestClose}>
+                            取消
+                        </Button>
+                        <Button disabled={mutation.isPending} onClick={submit}>
+                            {mutation.isPending ? '正在创建' : '创建秒杀'}
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        </>
     );
 }
 
 function useDraftCloseGuard<T>(open: boolean, draft: T, onClose: () => void) {
-    const initialDraftRef = useRef('');
-    const wasOpenRef = useRef(false);
+    const [initialDraft, setInitialDraft] = useState<string | null>(null);
+    const wasOpen = useRef(false);
 
     useEffect(() => {
-        if (open && !wasOpenRef.current) {
-            initialDraftRef.current = JSON.stringify(draft);
-        }
-        wasOpenRef.current = open;
+        if (open && !wasOpen.current) setInitialDraft(JSON.stringify(draft));
+        if (!open) setInitialDraft(null);
+        wasOpen.current = open;
     }, [draft, open]);
 
-    return () => {
-        const isDirty = initialDraftRef.current !== JSON.stringify(draft);
+    const isDirty = Boolean(open && initialDraft !== null && initialDraft !== JSON.stringify(draft));
+    const requestClose = () => {
         if (isDirty && !window.confirm('有未保存的修改，确定放弃吗？')) return;
         onClose();
     };
+
+    return { isDirty, requestClose };
 }
 
 function CampaignState({

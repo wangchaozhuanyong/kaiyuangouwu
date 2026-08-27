@@ -1,0 +1,10 @@
+{
+    "code": "portrait",
+    "required": ["subject"],
+    "defaults": {
+        "composition": "natural portrait framing and anatomically plausible pose",
+        "lighting": "soft flattering portrait light",
+        "style": "tasteful adult commercial portrait"
+    },
+    "avoid": ["age ambiguity", "sexualized pose", "identity drift", "over-smoothed skin"]
+}
