@@ -3,10 +3,17 @@ import {
     AfterSalesRequest,
     CollectionSummary,
     CreateAfterSalesRequestInput,
+    CreateImageGenerationInput,
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
     CustomerOrderCounts,
+    ImageGenerationJob,
+    ImageModelRecommendation,
+    ImagePrivateAssetView,
+    ImagePromptOptimizationResult,
+    ImageReferenceMode,
+    ImageStudioConfig,
     MarketConfig,
     MyReferralOverview,
     Order,
@@ -201,6 +208,32 @@ const referralWalletFields = `
     availableBalance
     pendingBalance
     reservedBalance
+`;
+
+const imageGenerationJobFields = `
+    id
+    createdAt
+    updatedAt
+    state
+    modelCodeSnapshot
+    modelNameSnapshot
+    officialModelIdSnapshot
+    originalPrompt
+    finalPrompt
+    promptSkillHash
+    referenceMode
+    aspectRatio
+    quantity
+    unitPriceSnapshot
+    reservedAmount
+    capturedAmount
+    releasedAmount
+    currencyCode
+    termsVersion
+    errorMessage
+    completedAt
+    referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
+    outputs { id outputIndex state attemptCount errorMessage completedAt refundedAt imageUrl downloadUrl }
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order
@@ -1279,6 +1312,145 @@ export class ShopApi {
             { amount },
         );
         return result.useMyReferralBalance;
+    }
+
+    async imageStudioConfig(signal?: AbortSignal): Promise<ImageStudioConfig> {
+        const result = await this.request<{ imageStudioConfig: ImageStudioConfig }>(
+            `
+                query ImageStudioConfig {
+                    imageStudioConfig {
+                        enabled promptOptimizationEnabled defaultModelCode termsVersion termsZh termsEn
+                        outputRetentionDays referenceRetentionHours maxReferenceBytes maxReferencePixels maxQuantity resolution
+                        models { id code displayNameZh displayNameEn descriptionZh descriptionEn officialModelId unitPrice currencyCode position isDefault healthStatus }
+                    }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.imageStudioConfig;
+    }
+
+    async imageStudioBalance(signal?: AbortSignal): Promise<number> {
+        const result = await this.request<{ imageStudioBalance: number }>(
+            `query ImageStudioBalance { imageStudioBalance }`,
+            undefined,
+            signal,
+        );
+        return result.imageStudioBalance;
+    }
+
+    async optimizeImagePrompt(
+        prompt: string,
+        referenceMode: ImageReferenceMode,
+    ): Promise<ImagePromptOptimizationResult> {
+        const result = await this.request<{ optimizeImagePrompt: ImagePromptOptimizationResult }>(
+            `
+                mutation OptimizeImagePrompt($input: OptimizeImagePromptInput!) {
+                    optimizeImagePrompt(input: $input) {
+                        originalPrompt optimizedPrompt promptSpec source recommendedModelCode recommendationReason promptSkillHash
+                    }
+                }
+            `,
+            { input: { prompt, referenceMode } },
+        );
+        return result.optimizeImagePrompt;
+    }
+
+    async recommendImageModel(
+        prompt: string,
+        referenceMode: ImageReferenceMode,
+    ): Promise<ImageModelRecommendation> {
+        const result = await this.request<{ recommendImageModel: ImageModelRecommendation }>(
+            `
+                query RecommendImageModel($input: OptimizeImagePromptInput!) {
+                    recommendImageModel(input: $input) {
+                        modelCode modelName officialModelId unitPrice currencyCode reason promptSkillHash
+                    }
+                }
+            `,
+            { input: { prompt, referenceMode } },
+        );
+        return result.recommendImageModel;
+    }
+
+    async uploadImageReference(file: File, termsAccepted: boolean): Promise<ImagePrivateAssetView> {
+        const operations = {
+            query: `mutation UploadImageReference($file: Upload!, $termsAccepted: Boolean!) {
+                uploadImageReference(file: $file, termsAccepted: $termsAccepted) {
+                    id originalName mimeType byteSize width height expiresAt previewUrl
+                }
+            }`,
+            variables: { file: null, termsAccepted },
+        };
+        const form = new FormData();
+        form.set('operations', JSON.stringify(operations));
+        form.set('map', JSON.stringify({ 0: ['variables.file'] }));
+        form.set('0', file, file.name);
+        const headers: Record<string, string> = { 'language-code': this.languageCode };
+        if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
+        if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
+        const separator = API_URL.includes('?') ? '&' : '?';
+        const response = await fetch(
+            `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
+            { method: 'POST', credentials: 'include', headers, body: form },
+        );
+        this.captureAuthToken(response);
+        const body = (await response.json()) as GraphQlResponse<{
+            uploadImageReference: ImagePrivateAssetView;
+        }>;
+        if (!response.ok || body.errors?.length || !body.data) {
+            throw new Error(body.errors?.[0]?.message ?? `Reference upload failed (${response.status})`);
+        }
+        return body.data.uploadImageReference;
+    }
+
+    async createImageGeneration(input: CreateImageGenerationInput): Promise<ImageGenerationJob> {
+        const result = await this.request<{ createImageGeneration: ImageGenerationJob }>(
+            `mutation CreateImageGeneration($input: CreateImageGenerationInput!) {
+                createImageGeneration(input: $input) { ${imageGenerationJobFields} }
+            }`,
+            { input },
+        );
+        return result.createImageGeneration;
+    }
+
+    async myImageGenerationJob(id: string, signal?: AbortSignal): Promise<ImageGenerationJob> {
+        const result = await this.request<{ myImageGenerationJob: ImageGenerationJob }>(
+            `query MyImageGenerationJob($id: ID!) { myImageGenerationJob(id: $id) { ${imageGenerationJobFields} } }`,
+            { id },
+            signal,
+        );
+        return result.myImageGenerationJob;
+    }
+
+    async myImageGenerationJobs(skip = 0, take = 20, signal?: AbortSignal) {
+        const result = await this.request<{
+            myImageGenerationJobs: { items: ImageGenerationJob[]; totalItems: number };
+        }>(
+            `query MyImageGenerationJobs($skip: Int, $take: Int) {
+                myImageGenerationJobs(skip: $skip, take: $take) { totalItems items { ${imageGenerationJobFields} } }
+            }`,
+            { skip, take },
+            signal,
+        );
+        return result.myImageGenerationJobs;
+    }
+
+    async cancelQueuedImageGeneration(id: string): Promise<ImageGenerationJob> {
+        const result = await this.request<{ cancelQueuedImageGeneration: ImageGenerationJob }>(
+            `mutation CancelImageGeneration($id: ID!) { cancelQueuedImageGeneration(id: $id) { ${imageGenerationJobFields} } }`,
+            { id },
+        );
+        return result.cancelQueuedImageGeneration;
+    }
+
+    async deleteMyGeneratedImage(outputId: string): Promise<boolean> {
+        const result = await this.request<{ deleteMyGeneratedImage: boolean }>(
+            `mutation DeleteMyGeneratedImage($outputId: ID!) { deleteMyGeneratedImage(outputId: $outputId) }`,
+            { outputId },
+        );
+        return result.deleteMyGeneratedImage;
     }
 
     async recordStorefrontVisit(visitorId?: string | null): Promise<boolean> {

@@ -1,4 +1,4 @@
-import { LanguageCode } from '@vendure/common/lib/generated-types';
+import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import {
     ContentTranslationPlugin,
     type ContentTranslationProvider,
@@ -31,10 +31,11 @@ process.env.IMAGE_GENERATION_MASTER_KEY = 'image-generation-e2e-master-key-over-
 const translationProvider: ContentTranslationProvider = {
     name: 'image-generation-e2e-translation',
     isConfigured: () => true,
-    translate: request => ({
-        provider: 'image-generation-e2e-translation',
-        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-    }),
+    translate: request =>
+        Promise.resolve({
+            provider: 'image-generation-e2e-translation',
+            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+        }),
 };
 
 const config = mergeConfig(testConfig(), {
@@ -483,7 +484,7 @@ describe('AI image generation full flow', () => {
             .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });
         const wallet = await connection.rawConnection
             .getRepository(ReferralWallet)
-            .findOneByOrFail({ customerId: customer.id, currencyCode: 'USD' });
+            .findOneByOrFail({ customerId: customer.id, currencyCode: CurrencyCode.USD });
         expect(wallet).toMatchObject({ availableBalance: 400, reservedBalance: 0 });
         const usages = await connection.rawConnection.getRepository(ReferralWalletUsage).find({
             where: { customerId: customer.id, resourceType: 'IMAGE_GENERATION_JOB' },

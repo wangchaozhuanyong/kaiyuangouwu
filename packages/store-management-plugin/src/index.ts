@@ -4,6 +4,7 @@ export { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity.js'
 export { ReferralProgramConfig } from './entities/referral-program-config.entity.js';
 export { ReferralRelationship } from './entities/referral-relationship.entity.js';
 export { ReferralReward } from './entities/referral-reward.entity.js';
+export { ReferralWalletUsage } from './entities/referral-wallet-usage.entity.js';
 export { ReferralWallet } from './entities/referral-wallet.entity.js';
 export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
@@ -25,6 +26,11 @@ export type {
     ValidateAccountEntryProofInput,
 } from './promotion/account-entry-proof.js';
 export { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service.js';
+export {
+    ReferralWalletSpendService,
+    type ReserveReferralWalletInput,
+    type SettleReferralWalletInput,
+} from './referral/referral-wallet-spend.service.js';
 export {
     adjustReferralBalancePermission,
     manageReferralWithdrawalPermission,

@@ -104,6 +104,18 @@ export const storefrontContentBlocksQuery = gql`
     }
 `;
 
+export const storefrontClientPluginCollectionsQuery = gql`
+    query StorefrontClientPluginCollections {
+        collections(options: { take: 200, sort: { name: ASC } }) {
+            items {
+                id
+                name
+                parentId
+            }
+        }
+    }
+`;
+
 export const storefrontContentTargetProductQuery = gql`
     query StorefrontContentTargetProduct($id: ID!) {
         product(id: $id) {
@@ -177,6 +189,8 @@ export type ContentBlockType =
     | 'SUPPORT'
     | 'AUTH_LOGIN'
     | 'AUTH_REGISTER'
+    | 'NAVIGATION'
+    | 'CLIENT_PLUGINS'
     | 'CUSTOM';
 
 export type ContentLayoutVariant =
@@ -248,6 +262,18 @@ export interface StorefrontContentBlocksResult {
         configuredBlockTypes: ContentBlockType[];
     };
     storefrontContentBlocks: ContentBlock[];
+}
+
+export interface StorefrontClientPluginCollection {
+    id: string;
+    name: string;
+    parentId: string;
+}
+
+export interface StorefrontClientPluginCollectionsResult {
+    collections: {
+        items: StorefrontClientPluginCollection[];
+    };
 }
 
 export interface StorefrontContentTargetProductResult {

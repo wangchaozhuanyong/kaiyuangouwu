@@ -578,6 +578,8 @@ export type StorefrontContentBlockType =
     | 'SUPPORT'
     | 'AUTH_LOGIN'
     | 'AUTH_REGISTER'
+    | 'NAVIGATION'
+    | 'CLIENT_PLUGINS'
     | 'CUSTOM';
 
 export type StorefrontContentLayoutVariant =
@@ -722,4 +724,123 @@ export interface StorefrontContentResponse {
     coupons: StorefrontCouponCampaign[];
     flashSales: StorefrontFlashSale[];
     systemAnnouncements: StorefrontSystemAnnouncement[];
+}
+
+export type ImageReferenceMode = 'NONE' | 'STYLE' | 'COMPOSITION' | 'IDENTITY' | 'PRODUCT' | 'EDIT';
+export type ImageGenerationState =
+    'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
+export type ImageOutputState = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
+
+export interface ImageStudioModel {
+    id: string;
+    code: string;
+    displayNameZh: string;
+    displayNameEn: string;
+    descriptionZh: string;
+    descriptionEn: string;
+    officialModelId: string;
+    unitPrice: number;
+    currencyCode: string;
+    position: number;
+    isDefault: boolean;
+    healthStatus: string;
+}
+
+export interface ImageStudioConfig {
+    enabled: boolean;
+    promptOptimizationEnabled: boolean;
+    defaultModelCode: string;
+    termsVersion: string;
+    termsZh: string;
+    termsEn: string;
+    outputRetentionDays: number;
+    referenceRetentionHours: number;
+    maxReferenceBytes: number;
+    maxReferencePixels: number;
+    maxQuantity: number;
+    resolution: string;
+    models: ImageStudioModel[];
+}
+
+export interface ImagePrivateAssetView {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    byteSize: number;
+    width: number;
+    height: number;
+    expiresAt: string;
+    previewUrl?: string | null;
+}
+
+export interface ImageGenerationOutput {
+    id: string;
+    outputIndex: number;
+    state: ImageOutputState;
+    attemptCount: number;
+    errorMessage?: string | null;
+    completedAt?: string | null;
+    refundedAt?: string | null;
+    imageUrl?: string | null;
+    downloadUrl?: string | null;
+}
+
+export interface ImageGenerationJob {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    state: ImageGenerationState;
+    modelCodeSnapshot: string;
+    modelNameSnapshot: string;
+    officialModelIdSnapshot: string;
+    originalPrompt: string;
+    finalPrompt: string;
+    promptSkillHash: string;
+    referenceMode: ImageReferenceMode;
+    referenceAsset?: ImagePrivateAssetView | null;
+    aspectRatio: string;
+    quantity: number;
+    unitPriceSnapshot: number;
+    reservedAmount: number;
+    capturedAmount: number;
+    releasedAmount: number;
+    currencyCode: string;
+    termsVersion: string;
+    errorMessage?: string | null;
+    completedAt?: string | null;
+    outputs: ImageGenerationOutput[];
+}
+
+export interface ImagePromptOptimizationResult {
+    originalPrompt: string;
+    optimizedPrompt: string;
+    promptSpec: Record<string, unknown>;
+    source: 'MODEL' | 'FALLBACK';
+    recommendedModelCode: string;
+    recommendationReason: string;
+    promptSkillHash: string;
+}
+
+export interface ImageModelRecommendation {
+    modelCode: string;
+    modelName: string;
+    officialModelId: string;
+    unitPrice: number;
+    currencyCode: string;
+    reason: string;
+    promptSkillHash: string;
+}
+
+export interface CreateImageGenerationInput {
+    modelCode: string;
+    prompt: string;
+    optimizedPrompt?: string | null;
+    referenceAssetId?: string | null;
+    referenceMode?: ImageReferenceMode | null;
+    aspectRatio: string;
+    quantity: number;
+    expectedUnitPrice: number;
+    currencyCode: string;
+    idempotencyKey: string;
+    termsAccepted: boolean;
 }

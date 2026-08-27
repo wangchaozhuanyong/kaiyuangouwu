@@ -97,6 +97,9 @@ jobs:
                   VENDURE_ASSET_UPLOAD_DIR: /tmp/vendure-build-assets
                   DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
                   DIGITAL_DELIVERY_SIGNING_SECRET: build-check-digital-secret-000000000000000000000000
+                  IMAGE_GENERATION_STORAGE_ROOT: /tmp/vendure-build-images
+                  IMAGE_GENERATION_DOWNLOAD_SECRET: build-check-image-download-key-000000000000000000000000
+                  IMAGE_GENERATION_MASTER_KEY: build-check-image-master-key-000000000000000000000000
                   STORE_DOMAIN_CNAME_TARGET: stores.build.test
                   STORE_DOMAIN_ROUTING_MODE: require-domain
                   STORE_DOMAIN_BYPASS_HOSTS: ''

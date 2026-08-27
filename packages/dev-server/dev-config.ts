@@ -46,6 +46,7 @@ import {
     FileBasedTemplateLoader,
 } from '@vendure/email-plugin';
 import { HardenPlugin } from '@vendure/harden-plugin';
+import { ImageGenerationPlugin } from '@vendure/image-generation-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
 import {
@@ -899,6 +900,11 @@ export const devConfig: VendureConfig = {
                       trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
                       bypassHosts: storeDomainBypassHosts(),
                   }),
+                  ImageGenerationPlugin.init({
+                      storageRoot: process.env.IMAGE_GENERATION_STORAGE_ROOT,
+                      downloadSigningSecret: process.env.IMAGE_GENERATION_DOWNLOAD_SECRET,
+                      production: IS_PRODUCTION,
+                  }),
                   StorefrontCatalogPlugin,
                   StorefrontCartPlugin,
                   StorefrontContentPlugin,
@@ -944,7 +950,13 @@ export const devConfig: VendureConfig = {
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
         // Enable if you need to debug the job queue
         // BullMQJobQueuePlugin.init({}),
-        DefaultJobQueuePlugin.init({}),
+        DefaultJobQueuePlugin.init({
+            concurrency: queueName => (queueName === 'image-generation-output' ? 2 : 1),
+            backoffStrategy: (queueName, attempts) =>
+                queueName === 'image-generation-output'
+                    ? Math.min(30_000, 1_000 * 2 ** Math.max(0, attempts - 1))
+                    : 1_000,
+        }),
         // JobQueueTestPlugin.init({ queueCount: 10 }),
         DefaultSchedulerPlugin.init({}),
         EmailPlugin.init(emailPluginOptions()),

@@ -18,7 +18,6 @@ import {
     SelectValue,
     Skeleton,
     Switch,
-    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -68,8 +67,8 @@ import {
     storefrontClientPluginCollectionsQuery,
     storefrontContentBlocksQuery,
     updateStorefrontContentBlockMutation,
-    versionedContentBlockUpdate,
 } from './storefront-content.graphql';
+import { UnsavedChangesConfirmation } from './unsaved-changes-confirmation';
 
 export const storefrontClientPluginRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -119,7 +118,7 @@ function StorefrontClientPluginPage() {
             const input = clientPluginBlockInput(block);
             return block.id
                 ? api.mutate(updateStorefrontContentBlockMutation, {
-                      input: versionedContentBlockUpdate(block, input),
+                      input: { id: block.id, ...input },
                   })
                 : api.mutate(createStorefrontContentBlockMutation, { input });
         },

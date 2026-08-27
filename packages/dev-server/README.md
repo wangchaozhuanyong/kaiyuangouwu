@@ -170,6 +170,13 @@ Specify the database as above to populate that database:
 [DB=mysql|postgres|sqlite] bun run populate
 ```
 
+## AI image studio
+
+The custom image-generation plugin is registered in `dev-config.ts`. Its provider setup, model
+pricing, referral-wallet settlement, private storage, prompt Skill workflow, production variables,
+and launch checklist are documented in
+[`../image-generation-plugin/README.md`](../image-generation-plugin/README.md).
+
 ## Publishing storefront media
 
 The storefront redesign assets have one release manifest in

@@ -23,6 +23,7 @@ import { Route as FlashSaleRouteImport } from './routes/flash-sale'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as HomeRouteImport } from './routes/home'
+import { Route as ImageStudioRouteImport } from './routes/image-studio'
 import { Route as LegalRouteImport } from './routes/legal'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LogisticsRouteImport } from './routes/logistics'
@@ -40,6 +41,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReviewsRouteImport } from './routes/reviews'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as VerifyAccountRouteImport } from './routes/verify-account'
 
@@ -111,6 +113,11 @@ const HistoryRoute = HistoryRouteImport.update({
 const HomeRoute = HomeRouteImport.update({
   id: '/home',
   path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImageStudioRoute = ImageStudioRouteImport.update({
+  id: '/image-studio',
+  path: '/image-studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalRoute = LegalRouteImport.update({
@@ -198,6 +205,11 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServicesRoute = ServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SupportRoute = SupportRouteImport.update({
   id: '/support',
   path: '/support',
@@ -224,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
+  '/image-studio': typeof ImageStudioRoute
   '/legal': typeof LegalRoute
   '/login': typeof LoginRoute
   '/logistics': typeof LogisticsRoute
@@ -241,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
   '/search': typeof SearchRoute
+  '/services': typeof ServicesRoute
   '/support': typeof SupportRoute
   '/verify-account': typeof VerifyAccountRoute
 }
@@ -259,6 +273,7 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
+  '/image-studio': typeof ImageStudioRoute
   '/legal': typeof LegalRoute
   '/login': typeof LoginRoute
   '/logistics': typeof LogisticsRoute
@@ -276,6 +291,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
   '/search': typeof SearchRoute
+  '/services': typeof ServicesRoute
   '/support': typeof SupportRoute
   '/verify-account': typeof VerifyAccountRoute
 }
@@ -295,6 +311,7 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
+  '/image-studio': typeof ImageStudioRoute
   '/legal': typeof LegalRoute
   '/login': typeof LoginRoute
   '/logistics': typeof LogisticsRoute
@@ -312,6 +329,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
   '/search': typeof SearchRoute
+  '/services': typeof ServicesRoute
   '/support': typeof SupportRoute
   '/verify-account': typeof VerifyAccountRoute
 }
@@ -332,6 +350,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/history'
     | '/home'
+    | '/image-studio'
     | '/legal'
     | '/login'
     | '/logistics'
@@ -349,6 +368,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/reviews'
     | '/search'
+    | '/services'
     | '/support'
     | '/verify-account'
   fileRoutesByTo: FileRoutesByTo
@@ -367,6 +387,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/history'
     | '/home'
+    | '/image-studio'
     | '/legal'
     | '/login'
     | '/logistics'
@@ -384,6 +405,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/reviews'
     | '/search'
+    | '/services'
     | '/support'
     | '/verify-account'
   id:
@@ -402,6 +424,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/history'
     | '/home'
+    | '/image-studio'
     | '/legal'
     | '/login'
     | '/logistics'
@@ -419,6 +442,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/reviews'
     | '/search'
+    | '/services'
     | '/support'
     | '/verify-account'
   fileRoutesById: FileRoutesById
@@ -438,6 +462,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HistoryRoute: typeof HistoryRoute
   HomeRoute: typeof HomeRoute
+  ImageStudioRoute: typeof ImageStudioRoute
   LegalRoute: typeof LegalRoute
   LoginRoute: typeof LoginRoute
   LogisticsRoute: typeof LogisticsRoute
@@ -455,6 +480,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ReviewsRoute: typeof ReviewsRoute
   SearchRoute: typeof SearchRoute
+  ServicesRoute: typeof ServicesRoute
   SupportRoute: typeof SupportRoute
   VerifyAccountRoute: typeof VerifyAccountRoute
 }
@@ -557,6 +583,13 @@ declare module '@tanstack/react-router' {
       path: '/home'
       fullPath: '/home'
       preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/image-studio': {
+      id: '/image-studio'
+      path: '/image-studio'
+      fullPath: '/image-studio'
+      preLoaderRoute: typeof ImageStudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal': {
@@ -678,6 +711,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/services': {
+      id: '/services'
+      path: '/services'
+      fullPath: '/services'
+      preLoaderRoute: typeof ServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/support': {
       id: '/support'
       path: '/support'
@@ -710,6 +750,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   HistoryRoute: HistoryRoute,
   HomeRoute: HomeRoute,
+  ImageStudioRoute: ImageStudioRoute,
   LegalRoute: LegalRoute,
   LoginRoute: LoginRoute,
   LogisticsRoute: LogisticsRoute,
@@ -727,6 +768,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ReviewsRoute: ReviewsRoute,
   SearchRoute: SearchRoute,
+  ServicesRoute: ServicesRoute,
   SupportRoute: SupportRoute,
   VerifyAccountRoute: VerifyAccountRoute,
 }

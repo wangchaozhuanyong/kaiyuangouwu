@@ -18,6 +18,8 @@ const commonTypes = gql`
         SUPPORT
         AUTH_LOGIN
         AUTH_REGISTER
+        NAVIGATION
+        CLIENT_PLUGINS
         CUSTOM
     }
 

@@ -1,7 +1,9 @@
-import type { RouteState } from '../storefront-router';
-import type { StorefrontContentBlock, StorefrontContentItem, StorefrontLanguage } from '../types';
 import { Headphones, TicketPercent, WandSparkles } from 'lucide-react';
 import type { ComponentType } from 'react';
+import type { RouteState } from '../storefront-router';
+import type { StorefrontContentBlock, StorefrontContentItem, StorefrontLanguage } from '../types';
+
+import './client-plugin-registry.css';
 
 export const clientPluginPlacements = [
     'AFTER_HEADER',
@@ -80,10 +82,16 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
             className="category-client-plugin category-client-plugin-image-studio"
             onClick={() => onNavigate({ name: 'image-studio' })}
         >
-            <span className="category-client-plugin-icon" aria-hidden="true"><WandSparkles /></span>
+            <span className="category-client-plugin-icon" aria-hidden="true">
+                <WandSparkles />
+            </span>
             <span className="category-client-plugin-copy">
                 <strong>{isZh ? 'AI 图片工坊' : 'AI Image Studio'}</strong>
-                <span>{isZh ? '智能优化描述，选择模型快速生成图片' : 'Improve your prompt, choose a model, and create images'}</span>
+                <span>
+                    {isZh
+                        ? '智能优化描述，选择模型快速生成图片'
+                        : 'Improve your prompt, choose a model, and create images'}
+                </span>
             </span>
             <span className="category-client-plugin-action">{isZh ? '开始创作' : 'Create'}</span>
         </button>

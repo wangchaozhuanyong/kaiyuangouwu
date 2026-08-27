@@ -27,6 +27,7 @@ import { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity';
 import { ReferralProgramConfig } from './entities/referral-program-config.entity';
 import { ReferralRelationship } from './entities/referral-relationship.entity';
 import { ReferralReward } from './entities/referral-reward.entity';
+import { ReferralWalletUsage } from './entities/referral-wallet-usage.entity';
 import { ReferralWallet } from './entities/referral-wallet.entity';
 import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
@@ -64,6 +65,7 @@ import { StorefrontPromotionService } from './promotion/storefront-promotion.ser
 import { referralBalancePaymentHandler } from './referral/referral-payment-handler';
 import { configureReferralPaymentProofSecret } from './referral/referral-payment-proof';
 import { auditReferralBalancesTask, reconcileReferralRewardsTask } from './referral/referral-tasks';
+import { ReferralWalletSpendService } from './referral/referral-wallet-spend.service';
 import {
     adjustReferralBalancePermission,
     manageReferralWithdrawalPermission,
@@ -130,6 +132,7 @@ import {
         ReferralReward,
         ReferralLedgerEntry,
         ReferralBalanceUse,
+        ReferralWalletUsage,
         ReferralWithdrawal,
         StorefrontDailyVisitor,
         StorefrontUsdtCheckoutQuote,
@@ -156,6 +159,7 @@ import {
         StorePromotionCampaignService,
         StoreCouponLifecycleService,
         ReferralService,
+        ReferralWalletSpendService,
         SystemAnnouncementService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
@@ -174,6 +178,7 @@ import {
             useClass: StorefrontActivationInterceptor,
         },
     ],
+    exports: [ReferralWalletSpendService],
     configuration: config => {
         config.authOptions.customPermissions.push(
             storeProfilePermission,

@@ -15,12 +15,19 @@ import {
     authVisualCodeByType,
     DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
     MAX_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    MAX_STOREFRONT_CLIENT_PLUGINS,
+    MAX_STOREFRONT_NAVIGATION_ITEMS,
     MIN_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    STOREFRONT_CLIENT_PLUGINS_CODE,
+    STOREFRONT_NAVIGATION_CODE,
+    storefrontClientPluginCodes,
+    storefrontClientPluginPlacements,
     StorefrontContentBlockType,
     storefrontContentBlockTypes,
     storefrontContentLayoutVariants,
     StorefrontContentTargetType,
     storefrontContentTargetTypes,
+    storefrontNavigationTargetPaths,
 } from './constants';
 import { StorefrontContentBlockTranslation } from './entities/storefront-content-block-translation.entity';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
@@ -141,6 +148,8 @@ export class StorefrontContentService {
         input: CreateStorefrontContentBlockInput,
     ): Promise<StorefrontContentBlock> {
         const normalized = this.validateBlockInput(input);
+        if (normalized.type === 'NAVIGATION') this.validateNavigationItems(input.items ?? []);
+        if (normalized.type === 'CLIENT_PLUGINS') this.validateClientPluginItems(input.items ?? []);
         this.validateAuthVisual(normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
@@ -214,6 +223,25 @@ export class StorefrontContentService {
                     })),
                 })),
         );
+        const effectiveItems =
+            input.items ??
+            block.items.map(item => ({
+                id: item.id,
+                enabled: item.enabled,
+                position: item.position,
+                imageAssetId: item.imageAssetId,
+                imageUrl: item.imageUrl,
+                targetType: item.targetType,
+                targetValue: item.targetValue,
+                settings: item.settings,
+                translations: item.translations.map(translation => ({
+                    languageCode: translation.languageCode,
+                    label: translation.label,
+                    description: translation.description,
+                })),
+            }));
+        if (next.type === 'NAVIGATION') this.validateNavigationItems(effectiveItems);
+        if (next.type === 'CLIENT_PLUGINS') this.validateClientPluginItems(effectiveItems);
         await this.assertUniqueCode(ctx, next.code, block.id);
         const requestedImageUrl =
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
@@ -277,6 +305,8 @@ export class StorefrontContentService {
         block: StorefrontContentBlock,
         inputs: StorefrontContentItemInput[],
     ): Promise<void> {
+        if (block.type === 'NAVIGATION') this.validateNavigationItems(inputs);
+        if (block.type === 'CLIENT_PLUGINS') this.validateClientPluginItems(inputs);
         const existing = await this.connection.getRepository(ctx, StorefrontContentItem).find({
             where: { blockId: block.id },
             relations: { imageAsset: true, translations: true },
@@ -597,6 +627,18 @@ export class StorefrontContentService {
         if (!storefrontContentBlockTypes.includes(input.type)) {
             throw new UserInputError('不支持的装修区块类型');
         }
+        if (
+            (input.type === 'NAVIGATION' && code !== STOREFRONT_NAVIGATION_CODE) ||
+            (input.type !== 'NAVIGATION' && code === STOREFRONT_NAVIGATION_CODE)
+        ) {
+            throw new UserInputError('客户端导航必须使用系统保留编码');
+        }
+        if (
+            (input.type === 'CLIENT_PLUGINS' && code !== STOREFRONT_CLIENT_PLUGINS_CODE) ||
+            (input.type !== 'CLIENT_PLUGINS' && code === STOREFRONT_CLIENT_PLUGINS_CODE)
+        ) {
+            throw new UserInputError('客户端插件配置必须使用系统保留编码');
+        }
         const authVisualType = input.type as keyof typeof authVisualCodeByType;
         const requiredAuthVisualCode = authVisualCodeByType[authVisualType];
         const reservedAuthVisualCodes = Object.values(authVisualCodeByType);
@@ -706,6 +748,83 @@ export class StorefrontContentService {
             (typeof accentColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(accentColor))
         ) {
             throw new UserInputError('登录注册页标签强调色必须使用六位十六进制颜色');
+        }
+    }
+
+    private validateNavigationItems(inputs: StorefrontContentItemInput[]): void {
+        if (!inputs.length || inputs.length > MAX_STOREFRONT_NAVIGATION_ITEMS) {
+            throw new UserInputError(`客户端导航必须包含 1 到 ${MAX_STOREFRONT_NAVIGATION_ITEMS} 个项目`);
+        }
+        if (!inputs.some(item => item.enabled !== false)) {
+            throw new UserInputError('客户端导航至少需要启用一个项目');
+        }
+        for (const input of inputs) {
+            if ((input.targetType ?? 'NONE') !== 'PAGE') {
+                throw new UserInputError('客户端导航只能跳转到站内页面');
+            }
+            const target = input.targetValue?.trim();
+            if (
+                !storefrontNavigationTargetPaths.includes(
+                    target as (typeof storefrontNavigationTargetPaths)[number],
+                )
+            ) {
+                throw new UserInputError('客户端导航包含不支持的站内页面');
+            }
+        }
+    }
+
+    private validateClientPluginItems(inputs: StorefrontContentItemInput[]): void {
+        if (inputs.length > MAX_STOREFRONT_CLIENT_PLUGINS) {
+            throw new UserInputError(`客户端插件最多可以添加 ${MAX_STOREFRONT_CLIENT_PLUGINS} 个`);
+        }
+        const pluginCodes = new Set<string>();
+        for (const input of inputs) {
+            if ((input.targetType ?? 'NONE') !== 'NONE' || input.targetValue?.trim()) {
+                throw new UserInputError('客户端插件不能配置独立跳转目标');
+            }
+            const settings = this.normalizeSettings(input.settings, '客户端插件设置');
+            const pluginCode = settings?.pluginCode;
+            const placement = settings?.placement;
+            const categoryScope = settings?.categoryScope ?? 'ALL';
+            const categoryIds = settings?.categoryIds ?? [];
+            const includeChildren = settings?.includeChildren ?? true;
+            if (typeof pluginCode !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pluginCode)) {
+                throw new UserInputError('客户端插件编码格式不正确');
+            }
+            if (pluginCodes.has(pluginCode)) throw new UserInputError('同一个客户端插件不能重复添加');
+            if (!storefrontClientPluginCodes.includes(pluginCode)) {
+                throw new UserInputError('客户端插件尚未在平台发布');
+            }
+            pluginCodes.add(pluginCode);
+            if (
+                typeof placement !== 'string' ||
+                !storefrontClientPluginPlacements.includes(
+                    placement as (typeof storefrontClientPluginPlacements)[number],
+                )
+            ) {
+                throw new UserInputError('客户端插件包含不支持的显示位置');
+            }
+            if (categoryScope !== 'ALL' && categoryScope !== 'SELECTED') {
+                throw new UserInputError('客户端插件分类显示范围不正确');
+            }
+            if (
+                !Array.isArray(categoryIds) ||
+                categoryIds.length > 200 ||
+                categoryIds.some(id => typeof id !== 'string' || !id.trim()) ||
+                new Set(categoryIds).size !== categoryIds.length
+            ) {
+                throw new UserInputError('客户端插件分类配置不正确');
+            }
+            if (
+                placement !== 'BUSINESS_SERVICES_MAIN' &&
+                categoryScope === 'SELECTED' &&
+                !categoryIds.length
+            ) {
+                throw new UserInputError('指定分类显示时至少需要选择一个分类');
+            }
+            if (typeof includeChildren !== 'boolean') {
+                throw new UserInputError('客户端插件子分类设置不正确');
+            }
         }
     }
 

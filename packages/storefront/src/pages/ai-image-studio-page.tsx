@@ -28,6 +28,8 @@ import {
     StorefrontLanguage,
 } from '../types';
 
+import './ai-image-studio-page.css';
+
 interface AiImageStudioPageProps {
     api: ShopApi;
     customer: ActiveCustomer | null;

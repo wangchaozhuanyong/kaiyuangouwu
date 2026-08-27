@@ -15,12 +15,14 @@ export default defineConfig(({ mode }) => {
             proxy: {
                 '/shop-api': apiProxyTarget,
                 '/assets': apiProxyTarget,
+                '/image-generation': apiProxyTarget,
             },
         },
         preview: {
             strictPort: true,
             proxy: {
                 '/shop-api': apiProxyTarget,
+                '/image-generation': apiProxyTarget,
             },
         },
     };

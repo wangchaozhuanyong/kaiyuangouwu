@@ -309,6 +309,21 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
                 ? 'configured'
                 : 'paths must be absolute, non-root, and distinct',
     });
+    const imageGenerationRoot = normalized(env.IMAGE_GENERATION_STORAGE_ROOT);
+    const imageGenerationReady =
+        isPersistentDirectory(imageGenerationRoot) &&
+        imageGenerationRoot !== assetUploadDir &&
+        imageGenerationRoot !== importAssetsDir &&
+        isConfiguredSecret(env.IMAGE_GENERATION_DOWNLOAD_SECRET, 32) &&
+        isConfiguredSecret(env.IMAGE_GENERATION_MASTER_KEY, 32);
+    pushCheck(checks, {
+        id: 'image-generation-storage',
+        title: 'AI 生图私有存储与加密配置',
+        passed: imageGenerationReady,
+        detail: imageGenerationReady
+            ? 'protected storage, download signing, and credential encryption configured'
+            : 'root must be a distinct persistent directory and both secrets must be strong',
+    });
     if (role === 'server') {
         const digitalDeliveryRoot = normalized(env.DIGITAL_DELIVERY_ROOT);
         const digitalDeliveryTtl = Number(env.DIGITAL_DELIVERY_LINK_TTL_SECONDS);
