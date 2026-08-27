@@ -1931,10 +1931,16 @@ function BlockEditor({
 
     return (
         <Sheet open onOpenChange={open => !open && requestClose()}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[88vw] sm:max-w-[1440px]">
-                <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
+            <SheetContent
+                className={
+                    '@container/editor flex max-w-none flex-col gap-0 overflow-hidden p-0 ' +
+                    'data-[side=right]:w-full data-[side=right]:sm:w-[88vw] ' +
+                    'data-[side=right]:sm:max-w-[1440px]'
+                }
+            >
+                <SheetHeader className="shrink-0 border-b px-4 py-4 pr-14 text-left @md/editor:px-6 @md/editor:pr-14">
+                    <div className="flex flex-col gap-3 @4xl/editor:flex-row @4xl/editor:items-start @4xl/editor:justify-between">
+                        <div className="min-w-0">
                             <SheetTitle>
                                 {lockedType === 'HERO'
                                     ? draft.id
@@ -1946,10 +1952,10 @@ function BlockEditor({
                             </SheetTitle>
                             <SheetDescription className="mt-1">{text.editorDescription}</SheetDescription>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2 @4xl/editor:shrink-0">
                             {fixedTemplate ? <Badge variant="outline">{text.fixedTemplate}</Badge> : null}
                             <div
-                                className="flex rounded-md border bg-muted/30 p-1"
+                                className="grid min-w-0 flex-1 grid-cols-2 rounded-md border bg-muted/30 p-1 @2xl/editor:flex @2xl/editor:flex-none"
                                 aria-label={text.simpleModeHint}
                             >
                                 <Button
@@ -1973,11 +1979,11 @@ function BlockEditor({
                     </div>
                     <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
                 </SheetHeader>
-                <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
-                    <div className="min-w-0 space-y-7 px-6 py-5 lg:overflow-y-auto">
+                <div className="grid min-h-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto @5xl/editor:grid-cols-[minmax(0,1fr)_360px] @5xl/editor:overflow-hidden">
+                    <div className="@container/editor-form min-w-0 space-y-7 px-4 py-5 @md/editor:px-6 @5xl/editor:overflow-y-auto">
                         <section className="space-y-4">
                             <h3 className="text-sm font-medium">{text.basic}</h3>
-                            <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="grid gap-4 @md/editor-form:grid-cols-2">
                                 {!fixedTemplate ? (
                                     <Field label={text.internalName} hint={text.internalNameHint}>
                                         <Input
@@ -2084,7 +2090,7 @@ function BlockEditor({
                                 ) : null}
                                 {advancedMode || previewUsesBlockImage(draft.type) ? (
                                     <AssetSelectionField
-                                        className="sm:col-span-2"
+                                        className="@md/editor-form:col-span-2"
                                         label={text.imageAsset}
                                         asset={draft.imageAsset}
                                         fallbackUrl={draft.imageUrl}
@@ -2105,7 +2111,7 @@ function BlockEditor({
                                         <Field
                                             label={text.imageUrl}
                                             hint={text.imageHint}
-                                            className="sm:col-span-2"
+                                            className="@md/editor-form:col-span-2"
                                         >
                                             <Input
                                                 inputMode="url"
@@ -2199,7 +2205,7 @@ function BlockEditor({
                         <Separator />
                         <section className="space-y-4">
                             <h3 className="text-sm font-medium">{text.translations}</h3>
-                            <div className="grid gap-5 xl:grid-cols-2">
+                            <div className="grid gap-5 @2xl/editor-form:grid-cols-2">
                                 {translationLanguages.map(languageCode => {
                                     const translation = getBlockTranslation(draft, languageCode);
                                     return (
@@ -2316,7 +2322,7 @@ function BlockEditor({
                         ) : null}
                     </div>
 
-                    <aside className="min-w-0 border-t bg-muted/30 px-5 py-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
+                    <aside className="min-w-0 border-t bg-muted/30 px-4 py-5 @md/editor:px-5 @5xl/editor:overflow-y-auto @5xl/editor:border-l @5xl/editor:border-t-0">
                         <h3 className="mb-4 text-sm font-medium">{text.preview}</h3>
                         <div className="mx-auto w-full max-w-[300px] overflow-hidden rounded-[8px] border bg-background shadow-sm">
                             <div className="flex h-7 items-center justify-center border-b bg-muted text-[10px] text-muted-foreground">
@@ -2437,11 +2443,22 @@ function BlockEditor({
                         </div>
                     </aside>
                 </div>
-                <SheetFooter className="shrink-0 border-t px-6 py-4">
-                    <Button type="button" variant="outline" disabled={saving} onClick={requestClose}>
+                <SheetFooter className="shrink-0 flex-row gap-3 border-t px-4 py-3 @md/editor:justify-end @md/editor:px-6 @md/editor:py-4">
+                    <Button
+                        className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
+                        type="button"
+                        variant="outline"
+                        disabled={saving}
+                        onClick={requestClose}
+                    >
                         {text.cancel}
                     </Button>
-                    <Button type="button" disabled={saving} onClick={() => onSave(draft)}>
+                    <Button
+                        className="min-w-0 flex-1 @md/editor:min-w-24 @md/editor:flex-none"
+                        type="button"
+                        disabled={saving}
+                        onClick={() => onSave(draft)}
+                    >
                         {saving ? text.saving : text.save}
                     </Button>
                 </SheetFooter>
@@ -2793,10 +2810,10 @@ function ItemEditor({
                     <X />
                 </IconButton>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 @md/editor-form:grid-cols-2">
                 {advancedMode || simpleItemUsesImage(blockType) ? (
                     <AssetSelectionField
-                        className="sm:col-span-2"
+                        className="@md/editor-form:col-span-2"
                         label={text.imageAsset}
                         asset={item.imageAsset}
                         fallbackUrl={item.imageUrl}
