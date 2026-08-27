@@ -135,6 +135,7 @@
         "node-forge": "1.4.0",
         "esbuild": "0.28.2",
         "nx": "23.1.1",
+        "pacote": "21.5.1",
         "piscina": "4.9.3",
         "postcss": "8.5.26",
         "protobufjs": "7.6.5",
