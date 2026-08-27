@@ -491,7 +491,6 @@ export function AccountPage() {
                                 <ProductVariantImage variant={variant} alt={variant.name} />
                                 <span>
                                     <strong>{variant.name}</strong>
-                                    <small>{variant.sku}</small>
                                 </span>
                                 <button
                                     type="button"

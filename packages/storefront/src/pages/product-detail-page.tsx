@@ -280,7 +280,6 @@ export function ProductDetailPage() {
             <section className="detail-options">
                 <header>
                     <strong>{isZh ? '选择规格' : 'Choose an option'}</strong>
-                    <span>{variant?.sku}</span>
                 </header>
                 <div>
                     {product.variants.map(item => (
@@ -367,7 +366,6 @@ export function ProductDetailPage() {
             <section className="detail-block detail-params">
                 <header>
                     <strong>{isZh ? '商品参数' : 'Product details'}</strong>
-                    <span>{variant?.sku}</span>
                 </header>
                 <dl>
                     <div>

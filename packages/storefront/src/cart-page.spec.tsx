@@ -116,6 +116,7 @@ describe('CartPage guest cart', () => {
         expect(markup).toContain('aria-label="增加 32 英寸显示器 数量"');
         expect(markup).toContain('结算（1）');
         expect(markup).not.toContain('登录后使用购物车');
+        expect(markup).not.toContain('DISPLAY-32');
     });
 
     it('keeps the regular decrement action when a line has more than one item', () => {

@@ -109,4 +109,32 @@ describe('product image navigation layers', () => {
         expect(stylesheet).toMatch(/\.product-row-detail-link\s*\{[^}]*z-index:\s*10;/);
         expect(stylesheet).toMatch(/\.row-add\s*\{[^}]*z-index:\s*20;/);
     });
+
+    it('does not use the internal SKU as customer-facing fallback copy', () => {
+        const productWithoutDescription = { ...digitalProduct, description: '' };
+        const cardMarkup = renderToStaticMarkup(
+            <ProductCard
+                product={productWithoutDescription}
+                market={market}
+                locale={market.locale}
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+        const rowMarkup = renderToStaticMarkup(
+            <ProductRow
+                product={productWithoutDescription}
+                market={market}
+                locale={market.locale}
+                language="zh"
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+
+        expect(cardMarkup).not.toContain('CHATGPT-PLUS');
+        expect(rowMarkup).not.toContain('CHATGPT-PLUS');
+    });
 });
