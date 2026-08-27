@@ -12,6 +12,7 @@ import {
 } from '@vendure/core';
 
 import {
+    authVisualCodeByType,
     DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
     MAX_HERO_AUTOPLAY_INTERVAL_SECONDS,
     MIN_HERO_AUTOPLAY_INTERVAL_SECONDS,
@@ -140,6 +141,7 @@ export class StorefrontContentService {
         input: CreateStorefrontContentBlockInput,
     ): Promise<StorefrontContentBlock> {
         const normalized = this.validateBlockInput(input);
+        this.validateAuthVisual(normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
@@ -193,6 +195,25 @@ export class StorefrontContentService {
                 })),
             items: input.items,
         });
+        this.validateAuthVisual(
+            next,
+            input.items ??
+                block.items.map(item => ({
+                    id: item.id,
+                    enabled: item.enabled,
+                    position: item.position,
+                    imageAssetId: item.imageAssetId,
+                    imageUrl: item.imageUrl,
+                    targetType: item.targetType,
+                    targetValue: item.targetValue,
+                    settings: item.settings,
+                    translations: item.translations.map(translation => ({
+                        languageCode: translation.languageCode,
+                        label: translation.label,
+                        description: translation.description,
+                    })),
+                })),
+        );
         await this.assertUniqueCode(ctx, next.code, block.id);
         const requestedImageUrl =
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
@@ -576,6 +597,15 @@ export class StorefrontContentService {
         if (!storefrontContentBlockTypes.includes(input.type)) {
             throw new UserInputError('不支持的装修区块类型');
         }
+        const authVisualType = input.type as keyof typeof authVisualCodeByType;
+        const requiredAuthVisualCode = authVisualCodeByType[authVisualType];
+        const reservedAuthVisualCodes = Object.values(authVisualCodeByType);
+        if (
+            (requiredAuthVisualCode && code !== requiredAuthVisualCode) ||
+            (!requiredAuthVisualCode && reservedAuthVisualCodes.some(reservedCode => reservedCode === code))
+        ) {
+            throw new UserInputError('登录注册页视觉必须使用对应的系统保留编码');
+        }
         const internalName =
             input.internalName?.trim() ||
             input.translations
@@ -643,6 +673,39 @@ export class StorefrontContentService {
         this.normalizeTarget(targetType, input.targetValue);
         if (blockType === 'COUPONS' && targetType !== 'COUPON') {
             throw new UserInputError('优惠券专区的每个条目都必须填写优惠码');
+        }
+    }
+
+    private validateAuthVisual(
+        input: ReturnType<StorefrontContentService['validateBlockInput']>,
+        items: StorefrontContentItemInput[],
+    ): void {
+        if (input.type !== 'AUTH_LOGIN' && input.type !== 'AUTH_REGISTER') return;
+        if (input.layoutVariant !== 'HERO_OVERLAY' || input.targetType !== 'NONE') {
+            throw new UserInputError('登录注册页视觉必须使用主视觉叠加布局且不能配置跳转');
+        }
+        if (input.startsAt || input.endsAt) {
+            throw new UserInputError('登录注册页视觉不能设置定时上下线');
+        }
+        const source = input.translations.find(
+            translation => translation.languageCode === LanguageCode.zh_Hans,
+        );
+        if (!source?.ctaLabel?.trim() || !source.subtitle?.trim()) {
+            throw new UserInputError('登录注册页视觉必须填写中文顶部短句和说明文案');
+        }
+        if (
+            items.length !== 3 ||
+            new Set(items.map(item => item.position)).size !== 3 ||
+            items.some(item => item.position < 0 || item.position > 2)
+        ) {
+            throw new UserInputError('登录注册页视觉必须包含三个顺序固定的卖点标签');
+        }
+        const accentColor = input.settings?.accentColor;
+        if (
+            accentColor != null &&
+            (typeof accentColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(accentColor))
+        ) {
+            throw new UserInputError('登录注册页标签强调色必须使用六位十六进制颜色');
         }
     }
 

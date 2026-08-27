@@ -119,6 +119,46 @@ describe('StorefrontContentService input validation', () => {
             ),
         ).toThrow(/必须填写优惠码/);
     });
+
+    it('reserves one stable code and a complete design shape for each auth page visual', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const authInput = createInput({
+            code: 'auth-login-visual',
+            type: 'AUTH_LOGIN',
+            layoutVariant: 'HERO_OVERLAY',
+            targetType: 'NONE',
+            targetValue: null,
+            translations: [
+                {
+                    languageCode: LanguageCode.zh_Hans,
+                    title: '登录你的 AI 新世界',
+                    subtitle: '创作、编程与办公工具，一站高效管理',
+                    ctaLabel: 'AI 软件精选平台',
+                },
+            ],
+            settings: { accentColor: '#67e8f9' },
+            items: [0, 1, 2].map(position => ({
+                enabled: true,
+                position,
+                targetType: 'NONE' as const,
+                targetValue: null,
+                translations: [{ languageCode: LanguageCode.zh_Hans, label: `卖点 ${String(position + 1)}` }],
+            })),
+        });
+        const normalized = validate(authInput);
+
+        expect(() => (service as any).validateAuthVisual(normalized, authInput.items)).not.toThrow();
+        expect(() => validate({ ...authInput, code: 'another-login-visual' })).toThrow(/系统保留编码/);
+        expect(() =>
+            (service as any).validateAuthVisual(normalized, authInput.items?.slice(0, 2) ?? []),
+        ).toThrow(/三个顺序固定/);
+        expect(() =>
+            (service as any).validateAuthVisual(
+                { ...normalized, settings: { accentColor: 'cyan' } },
+                authInput.items,
+            ),
+        ).toThrow(/强调色/);
+    });
 });
 
 describe('StorefrontContentService publication guard', () => {

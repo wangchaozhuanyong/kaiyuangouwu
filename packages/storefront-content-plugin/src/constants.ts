@@ -8,6 +8,12 @@ export const storefrontContentPermission = new CrudPermissionDefinition(
 export const DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS = 5;
 export const MIN_HERO_AUTOPLAY_INTERVAL_SECONDS = 3;
 export const MAX_HERO_AUTOPLAY_INTERVAL_SECONDS = 30;
+export const AUTH_LOGIN_VISUAL_CODE = 'auth-login-visual';
+export const AUTH_REGISTER_VISUAL_CODE = 'auth-register-visual';
+export const authVisualCodeByType = {
+    AUTH_LOGIN: AUTH_LOGIN_VISUAL_CODE,
+    AUTH_REGISTER: AUTH_REGISTER_VISUAL_CODE,
+} as const;
 
 export const storefrontContentBlockTypes = [
     'HERO',
