@@ -170,6 +170,44 @@ Specify the database as above to populate that database:
 [DB=mysql|postgres|sqlite] bun run populate
 ```
 
+## Publishing storefront media
+
+The storefront redesign assets have one release manifest in
+`scripts/sync-storefront-media.mjs`. The command uploads each changed file to the Vendure asset
+library, assigns it to the configured Channel, and binds the same asset ID to product variants and
+managed storefront content blocks. The Dashboard and Shop API therefore use the same asset; the
+client does not replace backend image URLs by filename.
+
+Validate the local manifest without contacting Vendure:
+
+```bash
+bun run sync:storefront-media -- --validate
+```
+
+Preview the exact assets and targets without writing:
+
+```bash
+bun run sync:storefront-media -- --dry-run
+```
+
+Apply to a local Vendure instance:
+
+```bash
+bun run sync:storefront-media -- --apply
+```
+
+For a production release, set `VENDURE_API_ORIGIN`, `SUPERADMIN_USERNAME`,
+`SUPERADMIN_PASSWORD`, and `STOREFRONT_MEDIA_CHANNEL_CODES` in the release environment, then run
+the sync after the API is healthy and before the new storefront is promoted:
+
+```bash
+bun run sync:storefront-media -- --apply --allow-remote
+```
+
+Remote writes require both flags. Existing asset records are not deleted: an unchanged file is
+reused by its SHA-256 tag, while a changed file creates a new asset and moves the configured
+bindings to it. This makes the command safe to repeat and keeps rollback assets available.
+
 ## Testing custom ui extension compilation
 
 In order to compile ui extensions within this monorepo, you need to add the following entry to

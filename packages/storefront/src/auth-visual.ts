@@ -79,3 +79,8 @@ export function authVisualAccentColor(
     if (typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent)) return accent;
     return variant === 'login' ? '#67e8f9' : '#fdba74';
 }
+
+export function authVisualOverlayColor(content: StorefrontContentBlock | undefined): string {
+    const background = content?.backgroundColor;
+    return typeof background === 'string' && /^#[0-9a-f]{6}$/i.test(background) ? background : '#0B1E2D';
+}

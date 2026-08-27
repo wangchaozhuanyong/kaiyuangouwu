@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import type { StorefrontContentBlock } from './types';
 
 import {
     HERO_CLOUD_BRIDGE_FALLBACK_IMAGE,
@@ -8,7 +9,6 @@ import {
     HERO_VIP_FALLBACK_IMAGE,
     HERO_VIP_IMAGE,
 } from './storefront-images';
-import type { StorefrontContentBlock } from './types';
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
@@ -76,6 +76,10 @@ export function heroThemeStyle(block: StorefrontContentBlock, vipTheme: boolean)
             ? '0 4px 14px rgba(69, 26, 26, 0.1)'
             : '0 3px 10px rgba(0, 0, 0, 0.22)',
     };
+}
+
+export function heroUsesImageOverlay(block: StorefrontContentBlock): boolean {
+    return block.settings?.themePreset !== 'cloudbridge-bright';
 }
 
 export function builtInHeroImage(block: StorefrontContentBlock, vipTheme: boolean): string {

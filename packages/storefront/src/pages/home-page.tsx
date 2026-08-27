@@ -35,7 +35,12 @@ import {
 
 import { ProductCard } from '../components/common/product-card';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
-import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from '../hero-theme';
+import {
+    builtInHeroFallbackImage,
+    builtInHeroImage,
+    heroThemeStyle,
+    heroUsesImageOverlay,
+} from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
 import { compactUiCopy } from '../i18n';
@@ -469,6 +474,7 @@ export function HomePage() {
         productImage(managedHeroProduct ?? hero) ??
         (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : DEFAULT_HERO_FALLBACK_IMAGE);
     const heroStyle = managedHero ? heroThemeStyle(managedHero, isVipTheme) : undefined;
+    const showHeroImageOverlay = managedHero ? heroUsesImageOverlay(managedHero) : false;
     const quickCollections = collections.slice(0, 5);
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
@@ -898,7 +904,9 @@ export function HomePage() {
                                             fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
                                         />
                                     </button>
-                                    <div className="hero-rich-overlay-shade" />
+                                    {showHeroImageOverlay ? (
+                                        <div className="hero-rich-overlay-shade" />
+                                    ) : null}
 
                                     {/* Dynamic Content Overlay with 3D Cyber Layout */}
                                     {(() => {

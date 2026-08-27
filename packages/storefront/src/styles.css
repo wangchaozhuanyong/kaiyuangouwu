@@ -1610,10 +1610,10 @@ img.fatal-error-mark {
 }
 
 .showcase-card {
-    --showcase-accent-rgb: 34 211 238;
-    --showcase-accent-text: #67e8f9;
-    --showcase-card-background: linear-gradient(145deg, #0c1929, #111d2e 52%, #0e2a3d);
-    --showcase-muted-text: #b4c1d1;
+    --showcase-accent-rgb: 53 230 176;
+    --showcase-accent-text: #83edca;
+    --showcase-card-background: linear-gradient(145deg, #0b1e2d, #102838 52%, #0d2634);
+    --showcase-muted-text: #a9bbc6;
 
     min-height: 142px;
     padding: 14px 12px 12px;
@@ -1671,7 +1671,7 @@ img.fatal-error-mark {
     position: absolute;
     inset: 0;
     border-radius: 14px;
-    opacity: 0.62;
+    opacity: 0.4;
     pointer-events: none;
     z-index: 2;
 }
@@ -1684,7 +1684,7 @@ img.fatal-error-mark {
     border-radius: 50%;
     filter: blur(35px);
     background: rgb(var(--showcase-accent-rgb));
-    opacity: 0.22;
+    opacity: 0.14;
     pointer-events: none;
     z-index: 2;
     transition: opacity 280ms ease;
@@ -1759,15 +1759,15 @@ img.fatal-error-mark {
 }
 
 .home-dual-showcase[data-card-template='tech-duo'] .showcase-card:nth-child(odd) {
-    --showcase-accent-rgb: 34 211 238;
-    --showcase-accent-text: #67e8f9;
-    --showcase-card-background: linear-gradient(145deg, #0c1929, #111d2e 52%, #0e2a3d);
+    --showcase-accent-rgb: 53 230 176;
+    --showcase-accent-text: #83edca;
+    --showcase-card-background: linear-gradient(145deg, #0b1e2d, #102838 52%, #0d2634);
 }
 
 .home-dual-showcase[data-card-template='tech-duo'] .showcase-card:nth-child(even) {
-    --showcase-accent-rgb: 167 139 250;
-    --showcase-accent-text: #c4b5fd;
-    --showcase-card-background: linear-gradient(145deg, #1a1035, #150d2e 52%, #0f172a);
+    --showcase-accent-rgb: 8 126 107;
+    --showcase-accent-text: #9be7cf;
+    --showcase-card-background: linear-gradient(145deg, #0b1e2d, #122b3b 52%, #0d2634);
 }
 
 .home-dual-showcase[data-card-template='ocean-cobalt'] .showcase-card:nth-child(odd) {
@@ -2695,8 +2695,8 @@ img.fatal-error-mark {
     width: 22px;
     height: 22px;
     border-radius: 6px;
-    background: #ffedd5;
-    color: #ea580c;
+    background: #e8f5f1;
+    color: #087e6b;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4218,8 +4218,8 @@ img.fatal-error-mark {
     white-space: normal;
 }
 
-.product-row span,
-.product-row small {
+.product-row-desc,
+.product-row-badge {
     max-width: 100%;
     margin-top: 4px;
     color: var(--muted);
@@ -7672,7 +7672,7 @@ img.fatal-error-mark {
 }
 
 .auth-page {
-    --auth-accent: #e42c23;
+    --auth-accent: #087e6b;
     min-height: 100dvh;
     padding: 0;
     overflow: hidden;
@@ -7681,8 +7681,8 @@ img.fatal-error-mark {
 
 .auth-hero {
     --auth-hero-text-color: #ffffff;
-    --auth-hero-overlay-color: #020718;
-    --auth-hero-accent-color: #67e8f9;
+    --auth-hero-overlay-color: #0b1e2d;
+    --auth-hero-accent-color: #35e6b0;
     height: clamp(168px, 24dvh, 210px);
     position: relative;
     overflow: hidden;
@@ -7777,7 +7777,7 @@ img.fatal-error-mark {
     font-size: 19px;
     font-weight: var(--font-weight-bold);
     line-height: 1;
-    box-shadow: 0 8px 22px rgba(220, 42, 32, 0.28);
+    box-shadow: 0 8px 22px rgba(8, 126, 107, 0.28);
 }
 
 .auth-brand-lockup strong {
@@ -7968,7 +7968,7 @@ img.fatal-error-mark {
 
 .auth-input-shell:focus-within {
     border-color: var(--auth-accent);
-    box-shadow: 0 0 0 3px rgba(228, 44, 35, 0.1);
+    box-shadow: 0 0 0 3px rgba(8, 126, 107, 0.12);
 }
 
 .login-content form input {
@@ -8066,15 +8066,15 @@ img.fatal-error-mark {
     color: white;
     font-size: 17px;
     font-weight: var(--font-weight-semibold);
-    box-shadow: 0 10px 24px rgba(196, 39, 31, 0.14);
+    box-shadow: 0 10px 24px rgba(8, 126, 107, 0.18);
 }
 
 .auth-page .wide-action:hover:not(:disabled) {
-    background: #cf251e;
+    background: #066a5b;
 }
 
 .auth-page .wide-action:disabled {
-    background: #e8aaa6;
+    background: #a7cec6;
     box-shadow: none;
 }
 
