@@ -68,12 +68,3 @@ export function referralShareUrl(code: string, source: ReferralSource = 'LINK'):
     url.searchParams.set('source', source);
     return url.href;
 }
-
-export function storefrontVisitorId(storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage): string {
-    const key = 'storefront-visitor-id:v1';
-    const existing = storage.getItem(key);
-    if (existing && /^[A-Za-z0-9_-]{16,128}$/.test(existing)) return existing;
-    const generated = crypto.randomUUID().replace(/-/g, '');
-    storage.setItem(key, generated);
-    return generated;
-}

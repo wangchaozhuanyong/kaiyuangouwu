@@ -27,7 +27,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from './query-client';
-import { captureReferralAttribution, storefrontVisitorId } from './referral-attribution';
+import { captureReferralAttribution } from './referral-attribution';
 import { productDescriptionText } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
@@ -431,13 +431,8 @@ export function App() {
     const customer = customerQuery.data ?? null;
 
     useEffect(() => {
-        try {
-            const visitorId = storefrontVisitorId();
-            void api.recordStorefrontVisit(visitorId).catch(() => undefined);
-        } catch {
-            // Analytics must never block storefront usage.
-        }
-    }, [api, customer?.id]);
+        void api.recordStorefrontVisit().catch(() => undefined);
+    }, [api]);
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         market.code,
         vendureLanguageCode,

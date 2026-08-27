@@ -201,7 +201,7 @@ function ReferralAdminPage() {
                     column="main"
                     blockId="referral-today"
                     title="今日经营概览"
-                    description="按北京时间统计，访客按匿名设备或登录客户去重。"
+                    description="按北京时间和支付结算日统计；访客按 IP 去重；订单、消费客户和成交额以已结算支付扣除已结算退款后的净实收为准。"
                 >
                     <TodayMetrics query={metrics} />
                 </PageBlock>

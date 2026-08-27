@@ -33,7 +33,7 @@ const externalPaymentHandler = new PaymentMethodHandler({
 const passthroughTranslationProvider: ContentTranslationProvider = {
     name: 'referral-e2e-passthrough',
     isConfigured: () => true,
-    translate: async request => ({
+    translate: request => ({
         provider: 'referral-e2e-passthrough',
         translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
     }),
@@ -341,6 +341,10 @@ const ADMIN_REPORTS = gql`
             orderCount
             todayInvitedCount
             todayInvitedPurchaserCount
+            salesByCurrency {
+                currencyCode
+                sales
+            }
         }
     }
 `;
@@ -417,6 +421,10 @@ describe('referral rebate closed loop', () => {
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        adminClient.setRequestHeader(
+            'x-vendure-sensitive-action-password',
+            config.authOptions.superadminCredentials.password,
+        );
         const productResult = await adminClient.query(CREATE_PRODUCT, {
             input: {
                 enabled: true,
@@ -454,6 +462,9 @@ describe('referral rebate closed loop', () => {
     it('binds an invitation, rewards paid product spend, claws back refunds, spends balance and handles an authorized withdrawal', async () => {
         const disabled = await shopClient.query(PROGRAM);
         expect(disabled.referralProgram.enabled).toBe(false);
+
+        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0001' });
+        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0002' });
 
         const updated = await adminClient.query(UPDATE_PROGRAM, {
             input: {
@@ -620,6 +631,14 @@ describe('referral rebate closed loop', () => {
             orderCount: 2,
             todayInvitedCount: 1,
             todayInvitedPurchaserCount: 1,
+        });
+        expect(reports.referralTodayMetrics.salesByCurrency).toContainEqual({
+            currencyCode: inviteeOrder.currencyCode,
+            sales:
+                inviteeOrder.totalWithTax +
+                completedInviterOrder.addPaymentToOrder.totalWithTax -
+                productRefund.refundOrder.total -
+                balanceRefund.refundOrder.total,
         });
 
         const finalOverview = await shopClient.query(OVERVIEW);
