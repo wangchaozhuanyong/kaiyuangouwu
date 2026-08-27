@@ -33,6 +33,7 @@ export {
 export { ReferralService } from './referral/referral.service.js';
 export { StoreActivationReadinessService } from './store-activation-readiness.service.js';
 export { StoreCommerceSettingsService } from './store-commerce-settings.service.js';
+export { StoreDefaultCurrencyPriceSelectionStrategy } from './store-currency-price-selection-strategy.js';
 export {
     StoreCurrencySettingsService,
     calculateUsdtCheckoutAmount,

@@ -48,7 +48,10 @@ import {
 import { HardenPlugin } from '@vendure/harden-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
-import { StoreManagementPlugin } from '@vendure/store-management-plugin';
+import {
+    StoreDefaultCurrencyPriceSelectionStrategy,
+    StoreManagementPlugin,
+} from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -536,8 +539,9 @@ export const devConfig: VendureConfig = {
         paymentMethodHandlers: IS_PRODUCTION ? [] : [dummyPaymentHandler],
     },
     catalogOptions: {
+        productVariantPriceSelectionStrategy: new StoreDefaultCurrencyPriceSelectionStrategy(),
         productVariantPriceUpdateStrategy: new DefaultProductVariantPriceUpdateStrategy({
-            syncPricesAcrossChannels: true,
+            syncPricesAcrossChannels: false,
         }),
     },
     customFields: {

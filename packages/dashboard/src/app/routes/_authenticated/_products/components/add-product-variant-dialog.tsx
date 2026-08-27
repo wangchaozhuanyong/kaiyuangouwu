@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createProductVariantsDocument, withProductVariantCustomFields } from '../products.graphql.js';
-import { getProductFulfillmentType } from './product-fulfillment-type.js';
+import { getNewVariantInventoryInput, getProductFulfillmentType } from './product-fulfillment-type.js';
 import { ProductOptionSelect } from './product-option-select.js';
 
 const productVariantFulfillmentFragment = graphql(`
@@ -231,9 +231,7 @@ export function AddProductVariantDialog({
                         productId,
                         sku: values.sku,
                         price: Number(values.price),
-                        stockOnHand: values.fulfillmentType === 'physical' ? Number(values.stockOnHand) : 0,
-                        trackInventory:
-                            values.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
+                        ...getNewVariantInventoryInput(Number(values.stockOnHand)),
                         customFields: {
                             fulfillmentType: values.fulfillmentType,
                             ...(values.fulfillmentType === 'digital'
@@ -338,7 +336,8 @@ export function AddProductVariantDialog({
                             description={
                                 form.watch('fulfillmentType') === 'digital' ? (
                                     <Trans>
-                                        Delivered to the checkout email after payment; no shipping or stock.
+                                        Delivered to the checkout email after payment; no shipping is
+                                        required.
                                     </Trans>
                                 ) : (
                                     <Trans>Uses stock, shipping address and logistics fulfillment.</Trans>
@@ -367,14 +366,15 @@ export function AddProductVariantDialog({
                                 </Select>
                             )}
                         />
-                        {form.watch('fulfillmentType') === 'physical' && (
-                            <FormFieldWrapper
-                                control={form.control}
-                                name="stockOnHand"
-                                label={<Trans>Stock level</Trans>}
-                                render={({ field }) => <Input type="number" min="0" step="1" {...field} />}
-                            />
-                        )}
+                        <FormFieldWrapper
+                            control={form.control}
+                            name="stockOnHand"
+                            label={<Trans>Stock level</Trans>}
+                            description={
+                                <Trans>Inventory tracking follows the global setting by default.</Trans>
+                            }
+                            render={({ field }) => <Input type="number" min="0" step="1" {...field} />}
+                        />
                         <DialogFooter className="flex flex-col items-end gap-2">
                             {duplicateVariantError && (
                                 <p className="text-sm text-destructive">{duplicateVariantError}</p>

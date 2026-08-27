@@ -7,6 +7,13 @@ export interface VariantWithFulfillmentType {
     customFields?: unknown;
 }
 
+export function getNewVariantInventoryInput(stockOnHand: number) {
+    return {
+        stockOnHand,
+        trackInventory: 'INHERIT' as const,
+    };
+}
+
 export function getVariantFulfillmentType(variant: VariantWithFulfillmentType): FulfillmentType {
     if (
         variant.customFields &&

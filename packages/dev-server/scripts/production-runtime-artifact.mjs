@@ -53,6 +53,7 @@ const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/storefront/dist/index.html',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
+    'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
 ]);
 
 function isPathInside(parent, candidate) {
@@ -222,6 +223,19 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
     }
 }
 
+export async function copyInventoryRepairReleaseInput(stagingRoot) {
+    const scriptSource = path.join(
+        repositoryRoot,
+        'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
+    );
+    const scriptDestination = path.join(
+        stagingRoot,
+        'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
+    );
+    await mkdir(path.dirname(scriptDestination), { recursive: true });
+    await cp(scriptSource, scriptDestination);
+}
+
 /**
  * @param {string} stagingRoot
  * @param {{ engines?: Record<string, string>, version?: string }} rootManifest
@@ -236,6 +250,8 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
         scripts: {
             migrate: 'node packages/dev-server/dist/run-migrations.js',
             'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',
+            'repair:inventory-inheritance':
+                'node packages/dev-server/scripts/repair-inventory-inheritance.mjs',
             'start:server': 'node packages/dev-server/dist/index.js',
             'start:worker': 'node packages/dev-server/dist/index-worker.js',
             verify: 'node verify-runtime.mjs',
@@ -308,6 +324,7 @@ export async function buildRuntimeArtifact({
         await pruneInstallerWorkspace(stagingRoot);
         await copyRuntimeBuildOutputs(stagingRoot);
         await copyStorefrontMediaReleaseInputs(stagingRoot);
+        await copyInventoryRepairReleaseInput(stagingRoot);
 
         const metadata = {
             artifactFormat: 1,

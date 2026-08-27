@@ -208,6 +208,31 @@ Remote writes require both flags. Existing asset records are not deleted: an unc
 reused by its SHA-256 tag, while a changed file creates a new asset and moves the configured
 bindings to it. This makes the command safe to repeat and keeps rollback assets available.
 
+## Repairing reviewed inventory inheritance targets
+
+New product variants save `trackInventory=INHERIT`, but existing variants which already contain an
+explicit `FALSE` are not changed automatically. For a reviewed one-time repair, set the exact
+Channel codes and stable SKUs in environment variables. The command refuses missing or ambiguous
+SKUs, leaves existing `INHERIT` values unchanged, and refuses to replace an explicit `TRUE` value.
+
+```bash
+INVENTORY_REPAIR_CHANNEL_CODES=__default_channel__ \
+INVENTORY_INHERIT_SKUS=reviewed-sku-a,reviewed-sku-b \
+bun run repair:inventory-inheritance -- --dry-run
+```
+
+After reviewing every returned variant ID, SKU, Channel and current value, apply locally with
+`--apply`. Production or remote writes additionally require `--allow-remote`:
+
+```bash
+bun run repair:inventory-inheritance -- --apply --allow-remote
+```
+
+Credentials and targets are read only from environment variables; they are never accepted as CLI
+arguments. If the configured password is not the active Dashboard credential, a short-lived
+authenticated Admin API session may be supplied as `VENDURE_ADMIN_BEARER_TOKEN`. Never print or
+persist that token. Unset all three repair variables after the one-time repair.
+
 ## Testing custom ui extension compilation
 
 In order to compile ui extensions within this monorepo, you need to add the following entry to
@@ -225,11 +250,11 @@ This package also contains scripts for load testing the Vendure server. The load
 
 Load testing is done with [k6](https://docs.k6.io/), and to run them you will need k6 installed and (in Windows) available in your PATH environment variable so that it can be run with the command `k6`.
 
-The load tests assume the existence of the following tables in the  database:
+The load tests assume the existence of the following tables in the database:
 
-* `vendure-load-testing-1000`
-* `vendure-load-testing-10000`
-* `vendure-load-testing-100000`
+- `vendure-load-testing-1000`
+- `vendure-load-testing-10000`
+- `vendure-load-testing-100000`
 
 The npm scripts `load-test:1k`, `load-test:10k` and `load-test:100k` will populate their respective databases with test data and then run the k6 scripts against them.
 
@@ -246,15 +271,15 @@ bun run load-test:1k deep-query.js
 The following queries can be used when running load tests against postgres to analyze the queries:
 
 ```sql
-SELECT 
+SELECT
   dbid,
-  (total_time / 1000 / 60) as total, 
-  (total_time/calls) as avg, 
+  (total_time / 1000 / 60) as total,
+  (total_time/calls) as avg,
   calls,
-  query 
-FROM pg_stat_statements 
+  query
+FROM pg_stat_statements
 WHERE dbid = <db_id>
-ORDER BY total DESC 
+ORDER BY total DESC
 LIMIT 100;
 
 -- SELECT pg_stat_statements_reset();
@@ -264,7 +289,7 @@ LIMIT 100;
 
 The results of the test are saved to the [`./load-testing/results`](./load-testing/results) directory. Each test run creates two files:
 
-* `load-test-<date>-<product-count>.json` Contains a summary of all load tests run
-* `load-test-<date>-<product-count>-<script-name>.csv` Contains time-series data which can be used to create charts
+- `load-test-<date>-<product-count>.json` Contains a summary of all load tests run
+- `load-test-<date>-<product-count>-<script-name>.csv` Contains time-series data which can be used to create charts
 
 Historical benchmark results with charts can be found in [this Google Sheet](https://docs.google.com/spreadsheets/d/1UaNhmokbNmKDehrnh4m9XO6-DJte-AI-l_Lnji47Qn8/edit?usp=sharing)

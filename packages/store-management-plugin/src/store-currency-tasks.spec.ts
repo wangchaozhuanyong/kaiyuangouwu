@@ -17,12 +17,12 @@ describe('automatic store currency task', () => {
     });
 
     it('delegates all automatic channels to the currency service', async () => {
-        const expected = [{ channelCode: 'cn-mainland', syncedPriceCount: 88, rate: 0.5991 }];
-        const syncAllAutomaticPrices = vi.fn().mockResolvedValue(expected);
+        const expected = [{ channelCode: 'cn-mainland', syncedPriceCount: 0, rate: 0.5991 }];
+        const refreshAllAutomaticRates = vi.fn().mockResolvedValue(expected);
         const injector = {
             get: (token: unknown) => {
                 expect(token).toBe(StoreCurrencySettingsService);
-                return { syncAllAutomaticPrices };
+                return { refreshAllAutomaticRates };
             },
         } as Injector;
         const scheduledContext = {} as RequestContext;
@@ -34,7 +34,7 @@ describe('automatic store currency task', () => {
                 params: {},
             }),
         ).resolves.toEqual(expected);
-        expect(syncAllAutomaticPrices).toHaveBeenCalledWith(scheduledContext);
+        expect(refreshAllAutomaticRates).toHaveBeenCalledWith(scheduledContext);
     });
 });
 

@@ -9,11 +9,11 @@ import { UsdtPaymentService } from './usdt/usdt-payment.service';
  */
 export const syncAutomaticStoreCurrencyPricesTask = new ScheduledTask({
     id: 'sync-automatic-store-currency-prices',
-    description: 'Refresh official CNY/MYR rates and sync converted prices at 10:00 Beijing time',
+    description: 'Refresh official CNY/MYR rates at 10:00 Beijing time; converted prices are calculated live',
     schedule: '0 10 * * *',
     timeout: '10m',
     async execute({ injector, scheduledContext }) {
-        return injector.get(StoreCurrencySettingsService).syncAllAutomaticPrices(scheduledContext);
+        return injector.get(StoreCurrencySettingsService).refreshAllAutomaticRates(scheduledContext);
     },
 });
 

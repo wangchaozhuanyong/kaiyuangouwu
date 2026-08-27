@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
     assertSafeOutputPath,
+    copyInventoryRepairReleaseInput,
     copyStorefrontMediaReleaseInputs,
     ensureRuntimeRootPermissions,
     pruneDeniedRuntimePackages,
@@ -68,6 +69,16 @@ void test('runtime artifact includes the media publisher and every manifest imag
             const copied = await readFile(path.join(fixtureRoot, relativePath));
             assert.ok(copied.byteLength > 0, `Missing copied media: ${entry.key}`);
         }
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('runtime artifact includes the reviewed inventory repair publisher', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-inventory-repair-'));
+    try {
+        await copyInventoryRepairReleaseInput(fixtureRoot);
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
     } finally {
         await rm(fixtureRoot, { recursive: true, force: true });
     }

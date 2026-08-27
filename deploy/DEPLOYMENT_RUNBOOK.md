@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-25
+最后核对：2026-08-27
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -213,6 +213,26 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 
 命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。
 
+API 健康后、切换 Storefront 稳定指针前，处理经过审核的旧库存继承数据。只把确认是历史后台
+错误写成 `trackInventory=FALSE` 的稳定 SKU 放入环境变量；先预演并逐项核对 SKU、variant ID、
+Channel 和当前值，再显式写入。脚本会拒绝缺失/重复 SKU、当前为 `TRUE` 的变体以及未授权的
+远程写入：
+
+```bash
+cd "${CANDIDATE}"
+export INVENTORY_REPAIR_CHANNEL_CODES=__default_channel__
+export INVENTORY_INHERIT_SKUS=reviewed-sku-a,reviewed-sku-b
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+    node packages/dev-server/scripts/repair-inventory-inheritance.mjs --dry-run
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+    node packages/dev-server/scripts/repair-inventory-inheritance.mjs --apply --allow-remote
+unset INVENTORY_REPAIR_CHANNEL_CODES INVENTORY_INHERIT_SKUS
+```
+
+凭据从已安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 读取；若后台密码已独立变更，也可
+通过进程环境临时注入现有的短期 `VENDURE_ADMIN_BEARER_TOKEN`。凭据不得写入参数、日志或发布记录，
+操作后必须立即取消环境变量。预演目标不正确或写入后没有返回 `INHERIT` 时立即停止发布。
+
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 
 ```bash
@@ -242,7 +262,7 @@ sudo -n systemctl reload nginx
 6. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 7. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
 8. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功。
-9. 从候选产物执行店铺图片同步的只读预演，核对通过后使用 `--apply --allow-remote` 绑定后台素材、商品与装修内容块，再原子切换 `kaiyuangouwu-current`。
+9. 从候选产物依次预演并执行店铺图片同步与本次审核过的库存继承修复；确认 Admin API 与 Shop API 结果一致后，再原子切换 `kaiyuangouwu-current`。
 10. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 11. 撤销临时 SSH 规则，仅保留原有固定规则；候选和回滚包按需保留，不删除用户数据。
 

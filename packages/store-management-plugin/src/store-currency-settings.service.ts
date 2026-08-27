@@ -27,6 +27,7 @@ import {
     UpdateStoreCurrencyConfigurationInput,
 } from './types';
 import { UsdtOtcRateService } from './usdt-otc-rate.service';
+// eslint-disable-next-line import/order -- TypeScript organize-imports sorts "-" before "/".
 import { UsdtPaymentService } from './usdt/usdt-payment.service';
 
 const SUPPORTED_CURRENCIES = [CurrencyCode.CNY, CurrencyCode.MYR] as const;
@@ -106,6 +107,9 @@ export class StoreCurrencySettingsService {
     ): Promise<StoreCurrencyConfiguration> {
         const normalized = normalizeInput(input);
         const channel = await this.getActiveChannel(ctx);
+        if (channel.defaultCurrencyCode !== normalized.defaultCurrencyCode) {
+            await this.materializeNewDefaultCurrencyPrices(ctx, channel.defaultCurrencyCode, normalized);
+        }
         const customFields = channel.customFields as CurrencyChannelFields;
         const updated = await this.channelService.update(ctx, {
             id: channel.id,
@@ -240,83 +244,11 @@ export class StoreCurrencySettingsService {
     }
 
     async syncPrices(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
-        let configuration = await this.get(ctx);
-        if (configuration.rateMode === 'AUTO') {
-            configuration = await this.refreshRate(ctx);
-        }
-        if (configuration.availableCurrencyCodes.length < 2) {
-            throw new UserInputError('请先同时启用 CNY 和 MYR');
-        }
-
-        const baseCurrency = configuration.defaultCurrencyCode;
-        const targetCurrency = baseCurrency === CurrencyCode.CNY ? CurrencyCode.MYR : CurrencyCode.CNY;
-        const repository = this.connection.getRepository(ctx, ProductVariantPrice);
-        const [basePrices, targetPrices] = await Promise.all([
-            repository.find({
-                where: { channelId: ctx.channelId, currencyCode: baseCurrency },
-                relations: { variant: true },
-            }),
-            repository.find({
-                where: { channelId: ctx.channelId, currencyCode: targetCurrency },
-                relations: { variant: true },
-            }),
-        ]);
-        const targetByVariant = new Map(targetPrices.map(price => [String(price.variant.id), price]));
-        const created: ProductVariantPrice[] = [];
-        const updated: ProductVariantPrice[] = [];
-
-        for (const basePrice of basePrices) {
-            const variantId = String(basePrice.variant.id);
-            const converted = convertMinorPrice(
-                basePrice.price,
-                baseCurrency,
-                configuration.cnyToMyrRate,
-                configuration.markupPercent,
-                configuration.roundingMode,
-            );
-            const existing = targetByVariant.get(variantId);
-            if (existing) {
-                if (existing.price !== converted) {
-                    existing.price = converted;
-                    updated.push(existing);
-                }
-                continue;
-            }
-            created.push(
-                new ProductVariantPrice({
-                    channelId: ctx.channelId,
-                    currencyCode: targetCurrency,
-                    price: converted,
-                    variant: new ProductVariant({ id: basePrice.variant.id }),
-                }),
-            );
-        }
-
-        if (created.length) {
-            const saved = await repository.save(created);
-            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'created'));
-        }
-        if (updated.length) {
-            const saved = await repository.save(updated);
-            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'updated'));
-        }
-
-        const channel = await this.getActiveChannel(ctx);
-        const customFields = channel.customFields as CurrencyChannelFields;
-        const syncedPriceCount = created.length + updated.length;
-        const savedChannel = await this.channelService.update(ctx, {
-            id: channel.id,
-            customFields: {
-                ...customFields,
-                currencyPricesUpdatedAt: new Date(),
-                currencySyncedPriceCount: syncedPriceCount,
-            },
-        });
-        if (isGraphQlErrorResult(savedChannel)) throw new UserInputError(savedChannel.message);
-        return this.toConfiguration(savedChannel);
+        const configuration = await this.get(ctx);
+        return configuration.rateMode === 'AUTO' ? this.refreshRate(ctx) : configuration;
     }
 
-    async syncAllAutomaticPrices(ctx: RequestContext): Promise<StoreCurrencyAutomaticSyncResult[]> {
+    async refreshAllAutomaticRates(ctx: RequestContext): Promise<StoreCurrencyAutomaticSyncResult[]> {
         const pageSize = 100;
         let skip = 0;
         let totalItems = 0;
@@ -344,10 +276,10 @@ export class StoreCurrencySettingsService {
                     apiType: 'admin',
                     channelOrToken: channel,
                 });
-                const updated = await this.syncPrices(channelContext);
+                const updated = await this.refreshRate(channelContext);
                 results.push({
                     channelCode: updated.channelCode,
-                    syncedPriceCount: updated.syncedPriceCount,
+                    syncedPriceCount: 0,
                     rate: updated.cnyToMyrRate,
                 });
             } catch (error) {
@@ -356,7 +288,7 @@ export class StoreCurrencySettingsService {
         }
 
         if (failures.length) {
-            throw new Error(`自动汇率同步失败：${failures.join('；')}`);
+            throw new Error(`自动汇率刷新失败：${failures.join('；')}`);
         }
         return results;
     }
@@ -423,6 +355,64 @@ export class StoreCurrencySettingsService {
         return channel;
     }
 
+    private async materializeNewDefaultCurrencyPrices(
+        ctx: RequestContext,
+        previousDefaultCurrency: CurrencyCode,
+        configuration: UpdateStoreCurrencyConfigurationInput,
+    ): Promise<void> {
+        if (!isSupportedCurrency(previousDefaultCurrency)) return;
+
+        const repository = this.connection.getRepository(ctx, ProductVariantPrice);
+        const [basePrices, targetPrices] = await Promise.all([
+            repository.find({
+                where: { channelId: ctx.channelId, currencyCode: previousDefaultCurrency },
+                relations: { variant: true },
+            }),
+            repository.find({
+                where: { channelId: ctx.channelId, currencyCode: configuration.defaultCurrencyCode },
+                relations: { variant: true },
+            }),
+        ]);
+        const targetByVariant = new Map(targetPrices.map(price => [String(price.variant.id), price]));
+        const created: ProductVariantPrice[] = [];
+        const updated: ProductVariantPrice[] = [];
+
+        for (const basePrice of basePrices) {
+            const converted = convertMinorPrice(
+                basePrice.price,
+                previousDefaultCurrency,
+                configuration.cnyToMyrRate,
+                configuration.markupPercent,
+                configuration.roundingMode,
+            );
+            const existing = targetByVariant.get(String(basePrice.variant.id));
+            if (existing) {
+                if (existing.price !== converted) {
+                    existing.price = converted;
+                    updated.push(existing);
+                }
+            } else {
+                created.push(
+                    new ProductVariantPrice({
+                        channelId: ctx.channelId,
+                        currencyCode: configuration.defaultCurrencyCode,
+                        price: converted,
+                        variant: new ProductVariant({ id: basePrice.variant.id }),
+                    }),
+                );
+            }
+        }
+
+        if (created.length) {
+            const saved = await repository.save(created);
+            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'created'));
+        }
+        if (updated.length) {
+            const saved = await repository.save(updated);
+            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'updated'));
+        }
+    }
+
     private toConfiguration(channel: Channel, now = new Date()): StoreCurrencyConfiguration {
         const customFields = channel.customFields as CurrencyChannelFields;
         const usdtPayment = this.usdtPaymentService.walletStatus();
@@ -453,8 +443,8 @@ export class StoreCurrencySettingsService {
             roundingMode: normalizeRoundingMode(customFields.currencyRoundingMode),
             rateSource: customFields.currencyRateSource?.trim() || null,
             rateUpdatedAt: nullableDate(customFields.currencyRateUpdatedAt),
-            pricesUpdatedAt: nullableDate(customFields.currencyPricesUpdatedAt),
-            syncedPriceCount: Math.max(0, Math.round(finiteNumber(customFields.currencySyncedPriceCount, 0))),
+            pricesUpdatedAt: null,
+            syncedPriceCount: 0,
             usdtDisplayEnabled: customFields.usdtDisplayEnabled === true,
             usdtMarkupPercent: finiteNumber(customFields.usdtRateMarkupBps, 0) / 100,
             ...usdtRateSchedule,

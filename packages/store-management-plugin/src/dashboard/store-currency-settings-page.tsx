@@ -29,7 +29,7 @@ import {
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import { CircleDollarSign, LoaderCircle, RefreshCw, Save, WandSparkles } from 'lucide-react';
+import { CircleDollarSign, LoaderCircle, RefreshCw, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -40,13 +40,11 @@ import {
     RefreshStoreUsdtRateResult,
     StoreCurrencyConfigurationRecord,
     StoreUsdtPaymentIntentRecord,
-    SyncStoreCurrencyPricesResult,
     UpdateStoreCurrencyConfigurationResult,
     UsdtRateScheduleMode,
     myStoreCurrencyConfigurationQuery,
     refreshMyStoreExchangeRateMutation,
     refreshMyStoreUsdtRateMutation,
-    syncMyStoreCurrencyPricesMutation,
     updateMyStoreCurrencyConfigurationMutation,
 } from './store-currency.graphql';
 
@@ -117,15 +115,6 @@ function StoreCurrencySettingsPage() {
             setDraft(toDraft(result.refreshMyStoreExchangeRate));
             void query.refetch();
             toast.success('已获取马来西亚国家银行中间价');
-        },
-        onError: error => toast.error(errorMessage(error)),
-    });
-    const syncMutation = useMutation({
-        mutationFn: () => api.mutate<SyncStoreCurrencyPricesResult>(syncMyStoreCurrencyPricesMutation, {}),
-        onSuccess: result => {
-            setDraft(toDraft(result.syncMyStoreCurrencyPrices));
-            void query.refetch();
-            toast.success(`副币价格已同步，更新 ${result.syncMyStoreCurrencyPrices.syncedPriceCount} 条`);
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -268,7 +257,7 @@ function StoreCurrencySettingsPage() {
                                     <section className="space-y-5 border-t pt-7">
                                         <SectionHeading
                                             title="马币汇率"
-                                            description="系统按该汇率生成并保存 MYR 商品价格。"
+                                            description="商品只保存店铺主币种价格，客户端按该汇率实时换算副币价格。"
                                         />
                                         <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-muted/30 p-4">
                                             <div>
@@ -285,8 +274,8 @@ function StoreCurrencySettingsPage() {
                                                 </div>
                                                 <HelpText>
                                                     {configuration?.rateSource ?? '尚未获取'} · 更新于{' '}
-                                                    {formatDate(configuration?.rateUpdatedAt)} · 已同步{' '}
-                                                    {configuration?.syncedPriceCount ?? 0} 条
+                                                    {formatDate(configuration?.rateUpdatedAt)} ·
+                                                    换算价格实时生效
                                                 </HelpText>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
@@ -300,21 +289,6 @@ function StoreCurrencySettingsPage() {
                                                         className={`mr-2 h-4 w-4${refreshMutation.isPending ? ' animate-spin' : ''}`}
                                                     />
                                                     刷新汇率
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="secondary"
-                                                    disabled={
-                                                        syncMutation.isPending || saveMutation.isPending
-                                                    }
-                                                    onClick={() => syncMutation.mutate()}
-                                                >
-                                                    {syncMutation.isPending ? (
-                                                        <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <WandSparkles className="mr-2 h-4 w-4" />
-                                                    )}
-                                                    同步商品价格
                                                 </Button>
                                             </div>
                                         </div>
@@ -382,8 +356,7 @@ function StoreCurrencySettingsPage() {
                                             </Field>
                                         </div>
                                         <HelpText>
-                                            修改设置后请先保存，再同步商品价格。上次同步：
-                                            {formatDate(configuration?.pricesUpdatedAt)}
+                                            修改汇率、加价或取整规则后保存即可，无需再同步每个商品。
                                         </HelpText>
                                     </section>
                                 </TabsContent>
@@ -486,7 +459,9 @@ function StoreCurrencySettingsPage() {
                                                     <SelectContent>
                                                         {USDT_INTERVAL_OPTIONS.map(minutes => (
                                                             <SelectItem key={minutes} value={String(minutes)}>
-                                                                每 {minutes} 分钟
+                                                                {minutes === 60
+                                                                    ? '每 1 小时'
+                                                                    : `每 ${minutes} 分钟`}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>

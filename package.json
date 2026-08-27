@@ -15,6 +15,7 @@
         "watch:core-common": "lerna run --scope @vendure/common --scope @vendure/core watch --parallel",
         "build:core-common": "lerna run --scope @vendure/common --scope @vendure/core build",
         "sync:storefront-media": "bun run --cwd packages/dev-server sync:storefront-media",
+        "repair:inventory-inheritance": "bun run --cwd packages/dev-server repair:inventory-inheritance",
         "lint": "eslint --fix",
         "lint:check": "node scripts/lint-check.mjs",
         "format": "prettier --write --html-whitespace-sensitivity ignore",

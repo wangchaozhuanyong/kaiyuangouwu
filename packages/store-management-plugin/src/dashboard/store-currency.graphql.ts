@@ -13,8 +13,6 @@ const storeCurrencyConfigurationFields = gql`
         roundingMode
         rateSource
         rateUpdatedAt
-        pricesUpdatedAt
-        syncedPriceCount
         usdtDisplayEnabled
         usdtMarkupPercent
         usdtRateScheduleMode
@@ -74,15 +72,6 @@ export const refreshMyStoreExchangeRateMutation = gql`
     }
 `;
 
-export const syncMyStoreCurrencyPricesMutation = gql`
-    ${storeCurrencyConfigurationFields}
-    mutation SyncMyStoreCurrencyPrices {
-        syncMyStoreCurrencyPrices {
-            ...StoreCurrencyConfigurationFields
-        }
-    }
-`;
-
 export const refreshMyStoreUsdtRateMutation = gql`
     ${storeCurrencyConfigurationFields}
     mutation RefreshMyStoreUsdtRate {
@@ -108,8 +97,6 @@ export interface StoreCurrencyConfigurationRecord {
     roundingMode: CurrencyRoundingMode;
     rateSource: string | null;
     rateUpdatedAt: string | null;
-    pricesUpdatedAt: string | null;
-    syncedPriceCount: number;
     usdtDisplayEnabled: boolean;
     usdtMarkupPercent: number;
     usdtRateScheduleMode: UsdtRateScheduleMode;
@@ -153,10 +140,6 @@ export interface UpdateStoreCurrencyConfigurationResult {
 
 export interface RefreshStoreExchangeRateResult {
     refreshMyStoreExchangeRate: StoreCurrencyConfigurationRecord;
-}
-
-export interface SyncStoreCurrencyPricesResult {
-    syncMyStoreCurrencyPrices: StoreCurrencyConfigurationRecord;
 }
 
 export interface RefreshStoreUsdtRateResult {
