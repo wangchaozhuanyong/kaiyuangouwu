@@ -49,6 +49,7 @@ import { AddReferralRebate1787774400000 } from './1787774400000-add-referral-reb
 import { AddStorefrontUsdtDisplay1787778000000 } from './1787778000000-add-storefront-usdt-display';
 import { AddUsdtTrc20Payments1787781600000 } from './1787781600000-add-usdt-trc20-payments';
 import { AlignUsdtTrc20Schema1787785200000 } from './1787785200000-align-usdt-trc20-schema';
+import { AddUsdtRateSchedule1787788800000 } from './1787788800000-add-usdt-rate-schedule';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -102,4 +103,5 @@ export const devServerMigrations = [
     AddStorefrontUsdtDisplay1787778000000,
     AddUsdtTrc20Payments1787781600000,
     AlignUsdtTrc20Schema1787785200000,
+    AddUsdtRateSchedule1787788800000,
 ];

@@ -379,6 +379,7 @@ export interface UpdateMyStoreCommerceConfigurationInput {
 
 export type StoreCurrencyRateMode = 'AUTO' | 'MANUAL';
 export type StoreCurrencyRoundingMode = 'CENT' | 'TENTH' | 'WHOLE';
+export type StoreUsdtRateScheduleMode = 'INTERVAL' | 'DAILY';
 
 export interface StoreCurrencyConfiguration {
     channelId: ID;
@@ -396,10 +397,15 @@ export interface StoreCurrencyConfiguration {
     syncedPriceCount: number;
     usdtDisplayEnabled: boolean;
     usdtMarkupPercent: number;
+    usdtRateScheduleMode: StoreUsdtRateScheduleMode;
+    usdtRateIntervalMinutes: number;
+    usdtRateDailyTime: string;
     cnyPerUsdtRate: number | null;
     myrPerUsdtRate: number | null;
     usdtRateSource: string | null;
     usdtRateUpdatedAt: Date | null;
+    usdtRateNextRunAt: Date;
+    usdtRateExpiresAt: Date | null;
     usdtRateAvailable: boolean;
     usdtPaymentConfigured: boolean;
     usdtPaymentNetwork: string;
@@ -417,6 +423,9 @@ export interface UpdateStoreCurrencyConfigurationInput {
     roundingMode: StoreCurrencyRoundingMode;
     usdtDisplayEnabled: boolean;
     usdtMarkupPercent: number;
+    usdtRateScheduleMode: StoreUsdtRateScheduleMode;
+    usdtRateIntervalMinutes: number;
+    usdtRateDailyTime: string;
 }
 
 export interface StorefrontUsdtCheckoutQuoteView {

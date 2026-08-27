@@ -44,6 +44,11 @@ const commonTypes = gql`
         WHOLE
     }
 
+    enum StoreUsdtRateScheduleMode {
+        INTERVAL
+        DAILY
+    }
+
     type StoreCurrencyConfiguration {
         channelId: ID!
         channelCode: String!
@@ -60,10 +65,15 @@ const commonTypes = gql`
         syncedPriceCount: Int!
         usdtDisplayEnabled: Boolean!
         usdtMarkupPercent: Float!
+        usdtRateScheduleMode: StoreUsdtRateScheduleMode!
+        usdtRateIntervalMinutes: Int!
+        usdtRateDailyTime: String!
         cnyPerUsdtRate: Float
         myrPerUsdtRate: Float
         usdtRateSource: String
         usdtRateUpdatedAt: DateTime
+        usdtRateNextRunAt: DateTime!
+        usdtRateExpiresAt: DateTime
         usdtRateAvailable: Boolean!
         usdtPaymentConfigured: Boolean!
         usdtPaymentNetwork: String!
@@ -323,6 +333,9 @@ export const adminApiExtensions = gql`
         roundingMode: StoreCurrencyRoundingMode!
         usdtDisplayEnabled: Boolean!
         usdtMarkupPercent: Float!
+        usdtRateScheduleMode: StoreUsdtRateScheduleMode!
+        usdtRateIntervalMinutes: Int!
+        usdtRateDailyTime: String!
     }
 
     type SystemAnnouncement implements Node {

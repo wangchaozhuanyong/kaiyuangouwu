@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 import {
     calculateUsdtCheckoutAmount,
     convertMinorPrice,
+    getNextUsdtRateRefreshAt,
+    getUsdtRateExpiresAt,
+    isUsdtRateRefreshDue,
     publicCurrencySelection,
 } from './store-currency-settings.service';
 
@@ -32,6 +35,48 @@ describe('USDT checkout quote amount', () => {
 
     it('rejects invalid rate inputs without producing an infinite amount', () => {
         expect(calculateUsdtCheckoutAmount(10_000, 0, 0)).toBe(0);
+    });
+});
+
+describe('USDT rate collection schedule', () => {
+    const intervalSchedule = {
+        usdtRateScheduleMode: 'INTERVAL' as const,
+        usdtRateIntervalMinutes: 5,
+        usdtRateDailyTime: '10:00',
+    };
+    const dailySchedule = {
+        usdtRateScheduleMode: 'DAILY' as const,
+        usdtRateIntervalMinutes: 5,
+        usdtRateDailyTime: '10:00',
+    };
+
+    it('runs interval collection from the most recent successful update', () => {
+        const updatedAt = new Date('2026-08-27T01:54:00.000Z');
+        const beforeDue = new Date('2026-08-27T01:58:00.000Z');
+        const dueAt = new Date('2026-08-27T01:59:00.000Z');
+
+        expect(isUsdtRateRefreshDue(intervalSchedule, updatedAt, beforeDue)).toBe(false);
+        expect(getNextUsdtRateRefreshAt(intervalSchedule, updatedAt, beforeDue)).toEqual(dueAt);
+        expect(isUsdtRateRefreshDue(intervalSchedule, updatedAt, dueAt)).toBe(true);
+        expect(getUsdtRateExpiresAt(intervalSchedule, updatedAt)).toEqual(
+            new Date('2026-08-27T02:09:00.000Z'),
+        );
+    });
+
+    it('runs daily collection at the configured Beijing time', () => {
+        const previousUpdate = new Date('2026-08-26T02:01:00.000Z');
+        const beforeDue = new Date('2026-08-27T01:59:00.000Z');
+        const dueAt = new Date('2026-08-27T02:00:00.000Z');
+
+        expect(isUsdtRateRefreshDue(dailySchedule, previousUpdate, beforeDue)).toBe(false);
+        expect(getNextUsdtRateRefreshAt(dailySchedule, previousUpdate, beforeDue)).toEqual(dueAt);
+        expect(isUsdtRateRefreshDue(dailySchedule, previousUpdate, dueAt)).toBe(true);
+    });
+
+    it('keeps a daily quote valid until fifteen minutes after the next planned collection', () => {
+        expect(getUsdtRateExpiresAt(dailySchedule, new Date('2026-08-27T02:00:05.000Z'))).toEqual(
+            new Date('2026-08-28T02:15:00.000Z'),
+        );
     });
 });
 

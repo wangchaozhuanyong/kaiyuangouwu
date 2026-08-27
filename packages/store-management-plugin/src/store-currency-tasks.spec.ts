@@ -39,8 +39,8 @@ describe('automatic store currency task', () => {
 });
 
 describe('automatic USDT rate task', () => {
-    it('runs every five minutes', () => {
-        expect(refreshStoreUsdtRatesTask.options.schedule).toBe('*/5 * * * *');
+    it('checks due per-Channel schedules every minute', () => {
+        expect(refreshStoreUsdtRatesTask.options.schedule).toBe('* * * * *');
     });
 
     it('refreshes every channel with USDT display enabled', async () => {

@@ -23,6 +23,7 @@ import {
     StoreCurrencyRateMode,
     StoreCurrencyRoundingMode,
     StorefrontUsdtCheckoutQuoteView,
+    StoreUsdtRateScheduleMode,
     UpdateStoreCurrencyConfigurationInput,
 } from './types';
 import { UsdtOtcRateService } from './usdt-otc-rate.service';
@@ -31,9 +32,16 @@ import { UsdtPaymentService } from './usdt/usdt-payment.service';
 const SUPPORTED_CURRENCIES = [CurrencyCode.CNY, CurrencyCode.MYR] as const;
 const BNM_EXCHANGE_RATE_URL = 'https://api.bnm.gov.my/public/exchange-rate/CNY?session=1200&quote=rm';
 const BNM_RATE_SOURCE = 'Bank Negara Malaysia';
-const USDT_RATE_MAX_AGE_MS = 15 * 60 * 1000;
 const USDT_CHECKOUT_QUOTE_TTL_MS = 10 * 60 * 1000;
 const USDT_QUOTE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const BEIJING_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+const USDT_INTERVAL_FAILURE_GRACE_MS = 10 * MINUTE_MS;
+const USDT_DAILY_FAILURE_GRACE_MS = 15 * MINUTE_MS;
+
+export const USDT_RATE_INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
+export const DEFAULT_USDT_RATE_DAILY_TIME = '10:00';
 
 interface CurrencyChannelFields {
     currencySelectorEnabled?: boolean | null;
@@ -47,6 +55,9 @@ interface CurrencyChannelFields {
     currencySyncedPriceCount?: number | null;
     usdtDisplayEnabled?: boolean | null;
     usdtRateMarkupBps?: number | null;
+    usdtRateScheduleMode?: string | null;
+    usdtRateIntervalMinutes?: number | null;
+    usdtRateDailyTime?: string | null;
     cnyPerUsdtRate?: number | null;
     usdtRateSource?: string | null;
     usdtRateUpdatedAt?: Date | string | null;
@@ -109,6 +120,9 @@ export class StoreCurrencySettingsService {
                 currencyRoundingMode: normalized.roundingMode,
                 usdtDisplayEnabled: normalized.usdtDisplayEnabled,
                 usdtRateMarkupBps: Math.round(normalized.usdtMarkupPercent * 100),
+                usdtRateScheduleMode: normalized.usdtRateScheduleMode,
+                usdtRateIntervalMinutes: normalized.usdtRateIntervalMinutes,
+                usdtRateDailyTime: normalized.usdtRateDailyTime,
             },
         });
         if (isGraphQlErrorResult(updated)) throw new UserInputError(updated.message);
@@ -364,12 +378,19 @@ export class StoreCurrencySettingsService {
             skip += page.items.length;
         } while (skip < totalItems);
 
-        const enabledChannels = channels.filter(channel => this.toConfiguration(channel).usdtDisplayEnabled);
-        if (!enabledChannels.length) return [];
+        const now = new Date();
+        const dueChannels = channels.filter(channel => {
+            const configuration = this.toConfiguration(channel, now);
+            return (
+                configuration.usdtDisplayEnabled &&
+                isUsdtRateRefreshDue(configuration, configuration.usdtRateUpdatedAt, now)
+            );
+        });
+        if (!dueChannels.length) return [];
 
         const snapshot = await this.usdtOtcRateService.fetchCnyRate();
         const results: StoreCurrencyAutomaticSyncResult[] = [];
-        for (const channel of enabledChannels) {
+        for (const channel of dueChannels) {
             const channelContext = await this.requestContextService.create({
                 apiType: 'admin',
                 channelOrToken: channel,
@@ -402,7 +423,7 @@ export class StoreCurrencySettingsService {
         return channel;
     }
 
-    private toConfiguration(channel: Channel): StoreCurrencyConfiguration {
+    private toConfiguration(channel: Channel, now = new Date()): StoreCurrencyConfiguration {
         const customFields = channel.customFields as CurrencyChannelFields;
         const usdtPayment = this.usdtPaymentService.walletStatus();
         const availableCurrencyCodes = channel.availableCurrencyCodes.filter(isSupportedCurrency);
@@ -414,6 +435,12 @@ export class StoreCurrencySettingsService {
         }
         const cnyPerUsdtRate = nullablePositiveNumber(customFields.cnyPerUsdtRate);
         const usdtRateUpdatedAt = nullableDate(customFields.usdtRateUpdatedAt);
+        const usdtRateSchedule = {
+            usdtRateScheduleMode: normalizeUsdtRateScheduleMode(customFields.usdtRateScheduleMode),
+            usdtRateIntervalMinutes: normalizeUsdtRateIntervalMinutes(customFields.usdtRateIntervalMinutes),
+            usdtRateDailyTime: normalizeUsdtRateDailyTime(customFields.usdtRateDailyTime),
+        };
+        const usdtRateExpiresAt = getUsdtRateExpiresAt(usdtRateSchedule, usdtRateUpdatedAt);
         return {
             channelId: channel.id,
             channelCode: channel.code,
@@ -430,17 +457,20 @@ export class StoreCurrencySettingsService {
             syncedPriceCount: Math.max(0, Math.round(finiteNumber(customFields.currencySyncedPriceCount, 0))),
             usdtDisplayEnabled: customFields.usdtDisplayEnabled === true,
             usdtMarkupPercent: finiteNumber(customFields.usdtRateMarkupBps, 0) / 100,
+            ...usdtRateSchedule,
             cnyPerUsdtRate,
             myrPerUsdtRate: cnyPerUsdtRate
                 ? cnyPerUsdtRate * positiveNumber(customFields.cnyToMyrRate, 0.6)
                 : null,
             usdtRateSource: customFields.usdtRateSource?.trim() || null,
             usdtRateUpdatedAt,
+            usdtRateNextRunAt: getNextUsdtRateRefreshAt(usdtRateSchedule, usdtRateUpdatedAt, now),
+            usdtRateExpiresAt,
             usdtRateAvailable:
                 customFields.usdtDisplayEnabled === true &&
                 cnyPerUsdtRate !== null &&
-                usdtRateUpdatedAt !== null &&
-                Date.now() - usdtRateUpdatedAt.getTime() <= USDT_RATE_MAX_AGE_MS,
+                usdtRateExpiresAt !== null &&
+                now.getTime() <= usdtRateExpiresAt.getTime(),
             usdtPaymentConfigured: usdtPayment.configured,
             usdtPaymentNetwork: usdtPayment.network,
             usdtReceivingAddressMasked: usdtPayment.receivingAddressMasked,
@@ -521,6 +551,50 @@ export function publicCurrencySelection(
     };
 }
 
+type UsdtRateSchedule = Pick<
+    StoreCurrencyConfiguration,
+    'usdtRateScheduleMode' | 'usdtRateIntervalMinutes' | 'usdtRateDailyTime'
+>;
+
+export function isUsdtRateRefreshDue(
+    schedule: UsdtRateSchedule,
+    updatedAt: Date | null,
+    now = new Date(),
+): boolean {
+    return getNextUsdtRateRefreshAt(schedule, updatedAt, now).getTime() <= now.getTime();
+}
+
+export function getNextUsdtRateRefreshAt(
+    schedule: UsdtRateSchedule,
+    updatedAt: Date | null,
+    now = new Date(),
+): Date {
+    if (!updatedAt) return now;
+    if (schedule.usdtRateScheduleMode === 'INTERVAL') {
+        const scheduledAt = new Date(updatedAt.getTime() + schedule.usdtRateIntervalMinutes * MINUTE_MS);
+        return scheduledAt.getTime() <= now.getTime() ? now : scheduledAt;
+    }
+
+    const latestScheduledAt = latestBeijingDailyRunAt(now, schedule.usdtRateDailyTime);
+    if (updatedAt.getTime() < latestScheduledAt.getTime()) return now;
+    return nextBeijingDailyRunAfter(now, schedule.usdtRateDailyTime);
+}
+
+export function getUsdtRateExpiresAt(schedule: UsdtRateSchedule, updatedAt: Date | null): Date | null {
+    if (!updatedAt) return null;
+    if (schedule.usdtRateScheduleMode === 'INTERVAL') {
+        return new Date(
+            updatedAt.getTime() +
+                schedule.usdtRateIntervalMinutes * MINUTE_MS +
+                USDT_INTERVAL_FAILURE_GRACE_MS,
+        );
+    }
+    return new Date(
+        nextBeijingDailyRunAfter(updatedAt, schedule.usdtRateDailyTime).getTime() +
+            USDT_DAILY_FAILURE_GRACE_MS,
+    );
+}
+
 function normalizeInput(input: UpdateStoreCurrencyConfigurationInput): UpdateStoreCurrencyConfigurationInput {
     if (!isSupportedCurrency(input.defaultCurrencyCode)) {
         throw new UserInputError('目前仅支持 CNY 和 MYR');
@@ -544,11 +618,24 @@ function normalizeInput(input: UpdateStoreCurrencyConfigurationInput): UpdateSto
     ) {
         throw new UserInputError('USDT 报价加价范围为 0% 至 20%');
     }
+    if (
+        !USDT_RATE_INTERVAL_OPTIONS.includes(
+            input.usdtRateIntervalMinutes as (typeof USDT_RATE_INTERVAL_OPTIONS)[number],
+        )
+    ) {
+        throw new UserInputError('USDT 采集间隔仅支持 5、10、15、30 或 60 分钟');
+    }
+    if (!isValidDailyTime(input.usdtRateDailyTime)) {
+        throw new UserInputError('USDT 每日采集时间必须使用 HH:mm 格式');
+    }
     return {
         ...input,
         availableCurrencyCodes,
         rateMode: normalizeRateMode(input.rateMode),
         roundingMode: normalizeRoundingMode(input.roundingMode),
+        usdtRateScheduleMode: normalizeUsdtRateScheduleMode(input.usdtRateScheduleMode),
+        usdtRateIntervalMinutes: normalizeUsdtRateIntervalMinutes(input.usdtRateIntervalMinutes),
+        usdtRateDailyTime: normalizeUsdtRateDailyTime(input.usdtRateDailyTime),
     };
 }
 
@@ -567,6 +654,46 @@ function normalizeRateMode(value: unknown): StoreCurrencyRateMode {
 
 function normalizeRoundingMode(value: unknown): StoreCurrencyRoundingMode {
     return value === 'TENTH' || value === 'WHOLE' ? value : 'CENT';
+}
+
+function normalizeUsdtRateScheduleMode(value: unknown): StoreUsdtRateScheduleMode {
+    return value === 'DAILY' ? 'DAILY' : 'INTERVAL';
+}
+
+function normalizeUsdtRateIntervalMinutes(value: unknown): number {
+    const interval = Math.round(Number(value));
+    return USDT_RATE_INTERVAL_OPTIONS.includes(interval as (typeof USDT_RATE_INTERVAL_OPTIONS)[number])
+        ? interval
+        : 5;
+}
+
+function normalizeUsdtRateDailyTime(value: unknown): string {
+    return typeof value === 'string' && isValidDailyTime(value.trim())
+        ? value.trim()
+        : DEFAULT_USDT_RATE_DAILY_TIME;
+}
+
+function isValidDailyTime(value: string): boolean {
+    return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function latestBeijingDailyRunAt(now: Date, dailyTime: string): Date {
+    const today = beijingDailyRunAt(now, dailyTime);
+    return today.getTime() <= now.getTime() ? today : new Date(today.getTime() - DAY_MS);
+}
+
+function nextBeijingDailyRunAfter(value: Date, dailyTime: string): Date {
+    const today = beijingDailyRunAt(value, dailyTime);
+    return today.getTime() > value.getTime() ? today : new Date(today.getTime() + DAY_MS);
+}
+
+function beijingDailyRunAt(value: Date, dailyTime: string): Date {
+    const shifted = new Date(value.getTime() + BEIJING_UTC_OFFSET_MS);
+    const [hour, minute] = dailyTime.split(':').map(Number);
+    return new Date(
+        Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), hour, minute) -
+            BEIJING_UTC_OFFSET_MS,
+    );
 }
 
 function finiteNumber(value: unknown, fallback: number): number {

@@ -17,10 +17,15 @@ const storeCurrencyConfigurationFields = gql`
         syncedPriceCount
         usdtDisplayEnabled
         usdtMarkupPercent
+        usdtRateScheduleMode
+        usdtRateIntervalMinutes
+        usdtRateDailyTime
         cnyPerUsdtRate
         myrPerUsdtRate
         usdtRateSource
         usdtRateUpdatedAt
+        usdtRateNextRunAt
+        usdtRateExpiresAt
         usdtRateAvailable
         usdtPaymentConfigured
         usdtPaymentNetwork
@@ -89,6 +94,7 @@ export const refreshMyStoreUsdtRateMutation = gql`
 
 export type CurrencyRateMode = 'AUTO' | 'MANUAL';
 export type CurrencyRoundingMode = 'CENT' | 'TENTH' | 'WHOLE';
+export type UsdtRateScheduleMode = 'INTERVAL' | 'DAILY';
 
 export interface StoreCurrencyConfigurationRecord {
     channelId: string;
@@ -106,10 +112,15 @@ export interface StoreCurrencyConfigurationRecord {
     syncedPriceCount: number;
     usdtDisplayEnabled: boolean;
     usdtMarkupPercent: number;
+    usdtRateScheduleMode: UsdtRateScheduleMode;
+    usdtRateIntervalMinutes: number;
+    usdtRateDailyTime: string;
     cnyPerUsdtRate: number | null;
     myrPerUsdtRate: number | null;
     usdtRateSource: string | null;
     usdtRateUpdatedAt: string | null;
+    usdtRateNextRunAt: string;
+    usdtRateExpiresAt: string | null;
     usdtRateAvailable: boolean;
     usdtPaymentConfigured: boolean;
     usdtPaymentNetwork: string;
