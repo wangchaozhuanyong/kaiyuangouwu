@@ -1,5 +1,8 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { PermissionGuard } from '@/vdb/components/shared/permission-guard.js';
+import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -110,12 +113,17 @@ function CollectionDeleteButton({
     const { t } = useLingui();
     const [open, setOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [password, setPassword] = useState('');
     const hasChildren = Boolean(collection.children?.length);
 
     const handleDelete = async () => {
         setIsDeleting(true);
         try {
-            const result = await api.mutate(deleteCollectionDocument, { id: collection.id });
+            const result = await api.mutate(
+                deleteCollectionDocument,
+                { id: collection.id },
+                sensitiveActionHeaders(password),
+            );
             if (result.deleteCollection.result !== 'DELETED') {
                 toast.error(t`Failed to delete`, {
                     description: result.deleteCollection.message,
@@ -125,6 +133,7 @@ function CollectionDeleteButton({
 
             await onDeleted();
             toast.success(t`Deleted successfully`);
+            setPassword('');
             setOpen(false);
         } catch (error) {
             toast.error(t`Failed to delete`, {
@@ -136,7 +145,17 @@ function CollectionDeleteButton({
     };
 
     return (
-        <AlertDialog open={open} onOpenChange={isDeleting ? undefined : setOpen}>
+        <AlertDialog
+            open={open}
+            onOpenChange={
+                isDeleting
+                    ? undefined
+                    : nextOpen => {
+                          setOpen(nextOpen);
+                          if (!nextOpen) setPassword('');
+                      }
+            }
+        >
             <AlertDialogTrigger
                 render={
                     <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" />
@@ -162,12 +181,13 @@ function CollectionDeleteButton({
                         )}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                <SensitiveActionPasswordField value={password} onChange={setPassword} disabled={isDeleting} />
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={isDeleting}>
                         <Trans>Cancel</Trans>
                     </AlertDialogCancel>
                     <AlertDialogAction
-                        disabled={isDeleting}
+                        disabled={isDeleting || !password}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         onClick={event => {
                             event.preventDefault();
@@ -585,7 +605,7 @@ function CollectionListPage() {
                                         <ChevronRight className="ml-3 h-4 w-4 shrink-0 text-muted-foreground" />
                                     )}
                                     <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                                        <DetailPageButton id={original.id} label={original.name} />
+                                        <span className="truncate">{original.name}</span>
                                         {isTopLevel ? (
                                             <PermissionGuard requires={['CreateCollection', 'CreateCatalog']}>
                                                 <Button

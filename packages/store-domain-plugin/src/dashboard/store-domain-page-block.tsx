@@ -21,12 +21,11 @@ import {
     useQuery,
     useQueryClient,
 } from '@vendure/dashboard';
-import { ClipboardCopy, Globe2, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
+import { ClipboardCopy, ExternalLink, Globe2, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { KeyboardEvent, useState } from 'react';
 
 import {
     StoreDomainItem,
-    StoreDomainsResult,
     createStoreDomainMutation,
     deleteStoreDomainMutation,
     setPrimaryStoreDomainMutation,
@@ -59,6 +58,7 @@ const zhCopy = {
     verify: '验证 DNS',
     verifying: '正在验证',
     makePrimary: '设为主域名',
+    visit: '访问域名',
     delete: '删除域名',
     deleteTitle: '删除这个域名？',
     deleteDescription: '删除后，该域名将立即停止路由到当前店铺。DNS 记录不会被自动删除。',
@@ -91,6 +91,7 @@ const enCopy: typeof zhCopy = {
     verify: 'Verify DNS',
     verifying: 'Verifying',
     makePrimary: 'Make primary',
+    visit: 'Visit domain',
     delete: 'Delete domain',
     deleteTitle: 'Delete this domain?',
     deleteDescription:
@@ -113,7 +114,7 @@ export function StoreDomainPageBlock({ context }: Readonly<StoreDomainPageBlockP
     const queryKey = ['store-domains', channelId];
     const domainQuery = useQuery({
         queryKey,
-        queryFn: () => api.query(storeDomainsQuery, { channelId }) as Promise<StoreDomainsResult>,
+        queryFn: () => api.query(storeDomainsQuery, { channelId }),
         enabled: Boolean(channelId),
     });
     const refresh = () => queryClient.invalidateQueries({ queryKey });
@@ -135,7 +136,11 @@ export function StoreDomainPageBlock({ context }: Readonly<StoreDomainPageBlockP
             }>,
         onSuccess: async result => {
             const verification = result.verifyStoreDomain;
-            verification.success ? toast.success(verification.message) : toast.error(verification.message);
+            if (verification.success) {
+                toast.success(verification.message);
+            } else {
+                toast.error(verification.message);
+            }
             await refresh();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -306,14 +311,7 @@ function DomainRow({
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                        <a
-                            className="break-all text-sm font-medium hover:underline"
-                            href={`https://${domain.domain}`}
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            {domain.domain}
-                        </a>
+                        <span className="break-all text-sm font-medium">{domain.domain}</span>
                         <Badge variant={active ? 'default' : 'secondary'}>
                             {active ? text.active : text.pending}
                         </Badge>
@@ -324,6 +322,14 @@ function DomainRow({
                     )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-1">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        render={<a href={`https://${domain.domain}`} target="_blank" rel="noreferrer" />}
+                    >
+                        <ExternalLink className="size-4" aria-hidden="true" />
+                        {text.visit}
+                    </Button>
                     {!active && (
                         <Button
                             type="button"

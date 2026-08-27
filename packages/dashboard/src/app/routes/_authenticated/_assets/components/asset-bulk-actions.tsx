@@ -1,4 +1,8 @@
 import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
+import {
     AlertDialog,
     AlertDialogCancel,
     AlertDialogContent,
@@ -31,21 +35,27 @@ export const DeleteAssetsBulkAction = ({
     const { hasPermissions } = usePermissions();
     const [dialogOpen, setDialogOpen] = useState(false);
     const [usageMessage, setUsageMessage] = useState<string | null>(null);
+    const [password, setPassword] = useState('');
     const selectionLength = selection.length;
     const canDelete = hasPermissions(['DeleteCatalog', 'DeleteAsset']);
     const { mutate, isPending } = useMutation({
-        mutationFn: ({ force }: { force: boolean }) =>
-            api.mutate(deleteAssetsDocument)({
-                input: {
-                    assetIds: selection.map(asset => asset.id),
-                    force,
+        mutationFn: ({ force, password: currentPassword }: { force: boolean; password: string }) =>
+            api.mutate(
+                deleteAssetsDocument,
+                {
+                    input: {
+                        assetIds: selection.map(asset => asset.id),
+                        force,
+                    },
                 },
-            }),
+                sensitiveActionHeaders(currentPassword),
+            ) as Promise<ResultOf<typeof deleteAssetsDocument>>,
         onSuccess: (result: ResultOf<typeof deleteAssetsDocument>, { force }) => {
             if (result.deleteAssets.result === 'DELETED') {
                 toast.success(t`Deleted ${selectionLength} assets`);
                 setDialogOpen(false);
                 setUsageMessage(null);
+                setPassword('');
                 refetch();
                 return;
             }
@@ -74,6 +84,7 @@ export const DeleteAssetsBulkAction = ({
         setDialogOpen(open);
         if (!open) {
             setUsageMessage(null);
+            setPassword('');
         }
     };
 
@@ -104,14 +115,19 @@ export const DeleteAssetsBulkAction = ({
                             )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <SensitiveActionPasswordField
+                        value={password}
+                        onChange={setPassword}
+                        disabled={isPending}
+                    />
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isPending}>
                             <Trans>Cancel</Trans>
                         </AlertDialogCancel>
                         <Button
                             variant="destructive"
-                            onClick={() => mutate({ force: usageMessage != null })}
-                            disabled={isPending}
+                            onClick={() => mutate({ force: usageMessage != null, password })}
+                            disabled={isPending || !password}
                         >
                             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                             {usageMessage ? <Trans>Delete anyway</Trans> : <Trans>Delete</Trans>}

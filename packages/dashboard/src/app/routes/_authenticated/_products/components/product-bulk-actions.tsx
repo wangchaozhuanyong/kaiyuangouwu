@@ -1,15 +1,21 @@
-import { TagIcon } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { PowerIcon, PowerOffIcon, TagIcon } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { DataTableBulkActionItem } from '@/vdb/components/data-table/data-table-bulk-action-item.js';
 import { AssignToChannelBulkAction } from '@/vdb/components/shared/assign-to-channel-bulk-action.js';
 import { usePriceFactor } from '@/vdb/components/shared/assign-to-channel-dialog.js';
 import { RemoveFromChannelBulkAction } from '@/vdb/components/shared/remove-from-channel-bulk-action.js';
+import {
+    sensitiveActionHeaders,
+    SensitiveActionPasswordField,
+} from '@/vdb/components/shared/sensitive-action-password.js';
 import { BulkActionComponent } from '@/vdb/framework/extension-api/types/data-table.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { usePaginatedList } from '@/vdb/hooks/use-paginated-list.js';
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { DeleteBulkAction } from '../../../../common/delete-bulk-action.js';
 import { DuplicateBulkAction } from '../../../../common/duplicate-bulk-action.js';
 import {
@@ -33,6 +39,74 @@ export const DeleteProductsBulkAction: BulkActionComponent<any> = ({ selection, 
         />
     );
 };
+
+function SetProductsEnabledBulkAction({
+    selection,
+    table,
+    enabled,
+}: Parameters<BulkActionComponent<any>>[0] & { enabled: boolean }) {
+    const { refetchPaginatedList } = usePaginatedList();
+    const { t } = useLingui();
+    const [password, setPassword] = useState('');
+    const mutation = useMutation({
+        mutationFn: (currentPassword: string) =>
+            api.mutate(
+                updateProductsDocument,
+                { input: selection.map(product => ({ id: product.id, enabled })) },
+                sensitiveActionHeaders(currentPassword),
+            ),
+        onSuccess: () => {
+            toast.success(enabled ? t`Products enabled` : t`Products disabled`);
+            refetchPaginatedList();
+            table.resetRowSelection();
+        },
+        onError: error => {
+            toast.error(enabled ? t`Failed to enable products` : t`Failed to disable products`, {
+                description: error instanceof Error ? error.message : t`Unknown error`,
+            });
+        },
+        onSettled: () => setPassword(''),
+    });
+
+    return (
+        <DataTableBulkActionItem
+            requiresPermission={['UpdateCatalog', 'UpdateProduct']}
+            onClick={() => mutation.mutate(password)}
+            label={enabled ? <Trans>Enable</Trans> : <Trans>Disable</Trans>}
+            confirmationText={
+                enabled ? (
+                    <Trans>Enable the selected {selection.length} products?</Trans>
+                ) : (
+                    <Trans>
+                        Disable the selected {selection.length} products? They will no longer be available for
+                        purchase.
+                    </Trans>
+                )
+            }
+            confirmationFields={
+                <SensitiveActionPasswordField
+                    value={password}
+                    onChange={setPassword}
+                    disabled={mutation.isPending}
+                />
+            }
+            confirmDisabled={!password || mutation.isPending}
+            onConfirmationOpenChange={open => {
+                if (!open && !mutation.isPending) setPassword('');
+            }}
+            disabled={mutation.isPending}
+            icon={enabled ? PowerIcon : PowerOffIcon}
+        />
+    );
+}
+
+export const EnableProductsBulkAction: BulkActionComponent<any> = props => (
+    <SetProductsEnabledBulkAction {...props} enabled={true} />
+);
+
+export const DisableProductsBulkAction: BulkActionComponent<any> = props => (
+    <SetProductsEnabledBulkAction {...props} enabled={false} />
+);
 
 export const AssignProductsToChannelBulkAction: BulkActionComponent<any> = ({ selection, table }) => {
     const { priceFactor, priceFactorField } = usePriceFactor();

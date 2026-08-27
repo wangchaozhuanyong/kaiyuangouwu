@@ -3,12 +3,6 @@ import {
     Button,
     ConfirmationDialog,
     DashboardRouteDefinition,
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
     Input,
     Label,
     Page,
@@ -17,6 +11,12 @@ import {
     PageBlock,
     PageLayout,
     PageTitle,
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
     Skeleton,
     Switch,
     Textarea,
@@ -241,125 +241,132 @@ function AnnouncementEditor({
         if (validationError) return toast.error(validationError);
         mutation.mutate(localDraft);
     };
+    const requestClose = () => {
+        const isDirty = JSON.stringify(localDraft) !== JSON.stringify(draft);
+        if (isDirty && !window.confirm('有未保存的修改，确定放弃吗？')) return;
+        onClose();
+    };
     return (
-        <Dialog open={Boolean(draft)} onOpenChange={open => !open && onClose()}>
-            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>{draft?.id ? '编辑系统公告' : '新建系统公告'}</DialogTitle>
-                    <DialogDescription>填写中文即可，保存时会自动生成英文。</DialogDescription>
-                </DialogHeader>
-                {localDraft ? (
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs text-muted-foreground">
-                                通常只需填写中文；仅在需要人工修改英文译文时切换到英文校对。
-                            </p>
-                            <div className="flex shrink-0 rounded-md border bg-background p-1">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={editEnglish ? 'ghost' : 'secondary'}
-                                    onClick={() => setEditEnglish(false)}
-                                >
-                                    常用模式
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={editEnglish ? 'secondary' : 'ghost'}
-                                    onClick={() => setEditEnglish(true)}
-                                >
-                                    英文校对
-                                </Button>
+        <Sheet open={Boolean(draft)} onOpenChange={open => !open && requestClose()}>
+            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
+                <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
+                    <SheetTitle>{draft?.id ? '编辑系统公告' : '新建系统公告'}</SheetTitle>
+                    <SheetDescription>填写中文即可，保存时会自动生成英文。</SheetDescription>
+                </SheetHeader>
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                    {localDraft ? (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-xs text-muted-foreground">
+                                    通常只需填写中文；仅在需要人工修改英文译文时切换到英文校对。
+                                </p>
+                                <div className="flex shrink-0 rounded-md border bg-background p-1">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={editEnglish ? 'ghost' : 'secondary'}
+                                        onClick={() => setEditEnglish(false)}
+                                    >
+                                        常用模式
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={editEnglish ? 'secondary' : 'ghost'}
+                                        onClick={() => setEditEnglish(true)}
+                                    >
+                                        英文校对
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
-                        <Field label="公告标题" className={editEnglish ? undefined : 'sm:col-span-2'}>
-                            <Input
-                                value={localDraft.titleZh}
-                                maxLength={120}
-                                onChange={event => update('titleZh', event.target.value)}
-                            />
-                        </Field>
-                        {editEnglish ? (
-                            <Field label="英文标题（人工覆盖）">
+                            <Field label="公告标题" className={editEnglish ? undefined : 'sm:col-span-2'}>
                                 <Input
-                                    value={localDraft.titleEn}
+                                    value={localDraft.titleZh}
                                     maxLength={120}
-                                    onChange={event => update('titleEn', event.target.value)}
+                                    onChange={event => update('titleZh', event.target.value)}
                                 />
                             </Field>
-                        ) : null}
-                        <Field label="公告内容" className="sm:col-span-2">
-                            <Textarea
-                                rows={4}
-                                value={localDraft.contentZh}
-                                maxLength={2000}
-                                onChange={event => update('contentZh', event.target.value)}
-                            />
-                        </Field>
-                        {editEnglish ? (
-                            <Field label="英文内容（人工覆盖）" className="sm:col-span-2">
+                            {editEnglish ? (
+                                <Field label="英文标题（人工覆盖）">
+                                    <Input
+                                        value={localDraft.titleEn}
+                                        maxLength={120}
+                                        onChange={event => update('titleEn', event.target.value)}
+                                    />
+                                </Field>
+                            ) : null}
+                            <Field label="公告内容" className="sm:col-span-2">
                                 <Textarea
-                                    rows={3}
-                                    value={localDraft.contentEn}
+                                    rows={4}
+                                    value={localDraft.contentZh}
                                     maxLength={2000}
-                                    onChange={event => update('contentEn', event.target.value)}
+                                    onChange={event => update('contentZh', event.target.value)}
                                 />
                             </Field>
-                        ) : null}
-                        <Field
-                            label="跳转链接"
-                            hint="可留空；支持 HTTPS、HTTP 或站内相对路径。"
-                            className="sm:col-span-2"
-                        >
-                            <Input
-                                value={localDraft.linkUrl}
-                                onChange={event => update('linkUrl', event.target.value)}
-                            />
-                        </Field>
-                        <Field label="开始时间">
-                            <Input
-                                type="datetime-local"
-                                value={localDraft.startsAt}
-                                onChange={event => update('startsAt', event.target.value)}
-                            />
-                        </Field>
-                        <Field label="结束时间">
-                            <Input
-                                type="datetime-local"
-                                value={localDraft.endsAt}
-                                onChange={event => update('endsAt', event.target.value)}
-                            />
-                        </Field>
-                        <Field label="优先级" hint="数字越大，滚动顺序越靠前。">
-                            <Input
-                                type="number"
-                                min={0}
-                                max={999}
-                                value={localDraft.priority}
-                                onChange={event => update('priority', event.target.value)}
-                            />
-                        </Field>
-                        <Field label="启用公告">
-                            <div className="flex h-9 items-center">
-                                <Switch
-                                    checked={localDraft.enabled}
-                                    onCheckedChange={enabled => update('enabled', enabled)}
+                            {editEnglish ? (
+                                <Field label="英文内容（人工覆盖）" className="sm:col-span-2">
+                                    <Textarea
+                                        rows={3}
+                                        value={localDraft.contentEn}
+                                        maxLength={2000}
+                                        onChange={event => update('contentEn', event.target.value)}
+                                    />
+                                </Field>
+                            ) : null}
+                            <Field
+                                label="跳转链接"
+                                hint="可留空；支持 HTTPS、HTTP 或站内相对路径。"
+                                className="sm:col-span-2"
+                            >
+                                <Input
+                                    value={localDraft.linkUrl}
+                                    onChange={event => update('linkUrl', event.target.value)}
                                 />
-                            </div>
-                        </Field>
-                    </div>
-                ) : null}
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
+                            </Field>
+                            <Field label="开始时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={localDraft.startsAt}
+                                    onChange={event => update('startsAt', event.target.value)}
+                                />
+                            </Field>
+                            <Field label="结束时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={localDraft.endsAt}
+                                    onChange={event => update('endsAt', event.target.value)}
+                                />
+                            </Field>
+                            <Field label="优先级" hint="数字越大，滚动顺序越靠前。">
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={999}
+                                    value={localDraft.priority}
+                                    onChange={event => update('priority', event.target.value)}
+                                />
+                            </Field>
+                            <Field label="启用公告">
+                                <div className="flex h-9 items-center">
+                                    <Switch
+                                        checked={localDraft.enabled}
+                                        onCheckedChange={enabled => update('enabled', enabled)}
+                                    />
+                                </div>
+                            </Field>
+                        </div>
+                    ) : null}
+                </div>
+                <SheetFooter className="shrink-0 border-t px-6 py-4">
+                    <Button variant="outline" onClick={requestClose}>
                         取消
                     </Button>
                     <Button disabled={mutation.isPending} onClick={save}>
                         {mutation.isPending ? '保存中' : '保存公告'}
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
     );
 }
 

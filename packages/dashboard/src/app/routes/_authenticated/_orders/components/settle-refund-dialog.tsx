@@ -1,3 +1,4 @@
+import { SensitiveActionPasswordField } from '@/vdb/components/shared/sensitive-action-password.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import {
     Dialog,
@@ -15,7 +16,7 @@ import { useState } from 'react';
 type SettleRefundDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSettle: (transactionId: string) => void;
+    onSettle: (transactionId: string, password: string) => void;
     isLoading?: boolean;
 };
 
@@ -27,17 +28,20 @@ export function SettleRefundDialog({
 }: Readonly<SettleRefundDialogProps>) {
     const { t } = useLingui();
     const [transactionId, setTransactionId] = useState('');
+    const [password, setPassword] = useState('');
 
     const handleSettle = () => {
-        if (transactionId.trim()) {
-            onSettle(transactionId.trim());
+        if (transactionId.trim() && password) {
+            onSettle(transactionId.trim(), password);
             setTransactionId('');
+            setPassword('');
         }
     };
 
     const handleOpenChange = (newOpen: boolean) => {
         if (!newOpen) {
             setTransactionId('');
+            setPassword('');
         }
         onOpenChange(newOpen);
     };
@@ -66,12 +70,17 @@ export function SettleRefundDialog({
                             disabled={isLoading}
                         />
                     </div>
+                    <SensitiveActionPasswordField
+                        value={password}
+                        onChange={setPassword}
+                        disabled={isLoading}
+                    />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>
                         <Trans>Cancel</Trans>
                     </Button>
-                    <Button onClick={handleSettle} disabled={!transactionId.trim() || isLoading}>
+                    <Button onClick={handleSettle} disabled={!transactionId.trim() || !password || isLoading}>
                         <Trans>Settle refund</Trans>
                     </Button>
                 </DialogFooter>

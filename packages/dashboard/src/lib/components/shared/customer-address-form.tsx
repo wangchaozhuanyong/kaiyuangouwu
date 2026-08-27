@@ -3,7 +3,7 @@ import { graphql } from '@/vdb/graphql/graphql.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Button } from '../ui/button.js';
 import { Checkbox } from '../ui/checkbox.js';
@@ -64,6 +64,7 @@ interface CustomerAddressFormProps<T = any> {
      * Custom label for the submit button. Defaults to "Save Address".
      */
     submitLabel?: React.ReactNode;
+    onDirtyChange?: (isDirty: boolean) => void;
 }
 
 export function CustomerAddressForm<T>({
@@ -73,6 +74,7 @@ export function CustomerAddressForm<T>({
     onCancel,
     hideDefaultAddressFlags = false,
     submitLabel,
+    onDirtyChange,
 }: CustomerAddressFormProps<T>) {
     const { t } = useLingui();
     const addressFormSchema = useMemo(() => createAddressFormSchema(t), [t]);
@@ -103,6 +105,10 @@ export function CustomerAddressForm<T>({
         },
         values: address ? setValuesForUpdate?.(address) : undefined,
     });
+
+    useEffect(() => {
+        onDirtyChange?.(form.formState.isDirty);
+    }, [form.formState.isDirty, onDirtyChange]);
 
     return (
         <Form {...form}>

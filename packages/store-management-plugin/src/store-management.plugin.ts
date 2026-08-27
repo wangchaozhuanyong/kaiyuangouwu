@@ -34,6 +34,8 @@ import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-conf
 import { StoreProfile } from './entities/store-profile.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
+import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
+import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
 import { SystemAnnouncement } from './entities/system-announcement.entity';
 import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.interceptor';
 import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
@@ -78,7 +80,11 @@ import {
     StoreCurrencySettingsShopResolver,
 } from './store-currency-settings.resolver';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
-import { syncAutomaticStoreCurrencyPricesTask } from './store-currency-tasks';
+import {
+    reconcileStoreUsdtPaymentsTask,
+    refreshStoreUsdtRatesTask,
+    syncAutomaticStoreCurrencyPricesTask,
+} from './store-currency-tasks';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
 import { StoreProvisioningResolver } from './store-provisioning.resolver';
@@ -92,6 +98,19 @@ import {
 } from './system-announcement.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
 import { StorefrontPromotionPluginOptions } from './types';
+import { UsdtOtcRateService } from './usdt-otc-rate.service';
+import { usdtTrc20PaymentHandler } from './usdt/usdt-payment-handler';
+import {
+    configureUsdtPaymentProofSecret,
+    isAcceptableUsdtPaymentProofSecret,
+} from './usdt/usdt-payment-proof';
+import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
+import { UsdtPaymentService } from './usdt/usdt-payment.service';
+import { UsdtTrc20Client } from './usdt/usdt-trc20-client';
+import {
+    loadUsdtWalletConfiguration,
+    UsdtWalletConfigurationService,
+} from './usdt/usdt-wallet-configuration.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin],
@@ -113,6 +132,8 @@ import { StorefrontPromotionPluginOptions } from './types';
         ReferralBalanceUse,
         ReferralWithdrawal,
         StorefrontDailyVisitor,
+        StorefrontUsdtCheckoutQuote,
+        StorefrontUsdtPaymentIntent,
     ],
     controllers: [StorefrontPromotionController],
     providers: [
@@ -123,6 +144,10 @@ import { StorefrontPromotionPluginOptions } from './types';
         StorefrontActivationService,
         StoreCommerceSettingsService,
         StoreCurrencySettingsService,
+        UsdtOtcRateService,
+        UsdtWalletConfigurationService,
+        UsdtTrc20Client,
+        UsdtPaymentService,
         StoreProvisioningService,
         StorefrontEntryMiddleware,
         StorefrontPromotionAccessService,
@@ -164,6 +189,13 @@ import { StorefrontPromotionPluginOptions } from './types';
             config.paymentOptions.paymentMethodHandlers.push(referralBalancePaymentHandler);
         }
         if (
+            !config.paymentOptions.paymentMethodHandlers.some(
+                handler => handler.code === usdtTrc20PaymentHandler.code,
+            )
+        ) {
+            config.paymentOptions.paymentMethodHandlers.push(usdtTrc20PaymentHandler);
+        }
+        if (
             !config.promotionOptions.promotionConditions.some(
                 candidate => candidate.code === customerCouponEntitlement.code,
             )
@@ -179,6 +211,8 @@ import { StorefrontPromotionPluginOptions } from './types';
         config.schedulerOptions.tasks.push(reconcileReferralRewardsTask);
         config.schedulerOptions.tasks.push(auditReferralBalancesTask);
         config.schedulerOptions.tasks.push(syncAutomaticStoreCurrencyPricesTask);
+        config.schedulerOptions.tasks.push(refreshStoreUsdtRatesTask);
+        config.schedulerOptions.tasks.push(reconcileStoreUsdtPaymentsTask);
         return config;
     },
     adminApiExtensions: {
@@ -224,6 +258,7 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
         private readonly requestContextService: RequestContextService,
         private readonly paymentMethodService: PaymentMethodService,
         private readonly channelService: ChannelService,
+        private readonly usdtWalletConfiguration: UsdtWalletConfigurationService,
     ) {}
 
     static init(options: StorefrontPromotionPluginOptions = {}): typeof StoreManagementPlugin {
@@ -245,11 +280,20 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
             ),
         };
         configureReferralPaymentProofSecret(signingSecret || 'development-referral-payment-proof-secret');
+        const usdtWallet = loadUsdtWalletConfiguration(process.env, production);
+        const usdtPaymentProofSecret = process.env.USDT_PAYMENT_PROOF_SECRET?.trim() || '';
+        if (production && usdtWallet.enabled && !isAcceptableUsdtPaymentProofSecret(usdtPaymentProofSecret)) {
+            throw new Error(
+                'USDT_PAYMENT_PROOF_SECRET must be a non-placeholder secret of at least 32 characters when USDT receiving is enabled',
+            );
+        }
+        configureUsdtPaymentProofSecret(usdtPaymentProofSecret || 'development-usdt-payment-proof-secret');
         return StoreManagementPlugin;
     }
 
     async onApplicationBootstrap(): Promise<void> {
         await this.ensureReferralPaymentMethod();
+        await this.ensureUsdtPaymentMethod();
         await this.ensurePrimaryStoreAdminPermissions();
     }
 
@@ -281,6 +325,51 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
                     },
                 ],
             });
+        }
+        await this.channelService.assignToChannels(
+            ctx,
+            PaymentMethod,
+            paymentMethod.id,
+            channels.map(channel => channel.id),
+        );
+    }
+
+    private async ensureUsdtPaymentMethod(): Promise<void> {
+        const ctx = await this.requestContextService.create({ apiType: 'admin' });
+        const repository = this.connection.rawConnection.getRepository(PaymentMethod);
+        const walletConfigured = this.usdtWalletConfiguration.get().enabled;
+        let paymentMethod = await repository.findOne({
+            where: { code: USDT_TRC20_PAYMENT_METHOD_CODE },
+        });
+        if (!walletConfigured) {
+            if (paymentMethod?.enabled) {
+                paymentMethod.enabled = false;
+                await repository.save(paymentMethod, { reload: false });
+            }
+            return;
+        }
+        const channels = await this.connection.getRepository(ctx, Channel).find();
+        if (!paymentMethod) {
+            paymentMethod = await this.paymentMethodService.create(ctx, {
+                code: USDT_TRC20_PAYMENT_METHOD_CODE,
+                enabled: true,
+                handler: { code: usdtTrc20PaymentHandler.code, arguments: [] },
+                translations: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        name: 'USDT-TRC20 链上支付',
+                        description: '系统确认链上固化到账后自动更新订单为待发货',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        name: 'USDT-TRC20 on-chain payment',
+                        description: 'The order is paid after the transfer is solidified on TRON',
+                    },
+                ],
+            });
+        } else if (!paymentMethod.enabled) {
+            paymentMethod.enabled = true;
+            await repository.save(paymentMethod, { reload: false });
         }
         await this.channelService.assignToChannels(
             ctx,

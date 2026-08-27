@@ -33,11 +33,13 @@ import {
     CurrencyRoundingMode,
     MyStoreCurrencyConfigurationResult,
     RefreshStoreExchangeRateResult,
+    RefreshStoreUsdtRateResult,
     StoreCurrencyConfigurationRecord,
     SyncStoreCurrencyPricesResult,
     UpdateStoreCurrencyConfigurationResult,
     myStoreCurrencyConfigurationQuery,
     refreshMyStoreExchangeRateMutation,
+    refreshMyStoreUsdtRateMutation,
     syncMyStoreCurrencyPricesMutation,
     updateMyStoreCurrencyConfigurationMutation,
 } from './store-currency.graphql';
@@ -52,6 +54,8 @@ interface CurrencyDraft {
     cnyToMyrRate: number;
     markupPercent: number;
     roundingMode: CurrencyRoundingMode;
+    usdtDisplayEnabled: boolean;
+    usdtMarkupPercent: number;
 }
 
 export const storeCurrencySettingsRoute: DashboardRouteDefinition = {
@@ -78,6 +82,7 @@ function StoreCurrencySettingsPage() {
         enabled: Boolean(activeChannel?.id),
     });
     const configuration = query.data?.myStoreCurrencyConfiguration;
+    const paymentIntents = query.data?.myStoreUsdtPaymentIntents ?? [];
 
     useEffect(() => {
         if (configuration) setDraft(toDraft(configuration));
@@ -110,6 +115,15 @@ function StoreCurrencySettingsPage() {
             setDraft(toDraft(result.syncMyStoreCurrencyPrices));
             void query.refetch();
             toast.success(`副币价格已同步，更新 ${result.syncMyStoreCurrencyPrices.syncedPriceCount} 条`);
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const refreshUsdtMutation = useMutation({
+        mutationFn: () => api.mutate<RefreshStoreUsdtRateResult>(refreshMyStoreUsdtRateMutation, {}),
+        onSuccess: result => {
+            setDraft(toDraft(result.refreshMyStoreUsdtRate));
+            void query.refetch();
+            toast.success('已更新 Binance 与 OKX P2P 商家 USDT 中位报价');
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -217,6 +231,178 @@ function StoreCurrencySettingsPage() {
                             </div>
                         ) : null}
                     </ConfigurationState>
+                </PageBlock>
+
+                <PageBlock
+                    column="main"
+                    blockId="store-usdt-payment-monitor"
+                    title="USDT 到账记录"
+                    description="只读监控最近 50 笔 TRC20 付款报价；钱包地址不能在这里修改。"
+                >
+                    {query.isLoading ? (
+                        <Skeleton className="h-28 w-full" />
+                    ) : paymentIntents.length ? (
+                        <div className="grid gap-3">
+                            {paymentIntents.map(intent => (
+                                <div
+                                    key={intent.id}
+                                    className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_auto]"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <strong>订单 {intent.orderCode}</strong>
+                                            <Badge
+                                                variant={intent.status === 'SETTLED' ? 'default' : 'outline'}
+                                            >
+                                                {usdtPaymentStatusLabel(intent.status)}
+                                            </Badge>
+                                        </div>
+                                        <p className="mb-0 mt-2 break-all text-sm text-muted-foreground">
+                                            {intent.transactionId
+                                                ? `交易：${intent.transactionId}`
+                                                : `报价有效至：${formatDate(intent.expiresAt)}`}
+                                        </p>
+                                        {intent.failureReason ? (
+                                            <p className="mb-0 mt-1 text-sm font-semibold text-destructive">
+                                                {intent.failureReason}
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                    <div className="text-left sm:text-right">
+                                        <span className="block text-sm text-muted-foreground">
+                                            {intent.network}
+                                        </span>
+                                        <strong className="text-lg">
+                                            ₮{intent.expectedUsdtAmount.toFixed(6)}
+                                        </strong>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="mb-0 text-sm text-muted-foreground">当前店铺还没有 USDT 付款报价。</p>
+                    )}
+                </PageBlock>
+
+                <PageBlock
+                    column="main"
+                    blockId="store-usdt-display"
+                    title="USDT 展示价格"
+                    description="USDT 只用于客户端参考价格和后续支付报价；订单账务仍使用 CNY 或 MYR。"
+                >
+                    {draft ? (
+                        <div className="grid gap-5 sm:grid-cols-2">
+                            <BooleanField
+                                id="store-usdt-display-enabled"
+                                label="允许客户切换查看 USDT 价格"
+                                checked={draft.usdtDisplayEnabled}
+                                onChange={value => update('usdtDisplayEnabled', value)}
+                            />
+                            <Field id="store-usdt-rate-markup" label="USDT 报价加价（%）">
+                                <Input
+                                    id="store-usdt-rate-markup"
+                                    type="number"
+                                    min={0}
+                                    max={20}
+                                    step="0.01"
+                                    value={draft.usdtMarkupPercent}
+                                    onChange={event =>
+                                        update('usdtMarkupPercent', Number(event.target.value))
+                                    }
+                                />
+                                <p className="text-sm text-muted-foreground">
+                                    仅影响客户看到的 USDT 数量，用于覆盖 OTC 波动和收款成本。
+                                </p>
+                            </Field>
+                            <div className="rounded-md border p-4 sm:col-span-2">
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                    <div>
+                                        <span className="text-sm text-muted-foreground">{'CNY/USDT'}</span>
+                                        <strong className="mt-1 block text-lg">
+                                            {configuration?.cnyPerUsdtRate?.toFixed(4) ?? '暂无'}
+                                        </strong>
+                                    </div>
+                                    <div>
+                                        <span className="text-sm text-muted-foreground">{'MYR/USDT'}</span>
+                                        <strong className="mt-1 block text-lg">
+                                            {configuration?.myrPerUsdtRate?.toFixed(4) ?? '暂无'}
+                                        </strong>
+                                    </div>
+                                    <div>
+                                        <span className="text-sm text-muted-foreground">报价状态</span>
+                                        <strong className="mt-1 block text-lg">
+                                            {configuration?.usdtRateAvailable ? '可用' : '待更新'}
+                                        </strong>
+                                    </div>
+                                </div>
+                                <p className="mb-0 mt-3 text-sm text-muted-foreground">
+                                    来源：{configuration?.usdtRateSource ?? '尚未采集'}；更新时间：
+                                    {formatDate(configuration?.usdtRateUpdatedAt)}。系统每 5 分钟刷新，超过 15
+                                    分钟的报价不会在客户端使用。
+                                </p>
+                            </div>
+                            <Alert className="sm:col-span-2">
+                                <AlertDescription>
+                                    当前自动报价分别计算 Binance 与 OKX P2P 合格商家出售 USDT
+                                    的中位价，再按平台等权合并。单一来源故障时自动降级；两边偏差超过 5%
+                                    时拒绝更新。
+                                </AlertDescription>
+                            </Alert>
+                            <div className="rounded-md border p-4 sm:col-span-2">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <strong className="block">TRC20 自动收款</strong>
+                                        <span className="text-sm text-muted-foreground">
+                                            收款地址只从服务器环境变量读取，后台没有修改接口。
+                                        </span>
+                                    </div>
+                                    <Badge
+                                        variant={
+                                            configuration?.usdtPaymentConfigured ? 'default' : 'destructive'
+                                        }
+                                    >
+                                        {configuration?.usdtPaymentConfigured ? '已安全配置' : '尚未配置'}
+                                    </Badge>
+                                </div>
+                                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                                    <div>
+                                        <dt className="text-muted-foreground">网络</dt>
+                                        <dd className="font-semibold">
+                                            {configuration?.usdtPaymentNetwork ?? 'TRC20'}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-muted-foreground">脱敏地址</dt>
+                                        <dd className="font-mono font-semibold">
+                                            {configuration?.usdtReceivingAddressMasked ?? '未配置'}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-muted-foreground">钱包校验码</dt>
+                                        <dd className="break-all font-mono font-semibold">
+                                            {configuration?.usdtReceivingAddressFingerprint?.slice(0, 16) ??
+                                                '未配置'}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            <div className="sm:col-span-2">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={refreshUsdtMutation.isPending || saveMutation.isPending}
+                                    onClick={() => refreshUsdtMutation.mutate()}
+                                >
+                                    {refreshUsdtMutation.isPending ? (
+                                        <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                    )}
+                                    立即更新 USDT 报价
+                                </Button>
+                            </div>
+                        </div>
+                    ) : null}
                 </PageBlock>
 
                 <PageBlock
@@ -396,6 +582,8 @@ function toDraft(configuration: StoreCurrencyConfigurationRecord): CurrencyDraft
         cnyToMyrRate: configuration.cnyToMyrRate,
         markupPercent: configuration.markupPercent,
         roundingMode: configuration.roundingMode,
+        usdtDisplayEnabled: configuration.usdtDisplayEnabled,
+        usdtMarkupPercent: configuration.usdtMarkupPercent,
     };
 }
 
@@ -406,7 +594,10 @@ function validDraft(draft: CurrencyDraft): boolean {
         draft.cnyToMyrRate > 0 &&
         Number.isFinite(draft.markupPercent) &&
         draft.markupPercent >= -20 &&
-        draft.markupPercent <= 100
+        draft.markupPercent <= 100 &&
+        Number.isFinite(draft.usdtMarkupPercent) &&
+        draft.usdtMarkupPercent >= 0 &&
+        draft.usdtMarkupPercent <= 20
     );
 }
 
@@ -414,6 +605,17 @@ function formatDate(value: string | null | undefined): string {
     if (!value) return '尚未执行';
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '尚未执行' : date.toLocaleString('zh-CN');
+}
+
+function usdtPaymentStatusLabel(status: string): string {
+    return (
+        {
+            PENDING: '等待到账',
+            SETTLED: '已确认到账',
+            MANUAL_REVIEW: '需要人工复核',
+            EXPIRED: '报价已过期',
+        }[status] ?? status
+    );
 }
 
 function errorMessage(error: unknown): string {

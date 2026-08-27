@@ -3,7 +3,6 @@ import { Money } from '@/vdb/components/data-display/money.js';
 import { getColumnVisibility } from '@/vdb/components/data-table/data-table-utils.js';
 import { DataTable } from '@/vdb/components/data-table/data-table.js';
 import { useGeneratedColumns } from '@/vdb/components/data-table/use-generated-columns.js';
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { VendureImage } from '@/vdb/components/shared/vendure-image.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/vdb/components/ui/dropdown-menu.js';
@@ -11,6 +10,7 @@ import { getFieldsFromDocumentNode } from '@/vdb/framework/document-introspectio
 import { ResultOf } from '@/vdb/graphql/graphql.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { Trans } from '@lingui/react/macro';
+import { Link } from '@tanstack/react-router';
 import { EllipsisVertical } from 'lucide-react';
 import { Fragment, useMemo } from 'react';
 import { orderDetailDocument, orderLineFragment, withOrderCustomFields } from '../orders.graphql.js';
@@ -44,11 +44,16 @@ function createCustomizeColumns(currencyCode: string) {
             cell: ({ row }: { row: any }) => {
                 const productVariant = row.original.productVariant;
                 return (
-                    <DetailPageButton
-                        id={productVariant.id}
-                        label={productVariant.name}
-                        href={`/product-variants/${productVariant.id}`}
-                    />
+                    <div className="flex items-center justify-between gap-2">
+                        <span>{productVariant.name}</span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            render={<Link to={`/product-variants/${productVariant.id}`} preload={false} />}
+                        >
+                            <Trans>View</Trans>
+                        </Button>
+                    </div>
                 );
             },
         },

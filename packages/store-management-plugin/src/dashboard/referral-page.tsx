@@ -778,6 +778,12 @@ function WithdrawalManagement({
     const [externalReference, setExternalReference] = useState('');
     const [adjustAmount, setAdjustAmount] = useState('');
     const [adjustReason, setAdjustReason] = useState('');
+    const requireSelectedCustomerId = () => {
+        if (!draft.customer) {
+            throw new Error('请先选择客户');
+        }
+        return draft.customer.id;
+    };
     const lookup = useQuery({
         queryKey: ['referral-customer-lookup', searchEmail],
         queryFn: () =>
@@ -787,20 +793,17 @@ function WithdrawalManagement({
         enabled: false,
     });
     const create = useMutation({
-        mutationFn: () => {
-            const customer = draft.customer;
-            if (!customer) throw new Error('请先选择客户');
-            return api.mutate(createReferralWithdrawalMutation, {
+        mutationFn: () =>
+            api.mutate(createReferralWithdrawalMutation, {
                 input: {
-                    customerId: customer.id,
+                    customerId: requireSelectedCustomerId(),
                     currencyCode: draft.currencyCode,
                     amount: toMinorAmount(draft.amount),
                     payoutMethod: draft.payoutMethod.trim(),
                     payoutAccountMasked: draft.payoutAccountMasked.trim(),
                     note: draft.note.trim() || null,
                 },
-            });
-        },
+            }),
         onSuccess: () => {
             toast.success('人工提款申请已创建，金额已冻结');
             setDraft({
@@ -837,16 +840,13 @@ function WithdrawalManagement({
         onError: error => toast.error(errorMessage(error)),
     });
     const adjust = useMutation({
-        mutationFn: () => {
-            const customer = draft.customer;
-            if (!customer) throw new Error('请先选择客户');
-            return api.mutate(adjustReferralBalanceMutation, {
-                customerId: customer.id,
+        mutationFn: () =>
+            api.mutate(adjustReferralBalanceMutation, {
+                customerId: requireSelectedCustomerId(),
                 currencyCode: draft.currencyCode,
                 amount: toSignedMinorAmount(adjustAmount),
                 reason: adjustReason.trim(),
-            });
-        },
+            }),
         onSuccess: () => {
             toast.success('返利余额已调整并写入流水');
             setAdjustAmount('');
@@ -901,7 +901,9 @@ function WithdrawalManagement({
                                         {`${customer.lastName}${customer.firstName}` || customer.emailAddress}
                                     </strong>
                                     <small className="block text-muted-foreground">
-                                        {customer.emailAddress} · ID {customer.id}
+                                        {customer.emailAddress}
+                                        {' · '}
+                                        {'ID'} {customer.id}
                                     </small>
                                 </button>
                             ))}
@@ -933,8 +935,8 @@ function WithdrawalManagement({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="CNY">CNY</SelectItem>
-                                <SelectItem value="MYR">MYR</SelectItem>
+                                <SelectItem value="CNY">{'CNY'}</SelectItem>
+                                <SelectItem value="MYR">{'MYR'}</SelectItem>
                             </SelectContent>
                         </Select>
                     </Field>

@@ -1,4 +1,3 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { RichTextDescriptionCell } from '@/vdb/components/shared/table-cell/order-table-cell-components.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
@@ -33,7 +32,7 @@ function ShippingMethodListPage() {
             }}
             customizeColumns={{
                 name: {
-                    cell: ({ row }) => <DetailPageButton id={row.original.id} label={row.original.name} />,
+                    cell: ({ row }) => <span>{row.original.name}</span>,
                 },
                 description: {
                     cell: RichTextDescriptionCell,
@@ -44,6 +43,7 @@ function ShippingMethodListPage() {
                     name: { contains: searchTerm },
                 };
             }}
+            primaryRowAction={{ label: <Trans>Edit</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[
                 [
                     {

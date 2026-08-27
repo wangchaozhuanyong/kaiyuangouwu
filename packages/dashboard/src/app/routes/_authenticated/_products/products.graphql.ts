@@ -112,6 +112,13 @@ export const productDetailFragment = graphql(
                 id
                 name
                 slug
+                filters {
+                    code
+                    args {
+                        name
+                        value
+                    }
+                }
             }
             customFields
         }
@@ -228,6 +235,29 @@ export const updateProductDocument = graphql(`
     }
 `);
 
+export const productCollectionAssignmentDetailDocument = graphql(`
+    query ProductCollectionAssignmentDetail($id: ID!) {
+        collection(id: $id) {
+            id
+            filters {
+                code
+                args {
+                    name
+                    value
+                }
+            }
+        }
+    }
+`);
+
+export const updateProductCollectionAssignmentDocument = graphql(`
+    mutation UpdateProductCollectionAssignment($input: UpdateCollectionInput!) {
+        updateCollection(input: $input) {
+            id
+        }
+    }
+`);
+
 export const deleteProductDocument = graphql(`
     mutation DeleteProduct($id: ID!) {
         deleteProduct(id: $id) {
@@ -254,6 +284,17 @@ export const assignProductsToChannelDocument = graphql(`
                 id
                 code
             }
+        }
+    }
+`);
+
+export const allProductIdsDocument = graphql(`
+    query AllProductIds($options: ProductListOptions) {
+        products(options: $options) {
+            items {
+                id
+            }
+            totalItems
         }
     }
 `);

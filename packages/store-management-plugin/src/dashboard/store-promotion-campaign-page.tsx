@@ -53,6 +53,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import {
+    StoreCouponDailyReportResult,
     StoreCouponKind,
     StorePromotionCampaignsResult,
     StorePromotionProductsResult,
@@ -62,6 +63,7 @@ import {
     revokeStoreCouponCampaignOutstandingMutation,
     setStorePromotionEnabledMutation,
     stopStoreCouponIssuanceMutation,
+    storeCouponDailyReportQuery,
     storePromotionCampaignsQuery,
     storePromotionProductsQuery,
     updateStorePromotionNameMutation,
@@ -95,6 +97,12 @@ interface FlashSaleDraft {
     startsAt: string;
     endsAt: string;
     variantPrices: Record<string, string>;
+}
+
+interface CouponReportFilter {
+    from: string;
+    to: string;
+    campaignId: string;
 }
 
 type SensitivePromotionAction =
@@ -134,9 +142,19 @@ function CampaignMetric({ label, value }: { label: string; value: string | numbe
 function CouponReport({
     coupons,
     currencyCode,
+    dailyMetrics,
+    filter,
+    reportPending,
+    reportError,
+    onFilterChange,
 }: {
     coupons: StorePromotionCampaignsResult['storeCouponCampaigns'];
     currencyCode: string;
+    dailyMetrics: StoreCouponDailyReportResult['storeCouponDailyReport'];
+    filter: CouponReportFilter;
+    reportPending: boolean;
+    reportError: unknown;
+    onFilterChange: (filter: CouponReportFilter) => void;
 }) {
     const totals = coupons.reduce(
         (result, coupon) => ({
@@ -166,6 +184,16 @@ function CouponReport({
             revenue: 0,
         },
     );
+    const dailyTotals = dailyMetrics.reduce(
+        (result, item) => ({
+            claimed: result.claimed + item.claimedCount,
+            redeemed: result.redeemed + item.redeemedCount,
+            refunded: result.refunded + item.refundedCount,
+            discount: result.discount + item.discountAmountTotal,
+            revenue: result.revenue + item.assistedRevenueTotal,
+        }),
+        { claimed: 0, redeemed: 0, refunded: 0, discount: 0, revenue: 0 },
+    );
 
     return (
         <div className="space-y-4">
@@ -184,7 +212,7 @@ function CouponReport({
                 <ReportMetric label="历史核销订单" value={`${totals.orders} 单`} />
                 <ReportMetric label="历史优惠金额" value={formatMoney(totals.discount, currencyCode)} />
                 <ReportMetric
-                    label="核销订单金额"
+                    label="优惠券归因订单金额"
                     value={formatMoney(totals.revenue, currencyCode)}
                     detail={`含后续退款订单 · 产出比 ${formatMultiple(totals.revenue, totals.discount)}`}
                 />
@@ -192,7 +220,9 @@ function CouponReport({
             <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">
                     当前共 {coupons.length} 个优惠券活动、{totals.orders} 个历史核销订单，其中{' '}
-                    {totals.refundedOrders} 个发生全额退款；数据来自领取记录和订单优惠分摊。
+                    {totals.refundedOrders}{' '}
+                    个发生全额退款；数据来自领取记录和订单优惠分摊。跨活动合计按券归因，
+                    叠加多张券的同一订单会分别计入对应活动。
                 </p>
                 <Button
                     type="button"
@@ -223,7 +253,7 @@ function CouponReport({
                             <ReportHeading align="right">历史核销订单</ReportHeading>
                             <ReportHeading align="right">退款订单</ReportHeading>
                             <ReportHeading align="right">历史优惠金额</ReportHeading>
-                            <ReportHeading align="right">核销订单金额</ReportHeading>
+                            <ReportHeading align="right">优惠券归因订单金额</ReportHeading>
                             <ReportHeading align="right">优惠产出比</ReportHeading>
                         </tr>
                     </thead>
@@ -265,6 +295,131 @@ function CouponReport({
                         暂无可统计的优惠券活动。
                     </p>
                 ) : null}
+            </div>
+            <div className="space-y-3 rounded-lg border p-4">
+                <div>
+                    <h3 className="text-sm font-semibold">每日发放与使用趋势</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        日期区间统计事件发生量；开始和结束日期均包含在内，单次最多查询 366 天。
+                        成交金额按优惠券归因，同一订单叠加多张券时会分别归因。
+                    </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                    <FormField label="开始日期">
+                        <Input
+                            type="date"
+                            value={filter.from}
+                            max={filter.to}
+                            onChange={event => onFilterChange({ ...filter, from: event.target.value })}
+                        />
+                    </FormField>
+                    <FormField label="结束日期">
+                        <Input
+                            type="date"
+                            value={filter.to}
+                            min={filter.from}
+                            onChange={event => onFilterChange({ ...filter, to: event.target.value })}
+                        />
+                    </FormField>
+                    <FormField label="优惠券活动">
+                        <Select
+                            value={filter.campaignId}
+                            onValueChange={campaignId =>
+                                campaignId && onFilterChange({ ...filter, campaignId })
+                            }
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">全部活动</SelectItem>
+                                {coupons.map(coupon => (
+                                    <SelectItem key={coupon.id} value={coupon.id}>
+                                        {coupon.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </FormField>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <ReportMetric label="区间发放" value={`${dailyTotals.claimed} 张`} />
+                    <ReportMetric label="区间核销订单" value={`${dailyTotals.redeemed} 单`} />
+                    <ReportMetric label="区间退款订单" value={`${dailyTotals.refunded} 单`} />
+                    <ReportMetric
+                        label="区间优惠金额"
+                        value={formatMoney(dailyTotals.discount, currencyCode)}
+                    />
+                    <ReportMetric
+                        label="区间归因订单金额"
+                        value={formatMoney(dailyTotals.revenue, currencyCode)}
+                        detail={`产出比 ${formatMultiple(dailyTotals.revenue, dailyTotals.discount)}`}
+                    />
+                </div>
+                <div className="flex justify-end">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!dailyMetrics.length || reportPending}
+                        onClick={() => exportCouponDailyReport(dailyMetrics, currencyCode, filter)}
+                    >
+                        <Download className="size-4" />
+                        导出区间日报
+                    </Button>
+                </div>
+                {reportError ? (
+                    <Alert variant="destructive">
+                        <AlertDescription>{errorMessage(reportError)}</AlertDescription>
+                    </Alert>
+                ) : (
+                    <div className="overflow-x-auto rounded-lg border">
+                        <table className="w-full min-w-[980px] text-left text-sm">
+                            <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
+                                <tr>
+                                    <ReportHeading>日期</ReportHeading>
+                                    <ReportHeading align="right">发放</ReportHeading>
+                                    <ReportHeading align="right">核销</ReportHeading>
+                                    <ReportHeading align="right">退款</ReportHeading>
+                                    <ReportHeading align="right">返还事件</ReportHeading>
+                                    <ReportHeading align="right">过期事件</ReportHeading>
+                                    <ReportHeading align="right">作废事件</ReportHeading>
+                                    <ReportHeading align="right">优惠金额</ReportHeading>
+                                    <ReportHeading align="right">归因订单金额</ReportHeading>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {dailyMetrics.map(item => (
+                                    <tr key={item.date} className="border-b last:border-0">
+                                        <td className="whitespace-nowrap px-3 py-3">{item.date}</td>
+                                        <ReportCell>{item.claimedCount}</ReportCell>
+                                        <ReportCell>{item.redeemedCount}</ReportCell>
+                                        <ReportCell>{item.refundedCount}</ReportCell>
+                                        <ReportCell>{item.returnedCount}</ReportCell>
+                                        <ReportCell>{item.expiredCount}</ReportCell>
+                                        <ReportCell>{item.revokedCount}</ReportCell>
+                                        <ReportCell>
+                                            {formatMoney(item.discountAmountTotal, currencyCode)}
+                                        </ReportCell>
+                                        <ReportCell>
+                                            {formatMoney(item.assistedRevenueTotal, currencyCode)}
+                                        </ReportCell>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {!reportPending && !dailyMetrics.length ? (
+                            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                                当前日期区间没有优惠券发放或使用数据。
+                            </p>
+                        ) : null}
+                        {reportPending ? (
+                            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                                正在加载区间报表…
+                            </p>
+                        ) : null}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -341,6 +496,7 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
     const { activeChannel } = useChannel();
     const queryClient = useQueryClient();
     const queryKey = ['store-promotion-campaigns', activeChannel?.id];
+    const [reportFilter, setReportFilter] = useState<CouponReportFilter>(defaultCouponReportFilter);
     const [couponOpen, setCouponOpen] = useState(false);
     const [flashOpen, setFlashOpen] = useState(false);
     const [sensitiveAction, setSensitiveAction] = useState<SensitivePromotionAction | null>(null);
@@ -350,7 +506,31 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
         queryFn: () => api.query<StorePromotionCampaignsResult>(storePromotionCampaignsQuery),
         enabled: Boolean(activeChannel?.id),
     });
-    const refresh = () => queryClient.invalidateQueries({ queryKey });
+    const reportValidationError = couponReportFilterError(reportFilter);
+    const reportQuery = useQuery({
+        queryKey: [
+            'store-coupon-daily-report',
+            activeChannel?.id,
+            reportFilter.from,
+            reportFilter.to,
+            reportFilter.campaignId,
+        ],
+        queryFn: () =>
+            api.query<StoreCouponDailyReportResult>(storeCouponDailyReportQuery, {
+                from: reportDateStart(reportFilter.from),
+                to: reportDateExclusiveEnd(reportFilter.to),
+                campaignId: reportFilter.campaignId === 'ALL' ? null : reportFilter.campaignId,
+            }),
+        enabled: mode === 'COUPONS' && Boolean(activeChannel?.id) && !reportValidationError,
+    });
+    const refresh = async () => {
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey }),
+            queryClient.invalidateQueries({
+                queryKey: ['store-coupon-daily-report', activeChannel?.id],
+            }),
+        ]);
+    };
     const sensitiveMutation = useMutation({
         mutationFn: ({ action, password }: { action: SensitivePromotionAction; password: string }) => {
             if (action.kind === 'TOGGLE') {
@@ -583,6 +763,11 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
                                 <CouponReport
                                     coupons={query.data?.storeCouponCampaigns ?? []}
                                     currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
+                                    dailyMetrics={reportQuery.data?.storeCouponDailyReport ?? []}
+                                    filter={reportFilter}
+                                    reportPending={reportQuery.isPending || reportQuery.isFetching}
+                                    reportError={reportValidationError ?? reportQuery.error}
+                                    onFilterChange={setReportFilter}
                                 />
                             </CampaignState>
                         </PageBlock>
@@ -1512,6 +1697,36 @@ function defaultDateRange() {
     return { startsAt: toLocalDateTime(start), endsAt: toLocalDateTime(end) };
 }
 
+function defaultCouponReportFilter(): CouponReportFilter {
+    const to = new Date();
+    const from = new Date(to.getTime() - 29 * 24 * 60 * 60 * 1_000);
+    return {
+        from: toLocalDate(from),
+        to: toLocalDate(to),
+        campaignId: 'ALL',
+    };
+}
+
+function couponReportFilterError(filter: CouponReportFilter): Error | null {
+    if (!filter.from || !filter.to) return new Error('请选择完整的报表日期区间');
+    const from = Date.parse(`${filter.from}T00:00:00.000Z`);
+    const to = Date.parse(`${filter.to}T00:00:00.000Z`);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return new Error('报表日期格式不正确');
+    if (from > to) return new Error('报表结束日期不能早于开始日期');
+    if ((to - from) / (24 * 60 * 60 * 1_000) + 1 > 366) {
+        return new Error('单次报表查询最多支持 366 天');
+    }
+    return null;
+}
+
+function reportDateStart(value: string): string {
+    return new Date(`${value}T00:00:00.000Z`).toISOString();
+}
+
+function reportDateExclusiveEnd(value: string): string {
+    return new Date(Date.parse(`${value}T00:00:00.000Z`) + 24 * 60 * 60 * 1_000).toISOString();
+}
+
 function couponInput(draft: CouponDraft) {
     return {
         name: draft.name,
@@ -1561,6 +1776,10 @@ function dateInput(value: string): string | null {
 function toLocalDateTime(value: Date): string {
     const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
     return local.toISOString().slice(0, 16);
+}
+function toLocalDate(value: Date): string {
+    const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 10);
 }
 function formatDateRange(startsAt: string | null, endsAt: string | null): string {
     return `${startsAt ? new Date(startsAt).toLocaleString() : '立即'} 至 ${endsAt ? new Date(endsAt).toLocaleString() : '长期'}`;
@@ -1625,7 +1844,7 @@ function exportCouponReport(
             '历史核销订单数',
             '退款订单数',
             `历史优惠金额(${currencyCode})`,
-            `核销订单金额-含后续退款(${currencyCode})`,
+            `优惠券归因订单金额-含后续退款(${currencyCode})`,
             '优惠产出比',
         ],
         ...coupons.map(coupon => [
@@ -1652,6 +1871,45 @@ function exportCouponReport(
     const link = document.createElement('a');
     link.href = url;
     link.download = `优惠券经营报表-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+function exportCouponDailyReport(
+    metrics: StoreCouponDailyReportResult['storeCouponDailyReport'],
+    currencyCode: string,
+    filter: CouponReportFilter,
+) {
+    const rows: Array<Array<string | number>> = [
+        [
+            '日期',
+            '发放数量',
+            '核销订单数',
+            '退款订单数',
+            '返还事件数',
+            '过期事件数',
+            '作废事件数',
+            `优惠金额(${currencyCode})`,
+            `优惠券归因订单金额(${currencyCode})`,
+        ],
+        ...metrics.map(item => [
+            item.date,
+            item.claimedCount,
+            item.redeemedCount,
+            item.refundedCount,
+            item.returnedCount,
+            item.expiredCount,
+            item.revokedCount,
+            (item.discountAmountTotal / 100).toFixed(2),
+            (item.assistedRevenueTotal / 100).toFixed(2),
+        ]),
+    ];
+    const csv = `\uFEFF${rows.map(row => row.map(csvValue).join(',')).join('\r\n')}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `优惠券区间日报-${filter.from}-${filter.to}.csv`;
     document.body.append(link);
     link.click();
     link.remove();

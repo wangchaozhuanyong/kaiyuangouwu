@@ -2,15 +2,15 @@ import {
     AssetPickerDialog,
     Badge,
     Button,
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
     ImageSizeHint,
     Input,
     Label,
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
     Switch,
     Textarea,
     toast,
@@ -29,7 +29,7 @@ import {
     X,
     type LucideIcon,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { ContentBlock, ContentItem } from './storefront-content.graphql';
 import {
@@ -68,6 +68,14 @@ export function SupportSettingsEditor({
     const [selectedChannel, setSelectedChannel] = useState<SupportChannelKey>('WECHAT');
     const [draggedChannel, setDraggedChannel] = useState<SupportChannelKey | null>(null);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+    const initialDraftRef = useRef(JSON.stringify(draft));
+    const requestClose = () => {
+        const isDirty = initialDraftRef.current !== JSON.stringify(draft);
+        if (isDirty && !window.confirm(isZh ? '有未保存的修改，确定放弃吗？' : 'Discard unsaved changes?')) {
+            return;
+        }
+        onClose();
+    };
     const rows = useMemo(() => supportItems(draft), [draft]);
     const selected = rows.find(entry => entry.channel.key === selectedChannel) ?? rows[0];
     const serviceTime = supportServiceTime(draft);
@@ -141,21 +149,21 @@ export function SupportSettingsEditor({
             : '';
 
     return (
-        <Dialog open onOpenChange={open => !open && onClose()}>
-            <DialogContent className="flex max-h-[94vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1180px,96vw)]">
-                <DialogHeader className="shrink-0 border-b px-6 py-4">
+        <Sheet open onOpenChange={open => !open && requestClose()}>
+            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[88vw] sm:max-w-[1440px]">
+                <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                            <DialogTitle>{isZh ? '客服配置' : 'Customer support'}</DialogTitle>
-                            <DialogDescription className="mt-1">
+                            <SheetTitle>{isZh ? '客服配置' : 'Customer support'}</SheetTitle>
+                            <SheetDescription className="mt-1">
                                 {isZh
                                     ? '设置客服时间、二维码和客户端直达渠道；配置仅作用于当前店铺。'
                                     : 'Configure service hours, QR code and direct contact channels for this store.'}
-                            </DialogDescription>
+                            </SheetDescription>
                         </div>
                         <Badge variant="outline">{isZh ? '固定模块' : 'Fixed module'}</Badge>
                     </div>
-                </DialogHeader>
+                </SheetHeader>
 
                 <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_360px] lg:overflow-hidden">
                     <div className="min-w-0 space-y-6 px-6 py-5 lg:overflow-y-auto">
@@ -567,16 +575,16 @@ export function SupportSettingsEditor({
                     </aside>
                 </div>
 
-                <DialogFooter className="shrink-0 border-t px-6 py-4">
-                    <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
+                <SheetFooter className="shrink-0 border-t px-6 py-4">
+                    <Button type="button" variant="outline" disabled={saving} onClick={requestClose}>
                         {isZh ? '取消' : 'Cancel'}
                     </Button>
                     <Button type="button" disabled={saving} onClick={save}>
                         {saving ? (isZh ? '正在保存' : 'Saving') : isZh ? '保存更改' : 'Save changes'}
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
     );
 }
 

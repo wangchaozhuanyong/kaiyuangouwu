@@ -13,10 +13,20 @@ describe('restrictPlatformNavigation', () => {
                     items: [{ id: 'products', title: 'Products', url: '/products' }],
                 },
                 {
+                    id: 'marketing',
+                    title: 'Marketing',
+                    items: [{ id: 'promotions', title: 'Promotions', url: '/promotions' }],
+                },
+                {
                     id: 'settings',
                     title: 'Settings',
                     items: [
-                        { id: 'channels', title: 'Channels', url: '/channels', requiresPermission: ['ReadChannel'] },
+                        {
+                            id: 'channels',
+                            title: 'Channels',
+                            url: '/channels',
+                            requiresPermission: ['ReadChannel'],
+                        },
                         { id: 'stock-locations', title: 'Stock', url: '/stock-locations' },
                         { id: 'payment-methods', title: 'Payments', url: '/payment-methods' },
                     ],
@@ -26,16 +36,21 @@ describe('restrictPlatformNavigation', () => {
 
         const result = restrictPlatformNavigation(config);
         const catalog = result.sections.find(section => section.id === 'catalog');
+        const marketing = result.sections.find(section => section.id === 'marketing');
         const settings = result.sections.find(section => section.id === 'settings');
         expect(catalog).toEqual(config.sections[0]);
-        const settingsItems = settings && 'items' in settings ? settings.items ?? [] : [];
+        const marketingItems = marketing && 'items' in marketing ? (marketing.items ?? []) : [];
+        expect(marketingItems).toEqual([
+            expect.objectContaining({ id: 'promotions', requiresPermission: ['CreateChannel'] }),
+        ]);
+        const settingsItems = settings && 'items' in settings ? (settings.items ?? []) : [];
         expect(settingsItems).toEqual([
             expect.objectContaining({ id: 'channels', requiresPermission: ['CreateChannel'] }),
             expect.objectContaining({ id: 'stock-locations' }),
             expect.objectContaining({ id: 'payment-methods', requiresPermission: ['CreateChannel'] }),
         ]);
         expect(settingsItems[1]).not.toHaveProperty('requiresPermission');
-        expect(config.sections[1]).toEqual({
+        expect(config.sections[2]).toEqual({
             id: 'settings',
             title: 'Settings',
             items: [

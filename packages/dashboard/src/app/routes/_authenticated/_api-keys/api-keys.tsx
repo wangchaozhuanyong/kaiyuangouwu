@@ -1,4 +1,3 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
@@ -40,7 +39,7 @@ function ApiKeyListPage() {
             }}
             customizeColumns={{
                 name: {
-                    cell: ({ row }) => <DetailPageButton id={row.original.id} label={row.original.name} />,
+                    cell: ({ row }) => <span>{row.original.name}</span>,
                 },
                 lastUsedAt: {
                     header: () => <Trans>Last used</Trans>,
@@ -69,6 +68,7 @@ function ApiKeyListPage() {
                     cell: ({ row }) => row.original.owner?.identifier ?? '',
                 },
             }}
+            primaryRowAction={{ label: <Trans>Manage</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[
                 {
                     component: DeleteApiKeysBulkAction,

@@ -1,4 +1,3 @@
-import { DetailPageButton } from '@/vdb/components/shared/detail-page-button.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
 import { ListPage } from '@/vdb/framework/page/list-page.js';
@@ -28,7 +27,7 @@ function ZoneListPage() {
             }}
             customizeColumns={{
                 name: {
-                    cell: ({ row }) => <DetailPageButton id={row.original.id} label={row.original.name} />,
+                    cell: ({ row }) => <span>{row.original.name}</span>,
                 },
             }}
             additionalColumns={{
@@ -41,6 +40,7 @@ function ZoneListPage() {
                     ),
                 },
             }}
+            primaryRowAction={{ label: <Trans>Manage</Trans>, href: row => `./${row.original.id}` }}
             bulkActions={[
                 {
                     component: DeleteZonesBulkAction,

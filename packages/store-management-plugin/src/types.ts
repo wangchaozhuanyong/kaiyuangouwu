@@ -259,6 +259,18 @@ export interface StoreCouponCampaignActionResult {
     affectedCount: number;
 }
 
+export interface StoreCouponDailyMetricView {
+    date: string;
+    claimedCount: number;
+    redeemedCount: number;
+    refundedCount: number;
+    returnedCount: number;
+    expiredCount: number;
+    revokedCount: number;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
+}
+
 export interface ProvisionStoreAdministratorInput {
     firstName: string;
     lastName: string;
@@ -382,6 +394,17 @@ export interface StoreCurrencyConfiguration {
     rateUpdatedAt: Date | null;
     pricesUpdatedAt: Date | null;
     syncedPriceCount: number;
+    usdtDisplayEnabled: boolean;
+    usdtMarkupPercent: number;
+    cnyPerUsdtRate: number | null;
+    myrPerUsdtRate: number | null;
+    usdtRateSource: string | null;
+    usdtRateUpdatedAt: Date | null;
+    usdtRateAvailable: boolean;
+    usdtPaymentConfigured: boolean;
+    usdtPaymentNetwork: string;
+    usdtReceivingAddressMasked: string | null;
+    usdtReceivingAddressFingerprint: string | null;
 }
 
 export interface UpdateStoreCurrencyConfigurationInput {
@@ -392,4 +415,25 @@ export interface UpdateStoreCurrencyConfigurationInput {
     cnyToMyrRate: number;
     markupPercent: number;
     roundingMode: StoreCurrencyRoundingMode;
+    usdtDisplayEnabled: boolean;
+    usdtMarkupPercent: number;
+}
+
+export interface StorefrontUsdtCheckoutQuoteView {
+    id: ID;
+    fiatCurrencyCode: string;
+    fiatAmount: number;
+    fiatPerUsdtRate: number;
+    markupPercent: number;
+    usdtAmount: number;
+    source: string;
+    network: string;
+    tokenContractAddress: string;
+    receivingAddress: string;
+    receivingAddressFingerprint: string;
+    paymentStatus: string;
+    transactionId: string | null;
+    settledAt: Date | null;
+    createdAt: Date;
+    expiresAt: Date;
 }

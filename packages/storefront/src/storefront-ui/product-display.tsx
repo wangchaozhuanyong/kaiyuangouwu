@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ImgHTMLAttributes, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
+import { formatDisplayMoney } from '../money-display';
 import { responsiveImageSources, StorefrontImageKind, storefrontPlaceholderUrl } from '../responsive-image';
 import { CollectionSummary, OrderSummary, Product, ProductVariant } from '../types';
 
@@ -483,12 +484,7 @@ export function contentStringArraySetting(value: unknown): string[] {
 }
 
 export function formatMoney(value: number, currency: string, locale: string): string {
-    return new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-    }).format(value / 100);
+    return formatDisplayMoney(value, currency, locale);
 }
 
 export function PriceDisplay({
