@@ -71,6 +71,17 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 手动工作流生成。输入必须是 `origin/main` 当前完整的 40 位小写 SHA；工作流固定使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64，并重复执行冻结安装、全仓审计、发布变更只读 lint、构建、测试、运行产物 High+ 门禁和自验证。分支未推送到 `main`、SHA 不一致、源码被修改、平台不符或任一门禁失败时都不会上传制品。
 
+制品工作流成功后，`Deploy Production Runtime` 会自动接管发布。它使用 GitHub OIDC 临时凭证承担
+`arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入
+`s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/<sha>/`，再只向
+`i-041a146558e432cbf` 发送 `AWS-RunShellScript`。仓库和 GitHub 均不保存长期 AWS Access Key；日常发布只需在
+GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，无需登录 AWS 控制台。
+
+自动发布入口为 `/usr/local/sbin/vendure-production-deploy-from-s3`，来源必须是已提交的
+`deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
+数据库备份和迁移、PM2 切换、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了店铺媒体、
+登录视觉或库存修复发布器以及受管店铺素材目录，自动发布会主动停止，必须回到下文的人工预演和发布流程。
+
 若仓库根命令与当次改动范围不匹配，以 `package.json` 的现有脚本和本次实际测试清单为准，并在发布记录中写明。构建 Dashboard 前必须使用干净的 `packages/dev-server/dist`，避免旧 Vite 哈希文件混入。
 
 ## 防止旧代码覆盖新代码的强制协议
@@ -261,8 +272,8 @@ sudo -n systemctl reload nginx
 1. 确认本地只包含本次发布代码；设计验收截图、测试报告和其他未跟踪资料不进入发布提交。
 2. 从目标提交创建隔离的干净工作树，运行测试和生产构建。
 3. 将目标提交推送到 `origin/main`，记录完整 Git SHA。
-4. 对该 SHA 手动运行 `Production Runtime Artifact` 工作流；或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录。两种方式都必须完成自验证并记录外层校验和。
-5. 将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`；禁止在 EC2 安装依赖或构建。
+4. 对该 SHA 手动运行 `Production Runtime Artifact` 工作流；成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成第 5 至 12 步。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
+5. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 6. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 7. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
 8. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功。

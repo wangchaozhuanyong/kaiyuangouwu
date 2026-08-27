@@ -97,6 +97,36 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
 });
 
+void test('OIDC production deployment uses a locked, immutable S3-to-SSM release path', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/deploy_production_runtime.yml'),
+        'utf8',
+    );
+
+    assert.match(script, /vendure-production-deploy\.lock/u);
+    assert.match(script, /flock --exclusive --wait 300/u);
+    assert.match(script, /git merge --ff-only refs\/remotes\/origin\/main/u);
+    assert.match(script, /sha256sum --check/u);
+    assert.match(script, /verify-runtime\.mjs" --expected-sha/u);
+    assert.match(script, /vendure-mysql-backup\.service/u);
+    assert.match(script, /RUN_MIGRATIONS=true/u);
+    assert.match(script, /switch-production-runtime\.sh/u);
+    assert.match(script, /9>&-/u);
+    assert.match(script, /PRODUCTION_DEPLOY_OK/u);
+    assert.match(script, /managed storefront data changed/u);
+
+    assert.match(workflow, /workflow_run:/u);
+    assert.match(workflow, /id-token: write/u);
+    assert.match(workflow, /actions\/download-artifact@[0-9a-f]{40}/u);
+    assert.match(workflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
+    assert.match(workflow, /yunqiao-vendure-github-deploy/u);
+    assert.match(workflow, /i-041a146558e432cbf/u);
+    assert.match(workflow, /AWS-RunShellScript/u);
+    assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
+    assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
+});
+
 void test('experimental UI examples do not commit Google API keys', async () => {
     const locationMap = await readFile(
         path.join(

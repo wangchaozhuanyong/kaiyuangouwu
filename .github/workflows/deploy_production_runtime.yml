@@ -1,0 +1,143 @@
+name: Deploy Production Runtime
+
+on:
+    workflow_run:
+        workflows:
+            - Production Runtime Artifact
+        types:
+            - completed
+
+permissions:
+    actions: read
+    contents: read
+    id-token: write
+
+concurrency:
+    group: production-deploy
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: deploy verified runtime through AWS SSM
+        if: >-
+            github.event.workflow_run.conclusion == 'success' &&
+            github.event.workflow_run.event == 'workflow_dispatch' &&
+            github.event.workflow_run.head_branch == 'main'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 45
+        env:
+            AWS_REGION: ap-northeast-1
+            AWS_ACCOUNT_ID: '079740175286'
+            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+            INSTANCE_ID: i-041a146558e432cbf
+            ARTIFACT_BUCKET: yunqiao-vendure-prod-backup-079740175286-apne1
+            TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+            SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+
+        steps:
+            - name: Validate release identity
+              run: |
+                  if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                    echo "workflow_run head SHA is invalid" >&2
+                    exit 1
+                  fi
+
+            - name: Download verified runtime artifact
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: production-runtime-${{ github.event.workflow_run.head_sha }}
+                  path: artifacts
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  run-id: ${{ github.event.workflow_run.id }}
+
+            - name: Validate downloaded archive
+              run: |
+                  shopt -s nullglob
+                  archives=(artifacts/*.tar.gz)
+                  checksums=(artifacts/*.tar.gz.sha256)
+                  test "${#archives[@]}" -eq 1
+                  test "${#checksums[@]}" -eq 1
+
+                  ARCHIVE_PATH="${archives[0]}"
+                  ARCHIVE_NAME="$(basename "$ARCHIVE_PATH")"
+                  ARTIFACT_NAME="${ARCHIVE_NAME%.tar.gz}"
+                  CHECKSUM_PATH="${checksums[0]}"
+
+                  [[ "$ARTIFACT_NAME" =~ ^${TARGET_SHA}-[0-9]+-[0-9]+-linux-x64$ ]]
+                  test "$(basename "$CHECKSUM_PATH")" = "${ARCHIVE_NAME}.sha256"
+                  (
+                    cd artifacts
+                    sha256sum --check "$(basename "$CHECKSUM_PATH")"
+                  )
+
+                  echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
+                  echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> "$GITHUB_ENV"
+                  echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
+                  echo "CHECKSUM_PATH=$CHECKSUM_PATH" >> "$GITHUB_ENV"
+                  echo "ARTIFACT_S3_PREFIX=s3://${ARTIFACT_BUCKET}/deployments/${TARGET_SHA}" >> "$GITHUB_ENV"
+
+            - name: Configure short-lived AWS credentials
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+              with:
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+                  role-session-name: vendure-production-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Upload immutable runtime to private S3
+              run: |
+                  aws s3 cp "$ARCHIVE_PATH" "$ARTIFACT_S3_PREFIX/$ARCHIVE_NAME" --only-show-errors
+                  aws s3 cp "$CHECKSUM_PATH" "$ARTIFACT_S3_PREFIX/$ARCHIVE_NAME.sha256" --only-show-errors
+
+            - name: Deploy through Systems Manager
+              run: |
+                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
+                  jq -n --arg command "$REMOTE_COMMAND" \
+                    '{commands: [$command], executionTimeout: ["3600"]}' > "$RUNNER_TEMP/ssm-parameters.json"
+
+                  COMMAND_ID="$(aws ssm send-command \
+                    --region "$AWS_REGION" \
+                    --document-name AWS-RunShellScript \
+                    --instance-ids "$INSTANCE_ID" \
+                    --comment "GitHub production deploy ${TARGET_SHA}" \
+                    --parameters "file://$RUNNER_TEMP/ssm-parameters.json" \
+                    --timeout-seconds 600 \
+                    --query 'Command.CommandId' \
+                    --output text)"
+                  test -n "$COMMAND_ID"
+
+                  status=Pending
+                  for attempt in $(seq 1 360); do
+                    status="$(aws ssm get-command-invocation \
+                      --region "$AWS_REGION" \
+                      --command-id "$COMMAND_ID" \
+                      --instance-id "$INSTANCE_ID" \
+                      --query Status \
+                      --output text 2>/dev/null || true)"
+                    case "$status" in
+                      Success)
+                        break
+                        ;;
+                      Failed|Cancelled|TimedOut|Cancelling)
+                        break
+                        ;;
+                    esac
+                    sleep 5
+                  done
+
+                  aws ssm get-command-invocation \
+                    --region "$AWS_REGION" \
+                    --command-id "$COMMAND_ID" \
+                    --instance-id "$INSTANCE_ID" \
+                    --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+                    --output json
+                  test "$status" = Success
+
+                  {
+                    echo "## Production deployment"
+                    echo
+                    echo "- Target SHA: \`$TARGET_SHA\`"
+                    echo "- Artifact: \`$ARTIFACT_NAME\`"
+                    echo "- SSM command: \`$COMMAND_ID\`"
+                    echo "- Status: \`$status\`"
+                  } >> "$GITHUB_STEP_SUMMARY"
