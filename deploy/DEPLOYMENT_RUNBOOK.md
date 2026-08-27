@@ -26,6 +26,9 @@
 - 服务器源码与加密环境文件目录：`/var/www/kaiyuangouwu`
 - 不可变运行产物/回滚目录：`/var/www/kaiyuangouwu-releases`
 - 当前运行产物指针：`/var/www/kaiyuangouwu-current`（只能指向上述发布目录中已验证的候选目录）
+- 发布保留策略：`current-sha` 成功更新后，由 `vendure-production-release-retention.path`
+  自动保留当前运行产物和最近两个更早的回滚产物；其余严格匹配发布命名规则的旧目录与 `.tar.gz`
+  归档才允许删除，校验文件、部署记录、数据库备份和应用日志不参与清理。
 - Vendure 上游：`127.0.0.1:3002`
 - PM2 进程：`vendure-api`、`vendure-worker`
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
@@ -265,6 +268,45 @@ sudo -n systemctl reload nginx
 9. 从候选产物依次预演并执行店铺图片同步与本次审核过的库存继承修复；确认 Admin API 与 Shop API 结果一致后，再原子切换 `kaiyuangouwu-current`。
 10. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 11. 撤销临时 SSH 规则，仅保留原有固定规则；候选和回滚包按需保留，不删除用户数据。
+12. 原子更新 `current-sha` 后确认 `vendure-production-release-retention.path` 已触发且 service 成功；
+    清理过程使用同一个生产部署锁，并固定保留当前版本和最近两个更早的回滚版本。
+
+### 发布产物自动保留
+
+首次启用时，从已提交且验证过的发布提交安装脚本和 systemd 单元：
+
+```bash
+sudo -n install -o root -g root -m 0755 \
+    deploy/systemd/vendure-production-release-retention.cjs \
+    /usr/local/sbin/vendure-production-release-retention
+sudo -n install -o root -g root -m 0644 \
+    deploy/systemd/vendure-production-release-retention.service \
+    /etc/systemd/system/vendure-production-release-retention.service
+sudo -n install -o root -g root -m 0644 \
+    deploy/systemd/vendure-production-release-retention.path \
+    /etc/systemd/system/vendure-production-release-retention.path
+sudo -n systemctl daemon-reload
+sudo -n systemctl enable --now vendure-production-release-retention.path
+```
+
+脚本默认是 dry-run。人工检查时仍需持有生产部署锁；实际删除还必须显式设置写入保护变量：
+
+```bash
+flock --exclusive --wait 300 /run/lock/vendure-production-deploy.lock \
+    node /usr/local/sbin/vendure-production-release-retention --dry-run
+VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE=1 \
+    flock --exclusive --wait 300 /run/lock/vendure-production-deploy.lock \
+    node /usr/local/sbin/vendure-production-release-retention --apply
+```
+
+执行前脚本会重新验证稳定指针、完整 `current-sha`、PM2 中 API/Worker 的在线状态及运行目录。
+任一状态不一致会停止，不删除任何内容。自动任务的结果使用以下命令核对：
+
+```bash
+systemctl status vendure-production-release-retention.path --no-pager
+systemctl status vendure-production-release-retention.service --no-pager
+journalctl -u vendure-production-release-retention.service --since '30 minutes ago' --no-pager
+```
 
 ## 上线验收
 

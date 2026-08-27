@@ -97,6 +97,29 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
 });
 
+void test('production release retention runs only after the verified marker changes', async () => {
+    const script = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-production-release-retention.cjs'),
+        'utf8',
+    );
+    const service = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-production-release-retention.service'),
+        'utf8',
+    );
+    const pathUnit = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-production-release-retention.path'),
+        'utf8',
+    );
+
+    assert.match(script, /VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE/u);
+    assert.match(script, /Current SHA marker does not match/u);
+    assert.match(script, /vendure-api/u);
+    assert.match(script, /vendure-worker/u);
+    assert.match(service, /vendure-production-deploy\.lock/u);
+    assert.match(service, /VENDURE_RELEASE_RETENTION_COUNT=3/u);
+    assert.match(pathUnit, /PathChanged=\/var\/www\/kaiyuangouwu-releases\/current-sha/u);
+});
+
 void test('experimental UI examples do not commit Google API keys', async () => {
     const locationMap = await readFile(
         path.join(
