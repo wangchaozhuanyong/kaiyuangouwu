@@ -517,7 +517,13 @@ export class ReferralService implements OnApplicationBootstrap {
                 if (!raced.affected) throw error;
             }
         }
-        return { recorded: true };
+        return { recorded: true, setCookie: identity.setCookie };
+    }
+
+    private secureVisitorHash(channelId: string, keyMaterial: string): string {
+        return createHmac('sha256', this.promotionOptions.signingSecret)
+            .update(`${channelId}:${keyMaterial}`)
+            .digest('hex');
     }
 
     async createWithdrawal(ctx: RequestContext, input: CreateReferralWithdrawalInput) {

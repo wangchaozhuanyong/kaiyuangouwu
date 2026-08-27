@@ -9,6 +9,14 @@ import {
 } from './hero-theme';
 import { HERO_CLOUD_BRIDGE_FALLBACK_IMAGE, HERO_CLOUD_BRIDGE_IMAGE } from './storefront-images';
 
+import {
+    builtInHeroFallbackImage,
+    builtInHeroImage,
+    heroThemeStyle,
+    heroUsesImageOverlay,
+} from './hero-theme';
+import { HERO_CLOUD_BRIDGE_FALLBACK_IMAGE, HERO_CLOUD_BRIDGE_IMAGE } from './storefront-images';
+
 function hero(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
     return {
         id: 'hero-1',

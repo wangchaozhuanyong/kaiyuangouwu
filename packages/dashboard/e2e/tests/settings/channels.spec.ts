@@ -2,6 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 
 // Channels have dependent selectors: available languages/currencies must be set
 // before their respective defaults. Zone selectors are standard Base UI Selects.
@@ -143,7 +144,7 @@ test.describe('Channels CRUD', () => {
         await testChannelRow.getByRole('checkbox').click();
         await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
         await lp.expectSuccessToast();
 
         await expect(lp.getRows().filter({ hasText: 'e2e-test-channel' })).toHaveCount(0);

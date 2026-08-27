@@ -7,6 +7,7 @@ interface StoredReferralAttribution {
 }
 
 const STORAGE_KEY = 'storefront-referral-attribution:v1';
+const VISITOR_STORAGE_KEY = 'storefront-visitor-id:v1';
 
 export function normalizeReferralCode(value?: string | null): string {
     return (value ?? '').trim().toUpperCase().replace(/\s+/g, '').slice(0, 12);

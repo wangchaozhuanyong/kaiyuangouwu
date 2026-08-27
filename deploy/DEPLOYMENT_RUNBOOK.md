@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-25
+最后核对：2026-08-27
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -26,6 +26,9 @@
 - 服务器源码与加密环境文件目录：`/var/www/kaiyuangouwu`
 - 不可变运行产物/回滚目录：`/var/www/kaiyuangouwu-releases`
 - 当前运行产物指针：`/var/www/kaiyuangouwu-current`（只能指向上述发布目录中已验证的候选目录）
+- 发布保留策略：`current-sha` 成功更新后，由 `vendure-production-release-retention.path`
+  自动保留当前运行产物和最近两个更早的回滚产物；其余严格匹配发布命名规则的旧目录与 `.tar.gz`
+  归档才允许删除，校验文件、部署记录、数据库备份和应用日志不参与清理。
 - Vendure 上游：`127.0.0.1:3002`
 - PM2 进程：`vendure-api`、`vendure-worker`
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`

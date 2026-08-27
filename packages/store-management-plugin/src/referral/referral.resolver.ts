@@ -1,7 +1,8 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction, UserInputError } from '@vendure/core';
+import type { Response } from 'express';
 
 import {
     adjustReferralBalancePermission,

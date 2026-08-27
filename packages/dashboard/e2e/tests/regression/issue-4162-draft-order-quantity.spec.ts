@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 
 // Regression: https://github.com/vendurehq/vendure/issues/4162
 // Fix PR: https://github.com/vendurehq/vendure/pull/4345
@@ -64,7 +65,7 @@ test.describe('Issue #4162: Draft order quantity editing', () => {
 
         // Clean up: delete the draft
         await page.getByRole('button', { name: /Delete draft/i }).click();
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
         await expect(page).not.toHaveURL(/\/draft\//, { timeout: 15_000 });
     });
 });

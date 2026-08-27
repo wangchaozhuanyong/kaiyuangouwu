@@ -51,6 +51,7 @@ const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/dev-server/dist/dashboard/index.html',
     'packages/dev-server/email-templates/order-confirmation/body.hbs',
     'packages/content-translation-plugin/dist/index.js',
+    'packages/image-generation-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
     'packages/dev-server/scripts/repair-inventory-inheritance.mjs',

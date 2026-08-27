@@ -44,11 +44,7 @@ describe('storefront USDT display migration', () => {
             expect(updatedAt?.precision).toBe(databaseType === 'mysql' ? 6 : undefined);
             expect(quoteTable?.name).toBe('storefront_usdt_checkout_quote');
             expect(quoteTable?.findColumnByName('fiatPerUsdtRate')?.type).toBe(
-                databaseType === 'mysql'
-                    ? 'double'
-                    : databaseType === 'postgres'
-                      ? 'double precision'
-                      : 'float',
+                databaseType === 'postgres' ? 'double precision' : 'float',
             );
             expect(quoteTable?.findColumnByName('id')?.type).toBe(
                 databaseType === 'mysql' ? 'int' : 'integer',

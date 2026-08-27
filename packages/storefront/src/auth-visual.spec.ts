@@ -8,6 +8,13 @@ import {
     resolveAuthVisualMessage,
 } from './auth-visual';
 
+import {
+    authVisualAccentColor,
+    authVisualOverlayColor,
+    findAuthVisualContent,
+    resolveAuthVisualMessage,
+} from './auth-visual';
+
 function block(type: StorefrontContentBlockType): StorefrontContentBlock {
     return {
         id: type,

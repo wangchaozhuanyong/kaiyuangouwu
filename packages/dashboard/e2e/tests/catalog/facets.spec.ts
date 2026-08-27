@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { BaseListPage } from '../../page-objects/list-page.base.js';
 import { createCrudTestSuite } from '../../utils/crud-test-factory.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 
 test.describe('Facets', () => {
     test.describe.configure({ mode: 'serial' });
@@ -99,9 +100,10 @@ test.describe('Filter attribute values', () => {
         await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10_000 });
 
         // Use .first() in case a retry created duplicate entries
-        const testValueButton = page.locator('table').getByRole('button', { name: 'E2E Test Value' }).first();
-        await testValueButton.scrollIntoViewIfNeeded();
-        await testValueButton.click();
+        const testValueRow = page.locator('table tbody tr').filter({ hasText: 'E2E Test Value' }).first();
+        await testValueRow.scrollIntoViewIfNeeded();
+        await testValueRow.getByRole('button', { name: 'Edit', exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Open full page' }).click();
         await expect(page).toHaveURL(new RegExp(`/facets/${seededFacetId}/values/[^/]+`));
 
         // Verify the name field shows the correct value
@@ -118,9 +120,10 @@ test.describe('Filter attribute values', () => {
         });
         await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
 
-        const testValueButton = page.locator('table').getByRole('button', { name: 'E2E Test Value' }).first();
-        await testValueButton.scrollIntoViewIfNeeded();
-        await testValueButton.click();
+        const testValueRow = page.locator('table tbody tr').filter({ hasText: 'E2E Test Value' }).first();
+        await testValueRow.scrollIntoViewIfNeeded();
+        await testValueRow.getByRole('button', { name: 'Edit', exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Open full page' }).click();
         await expect(page).toHaveURL(new RegExp(`/facets/${seededFacetId}/values/[^/]+`));
 
         // Wait for form data to fully load before editing
@@ -165,7 +168,7 @@ test.describe('Filter attribute values', () => {
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
 
         // Confirm deletion
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
 
         // Verify the value was deleted
         await expect(

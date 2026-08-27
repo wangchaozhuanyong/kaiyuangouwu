@@ -66,11 +66,8 @@ export class AddStorefrontUsdtDisplay1787778000000 implements MigrationInterface
 
         if (!(await queryRunner.hasTable('storefront_usdt_checkout_quote'))) {
             const timestampType = databaseType === 'postgres' ? 'timestamp without time zone' : 'datetime';
-            const rateType = isMysql
-                ? 'double'
-                : databaseType === 'postgres' || databaseType === 'cockroachdb'
-                  ? 'double precision'
-                  : 'float';
+            const rateType =
+                databaseType === 'postgres' || databaseType === 'cockroachdb' ? 'double precision' : 'float';
             const idType = databaseType === 'postgres' || isSqlite ? 'integer' : 'int';
             const now = isMysql ? 'CURRENT_TIMESTAMP(6)' : isSqlite ? "datetime('now')" : 'CURRENT_TIMESTAMP';
             await queryRunner.createTable(
