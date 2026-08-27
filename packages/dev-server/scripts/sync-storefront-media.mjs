@@ -61,6 +61,19 @@ const LOGIN_MUTATION = `
     }
 `;
 
+const CURRENT_USER_QUERY = `
+    query StorefrontMediaCurrentUser {
+        me {
+            id
+            channels {
+                id
+                code
+                token
+            }
+        }
+    }
+`;
+
 const PRODUCT_VARIANT_QUERY = `
     query StorefrontMediaProductVariant($sku: String!) {
         productVariants(options: { take: 2, filter: { sku: { eq: $sku } } }) {
@@ -98,7 +111,6 @@ const ASSET_QUERY = `
         assets(options: { take: 1, tags: $tags, tagsOperator: AND }) {
             items {
                 id
-                name
                 preview
                 source
             }
@@ -255,6 +267,16 @@ async function login(fetchImpl, apiOrigin, username, password) {
     return { authToken, channels: result.data.login.channels };
 }
 
+async function authenticate(fetchImpl, apiOrigin, username, password, adminBearerToken) {
+    if (!adminBearerToken) return login(fetchImpl, apiOrigin, username, password);
+
+    const result = await graphql(fetchImpl, apiOrigin, CURRENT_USER_QUERY, undefined, {
+        authorization: `Bearer ${adminBearerToken}`,
+    });
+    assert.ok(result.data.me, 'VENDURE_ADMIN_BEARER_TOKEN is invalid or expired');
+    return { authToken: adminBearerToken, channels: result.data.me.channels };
+}
+
 async function findAsset(fetchImpl, apiOrigin, authToken, channel, tags) {
     const result = await graphql(
         fetchImpl,
@@ -290,7 +312,6 @@ async function uploadAsset(fetchImpl, apiOrigin, authToken, channel, media) {
                 createAssets(input: $input) {
                     ... on Asset {
                         id
-                        name
                         preview
                         source
                     }
@@ -418,6 +439,7 @@ export async function syncStorefrontMedia({
     apiOrigin,
     username,
     password,
+    adminBearerToken,
     channelCodes = ['cn-mainland'],
     apply = false,
     allowRemote = false,
@@ -426,7 +448,10 @@ export async function syncStorefrontMedia({
     manifest = storefrontMediaManifest,
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
-    assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
+    assert.ok(
+        adminBearerToken || (username && password),
+        'VENDURE_ADMIN_BEARER_TOKEN or SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required',
+    );
     assert.ok(channelCodes.length > 0, 'At least one storefront media Channel is required');
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
@@ -434,7 +459,7 @@ export async function syncStorefrontMedia({
 
     const normalizedOrigin = apiOrigin.replace(/\/$/, '');
     const prepared = await prepareStorefrontMediaManifest(manifest);
-    const session = await login(fetchImpl, normalizedOrigin, username, password);
+    const session = await authenticate(fetchImpl, normalizedOrigin, username, password, adminBearerToken);
     const channelsByCode = new Map(session.channels.map(channel => [channel.code, channel]));
     const selectedChannels = channelCodes.map(code => {
         const channel = channelsByCode.get(code);
@@ -581,6 +606,7 @@ if (isMain) {
             apiOrigin,
             username: process.env.SUPERADMIN_USERNAME,
             password: process.env.SUPERADMIN_PASSWORD,
+            adminBearerToken: process.env.VENDURE_ADMIN_BEARER_TOKEN,
             channelCodes,
             apply: options.apply,
             allowRemote: options.allowRemote,

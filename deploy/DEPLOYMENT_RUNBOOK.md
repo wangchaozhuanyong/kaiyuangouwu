@@ -211,7 +211,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
     node packages/dev-server/scripts/sync-storefront-media.mjs --apply --allow-remote
 ```
 
-命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。
+命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；若后台密码已独立变更，也可通过进程环境临时注入现有的短期 `VENDURE_ADMIN_BEARER_TOKEN`。不得把凭据写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。
 
 API 健康后、切换 Storefront 稳定指针前，处理经过审核的旧库存继承数据。只把确认是历史后台
 错误写成 `trackInventory=FALSE` 的稳定 SKU 放入环境变量；先预演并逐项核对 SKU、variant ID、
