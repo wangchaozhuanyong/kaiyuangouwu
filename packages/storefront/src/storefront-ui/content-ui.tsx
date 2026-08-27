@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
+    Badge,
     Check,
     ChevronRight,
     CircleCheck,
@@ -99,7 +100,6 @@ export function HomepageCouponHub({
 
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
-                    const isClaimed = coupon.claimed;
                     const canClaim = coupon.claimable && !coupon.claimed;
 
                     return (
@@ -112,7 +112,12 @@ export function HomepageCouponHub({
                                 <div className="coupon-ticket-top">
                                     <span className="coupon-ticket-tag">{coupon.tag}</span>
                                 </div>
-                                <div className="coupon-ticket-value">
+                                <div
+                                    className={`coupon-ticket-value${
+                                        coupon.unitBefore ? ' is-unit-before' : ''
+                                    }`}
+                                >
+                                    <Badge className="coupon-ticket-seal" aria-hidden="true" />
                                     {coupon.unitBefore ? (
                                         <>
                                             <small className="coupon-unit">{coupon.unit}</small>
@@ -128,12 +133,6 @@ export function HomepageCouponHub({
                                     )}
                                 </div>
                                 <p className="coupon-ticket-desc">{coupon.description}</p>
-                            </div>
-
-                            <div className="coupon-ticket-divider" aria-hidden="true">
-                                <span className="coupon-notch coupon-notch-top" />
-                                <span className="coupon-notch-line" />
-                                <span className="coupon-notch-bottom" />
                             </div>
 
                             <div className="coupon-ticket-action">
@@ -153,29 +152,9 @@ export function HomepageCouponHub({
                                     }
                                 >
                                     {!canClaim ? (
-                                        <span className="coupon-btn-text-wrap">
-                                            <Check size={12} strokeWidth={2.8} aria-hidden="true" />
-                                            <span>
-                                                {isZh
-                                                    ? isClaimed
-                                                        ? '已领'
-                                                        : '已领完'
-                                                    : isClaimed
-                                                      ? 'Got'
-                                                      : 'Ended'}
-                                            </span>
-                                        </span>
+                                        <Check size={16} strokeWidth={2.6} aria-hidden="true" />
                                     ) : (
-                                        <span className="coupon-btn-text-wrap">
-                                            {isZh ? (
-                                                <>
-                                                    <span>立即</span>
-                                                    <span>领取</span>
-                                                </>
-                                            ) : (
-                                                <span>Claim</span>
-                                            )}
-                                        </span>
+                                        <ChevronRight size={17} strokeWidth={2.4} aria-hidden="true" />
                                     )}
                                 </button>
                             </div>
