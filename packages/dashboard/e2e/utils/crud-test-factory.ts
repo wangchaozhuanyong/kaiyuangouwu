@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { BaseDetailPage, type FieldInput } from '../page-objects/detail-page.base.js';
 import { BaseListPage, type ListPageConfig } from '../page-objects/list-page.base.js';
+import { confirmSensitiveAction } from './sensitive-action.js';
 
 export interface CrudTestConfig {
     /** Singular entity name for test descriptions, e.g. 'tax category' */
@@ -293,10 +294,7 @@ export function createCrudTestSuite(config: CrudTestConfig) {
                     await targetRow.first().getByRole('checkbox').click();
                     await page.getByTestId('dt-bulk-actions-trigger').click();
                     await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
-                    await page
-                        .locator('[role="alertdialog"]')
-                        .getByRole('button', { name: 'Continue' })
-                        .click();
+                    await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
                 }
                 await listPage.expectSuccessToast();
             });

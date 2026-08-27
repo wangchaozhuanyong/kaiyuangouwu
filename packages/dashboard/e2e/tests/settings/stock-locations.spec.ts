@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { BaseListPage } from '../../page-objects/list-page.base.js';
 import { createCrudTestSuite } from '../../utils/crud-test-factory.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
 // Unique per run so repeated local runs (which don't reset the DB) don't leave duplicates that
@@ -60,7 +61,7 @@ async function bulkDelete(page: Page, listPage: BaseListPage, searchTerm: string
     await expect(dialog.getByText('Delete stock locations')).toBeVisible();
     await dialog.getByRole('combobox').click();
     await page.getByRole('option', { name: optionName }).click();
-    await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+    await confirmSensitiveAction(dialog, 'Delete');
 }
 
 test.describe('Stock Locations', () => {

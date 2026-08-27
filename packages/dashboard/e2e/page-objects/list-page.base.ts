@@ -1,5 +1,7 @@
 import { type Locator, type Page, expect } from '@playwright/test';
 
+import { confirmSensitiveAction } from '../utils/sensitive-action.js';
+
 export interface ListPageConfig {
     /** URL path, e.g. '/tax-categories' */
     path: string;
@@ -51,6 +53,7 @@ export class BaseListPage {
     /** Click the explicit primary action in the row matching `name`, with a legacy-link fallback. */
     async clickEntity(name: string) {
         const row = this.getRows().filter({ hasText: name }).first();
+        await expect(row).toBeVisible({ timeout: 10_000 });
         const primaryAction = row.getByTestId('dt-row-primary-action');
         if (await primaryAction.isVisible().catch(() => false)) {
             await primaryAction.click();
@@ -59,6 +62,11 @@ export class BaseListPage {
         const exactMatch = this.dataTable.getByRole('button', { name, exact: true }).first();
         if (await exactMatch.isVisible().catch(() => false)) {
             await exactMatch.click();
+            return;
+        }
+        const editAction = row.getByRole('button', { name: 'Edit', exact: true });
+        if (await editAction.isVisible().catch(() => false)) {
+            await editAction.click();
             return;
         }
         await this.dataTable.getByRole('button', { name }).first().click();
@@ -103,11 +111,7 @@ export class BaseListPage {
         await this.page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
         // Confirm in the AlertDialog. Sensitive destructive actions also require the current password.
         const alertDialog = this.page.locator('[role="alertdialog"]');
-        const passwordInput = alertDialog.locator('input[type="password"]');
-        if (await passwordInput.isVisible().catch(() => false)) {
-            await passwordInput.fill('superadmin');
-        }
-        await alertDialog.getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(alertDialog);
     }
 
     /** Open the row-level action menu (ellipsis) for a specific row index, then click "Delete" and confirm. */
@@ -117,11 +121,7 @@ export class BaseListPage {
         await this.page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
         // Confirm in the AlertDialog
         const alertDialog = this.page.locator('[role="alertdialog"]');
-        const passwordInput = alertDialog.locator('input[type="password"]');
-        if (await passwordInput.isVisible().catch(() => false)) {
-            await passwordInput.fill('superadmin');
-        }
-        await alertDialog.getByRole('button', { name: 'Delete' }).click();
+        await confirmSensitiveAction(alertDialog, 'Delete');
     }
 
     async expectRowCount(count: number) {

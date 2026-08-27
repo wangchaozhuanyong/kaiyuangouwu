@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
 const productDetailConfig = {
@@ -134,9 +135,9 @@ test.describe('product variant generation', () => {
         await expect(page.getByText('Product type and delivery', { exact: true })).toBeVisible();
 
         await page.getByRole('radio', { name: /^Digital product/ }).click();
-        await expect(page.getByTestId('variant-stock-input')).toHaveCount(0);
+        await expect(page.getByTestId('variant-stock-input')).toHaveCount(3);
         await expect(
-            page.getByText('Delivered to the checkout email after payment; no shipping or stock.'),
+            page.getByText('Delivered to the checkout email after payment; no shipping is required.'),
         ).toBeVisible();
 
         await page.getByRole('radio', { name: /^Physical product/ }).click();
@@ -209,7 +210,10 @@ test.describe('product variant generation', () => {
         const editorDrawer = page.getByRole('dialog');
         await expect(editorDrawer).toBeVisible();
         await expect(
-            editorDrawer.getByRole('heading', { name: /E2E Variant Test Product Small/i }),
+            editorDrawer.getByRole('heading', {
+                name: 'E2E Variant Test Product Small',
+                exact: true,
+            }),
         ).toBeVisible();
         await expect(page).toHaveURL(productUrl);
         await editorDrawer.getByRole('button', { name: 'Close', exact: true }).click();
@@ -325,7 +329,7 @@ test.describe('manage product variants', () => {
         const typeSelect = firstRow.getByRole('combobox').first();
         await typeSelect.click();
         await page.getByRole('option', { name: 'Digital product' }).click();
-        await expect(firstRow.getByText('Not tracked')).toBeVisible();
+        await expect(firstRow.getByRole('spinbutton')).toBeVisible();
         await firstRow.getByTestId('variant-save-btn').click();
         await expect(
             page
@@ -366,7 +370,7 @@ test.describe('manage product variants', () => {
         await expect(alertDialog.getByText('Are you sure you want to delete this SKU?')).toBeVisible();
 
         // Confirm the deletion
-        await alertDialog.getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(alertDialog);
 
         // Wait for success toast
         await expect(
@@ -497,7 +501,7 @@ test.describe('remove option group from product detail (#4703)', () => {
         // Confirm in the AlertDialog.
         const alertDialog = page.locator('[role="alertdialog"]');
         await expect(alertDialog.getByText('Remove option group')).toBeVisible();
-        await alertDialog.getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(alertDialog);
 
         await expect(
             page
@@ -609,18 +613,17 @@ test.describe('force-remove an in-use option group (#4703)', () => {
         const removeButton = page.getByRole('button', { name: 'Remove option group' });
         await expect(removeButton).toBeVisible();
         await removeButton.click();
-        await page
+        const removeDialog = page
             .locator('[role="alertdialog"]')
-            .filter({ hasText: 'Are you sure you want to remove this option group' })
-            .getByRole('button', { name: 'Continue' })
-            .click();
+            .filter({ hasText: 'Are you sure you want to remove this option group' });
+        await confirmSensitiveAction(removeDialog);
 
         // The force-remove confirmation appears because the group is in use.
         const forceDialog = page
             .locator('[role="alertdialog"]')
             .filter({ hasText: 'Force remove option group' });
         await expect(forceDialog).toBeVisible({ timeout: 10_000 });
-        await forceDialog.getByRole('button', { name: 'Force remove' }).click();
+        await confirmSensitiveAction(forceDialog, 'Force remove');
 
         await expect(
             page
@@ -656,16 +659,18 @@ test.describe('variant option group edit link', () => {
         });
 
         // Click a variant that has options (Laptop variants have screen size + RAM)
-        await page
-            .locator('table')
-            .getByRole('button', { name: /Laptop/ })
-            .first()
-            .click();
+        const laptopRow = page
+            .locator('table tbody tr')
+            .filter({ hasText: /Laptop/ })
+            .first();
+        await laptopRow.getByRole('button', { name: 'Edit', exact: true }).click();
+        const editorDrawer = page.getByRole('dialog');
+        await editorDrawer.getByRole('button', { name: 'Open full page' }).click();
         await expect(page).toHaveURL(/\/product-variants\/[^/]+$/);
 
         // The Options block should be visible with edit icons
-        const optionsBlock = page.getByRole('main');
-        await expect(optionsBlock.getByText('Options', { exact: true })).toBeVisible({
+        const optionsBlock = page.locator('#page-block-options');
+        await expect(optionsBlock.locator('[data-slot="card-title"]')).toHaveText('Options', {
             timeout: 10_000,
         });
 

@@ -2,6 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 
 // Administrators have a password field and a multi-select role picker
 // that don't fit the standard CRUD factory, so we use custom tests.
@@ -109,7 +110,7 @@ test.describe('Administrators', () => {
         await testAdminRow.getByRole('checkbox').click();
         await page.getByTestId('dt-bulk-actions-trigger').click();
         await page.locator('[role="menu"]').getByText('Delete', { exact: true }).click();
-        await page.locator('[role="alertdialog"]').getByRole('button', { name: 'Continue' }).click();
+        await confirmSensitiveAction(page.locator('[role="alertdialog"]'));
         await lp.expectSuccessToast();
 
         // Verify the admin is gone
