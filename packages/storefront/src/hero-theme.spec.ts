@@ -1,13 +1,5 @@
-import type { StorefrontContentBlock } from './types';
 import { describe, expect, it } from 'vitest';
-
-import {
-    builtInHeroFallbackImage,
-    builtInHeroImage,
-    heroThemeStyle,
-    heroUsesImageOverlay,
-} from './hero-theme';
-import { HERO_CLOUD_BRIDGE_FALLBACK_IMAGE, HERO_CLOUD_BRIDGE_IMAGE } from './storefront-images';
+import type { StorefrontContentBlock } from './types';
 
 import {
     builtInHeroFallbackImage,

@@ -64,8 +64,14 @@ export class ReferralShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Public)
-    recordStorefrontVisit(@Ctx() ctx: RequestContext) {
-        return this.referralService.recordVisit(ctx);
+    async recordStorefrontVisit(
+        @Ctx() ctx: RequestContext,
+        @Context('res') res: Response,
+        @Args('visitorId') visitorId?: string,
+    ) {
+        const result = await this.referralService.recordVisit(ctx, visitorId);
+        if (result.setCookie) res.append('Set-Cookie', result.setCookie);
+        return { recorded: result.recorded };
     }
 }
 

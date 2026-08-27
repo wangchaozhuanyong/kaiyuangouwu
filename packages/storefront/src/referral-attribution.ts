@@ -69,3 +69,25 @@ export function referralShareUrl(code: string, source: ReferralSource = 'LINK'):
     url.searchParams.set('source', source);
     return url.href;
 }
+
+export function storefrontVisitorId(
+    storage?: Pick<Storage, 'getItem' | 'setItem'>,
+    generateId?: () => string,
+): string | null {
+    try {
+        const resolvedStorage = storage ?? (typeof localStorage === 'undefined' ? null : localStorage);
+        if (!resolvedStorage) return null;
+        const existing = resolvedStorage.getItem(VISITOR_STORAGE_KEY);
+        if (existing && /^[A-Za-z0-9_-]{16,128}$/.test(existing)) return existing;
+        const generated = (generateId ?? defaultVisitorId)();
+        if (!/^[A-Za-z0-9_-]{16,128}$/.test(generated)) return null;
+        resolvedStorage.setItem(VISITOR_STORAGE_KEY, generated);
+        return generated;
+    } catch {
+        return null;
+    }
+}
+
+function defaultVisitorId(): string {
+    return crypto.randomUUID().replace(/-/g, '');
+}

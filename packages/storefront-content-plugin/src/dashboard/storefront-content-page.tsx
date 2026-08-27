@@ -429,8 +429,6 @@ const enCopy: typeof zhCopy = {
 };
 
 const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
-    NAVIGATION: { zh: '客户端导航', en: 'Storefront navigation' },
-    CLIENT_PLUGINS: { zh: '客户端插件', en: 'Storefront plugins' },
     HERO: { zh: '首页主视觉', en: 'Hero' },
     NOTICE: { zh: '公告', en: 'Notice' },
     QUICK_LINKS: { zh: '快捷入口', en: 'Quick links' },
