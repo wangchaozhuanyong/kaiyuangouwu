@@ -11,6 +11,44 @@ const ReviewCenterPage = lazy(() =>
 const SupportPage = lazy(() =>
     import('../pages/support-page').then(module => ({ default: module.SupportPage })),
 );
+const BusinessServicesPage = lazy(() =>
+    import('../pages/business-services-page').then(module => ({ default: module.BusinessServicesPage })),
+);
+const AiImageStudioPage = lazy(() =>
+    import('../pages/ai-image-studio-page').then(module => ({ default: module.AiImageStudioPage })),
+);
+
+export function ServicesRoutePage() {
+    const runtime = useRuntime();
+    return (
+        <PageContext
+            value={{
+                contentBlocks: runtime.contentBlocks,
+                language: runtime.language,
+                onNavigate: runtime.navigate,
+            }}
+        >
+            <BusinessServicesPage />
+        </PageContext>
+    );
+}
+
+export function ImageStudioRoutePage() {
+    const runtime = useRuntime();
+    return (
+        <RouteGate name="image-studio">
+            <AiImageStudioPage
+                api={runtime.api}
+                customer={runtime.customer}
+                market={runtime.market}
+                language={runtime.language}
+                onBack={runtime.goBack}
+                onSignIn={() => runtime.navigate({ name: 'login' })}
+                onNotify={runtime.notify}
+            />
+        </RouteGate>
+    );
+}
 
 export function FlashSaleRoutePage() {
     const runtime = useRuntime();
