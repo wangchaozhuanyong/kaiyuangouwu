@@ -35,6 +35,11 @@ const messages = {
     retry: msg({ id: 'operations.stores.retry', message: 'Retry' }),
 };
 
+const metricGridClassName = [
+    'grid grid-cols-[minmax(0,1fr)_3.5rem_6rem] gap-2',
+    'sm:grid-cols-[minmax(0,1fr)_6rem_8rem] sm:gap-4',
+].join(' ');
+
 export function StoreOverviewWidget() {
     const { t } = useLingui();
     const { channels, activeChannel } = useChannel();
@@ -115,7 +120,7 @@ export function StoreOverviewWidget() {
             {isPending ? (
                 <div className="space-y-3 py-1">
                     {[0, 1].map(row => (
-                        <div key={row} className="grid grid-cols-[1fr_6rem_8rem] items-center gap-4">
+                        <div key={row} className={`${metricGridClassName} items-center`}>
                             <Skeleton className="h-8 w-40" />
                             <Skeleton className="h-7 w-12 justify-self-end" />
                             <Skeleton className="h-7 w-24 justify-self-end" />
@@ -131,12 +136,14 @@ export function StoreOverviewWidget() {
                 </div>
             ) : (
                 <div className="min-w-0">
-                    <div className="mb-2 grid grid-cols-[minmax(0,1fr)_6rem_8rem] gap-4 border-b pb-2 text-xs text-muted-foreground">
-                        <span>
+                    <div
+                        className={`${metricGridClassName} mb-2 border-b pb-2 text-xs text-muted-foreground`}
+                    >
+                        <span className="col-span-3 sm:col-span-1">
                             {channels.length} {t(messages.stores)} · {t(messages.total)}{' '}
                             {formatNumber(normalizedMetrics.totalOrders)} {t(messages.orders).toLowerCase()}
                         </span>
-                        <span className="text-right">{t(messages.orders)}</span>
+                        <span className="col-start-2 text-right sm:col-start-auto">{t(messages.orders)}</span>
                         <span className="text-right">{t(messages.sales)}</span>
                     </div>
                     <div className="max-h-52 overflow-y-auto">
@@ -148,14 +155,14 @@ export function StoreOverviewWidget() {
                             return (
                                 <div
                                     key={channel.id}
-                                    className="grid min-h-12 grid-cols-[minmax(0,1fr)_6rem_8rem] items-center gap-4 border-b last:border-0"
+                                    className={`${metricGridClassName} min-h-12 items-center border-b last:border-0`}
                                 >
                                     <div className="flex min-w-0 items-center gap-2.5">
                                         <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
                                             <Store className="size-4" aria-hidden="true" />
                                         </div>
                                         <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                                                 <span className="truncate text-sm font-medium">
                                                     <ChannelCodeLabel code={channel.code} />
                                                 </span>
