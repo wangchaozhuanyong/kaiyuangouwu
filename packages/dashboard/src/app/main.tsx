@@ -16,7 +16,7 @@ import { useServerConfig } from '@/vdb/hooks/use-server-config.js';
 import { useUiLanguageLoader } from '@/vdb/hooks/use-ui-language-loader.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { defaultLocale, dynamicActivate } from '@/vdb/providers/i18n-provider.js';
-import { useLingui } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AnyRoute, createRouter, RouterOptions, RouterProvider } from '@tanstack/react-router';
 import React, { useEffect } from 'react';
@@ -163,13 +163,15 @@ function App() {
     if (extensionLoadError) {
         return (
             <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
-                <p className="text-destructive">后台扩展加载失败：{extensionLoadError.message}</p>
+                <p className="text-destructive">
+                    <Trans>Dashboard extensions failed to load: {extensionLoadError.message}</Trans>
+                </p>
                 <button
                     type="button"
                     className="rounded-md border px-4 py-2"
                     onClick={() => window.location.reload()}
                 >
-                    重新加载
+                    <Trans>Reload</Trans>
                 </button>
             </div>
         );

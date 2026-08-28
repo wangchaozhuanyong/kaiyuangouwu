@@ -107,6 +107,7 @@ test.describe('Custom Fields', () => {
         await dp.expectNewPageLoaded();
 
         await dp.fillInput('Product name', 'Nullable Feature Type Product');
+        await dp.fillRichText('Description', 'Product used to verify nullable option fields.');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
         await expect(dp.formItem('Feature Type').getByRole('combobox')).toHaveAttribute(
             'data-placeholder',

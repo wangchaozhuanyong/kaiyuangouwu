@@ -35,8 +35,9 @@ test.describe('Issue #4155: Nullable non-string custom field defaults', () => {
         await dp.gotoNew();
         await dp.expectNewPageLoaded();
 
-        // Only fill required fields — leave nullable custom fields empty
+        // Fill required product fields while leaving nullable custom fields empty.
         await dp.fillInput('Product name', 'Issue 4155 Test Product');
+        await dp.fillRichText('Description', 'Product used to verify nullable non-string fields.');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
 
         // Wait for form validation to settle — the Create button becomes enabled

@@ -30,7 +30,14 @@ test.describe('Breadcrumb should update after entity mutation', () => {
         // Create a product to test with
         await detail.gotoNew();
         await detail.expectNewPageLoaded();
-        await detail.fillFields([{ label: 'Product name', value: productName }]);
+        await detail.fillFields([
+            { label: 'Product name', value: productName },
+            {
+                label: 'Description',
+                value: 'Product used to verify breadcrumb updates.',
+                type: 'rich-text',
+            },
+        ]);
         await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
         await detail.clickCreate();
         await detail.expectSuccessToast(/created/i);

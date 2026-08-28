@@ -15,7 +15,7 @@ export interface FieldInput {
     /** The value to type/set. For 'select', this is the visible option text to choose. */
     value: string | boolean;
     /** Field type — defaults to 'input' */
-    type?: 'input' | 'switch' | 'select' | 'number' | 'password';
+    type?: 'input' | 'switch' | 'select' | 'number' | 'password' | 'rich-text';
 }
 
 /**
@@ -74,6 +74,11 @@ export class BaseDetailPage {
         await this.formItem(label).getByRole('textbox').fill(value);
     }
 
+    /** Fill a rich-text editor identified by its field label. */
+    async fillRichText(label: string, value: string) {
+        await this.formItem(label).locator('[contenteditable="true"]').fill(value);
+    }
+
     /** Fill a number input field identified by its label (uses spinbutton role). */
     async fillNumber(label: string, value: string) {
         await this.formItem(label).getByRole('spinbutton').fill(value);
@@ -129,6 +134,9 @@ export class BaseDetailPage {
                     break;
                 case 'password':
                     await this.fillPassword(field.label, field.value as string);
+                    break;
+                case 'rich-text':
+                    await this.fillRichText(field.label, field.value as string);
                     break;
                 default:
                     await this.fillInput(field.label, field.value as string);

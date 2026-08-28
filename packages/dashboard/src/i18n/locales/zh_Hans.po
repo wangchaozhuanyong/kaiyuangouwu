@@ -3535,6 +3535,11 @@ msgstr "待处理"
 msgid "fulfillmentState.Shipped"
 msgstr "已发货"
 
+#. placeholder {0}: extensionLoadError.message
+#: src/app/main.tsx
+msgid "Dashboard extensions failed to load: {0}"
+msgstr "后台扩展加载失败：{0}"
+
 #: src/lib/components/data-table/save-view-button.tsx
 msgid "Save View"
 msgstr "保存视图"
@@ -3975,6 +3980,10 @@ msgstr "客户历史"
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Task cancelled successfully"
 msgstr "任务已成功取消"
+
+#: src/app/main.tsx
+msgid "Reload"
+msgstr "重新加载"
 
 #: src/app/routes/_authenticated/_products/components/assign-facet-values-dialog.tsx
 msgid "Successfully updated facet values for {entityIdsLength} {entityType}"

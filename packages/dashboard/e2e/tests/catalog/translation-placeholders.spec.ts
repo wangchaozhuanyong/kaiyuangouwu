@@ -203,6 +203,7 @@ test.describe('Default-language product editing', () => {
         const name = `OSS579 Only-EN ${Date.now()}`;
         // Slug is auto-generated from the name (its input is disabled), so filling the name is enough.
         await dp.fillInput('Product name', name);
+        await dp.fillRichText('Description', 'Product used to verify default-language submission.');
 
         const createRequest = page.waitForRequest(
             req => req.method() === 'POST' && (req.postData() ?? '').includes('mutation CreateProduct('),

@@ -869,6 +869,7 @@ function PosterTemplateEditor({
                     disabled={disabled}
                     onChange={e => update('rewardTextZh', e.target.value)}
                 />
+                {/* i18n-audit-ignore -- Merchant edits this explicitly paired Chinese referral copy. */}
                 <Help>支持 {'{rewardRate}'} 动态奖励比例；只表述消费抵扣，不建议出现提现文字。</Help>
             </Field>
             <Field label="英文奖励文案">
@@ -878,6 +879,7 @@ function PosterTemplateEditor({
                     disabled={disabled}
                     onChange={e => update('rewardTextEn', e.target.value)}
                 />
+                {/* i18n-audit-ignore -- Merchant edits this explicitly paired English referral copy. */}
                 <Help>Use {'{rewardRate}'} for the live reward percentage.</Help>
             </Field>
             <Field label="中文网站介绍">
