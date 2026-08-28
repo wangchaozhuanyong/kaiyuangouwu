@@ -20,6 +20,7 @@ import { LoaderCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { allProductIdsDocument, assignProductsToChannelDocument } from '../products.graphql.js';
+
 import {
     assignProductBatchesToChannels,
     fetchAllProductIds,
@@ -63,10 +64,10 @@ export function AssignAllProductsDialog({
             setProgress({ phase: 'fetching', completed: 0, total: productCount });
             const productIds = await fetchAllProductIds(
                 async ({ skip, take }) => {
-                    const result = await api.query(allProductIdsDocument, {
+                    const pageResult = await api.query(allProductIdsDocument, {
                         options: { skip, take, sort: { id: 'ASC' } },
                     });
-                    return result.products;
+                    return pageResult.products;
                 },
                 ({ fetched, total }) => {
                     setProgress({ phase: 'fetching', completed: fetched, total });
@@ -82,7 +83,7 @@ export function AssignAllProductsDialog({
                 completed: 0,
                 total: productIds.length * selectedChannelIds.length,
             });
-            const result = await assignProductBatchesToChannels({
+            const assignmentResult = await assignProductBatchesToChannels({
                 productIds,
                 channelIds: selectedChannelIds,
                 priceFactor,
@@ -94,7 +95,7 @@ export function AssignAllProductsDialog({
             return {
                 productCount: productIds.length,
                 targetCount: selectedChannelIds.length,
-                failures: result.failures,
+                failures: assignmentResult.failures,
             };
         },
         onSuccess: result => {
@@ -126,8 +127,7 @@ export function AssignAllProductsDialog({
             }
             onSuccess?.();
         },
-        onError: error => {
-            console.error('Failed to assign all default-channel products', error);
+        onError: () => {
             toast.error(t`Failed to assign all products`);
         },
         onSettled: () => {

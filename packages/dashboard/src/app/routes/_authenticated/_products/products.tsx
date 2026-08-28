@@ -16,6 +16,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { LayersIcon, ListRestart, PlusIcon } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
+
 import { AssignAllProductsDialog } from './components/assign-all-products-dialog.js';
 import { isAssignAllProductsAvailable } from './components/assign-all-products.js';
 import {
