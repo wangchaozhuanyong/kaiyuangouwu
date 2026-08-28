@@ -3976,6 +3976,10 @@ msgstr "Customer history"
 msgid "Task cancelled successfully"
 msgstr "Task cancelled successfully"
 
+#: src/app/main.tsx
+msgid "Reload"
+msgstr "Reload"
+
 #: src/app/routes/_authenticated/_products/components/assign-facet-values-dialog.tsx
 msgid "Successfully updated facet values for {entityIdsLength} {entityType}"
 msgstr "Successfully updated filter attribute values for {entityIdsLength} {entityType}"
@@ -4465,6 +4469,10 @@ msgstr "State/Province"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 msgid "Failed to update option group"
 msgstr "Failed to update option group"
+
+#: src/app/main.tsx
+msgid "Dashboard extensions failed to load:"
+msgstr "Dashboard extensions failed to load:"
 
 #: src/app/routes/_authenticated/_tax-categories/tax-categories_.$id.tsx
 msgid "Failed to create tax category"

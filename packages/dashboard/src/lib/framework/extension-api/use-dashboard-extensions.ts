@@ -30,7 +30,9 @@ export function useDashboardExtensions() {
             },
             error => {
                 if (mounted) {
-                    setExtensionLoadError(error instanceof Error ? error : new Error('后台扩展加载失败'));
+                    setExtensionLoadError(
+                        error instanceof Error ? error : new Error('Unknown dashboard extension error'),
+                    );
                 }
             },
         );

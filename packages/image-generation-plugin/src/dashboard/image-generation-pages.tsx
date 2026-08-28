@@ -342,7 +342,9 @@ function ImageGenerationSettingsPage() {
                                         <option value="OPENAI_RESPONSES_IMAGE">
                                             OpenAI Responses Image（当前中转站推荐）
                                         </option>
+                                        {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
                                         <option value="OPENAI_IMAGES">OpenAI Images</option>
+                                        {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
                                         <option value="OPENAI_COMPATIBLE_CHAT">OpenAI Compatible Chat</option>
                                         <option value="GEMINI_INTERACTIONS">
                                             Gemini Interactions（推荐）
@@ -482,6 +484,7 @@ function ImageGenerationSettingsPage() {
                                             {item.actualCost.toFixed(6)} {item.costCurrency}
                                         </td>
                                         <td>{item.missingCostCount}</td>
+                                        {/* i18n-audit-ignore -- Fixed latency unit. */}
                                         <td>{item.averageLatencyMs}ms</td>
                                     </tr>
                                 ))}
@@ -510,6 +513,7 @@ function ImageGenerationSettingsPage() {
                                 className="flex items-center justify-between rounded border p-3"
                             >
                                 <div>
+                                    {/* i18n-audit-ignore -- Technical bundle version prefix. */}
                                     <strong>Bundle v{release.bundleVersion}</strong>
                                     <div className="font-mono text-xs text-muted-foreground">
                                         {release.sourceHash}

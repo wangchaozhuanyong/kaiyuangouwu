@@ -869,6 +869,7 @@ function PosterTemplateEditor({
                     disabled={disabled}
                     onChange={e => update('rewardTextZh', e.target.value)}
                 />
+                {/* i18n-audit-ignore -- Literal template token documented for the Chinese copy field. */}
                 <Help>支持 {'{rewardRate}'} 动态奖励比例；只表述消费抵扣，不建议出现提现文字。</Help>
             </Field>
             <Field label="英文奖励文案">
@@ -878,6 +879,7 @@ function PosterTemplateEditor({
                     disabled={disabled}
                     onChange={e => update('rewardTextEn', e.target.value)}
                 />
+                {/* i18n-audit-ignore -- English guidance belongs to the English copy field. */}
                 <Help>Use {'{rewardRate}'} for the live reward percentage.</Help>
             </Field>
             <Field label="中文网站介绍">

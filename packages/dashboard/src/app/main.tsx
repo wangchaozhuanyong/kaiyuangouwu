@@ -15,8 +15,8 @@ import { useDisplayLocale } from '@/vdb/hooks/use-display-locale.js';
 import { useServerConfig } from '@/vdb/hooks/use-server-config.js';
 import { useUiLanguageLoader } from '@/vdb/hooks/use-ui-language-loader.js';
 import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
-import { defaultLocale, dynamicActivate } from '@/vdb/providers/i18n-provider.js';
-import { useLingui } from '@lingui/react/macro';
+import { defaultLocale, dynamicActivate, I18nProvider } from '@/vdb/providers/i18n-provider.js';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AnyRoute, createRouter, RouterOptions, RouterProvider } from '@tanstack/react-router';
 import React, { useEffect } from 'react';
@@ -143,6 +143,25 @@ function BootSplash() {
     );
 }
 
+function DashboardExtensionLoadError({ error }: Readonly<{ error: Error }>) {
+    return (
+        <I18nProvider>
+            <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
+                <p className="text-destructive">
+                    <Trans>Dashboard extensions failed to load:</Trans> {error.message}
+                </p>
+                <button
+                    type="button"
+                    className="rounded-md border px-4 py-2"
+                    onClick={() => window.location.reload()}
+                >
+                    <Trans>Reload</Trans>
+                </button>
+            </div>
+        </I18nProvider>
+    );
+}
+
 function App() {
     const [i18nLoaded, setI18nLoaded] = React.useState(false);
     const { extensionsLoaded, extensionLoadError } = useDashboardExtensions();
@@ -161,18 +180,7 @@ function App() {
     }, [extensionsLoaded]);
 
     if (extensionLoadError) {
-        return (
-            <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
-                <p className="text-destructive">后台扩展加载失败：{extensionLoadError.message}</p>
-                <button
-                    type="button"
-                    className="rounded-md border px-4 py-2"
-                    onClick={() => window.location.reload()}
-                >
-                    重新加载
-                </button>
-            </div>
-        );
+        return <DashboardExtensionLoadError error={extensionLoadError} />;
     }
     if (!i18nLoaded || !extensionsLoaded) {
         // Show a minimal full-screen splash so the user sees that the app is

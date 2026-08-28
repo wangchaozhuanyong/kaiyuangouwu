@@ -3976,6 +3976,10 @@ msgstr "客户历史"
 msgid "Task cancelled successfully"
 msgstr "任务已成功取消"
 
+#: src/app/main.tsx
+msgid "Reload"
+msgstr "重新加载"
+
 #: src/app/routes/_authenticated/_products/components/assign-facet-values-dialog.tsx
 msgid "Successfully updated facet values for {entityIdsLength} {entityType}"
 msgstr "已成功为 {entityIdsLength} {entityType} 更新筛选属性值"
@@ -4465,6 +4469,10 @@ msgstr "州/省"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 msgid "Failed to update option group"
 msgstr "更新规格组失败"
+
+#: src/app/main.tsx
+msgid "Dashboard extensions failed to load:"
+msgstr "后台扩展加载失败："
 
 #: src/app/routes/_authenticated/_tax-categories/tax-categories_.$id.tsx
 msgid "Failed to create tax category"
