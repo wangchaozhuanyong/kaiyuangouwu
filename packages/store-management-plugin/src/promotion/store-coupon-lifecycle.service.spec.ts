@@ -79,6 +79,42 @@ describe('StoreCouponLifecycleService', () => {
         );
     });
 
+    it('backfills serialized legacy promotion operations without blocking application startup', async () => {
+        const update = vi.fn(async () => undefined);
+        const actions = [{ code: 'order_fixed_discount', args: [] }];
+        const conditions = [{ code: 'minimum_order_amount', args: [] }];
+        const service = new StoreCouponLifecycleService(
+            {
+                rawConnection: {
+                    getRepository: () => ({
+                        find: vi.fn(async () => [
+                            {
+                                id: 'promotion-1',
+                                couponCode: 'CPN_0123456789ABCDEF0123456789ABCDEF',
+                                actions: JSON.stringify(actions),
+                                conditions: JSON.stringify(conditions),
+                            },
+                        ]),
+                        update,
+                    }),
+                },
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await expect((service as any).backfillLegacyCouponEntitlements()).resolves.toBeUndefined();
+        expect(update).toHaveBeenCalledWith(
+            { id: 'promotion-1' },
+            {
+                conditions: [{ code: 'store_customer_coupon_entitlement', args: [] }, conditions[0]],
+            },
+        );
+    });
+
     it('issues a server-owned coupon before its future usage window and snapshots its validity', async () => {
         const now = Date.now();
         const startsAt = new Date(now + 24 * 60 * 60_000);

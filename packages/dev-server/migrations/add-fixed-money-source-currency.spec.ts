@@ -1,11 +1,33 @@
-import { DataSource, Table } from 'typeorm';
+import { DataSource, EntitySchema, Table } from 'typeorm';
 import { describe, expect, it } from 'vitest';
 
 import { AddFixedMoneySourceCurrency1787796000000 } from './1787796000000-add-fixed-money-source-currency';
 
 describe('fixed money source currency migration', () => {
     it('backfills coupon and referral source currencies from their channels', async () => {
-        const dataSource = new DataSource({ type: 'sqljs', entities: [], synchronize: false });
+        const dataSource = new DataSource({
+            type: 'sqljs',
+            entities: [
+                new EntitySchema({
+                    name: 'Promotion',
+                    tableName: 'promotion',
+                    columns: {
+                        id: { type: Number, primary: true },
+                        conditions: { type: 'simple-json' },
+                        actions: { type: 'simple-json' },
+                    },
+                }),
+                new EntitySchema({
+                    name: 'ShippingMethod',
+                    tableName: 'shipping_method',
+                    columns: {
+                        id: { type: Number, primary: true },
+                        calculator: { type: 'simple-json' },
+                    },
+                }),
+            ],
+            synchronize: false,
+        });
         await dataSource.initialize();
         const queryRunner = dataSource.createQueryRunner();
         try {

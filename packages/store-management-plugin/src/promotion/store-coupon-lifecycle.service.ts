@@ -411,20 +411,21 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             take: 10_000,
         });
         for (const promotion of promotions) {
+            const actions = storedPromotionOperations(promotion.actions);
+            const conditions = storedPromotionOperations(promotion.conditions);
             if (
+                !actions ||
+                !conditions ||
                 !/^CPN_[A-F0-9]{32}$/u.test(promotion.couponCode ?? '') ||
-                !promotion.actions.some(action => couponKindForAction(action.code)) ||
-                promotion.conditions.some(condition => condition.code === 'store_customer_coupon_entitlement')
+                !actions.some(action => couponKindForAction(action.code)) ||
+                conditions.some(condition => condition.code === 'store_customer_coupon_entitlement')
             ) {
                 continue;
             }
             await repository.update(
                 { id: promotion.id },
                 {
-                    conditions: [
-                        { code: 'store_customer_coupon_entitlement', args: [] },
-                        ...promotion.conditions,
-                    ],
+                    conditions: [{ code: 'store_customer_coupon_entitlement', args: [] }, ...conditions],
                 },
             );
         }
@@ -952,6 +953,18 @@ function isLockNotSupportedError(error: unknown): boolean {
         error.name === 'LockNotSupportedOnGivenDriverError' ||
         error.message.toLowerCase().includes('locking not supported')
     );
+}
+
+function storedPromotionOperations(value: unknown): Promotion['actions'] | null {
+    let operations = value;
+    if (typeof operations === 'string') {
+        try {
+            operations = JSON.parse(operations) as unknown;
+        } catch {
+            return null;
+        }
+    }
+    return Array.isArray(operations) ? (operations as Promotion['actions']) : null;
 }
 
 function couponRuleSnapshot(promotion: Promotion) {

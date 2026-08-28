@@ -104,12 +104,10 @@ export class AddFixedMoneySourceCurrency1787796000000 implements MigrationInterf
                 }
             }
             if (changed) {
-                await queryRunner.manager
-                    .createQueryBuilder()
-                    .update('promotion')
-                    .set({ conditions: JSON.stringify(conditions), actions: JSON.stringify(actions) })
-                    .where('id = :id', { id: row.id })
-                    .execute();
+                await this.updateJsonFields(queryRunner, 'promotion', row.id, {
+                    conditions: JSON.stringify(conditions),
+                    actions: JSON.stringify(actions),
+                });
             }
         }
     }
@@ -138,13 +136,29 @@ export class AddFixedMoneySourceCurrency1787796000000 implements MigrationInterf
             const calculator = jsonOperation(row.calculator);
             if (!calculator || calculator.code !== 'physical-subtotal-shipping-calculator') continue;
             if (!addOperationArgument(calculator, 'currencyCode', row.currencyCode)) continue;
-            await queryRunner.manager
-                .createQueryBuilder()
-                .update('shipping_method')
-                .set({ calculator: JSON.stringify(calculator) })
-                .where('id = :id', { id: row.id })
-                .execute();
+            await this.updateJsonFields(queryRunner, 'shipping_method', row.id, {
+                calculator: JSON.stringify(calculator),
+            });
         }
+    }
+
+    private async updateJsonFields(
+        queryRunner: QueryRunner,
+        tableName: string,
+        id: string | number,
+        fields: Record<string, string>,
+    ): Promise<void> {
+        const driver = queryRunner.connection.driver;
+        const escape = (identifier: string) => driver.escape(identifier);
+        const entries = Object.entries(fields);
+        const assignments = entries.map(
+            ([name], index) => `${escape(name)} = ${driver.createParameter(name, index)}`,
+        );
+        const idParameter = driver.createParameter('id', entries.length);
+        await queryRunner.query(
+            `UPDATE ${escape(tableName)} SET ${assignments.join(', ')} WHERE ${escape('id')} = ${idParameter}`,
+            [...entries.map(([, value]) => value), id],
+        );
     }
 }
 
