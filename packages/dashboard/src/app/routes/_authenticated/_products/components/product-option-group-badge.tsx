@@ -7,6 +7,7 @@ import { Link } from '@tanstack/react-router';
 import { ArrowUpRight, Layers3, Trash2 } from 'lucide-react';
 
 import { useRemoveOptionGroup } from '../hooks/use-remove-option-group.js';
+
 import { ForceRemoveOptionGroupDialog } from './force-remove-option-group-dialog.js';
 
 interface ProductOptionGroupBadgeProps {
@@ -83,7 +84,9 @@ export function ProductOptionGroupBadge({
                                 <ConfirmationDialog
                                     title={t`Remove option group`}
                                     description={t`Are you sure you want to remove this option group from the product?`}
-                                    onConfirm={() => remove(id)}
+                                    onConfirm={() => {
+                                        void remove(id);
+                                    }}
                                 >
                                     <Button
                                         type="button"
@@ -108,7 +111,9 @@ export function ProductOptionGroupBadge({
                         clearInUseGroup();
                     }
                 }}
-                onConfirm={forceRemove}
+                onConfirm={() => {
+                    void forceRemove();
+                }}
                 isPending={isPending}
             />
         </>

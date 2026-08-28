@@ -9,6 +9,7 @@ import { Link } from '@tanstack/react-router';
 import { useDebounce } from '@uidotdev/usehooks';
 import { AlertCircle, ArrowRight, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+
 import { productsByOptionGroupDocument } from '../option-groups.graphql.js';
 
 const PAGE_SIZE = 10;
@@ -76,7 +77,14 @@ export function OptionGroupProductsBlock({
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
                                 <Trans>Could not load linked products.</Trans>
-                                <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        void refetch();
+                                    }}
+                                >
                                     <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                                     <Trans>Retry</Trans>
                                 </Button>
@@ -105,7 +113,11 @@ export function OptionGroupProductsBlock({
                                 key={item.id}
                                 to={`/products/${item.id}`}
                                 preload={false}
-                                className="group flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                                className={[
+                                    'group flex items-center justify-between gap-4 px-4 py-3 transition-colors',
+                                    'hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2',
+                                    'focus-visible:ring-inset focus-visible:ring-ring',
+                                ].join(' ')}
                             >
                                 <span className="min-w-0">
                                     <span className="block truncate font-medium">{item.name}</span>

@@ -7,6 +7,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ArrowUpRightIcon, Layers3Icon, Link2Icon, PlusIcon } from 'lucide-react';
 import { type MouseEvent } from 'react';
+
 import {
     AssignOptionGroupsToChannelBulkAction,
     DeleteOptionGroupsBulkAction,
@@ -133,7 +134,11 @@ function LinkedProductsCell({
                     preload={false}
                     onClick={(event: MouseEvent<HTMLAnchorElement>) => event.stopPropagation()}
                     aria-label={t`Open product ${product.name}`}
-                    className="inline-flex max-w-48 items-center gap-1 rounded-md bg-muted px-2 py-1 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className={[
+                        'inline-flex max-w-48 items-center gap-1 rounded-md bg-muted px-2 py-1',
+                        'text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    ].join(' ')}
                 >
                     <span className="truncate">{product.name}</span>
                     <ArrowUpRightIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

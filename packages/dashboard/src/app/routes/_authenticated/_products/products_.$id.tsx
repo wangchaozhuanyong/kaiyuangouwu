@@ -31,6 +31,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Layers, LibraryBig, Package, PlusIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
 import { GenerateVariantsPanel } from './components/generate-variants-panel.js';
 import { ProductCollectionsPanel } from './components/product-collections-panel.js';
@@ -99,7 +100,10 @@ function NoVariantsPrompt({
             <button
                 type="button"
                 onClick={() => setMode('single')}
-                className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-6 text-center transition-colors hover:border-primary hover:bg-accent cursor-pointer"
+                className={[
+                    'flex flex-col items-center gap-2 rounded-md border border-dashed border-border',
+                    'cursor-pointer p-6 text-center transition-colors hover:border-primary hover:bg-accent',
+                ].join(' ')}
             >
                 <Package className="h-8 w-8 text-muted-foreground" />
                 <span className="font-medium">
@@ -117,7 +121,11 @@ function NoVariantsPrompt({
                 trigger={
                     <button
                         type="button"
-                        className="flex w-full flex-col items-center gap-2 rounded-md border border-dashed border-border p-6 text-center transition-colors hover:border-primary hover:bg-accent cursor-pointer"
+                        className={[
+                            'flex w-full flex-col items-center gap-2 rounded-md border border-dashed',
+                            'border-border cursor-pointer p-6 text-center transition-colors',
+                            'hover:border-primary hover:bg-accent',
+                        ].join(' ')}
                     >
                         <Layers className="h-8 w-8 text-muted-foreground" />
                         <span className="font-medium">
@@ -138,7 +146,7 @@ function ProductDetailPage() {
     const navigate = useNavigate();
     const creatingNewEntity = params.id === NEW_ENTITY_PATH;
     const { t } = useLingui();
-    const refreshRef = useRef<() => void>(() => {});
+    const refreshRef = useRef<() => void>(() => undefined);
     const { channels } = useChannel();
     const { priceFactor, priceFactorField } = usePriceFactor();
 
@@ -159,16 +167,16 @@ function ProductDetailPage() {
                     message: t`This field is required`,
                 },
             ),
-        setValuesForUpdate: entity => {
+        setValuesForUpdate: currentEntity => {
             return {
-                id: entity.id,
-                expectedUpdatedAt: entity.updatedAt,
-                enabled: entity.enabled,
-                featuredAssetId: entity.featuredAsset?.id,
-                assetIds: entity.assets.map(asset => asset.id),
-                facetValueIds: entity.facetValues.map(facetValue => facetValue.id),
-                channelIds: entity.channels.map(c => c.id) ?? [],
-                translations: entity.translations.map(translation => ({
+                id: currentEntity.id,
+                expectedUpdatedAt: currentEntity.updatedAt,
+                enabled: currentEntity.enabled,
+                featuredAssetId: currentEntity.featuredAsset?.id,
+                assetIds: currentEntity.assets.map(asset => asset.id),
+                facetValueIds: currentEntity.facetValues.map(facetValue => facetValue.id),
+                channelIds: currentEntity.channels.map(c => c.id) ?? [],
+                translations: currentEntity.translations.map(translation => ({
                     id: translation.id,
                     languageCode: translation.languageCode,
                     name: translation.name,
@@ -176,17 +184,17 @@ function ProductDetailPage() {
                     description: translation.description,
                     customFields: (translation as any).customFields,
                 })),
-                customFields: entity.customFields as any,
+                customFields: currentEntity.customFields,
             };
         },
         params: { id: params.id },
-        onSuccess: async data => {
+        onSuccess: data => {
             toast.success(
                 creatingNewEntity ? t`Successfully created product` : t`Successfully updated product`,
             );
             resetForm();
             if (creatingNewEntity) {
-                await navigate({ to: `../$id`, params: { id: data.id } });
+                void navigate({ to: `../$id`, params: { id: data.id } });
             }
         },
         onError: err => {
@@ -390,7 +398,9 @@ function ProductDetailPage() {
                                 optionGroups={entity.optionGroups}
                                 onSuccess={() => refreshEntity()}
                                 onBack={{
-                                    handler: () => removeAllOptionGroups(entity, entity.optionGroups),
+                                    handler: () => {
+                                        void removeAllOptionGroups(entity, entity.optionGroups);
+                                    },
                                     confirmation: {
                                         title: t`Remove option groups?`,
                                         description: t`This will remove all option groups from this product and return to the variant setup choice.`,

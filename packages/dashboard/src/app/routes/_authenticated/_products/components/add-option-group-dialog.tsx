@@ -27,11 +27,13 @@ import { Check, Link, Plus, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+
 import { optionGroupPickerListDocument } from '../../_option-groups/option-groups.graphql.js';
 import {
     addOptionGroupToProductDocument,
     createProductOptionGroupForProductDocument,
 } from '../products.graphql.js';
+
 import { createOptionGroupSchema, OptionGroup, SingleOptionGroupEditor } from './option-groups-editor.js';
 
 export function AddOptionGroupDialog({
@@ -169,7 +171,9 @@ export function AddOptionGroupDialog({
                     <TabsContent value="existing">
                         <OptionGroupSearch
                             existingGroupIds={existingGroupIds}
-                            onSelect={handleAssignExisting}
+                            onSelect={optionGroupId => {
+                                void handleAssignExisting(optionGroupId);
+                            }}
                             isPending={addOptionGroupToProductMutation.isPending}
                         />
                     </TabsContent>
@@ -181,7 +185,9 @@ export function AddOptionGroupDialog({
                         </div>
                         <DialogFooter className="mt-4">
                             <Button
-                                onClick={handleCreateNew}
+                                onClick={() => {
+                                    void handleCreateNew();
+                                }}
                                 disabled={
                                     !form.formState.isValid ||
                                     createOptionGroupMutation.isPending ||

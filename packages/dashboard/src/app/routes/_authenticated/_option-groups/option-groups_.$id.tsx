@@ -25,6 +25,7 @@ import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, ParsedLocation, useLocation, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
+
 import { ProductOptionsTable } from '../_products/components/product-options-table.js';
 import { SharedOptionGroupWarning } from '../_products/components/shared-option-group-warning.js';
 import {
@@ -33,6 +34,7 @@ import {
     productOptionGroupDetailDocument,
     updateProductOptionGroupDocument,
 } from '../_products/product-option-groups.graphql.js';
+
 import { OptionGroupProductsBlock } from './components/option-group-products-block.js';
 import {
     assignOptionGroupsToChannelDocument,
@@ -110,17 +112,17 @@ function OptionGroupDetailPage() {
         queryDocument: productOptionGroupDetailDocument,
         createDocument: createProductOptionGroupDocument,
         updateDocument: updateProductOptionGroupDocument,
-        setValuesForUpdate: entity => {
+        setValuesForUpdate: currentEntity => {
             return {
-                id: entity.id,
-                code: entity.code,
-                translations: entity.translations.map(translation => ({
+                id: currentEntity.id,
+                code: currentEntity.code,
+                translations: currentEntity.translations.map(translation => ({
                     id: translation.id,
                     languageCode: translation.languageCode,
                     name: translation.name,
                     customFields: (translation as any).customFields,
                 })),
-                customFields: entity.customFields,
+                customFields: currentEntity.customFields,
             };
         },
         transformCreateInput: values => {
@@ -135,7 +137,7 @@ function OptionGroupDetailPage() {
                 message: t`This field is required`,
             }),
         params: { id: params.id },
-        onSuccess: async data => {
+        onSuccess: data => {
             toast.success(
                 creatingNewEntity
                     ? t`Successfully created option group`
@@ -143,7 +145,7 @@ function OptionGroupDetailPage() {
             );
             resetForm();
             if (creatingNewEntity) {
-                await navigate({ to: `../$id`, params: { id: data.id } });
+                void navigate({ to: `../$id`, params: { id: data.id } });
             }
         },
         onError: err => {
