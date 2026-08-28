@@ -18,6 +18,9 @@ readonly deployment_id="${target_sha}-github-${GITHUB_RUN_ID:-manual}-$(date -u 
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
+    if [[ "${rollback_needed:-0}" == "1" ]] && declare -F rollback >/dev/null; then
+        rollback 1
+    fi
     exit 1
 }
 
@@ -97,7 +100,7 @@ cleanup() {
 }
 
 rollback() {
-    local status="$?"
+    local status="${1:-$?}"
     trap - ERR
 
     if [[ "${rollback_needed}" == "1" ]]; then

@@ -116,6 +116,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /vendure-mysql-backup\.service/u);
     assert.ok(script.includes(migrationReadinessCommand));
     assert.match(script, /switch-production-runtime\.sh/u);
+    assert.match(script, /rollback 1/u);
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
     assert.match(script, /managed storefront data changed/u);
@@ -126,6 +127,34 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
     assert.match(workflow, /yunqiao-vendure-github-deploy/u);
     assert.match(workflow, /i-041a146558e432cbf/u);
+    assert.match(workflow, /AWS-RunShellScript/u);
+    assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
+    assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
+});
+
+void test('OIDC production recovery restarts only the last verified immutable runtime', async () => {
+    const script = await readFile(
+        path.join(repositoryRoot, 'deploy/recover-current-production-runtime.sh'),
+        'utf8',
+    );
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/recover_production_runtime.yml'),
+        'utf8',
+    );
+
+    assert.match(script, /kaiyuangouwu-current/u);
+    assert.match(script, /current-sha/u);
+    assert.match(script, /RUNTIME-METADATA\.json/u);
+    assert.match(script, /candidate_sha.*expected_sha/u);
+    assert.match(script, /vendure-production-deploy\.lock/u);
+    assert.match(script, /switch-production-runtime\.sh/u);
+    assert.match(script, /127\.0\.0\.1:3002\/health/u);
+    assert.match(script, /pm2 save/u);
+
+    assert.match(workflow, /workflow_dispatch:/u);
+    assert.match(workflow, /id-token: write/u);
+    assert.match(workflow, /git merge --ff-only/u);
+    assert.match(workflow, /recover-current-production-runtime\.sh/u);
     assert.match(workflow, /AWS-RunShellScript/u);
     assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);

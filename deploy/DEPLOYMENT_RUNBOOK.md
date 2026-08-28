@@ -83,6 +83,10 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，无�
 数据库备份和迁移、PM2 切换、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了店铺媒体、
 登录视觉或库存修复发布器以及受管店铺素材目录，自动发布会主动停止，必须回到下文的人工预演和发布流程。
 
+若候选 API 未通过健康检查且自动回滚本身失败，可手动运行 `Recover Current Production Runtime` 工作流。
+它只会读取 `kaiyuangouwu-current` 与 `current-sha` 指向的最后一个已验证运行包，要求两者 SHA 一致，
+并通过 `deploy/recover-current-production-runtime.sh` 在同一生产锁内重建 PM2 进程；不会回退 Git、数据库或版本标记。
+
 若仓库根命令与当次改动范围不匹配，以 `package.json` 的现有脚本和本次实际测试清单为准，并在发布记录中写明。构建 Dashboard 前必须使用干净的 `packages/dev-server/dist`，避免旧 Vite 哈希文件混入。
 
 ## 防止旧代码覆盖新代码的强制协议
