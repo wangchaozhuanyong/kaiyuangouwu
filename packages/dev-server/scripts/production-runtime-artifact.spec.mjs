@@ -10,6 +10,8 @@ import {
     ensureRuntimeRootPermissions,
     pruneDeniedRuntimePackages,
     repositoryRoot,
+    REQUIRED_RUNTIME_FILES,
+    RUNTIME_PACKAGE_ASSETS,
     runtimeArtifactsRoot,
 } from './production-runtime-artifact.mjs';
 import {
@@ -22,6 +24,11 @@ import {
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
 import { storefrontMediaManifest } from './sync-storefront-media.mjs';
+
+void test('runtime artifact includes catalog management plugin build output', () => {
+    assert.deepEqual(RUNTIME_PACKAGE_ASSETS['catalog-management-plugin'], ['dist']);
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/catalog-management-plugin/dist/index.js'));
+});
 
 void test('runtime verification rejects missing Vendure workspace packages', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-workspace-link-'));

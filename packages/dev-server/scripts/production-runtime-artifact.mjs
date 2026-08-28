@@ -20,8 +20,9 @@ const scriptPath = fileURLToPath(import.meta.url);
 export const repositoryRoot = path.resolve(path.dirname(scriptPath), '../../..');
 export const runtimeArtifactsRoot = path.join(repositoryRoot, 'artifacts', 'production-runtime');
 
-const RUNTIME_PACKAGE_ASSETS = Object.freeze({
+export const RUNTIME_PACKAGE_ASSETS = Object.freeze({
     'asset-server-plugin': ['lib'],
+    'catalog-management-plugin': ['dist'],
     'commerce-fulfillment-plugin': ['dist'],
     common: ['lib'],
     'content-translation-plugin': ['dist'],
@@ -45,7 +46,8 @@ const STOREFRONT_MEDIA_RUNTIME_FILES = Object.freeze(
     storefrontMediaManifest.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
 );
 
-const REQUIRED_RUNTIME_FILES = Object.freeze([
+export const REQUIRED_RUNTIME_FILES = Object.freeze([
+    'packages/catalog-management-plugin/dist/index.js',
     'packages/dev-server/dist/index.js',
     'packages/dev-server/dist/index-worker.js',
     'packages/dev-server/dist/run-migrations.js',
