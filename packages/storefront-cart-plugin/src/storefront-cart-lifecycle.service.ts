@@ -33,9 +33,11 @@ export class StorefrontCartLifecycleService implements OnApplicationBootstrap {
             event: LoginEvent,
             id: 'storefront-cart-merge-on-login',
             handler: event =>
-                this.connection.withTransaction(event.ctx, txCtx =>
-                    this.storefrontCartService.mergeAfterLogin(txCtx, event.user.id),
-                ),
+                event.ctx.apiType === 'shop'
+                    ? this.connection.withTransaction(event.ctx, txCtx =>
+                          this.storefrontCartService.mergeAfterLogin(txCtx, event.user.id),
+                      )
+                    : Promise.resolve(),
         });
     }
 
@@ -62,8 +64,10 @@ export class StorefrontCartLifecycleService implements OnApplicationBootstrap {
 
         const lineRepository = this.connection.getRepository(ctx, StorefrontCartLine);
         for (const snapshotLine of checkout.lines) {
-            const cartLine = checkout.cart.lines.find(line =>
-                snapshotLine.cartLineId != null && line.id.toString() === snapshotLine.cartLineId.toString(),
+            const cartLine = checkout.cart.lines.find(
+                line =>
+                    snapshotLine.cartLineId != null &&
+                    line.id.toString() === snapshotLine.cartLineId.toString(),
             );
             if (!cartLine) {
                 continue;
