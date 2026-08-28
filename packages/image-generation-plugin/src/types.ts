@@ -50,6 +50,7 @@ export interface SaveImageModelInput {
     currencyCode: CurrencyCode;
     position: number;
     isDefault: boolean;
+    supportsIdempotency: boolean;
 }
 
 export interface CreateImageGenerationInput {
@@ -85,6 +86,15 @@ export interface ProviderGenerationResult {
     providerRequestId?: string;
     revisedPrompt?: string;
     metadata?: Record<string, any>;
+    telemetry?: ProviderTelemetry;
+}
+
+export interface ProviderTelemetry {
+    httpStatus?: number;
+    providerRequestId?: string;
+    actualCostMicrounits?: number;
+    costCurrency?: string;
+    usage?: Record<string, any>;
 }
 
 export interface ImagePromptSpec {

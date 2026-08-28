@@ -4,9 +4,10 @@ import { RequestContext, TransactionalConnection, UserInputError } from '@vendur
 import { fileTypeFromBuffer } from 'file-type';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
+import { In, LessThan } from 'typeorm';
 
 import { IMAGE_GENERATION_OPTIONS, MAX_REFERENCE_BYTES, MAX_REFERENCE_PIXELS } from '../constants';
 import { ImagePrivateAsset } from '../entities/image-private-asset.entity';
@@ -58,8 +59,11 @@ export class ImagePrivateStorageService {
         ctx: RequestContext,
         customerId: ID,
         upload: UploadedImageFile,
+        maxBytes = MAX_REFERENCE_BYTES,
     ): Promise<ImagePrivateAsset> {
-        const bytes = await readUpload(upload, MAX_REFERENCE_BYTES);
+        const uploaded = await readUpload(upload, Math.min(MAX_REFERENCE_BYTES, maxBytes));
+        const bytes = await normalizeReferenceImage(uploaded);
+        if (bytes.length > maxBytes) throw new UserInputError('参考图总容量不足，请删除旧参考图后重试');
         return this.store(ctx, customerId, 'REFERENCE', bytes, upload.filename, null, REFERENCE_RETENTION_MS);
     }
 
@@ -140,8 +144,14 @@ export class ImagePrivateStorageService {
             where: { id: assetId, channelId: ctx.channelId, customerId },
         });
         if (!asset || asset.deletedAt) return false;
-        asset.deletedAt = new Date();
-        await repository.save(asset, { reload: false });
+        if (asset.kind === 'REFERENCE') {
+            asset.deletedAt = new Date();
+            asset.originalName = 'deleted';
+            asset.providerMetadata = null;
+            await repository.save(asset, { reload: false });
+        } else {
+            await repository.remove(asset);
+        }
         await unlink(this.absolutePath(asset.storageKey)).catch(() => undefined);
         return true;
     }
@@ -191,10 +201,21 @@ export class ImagePrivateStorageService {
             .getMany();
         for (const asset of expired) {
             await unlink(this.absolutePath(asset.storageKey)).catch(() => undefined);
-            asset.deletedAt = new Date();
-            await repository.save(asset, { reload: false });
+            await repository.remove(asset);
         }
-        return expired.length;
+        const tombstoneLimit = Math.max(0, 200 - expired.length);
+        const staleTombstones = tombstoneLimit
+            ? await repository.find({
+                  where: { deletedAt: LessThan(new Date(Date.now() - 31 * 24 * 60 * 60_000)) },
+                  take: tombstoneLimit,
+              })
+            : [];
+        if (staleTombstones.length) await repository.remove(staleTombstones);
+        return (
+            expired.length +
+            staleTombstones.length +
+            (await this.purgeOrphans(Math.max(0, 200 - expired.length - staleTombstones.length)))
+        );
     }
 
     private async store(
@@ -228,23 +249,28 @@ export class ImagePrivateStorageService {
         const outputPath = this.absolutePath(storageKey);
         await mkdir(path.dirname(outputPath), { recursive: true, mode: 0o700 });
         await writeFile(outputPath, bytes, { mode: 0o600, flag: 'wx' });
-        return this.connection.getRepository(ctx, ImagePrivateAsset).save(
-            new ImagePrivateAsset({
-                channelId: ctx.channelId,
-                customerId,
-                kind,
-                storageKey,
-                originalName: safeFileName(originalName),
-                mimeType: detected.mime,
-                byteSize: bytes.length,
-                width: metadata.width,
-                height: metadata.height,
-                sha256: createHash('sha256').update(bytes).digest('hex'),
-                expiresAt: new Date(now.getTime() + retentionMs),
-                deletedAt: null,
-                providerMetadata,
-            }),
-        );
+        try {
+            return await this.connection.getRepository(ctx, ImagePrivateAsset).save(
+                new ImagePrivateAsset({
+                    channelId: ctx.channelId,
+                    customerId,
+                    kind,
+                    storageKey,
+                    originalName: safeFileName(originalName),
+                    mimeType: detected.mime,
+                    byteSize: bytes.length,
+                    width: metadata.width,
+                    height: metadata.height,
+                    sha256: createHash('sha256').update(bytes).digest('hex'),
+                    expiresAt: new Date(now.getTime() + retentionMs),
+                    deletedAt: null,
+                    providerMetadata,
+                }),
+            );
+        } catch (error) {
+            await unlink(outputPath).catch(() => undefined);
+            throw error;
+        }
     }
 
     private absolutePath(storageKey: string): string {
@@ -256,6 +282,71 @@ export class ImagePrivateStorageService {
     private signature(encoded: string): string {
         return createHmac('sha256', this.signingSecret).update(encoded).digest('base64url');
     }
+
+    private async purgeOrphans(limit: number): Promise<number> {
+        if (limit <= 0 || !existsSync(this.root)) return 0;
+        const files = await storageFiles(this.root, this.root, Math.max(limit * 4, 200));
+        const cutoff = Date.now() - 60 * 60_000;
+        const candidates = files.filter(file => file.mtimeMs <= cutoff).slice(0, limit);
+        if (!candidates.length) return 0;
+        const existing = await this.connection.rawConnection.getRepository(ImagePrivateAsset).find({
+            where: { storageKey: In(candidates.map(file => file.storageKey)) },
+            select: { storageKey: true },
+        });
+        const known = new Set(existing.map(asset => asset.storageKey));
+        let removed = 0;
+        for (const candidate of candidates) {
+            if (known.has(candidate.storageKey)) continue;
+            if (
+                await unlink(candidate.path)
+                    .then(() => true)
+                    .catch(() => false)
+            )
+                removed += 1;
+        }
+        return removed;
+    }
+}
+
+async function normalizeReferenceImage(bytes: Buffer): Promise<Buffer> {
+    const detected = await fileTypeFromBuffer(bytes);
+    if (!detected || !['image/jpeg', 'image/png', 'image/webp'].includes(detected.mime)) {
+        throw new UserInputError('仅支持 JPEG、PNG 或 WebP 图片');
+    }
+    const pipeline = sharp(bytes, { failOn: 'error', limitInputPixels: MAX_REFERENCE_PIXELS }).rotate();
+    try {
+        if (detected.mime === 'image/jpeg') return await pipeline.jpeg({ quality: 95 }).toBuffer();
+        if (detected.mime === 'image/webp') return await pipeline.webp({ quality: 95 }).toBuffer();
+        return await pipeline.png({ compressionLevel: 9 }).toBuffer();
+    } catch {
+        throw new UserInputError('图片文件损坏或像素过大');
+    }
+}
+
+async function storageFiles(
+    root: string,
+    directory: string,
+    limit: number,
+): Promise<Array<{ path: string; storageKey: string; mtimeMs: number }>> {
+    const found: Array<{ path: string; storageKey: string; mtimeMs: number }> = [];
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+        if (found.length >= limit) break;
+        const entryPath = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+            found.push(...(await storageFiles(root, entryPath, limit - found.length)));
+            continue;
+        }
+        if (!entry.isFile()) continue;
+        const details = await stat(entryPath).catch(() => undefined);
+        if (!details) continue;
+        found.push({
+            path: entryPath,
+            storageKey: path.relative(root, entryPath).split(path.sep).join('/'),
+            mtimeMs: details.mtimeMs,
+        });
+    }
+    return found;
 }
 
 async function readUpload(upload: UploadedImageFile, maxBytes: number): Promise<Buffer> {

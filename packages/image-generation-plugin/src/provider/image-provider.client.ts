@@ -1,10 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { ImageProviderCipherService } from '../security/image-provider-cipher.service';
 import { SafeProviderUrlService } from '../security/safe-provider-url.service';
-import { ImageProviderProtocol, ProviderGenerationInput, ProviderGenerationResult } from '../types';
+import {
+    ImageProviderProtocol,
+    ProviderGenerationInput,
+    ProviderGenerationResult,
+    ProviderTelemetry,
+} from '../types';
 
 const REQUEST_TIMEOUT_MS = 120_000;
 const MAX_PROVIDER_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -12,9 +19,25 @@ const MAX_PROVIDER_JSON_BYTES = 40 * 1024 * 1024;
 const MAX_PROMPT_RESPONSE_BYTES = 1024 * 1024;
 const MAX_MODEL_RESPONSE_BYTES = 1024 * 1024;
 
-export class RetryableImageProviderError extends Error {}
-export class AmbiguousImageProviderError extends Error {}
-export class DefinitiveImageProviderError extends Error {}
+export interface ImageProviderErrorDetails extends ProviderTelemetry {}
+
+class ImageProviderError extends Error {
+    constructor(
+        message: string,
+        readonly details: ImageProviderErrorDetails = {},
+    ) {
+        super(message);
+    }
+}
+
+export class RetryableImageProviderError extends ImageProviderError {}
+export class AmbiguousImageProviderError extends ImageProviderError {}
+export class DefinitiveImageProviderError extends ImageProviderError {}
+
+interface ProviderJsonResponse {
+    payload: unknown;
+    telemetry: ProviderTelemetry;
+}
 
 @Injectable()
 export class ImageProviderClient {
@@ -51,7 +74,7 @@ export class ImageProviderClient {
             throw new DefinitiveImageProviderError('提示词优化模型尚未配置');
         }
         const baseUrl = await this.safeUrls.validate(credential.baseUrl);
-        const response = await this.requestJson(
+        const { payload: response } = await this.requestJson(
             this.safeUrls.endpoint(baseUrl, 'chat/completions'),
             this.cipher.decrypt(credential.encryptedApiKey),
             {
@@ -86,10 +109,16 @@ export class ImageProviderClient {
                 },
             });
             await response.body?.cancel().catch(() => undefined);
+            if (response.ok) {
+                const textModel = await this.testModel(credential, credential.textModelId);
+                if (!textModel.ok) {
+                    return { ok: false, message: `中转站可连接，但文本编排模型不可用：${textModel.message}` };
+                }
+            }
             return {
                 ok: response.ok,
                 message: response.ok
-                    ? '连接成功，中转站已通过模型列表端点验证'
+                    ? `连接成功，文本编排模型 ${credential.textModelId} 已验证`
                     : `中转站模型列表端点返回 HTTP ${response.status}`,
             };
         } catch (error) {
@@ -156,7 +185,7 @@ export class ImageProviderClient {
         input: ProviderGenerationInput,
     ): Promise<ProviderGenerationResult> {
         const size = openAiSize(input.aspectRatio);
-        let response: unknown;
+        let response: ProviderJsonResponse;
         if (input.reference) {
             const form = new FormData();
             form.set('model', input.providerModelId);
@@ -188,7 +217,7 @@ export class ImageProviderClient {
                 input.idempotencyKey,
             );
         }
-        return this.imageResult(response);
+        return this.imageResult(response.payload, response.telemetry);
     }
 
     private async openAiResponsesImage(
@@ -233,7 +262,7 @@ export class ImageProviderClient {
             },
             input.idempotencyKey,
         );
-        return this.imageResult(response);
+        return this.imageResult(response.payload, response.telemetry);
     }
 
     private async openAiChat(
@@ -262,7 +291,7 @@ export class ImageProviderClient {
             },
             input.idempotencyKey,
         );
-        return this.imageResult(response);
+        return this.imageResult(response.payload, response.telemetry);
     }
 
     private async geminiNative(
@@ -288,7 +317,7 @@ export class ImageProviderClient {
             input.idempotencyKey,
             { 'x-goog-api-key': apiKey },
         );
-        return this.imageResult(response);
+        return this.imageResult(response.payload, response.telemetry);
     }
 
     private async geminiNativeStream(
@@ -320,17 +349,27 @@ export class ImageProviderClient {
                 },
             }),
         });
-        const text = await readResponseText(response, MAX_PROVIDER_JSON_BYTES);
-        if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试');
+        const details = responseErrorDetails(response);
+        let text: string;
+        try {
+            text = await readResponseText(response, MAX_PROVIDER_JSON_BYTES);
+        } catch (error) {
+            throw withProviderTelemetry(error, details);
+        }
+        if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试', details);
         if (response.status >= 300 && response.status < 400) {
-            throw new DefinitiveImageProviderError('中转站重定向已被安全策略拒绝');
+            throw new DefinitiveImageProviderError('中转站重定向已被安全策略拒绝', details);
         }
         if (!response.ok) {
-            throw new DefinitiveImageProviderError(
-                `中转站返回 HTTP ${response.status}${text ? `：${text.slice(0, 300)}` : ''}`,
-            );
+            throw httpFailure(response.status, details);
         }
-        return this.imageResult(parseGeminiStreamResponse(text));
+        let payload: unknown;
+        try {
+            payload = parseGeminiStreamResponse(text);
+        } catch (error) {
+            throw withProviderTelemetry(error, details);
+        }
+        return this.imageResult(payload, responseTelemetry(response, payload));
     }
 
     private async geminiInteractions(
@@ -362,11 +401,18 @@ export class ImageProviderClient {
             input.idempotencyKey,
             { 'x-goog-api-key': apiKey },
         );
-        return this.imageResult(response);
+        return this.imageResult(response.payload, response.telemetry);
     }
 
-    private async imageResult(response: unknown): Promise<ProviderGenerationResult> {
-        const providerRequestId = stringAt(response, ['id']) ?? stringAt(response, ['responseId']);
+    private async imageResult(
+        response: unknown,
+        requestTelemetry: ProviderTelemetry = {},
+    ): Promise<ProviderGenerationResult> {
+        const providerRequestId =
+            stringAt(response, ['id']) ??
+            stringAt(response, ['responseId']) ??
+            findStringByKey(response, new Set(['responseId', 'requestId']), value => Boolean(value.trim())) ??
+            requestTelemetry.providerRequestId;
         const revisedPrompt = stringAt(response, ['data', 0, 'revised_prompt']);
         const embeddedDataUrl = findStringValue(response, value =>
             /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+/iu.test(value),
@@ -392,7 +438,7 @@ export class ImageProviderClient {
         if (base64) {
             const bytes = Buffer.from(base64.replace(/^data:image\/[a-z0-9.+-]+;base64,/iu, ''), 'base64');
             if (!bytes.length || bytes.length > MAX_PROVIDER_IMAGE_BYTES) {
-                throw new DefinitiveImageProviderError('中转站返回的图片大小无效');
+                throw new DefinitiveImageProviderError('中转站返回的图片大小无效', requestTelemetry);
             }
             return {
                 bytes,
@@ -400,6 +446,7 @@ export class ImageProviderClient {
                 providerRequestId,
                 revisedPrompt,
                 metadata: safeProviderMetadata(providerRequestId, revisedPrompt, mimeType, 'inline'),
+                telemetry: { ...requestTelemetry, providerRequestId },
             };
         }
         const imageUrl =
@@ -408,8 +455,14 @@ export class ImageProviderClient {
             findStringValue(response, value => /https?:\/\/[^\s)"']+/iu.test(value))?.match(
                 /https?:\/\/[^\s)"']+/iu,
             )?.[0];
-        if (!imageUrl) throw new DefinitiveImageProviderError('中转站响应中没有可识别的图片');
-        const downloaded = await this.downloadImage(imageUrl);
+        if (!imageUrl)
+            throw new DefinitiveImageProviderError('中转站响应中没有可识别的图片', requestTelemetry);
+        let downloaded: { bytes: Buffer; mimeType: string };
+        try {
+            downloaded = await this.downloadImage(imageUrl);
+        } catch (error) {
+            throw withProviderTelemetry(error, requestTelemetry);
+        }
         return {
             ...downloaded,
             providerRequestId,
@@ -420,21 +473,13 @@ export class ImageProviderClient {
                 downloaded.mimeType,
                 'remote-url',
             ),
+            telemetry: { ...requestTelemetry, providerRequestId },
         };
     }
 
     private async downloadImage(rawUrl: string): Promise<{ bytes: Buffer; mimeType: string }> {
-        const url = await this.safeUrls.validate(rawUrl);
-        const response = await this.request(url, { method: 'GET', redirect: 'manual' });
-        if (!response.ok)
-            throw new DefinitiveImageProviderError(`下载中转站图片失败（HTTP ${response.status}）`);
-        const contentLength = Number(response.headers.get('content-length') ?? 0);
-        if (contentLength > MAX_PROVIDER_IMAGE_BYTES)
-            throw new DefinitiveImageProviderError('中转站图片超过 25MB');
-        const bytes = await readResponseBytes(response, MAX_PROVIDER_IMAGE_BYTES);
-        if (!bytes.length || bytes.length > MAX_PROVIDER_IMAGE_BYTES)
-            throw new DefinitiveImageProviderError('中转站图片大小无效');
-        return { bytes, mimeType: response.headers.get('content-type')?.split(';')[0] ?? 'image/png' };
+        const resolved = await this.safeUrls.resolveRemoteImage(rawUrl);
+        return pinnedImageDownload(resolved);
     }
 
     private async requestJson(
@@ -444,7 +489,7 @@ export class ImageProviderClient {
         idempotencyKey: string,
         extraHeaders: Record<string, string> = {},
         maxResponseBytes = MAX_PROVIDER_JSON_BYTES,
-    ): Promise<unknown> {
+    ): Promise<ProviderJsonResponse> {
         const isForm = body instanceof FormData;
         const response = await this.request(url, {
             method: 'POST',
@@ -457,20 +502,25 @@ export class ImageProviderClient {
             },
             body: isForm ? body : JSON.stringify(body),
         });
-        const text = await readResponseText(response, maxResponseBytes);
-        if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试');
+        const details = responseErrorDetails(response);
+        let text: string;
+        try {
+            text = await readResponseText(response, maxResponseBytes);
+        } catch (error) {
+            throw withProviderTelemetry(error, details);
+        }
+        if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试', details);
         if (response.status >= 300 && response.status < 400) {
-            throw new DefinitiveImageProviderError('中转站重定向已被安全策略拒绝');
+            throw new DefinitiveImageProviderError('中转站重定向已被安全策略拒绝', details);
         }
         if (!response.ok) {
-            throw new DefinitiveImageProviderError(
-                `中转站返回 HTTP ${response.status}${text ? `：${text.slice(0, 300)}` : ''}`,
-            );
+            throw httpFailure(response.status, details);
         }
         try {
-            return JSON.parse(text) as unknown;
+            const payload = JSON.parse(text) as unknown;
+            return { payload, telemetry: responseTelemetry(response, payload) };
         } catch {
-            throw new DefinitiveImageProviderError('中转站返回了无效 JSON');
+            throw new DefinitiveImageProviderError('中转站返回了无效 JSON', details);
         }
     }
 
@@ -497,6 +547,83 @@ export class ImageProviderClient {
     private headers(apiKey: string): Record<string, string> {
         return { authorization: `Bearer ${apiKey}`, accept: 'application/json' };
     }
+}
+
+async function pinnedImageDownload(input: {
+    url: URL;
+    address: string;
+    family: number;
+}): Promise<{ bytes: Buffer; mimeType: string }> {
+    return new Promise((resolve, reject) => {
+        const transport = input.url.protocol === 'https:' ? httpsRequest : httpRequest;
+        const request = transport(
+            {
+                protocol: input.url.protocol,
+                hostname: input.address,
+                family: input.family,
+                port: input.url.port || undefined,
+                method: 'GET',
+                path: `${input.url.pathname}${input.url.search}`,
+                servername: input.url.protocol === 'https:' ? input.url.hostname : undefined,
+                headers: { host: input.url.host, accept: 'image/jpeg,image/png,image/webp' },
+                timeout: REQUEST_TIMEOUT_MS,
+            },
+            response => {
+                const status = response.statusCode ?? 0;
+                if (status < 200 || status >= 300) {
+                    response.resume();
+                    reject(
+                        new DefinitiveImageProviderError(`下载中转站图片失败（HTTP ${status}）`, {
+                            httpStatus: status,
+                        }),
+                    );
+                    return;
+                }
+                const declared = Number(response.headers['content-length'] ?? 0);
+                if (declared > MAX_PROVIDER_IMAGE_BYTES) {
+                    response.destroy();
+                    reject(new DefinitiveImageProviderError('中转站图片超过 25MB'));
+                    return;
+                }
+                const chunks: Buffer[] = [];
+                let total = 0;
+                response.on('data', (chunk: Buffer | string) => {
+                    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                    total += buffer.length;
+                    if (total > MAX_PROVIDER_IMAGE_BYTES) {
+                        response.destroy(new DefinitiveImageProviderError('中转站图片超过 25MB'));
+                        return;
+                    }
+                    chunks.push(buffer);
+                });
+                response.on('end', () => {
+                    if (!total) {
+                        reject(new DefinitiveImageProviderError('中转站图片大小无效'));
+                        return;
+                    }
+                    const contentType = Array.isArray(response.headers['content-type'])
+                        ? response.headers['content-type'][0]
+                        : response.headers['content-type'];
+                    resolve({
+                        bytes: Buffer.concat(chunks, total),
+                        mimeType: contentType?.split(';')[0] ?? 'image/png',
+                    });
+                });
+                response.on('error', error =>
+                    reject(new AmbiguousImageProviderError(`读取中转站图片失败：${safeError(error)}`)),
+                );
+            },
+        );
+        request.on('timeout', () => request.destroy(new AmbiguousImageProviderError('下载中转站图片超时')));
+        request.on('error', error =>
+            reject(
+                error instanceof ImageProviderError
+                    ? error
+                    : new AmbiguousImageProviderError(`下载中转站图片网络错误：${safeError(error)}`),
+            ),
+        );
+        request.end();
+    });
 }
 
 function openAiSize(aspectRatio: string): string {
@@ -599,6 +726,110 @@ function findStringValue(
 
 function safeError(error: unknown): string {
     return error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
+}
+
+function httpFailure(status: number, details: ImageProviderErrorDetails): ImageProviderError {
+    const message = `中转站返回 HTTP ${status}`;
+    if ([408, 425, 500, 502, 503, 504].includes(status)) {
+        return new AmbiguousImageProviderError(`${message}，结果暂时无法确认`, details);
+    }
+    return new DefinitiveImageProviderError(message, details);
+}
+
+function withProviderTelemetry(error: unknown, telemetry: ProviderTelemetry): ImageProviderError {
+    const message = safeError(error);
+    if (error instanceof RetryableImageProviderError) {
+        return new RetryableImageProviderError(message, { ...telemetry, ...error.details });
+    }
+    if (error instanceof AmbiguousImageProviderError) {
+        return new AmbiguousImageProviderError(message, { ...telemetry, ...error.details });
+    }
+    if (error instanceof DefinitiveImageProviderError) {
+        return new DefinitiveImageProviderError(message, { ...telemetry, ...error.details });
+    }
+    return new DefinitiveImageProviderError(message, telemetry);
+}
+
+function responseErrorDetails(response: Response): ImageProviderErrorDetails {
+    return {
+        httpStatus: response.status,
+        providerRequestId:
+            response.headers.get('x-request-id') ??
+            response.headers.get('request-id') ??
+            response.headers.get('x-goog-request-id') ??
+            undefined,
+    };
+}
+
+function responseTelemetry(response: Response, payload: unknown): ProviderTelemetry {
+    const headerRequestId = responseErrorDetails(response).providerRequestId;
+    const providerRequestId =
+        stringAt(payload, ['id']) ??
+        stringAt(payload, ['responseId']) ??
+        findStringByKey(payload, new Set(['responseId', 'requestId']), value => Boolean(value.trim())) ??
+        headerRequestId;
+    const usageSource = findObjectByKey(payload, new Set(['usage', 'usageMetadata', 'billing'])) ?? undefined;
+    const usage = usageSource ? sanitizeUsage(usageSource) : undefined;
+    const costValue =
+        numericValue(objectAt(usageSource, ['total_cost'])) ??
+        numericValue(objectAt(usageSource, ['totalCost'])) ??
+        numericValue(objectAt(usageSource, ['cost'])) ??
+        numericValue(findValueByKey(payload, new Set(['actual_cost', 'actualCost', 'total_cost'])));
+    const currency =
+        stringAt(usageSource, ['currency']) ??
+        stringAt(payload, ['currency']) ??
+        (costValue == null ? undefined : 'USD');
+    return {
+        httpStatus: response.status,
+        providerRequestId,
+        ...(costValue != null && costValue >= 0 && costValue <= 2_000
+            ? { actualCostMicrounits: Math.round(costValue * 1_000_000) }
+            : {}),
+        ...(currency && /^[A-Za-z]{3}$/u.test(currency) ? { costCurrency: currency.toUpperCase() } : {}),
+        ...(usage && Object.keys(usage).length ? { usage } : {}),
+    };
+}
+
+function numericValue(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
+}
+
+function findObjectByKey(value: unknown, keys: Set<string>, depth = 0): Record<string, unknown> | undefined {
+    if (depth > 6 || !value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        if (keys.has(key) && child && typeof child === 'object' && !Array.isArray(child)) {
+            return child as Record<string, unknown>;
+        }
+        const nested = findObjectByKey(child, keys, depth + 1);
+        if (nested) return nested;
+    }
+}
+
+function findValueByKey(value: unknown, keys: Set<string>, depth = 0): unknown {
+    if (depth > 6 || !value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        if (keys.has(key)) return child;
+        const nested = findValueByKey(child, keys, depth + 1);
+        if (nested !== undefined) return nested;
+    }
+}
+
+function sanitizeUsage(value: Record<string, unknown>, depth = 0): Record<string, any> {
+    if (depth > 4) return {};
+    const entries = Object.entries(value).slice(0, 40);
+    const sanitized: Record<string, any> = {};
+    for (const [key, child] of entries) {
+        if (!/^[A-Za-z0-9_.-]{1,64}$/u.test(key)) continue;
+        if (typeof child === 'number' || typeof child === 'boolean' || child == null) {
+            sanitized[key] = child;
+        } else if (Array.isArray(child)) {
+            sanitized[key] = child.slice(0, 20).filter(item => ['number', 'boolean'].includes(typeof item));
+        } else if (typeof child === 'object') {
+            sanitized[key] = sanitizeUsage(child as Record<string, unknown>, depth + 1);
+        }
+    }
+    return sanitized;
 }
 
 function collectModelIdentifiers(value: unknown, depth = 0): string[] {

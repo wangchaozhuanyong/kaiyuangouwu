@@ -1,7 +1,7 @@
-import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
-import type { SafeProviderUrlService } from '../security/safe-provider-url.service';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
+import type { SafeProviderUrlService } from '../security/safe-provider-url.service';
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 
@@ -46,6 +46,8 @@ describe('ImageProviderClient mock relay integration', () => {
         validate: (value: string) => Promise.resolve(new URL(value)),
         endpoint: (base: URL, pathname: string) =>
             new URL(`${base.toString().replace(/\/$/u, '')}/${pathname.replace(/^\//u, '')}`),
+        resolveRemoteImage: (value: string) =>
+            Promise.resolve({ url: new URL(value), address: '127.0.0.1', family: 4 }),
     };
     const credential = new ImageProviderCredential({
         enabled: true,
