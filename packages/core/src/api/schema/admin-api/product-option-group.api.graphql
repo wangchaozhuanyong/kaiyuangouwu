@@ -5,6 +5,11 @@ type Query {
     productOption(id: ID!): ProductOption
 }
 
+extend type ProductOptionGroup {
+    "Products in the current Channel that use this ProductOptionGroup"
+    products(options: ProductListOptions): ProductList!
+}
+
 type Mutation {
     "Create a new ProductOptionGroup"
     createProductOptionGroup(input: CreateProductOptionGroupInput!): ProductOptionGroup!

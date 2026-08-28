@@ -5028,8 +5028,15 @@ export type ProductOptionGroup = Node & {
   options: Array<ProductOption>;
   /** The number of products that use this option group */
   productCount: Scalars['Int']['output'];
+  /** Products in the current Channel that use this ProductOptionGroup */
+  products: ProductList;
   translations: Array<ProductOptionGroupTranslation>;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+
+export type ProductOptionGroupProductsArgs = {
+  options?: InputMaybe<ProductListOptions>;
 };
 
 export type ProductOptionGroupFilterParameter = {

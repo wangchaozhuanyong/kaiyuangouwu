@@ -28,7 +28,7 @@ import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Layers, Package, PlusIcon } from 'lucide-react';
+import { Layers, LibraryBig, Package, PlusIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
@@ -272,6 +272,64 @@ function ProductDetailPage() {
                     />
                 </PageBlock>
                 <CustomFieldsPageBlock column="main" entityType="Product" control={form.control} />
+                {entity && (
+                    <PageBlock
+                        column="main"
+                        blockId="option-groups"
+                        title={<Trans>Specification templates</Trans>}
+                        description={
+                            <Trans>
+                                Templates define the selectable specifications for this product and are used
+                                to generate SKUs.
+                            </Trans>
+                        }
+                    >
+                        <div className="space-y-3">
+                            {entity.optionGroups.length > 0 ? (
+                                entity.optionGroups.map(group => (
+                                    <ProductOptionGroupBadge
+                                        key={group.id}
+                                        id={group.id}
+                                        name={group.name}
+                                        options={group.options}
+                                        productId={entity.id}
+                                        onRemoved={() => refreshEntity()}
+                                    />
+                                ))
+                            ) : (
+                                <div className="flex flex-col gap-3 rounded-lg bg-muted/40 px-4 py-4 sm:flex-row sm:items-center">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground shadow-sm">
+                                        <Layers className="h-4 w-4" aria-hidden="true" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="font-medium">
+                                            <Trans>No specification template linked</Trans>
+                                        </p>
+                                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                            <Trans>
+                                                A single-SKU product can stay empty. For size, colour, or
+                                                other choices, select a template from the library or create
+                                                one here.
+                                            </Trans>
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <AddOptionGroupDialog
+                                    productId={entity.id}
+                                    productUpdatedAt={entity.updatedAt}
+                                    existingGroupIds={entity.optionGroups.map(group => group.id)}
+                                    onSuccess={() => refreshEntity()}
+                                />
+                                <Button variant="ghost" size="sm" render={<Link to="/option-groups" />}>
+                                    <LibraryBig className="h-4 w-4" aria-hidden="true" />
+                                    <Trans>Open specification template library</Trans>
+                                </Button>
+                            </div>
+                        </div>
+                    </PageBlock>
+                )}
                 {entity && entity.variantList.totalItems > 0 && (
                     <PageBlock
                         column="main"
@@ -340,32 +398,6 @@ function ProductDetailPage() {
                                 }}
                             />
                         )}
-                    </PageBlock>
-                )}
-                {entity && entity.optionGroups.length > 0 && (
-                    <PageBlock
-                        column="side"
-                        blockId="option-groups"
-                        title={<Trans>Product Options</Trans>}
-                        description={<Trans>Size, colour, etc.</Trans>}
-                    >
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                            {entity.optionGroups.map(g => (
-                                <ProductOptionGroupBadge
-                                    key={g.id}
-                                    id={g.id}
-                                    name={g.name}
-                                    productId={entity.id}
-                                    onRemoved={() => refreshEntity()}
-                                />
-                            ))}
-                        </div>
-                        <AddOptionGroupDialog
-                            productId={entity.id}
-                            productUpdatedAt={entity.updatedAt}
-                            existingGroupIds={entity.optionGroups.map(g => g.id)}
-                            onSuccess={() => refreshEntity()}
-                        />
                     </PageBlock>
                 )}
                 <PageBlock column="side" blockId="facet-values" title={<Trans>Facet Values</Trans>}>

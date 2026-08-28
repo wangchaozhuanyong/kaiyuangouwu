@@ -23,8 +23,8 @@ import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { ErrorResultUnion } from '../../../common/error/error-result';
 import { ForbiddenError } from '../../../common/error/errors';
 import { Translated } from '../../../common/types/locale-types';
-import { ProductOption } from '../../../entity/product-option/product-option.entity';
 import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
+import { ProductOption } from '../../../entity/product-option/product-option.entity';
 import { ProductOptionGroupService } from '../../../service/services/product-option-group.service';
 import { ProductOptionService } from '../../../service/services/product-option.service';
 import { ProductService } from '../../../service/services/product.service';
@@ -47,7 +47,8 @@ export class ProductOptionResolver {
     productOptionGroups(
         @Ctx() ctx: RequestContext,
         @Args() args: QueryProductOptionGroupsArgs,
-        @Relations(ProductOptionGroup) relations: RelationPaths<ProductOptionGroup>,
+        @Relations({ entity: ProductOptionGroup, omit: ['products'] })
+        relations: RelationPaths<ProductOptionGroup>,
     ): Promise<PaginatedList<Translated<ProductOptionGroup>>> {
         return this.productOptionGroupService.findAll(ctx, args.options || undefined, relations);
     }
@@ -57,7 +58,8 @@ export class ProductOptionResolver {
     productOptionGroup(
         @Ctx() ctx: RequestContext,
         @Args() args: QueryProductOptionGroupArgs,
-        @Relations(ProductOptionGroup) relations: RelationPaths<ProductOptionGroup>,
+        @Relations({ entity: ProductOptionGroup, omit: ['products'] })
+        relations: RelationPaths<ProductOptionGroup>,
     ): Promise<Translated<ProductOptionGroup> | undefined> {
         return this.productOptionGroupService.findOne(ctx, args.id, relations);
     }

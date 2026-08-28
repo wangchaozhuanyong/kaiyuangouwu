@@ -5,7 +5,8 @@ import { ListPage } from '@/vdb/framework/page/list-page.js';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { ArrowRightIcon, Layers3Icon, PlusIcon } from 'lucide-react';
+import { ArrowUpRightIcon, Layers3Icon, Link2Icon, PlusIcon } from 'lucide-react';
+import { type MouseEvent } from 'react';
 import {
     AssignOptionGroupsToChannelBulkAction,
     DeleteOptionGroupsBulkAction,
@@ -14,8 +15,6 @@ import {
 import { optionGroupListDocument } from './option-groups.graphql.js';
 
 const optionGroupLibraryLabel = msg({ id: 'nav.optionGroups', message: 'Option groups' });
-const exampleOptionValues = ['S', 'M', 'L'].join(' / ');
-
 export const Route = createFileRoute('/_authenticated/_option-groups/option-groups')({
     component: OptionGroupListPage,
     loader: () => ({ breadcrumb: () => <OptionGroupLibraryLabel /> }),
@@ -35,12 +34,13 @@ function OptionGroupListPage() {
             defaultVisibility={{
                 name: true,
                 options: true,
-                productCount: true,
+                linkedProducts: true,
             }}
-            defaultColumnOrder={['name', 'options', 'productCount']}
+            defaultColumnOrder={['name', 'options', 'linkedProducts']}
             customizeColumns={{
                 name: {
-                    cell: ({ row }) => <span>{row.original.name}</span>,
+                    header: () => <Trans>Specification template</Trans>,
+                    cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
                 },
                 code: {
                     meta: { disabled: true },
@@ -64,8 +64,15 @@ function OptionGroupListPage() {
                         );
                     },
                 },
-                productCount: {
-                    header: () => <Trans>Products</Trans>,
+                products: {
+                    meta: { disabled: true },
+                },
+            }}
+            additionalColumns={{
+                linkedProducts: {
+                    meta: { dependencies: ['products'] },
+                    header: () => <Trans>Linked products</Trans>,
+                    cell: ({ row }) => <LinkedProductsCell products={row.original.products} />,
                 },
             }}
             onSearchTermChange={searchTerm => {
@@ -91,11 +98,7 @@ function OptionGroupListPage() {
                 ],
             ]}
             primaryRowAction={{
-                label: (
-                    <span>
-                        <Trans>Edit</Trans> <Trans>Option Values</Trans>
-                    </span>
-                ),
+                label: <Trans>Manage template</Trans>,
                 href: row => `./${row.original.id}`,
             }}
             route={Route}
@@ -110,6 +113,41 @@ function OptionGroupListPage() {
     );
 }
 
+function LinkedProductsCell({
+    products,
+}: Readonly<{
+    products: {
+        items: Array<{ id: string; name: string }>;
+        totalItems: number;
+    };
+}>) {
+    const { t } = useLingui();
+    const remaining = products.totalItems - products.items.length;
+
+    return products.items.length > 0 ? (
+        <div className="flex max-w-xl flex-wrap items-center gap-1.5">
+            {products.items.map(product => (
+                <Link
+                    key={product.id}
+                    to={`/products/${product.id}`}
+                    preload={false}
+                    onClick={(event: MouseEvent<HTMLAnchorElement>) => event.stopPropagation()}
+                    aria-label={t`Open product ${product.name}`}
+                    className="inline-flex max-w-48 items-center gap-1 rounded-md bg-muted px-2 py-1 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                    <span className="truncate">{product.name}</span>
+                    <ArrowUpRightIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                </Link>
+            ))}
+            {remaining > 0 && <Badge variant="outline">+{remaining}</Badge>}
+        </div>
+    ) : (
+        <span className="text-sm text-muted-foreground">
+            <Trans>Not linked to any product</Trans>
+        </span>
+    );
+}
+
 function OptionGroupLibraryLabel() {
     const { i18n } = useLingui();
     return i18n._(optionGroupLibraryLabel);
@@ -117,40 +155,25 @@ function OptionGroupLibraryLabel() {
 
 function OptionGroupGuidance() {
     return (
-        <section
-            aria-labelledby="option-group-guidance-title"
-            className="rounded-lg border bg-muted/30 px-4 py-3"
-        >
-            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-                <div className="flex min-w-0 items-start gap-3">
-                    <div className="mt-0.5 rounded-md bg-primary/10 p-2 text-primary">
-                        <Layers3Icon className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <div>
-                        <p id="option-group-guidance-title" className="font-medium">
-                            <Trans>Recommended workflow</Trans>
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            <Trans>Assign an existing option group or create a new one</Trans>
-                        </p>
-                    </div>
+        <section aria-labelledby="option-group-guidance-title" className="rounded-lg bg-muted/40 px-4 py-3">
+            <div className="flex min-w-0 items-start gap-3">
+                <div className="mt-0.5 rounded-md bg-primary/10 p-2 text-primary">
+                    <Layers3Icon className="h-4 w-4" aria-hidden="true" />
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <Badge variant="outline" className="gap-1.5 py-1.5">
-                        <Trans>Option Groups</Trans>
-                        <span className="font-normal text-muted-foreground">
-                            <Trans>For example: Size</Trans>
-                        </span>
-                    </Badge>
-                    <ArrowRightIcon className="h-4 w-4 text-muted-foreground" />
-                    <Badge variant="outline" className="gap-1.5 py-1.5">
-                        <Trans>Option Values</Trans>
-                        <span className="font-normal text-muted-foreground">{exampleOptionValues}</span>
-                    </Badge>
-                    <ArrowRightIcon className="h-4 w-4 text-muted-foreground" />
-                    <Badge variant="outline" className="py-1.5">
-                        <Trans>Variants</Trans>
-                    </Badge>
+                <div>
+                    <p id="option-group-guidance-title" className="font-medium">
+                        <Trans>Templates and products are linked in both directions</Trans>
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                        <Trans>
+                            This list shows which products use each template. Open a product name to manage
+                            its templates, or open the template to edit its option values.
+                        </Trans>
+                    </p>
+                    <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Link2Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Trans>Changes to a shared template affect every linked product.</Trans>
+                    </div>
                 </div>
             </div>
         </section>

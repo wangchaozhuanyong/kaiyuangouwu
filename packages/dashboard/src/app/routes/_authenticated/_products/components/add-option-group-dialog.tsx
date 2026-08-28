@@ -27,7 +27,7 @@ import { Check, Link, Plus, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { optionGroupListDocument } from '../../_option-groups/option-groups.graphql.js';
+import { optionGroupPickerListDocument } from '../../_option-groups/option-groups.graphql.js';
 import {
     addOptionGroupToProductDocument,
     createProductOptionGroupForProductDocument,
@@ -48,7 +48,7 @@ export function AddOptionGroupDialog({
     trigger?: React.ReactElement;
 }>) {
     const [open, setOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<string>('new');
+    const [activeTab, setActiveTab] = useState<string>('existing');
     const { t } = useLingui();
     const optionGroupSchema = useMemo(() => createOptionGroupSchema(t), [t]);
 
@@ -129,7 +129,7 @@ export function AddOptionGroupDialog({
                 setOpen(isOpen);
                 if (!isOpen) {
                     form.reset();
-                    setActiveTab('new');
+                    setActiveTab('existing');
                 }
             }}
         >
@@ -140,29 +140,39 @@ export function AddOptionGroupDialog({
                     render={<Button variant="outline" size="sm" type="button" className="w-full gap-2" />}
                 >
                     <Plus className="h-4 w-4" />
-                    <Trans>Add Option</Trans>
+                    <Trans>Set specification templates</Trans>
                 </DialogTrigger>
             )}
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>
-                        <Trans>Add option group to product</Trans>
+                        <Trans>Set product specifications</Trans>
                     </DialogTitle>
                     <DialogDescription>
-                        <Trans>Assign an existing option group or create a new one</Trans>
+                        <Trans>
+                            Choose a reusable template from the library, or create a template for this
+                            product.
+                        </Trans>
                     </DialogDescription>
                 </DialogHeader>
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="existing">
+                            <Link className="mr-2 h-4 w-4" />
+                            <Trans>Choose from library</Trans>
+                        </TabsTrigger>
                         <TabsTrigger value="new">
                             <Plus className="mr-2 h-4 w-4" />
                             <Trans>Create new</Trans>
                         </TabsTrigger>
-                        <TabsTrigger value="existing">
-                            <Link className="mr-2 h-4 w-4" />
-                            <Trans>Assign existing</Trans>
-                        </TabsTrigger>
                     </TabsList>
+                    <TabsContent value="existing">
+                        <OptionGroupSearch
+                            existingGroupIds={existingGroupIds}
+                            onSelect={handleAssignExisting}
+                            isPending={addOptionGroupToProductMutation.isPending}
+                        />
+                    </TabsContent>
                     <TabsContent value="new">
                         <div className="space-y-4">
                             <Form {...form}>
@@ -182,13 +192,6 @@ export function AddOptionGroupDialog({
                                 <Trans>Save option group</Trans>
                             </Button>
                         </DialogFooter>
-                    </TabsContent>
-                    <TabsContent value="existing">
-                        <OptionGroupSearch
-                            existingGroupIds={existingGroupIds}
-                            onSelect={handleAssignExisting}
-                            isPending={addOptionGroupToProductMutation.isPending}
-                        />
                     </TabsContent>
                 </Tabs>
             </DialogContent>
@@ -212,7 +215,7 @@ function OptionGroupSearch({
     const { data, isLoading } = useQuery({
         queryKey: ['option-groups-search', debouncedSearchTerm],
         queryFn: () =>
-            api.query(optionGroupListDocument, {
+            api.query(optionGroupPickerListDocument, {
                 options: {
                     take: 20,
                     sort: { name: 'ASC' },
@@ -233,13 +236,13 @@ function OptionGroupSearch({
     return (
         <Command shouldFilter={false} className="border rounded-md">
             <CommandInput
-                placeholder={t`Search option groups...`}
+                placeholder={t`Search specification templates...`}
                 onValueChange={setSearchTerm}
                 className="h-10"
             />
             <CommandList className="max-h-[300px]">
                 <CommandEmpty>
-                    {isLoading ? <Trans>Loading...</Trans> : <Trans>No option groups found</Trans>}
+                    {isLoading ? <Trans>Loading...</Trans> : <Trans>No specification templates found</Trans>}
                 </CommandEmpty>
                 {sortedItems.map(group => {
                     const isAlreadyAssigned = existingGroupIds.includes(group.id);
@@ -256,6 +259,13 @@ function OptionGroupSearch({
                         >
                             <div>
                                 <div className="font-medium">{group.name}</div>
+                                <div className="mt-0.5 text-xs text-muted-foreground">
+                                    {group.productCount > 0 ? (
+                                        <Trans>Linked to {group.productCount} products</Trans>
+                                    ) : (
+                                        <Trans>Not linked to any product</Trans>
+                                    )}
+                                </div>
                                 {group.options.length > 0 ? (
                                     <div className="mt-1 flex flex-wrap gap-1">
                                         {group.options.slice(0, 4).map(option => (
@@ -276,7 +286,7 @@ function OptionGroupSearch({
                             {isAlreadyAssigned && (
                                 <Badge variant="secondary" className="ml-2">
                                     <Check className="mr-1 h-3 w-3" />
-                                    <Trans>Assigned</Trans>
+                                    <Trans>Linked to this product</Trans>
                                 </Badge>
                             )}
                         </CommandItem>

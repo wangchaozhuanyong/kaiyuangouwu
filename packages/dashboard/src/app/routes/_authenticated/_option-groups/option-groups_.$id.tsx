@@ -3,6 +3,7 @@ import { AssignedChannels } from '@/vdb/components/shared/assigned-channels.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
 import { TranslatableFormFieldWrapper } from '@/vdb/components/shared/translatable-form-field.js';
+import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
@@ -204,6 +205,26 @@ function OptionGroupDetailPage() {
                 </PageBlock>
                 <CustomFieldsPageBlock column="main" entityType="ProductOptionGroup" control={form.control} />
                 {entity && (
+                    <PageBlock
+                        column="main"
+                        blockId="products"
+                        title={
+                            <span className="inline-flex items-center gap-2">
+                                <Trans>Linked products</Trans>
+                                <Badge variant="secondary">{entity.productCount}</Badge>
+                            </span>
+                        }
+                        description={
+                            <Trans>
+                                These products currently use this template. Open a product to change or remove
+                                the link.
+                            </Trans>
+                        }
+                    >
+                        <OptionGroupProductsBlock optionGroupId={entity.id} />
+                    </PageBlock>
+                )}
+                {entity && (
                     <PageBlock column="main" blockId="product-options" title={<Trans>Option Values</Trans>}>
                         <div className="space-y-4">
                             <SharedOptionGroupWarning productCount={entity.productCount} />
@@ -214,11 +235,6 @@ function OptionGroupDetailPage() {
                                 linkSearch={search.from === 'product' ? search : undefined}
                             />
                         </div>
-                    </PageBlock>
-                )}
-                {entity && (
-                    <PageBlock column="side" blockId="products" title={<Trans>Products</Trans>}>
-                        <OptionGroupProductsBlock optionGroupId={entity.id} />
                     </PageBlock>
                 )}
                 {channels.length > 1 && entity && (

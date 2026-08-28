@@ -537,7 +537,20 @@ export type introspection = {
     query: 'Query';
     mutation: 'Mutation';
     subscription: never;
-    types: introspection_types;
+    types: introspection_types & {
+        ProductOptionGroup: {
+            fields: introspection_types['ProductOptionGroup']['fields'] & {
+                products: {
+                    name: 'products';
+                    type: {
+                        kind: 'NON_NULL';
+                        name: never;
+                        ofType: { kind: 'OBJECT'; name: 'ProductList'; ofType: null };
+                    };
+                };
+            };
+        };
+    };
 };
 
 import 'gql.tada';
