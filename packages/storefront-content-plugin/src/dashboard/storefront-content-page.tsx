@@ -58,7 +58,6 @@ import {
     EyeOff,
     GripVertical,
     Image as ImageIcon,
-    ImagePlus,
     LayoutTemplate,
     Pencil,
     Plus,
@@ -72,6 +71,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { CompactAssetControl, EditorField as Field } from './compact-editor';
 import { applyCoreCategoryDefaults, dualCardTemplateId, dualCardTemplates } from './dual-card-templates';
 import {
     FixedHomepageModuleType,
@@ -1606,11 +1606,11 @@ function ModuleSpecificSettings({
     }
 
     return (
-        <section className="space-y-4">
+        <section className="space-y-3">
             <h3 className="text-sm font-medium">{text.displaySettings}</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 @xl/editor-form:grid-cols-2">
                 {draft.type === 'NOTICE' ? (
-                    <Field label={text.noticeInterval} hint={text.noticeIntervalHint}>
+                    <Field compact label={text.noticeInterval} hint={text.noticeIntervalHint}>
                         <Input
                             type="number"
                             min={3}
@@ -1628,6 +1628,7 @@ function ModuleSpecificSettings({
                     </Field>
                 ) : (
                     <Field
+                        compact
                         label={text.displayCount}
                         hint={
                             draft.type === 'CATEGORY_AD'
@@ -1653,6 +1654,7 @@ function ModuleSpecificSettings({
                 )}
                 {productSettingKey ? (
                     <Field
+                        compact
                         label={
                             draft.type === 'BEST_SELLERS' ? text.selectPinnedProducts : text.selectProducts
                         }
@@ -1807,7 +1809,7 @@ function HeroThemeSettings({
         });
 
     return (
-        <section className="space-y-4">
+        <section className="space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h3 className="text-sm font-medium">{text.heroTheme}</h3>
@@ -1825,43 +1827,43 @@ function HeroThemeSettings({
                 }}
                 aria-hidden="true"
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-                <Field label={text.heroOverlayColor}>
+            <div className="grid gap-3 @xl/editor-form:grid-cols-2 @2xl/editor-form:grid-cols-3">
+                <Field compact label={text.heroOverlayColor}>
                     <ColorInput
                         value={draft.backgroundColor}
                         ariaLabel={text.heroOverlayColor}
                         onChange={value => onChange({ ...draft, backgroundColor: value })}
                     />
                 </Field>
-                <Field label={text.heroTitleColor}>
+                <Field compact label={text.heroTitleColor}>
                     <ColorInput
                         value={draft.textColor}
                         ariaLabel={text.heroTitleColor}
                         onChange={value => onChange({ ...draft, textColor: value })}
                     />
                 </Field>
-                <Field label={text.heroSecondaryTextColor}>
+                <Field compact label={text.heroSecondaryTextColor}>
                     <ColorInput
                         value={secondaryTextColor}
                         ariaLabel={text.heroSecondaryTextColor}
                         onChange={value => updateSetting('secondaryTextColor', value)}
                     />
                 </Field>
-                <Field label={text.heroAccentColor}>
+                <Field compact label={text.heroAccentColor}>
                     <ColorInput
                         value={accentColor}
                         ariaLabel={text.heroAccentColor}
                         onChange={value => updateSetting('accentColor', value)}
                     />
                 </Field>
-                <Field label={text.heroAccentSecondaryColor}>
+                <Field compact label={text.heroAccentSecondaryColor}>
                     <ColorInput
                         value={accentSecondaryColor}
                         ariaLabel={text.heroAccentSecondaryColor}
                         onChange={value => updateSetting('accentSecondaryColor', value)}
                     />
                 </Field>
-                <Field label={text.heroButtonTextColor}>
+                <Field compact label={text.heroButtonTextColor}>
                     <ColorInput
                         value={buttonTextColor}
                         ariaLabel={text.heroButtonTextColor}
@@ -2001,12 +2003,12 @@ function BlockEditor({
                         <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
                     </SheetHeader>
                     <div className="grid min-h-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto @5xl/editor:grid-cols-[minmax(0,1fr)_360px] @5xl/editor:overflow-hidden">
-                        <div className="@container/editor-form min-w-0 space-y-7 px-4 py-5 @md/editor:px-6 @5xl/editor:overflow-y-auto">
-                            <section className="space-y-4">
+                        <div className="@container/editor-form min-w-0 space-y-5 px-4 py-4 @md/editor:px-6 @5xl/editor:overflow-y-auto">
+                            <section className="space-y-3">
                                 <h3 className="text-sm font-medium">{text.basic}</h3>
-                                <div className="grid gap-4 @md/editor-form:grid-cols-2">
+                                <div className="grid gap-3 @xl/editor-form:grid-cols-2 @2xl/editor-form:grid-cols-4">
                                     {!fixedTemplate ? (
-                                        <Field label={text.internalName} hint={text.internalNameHint}>
+                                        <Field compact label={text.internalName} hint={text.internalNameHint}>
                                             <Input
                                                 value={draft.internalName}
                                                 onChange={event => update('internalName', event.target.value)}
@@ -2014,7 +2016,7 @@ function BlockEditor({
                                         </Field>
                                     ) : null}
                                     {!lockedType ? (
-                                        <Field label={text.type}>
+                                        <Field compact label={text.type}>
                                             <Select
                                                 value={draft.type}
                                                 onValueChange={value => {
@@ -2051,7 +2053,7 @@ function BlockEditor({
                                         </Field>
                                     ) : null}
                                     {advancedMode ? (
-                                        <Field label={text.code} hint={text.codeHint}>
+                                        <Field compact label={text.code} hint={text.codeHint}>
                                             <Input
                                                 value={draft.code}
                                                 autoCapitalize="none"
@@ -2061,7 +2063,7 @@ function BlockEditor({
                                         </Field>
                                     ) : null}
                                     {advancedMode ? (
-                                        <Field label={text.position}>
+                                        <Field compact label={text.position}>
                                             <Input
                                                 type="number"
                                                 min={0}
@@ -2073,10 +2075,12 @@ function BlockEditor({
                                         </Field>
                                     ) : null}
                                     {!fixedTemplate ? (
-                                        <div className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+                                        <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2">
                                             <div className="min-w-0">
-                                                <Label>{text.status}</Label>
-                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                <Label className="text-xs text-muted-foreground">
+                                                    {text.status}
+                                                </Label>
+                                                <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                                                     {text.statusHint}
                                                 </p>
                                             </div>
@@ -2089,7 +2093,7 @@ function BlockEditor({
                                     ) : null}
                                     {advancedMode ? (
                                         <>
-                                            <Field label={text.startsAt}>
+                                            <Field compact label={text.startsAt}>
                                                 <Input
                                                     type="datetime-local"
                                                     value={toLocalDateTime(draft.startsAt)}
@@ -2101,7 +2105,7 @@ function BlockEditor({
                                                     }
                                                 />
                                             </Field>
-                                            <Field label={text.endsAt}>
+                                            <Field compact label={text.endsAt}>
                                                 <Input
                                                     type="datetime-local"
                                                     value={toLocalDateTime(draft.endsAt)}
@@ -2117,7 +2121,7 @@ function BlockEditor({
                                     ) : null}
                                     {advancedMode || previewUsesBlockImage(draft.type) ? (
                                         <AssetSelectionField
-                                            className="@md/editor-form:col-span-2"
+                                            className="@xl/editor-form:col-span-2 @2xl/editor-form:col-span-2"
                                             label={text.imageAsset}
                                             asset={draft.imageAsset}
                                             fallbackUrl={draft.imageUrl}
@@ -2136,9 +2140,10 @@ function BlockEditor({
                                     {advancedMode ? (
                                         <>
                                             <Field
+                                                compact
                                                 label={text.imageUrl}
                                                 hint={text.imageHint}
-                                                className="@md/editor-form:col-span-2"
+                                                className="@xl/editor-form:col-span-2"
                                             >
                                                 <Input
                                                     inputMode="url"
@@ -2156,7 +2161,7 @@ function BlockEditor({
                                             </Field>
                                             {draft.type !== 'CORE_CATEGORIES' && draft.type !== 'HERO' ? (
                                                 <>
-                                                    <Field label={text.backgroundColor}>
+                                                    <Field compact label={text.backgroundColor}>
                                                         <ColorInput
                                                             value={draft.backgroundColor}
                                                             ariaLabel={text.backgroundColor}
@@ -2165,7 +2170,7 @@ function BlockEditor({
                                                             }
                                                         />
                                                     </Field>
-                                                    <Field label={text.textColor}>
+                                                    <Field compact label={text.textColor}>
                                                         <ColorInput
                                                             value={draft.textColor}
                                                             ariaLabel={text.textColor}
@@ -2180,7 +2185,7 @@ function BlockEditor({
                                     lockedType === 'HERO' ||
                                     simpleBlockNeedsTarget(draft.type) ? (
                                         <>
-                                            <Field label={text.targetType}>
+                                            <Field compact label={text.targetType}>
                                                 <TargetSelect
                                                     value={draft.targetType}
                                                     isZh={isZh}
@@ -2198,6 +2203,7 @@ function BlockEditor({
                                                 />
                                             </Field>
                                             <TargetValueEditor
+                                                compact
                                                 targetType={draft.targetType}
                                                 value={draft.targetValue}
                                                 isZh={isZh}
@@ -2232,17 +2238,20 @@ function BlockEditor({
                             ) : null}
 
                             <Separator />
-                            <section className="space-y-4">
+                            <section className="space-y-3">
                                 <h3 className="text-sm font-medium">{text.translations}</h3>
-                                <div className="grid gap-5 @2xl/editor-form:grid-cols-2">
+                                <div className="grid gap-3 @2xl/editor-form:grid-cols-2">
                                     {translationLanguages.map(languageCode => {
                                         const translation = getBlockTranslation(draft, languageCode);
                                         return (
-                                            <div key={languageCode} className="space-y-3 border-l-2 pl-4">
-                                                <h4 className="text-sm font-medium">
+                                            <fieldset
+                                                key={languageCode}
+                                                className="grid min-w-0 gap-2 rounded-md border border-dashed px-3 pb-3 pt-1 @xl/editor-form:grid-cols-2"
+                                            >
+                                                <legend className="px-1 text-[11px] font-medium text-muted-foreground">
                                                     {languageCode === 'zh_Hans' ? text.chinese : text.english}
-                                                </h4>
-                                                <Field label={text.blockTitle}>
+                                                </legend>
+                                                <Field compact label={text.blockTitle}>
                                                     <Input
                                                         value={translation.title}
                                                         onChange={event =>
@@ -2253,7 +2262,7 @@ function BlockEditor({
                                                     />
                                                 </Field>
                                                 {advancedMode || visibleTextFields.subtitle ? (
-                                                    <Field label={text.subtitle}>
+                                                    <Field compact label={text.subtitle}>
                                                         <Input
                                                             value={translation.subtitle}
                                                             onChange={event =>
@@ -2265,9 +2274,10 @@ function BlockEditor({
                                                     </Field>
                                                 ) : null}
                                                 {advancedMode || visibleTextFields.body ? (
-                                                    <Field label={text.body}>
+                                                    <Field compact label={text.body}>
                                                         <Textarea
-                                                            rows={4}
+                                                            className="min-h-9 resize-y py-2"
+                                                            rows={1}
                                                             value={translation.body}
                                                             onChange={event =>
                                                                 updateTranslation(languageCode, {
@@ -2279,7 +2289,7 @@ function BlockEditor({
                                                 ) : null}
                                                 {draft.type !== 'CATEGORY_AD' &&
                                                 (advancedMode || visibleTextFields.cta) ? (
-                                                    <Field label={text.cta}>
+                                                    <Field compact label={text.cta}>
                                                         <Input
                                                             value={translation.ctaLabel}
                                                             onChange={event =>
@@ -2290,7 +2300,7 @@ function BlockEditor({
                                                         />
                                                     </Field>
                                                 ) : null}
-                                            </div>
+                                            </fieldset>
                                         );
                                     })}
                                 </div>
@@ -2299,7 +2309,7 @@ function BlockEditor({
                             {advancedMode || simpleModuleUsesItems(draft.type) ? (
                                 <>
                                     <Separator />
-                                    <section className="space-y-4">
+                                    <section className="space-y-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <h3 className="text-sm font-medium">{text.items}</h3>
                                             {draft.type !== 'CORE_CATEGORIES' || draft.items.length < 2 ? (
@@ -2830,22 +2840,29 @@ function ItemEditor({
             ),
         );
     return (
-        <div className="space-y-4 border-t pt-4 first:border-t-0 first:pt-0">
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium">
-                        {text.item} {index + 1}
+        <article className="rounded-lg border bg-muted/10 p-3" aria-label={`${text.item} ${index + 1}`}>
+            <div className="mb-3 flex min-h-7 items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+                        {index + 1}
                     </span>
-                    <Switch checked={item.enabled} onCheckedChange={value => update('enabled', value)} />
+                    <span className="text-sm font-medium">{text.item}</span>
+                    <Switch
+                        checked={item.enabled}
+                        aria-label={`${text.item} ${index + 1}`}
+                        onCheckedChange={value => update('enabled', value)}
+                    />
                 </div>
                 <IconButton label={text.removeItem} disabled={false} onClick={onRemove}>
                     <X />
                 </IconButton>
             </div>
-            <div className="grid gap-4 @md/editor-form:grid-cols-2">
+            <div className="grid items-start gap-x-3 gap-y-3 @xl/editor-form:grid-cols-2 @2xl/editor-form:grid-cols-12">
                 {advancedMode || simpleItemUsesImage(blockType) ? (
                     <AssetSelectionField
-                        className="@md/editor-form:col-span-2"
+                        className={
+                            advancedMode ? '@2xl/editor-form:col-span-2' : '@2xl/editor-form:col-span-3'
+                        }
                         label={text.imageAsset}
                         asset={item.imageAsset}
                         fallbackUrl={item.imageUrl}
@@ -2862,7 +2879,7 @@ function ItemEditor({
                     />
                 ) : null}
                 {advancedMode ? (
-                    <Field label={text.position}>
+                    <Field compact className="@2xl/editor-form:col-span-1" label={text.position}>
                         <Input
                             type="number"
                             min={0}
@@ -2873,7 +2890,7 @@ function ItemEditor({
                 ) : null}
                 {showTarget ? (
                     <>
-                        <Field label={text.targetType}>
+                        <Field compact className="@2xl/editor-form:col-span-2" label={text.targetType}>
                             <TargetSelect
                                 value={item.targetType}
                                 isZh={isZh}
@@ -2891,6 +2908,8 @@ function ItemEditor({
                             />
                         </Field>
                         <TargetValueEditor
+                            compact
+                            className="@2xl/editor-form:col-span-3"
                             targetType={item.targetType}
                             value={item.targetValue}
                             isZh={isZh}
@@ -2902,68 +2921,76 @@ function ItemEditor({
                 {translationLanguages.map(languageCode => {
                     const translation = getItemTranslation(item, languageCode);
                     return (
-                        <div key={languageCode} className="space-y-3 border-l-2 pl-4">
-                            <h4 className="text-xs font-medium text-muted-foreground">
+                        <fieldset
+                            key={languageCode}
+                            className="min-w-0 rounded-md border border-dashed px-2.5 pb-2.5 pt-1 @2xl/editor-form:col-span-4"
+                        >
+                            <legend className="px-1 text-[11px] font-medium text-muted-foreground">
                                 {languageCode === 'zh_Hans' ? text.chinese : text.english}
-                            </h4>
-                            {blockType === 'CORE_CATEGORIES' ? (
-                                <Field label={text.itemBadge}>
+                            </legend>
+                            <div className="grid min-w-0 grid-cols-2 gap-2">
+                                {blockType === 'CORE_CATEGORIES' ? (
+                                    <Field compact label={text.itemBadge}>
+                                        <Input
+                                            value={stringSetting(
+                                                item.settings?.[
+                                                    localizedItemSettingKey('badgeLabel', languageCode)
+                                                ],
+                                            )}
+                                            onChange={event =>
+                                                updateLocalizedSetting(
+                                                    'badgeLabel',
+                                                    languageCode,
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                    </Field>
+                                ) : null}
+                                <Field compact label={text.itemLabel}>
                                     <Input
-                                        value={stringSetting(
-                                            item.settings?.[
-                                                localizedItemSettingKey('badgeLabel', languageCode)
-                                            ],
-                                        )}
+                                        value={translation.label}
                                         onChange={event =>
-                                            updateLocalizedSetting(
-                                                'badgeLabel',
-                                                languageCode,
-                                                event.target.value,
-                                            )
+                                            updateTranslation(languageCode, { label: event.target.value })
                                         }
                                     />
                                 </Field>
-                            ) : null}
-                            <Field label={text.itemLabel}>
-                                <Input
-                                    value={translation.label}
-                                    onChange={event =>
-                                        updateTranslation(languageCode, { label: event.target.value })
-                                    }
-                                />
-                            </Field>
-                            <Field label={text.itemDescription}>
-                                <Textarea
-                                    rows={2}
-                                    value={translation.description}
-                                    onChange={event =>
-                                        updateTranslation(languageCode, { description: event.target.value })
-                                    }
-                                />
-                            </Field>
-                            {blockType === 'CORE_CATEGORIES' ? (
-                                <Field label={text.itemCta}>
-                                    <Input
-                                        value={stringSetting(
-                                            item.settings?.[
-                                                localizedItemSettingKey('ctaLabel', languageCode)
-                                            ],
-                                        )}
+                                <Field compact label={text.itemDescription}>
+                                    <Textarea
+                                        className="min-h-9 resize-y py-2"
+                                        rows={1}
+                                        value={translation.description}
                                         onChange={event =>
-                                            updateLocalizedSetting(
-                                                'ctaLabel',
-                                                languageCode,
-                                                event.target.value,
-                                            )
+                                            updateTranslation(languageCode, {
+                                                description: event.target.value,
+                                            })
                                         }
                                     />
                                 </Field>
-                            ) : null}
-                        </div>
+                                {blockType === 'CORE_CATEGORIES' ? (
+                                    <Field compact label={text.itemCta}>
+                                        <Input
+                                            value={stringSetting(
+                                                item.settings?.[
+                                                    localizedItemSettingKey('ctaLabel', languageCode)
+                                                ],
+                                            )}
+                                            onChange={event =>
+                                                updateLocalizedSetting(
+                                                    'ctaLabel',
+                                                    languageCode,
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                    </Field>
+                                ) : null}
+                            </div>
+                        </fieldset>
                     );
                 })}
             </div>
-        </div>
+        </article>
     );
 }
 
@@ -2988,31 +3015,16 @@ function AssetSelectionField({
     const preview = asset?.preview ?? fallbackUrl;
 
     return (
-        <Field label={label} className={className}>
-            <div className="flex min-w-0 items-center gap-3 rounded-md border p-3">
-                {preview ? (
-                    <img className="size-16 shrink-0 rounded-md border object-cover" src={preview} alt="" />
-                ) : (
-                    <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-dashed bg-muted/40">
-                        <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />
-                    </div>
-                )}
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{asset?.name ?? text.noImage}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
-                            <ImagePlus className="size-4" aria-hidden="true" />
-                            {preview ? text.replaceImage : text.selectImage}
-                        </Button>
-                        {preview ? (
-                            <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)}>
-                                {text.removeImage}
-                            </Button>
-                        ) : null}
-                    </div>
-                </div>
-            </div>
-            <ImageSizeHint guidance={imageGuidance} />
+        <Field compact label={label} className={className}>
+            <CompactAssetControl
+                preview={preview}
+                alt={asset?.name ?? label}
+                fileName={asset?.name}
+                selectLabel={preview ? text.replaceImage : text.selectImage}
+                removeLabel={text.removeImage}
+                onSelect={() => setOpen(true)}
+                onRemove={() => onChange(null)}
+            />
             <AssetPickerDialog
                 open={open}
                 onClose={() => setOpen(false)}
@@ -3022,21 +3034,6 @@ function AssetSelectionField({
                 imageGuidance={imageGuidance}
             />
         </Field>
-    );
-}
-
-function Field({
-    label,
-    hint,
-    className,
-    children,
-}: Readonly<{ label: string; hint?: string; className?: string; children: React.ReactNode }>) {
-    return (
-        <div className={`min-w-0 space-y-2 ${className ?? ''}`}>
-            <Label>{label}</Label>
-            {children}
-            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-        </div>
     );
 }
 
@@ -3111,28 +3108,52 @@ function TargetValueEditor({
     value,
     isZh,
     text,
+    compact = false,
+    className,
     onChange,
 }: Readonly<{
     targetType: ContentTargetType;
     value: string | null;
     isZh: boolean;
     text: typeof zhCopy;
+    compact?: boolean;
+    className?: string;
     onChange: (value: string | null) => void;
 }>) {
     if (targetType === 'NONE') return null;
 
     if (targetType === 'PRODUCT') {
         return (
-            <Field label={text.targetValue} hint={text.targetProductHint}>
-                <ProductTargetPicker value={value} text={text} onChange={onChange} />
+            <Field
+                compact={compact}
+                label={text.targetValue}
+                hint={compact ? undefined : text.targetProductHint}
+                className={className}
+            >
+                <ProductTargetPicker compact={compact} value={value} text={text} onChange={onChange} />
             </Field>
         );
     }
 
     if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
         return (
-            <Field label={text.targetValue} hint={text.targetCategoryHint}>
+            <Field
+                compact={compact}
+                label={text.targetValue}
+                hint={compact ? undefined : text.targetCategoryHint}
+                className={className}
+            >
                 <RelationSelector
+                    className={
+                        compact
+                            ? [
+                                  'flex min-w-0 items-center gap-2 overflow-hidden',
+                                  '[&>div:first-child]:mb-0 [&>div:first-child]:min-w-0',
+                                  '[&>div:first-child]:flex-1 [&>div:first-child]:flex-nowrap',
+                                  '[&>div:first-child>div]:truncate [&>button]:shrink-0',
+                              ].join(' ')
+                            : undefined
+                    }
                     config={collectionRelationConfig}
                     value={value ?? undefined}
                     selectorLabel={text.selectTargetCategory}
@@ -3144,7 +3165,12 @@ function TargetValueEditor({
 
     if (targetType === 'PAGE') {
         return (
-            <Field label={text.targetValue} hint={text.pageTargetHint}>
+            <Field
+                compact={compact}
+                label={text.targetValue}
+                hint={compact ? undefined : text.pageTargetHint}
+                className={className}
+            >
                 <PresetTargetPicker
                     key="page"
                     value={value}
@@ -3161,7 +3187,12 @@ function TargetValueEditor({
 
     if (targetType === 'SUPPORT') {
         return (
-            <Field label={text.targetValue} hint={text.supportTargetHint}>
+            <Field
+                compact={compact}
+                label={text.targetValue}
+                hint={compact ? undefined : text.supportTargetHint}
+                className={className}
+            >
                 <PresetTargetPicker
                     key="support"
                     value={value}
@@ -3177,7 +3208,12 @@ function TargetValueEditor({
     }
 
     return (
-        <Field label={text.targetValue} hint={text.targetHint}>
+        <Field
+            compact={compact}
+            label={text.targetValue}
+            hint={compact ? undefined : text.targetHint}
+            className={className}
+        >
             <Input value={value ?? ''} onChange={event => onChange(event.target.value || null)} />
         </Field>
     );
@@ -3186,10 +3222,12 @@ function TargetValueEditor({
 function ProductTargetPicker({
     value,
     text,
+    compact = false,
     onChange,
 }: Readonly<{
     value: string | null;
     text: typeof zhCopy;
+    compact?: boolean;
     onChange: (value: string | null) => void;
 }>) {
     const { activeChannel } = useChannel();
@@ -3209,48 +3247,68 @@ function ProductTargetPicker({
     return (
         <>
             {value ? (
-                <div className="flex min-w-0 items-center gap-3 rounded-md border p-3">
+                <div
+                    className={`flex min-w-0 items-center rounded-md border ${compact ? 'gap-2 p-1.5' : 'gap-3 p-3'}`}
+                >
                     {productQuery.isLoading ? (
-                        <Skeleton className="size-14 shrink-0 rounded-md" />
+                        <Skeleton className={`${compact ? 'size-9' : 'size-14'} shrink-0 rounded-md`} />
                     ) : product?.featuredAsset?.preview ? (
                         <img
-                            className="size-14 shrink-0 rounded-md border object-cover"
+                            className={`${compact ? 'size-9' : 'size-14'} shrink-0 rounded-md border object-cover`}
                             src={product.featuredAsset.preview}
-                            alt=""
+                            alt={product.name}
                         />
                     ) : (
-                        <div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-dashed bg-muted/40">
-                            <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+                        <div
+                            className={`flex ${compact ? 'size-9' : 'size-14'} shrink-0 items-center justify-center rounded-md border border-dashed bg-muted/40`}
+                        >
+                            <ImageIcon
+                                className={`${compact ? 'size-4' : 'size-5'} text-muted-foreground`}
+                                aria-hidden="true"
+                            />
                         </div>
                     )}
                     <div className="min-w-0 flex-1">
                         {productQuery.isLoading ? (
-                            <div className="space-y-2">
-                                <Skeleton className="h-4 w-2/3" />
-                                <Skeleton className="h-3 w-1/2" />
-                            </div>
+                            <Skeleton className="h-4 w-2/3" />
                         ) : product ? (
                             <>
                                 <p className="truncate text-sm font-medium">{product.name}</p>
-                                <p className="truncate text-xs text-muted-foreground">{product.slug}</p>
+                                {!compact ? (
+                                    <p className="truncate text-xs text-muted-foreground">{product.slug}</p>
+                                ) : null}
                             </>
                         ) : (
                             <p className="text-xs text-destructive">{text.targetProductMissing}</p>
                         )}
+                        {!compact ? (
+                            <Button
+                                className="mt-2"
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setOpen(true)}
+                            >
+                                <Search className="size-4" aria-hidden="true" />
+                                {text.changeTargetProduct}
+                            </Button>
+                        ) : null}
+                    </div>
+                    {compact ? (
                         <Button
-                            className="mt-2"
                             type="button"
-                            size="sm"
-                            variant="outline"
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={text.changeTargetProduct}
+                            title={text.changeTargetProduct}
                             onClick={() => setOpen(true)}
                         >
                             <Search className="size-4" aria-hidden="true" />
-                            {text.changeTargetProduct}
                         </Button>
-                    </div>
+                    ) : null}
                     <Button
                         type="button"
-                        size="icon"
+                        size={compact ? 'icon-sm' : 'icon'}
                         variant="ghost"
                         aria-label={text.clearTarget}
                         title={text.clearTarget}

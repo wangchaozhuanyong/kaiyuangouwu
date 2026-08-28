@@ -7,7 +7,6 @@ import {
     Button,
     ChannelCodeLabel,
     DashboardRouteDefinition,
-    ImageSizeHint,
     Input,
     Label,
     Page,
@@ -25,16 +24,7 @@ import {
     useQuery,
     useQueryClient,
 } from '@vendure/dashboard';
-import {
-    Image as ImageIcon,
-    ImagePlus,
-    Monitor,
-    RefreshCw,
-    RotateCcw,
-    Save,
-    Smartphone,
-    Sparkles,
-} from 'lucide-react';
+import { Monitor, RefreshCw, RotateCcw, Save, Smartphone, Sparkles } from 'lucide-react';
 import { CSSProperties, useEffect, useState } from 'react';
 
 import {
@@ -46,6 +36,7 @@ import {
     createAuthVisualDraft,
     isAuthVisualValid,
 } from './auth-visual-config';
+import { CompactAssetControl, EditorField as Field } from './compact-editor';
 import {
     ContentBlock,
     StorefrontContentBlocksResult,
@@ -72,7 +63,6 @@ const copy = {
         selectImage: '从素材库选择或上传',
         replaceImage: '更换图片',
         removeImage: '改用系统默认图',
-        defaultImage: '当前使用系统默认图',
         color: '文字与遮罩颜色',
         textColor: '主文字',
         overlayColor: '遮罩底色',
@@ -119,7 +109,6 @@ const copy = {
         selectImage: 'Select or upload asset',
         replaceImage: 'Replace image',
         removeImage: 'Use built-in image',
-        defaultImage: 'Using the built-in image',
         color: 'Copy and overlay colors',
         textColor: 'Primary text',
         overlayColor: 'Overlay base',
@@ -391,31 +380,35 @@ function AuthVisualEditor({
         });
 
     return (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)]">
-            <div className="space-y-6">
-                <div className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 p-4">
-                    <div>
-                        <Label>{text.enabled}</Label>
-                        <p className="mt-1 text-xs text-muted-foreground">{text.enabledHint}</p>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)]">
+            <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3">
+                        <div className="min-w-0">
+                            <Label className="text-xs text-muted-foreground">{text.enabled}</Label>
+                            <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                                {text.enabledHint}
+                            </p>
+                        </div>
+                        <Switch
+                            checked={draft.enabled}
+                            onCheckedChange={enabled => onChange({ ...draft, enabled })}
+                        />
                     </div>
-                    <Switch
-                        checked={draft.enabled}
-                        onCheckedChange={enabled => onChange({ ...draft, enabled })}
+
+                    <AuthVisualImageField
+                        draft={draft}
+                        text={text}
+                        onChange={(asset, remove) =>
+                            onChange({
+                                ...draft,
+                                imageAsset: asset,
+                                imageAssetId: asset?.id ?? (remove ? null : draft.imageAssetId),
+                                imageUrl: remove || asset ? null : draft.imageUrl,
+                            })
+                        }
                     />
                 </div>
-
-                <AuthVisualImageField
-                    draft={draft}
-                    text={text}
-                    onChange={(asset, remove) =>
-                        onChange({
-                            ...draft,
-                            imageAsset: asset,
-                            imageAssetId: asset?.id ?? (remove ? null : draft.imageAssetId),
-                            imageUrl: remove || asset ? null : draft.imageUrl,
-                        })
-                    }
-                />
 
                 <div className="space-y-3">
                     <div>
@@ -445,8 +438,8 @@ function AuthVisualEditor({
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-3">
+                    <div className="flex flex-col gap-2 rounded-md border bg-muted/20 p-2.5 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <Label>{text.content}</Label>
                             <p className="mt-1 text-xs text-muted-foreground">{text.translationHelp}</p>
@@ -470,12 +463,15 @@ function AuthVisualEditor({
                             </Button>
                         </div>
                     </div>
-                    <div className={`grid gap-4 ${editEnglish ? '2xl:grid-cols-2' : ''}`}>
+                    <div className={`grid gap-3 ${editEnglish ? 'xl:grid-cols-2' : ''}`}>
                         {editLanguages.map(languageCode => {
                             const translation = authVisualTranslation(draft, languageCode);
                             return (
-                                <div key={languageCode} className="space-y-4 rounded-lg border p-4">
-                                    <div>
+                                <div
+                                    key={languageCode}
+                                    className="grid min-w-0 gap-3 rounded-lg border p-3 sm:grid-cols-2"
+                                >
+                                    <div className="sm:col-span-2">
                                         <h3 className="font-medium">
                                             {languageCode === 'zh_Hans' ? text.chinese : text.english}
                                         </h3>
@@ -503,9 +499,8 @@ function AuthVisualEditor({
                                         maxLength={languageCode === 'zh_Hans' ? 42 : 80}
                                         onChange={value => updateTranslation(languageCode, 'subtitle', value)}
                                     />
-                                    <div className="space-y-2">
-                                        <Label>{text.tags}</Label>
-                                        <div className="grid gap-2 sm:grid-cols-3 2xl:grid-cols-1">
+                                    <Field compact label={text.tags} className="sm:col-span-2">
+                                        <div className="grid grid-cols-3 gap-2">
                                             {draft.items.map((item, position) => (
                                                 <Input
                                                     key={item.id ?? position}
@@ -522,7 +517,7 @@ function AuthVisualEditor({
                                                 />
                                             ))}
                                         </div>
-                                    </div>
+                                    </Field>
                                 </div>
                             );
                         })}
@@ -660,43 +655,17 @@ function AuthVisualImageField({
     const [open, setOpen] = useState(false);
     const preview = draft.imageAsset?.preview ?? draft.imageUrl;
     return (
-        <div className="space-y-2">
-            <Label>{text.image}</Label>
-            <div className="flex min-w-0 items-center gap-4 rounded-lg border p-4">
-                {preview ? (
-                    <img
-                        className="h-20 w-36 shrink-0 rounded-lg border object-cover"
-                        src={preview}
-                        alt={draft.imageAsset?.name ?? text.image}
-                    />
-                ) : (
-                    <div className="flex h-20 w-36 shrink-0 items-center justify-center rounded-lg border border-dashed bg-muted/40">
-                        <ImageIcon className="size-6 text-muted-foreground" aria-hidden="true" />
-                    </div>
-                )}
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                        {draft.imageAsset?.name ?? text.defaultImage}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
-                            <ImagePlus className="size-4" />
-                            {preview ? text.replaceImage : text.selectImage}
-                        </Button>
-                        {preview ? (
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => onChange(null, true)}
-                            >
-                                {text.removeImage}
-                            </Button>
-                        ) : null}
-                    </div>
-                </div>
-            </div>
-            <ImageSizeHint guidance="hero" />
+        <Field compact label={text.image}>
+            <CompactAssetControl
+                preview={preview}
+                alt={draft.imageAsset?.name ?? text.image}
+                fileName={draft.imageAsset?.name}
+                selectLabel={preview ? text.replaceImage : text.selectImage}
+                removeLabel={text.removeImage}
+                previewClassName="h-9 w-16"
+                onSelect={() => setOpen(true)}
+                onRemove={() => onChange(null, true)}
+            />
             <AssetPickerDialog
                 open={open}
                 onClose={() => setOpen(false)}
@@ -705,7 +674,7 @@ function AuthVisualImageField({
                 title={text.selectImage}
                 imageGuidance="hero"
             />
-        </div>
+        </Field>
     );
 }
 
@@ -716,15 +685,9 @@ function TextField({
     onChange,
 }: Readonly<{ label: string; value: string; maxLength: number; onChange: (value: string) => void }>) {
     return (
-        <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-                <Label>{label}</Label>
-                <span className="text-xs text-muted-foreground">
-                    {value.length}/{maxLength}
-                </span>
-            </div>
+        <Field compact label={label} meta={`${value.length}/${maxLength}`}>
             <Input value={value} maxLength={maxLength} onChange={event => onChange(event.target.value)} />
-        </div>
+        </Field>
     );
 }
 
@@ -734,8 +697,7 @@ function ColorField({
     onChange,
 }: Readonly<{ label: string; value: string; onChange: (value: string) => void }>) {
     return (
-        <div className="space-y-2">
-            <Label>{label}</Label>
+        <Field compact label={label}>
             <div className="flex items-center gap-2 rounded-md border p-2">
                 <Input
                     className="h-8 w-10 cursor-pointer border-0 p-0"
@@ -746,7 +708,7 @@ function ColorField({
                 />
                 <code className="text-xs uppercase text-muted-foreground">{value}</code>
             </div>
-        </div>
+        </Field>
     );
 }
 
