@@ -60,6 +60,7 @@ import { HardenImageGeneration1787817600000 } from './1787817600000-harden-image
 import { AlignHardenedImageGenerationSchema1787821200000 } from './1787821200000-align-hardened-image-generation-schema';
 import { AddCatalogManagement1787824800000 } from './1787824800000-add-catalog-management';
 import { AddCatalogImportMetadata1787828400000 } from './1787828400000-add-catalog-import-metadata';
+import { AlignCatalogManagementSchema1787832000000 } from './1787832000000-align-catalog-management-schema';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -124,4 +125,5 @@ export const devServerMigrations = [
     AlignHardenedImageGenerationSchema1787821200000,
     AddCatalogManagement1787824800000,
     AddCatalogImportMetadata1787828400000,
+    AlignCatalogManagementSchema1787832000000,
 ];
