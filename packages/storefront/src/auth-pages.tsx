@@ -1077,45 +1077,55 @@ function AuthLayout({
                     decoding="async"
                     fetchPriority="high"
                 />
-                <button
-                    className="auth-back-button"
-                    type="button"
-                    onClick={onBack}
-                    aria-label={language === 'zh' ? '返回' : 'Back'}
-                >
-                    <ArrowLeft aria-hidden="true" />
-                </button>
-                <div className="auth-brand-lockup">
-                    <div className="auth-brand-main">
-                        {logoUrl ? (
-                            <img
-                                className="auth-brand-mark"
-                                src={storefrontWebpUrl(logoUrl, 'thumbnail')}
-                                alt={storefrontName}
-                            />
-                        ) : (
-                            <span className="auth-brand-mark" aria-hidden="true">
-                                桥
-                            </span>
-                        )}
-                        <strong>{storefrontName}</strong>
-                    </div>
-                    <small>
-                        {language === 'zh' ? '智联云端 · 桥接未来' : 'Cloud intelligence · Bridging tomorrow'}
-                    </small>
-                </div>
-                {heroMessage && (
-                    <div className="auth-hero-message">
-                        <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>
-                        <h2>{heroMessage.title}</h2>
-                        <p>{heroMessage.description}</p>
-                        <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
-                            {heroMessage.tags.map(tag => (
-                                <span key={tag}>{tag}</span>
-                            ))}
+                <header className="auth-hero-header">
+                    <button
+                        className="auth-back-button"
+                        type="button"
+                        onClick={onBack}
+                        aria-label={language === 'zh' ? '返回' : 'Back'}
+                    >
+                        <ArrowLeft aria-hidden="true" />
+                    </button>
+                </header>
+                <div className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}`}>
+                    <div className="auth-hero-kicker">
+                        <div className="auth-brand-lockup">
+                            <div className="auth-brand-main">
+                                {logoUrl ? (
+                                    <img
+                                        className="auth-brand-mark"
+                                        src={storefrontWebpUrl(logoUrl, 'thumbnail')}
+                                        alt={storefrontName}
+                                    />
+                                ) : (
+                                    <span className="auth-brand-mark" aria-hidden="true">
+                                        桥
+                                    </span>
+                                )}
+                                <strong>{storefrontName}</strong>
+                            </div>
+                            <small>
+                                {language === 'zh'
+                                    ? '智联云端 · 桥接未来'
+                                    : 'Cloud intelligence · Bridging tomorrow'}
+                            </small>
                         </div>
+                        {heroMessage && <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>}
                     </div>
-                )}
+                    {heroMessage && (
+                        <>
+                            <div className="auth-hero-copy">
+                                <h2>{heroMessage.title}</h2>
+                                <p>{heroMessage.description}</p>
+                            </div>
+                            <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
+                                {heroMessage.tags.map(tag => (
+                                    <span key={tag}>{tag}</span>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
             </section>
             <section className="login-content">
                 <div className="auth-card-content">{children}</div>

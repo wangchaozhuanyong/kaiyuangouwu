@@ -7944,14 +7944,18 @@ img.fatal-error-mark {
     object-position: 50% 54%;
 }
 
+.auth-hero-header {
+    position: absolute;
+    z-index: 3;
+    top: max(16px, env(safe-area-inset-top));
+    left: 14px;
+}
+
 .auth-back-button {
     width: 42px;
     height: 42px;
     padding: 0;
-    position: absolute;
-    z-index: 3;
-    top: 14px;
-    left: 14px;
+    position: static;
     border: 1px solid rgba(255, 255, 255, 0.28);
     border-radius: 50%;
     background: rgba(2, 14, 39, 0.62);
@@ -7968,32 +7972,28 @@ img.fatal-error-mark {
 }
 
 .auth-brand-lockup {
-    position: absolute;
-    z-index: 2;
-    top: 30px;
-    left: 50%;
-    display: grid;
-    justify-items: center;
-    gap: 5px;
-    transform: translateX(-50%);
+    min-width: 0;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
     white-space: nowrap;
 }
 
 .auth-brand-main {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
 }
 
 .auth-brand-mark {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
     background: var(--auth-accent);
     color: white;
     display: grid;
     place-items: center;
-    font-size: 19px;
+    font-size: 18px;
     font-weight: var(--font-weight-bold);
     line-height: 1;
     box-shadow: 0 8px 22px rgba(8, 126, 107, 0.28);
@@ -8001,12 +8001,15 @@ img.fatal-error-mark {
 
 .auth-brand-lockup strong {
     color: white;
-    font-size: 22px;
+    font-size: 19px;
     font-weight: var(--font-weight-bold);
     letter-spacing: -0.02em;
 }
 
 .auth-brand-lockup small {
+    margin-left: 11px;
+    padding-left: 11px;
+    border-left: 1px solid rgba(255, 255, 255, 0.24);
     color: rgba(228, 235, 247, 0.8);
     font-size: 10px;
     font-weight: var(--font-weight-medium);
@@ -8015,7 +8018,7 @@ img.fatal-error-mark {
 
 .auth-page-login .auth-brand-lockup,
 .auth-page-register .auth-brand-lockup {
-    top: 16px;
+    flex: 0 0 auto;
 }
 
 .auth-page-login .auth-brand-lockup small,
@@ -8024,62 +8027,84 @@ img.fatal-error-mark {
 }
 
 .auth-hero-message {
-    width: calc(100% - 40px);
-    max-width: 430px;
+    width: calc(100% - 36px);
+    max-width: 360px;
     position: absolute;
     z-index: 2;
-    bottom: 13px;
-    left: 50%;
+    top: max(16px, env(safe-area-inset-top));
+    right: 18px;
+    bottom: 24px;
+    left: 18px;
+    margin: 0 auto;
     color: var(--auth-hero-text-color);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    transform: translateX(-50%);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    justify-items: center;
     text-align: center;
     text-shadow: 0 2px 14px rgba(0, 0, 0, 0.68);
 }
 
+.auth-hero-message-brand-only {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auth-hero-kicker {
+    width: max-content;
+    max-width: calc(100% - 88px);
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
 .auth-hero-eyebrow {
-    max-width: 100%;
-    min-height: 20px;
-    padding: 3px 9px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    border-radius: 9999px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06));
+    max-width: 148px;
+    min-height: 26px;
+    padding: 0 0 0 12px;
+    border: 0;
+    border-left: 1px solid color-mix(in srgb, var(--auth-hero-accent-color) 52%, transparent);
+    border-radius: 0;
+    background: transparent;
     color: #ffffff;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 9px;
     font-weight: var(--font-weight-bold);
-    letter-spacing: 0.13em;
-    line-height: 1;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.16),
-        0 5px 16px rgba(0, 0, 0, 0.18);
-    backdrop-filter: blur(10px);
+    letter-spacing: 0.1em;
+    line-height: 1.35;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: left;
 }
 
 .auth-hero-login .auth-hero-eyebrow {
-    border-color: color-mix(in srgb, var(--auth-hero-accent-color) 62%, transparent);
     color: var(--auth-hero-accent-color);
 }
 
 .auth-hero-register .auth-hero-eyebrow {
-    border-color: color-mix(in srgb, var(--auth-hero-accent-color) 62%, transparent);
     color: var(--auth-hero-accent-color);
 }
 
+.auth-hero-copy {
+    align-self: center;
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+}
+
 .auth-hero-message h2 {
-    margin: 5px 0 0;
+    max-width: 15em;
+    margin: 0;
     color: var(--auth-hero-text-color);
-    font-size: 20px;
+    font-size: clamp(20px, 5.4vw, 23px);
     font-weight: 800;
     letter-spacing: -0.035em;
-    line-height: 1.15;
+    line-height: 1.18;
     text-wrap: balance;
     display: -webkit-box;
     overflow: hidden;
@@ -8088,11 +8113,13 @@ img.fatal-error-mark {
 }
 
 .auth-hero-message p {
-    margin: 3px 0 0;
+    max-width: 31em;
+    margin: 0;
     color: color-mix(in srgb, var(--auth-hero-text-color) 88%, transparent);
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: var(--font-weight-medium);
-    line-height: 1.3;
+    line-height: 1.4;
+    text-wrap: pretty;
     display: -webkit-box;
     overflow: hidden;
     -webkit-box-orient: vertical;
@@ -8101,29 +8128,35 @@ img.fatal-error-mark {
 
 .auth-hero-tags {
     max-width: 100%;
-    margin-top: 7px;
+    margin: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 0;
     overflow: hidden;
 }
 
 .auth-hero-tags > span {
-    min-height: 19px;
-    padding: 3px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--auth-hero-overlay-color) 62%, transparent);
+    min-height: auto;
+    padding: 0 10px;
+    border: 0;
+    border-left: 1px solid color-mix(in srgb, var(--auth-hero-accent-color) 48%, transparent);
+    border-radius: 0;
+    background: transparent;
     color: color-mix(in srgb, var(--auth-hero-text-color) 92%, transparent);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
+    font-size: 9.5px;
     font-weight: var(--font-weight-semibold);
     line-height: 1;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(9px);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.auth-hero-tags > span:first-child {
+    padding-left: 0;
+    border-left: 0;
 }
 
 .login-content {
@@ -8374,9 +8407,7 @@ img.fatal-error-mark {
         height: 150px;
     }
 
-    .auth-brand-lockup,
-    .auth-page-login .auth-brand-lockup,
-    .auth-page-register .auth-brand-lockup {
+    .auth-hero-header {
         top: 14px;
     }
 
@@ -8385,7 +8416,8 @@ img.fatal-error-mark {
     }
 
     .auth-hero-message {
-        bottom: 14px;
+        top: 14px;
+        bottom: 18px;
     }
 
     .auth-hero-message p,
@@ -9808,28 +9840,44 @@ img.fatal-error-mark {
         object-position: 44% 50%;
     }
 
-    .auth-page .auth-back-button {
+    .auth-page .auth-hero-header {
         top: 28px;
         left: 28px;
-    }
-
-    .auth-page .auth-brand-lockup {
-        top: 54px;
     }
 
     .auth-page .auth-hero-message {
         width: calc(100% - 96px);
         max-width: 480px;
+        top: auto;
+        right: auto;
         bottom: 52px;
         left: 48px;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
         align-items: flex-start;
-        transform: none;
         text-align: left;
+    }
+
+    .auth-page .auth-hero-message-brand-only {
+        bottom: 50%;
+        transform: translateY(50%);
+    }
+
+    .auth-page .auth-hero-kicker {
+        max-width: 100%;
+        justify-content: flex-start;
+    }
+
+    .auth-page .auth-hero-copy {
+        margin-top: 36px;
+        align-self: auto;
+        justify-items: start;
     }
 
     .auth-page .auth-hero-eyebrow {
         min-height: 25px;
-        padding: 5px 12px;
+        padding: 0 0 0 14px;
         font-size: 10px;
     }
 
