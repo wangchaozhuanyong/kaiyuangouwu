@@ -289,11 +289,13 @@ sudo -n systemctl reload nginx
 ## 上线验收
 
 ```bash
-curl -fsS https://damatong.net/health
-curl -I https://damatong.net/
-curl -I https://console.damatong.net/dashboard/
-curl -I https://damatong.net/assets/
+cd /var/www/kaiyuangouwu
+node deploy/verify-production-release.mjs \
+  --storefront-url https://damatong.net \
+  --dashboard-url https://console.damatong.net/dashboard/
 ```
+
+验收脚本会走完整推广入口：确认未携带 Cookie 的 Shop API 返回 `STOREFRONT_ENTRY_REQUIRED`，从 `/promo` 获取签名票据并换取入口 Cookie，再验证 Shop API、带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。`/assets/` 目录本身不是有效静态资源验收地址。
 
 另外检查：
 

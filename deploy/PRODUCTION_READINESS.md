@@ -252,7 +252,7 @@ node packages/dev-server/dist/index.js
 4. 只运行一次数据库迁移。
 5. PM2 从同一个候选产物目录启动 Worker 和 API Server。
 6. API 健康检查成功后，原子切换 `kaiyuangouwu-current` 到新版本目录。
-7. 检查 `/health`、`/shop-api`、商品资源和 Dashboard。
+7. 使用 `deploy/verify-production-release.mjs` 检查 `/health`、受推广入口保护的 `/shop-api`、前台实际哈希资源、Dashboard 和公网 Admin API 拒绝策略。
 8. 使用至少两个不同国家或地区的客户资料完成最小金额测试订单。
 9. 确认 `RUNTIME-AUDIT.json` 无 High 和 Critical，且完整 monorepo 的 `bun audit` 为 0 漏洞。
 10. 观察错误、队列和支付回调后再开放流量。

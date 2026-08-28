@@ -97,6 +97,14 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
 });
 
+void test('production runbook uses the promotion-aware release verifier', async () => {
+    const runbook = await readFile(path.join(repositoryRoot, 'deploy/DEPLOYMENT_RUNBOOK.md'), 'utf8');
+
+    assert.match(runbook, /node deploy\/verify-production-release\.mjs/u);
+    assert.match(runbook, /STOREFRONT_ENTRY_REQUIRED/u);
+    assert.doesNotMatch(runbook, /curl -I https:\/\/damatong\.net\/assets\//u);
+});
+
 void test('OIDC production deployment uses a locked, immutable S3-to-SSM release path', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
     const workflow = await readFile(

@@ -1,0 +1,281 @@
+import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
+
+const SHOP_API_PROBE = Object.freeze({ query: '{__typename}' });
+const ENTRY_COOKIE_NAME = 'storefront-entry';
+const DEFAULT_TIMEOUT_MS = 10_000;
+
+function decodeHtmlAttribute(value) {
+    return value
+        .replace(/&#x([0-9a-f]+);/giu, (_match, codePoint) =>
+            String.fromCodePoint(Number.parseInt(codePoint, 16)),
+        )
+        .replace(/&#([0-9]+);/gu, (_match, codePoint) => String.fromCodePoint(Number.parseInt(codePoint, 10)))
+        .replace(/&quot;/giu, '"')
+        .replace(/&#39;|&apos;/giu, "'")
+        .replace(/&lt;/giu, '<')
+        .replace(/&gt;/giu, '>')
+        .replace(/&amp;/giu, '&');
+}
+
+function readHtmlAttribute(tag, attributeName) {
+    const quoted = tag.match(new RegExp(`\\b${attributeName}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'iu'));
+    if (quoted) {
+        return decodeHtmlAttribute(quoted[1] ?? quoted[2] ?? '');
+    }
+    const unquoted = tag.match(new RegExp(`\\b${attributeName}\\s*=\\s*([^\\s>]+)`, 'iu'));
+    return unquoted ? decodeHtmlAttribute(unquoted[1]) : undefined;
+}
+
+export function extractEntryTicket(html) {
+    for (const match of html.matchAll(/<input\b[^>]*>/giu)) {
+        if (readHtmlAttribute(match[0], 'name') === 'ticket') {
+            const ticket = readHtmlAttribute(match[0], 'value');
+            if (ticket) {
+                return ticket;
+            }
+        }
+    }
+    throw new Error('Promotion page does not contain a non-empty signed entry ticket');
+}
+
+export function extractEntryCookie(headers) {
+    const setCookieHeaders =
+        typeof headers.getSetCookie === 'function'
+            ? headers.getSetCookie()
+            : [headers.get('set-cookie')].filter(Boolean);
+    for (const header of setCookieHeaders) {
+        const match = header.match(new RegExp(`(?:^|,\\s*)${ENTRY_COOKIE_NAME}=([^;,\\s]+)`, 'u'));
+        if (match) {
+            return `${ENTRY_COOKIE_NAME}=${match[1]}`;
+        }
+    }
+    throw new Error(`Promotion entry response did not set the ${ENTRY_COOKIE_NAME} cookie`);
+}
+
+export function extractStorefrontAssetUrl(html, storefrontUrl) {
+    const storefrontOrigin = new URL(storefrontUrl).origin;
+    for (const match of html.matchAll(/<(?:link|script)\b[^>]*>/giu)) {
+        const reference = readHtmlAttribute(match[0], 'href') ?? readHtmlAttribute(match[0], 'src');
+        if (!reference) {
+            continue;
+        }
+        const assetUrl = new URL(reference, storefrontUrl);
+        if (
+            assetUrl.origin === storefrontOrigin &&
+            assetUrl.pathname.startsWith('/assets/') &&
+            /\.(?:css|js)$/u.test(assetUrl.pathname)
+        ) {
+            return assetUrl;
+        }
+    }
+    throw new Error('Authenticated storefront HTML does not reference a same-origin JS or CSS asset');
+}
+
+function normalizeStorefrontUrl(value) {
+    const url = new URL(value);
+    if (url.username || url.password) {
+        throw new Error('Storefront URL must not contain credentials');
+    }
+    url.pathname = '/';
+    url.search = '';
+    url.hash = '';
+    return url;
+}
+
+function normalizeDashboardUrl(value) {
+    const url = new URL(value);
+    if (url.username || url.password) {
+        throw new Error('Dashboard URL must not contain credentials');
+    }
+    url.hash = '';
+    return url;
+}
+
+async function fetchWithTimeout(fetchImpl, url, init, timeoutMs) {
+    try {
+        return await fetchImpl(url, {
+            ...init,
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+    } catch (error) {
+        throw new Error(`Request failed for ${url.origin}${url.pathname}: ${error.message}`, {
+            cause: error,
+        });
+    }
+}
+
+function expectStatus(response, expectedStatus, label) {
+    if (response.status !== expectedStatus) {
+        throw new Error(`${label}: expected HTTP ${expectedStatus}, received ${response.status}`);
+    }
+}
+
+async function readJson(response, label) {
+    try {
+        return await response.json();
+    } catch (error) {
+        throw new Error(`${label}: response was not valid JSON`, { cause: error });
+    }
+}
+
+function shopApiRequest(cookie) {
+    return {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+            'content-type': 'application/json',
+            ...(cookie ? { cookie } : {}),
+        },
+        body: JSON.stringify(SHOP_API_PROBE),
+    };
+}
+
+export async function verifyProductionRelease({
+    storefrontUrl,
+    dashboardUrl,
+    fetchImpl = globalThis.fetch,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+}) {
+    if (typeof fetchImpl !== 'function') {
+        throw new Error('This verifier requires a Node.js runtime with global fetch support');
+    }
+    if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+        throw new Error('timeoutMs must be a positive integer');
+    }
+
+    const storefront = normalizeStorefrontUrl(storefrontUrl);
+    const dashboard = normalizeDashboardUrl(dashboardUrl);
+    const checks = [];
+
+    const healthUrl = new URL('/health', storefront);
+    const healthResponse = await fetchWithTimeout(fetchImpl, healthUrl, { redirect: 'manual' }, timeoutMs);
+    expectStatus(healthResponse, 200, 'Public health endpoint');
+    const health = await readJson(healthResponse, 'Public health endpoint');
+    if (health?.status !== 'ok') {
+        throw new Error('Public health endpoint: expected JSON status "ok"');
+    }
+    checks.push('public health');
+
+    const shopApiUrl = new URL('/shop-api', storefront);
+    const blockedShopResponse = await fetchWithTimeout(fetchImpl, shopApiUrl, shopApiRequest(), timeoutMs);
+    expectStatus(blockedShopResponse, 403, 'Shop API without promotion cookie');
+    const blockedShopBody = await readJson(blockedShopResponse, 'Shop API without promotion cookie');
+    const gateError = blockedShopBody?.errors?.some(
+        error => error?.extensions?.code === 'STOREFRONT_ENTRY_REQUIRED',
+    );
+    if (!gateError) {
+        throw new Error('Shop API without promotion cookie: missing STOREFRONT_ENTRY_REQUIRED');
+    }
+    checks.push('unauthenticated Shop API gate');
+
+    const promotionUrl = new URL('/promo', storefront);
+    const promotionResponse = await fetchWithTimeout(
+        fetchImpl,
+        promotionUrl,
+        { redirect: 'manual' },
+        timeoutMs,
+    );
+    expectStatus(promotionResponse, 200, 'Promotion entry page');
+    const ticket = extractEntryTicket(await promotionResponse.text());
+
+    const enterUrl = new URL('/promo/enter', storefront);
+    const enterResponse = await fetchWithTimeout(
+        fetchImpl,
+        enterUrl,
+        {
+            method: 'POST',
+            redirect: 'manual',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ ticket }).toString(),
+        },
+        timeoutMs,
+    );
+    expectStatus(enterResponse, 303, 'Promotion entry submission');
+    if (enterResponse.headers.get('location') !== '/') {
+        throw new Error('Promotion entry submission: expected redirect location /');
+    }
+    const entryCookie = extractEntryCookie(enterResponse.headers);
+    checks.push('signed promotion entry');
+
+    const authenticatedShopResponse = await fetchWithTimeout(
+        fetchImpl,
+        shopApiUrl,
+        shopApiRequest(entryCookie),
+        timeoutMs,
+    );
+    expectStatus(authenticatedShopResponse, 200, 'Shop API with promotion cookie');
+    const authenticatedShopBody = await readJson(authenticatedShopResponse, 'Shop API with promotion cookie');
+    if (authenticatedShopBody?.data?.__typename !== 'Query') {
+        throw new Error('Shop API with promotion cookie: GraphQL probe did not return Query');
+    }
+    checks.push('authenticated Shop API');
+
+    const storefrontResponse = await fetchWithTimeout(
+        fetchImpl,
+        storefront,
+        { redirect: 'manual', headers: { cookie: entryCookie } },
+        timeoutMs,
+    );
+    expectStatus(storefrontResponse, 200, 'Authenticated storefront');
+    const storefrontHtml = await storefrontResponse.text();
+    const assetUrl = extractStorefrontAssetUrl(storefrontHtml, storefront);
+    checks.push('authenticated storefront');
+
+    const assetResponse = await fetchWithTimeout(
+        fetchImpl,
+        assetUrl,
+        { redirect: 'manual', headers: { cookie: entryCookie } },
+        timeoutMs,
+    );
+    expectStatus(assetResponse, 200, 'Storefront build asset');
+    await assetResponse.body?.cancel();
+    checks.push('storefront build asset');
+
+    const dashboardResponse = await fetchWithTimeout(fetchImpl, dashboard, { redirect: 'follow' }, timeoutMs);
+    expectStatus(dashboardResponse, 200, 'Dashboard');
+    await dashboardResponse.body?.cancel();
+    checks.push('dashboard');
+
+    const adminApiUrl = new URL('/admin-api', storefront);
+    const adminApiResponse = await fetchWithTimeout(fetchImpl, adminApiUrl, shopApiRequest(), timeoutMs);
+    expectStatus(adminApiResponse, 404, 'Public Admin API');
+    await adminApiResponse.body?.cancel();
+    checks.push('public Admin API denial');
+
+    return checks;
+}
+
+async function main() {
+    const { values } = parseArgs({
+        options: {
+            'storefront-url': { type: 'string' },
+            'dashboard-url': { type: 'string' },
+            'timeout-ms': { type: 'string', default: String(DEFAULT_TIMEOUT_MS) },
+        },
+        strict: true,
+    });
+    if (!values['storefront-url'] || !values['dashboard-url']) {
+        throw new Error(
+            'Usage: node deploy/verify-production-release.mjs --storefront-url <url> --dashboard-url <url>',
+        );
+    }
+    const timeoutMs = Number(values['timeout-ms']);
+    const checks = await verifyProductionRelease({
+        storefrontUrl: values['storefront-url'],
+        dashboardUrl: values['dashboard-url'],
+        timeoutMs,
+    });
+    for (const check of checks) {
+        process.stdout.write(`[pass] ${check}\n`);
+    }
+    process.stdout.write(`Production release verification passed (${checks.length} checks)\n`);
+}
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+    main().catch(error => {
+        process.stderr.write(`Production release verification failed: ${error.message}\n`);
+        process.exitCode = 1;
+    });
+}
