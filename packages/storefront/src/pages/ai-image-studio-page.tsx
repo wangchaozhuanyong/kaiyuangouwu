@@ -49,6 +49,7 @@ function formatBillingMoney(value: number, currencyCode: string, locale: string)
 
 const aspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
 const activeStates = new Set(['QUEUED', 'RUNNING', 'UNKNOWN']);
+const terminalStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']);
 
 export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const { api, customer, market, language, onBack, onSignIn, onNotify } = props;
@@ -218,6 +219,20 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const deleteOutput = async (outputId: string) => {
         try {
             await api.deleteMyGeneratedImage(outputId);
+            await load();
+        } catch (error) {
+            setActionError(errorMessage(error));
+        }
+    };
+    const deleteJob = async (id: string) => {
+        const confirmed = window.confirm(
+            isZh
+                ? '删除后将立即清理该任务的生成图、提示词和历史记录，且无法恢复。是否继续？'
+                : 'This permanently deletes the generated images, prompt, and history for this job. Continue?',
+        );
+        if (!confirmed) return;
+        try {
+            await api.deleteMyImageGenerationJob(id);
             await load();
         } catch (error) {
             setActionError(errorMessage(error));
@@ -538,6 +553,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     locale={market.locale}
                                     onCancel={() => void cancel(job.id)}
                                     onDelete={outputId => void deleteOutput(outputId)}
+                                    onDeleteJob={() => void deleteJob(job.id)}
                                     onRegenerate={() => regenerate(job)}
                                 />
                             ))
@@ -561,6 +577,7 @@ function GenerationCard({
     locale,
     onCancel,
     onDelete,
+    onDeleteJob,
     onRegenerate,
 }: Readonly<{
     job: ImageGenerationJob;
@@ -568,6 +585,7 @@ function GenerationCard({
     locale: string;
     onCancel(): void;
     onDelete(outputId: string): void;
+    onDeleteJob(): void;
     onRegenerate(): void;
 }>) {
     const isZh = language === 'zh';
@@ -637,6 +655,12 @@ function GenerationCard({
                         <RotateCcw />
                         {isZh ? '再次创作' : 'Use again'}
                     </button>
+                    {terminalStates.has(job.state) ? (
+                        <button type="button" onClick={onDeleteJob}>
+                            <Trash2 />
+                            {isZh ? '删除记录' : 'Delete job'}
+                        </button>
+                    ) : null}
                 </div>
             </footer>
         </article>

@@ -39,6 +39,28 @@ export class SafeProviderUrlService {
         return url;
     }
 
+    async resolveRemoteImage(rawUrl: string): Promise<{ url: URL; address: string; family: number }> {
+        const url = await this.validate(rawUrl);
+        const hostname = url.hostname.toLowerCase().replace(/\.$/u, '');
+        const allowlist = new Set(
+            (process.env.IMAGE_GENERATION_REMOTE_IMAGE_HOSTS ?? '')
+                .split(',')
+                .map(value => value.trim().toLowerCase().replace(/\.$/u, ''))
+                .filter(Boolean),
+        );
+        if (!allowlist.has(hostname)) {
+            throw new Error('中转站远程图片域名不在 IMAGE_GENERATION_REMOTE_IMAGE_HOSTS 白名单中');
+        }
+        const addresses = isIP(hostname)
+            ? [{ address: hostname, family: isIP(hostname) }]
+            : await lookup(hostname, { all: true, verbatim: true });
+        const selected = addresses.find(item => !isPrivateAddress(item.address));
+        if (!selected || addresses.some(item => isPrivateAddress(item.address))) {
+            throw new Error('中转站图片地址解析到了本机、内网或云元数据地址');
+        }
+        return { url, address: selected.address, family: selected.family };
+    }
+
     endpoint(baseUrl: URL, pathname: string): URL {
         const normalizedBase = new URL(baseUrl.toString());
         normalizedBase.pathname = `${normalizedBase.pathname.replace(/\/$/u, '')}/${pathname.replace(/^\//u, '')}`;

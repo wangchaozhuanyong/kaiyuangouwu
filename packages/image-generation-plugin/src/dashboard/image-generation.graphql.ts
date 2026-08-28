@@ -19,6 +19,7 @@ const modelFields = gql`
         healthStatus
         healthMessage
         lastTestedAt
+        supportsIdempotency
     }
 `;
 
@@ -90,6 +91,26 @@ export const imageGenerationAdminQuery = gql`
                 }
             }
         }
+        imageGenerationCostSummary(days: 30) {
+            from
+            to
+            truncated
+            items {
+                modelCode
+                providerScope
+                saleCurrencyCode
+                costCurrency
+                attempts
+                successes
+                retries
+                failures
+                unknowns
+                missingCostCount
+                grossRevenue
+                actualCost
+                averageLatencyMs
+            }
+        }
         imagePromptSkillReleases {
             id
             createdAt
@@ -148,6 +169,18 @@ export const testImageModelMutation = gql`
     }
 `;
 
+export const smokeTestImageModelMutation = gql`
+    mutation SmokeTestImageModel($code: String!) {
+        smokeTestImageModel(code: $code) {
+            ok
+            message
+            testedAt
+            actualCostMicrounits
+            costCurrency
+        }
+    }
+`;
+
 export const activateImageSkillMutation = gql`
     mutation ActivateImageSkill($id: ID!) {
         activateImagePromptSkillRelease(id: $id) {
@@ -201,6 +234,7 @@ export interface ImageAdminModelRecord {
     healthStatus: string;
     healthMessage?: string | null;
     lastTestedAt?: string | null;
+    supportsIdempotency: boolean;
 }
 
 export interface ImageAdminConfigRecord {
@@ -250,6 +284,26 @@ export interface ImageAdminJobRecord {
 export interface ImageAdminQueryResult {
     imageGenerationAdminConfig: ImageAdminConfigRecord;
     imageGenerationJobs: { items: ImageAdminJobRecord[]; totalItems: number };
+    imageGenerationCostSummary: {
+        from: string;
+        to: string;
+        truncated: boolean;
+        items: Array<{
+            modelCode: string;
+            providerScope: string;
+            saleCurrencyCode: string;
+            costCurrency: string;
+            attempts: number;
+            successes: number;
+            retries: number;
+            failures: number;
+            unknowns: number;
+            missingCostCount: number;
+            grossRevenue: number;
+            actualCost: number;
+            averageLatencyMs: number;
+        }>;
+    };
     imagePromptSkillReleases: Array<{
         id: string;
         createdAt: string;

@@ -90,6 +90,12 @@ export class ImageGenerationShopResolver {
     deleteMyGeneratedImage(@Ctx() ctx: RequestContext, @Args('outputId') outputId: ID) {
         return this.generations.deleteOutput(ctx, outputId);
     }
+
+    @Mutation()
+    @Allow(Permission.Authenticated)
+    deleteMyImageGenerationJob(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.generations.deleteJob(ctx, id);
+    }
 }
 
 @Resolver()
@@ -128,6 +134,12 @@ export class ImageGenerationAdminResolver {
         return this.configService.skillReleases(ctx);
     }
 
+    @Query()
+    @Allow(manageImageGenerationPermission.Read)
+    imageGenerationCostSummary(@Ctx() ctx: RequestContext, @Args('days') days?: number) {
+        return this.generations.adminCostSummary(ctx, days);
+    }
+
     @Mutation()
     @Allow(manageImageGenerationPermission.Update)
     saveImageGenerationConfig(
@@ -156,6 +168,12 @@ export class ImageGenerationAdminResolver {
     @Allow(manageImageGenerationPermission.Update)
     testImageModel(@Ctx() ctx: RequestContext, @Args('code') code: string) {
         return this.configService.testModel(ctx, code);
+    }
+
+    @Mutation()
+    @Allow(manageImageGenerationPermission.Update)
+    smokeTestImageModel(@Ctx() ctx: RequestContext, @Args('code') code: string) {
+        return this.configService.smokeTestModel(ctx, code);
     }
 
     @Mutation()

@@ -15,13 +15,16 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { ImageGenerationCostEvent } from '../src/entities/image-generation-cost-event.entity';
+import { ImageGenerationDispatch } from '../src/entities/image-generation-dispatch.entity';
+import { ImageGenerationJob } from '../src/entities/image-generation-job.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
 import { ImagePrivateStorageService } from '../src/storage/image-private-storage.service';
 
 const storageRoot = mkdtempSync(path.join(tmpdir(), 'vendure-image-generation-e2e-'));
 const pngBase64 =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZPToAAAAASUVORK5CYII=';
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 const referenceFixture = path.join(storageRoot, 'reference-fixture.png');
 writeFileSync(referenceFixture, Buffer.from(pngBase64, 'base64'), { mode: 0o600 });
 const originalMasterKey = process.env.IMAGE_GENERATION_MASTER_KEY;
@@ -31,10 +34,11 @@ process.env.IMAGE_GENERATION_MASTER_KEY = 'image-generation-e2e-master-key-over-
 const translationProvider: ContentTranslationProvider = {
     name: 'image-generation-e2e-translation',
     isConfigured: () => true,
-    translate: request => Promise.resolve({
-        provider: 'image-generation-e2e-translation',
-        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-    }),
+    translate: request =>
+        Promise.resolve({
+            provider: 'image-generation-e2e-translation',
+            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+        }),
 };
 
 const config = mergeConfig(testConfig(), {
@@ -255,6 +259,30 @@ const REFUND_OUTPUT = gql`
     }
 `;
 
+const COST_SUMMARY = gql`
+    query ImageGenerationCostSummaryE2E {
+        imageGenerationCostSummary(days: 30) {
+            truncated
+            items {
+                modelCode
+                attempts
+                successes
+                failures
+                missingCostCount
+                grossRevenue
+                actualCost
+                costCurrency
+            }
+        }
+    }
+`;
+
+const DELETE_JOB = gql`
+    mutation DeleteImageGenerationJobE2E($id: ID!) {
+        deleteMyImageGenerationJob(id: $id)
+    }
+`;
+
 describe('AI image generation full flow', () => {
     beforeAll(async () => {
         vi.stubGlobal('fetch', providerFetch);
@@ -329,6 +357,7 @@ describe('AI image generation full flow', () => {
                 currencyCode: 'USD',
                 position: 0,
                 isDefault: true,
+                supportsIdempotency: false,
             },
         });
         expect((await adminClient.query(TEST_MODEL, { code: 'OPENAI_HIGH_QUALITY' })).testImageModel.ok).toBe(
@@ -550,6 +579,46 @@ describe('AI image generation full flow', () => {
         const remainingReferenceMs = retainedReference.expiresAt.getTime() - Date.now();
         expect(remainingReferenceMs).toBeGreaterThan(23 * 60 * 60_000);
         expect(remainingReferenceMs).toBeLessThanOrEqual(24 * 60 * 60_000);
+
+        const costSummary = (await adminClient.query(COST_SUMMARY)).imageGenerationCostSummary;
+        expect(costSummary.truncated).toBe(false);
+        expect(costSummary.items).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    modelCode: 'OPENAI_HIGH_QUALITY',
+                    attempts: 3,
+                    successes: 3,
+                    failures: 0,
+                    missingCostCount: 0,
+                    grossRevenue: 300,
+                    actualCost: 0.014016,
+                    costCurrency: 'USD',
+                }),
+                expect.objectContaining({
+                    modelCode: 'OPENAI_HIGH_QUALITY',
+                    attempts: 1,
+                    successes: 0,
+                    failures: 1,
+                    missingCostCount: 1,
+                    grossRevenue: 0,
+                    actualCost: 0,
+                    costCurrency: 'UNKNOWN',
+                }),
+            ]),
+        );
+        await expect(
+            connection.rawConnection.getRepository(ImageGenerationDispatch).countBy({ state: 'COMPLETED' }),
+        ).resolves.toBe(4);
+
+        expect(
+            (await shopClient.query(DELETE_JOB, { id: referenceCreated.id })).deleteMyImageGenerationJob,
+        ).toBe(true);
+        await expect(
+            connection.rawConnection.getRepository(ImageGenerationJob).findOneBy({ id: referenceCreated.id }),
+        ).resolves.toBeNull();
+        await expect(connection.rawConnection.getRepository(ImageGenerationCostEvent).count()).resolves.toBe(
+            4,
+        );
     }, 30_000);
 });
 
@@ -604,7 +673,7 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
     }
     if (providerFailure) {
         return new Response('{"error":"mock definitive failure"}', {
-            status: 500,
+            status: 400,
             headers: { 'content-type': 'application/json' },
         });
     }
@@ -625,6 +694,7 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
             JSON.stringify({
                 id: 'image-e2e-provider-request',
                 output: [{ type: 'image_generation_call', result: pngBase64 }],
+                usage: { total_cost: 0.004672, output_images: 1 },
             }),
             { status: 200, headers: { 'content-type': 'application/json' } },
         );

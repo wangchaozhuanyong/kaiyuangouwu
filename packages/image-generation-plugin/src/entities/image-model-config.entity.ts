@@ -1,8 +1,8 @@
-import type { ImageProviderProtocol } from '../types';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Channel, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+import type { ImageProviderProtocol } from '../types';
 
 @Entity({ name: 'image_model_config' })
 @Index('IDX_image_model_config_channel_code', ['channelId', 'code'], { unique: true })
@@ -58,6 +58,9 @@ export class ImageModelConfig extends VendureEntity {
     @Column('boolean', { default: false })
     isDefault: boolean;
 
+    @Column('boolean', { default: false })
+    supportsIdempotency: boolean;
+
     @Column({ type: 'varchar', length: 24, default: 'UNTESTED' })
     healthStatus: string;
 
@@ -66,4 +69,7 @@ export class ImageModelConfig extends VendureEntity {
 
     @Column({ type: Date, nullable: true })
     lastTestedAt: Date | null;
+
+    @Column('int', { default: 0 })
+    consecutiveFailures: number;
 }

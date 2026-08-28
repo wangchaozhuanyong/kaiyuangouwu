@@ -195,6 +195,7 @@ export const shopApiExtensions = gql`
         createImageGeneration(input: CreateImageGenerationInput!): ImageGenerationJob!
         cancelQueuedImageGeneration(id: ID!): ImageGenerationJob!
         deleteMyGeneratedImage(outputId: ID!): Boolean!
+        deleteMyImageGenerationJob(id: ID!): Boolean!
     }
 `;
 
@@ -218,6 +219,7 @@ export const adminApiExtensions = gql`
         providerModelId: String!
         healthMessage: String
         lastTestedAt: DateTime
+        supportsIdempotency: Boolean!
     }
 
     type ImageProviderAdminConfig {
@@ -235,6 +237,31 @@ export const adminApiExtensions = gql`
         ok: Boolean!
         message: String!
         testedAt: DateTime!
+        actualCostMicrounits: Int
+        costCurrency: String
+    }
+
+    type ImageGenerationCostSummaryItem {
+        modelCode: String!
+        providerScope: String!
+        saleCurrencyCode: String!
+        costCurrency: String!
+        attempts: Int!
+        successes: Int!
+        retries: Int!
+        failures: Int!
+        unknowns: Int!
+        missingCostCount: Int!
+        grossRevenue: Money!
+        actualCost: Float!
+        averageLatencyMs: Int!
+    }
+
+    type ImageGenerationCostSummary {
+        from: DateTime!
+        to: DateTime!
+        truncated: Boolean!
+        items: [ImageGenerationCostSummaryItem!]!
     }
 
     type ImagePromptSkillRelease implements Node {
@@ -277,6 +304,7 @@ export const adminApiExtensions = gql`
         currencyCode: CurrencyCode!
         position: Int!
         isDefault: Boolean!
+        supportsIdempotency: Boolean!
     }
 
     extend type Query {
@@ -284,6 +312,7 @@ export const adminApiExtensions = gql`
         imageProviderAdminConfigs: [ImageProviderAdminConfig!]!
         imageGenerationJobs(skip: Int, take: Int, state: ImageGenerationState): ImageGenerationJobList!
         imagePromptSkillReleases: [ImagePromptSkillRelease!]!
+        imageGenerationCostSummary(days: Int): ImageGenerationCostSummary!
     }
 
     extend type Mutation {
@@ -291,6 +320,7 @@ export const adminApiExtensions = gql`
         saveImageProviderCredential(input: SaveImageProviderCredentialInput!): ImageProviderAdminConfig!
         testImageProviderConnection(scope: ImageProviderScope!): ImageProviderConnectionResult!
         testImageModel(code: String!): ImageProviderConnectionResult!
+        smokeTestImageModel(code: String!): ImageProviderConnectionResult!
         saveImageModel(input: SaveImageModelInput!): ImageStudioModel!
         activateImagePromptSkillRelease(id: ID!): ImagePromptSkillRelease!
         retryUnknownImageOutput(outputId: ID!): ImageGenerationOutput!

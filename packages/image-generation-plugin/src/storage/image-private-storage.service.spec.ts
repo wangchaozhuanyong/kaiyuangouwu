@@ -1,5 +1,10 @@
 import type { RequestContext, TransactionalConnection } from '@vendure/core';
 import { UserInputError } from '@vendure/core';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePrivateAsset } from '../entities/image-private-asset.entity';
@@ -13,6 +18,40 @@ afterEach(() => {
 });
 
 describe('ImagePrivateStorageService reference lifecycle', () => {
+    it('re-encodes uploads without EXIF metadata before private storage', async () => {
+        const storageRoot = await mkdtemp(path.join(tmpdir(), 'image-reference-metadata-'));
+        const source = await sharp({
+            create: { width: 8, height: 8, channels: 3, background: '#ffffff' },
+        })
+            .jpeg()
+            .withMetadata({ exif: { IFD0: { Artist: 'private-location-owner' } } })
+            .toBuffer();
+        const repository = {
+            save: vi.fn((storedAsset: ImagePrivateAsset) => {
+                storedAsset.id = 100;
+                return Promise.resolve(storedAsset);
+            }),
+        };
+        const connection = {
+            getRepository: vi.fn(() => repository),
+            rawConnection: { options: { type: 'sqljs' } },
+        } as unknown as TransactionalConnection;
+        const service = new ImagePrivateStorageService(connection, {
+            production: false,
+            storageRoot,
+        });
+
+        const asset = await service.storeReference(context(), 10, {
+            filename: 'with-location.jpg',
+            mimetype: 'image/jpeg',
+            createReadStream: () => Readable.from(source),
+        });
+        const storedMetadata = await sharp(await service.read(asset)).metadata();
+
+        expect(storedMetadata.exif).toBeUndefined();
+        await rm(storageRoot, { recursive: true, force: true });
+    });
+
     it('retains an active task reference for the output retention window', async () => {
         const now = new Date('2026-08-27T12:00:00.000Z');
         vi.useFakeTimers();
@@ -58,6 +97,20 @@ describe('ImagePrivateStorageService reference lifecycle', () => {
             UserInputError,
         );
         expect(deletedSave).not.toHaveBeenCalled();
+    });
+
+    it('removes the reference file and sensitive fields but keeps a short-lived quota tombstone', async () => {
+        const asset = referenceAsset(new Date(Date.now() + DAY_MS));
+        asset.originalName = 'private-person.jpg';
+        asset.providerMetadata = { revisedPrompt: 'private prompt' };
+        const { service, save } = storageWith(asset);
+
+        await expect(service.deleteOwned(context(), asset.id, asset.customerId)).resolves.toBe(true);
+
+        expect(asset.deletedAt).toBeInstanceOf(Date);
+        expect(asset.originalName).toBe('deleted');
+        expect(asset.providerMetadata).toBeNull();
+        expect(save).toHaveBeenCalledWith(asset, { reload: false });
     });
 });
 

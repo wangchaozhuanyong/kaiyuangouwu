@@ -13,6 +13,7 @@ describe('image generation GraphQL surface', () => {
         expect(schema).toContain('officialModelId');
         expect(schema).toContain('descriptionZh');
         expect(schema).toContain('descriptionEn');
+        expect(schema).toContain('deleteMyImageGenerationJob');
     });
 
     it('separates provider credentials from store-level image configuration', () => {
@@ -28,5 +29,8 @@ describe('image generation GraphQL surface', () => {
         expect(schema).toContain('extend type ImageStudioModel');
         expect(schema).toContain('testImageModel');
         expect(schema).toContain('lastTestedAt');
+        expect(schema).toContain('supportsIdempotency');
+        expect(schema).toContain('smokeTestImageModel');
+        expect(schema).toContain('imageGenerationCostSummary');
     });
 });
