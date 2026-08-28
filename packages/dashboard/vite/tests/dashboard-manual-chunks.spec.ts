@@ -5,6 +5,9 @@ import { dashboardManualChunks } from '../dashboard-manual-chunks.js';
 describe('dashboardManualChunks', () => {
     it.each([
         ['/workspace/node_modules/@tanstack/react-query/build/index.js', 'vendor-tanstack'],
+        ['/workspace/node_modules/react/jsx-runtime.js', 'vendor-react'],
+        ['/workspace/node_modules/react-dom/client.js', 'vendor-react'],
+        ['/workspace/node_modules/scheduler/index.js', 'vendor-react'],
         ['/workspace/node_modules/lucide-react/dist/cjs/lucide-react.js', 'vendor-icons'],
         ['/workspace/node_modules/@tiptap/core/dist/index.js', 'vendor-rich-text'],
         ['/workspace/node_modules/date-fns/format.js', 'vendor-date-fns'],
@@ -26,10 +29,6 @@ describe('dashboardManualChunks', () => {
             '/workspace/packages/dashboard/src/lib/framework/form-engine/use-generated-form.tsx',
             'dashboard-framework',
         ],
-        [
-            '/workspace/packages/dashboard/src/lib/components/shared/rich-text-editor/rich-text-editor.tsx',
-            'dashboard-framework',
-        ],
     ])('maps %s to %s', (id, expected) => {
         expect(dashboardManualChunks(id)).toBe(expected);
     });
@@ -38,6 +37,11 @@ describe('dashboardManualChunks', () => {
         expect(dashboardManualChunks('/workspace/packages/dashboard/src/app/main.tsx')).toBeUndefined();
         expect(
             dashboardManualChunks('/workspace/node_modules/date-fns/locale/af/_lib/formatDistance.js'),
+        ).toBeUndefined();
+        expect(
+            dashboardManualChunks(
+                '/workspace/packages/dashboard/src/lib/components/shared/rich-text-editor/rich-text-editor.tsx',
+            ),
         ).toBeUndefined();
     });
 });

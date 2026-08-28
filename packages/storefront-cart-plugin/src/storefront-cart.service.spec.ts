@@ -1,9 +1,13 @@
 import 'reflect-metadata';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontCart } from './entities/storefront-cart.entity';
 import { isRegisteredProductionPaymentMethod, StorefrontCartService } from './storefront-cart.service';
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
 
 describe('production payment readiness', () => {
     const method = (code: string, handlerCode: string, name: string) =>
@@ -104,5 +108,53 @@ describe('StorefrontCartService Channel isolation', () => {
         expect(repository.findOne).toHaveBeenNthCalledWith(2, {
             where: { channelId: 'store-b', ownerType: 'CUSTOMER', ownerId: 'customer-1' },
         });
+    });
+});
+
+describe('StorefrontCartService login merge', () => {
+    it('invalidates checkout projection without rebuilding the active order during login', async () => {
+        const customerCart = new StorefrontCart({
+            id: 'customer-cart',
+            channelId: 'store-a',
+            ownerType: 'CUSTOMER',
+            ownerId: 'customer-1',
+            state: 'OPEN',
+            revision: 2,
+            checkoutOrderId: null,
+            projectedRevision: 2,
+            initialized: true,
+        });
+        const cartRepository = {
+            findOne: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(customerCart),
+            update: vi.fn().mockResolvedValue({ affected: 1 }),
+        };
+        const connection = { getRepository: vi.fn().mockReturnValue(cartRepository) };
+        const customerService = {
+            findOneByUserId: vi.fn().mockResolvedValue({ id: 'customer-1' }),
+        };
+        const orderService = {
+            getActiveOrderForUser: vi.fn().mockResolvedValue(null),
+        };
+        const service = new StorefrontCartService(
+            connection as any,
+            {} as any,
+            customerService as any,
+            orderService as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        const projectCartSpy = vi.spyOn(service as any, 'projectCart');
+
+        await expect(
+            service.mergeAfterLogin({ channelId: 'store-a', session: { id: 'session-1' } } as any, 'user-1'),
+        ).resolves.toBeUndefined();
+
+        expect(cartRepository.update).toHaveBeenCalledWith('customer-cart', {
+            checkoutOrderId: null,
+            projectedRevision: null,
+            lastActivityAt: expect.any(Date),
+        });
+        expect(projectCartSpy).not.toHaveBeenCalled();
     });
 });

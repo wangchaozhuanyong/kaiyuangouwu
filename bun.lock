@@ -255,6 +255,9 @@
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
       },
+      "peerDependencies": {
+        "@vendure/dashboard": "3.7.2",
+      },
     },
     "packages/core": {
       "name": "@vendure/core",
@@ -474,6 +477,7 @@
         "@vendure/dashboard": "3.7.2",
         "@vendure/email-plugin": "3.7.2",
         "@vendure/harden-plugin": "3.7.2",
+        "@vendure/image-generation-plugin": "0.1.0",
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
         "@vendure/store-management-plugin": "0.1.0",
@@ -561,6 +565,32 @@
       },
       "peerDependencies": {
         "@apollo/server": "^5.5.0",
+      },
+    },
+    "packages/image-generation-plugin": {
+      "name": "@vendure/image-generation-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "@vendure/store-management-plugin": "0.1.0",
+        "file-type": "21.3.4",
+        "graphql-tag": "^2.12.6",
+        "lucide-react": "^0.475.0",
+        "sharp": "0.35.3",
+        "typeorm": "^0.3.21",
+      },
+      "devDependencies": {
+        "@types/express": "^5.0.0",
+        "@types/react": "^19.2.14",
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4",
+      },
+      "peerDependencies": {
+        "@vendure/dashboard": "3.7.2",
+        "react": "^19.2.4",
       },
     },
     "packages/job-queue-plugin": {
@@ -2993,6 +3023,8 @@
     "@vendure/graphiql-plugin": ["@vendure/graphiql-plugin@workspace:packages/graphiql-plugin"],
 
     "@vendure/harden-plugin": ["@vendure/harden-plugin@workspace:packages/harden-plugin"],
+
+    "@vendure/image-generation-plugin": ["@vendure/image-generation-plugin@workspace:packages/image-generation-plugin"],
 
     "@vendure/job-queue-plugin": ["@vendure/job-queue-plugin@workspace:packages/job-queue-plugin"],
 
@@ -6499,6 +6531,8 @@
     "@vendure/email-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 
     "@vendure/graphiql-plugin/rimraf": ["rimraf@6.1.3", "", { "dependencies": { "glob": "^13.0.3", "package-json-from-dist": "^1.0.1" }, "bin": { "rimraf": "dist/esm/bin.mjs" } }, "sha512-LKg+Cr2ZF61fkcaK1UdkH2yEBBKnYjTyWzTJT6KNPcSPaiT7HSdhtMXQuN5wkTX0Xu72KQ1l8S42rlmexS2hSA=="],
+
+    "@vendure/image-generation-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 
     "@vendure/job-queue-plugin/ioredis": ["ioredis@5.9.3", "", { "dependencies": { "@ioredis/commands": "1.5.0", "cluster-key-slot": "^1.1.0", "debug": "^4.3.4", "denque": "^2.1.0", "lodash.defaults": "^4.2.0", "lodash.isarguments": "^3.1.0", "redis-errors": "^1.2.0", "redis-parser": "^3.0.0", "standard-as-callback": "^2.1.0" } }, "sha512-VI5tMCdeoxZWU5vjHWsiE/Su76JGhBvWF1MJnV9ZtGltHk9BmD48oDq8Tj8haZ85aceXZMxLNDQZRVo5QKNgXA=="],
 

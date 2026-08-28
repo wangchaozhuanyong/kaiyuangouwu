@@ -265,10 +265,7 @@ function ManageProductVariants() {
             toast.error(t`Price must be a non-negative number`);
             return;
         }
-        if (
-            draft.fulfillmentType === 'physical' &&
-            (!Number.isInteger(draft.stockOnHand) || draft.stockOnHand < 0)
-        ) {
+        if (!Number.isInteger(draft.stockOnHand) || draft.stockOnHand < 0) {
             toast.error(t`Stock must be a non-negative integer`);
             return;
         }
@@ -278,8 +275,7 @@ function ManageProductVariants() {
                 id: variant.id,
                 sku: draft.sku.trim(),
                 price: draft.price,
-                stockOnHand: draft.fulfillmentType === 'physical' ? draft.stockOnHand : 0,
-                trackInventory: draft.fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
+                stockOnHand: draft.stockOnHand,
                 customFields: getUpdatedFulfillmentCustomFields(
                     variant.customFields,
                     draft.fulfillmentType,
@@ -422,6 +418,7 @@ function ManageProductVariants() {
                     </div>
                     <AddOptionGroupDialog
                         productId={id}
+                        productUpdatedAt={productData.product.updatedAt}
                         existingGroupIds={productData.product.optionGroups.map(g => g.id)}
                         onSuccess={() => refetch()}
                     />
@@ -500,24 +497,18 @@ function ManageProductVariants() {
                                                     />
                                                 </TableCell>
                                                 <TableCell>
-                                                    {draft.fulfillmentType === 'physical' ? (
-                                                        <Input
-                                                            value={draft.stockOnHand}
-                                                            onChange={event =>
-                                                                updateVariantDraft(variant.id, {
-                                                                    stockOnHand: Number(event.target.value),
-                                                                })
-                                                            }
-                                                            type="number"
-                                                            min="0"
-                                                            step="1"
-                                                            aria-label={t`Stock for ${variant.name}`}
-                                                        />
-                                                    ) : (
-                                                        <span className="text-sm text-muted-foreground">
-                                                            <Trans>Not tracked</Trans>
-                                                        </span>
-                                                    )}
+                                                    <Input
+                                                        value={draft.stockOnHand}
+                                                        onChange={event =>
+                                                            updateVariantDraft(variant.id, {
+                                                                stockOnHand: Number(event.target.value),
+                                                            })
+                                                        }
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        aria-label={t`Stock for ${variant.name}`}
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
                                                     <Select

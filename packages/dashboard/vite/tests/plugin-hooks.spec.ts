@@ -464,11 +464,17 @@ describe('viteConfigPlugin', () => {
         expect(aliases['@/graphql']).toBe(path.resolve(packageRoot, './src/lib/graphql'));
     });
 
-    it('deduplicates React for linked dashboard extensions', () => {
+    it('deduplicates React and Lingui for linked dashboard extensions', () => {
         const plugin = viteConfigPlugin({ packageRoot });
         const result = callConfig(plugin, { resolve: { dedupe: ['graphql'] } }, { command: 'serve' });
 
-        expect(result.resolve.dedupe).toEqual(['graphql', 'react', 'react-dom']);
+        expect(result.resolve.dedupe).toEqual([
+            'graphql',
+            'react',
+            'react-dom',
+            '@lingui/core',
+            '@lingui/react',
+        ]);
     });
 
     it('preserves existing resolve aliases', () => {
@@ -517,7 +523,12 @@ describe('viteConfigPlugin', () => {
 
         const result = callConfig(plugin, config, { command: 'serve' });
 
-        expect(result.resolve.dedupe).toEqual(['react', 'react-dom']);
+        expect(result.resolve.dedupe).toEqual([
+            'react',
+            'react-dom',
+            '@lingui/core',
+            '@lingui/react',
+        ]);
         expect(result.resolve.conditions).toEqual(['browser']);
         expect(result.resolve.alias['@/vdb']).toBe('/dashboard/src/lib');
     });
@@ -1061,7 +1072,7 @@ describe('filterActivePluginInfo', () => {
     // Fails open: a missing `plugins` key means "no filtering information",
     // not "disable everything", so the discovered pluginInfo is returned as-is.
     it('returns pluginInfo unchanged when the plugins key is missing', () => {
-        const result = filterActivePluginInfo([makePluginInfo('A')], {} as { plugins?: undefined });
+        const result = filterActivePluginInfo([makePluginInfo('A')], {});
         expect(result.map(p => p.name)).toEqual(['A']);
     });
 

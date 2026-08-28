@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    getNewVariantInventoryInput,
     getProductFulfillmentType,
     getUpdatedFulfillmentCustomFields,
     getVariantDigitalDeliveryMode,
@@ -8,6 +9,13 @@ import {
 } from './product-fulfillment-type.js';
 
 describe('product fulfillment type', () => {
+    it('makes new SKU inventory inherit the global tracking setting', () => {
+        expect(getNewVariantInventoryInput(12)).toEqual({
+            stockOnHand: 12,
+            trackInventory: 'INHERIT',
+        });
+    });
+
     it('defaults missing fulfillment settings to physical', () => {
         expect(getVariantFulfillmentType({})).toBe('physical');
         expect(getProductFulfillmentType([])).toBe('physical');

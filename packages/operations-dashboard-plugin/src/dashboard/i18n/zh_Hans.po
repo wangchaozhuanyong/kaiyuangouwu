@@ -730,7 +730,7 @@ msgstr "库存管理"
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.specificationTemplates"
-msgstr "商品规格"
+msgstr "规格模板库"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx

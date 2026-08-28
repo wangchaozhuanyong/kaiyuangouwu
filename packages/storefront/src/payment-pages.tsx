@@ -845,7 +845,6 @@ export function OrderConfirmationPage({
                             <article key={delivery.orderLineId}>
                                 <span>
                                     <strong>{delivery.name}</strong>
-                                    <small>{delivery.sku}</small>
                                 </span>
                                 {delivery.status === 'READY' && delivery.downloadUrl ? (
                                     <a href={delivery.downloadUrl} rel="noreferrer">
@@ -887,7 +886,7 @@ export function OrderConfirmationPage({
                                 <span>
                                     <strong>{delivery.productName}</strong>
                                     <small>
-                                        {delivery.sku} × {delivery.quantity}
+                                        {isZh ? '数量' : 'Qty'} × {delivery.quantity}
                                     </small>
                                 </span>
                                 <em>{confirmationAutoCardStatus(delivery.state, language)}</em>

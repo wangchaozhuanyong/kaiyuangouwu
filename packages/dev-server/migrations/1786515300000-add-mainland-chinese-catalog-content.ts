@@ -312,15 +312,20 @@ export class AddMainlandChineseCatalogContent1786515300000 implements MigrationI
         name: string,
         description: string,
     ): Promise<void> {
+        const [nameParameter, descriptionParameter, baseIdParameter] = this.placeholders(
+            queryRunner,
+            3,
+        );
         await queryRunner.query(
             `
                 INSERT INTO "${table}" ("languageCode", "name", "slug", "description", "baseId")
-                SELECT 'zh_Hans', ?, source.slug, ?, source.baseId
+                SELECT 'zh_Hans', ${nameParameter}, source."slug", ${descriptionParameter}, source."baseId"
                 FROM "${table}" source
-                WHERE source.baseId = ? AND source.languageCode = 'en'
+                WHERE source."baseId" = ${baseIdParameter} AND source."languageCode" = 'en'
                   AND NOT EXISTS (
                       SELECT 1 FROM "${table}" existing
-                      WHERE existing.baseId = source.baseId AND existing.languageCode = 'zh_Hans'
+                      WHERE existing."baseId" = source."baseId"
+                        AND existing."languageCode" = 'zh_Hans'
                   )
             `,
             [name, description, baseId],
@@ -343,19 +348,28 @@ export class AddMainlandChineseCatalogContent1786515300000 implements MigrationI
         baseId: number,
         name: string,
     ): Promise<void> {
+        const [nameParameter, baseIdParameter] = this.placeholders(queryRunner, 2);
         await queryRunner.query(
             `
                 INSERT INTO "${table}" ("languageCode", "name", "baseId")
-                SELECT 'zh_Hans', ?, source.baseId
+                SELECT 'zh_Hans', ${nameParameter}, source."baseId"
                 FROM "${table}" source
-                WHERE source.baseId = ? AND source.languageCode = 'en'
+                WHERE source."baseId" = ${baseIdParameter} AND source."languageCode" = 'en'
                   AND NOT EXISTS (
-                    SELECT 1 FROM "${table}"
-                    WHERE baseId = source.baseId AND languageCode = 'zh_Hans'
+                    SELECT 1 FROM "${table}" existing
+                    WHERE existing."baseId" = source."baseId"
+                      AND existing."languageCode" = 'zh_Hans'
                   )
             `,
-            [name, baseId, baseId],
+            [name, baseId],
         );
+    }
+
+    private placeholders(queryRunner: QueryRunner, count: number): string[] {
+        if (['postgres', 'cockroachdb'].includes(queryRunner.connection.options.type)) {
+            return Array.from({ length: count }, (_, index) => `$${index + 1}`);
+        }
+        return Array.from({ length: count }, () => '?');
     }
 
     private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {

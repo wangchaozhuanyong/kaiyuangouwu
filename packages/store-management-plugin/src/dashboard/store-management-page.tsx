@@ -29,6 +29,7 @@ import {
     SheetTitle,
     Skeleton,
     Textarea,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useChannelDisplayName,
@@ -59,6 +60,7 @@ import {
 
 interface ProfileDraft {
     id: string;
+    expectedUpdatedAt: string;
     storefrontNameZh: string;
     storefrontNameEn: string;
     originalStorefrontNameZh: string;
@@ -191,6 +193,7 @@ function StoreManagementPage() {
         mutationFn: (input: ProfileDraft) => {
             const updateInput: Record<string, unknown> = {
                 id: input.id,
+                expectedUpdatedAt: input.expectedUpdatedAt,
                 status: input.status,
                 sortOrder: Number(input.sortOrder),
                 descriptionZh: input.descriptionZh,
@@ -219,6 +222,7 @@ function StoreManagementPage() {
     const openEditor = (profile: StoreProfileRecord) => {
         setDraft({
             id: profile.id,
+            expectedUpdatedAt: profile.updatedAt,
             storefrontNameZh: profile.channel.customFields.storefrontNameZh ?? '',
             storefrontNameEn: profile.channel.customFields.storefrontNameEn ?? '',
             originalStorefrontNameZh: profile.channel.customFields.storefrontNameZh ?? '',
@@ -451,8 +455,8 @@ function ProfileEditor({
     if (!draft) return null;
     const update = <K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) =>
         onChange({ ...draft, [field]: value });
+    const isDirty = initialDraftRef.current !== JSON.stringify(draft);
     const requestClose = () => {
-        const isDirty = initialDraftRef.current !== JSON.stringify(draft);
         if (isDirty && !window.confirm(isZh ? '有未保存的修改，确定放弃吗？' : 'Discard unsaved changes?')) {
             return;
         }
@@ -460,6 +464,7 @@ function ProfileEditor({
     };
     return (
         <>
+            <UnsavedChangesConfirmation when={isDirty} />
             <Sheet open onOpenChange={open => !open && requestClose()}>
                 <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
                     <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">

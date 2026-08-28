@@ -1,6 +1,7 @@
 import { api } from '@/vdb/graphql/api.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import { useAuth } from '@/vdb/hooks/use-auth.js';
+import { Trans } from '@lingui/react/macro';
 import { useQuery } from '@tanstack/react-query';
 import { ResultOf } from 'gql.tada';
 import React from 'react';
@@ -265,7 +266,7 @@ export interface ServerConfig {
 export const ServerConfigProvider = ({ children }: { children: React.ReactNode }) => {
     const { user } = useAuth();
     const queryKey = ['getServerConfig', user?.id];
-    const { data } = useQuery({
+    const { data, error, refetch, isFetching } = useQuery({
         queryKey,
         queryFn: () => api.query(getServerConfigDocument),
         retry: false,
@@ -294,6 +295,24 @@ export const ServerConfigProvider = ({ children }: { children: React.ReactNode }
                 : null,
         [data],
     );
+
+    if (user?.id && error) {
+        return (
+            <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
+                <p className="text-destructive">
+                    <Trans>Failed to load server configuration: {error.message}</Trans>
+                </p>
+                <button
+                    type="button"
+                    className="rounded-md border px-4 py-2 disabled:opacity-50"
+                    disabled={isFetching}
+                    onClick={() => void refetch()}
+                >
+                    <Trans>Retry</Trans>
+                </button>
+            </div>
+        );
+    }
 
     return <ServerConfigContext.Provider value={value}>{children}</ServerConfigContext.Provider>;
 };

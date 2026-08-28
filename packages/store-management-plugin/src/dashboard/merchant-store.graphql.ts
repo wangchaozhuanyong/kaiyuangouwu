@@ -20,6 +20,7 @@ export const completeInitialPasswordChangeMutation = gql`
 const myStoreProfileFields = gql`
     fragment MyStoreProfileFields on StoreProfile {
         id
+        updatedAt
         status
         isOperational
         descriptionZh
@@ -103,6 +104,7 @@ export interface CompleteInitialPasswordChangeResult {
 
 export interface MyStoreProfileRecord {
     id: string;
+    updatedAt: string;
     status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
     isOperational: boolean;
     descriptionZh: string;

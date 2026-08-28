@@ -1,0 +1,17 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "jsx": "react-jsx",
+        "lib": ["es2019", "esnext.asynciterable", "dom", "dom.iterable"],
+        "paths": {
+            "@vendure/store-management-plugin": ["../store-management-plugin/src/index.ts"],
+            "@/vdb/*": ["../dashboard/src/lib/*"]
+        }
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "../dashboard/src/vite-env.d.ts",
+        "../store-management-plugin/src/markdown-it.d.ts"
+    ]
+}

@@ -328,6 +328,22 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         });
     }
 
+    if (role === 'server' || role === 'worker') {
+        const imageGenerationRoot = normalized(env.IMAGE_GENERATION_STORAGE_ROOT);
+        const imageGenerationReady =
+            isPersistentDirectory(imageGenerationRoot) &&
+            isConfiguredSecret(env.IMAGE_GENERATION_DOWNLOAD_SECRET, 32) &&
+            isConfiguredSecret(env.IMAGE_GENERATION_MASTER_KEY, 32);
+        pushCheck(checks, {
+            id: 'image-generation-private-storage',
+            title: 'AI 生图私有存储与密钥',
+            passed: imageGenerationReady,
+            detail: imageGenerationReady
+                ? 'private storage and encryption/signing secrets configured'
+                : 'root must be an absolute persistent path and both secrets must be strong',
+        });
+    }
+
     const smtpHost = normalized(env.SMTP_HOST).toLowerCase();
     const smtpPort = Number(env.SMTP_PORT);
     const smtpSecure = normalized(env.SMTP_SECURE);

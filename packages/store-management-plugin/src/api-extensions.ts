@@ -44,9 +44,15 @@ const commonTypes = gql`
         WHOLE
     }
 
+    enum StoreUsdtRateScheduleMode {
+        INTERVAL
+        DAILY
+    }
+
     type StoreCurrencyConfiguration {
         channelId: ID!
         channelCode: String!
+        updatedAt: DateTime!
         defaultCurrencyCode: CurrencyCode!
         availableCurrencyCodes: [CurrencyCode!]!
         selectorEnabled: Boolean!
@@ -60,10 +66,15 @@ const commonTypes = gql`
         syncedPriceCount: Int!
         usdtDisplayEnabled: Boolean!
         usdtMarkupPercent: Float!
+        usdtRateScheduleMode: StoreUsdtRateScheduleMode!
+        usdtRateIntervalMinutes: Int!
+        usdtRateDailyTime: String!
         cnyPerUsdtRate: Float
         myrPerUsdtRate: Float
         usdtRateSource: String
         usdtRateUpdatedAt: DateTime
+        usdtRateNextRunAt: DateTime!
+        usdtRateExpiresAt: DateTime
         usdtRateAvailable: Boolean!
         usdtPaymentConfigured: Boolean!
         usdtPaymentNetwork: String!
@@ -146,6 +157,7 @@ const commonTypes = gql`
 
     type ReferralProgram {
         channelId: ID!
+        updatedAt: DateTime
         enabled: Boolean!
         rewardRate: Float!
         releaseDelayDays: Int!
@@ -155,6 +167,32 @@ const commonTypes = gql`
         attributionWindowDays: Int!
         defaultPosterTemplate: String!
         posterTemplates: [String!]!
+        posterTemplateConfigs: [ReferralPosterTemplate!]!
+    }
+
+    type ReferralPosterTemplate implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        name: String!
+        enabled: Boolean!
+        position: Int!
+        layoutVariant: String!
+        posterBackgroundAsset: Asset
+        shareBackgroundAsset: Asset
+        titleZh: String!
+        titleEn: String!
+        headlineZh: String!
+        headlineEn: String!
+        rewardTextZh: String!
+        rewardTextEn: String!
+        siteIntroZh: String!
+        siteIntroEn: String!
+        serviceTextZh: String!
+        serviceTextEn: String!
+        foregroundColor: String!
+        accentColor: String!
+        overlayOpacity: Int!
     }
 
     type ReferralWallet implements Node {
@@ -252,6 +290,7 @@ export const adminApiExtensions = gql`
 
     input UpdateStoreProfileInput {
         id: ID!
+        expectedUpdatedAt: DateTime!
         storefrontNameZh: String
         storefrontNameEn: String
         status: StoreProfileStatus
@@ -263,6 +302,7 @@ export const adminApiExtensions = gql`
     }
 
     input UpdateMyStoreProfileInput {
+        expectedUpdatedAt: DateTime!
         storefrontNameZh: String
         storefrontNameEn: String
         descriptionZh: String
@@ -273,6 +313,7 @@ export const adminApiExtensions = gql`
     type StoreCommerceConfiguration {
         channelId: ID!
         channelCode: String!
+        updatedAt: DateTime!
         currencyCode: CurrencyCode!
         pricesIncludeTax: Boolean!
         countryCode: String
@@ -297,6 +338,7 @@ export const adminApiExtensions = gql`
     }
 
     input UpdateMyStoreCommerceConfigurationInput {
+        expectedUpdatedAt: DateTime!
         pricesIncludeTax: Boolean!
         countryCode: String!
         taxRate: Float!
@@ -314,6 +356,7 @@ export const adminApiExtensions = gql`
     }
 
     input UpdateStoreCurrencyConfigurationInput {
+        expectedUpdatedAt: DateTime!
         defaultCurrencyCode: CurrencyCode!
         availableCurrencyCodes: [CurrencyCode!]!
         selectorEnabled: Boolean!
@@ -323,6 +366,9 @@ export const adminApiExtensions = gql`
         roundingMode: StoreCurrencyRoundingMode!
         usdtDisplayEnabled: Boolean!
         usdtMarkupPercent: Float!
+        usdtRateScheduleMode: StoreUsdtRateScheduleMode!
+        usdtRateIntervalMinutes: Int!
+        usdtRateDailyTime: String!
     }
 
     type SystemAnnouncement implements Node {
@@ -563,6 +609,7 @@ export const adminApiExtensions = gql`
     }
 
     input UpdateReferralProgramInput {
+        expectedUpdatedAt: DateTime!
         enabled: Boolean!
         rewardRate: Float!
         releaseDelayDays: Int!
@@ -571,6 +618,51 @@ export const adminApiExtensions = gql`
         allowBalanceSpend: Boolean!
         attributionWindowDays: Int!
         defaultPosterTemplate: String!
+    }
+
+    input CreateReferralPosterTemplateInput {
+        name: String!
+        enabled: Boolean!
+        position: Int!
+        layoutVariant: String!
+        posterBackgroundAssetId: ID
+        shareBackgroundAssetId: ID
+        titleZh: String!
+        titleEn: String!
+        headlineZh: String!
+        headlineEn: String!
+        rewardTextZh: String!
+        rewardTextEn: String!
+        siteIntroZh: String!
+        siteIntroEn: String!
+        serviceTextZh: String!
+        serviceTextEn: String!
+        foregroundColor: String!
+        accentColor: String!
+        overlayOpacity: Int!
+    }
+
+    input UpdateReferralPosterTemplateInput {
+        id: ID!
+        name: String!
+        enabled: Boolean!
+        position: Int!
+        layoutVariant: String!
+        posterBackgroundAssetId: ID
+        shareBackgroundAssetId: ID
+        titleZh: String!
+        titleEn: String!
+        headlineZh: String!
+        headlineEn: String!
+        rewardTextZh: String!
+        rewardTextEn: String!
+        siteIntroZh: String!
+        siteIntroEn: String!
+        serviceTextZh: String!
+        serviceTextEn: String!
+        foregroundColor: String!
+        accentColor: String!
+        overlayOpacity: Int!
     }
 
     type ReferralRelationshipAdmin implements Node {
@@ -748,6 +840,7 @@ export const adminApiExtensions = gql`
         referralLedger(skip: Int, take: Int): ReferralLedgerAdminList!
         referralRewards(skip: Int, take: Int): ReferralRewardAdminList!
         referralWithdrawals(skip: Int, take: Int): ReferralWithdrawalList!
+        referralCustomerWallets(customerId: ID!): [ReferralWallet!]!
         referralTodayMetrics: ReferralTodayMetrics!
         referralBalanceAudit: ReferralBalanceAuditResult!
     }
@@ -787,6 +880,9 @@ export const adminApiExtensions = gql`
         updateSystemAnnouncement(input: UpdateSystemAnnouncementInput!): SystemAnnouncement!
         deleteSystemAnnouncement(id: ID!): DeletionResponse!
         updateReferralProgram(input: UpdateReferralProgramInput!): ReferralProgram!
+        createReferralPosterTemplate(input: CreateReferralPosterTemplateInput!): ReferralPosterTemplate!
+        updateReferralPosterTemplate(input: UpdateReferralPosterTemplateInput!): ReferralPosterTemplate!
+        deleteReferralPosterTemplate(id: ID!): DeletionResponse!
         createReferralWithdrawal(input: CreateReferralWithdrawalInput!): ReferralWithdrawal!
         processReferralWithdrawal(input: ProcessReferralWithdrawalInput!): ReferralWithdrawal!
         adjustReferralBalance(
@@ -824,7 +920,6 @@ export const shopApiExtensions = gql`
 
     type StoreFlashSale {
         id: ID!
-        name: String!
         enabled: Boolean!
         startsAt: DateTime
         endsAt: DateTime

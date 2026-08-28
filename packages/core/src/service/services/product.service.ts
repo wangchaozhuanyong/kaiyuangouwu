@@ -11,12 +11,12 @@ import {
 } from '@vendure/common/lib/generated-types';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { unique } from '@vendure/common/lib/unique';
-import { FindOptionsUtils, In, IsNull } from 'typeorm';
+import { FindOptionsUtils, In, IsNull, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
 import { ErrorResultUnion } from '../../common/error/error-result';
-import { EntityNotFoundError } from '../../common/error/errors';
+import { EntityNotFoundError, UserInputError } from '../../common/error/errors';
 import { ProductOptionInUseError } from '../../common/error/generated-graphql-admin-errors';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
@@ -25,11 +25,11 @@ import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Channel } from '../../entity/channel/channel.entity';
 import { FacetValue } from '../../entity/facet-value/facet-value.entity';
-import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
-import { ProductOption } from '../../entity/product-option/product-option.entity';
-import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { ProductTranslation } from '../../entity/product/product-translation.entity';
 import { Product } from '../../entity/product/product.entity';
+import { ProductOption } from '../../entity/product-option/product-option.entity';
+import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
+import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { ProductChannelEvent } from '../../event-bus/events/product-channel-event';
 import { ProductEvent } from '../../event-bus/events/product-event';
@@ -113,7 +113,7 @@ export class ProductService {
                 customPropertyMap,
             })
             .getManyAndCount()
-            .then(async ([products, totalItems]) => {
+            .then(([products, totalItems]) => {
                 const items = products.map(product =>
                     this.translator.translate(product, ctx, ['facetValues', ['facetValues', 'facet']]),
                 );
@@ -260,10 +260,14 @@ export class ProductService {
     }
 
     async update(ctx: RequestContext, input: UpdateProductInput): Promise<Translated<Product>> {
+        await this.lockProductForUpdate(ctx, input.id);
         const product = await this.connection.getEntityOrThrow(ctx, Product, input.id, {
             channelId: ctx.channelId,
             relations: ['facetValues', 'facetValues.channels'],
         });
+        if (input.expectedUpdatedAt != null) {
+            this.assertExpectedUpdatedAt(product.updatedAt, input.expectedUpdatedAt);
+        }
         await this.slugValidator.validateSlugs(ctx, input, ProductTranslation);
         const updatedProduct = await this.translatableSaver.update({
             ctx,
@@ -288,6 +292,30 @@ export class ProductService {
         await this.eventBus.publish(new ProductEvent(ctx, updatedProduct, 'updated', input));
 
         return assertFound(this.findOne(ctx, updatedProduct.id));
+    }
+
+    private async lockProductForUpdate(ctx: RequestContext, id: ID): Promise<void> {
+        try {
+            await this.connection
+                .getRepository(ctx, Product)
+                .createQueryBuilder('product')
+                .innerJoin('product.channels', 'channel', 'channel.id = :channelId', {
+                    channelId: ctx.channelId,
+                })
+                .setLock('pessimistic_write')
+                .where('product.id = :id', { id })
+                .andWhere('product.deletedAt IS NULL')
+                .getOne();
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+    }
+
+    private assertExpectedUpdatedAt(current: Date, expected: Date | string): void {
+        const expectedDate = expected instanceof Date ? expected : new Date(expected);
+        if (!Number.isFinite(expectedDate.getTime()) || current.getTime() !== expectedDate.getTime()) {
+            throw new UserInputError('CONCURRENT_MODIFICATION: 商品已被其他管理员更新，请重新载入后合并修改');
+        }
     }
 
     async softDelete(ctx: RequestContext, productId: ID): Promise<DeletionResponse> {
@@ -440,8 +468,13 @@ export class ProductService {
         ctx: RequestContext,
         productId: ID,
         optionGroupId: ID,
+        expectedUpdatedAt?: Date | string | null,
     ): Promise<Translated<Product>> {
+        await this.lockProductForUpdate(ctx, productId);
         const product = await this.getProductWithOptionGroups(ctx, productId);
+        if (expectedUpdatedAt != null) {
+            this.assertExpectedUpdatedAt(product.updatedAt, expectedUpdatedAt);
+        }
         const optionGroup = await this.connection.findOneInChannel(
             ctx,
             ProductOptionGroup,
@@ -460,6 +493,60 @@ export class ProductService {
             await this.connection.getRepository(ctx, Product).save(product, { reload: false });
             await this.eventBus.publish(
                 new ProductOptionGroupChangeEvent(ctx, product, optionGroupId, 'assigned'),
+            );
+        }
+        return assertFound(this.findOne(ctx, productId));
+    }
+
+    async removeOptionGroupsFromProduct(
+        ctx: RequestContext,
+        productId: ID,
+        optionGroupIds: ID[],
+        expectedUpdatedAt: Date | string,
+        force = false,
+    ): Promise<Translated<Product>> {
+        const uniqueGroupIds = unique(optionGroupIds);
+        if (uniqueGroupIds.length !== optionGroupIds.length) {
+            throw new UserInputError('要移除的商品规格组包含重复项');
+        }
+
+        await this.lockProductForUpdate(ctx, productId);
+        const product = await this.getProductWithOptionGroups(ctx, productId);
+        this.assertExpectedUpdatedAt(product.updatedAt, expectedUpdatedAt);
+        const requestedIds = new Set(uniqueGroupIds.map(String));
+        if (
+            product.optionGroups.filter(group => requestedIds.has(String(group.id))).length !==
+            requestedIds.size
+        ) {
+            throw new UserInputError('要移除的商品规格组已发生变化，请重新载入后重试');
+        }
+
+        const optionGroupsInUse = product.optionGroups.filter(
+            group =>
+                requestedIds.has(String(group.id)) &&
+                product.variants.some(
+                    variant =>
+                        variant.deletedAt == null &&
+                        variant.options.some(option => idsAreEqual(option.groupId, group.id)),
+                ),
+        );
+        if (optionGroupsInUse.length > 0 && !force) {
+            throw new UserInputError('规格组仍被商品变体使用，无法批量移除');
+        }
+        if (optionGroupsInUse.length > 0) {
+            for (const variant of product.variants) {
+                variant.options = variant.options.filter(option => !requestedIds.has(String(option.groupId)));
+            }
+            await this.connection.getRepository(ctx, ProductVariant).save(product.variants, {
+                reload: false,
+            });
+        }
+
+        product.optionGroups = product.optionGroups.filter(group => !requestedIds.has(String(group.id)));
+        await this.connection.getRepository(ctx, Product).save(product, { reload: false });
+        for (const optionGroupId of uniqueGroupIds) {
+            await this.eventBus.publish(
+                new ProductOptionGroupChangeEvent(ctx, product, optionGroupId, 'removed'),
             );
         }
         return assertFound(this.findOne(ctx, productId));
@@ -516,4 +603,13 @@ export class ProductService {
             relations: ['optionGroups', 'variants', 'variants.options'],
         });
     }
+}
+
+function isLockNotSupportedError(error: unknown): boolean {
+    return (
+        error instanceof LockNotSupportedOnGivenDriverError ||
+        (error instanceof Error &&
+            (error.name === 'LockNotSupportedOnGivenDriverError' ||
+                error.message.toLowerCase().includes('locking not supported')))
+    );
 }

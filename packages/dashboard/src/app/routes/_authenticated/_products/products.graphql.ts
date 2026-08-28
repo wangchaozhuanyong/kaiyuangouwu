@@ -330,6 +330,7 @@ export const getProductsWithFacetValuesByIdsDocument = graphql(`
         products(options: { filter: { id: { in: $ids } } }) {
             items {
                 id
+                updatedAt
                 name
                 facetValues {
                     id
@@ -347,8 +348,12 @@ export const getProductsWithFacetValuesByIdsDocument = graphql(`
 `);
 
 export const addOptionGroupToProductDocument = graphql(`
-    mutation AddOptionGroupToProduct($productId: ID!, $optionGroupId: ID!) {
-        addOptionGroupToProduct(productId: $productId, optionGroupId: $optionGroupId) {
+    mutation AddOptionGroupToProduct($productId: ID!, $optionGroupId: ID!, $expectedUpdatedAt: DateTime!) {
+        addOptionGroupToProduct(
+            productId: $productId
+            optionGroupId: $optionGroupId
+            expectedUpdatedAt: $expectedUpdatedAt
+        ) {
             id
             optionGroups {
                 id
@@ -360,6 +365,23 @@ export const addOptionGroupToProductDocument = graphql(`
                     name
                 }
             }
+        }
+    }
+`);
+
+export const removeOptionGroupsFromProductDocument = graphql(`
+    mutation RemoveOptionGroupsFromProduct(
+        $productId: ID!
+        $optionGroupIds: [ID!]!
+        $expectedUpdatedAt: DateTime!
+    ) {
+        removeOptionGroupsFromProduct(
+            productId: $productId
+            optionGroupIds: $optionGroupIds
+            expectedUpdatedAt: $expectedUpdatedAt
+        ) {
+            id
+            updatedAt
         }
     }
 `);
@@ -422,6 +444,29 @@ export const removeOptionGroupFromProductDocument = graphql(`
 export const createProductOptionGroupDocument = graphql(`
     mutation CreateOptionGroups($input: CreateProductOptionGroupInput!) {
         createProductOptionGroup(input: $input) {
+            id
+            name
+            code
+            options {
+                id
+                code
+                name
+            }
+        }
+    }
+`);
+
+export const createProductOptionGroupForProductDocument = graphql(`
+    mutation CreateProductOptionGroupForProduct(
+        $productId: ID!
+        $expectedUpdatedAt: DateTime!
+        $input: CreateProductOptionGroupInput!
+    ) {
+        createProductOptionGroupForProduct(
+            productId: $productId
+            expectedUpdatedAt: $expectedUpdatedAt
+            input: $input
+        ) {
             id
             name
             code

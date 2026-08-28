@@ -52,6 +52,18 @@ describe('responsiveImageSources', () => {
         );
     });
 
+    it('uses the Vendure asset published by the backend without filename-based overrides', () => {
+        const sources = responsiveImageSources(
+            '/assets/preview/17/codex-pro-x5-cover-navy-emerald__preview.png',
+            'card',
+        );
+
+        expect(sources?.webpSrcSet).toContain(
+            '/assets/preview/17/codex-pro-x5-cover-navy-emerald__preview.png',
+        );
+        expect(sources?.webpSrcSet).toContain('preset=storefront-card-square-320');
+    });
+
     it('keeps SVG assets as vectors instead of rasterizing them', () => {
         expect(responsiveImageSources('/assets/source/icon.svg', 'thumbnail')).toBeNull();
         expect(storefrontWebpUrl('/assets/source/icon.svg', 'thumbnail')).toBe('/assets/source/icon.svg');

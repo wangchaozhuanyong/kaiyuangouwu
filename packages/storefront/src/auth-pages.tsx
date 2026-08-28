@@ -19,7 +19,7 @@ import {
     ACCOUNT_PASSWORD_MIN_LENGTH,
     validateAccountPassword,
 } from './auth-validation';
-import { authVisualAccentColor, resolveAuthVisualMessage } from './auth-visual';
+import { authVisualAccentColor, authVisualOverlayColor, resolveAuthVisualMessage } from './auth-visual';
 import {
     attributionWithinWindow,
     captureReferralAttribution,
@@ -1059,7 +1059,7 @@ function AuthLayout({
     const heroStyle = authVisualVariant
         ? ({
               '--auth-hero-text-color': heroContent?.textColor ?? '#ffffff',
-              '--auth-hero-overlay-color': heroContent?.backgroundColor ?? '#020718',
+              '--auth-hero-overlay-color': authVisualOverlayColor(heroContent),
               '--auth-hero-accent-color': authVisualAccentColor(heroContent, authVisualVariant),
           } as CSSProperties)
         : undefined;

@@ -24,13 +24,13 @@ import {
     QueryProductVariantsArgs,
     RemoveOptionGroupFromProductResult,
 } from '@vendure/common/lib/generated-types';
-import { PaginatedList } from '@vendure/common/lib/shared-types';
+import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 
 import { ErrorResultUnion } from '../../../common/error/error-result';
 import { UserInputError } from '../../../common/error/errors';
 import { Translated } from '../../../common/types/locale-types';
-import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
 import { Product } from '../../../entity/product/product.entity';
+import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
 import { FacetValueService } from '../../../service/services/facet-value.service';
 import { ProductVariantService } from '../../../service/services/product-variant.service';
 import { ProductService } from '../../../service/services/product.service';
@@ -165,8 +165,27 @@ export class ProductResolver {
         @Ctx() ctx: RequestContext,
         @Args() args: MutationAddOptionGroupToProductArgs,
     ): Promise<Translated<Product>> {
-        const { productId, optionGroupId } = args;
-        return this.productService.addOptionGroupToProduct(ctx, productId, optionGroupId);
+        const { productId, optionGroupId, expectedUpdatedAt } = args;
+        return this.productService.addOptionGroupToProduct(ctx, productId, optionGroupId, expectedUpdatedAt);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdateCatalog, Permission.UpdateProduct)
+    async removeOptionGroupsFromProduct(
+        @Ctx() ctx: RequestContext,
+        @Args('productId') productId: ID,
+        @Args('optionGroupIds') optionGroupIds: ID[],
+        @Args('expectedUpdatedAt') expectedUpdatedAt: Date,
+        @Args('force') force?: boolean,
+    ): Promise<Translated<Product>> {
+        return this.productService.removeOptionGroupsFromProduct(
+            ctx,
+            productId,
+            optionGroupIds,
+            expectedUpdatedAt,
+            force,
+        );
     }
 
     @Transaction()

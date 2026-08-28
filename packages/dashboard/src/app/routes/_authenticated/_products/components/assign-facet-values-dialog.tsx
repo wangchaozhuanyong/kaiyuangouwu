@@ -20,6 +20,7 @@ import { getDetailQueryOptions } from '@/vdb/framework/page/use-detail-page.js';
 
 interface EntityWithFacetValues {
     id: string;
+    updatedAt?: string;
     name: string;
     sku?: string;
     facetValues: Array<{
@@ -109,6 +110,7 @@ export function AssignFacetValuesDialog({
         mutate({
             input: items.map((entity: EntityWithFacetValues) => ({
                 id: entity.id,
+                ...(entityType === 'products' ? { expectedUpdatedAt: entity.updatedAt } : {}),
                 facetValueIds: [
                     ...new Set([
                         ...entity.facetValues

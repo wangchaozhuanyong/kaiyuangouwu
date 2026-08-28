@@ -4,6 +4,7 @@ const storeCurrencyConfigurationFields = gql`
     fragment StoreCurrencyConfigurationFields on StoreCurrencyConfiguration {
         channelId
         channelCode
+        updatedAt
         defaultCurrencyCode
         availableCurrencyCodes
         selectorEnabled
@@ -13,14 +14,17 @@ const storeCurrencyConfigurationFields = gql`
         roundingMode
         rateSource
         rateUpdatedAt
-        pricesUpdatedAt
-        syncedPriceCount
         usdtDisplayEnabled
         usdtMarkupPercent
+        usdtRateScheduleMode
+        usdtRateIntervalMinutes
+        usdtRateDailyTime
         cnyPerUsdtRate
         myrPerUsdtRate
         usdtRateSource
         usdtRateUpdatedAt
+        usdtRateNextRunAt
+        usdtRateExpiresAt
         usdtRateAvailable
         usdtPaymentConfigured
         usdtPaymentNetwork
@@ -69,15 +73,6 @@ export const refreshMyStoreExchangeRateMutation = gql`
     }
 `;
 
-export const syncMyStoreCurrencyPricesMutation = gql`
-    ${storeCurrencyConfigurationFields}
-    mutation SyncMyStoreCurrencyPrices {
-        syncMyStoreCurrencyPrices {
-            ...StoreCurrencyConfigurationFields
-        }
-    }
-`;
-
 export const refreshMyStoreUsdtRateMutation = gql`
     ${storeCurrencyConfigurationFields}
     mutation RefreshMyStoreUsdtRate {
@@ -89,10 +84,12 @@ export const refreshMyStoreUsdtRateMutation = gql`
 
 export type CurrencyRateMode = 'AUTO' | 'MANUAL';
 export type CurrencyRoundingMode = 'CENT' | 'TENTH' | 'WHOLE';
+export type UsdtRateScheduleMode = 'INTERVAL' | 'DAILY';
 
 export interface StoreCurrencyConfigurationRecord {
     channelId: string;
     channelCode: string;
+    updatedAt: string;
     defaultCurrencyCode: 'CNY' | 'MYR';
     availableCurrencyCodes: Array<'CNY' | 'MYR'>;
     selectorEnabled: boolean;
@@ -102,14 +99,17 @@ export interface StoreCurrencyConfigurationRecord {
     roundingMode: CurrencyRoundingMode;
     rateSource: string | null;
     rateUpdatedAt: string | null;
-    pricesUpdatedAt: string | null;
-    syncedPriceCount: number;
     usdtDisplayEnabled: boolean;
     usdtMarkupPercent: number;
+    usdtRateScheduleMode: UsdtRateScheduleMode;
+    usdtRateIntervalMinutes: number;
+    usdtRateDailyTime: string;
     cnyPerUsdtRate: number | null;
     myrPerUsdtRate: number | null;
     usdtRateSource: string | null;
     usdtRateUpdatedAt: string | null;
+    usdtRateNextRunAt: string;
+    usdtRateExpiresAt: string | null;
     usdtRateAvailable: boolean;
     usdtPaymentConfigured: boolean;
     usdtPaymentNetwork: string;
@@ -142,10 +142,6 @@ export interface UpdateStoreCurrencyConfigurationResult {
 
 export interface RefreshStoreExchangeRateResult {
     refreshMyStoreExchangeRate: StoreCurrencyConfigurationRecord;
-}
-
-export interface SyncStoreCurrencyPricesResult {
-    syncMyStoreCurrencyPrices: StoreCurrencyConfigurationRecord;
 }
 
 export interface RefreshStoreUsdtRateResult {

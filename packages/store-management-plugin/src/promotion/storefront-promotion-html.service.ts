@@ -16,6 +16,9 @@ export interface StorefrontPromotionBindings {
     'store.description': string;
     'store.logoUrl': string;
     'store.heroImageUrl': string;
+    'store.shareImageUrl'?: string;
+    'store.shareTitle'?: string;
+    'store.shareDescription'?: string;
     'store.currentYear': string;
     'store.language': string;
     'store.featuredProduct1Id': string;
@@ -38,6 +41,7 @@ export interface StorefrontPromotionBindings {
 const PROMOTION_IMAGE_BINDINGS: ReadonlyArray<keyof StorefrontPromotionBindings> = [
     'store.logoUrl',
     'store.heroImageUrl',
+    'store.shareImageUrl',
     'store.featuredProduct1ImageUrl',
     'store.featuredProduct2ImageUrl',
     'store.featuredProduct3ImageUrl',
@@ -142,7 +146,9 @@ export class StorefrontPromotionHtmlService {
         const withTokens = this.replaceTokens(source, input.bindings);
         const $ = load(withTokens, { xml: false });
         const trustedImageUrls = new Set(
-            PROMOTION_IMAGE_BINDINGS.map(key => input.bindings[key]).filter(Boolean),
+            PROMOTION_IMAGE_BINDINGS.map(key => input.bindings[key]).filter((value): value is string =>
+                Boolean(value),
+            ),
         );
 
         this.sanitizeDocument($, trustedImageUrls);
@@ -329,6 +335,27 @@ export class StorefrontPromotionHtmlService {
             $('head').append(`<link rel="icon" href="${escapedLogoUrl}">`);
             $('head').append(`<link rel="apple-touch-icon" href="${escapedLogoUrl}">`);
         }
+        const shareImageUrl = this.storefrontImageUrl(bindings['store.shareImageUrl'] ?? '', true);
+        if (shareImageUrl) {
+            $('meta[property="og:image"], meta[name="twitter:image"]').remove();
+            const escapedShareImageUrl = this.escapeHtml(shareImageUrl);
+            $('head').append(`<meta property="og:image" content="${escapedShareImageUrl}">`);
+            $('head').append(`<meta name="twitter:image" content="${escapedShareImageUrl}">`);
+        }
+        const shareTitle = bindings['store.shareTitle']?.trim();
+        if (shareTitle) {
+            $('meta[property="og:title"], meta[name="twitter:title"]').remove();
+            const escapedShareTitle = this.escapeHtml(shareTitle);
+            $('head').append(`<meta property="og:title" content="${escapedShareTitle}">`);
+            $('head').append(`<meta name="twitter:title" content="${escapedShareTitle}">`);
+        }
+        const shareDescription = bindings['store.shareDescription']?.trim();
+        if (shareDescription) {
+            $('meta[property="og:description"], meta[name="twitter:description"]').remove();
+            const escapedShareDescription = this.escapeHtml(shareDescription);
+            $('head').append(`<meta property="og:description" content="${escapedShareDescription}">`);
+            $('head').append(`<meta name="twitter:description" content="${escapedShareDescription}">`);
+        }
         $('link[rel="canonical"]').remove();
         if (canonicalUrl && this.isSafeUrl(canonicalUrl, false)) {
             $('head').append(`<link rel="canonical" href="${this.escapeHtml(canonicalUrl)}">`);
@@ -345,7 +372,7 @@ export class StorefrontPromotionHtmlService {
 
     private replaceTokens(source: string, bindings: StorefrontPromotionBindings): string {
         return source.replace(
-            /{{\s*(store\.(?:name|description|logoUrl|heroImageUrl|currentYear|language))\s*}}/g,
+            /{{\s*(store\.(?:name|description|logoUrl|heroImageUrl|shareImageUrl|shareTitle|shareDescription|currentYear|language))\s*}}/g,
             (_match, key: keyof StorefrontPromotionBindings) => this.escapeHtml(bindings[key] ?? ''),
         );
     }

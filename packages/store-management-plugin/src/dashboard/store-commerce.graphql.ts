@@ -4,6 +4,7 @@ const storeCommerceConfigurationFields = gql`
     fragment StoreCommerceConfigurationFields on StoreCommerceConfiguration {
         channelId
         channelCode
+        updatedAt
         currencyCode
         pricesIncludeTax
         countryCode
@@ -59,6 +60,7 @@ export const updateMyStoreCommerceConfigurationMutation = gql`
 export interface StoreCommerceConfigurationRecord {
     channelId: string;
     channelCode: string;
+    updatedAt: string;
     currencyCode: string;
     pricesIncludeTax: boolean;
     countryCode: string | null;

@@ -59,15 +59,20 @@ export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterfa
         table: string,
         entityIdColumn: string,
     ): Promise<void> {
-        const insertIgnore = this.isMysql(queryRunner) ? 'INSERT IGNORE' : 'INSERT OR IGNORE';
         await queryRunner.query(`
-            ${insertIgnore} INTO "${table}" ("${entityIdColumn}", "channelId")
-            SELECT source."${entityIdColumn}", target.id
+            INSERT INTO "${table}" ("${entityIdColumn}", "channelId")
+            SELECT source."${entityIdColumn}", target."id"
             FROM "${table}" source
-            JOIN channel source_channel ON source_channel.id = source."channelId"
-            CROSS JOIN channel target
-            WHERE source_channel.code = '__default_channel__'
-              AND target.code IN ('cn-mainland', 'my-malaysia')
+            JOIN "channel" source_channel ON source_channel."id" = source."channelId"
+            CROSS JOIN "channel" target
+            WHERE source_channel."code" = '__default_channel__'
+              AND target."code" IN ('cn-mainland', 'my-malaysia')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM "${table}" existing
+                  WHERE existing."${entityIdColumn}" = source."${entityIdColumn}"
+                    AND existing."channelId" = target."id"
+              )
         `);
     }
 
@@ -79,17 +84,17 @@ export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterfa
         await queryRunner.query(
             `
                 INSERT INTO "product_variant_price" ("currencyCode", "channelId", "price", "variantId")
-                SELECT ?, target.id, source.price, source.variantId
-                FROM product_variant_price source
-                JOIN channel source_channel ON source_channel.id = source.channelId
-                JOIN channel target ON target.code = ?
-                WHERE source_channel.code = '__default_channel__'
-                  AND source.currencyCode = 'USD'
+                SELECT ${this.parameter(1, queryRunner)}, target."id", source."price", source."variantId"
+                FROM "product_variant_price" source
+                JOIN "channel" source_channel ON source_channel."id" = source."channelId"
+                JOIN "channel" target ON target."code" = ${this.parameter(2, queryRunner)}
+                WHERE source_channel."code" = '__default_channel__'
+                  AND source."currencyCode" = 'USD'
                   AND NOT EXISTS (
-                      SELECT 1 FROM product_variant_price existing
-                      WHERE existing.channelId = target.id
-                        AND existing.variantId = source.variantId
-                        AND existing.currencyCode = ?
+                      SELECT 1 FROM "product_variant_price" existing
+                      WHERE existing."channelId" = target."id"
+                        AND existing."variantId" = source."variantId"
+                        AND existing."currencyCode" = ${this.parameter(3, queryRunner)}
                   )
             `,
             [currencyCode, targetChannelCode, currencyCode],
@@ -98,6 +103,12 @@ export class SeedRegionalChannelCatalog1786514968000 implements MigrationInterfa
 
     private isMysql(queryRunner: QueryRunner): boolean {
         return ['mysql', 'mariadb'].includes(queryRunner.connection.options.type);
+    }
+
+    private parameter(index: number, queryRunner: QueryRunner): string {
+        return ['postgres', 'cockroachdb'].includes(queryRunner.connection.options.type)
+            ? `$${index}`
+            : '?';
     }
 
     private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {

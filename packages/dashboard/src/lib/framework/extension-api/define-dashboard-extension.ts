@@ -21,7 +21,9 @@ globalRegistry.register('registerDashboardExtensionCallbacks', new Set<() => voi
 globalRegistry.register('navMenuModifiers', []);
 
 export function onExtensionSourceChange(callback: () => void) {
-    globalRegistry.get('extensionSourceChangeCallbacks').add(callback);
+    const callbacks = globalRegistry.get('extensionSourceChangeCallbacks');
+    callbacks.add(callback);
+    return () => callbacks.delete(callback);
 }
 
 export function executeDashboardExtensionCallbacks() {

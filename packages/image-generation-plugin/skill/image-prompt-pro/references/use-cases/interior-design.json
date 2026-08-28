@@ -1,0 +1,10 @@
+{
+    "code": "interior-design",
+    "required": ["subject", "scene"],
+    "defaults": {
+        "composition": "architecturally coherent wide-angle composition",
+        "lighting": "physically plausible daylight and practical lights",
+        "style": "high-end photoreal interior visualization"
+    },
+    "avoid": ["impossible geometry", "floating furniture", "blocked circulation", "inconsistent shadows"]
+}

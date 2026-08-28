@@ -188,8 +188,23 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('class="hero');
         expect(markup).toContain('aria-roledescription="轮播"');
         expect(markup).toContain('class="hero-rich-image-link"');
+        expect(markup).toContain('class="hero-rich-overlay-shade"');
         expect(markup).toContain('aria-label="查看推荐内容：后台配置的首页轮播"');
         expect(markup).toContain(heroBlock.title);
+    });
+
+    it('does not wash out CloudBridge artwork with a full-image overlay', () => {
+        const markup = renderHome({
+            contentBlocks: [
+                {
+                    ...heroBlock,
+                    settings: { themePreset: 'cloudbridge-bright' },
+                },
+            ],
+        });
+
+        expect(markup).toContain('class="hero-rich-image-link"');
+        expect(markup).not.toContain('class="hero-rich-overlay-shade"');
     });
 
     it('does not substitute a built-in image for a managed hero that has no backend image', () => {
@@ -273,6 +288,23 @@ describe('HomePage localized trust bar layout', () => {
         expect(stylesheet).toMatch(
             /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
         );
+    });
+});
+
+describe('HomePage mobile header layout', () => {
+    it('renders the brand controls in one row without a search entry', () => {
+        const markup = renderHome();
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('class="topbar home-topbar"');
+        expect(markup).not.toContain('class="search-trigger"');
+        expect(stylesheet).toMatch(
+            /\.home-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) max-content;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.home-topbar > \.topbar-actions\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*1;/,
+        );
+        expect(stylesheet).not.toMatch(/\.home-topbar > \.search-trigger/);
     });
 });
 
@@ -500,24 +532,57 @@ describe('HomePage featured collection', () => {
         items: [],
     };
 
-    it('labels the horizontal product track and keeps the compact mobile layout rules', () => {
+    it('groups managed products into one responsive collection module', () => {
+        const productsInCollection: Product[] = Array.from({ length: 5 }, (_, index) => {
+            const id = `featured-product-${index + 1}`;
+            const name = index === 0 ? featuredProduct.name : `集合商品 ${index + 1}`;
+            return {
+                ...featuredProduct,
+                id,
+                name,
+                variants: featuredProduct.variants.map(variant => ({
+                    ...variant,
+                    id: `${variant.id}-${index + 1}`,
+                    name,
+                    product: { ...variant.product, id, name },
+                })),
+            };
+        });
+        const collectionBlock = {
+            ...featuredCollectionBlock,
+            settings: {
+                ...featuredCollectionBlock.settings,
+                displayCount: 5,
+                selectedProductIds: productsInCollection.map(productItem => productItem.id),
+            },
+        };
         const markup = renderHome({
             configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION'],
-            contentBlocks: [featuredCollectionBlock],
-            managedContentProducts: [featuredProduct],
+            contentBlocks: [collectionBlock],
+            managedContentProducts: productsInCollection,
         });
         const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
-        expect(markup).toContain('aria-label="推荐集合，左右滑动查看更多商品"');
+        expect(markup).toContain('class="featured-collection-mosaic"');
+        expect(markup).toContain('data-product-count="5"');
+        expect(markup).toContain('aria-label="推荐集合"');
+        expect(markup).not.toContain('左右滑动查看更多商品');
         expect(markup).toContain('Codex-Plus成品号');
+        expect(markup).not.toContain('这是一段会在移动端限制为两行的商品描述。');
+        expect(markup).not.toContain('本期策展');
+        expect(markup).not.toContain('featured-collection-product-index');
         expect(stylesheet).toMatch(
-            /\.featured-collection-intro\s*\{[^}]*min-height:\s*156px;[^}]*padding:\s*20px;/,
+            /\.featured-collection-mosaic\s*\{[^}]*aspect-ratio:\s*2 \/ 1;[^}]*border-radius:\s*16px;/,
         );
         expect(stylesheet).toMatch(
-            /\.featured-collection-track\s*\{[^}]*grid-auto-columns:\s*clamp\(248px, calc\(100vw - 64px\), 360px\);[^}]*scroll-snap-type:\s*inline mandatory;/,
+            /\.featured-collection-mosaic\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[^}]*grid-template-rows:\s*repeat\(2, minmax\(0, 1fr\)\);/,
         );
         expect(stylesheet).toMatch(
-            /\.featured-collection-product-copy small\s*\{[^}]*-webkit-line-clamp:\s*2;/,
+            new RegExp(
+                String.raw`\.featured-collection-mosaic\[data-product-count='5'\] ` +
+                    String.raw`\.featured-collection-product:first-child\s*\{` +
+                    String.raw`[^}]*grid-column:\s*1 \/ span 2;[^}]*grid-row:\s*1 \/ span 2;`,
+            ),
         );
     });
 });

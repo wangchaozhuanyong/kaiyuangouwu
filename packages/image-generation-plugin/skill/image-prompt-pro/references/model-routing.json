@@ -1,0 +1,32 @@
+{
+    "version": 1,
+    "defaultStrategy": "BALANCED",
+    "rules": [
+        {
+            "priority": 10,
+            "modelCode": "OPENAI_HIGH_QUALITY",
+            "when": [
+                "identity-preservation",
+                "high-fidelity-edit",
+                "transparent-background",
+                "product-cutout"
+            ],
+            "reasonZh": "更适合身份一致性、精细编辑和透明背景",
+            "reasonEn": "Best suited to identity consistency, precise edits, and transparent backgrounds"
+        },
+        {
+            "priority": 20,
+            "modelCode": "GEMINI_PRO",
+            "when": ["exact-text", "poster", "infographic", "complex-layout"],
+            "reasonZh": "更适合准确文字、海报和复杂版式",
+            "reasonEn": "Best suited to accurate text, posters, and complex layouts"
+        },
+        {
+            "priority": 30,
+            "modelCode": "GEMINI_FLASH",
+            "when": ["general", "product-scene", "social-art", "illustration"],
+            "reasonZh": "生成速度与成本更均衡",
+            "reasonEn": "Balanced for speed and cost"
+        }
+    ]
+}

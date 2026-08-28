@@ -3,8 +3,8 @@ import { SUPER_ADMIN_USER_IDENTIFIER, SUPER_ADMIN_USER_PASSWORD } from '@vendure
 import { VendureConfig } from '@vendure/core';
 import fs from 'fs';
 import { DocumentNode } from 'graphql';
-import gql from 'graphql-tag';
 import { print } from 'graphql/language/printer';
+import gql from 'graphql-tag';
 import mime from 'mime-types';
 import { stringify } from 'querystring';
 
@@ -65,6 +65,18 @@ export class SimpleGraphQLClient {
         this.channelToken = token;
         if (this.vendureConfig.apiOptions.channelTokenKey) {
             this.headers[this.vendureConfig.apiOptions.channelTokenKey] = this.channelToken;
+        }
+    }
+
+    /**
+     * @description
+     * Sets or removes a header to be included in each request.
+     */
+    setRequestHeader(name: string, value: string | null) {
+        if (value === null) {
+            delete this.headers[name];
+        } else {
+            this.headers[name] = value;
         }
     }
 

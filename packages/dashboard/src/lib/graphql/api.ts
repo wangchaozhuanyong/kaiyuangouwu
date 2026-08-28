@@ -13,6 +13,9 @@ import { addDashboardLanguageParams } from './language-request.js';
 
 const API_URL = getApiBaseUrl() + `/${uiConfig.api.adminApiPath}`;
 const DISPLAY_LANGUAGE_HEADER = 'x-vendure-dashboard-display-language';
+const REQUEST_KIND_HEADER = 'x-vendure-dashboard-request-kind';
+const QUERY_TIMEOUT_MS = 30_000;
+const MUTATION_TIMEOUT_MS = 90_000;
 
 export type Variables = object;
 export type RequestDocument = string | DocumentNode;
@@ -25,10 +28,12 @@ const awesomeClient = new AwesomeGraphQLClient({
         const sessionToken = localStorage.getItem(LS_KEY_SESSION_TOKEN);
         const headers = new Headers(options.headers);
         const displayLanguage = headers.get(DISPLAY_LANGUAGE_HEADER);
+        const requestKind = headers.get(REQUEST_KIND_HEADER) === 'mutation' ? 'mutation' : 'query';
 
         // This header is only used internally to select the request language.
         // Do not send it to the API, where it would trigger an unnecessary CORS preflight.
         headers.delete(DISPLAY_LANGUAGE_HEADER);
+        headers.delete(REQUEST_KIND_HEADER);
 
         if (sessionToken) {
             headers.set('Authorization', `Bearer ${sessionToken}`);
@@ -49,18 +54,46 @@ const awesomeClient = new AwesomeGraphQLClient({
             console.warn('Failed to read content language from user settings:', error);
         }
 
-        return fetch(finalUrl, {
-            ...options,
-            headers,
-            credentials: 'include',
-            mode: 'cors',
-        }).then(res => {
-            const authToken = res.headers.get(uiConfig.api.authTokenHeaderKey);
+        const timeoutMs = requestKind === 'mutation' ? MUTATION_TIMEOUT_MS : QUERY_TIMEOUT_MS;
+        const controller = new AbortController();
+        let timedOut = false;
+        const abortFromCaller = () => controller.abort(options.signal?.reason);
+        if (options.signal?.aborted) {
+            abortFromCaller();
+        } else {
+            options.signal?.addEventListener('abort', abortFromCaller, { once: true });
+        }
+        const timeoutId = globalThis.setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, timeoutMs);
+
+        try {
+            const response = await fetch(finalUrl, {
+                ...options,
+                headers,
+                credentials: 'include',
+                mode: 'cors',
+                signal: controller.signal,
+            });
+            const authToken = response.headers.get(uiConfig.api.authTokenHeaderKey);
             if (authToken) {
                 localStorage.setItem(LS_KEY_SESSION_TOKEN, authToken);
             }
-            return res;
-        });
+            return response;
+        } catch (error) {
+            if (timedOut) {
+                throw new Error(
+                    requestKind === 'mutation'
+                        ? '提交超时（90 秒），请先刷新确认数据是否已保存，再决定是否重试'
+                        : '加载超时（30 秒），请检查网络或稍后重试',
+                );
+            }
+            throw error;
+        } finally {
+            globalThis.clearTimeout(timeoutId);
+            options.signal?.removeEventListener('abort', abortFromCaller);
+        }
     },
 });
 
@@ -78,6 +111,17 @@ function handleInvalidChannelToken(err: unknown) {
     }
 }
 
+function withRequestKind(headers: HeadersInit | undefined, kind: 'query' | 'mutation'): Headers {
+    const nextHeaders = new Headers(headers);
+    nextHeaders.set(REQUEST_KIND_HEADER, kind);
+    return nextHeaders;
+}
+
+function handleRequestError(err: unknown): never {
+    handleInvalidChannelToken(err);
+    throw err;
+}
+
 export type VariablesAndRequestHeadersArgs<V extends Variables> =
     V extends Record<any, never>
         ? [variables?: V, requestHeaders?: HeadersInit]
@@ -89,10 +133,9 @@ function query<T, V extends Variables = Variables>(
     requestHeaders?: HeadersInit,
 ): Promise<T> {
     const documentString = typeof document === 'string' ? document : print(document);
-    return awesomeClient.request(documentString, variables, { headers: requestHeaders }).catch(err => {
-        handleInvalidChannelToken(err);
-        throw err;
-    }) as any;
+    return awesomeClient
+        .request(documentString, variables, { headers: withRequestKind(requestHeaders, 'query') })
+        .catch(handleRequestError) as any;
 }
 
 /**
@@ -141,10 +184,18 @@ function mutate<T, V extends Variables = Variables>(
 ): Promise<T> | ((variables: V) => Promise<T>) {
     const documentString = typeof document === 'string' ? document : print(document);
     if (maybeVariables) {
-        return awesomeClient.request(documentString, maybeVariables, { headers: requestHeaders }) as any;
+        return awesomeClient
+            .request(documentString, maybeVariables, {
+                headers: withRequestKind(requestHeaders, 'mutation'),
+            })
+            .catch(handleRequestError) as any;
     } else {
         return (variables: V): Promise<T> => {
-            return awesomeClient.request(documentString, variables) as any;
+            return awesomeClient
+                .request(documentString, variables, {
+                    headers: withRequestKind(undefined, 'mutation'),
+                })
+                .catch(handleRequestError) as any;
         };
     }
 }

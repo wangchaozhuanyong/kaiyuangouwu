@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
+    Badge,
     Bell,
     Check,
     ChevronRight,
@@ -13,7 +14,6 @@ import {
     Lock,
     Package,
     RotateCcw,
-    Search,
     ShieldCheck,
     ShoppingBag,
     Sparkles,
@@ -34,7 +34,12 @@ import {
 
 import { ProductCard } from '../components/common/product-card';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
-import { builtInHeroFallbackImage, builtInHeroImage, heroThemeStyle } from '../hero-theme';
+import {
+    builtInHeroFallbackImage,
+    builtInHeroImage,
+    heroThemeStyle,
+    heroUsesImageOverlay,
+} from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
 import { compactUiCopy } from '../i18n';
@@ -260,7 +265,6 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
 
             <div className="coupon-hub-scroll" role="list">
                 {coupons.map(coupon => {
-                    const isClaimed = coupon.claimed;
                     const canClaim = coupon.claimable && !coupon.claimed;
 
                     return (
@@ -273,7 +277,12 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
                                 <div className="coupon-ticket-top">
                                     <span className="coupon-ticket-tag">{coupon.tag}</span>
                                 </div>
-                                <div className="coupon-ticket-value">
+                                <div
+                                    className={`coupon-ticket-value${
+                                        coupon.unitBefore ? ' is-unit-before' : ''
+                                    }`}
+                                >
+                                    <Badge className="coupon-ticket-seal" aria-hidden="true" />
                                     {coupon.unitBefore ? (
                                         <>
                                             <small className="coupon-unit">{coupon.unit}</small>
@@ -289,12 +298,6 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
                                     )}
                                 </div>
                                 <p className="coupon-ticket-desc">{coupon.description}</p>
-                            </div>
-
-                            <div className="coupon-ticket-divider" aria-hidden="true">
-                                <span className="coupon-notch coupon-notch-top" />
-                                <span className="coupon-notch-line" />
-                                <span className="coupon-notch-bottom" />
                             </div>
 
                             <div className="coupon-ticket-action">
@@ -314,29 +317,9 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
                                     }
                                 >
                                     {!canClaim ? (
-                                        <span className="coupon-btn-text-wrap">
-                                            <Check size={12} strokeWidth={2.8} aria-hidden="true" />
-                                            <span>
-                                                {isZh
-                                                    ? isClaimed
-                                                        ? '已领'
-                                                        : '已领完'
-                                                    : isClaimed
-                                                      ? 'Got'
-                                                      : 'Ended'}
-                                            </span>
-                                        </span>
+                                        <Check size={16} strokeWidth={2.6} aria-hidden="true" />
                                     ) : (
-                                        <span className="coupon-btn-text-wrap">
-                                            {isZh ? (
-                                                <>
-                                                    <span>立即</span>
-                                                    <span>领取</span>
-                                                </>
-                                            ) : (
-                                                <span>Claim</span>
-                                            )}
-                                        </span>
+                                        <ChevronRight size={17} strokeWidth={2.4} aria-hidden="true" />
                                     )}
                                 </button>
                             </div>
@@ -490,6 +473,7 @@ export function HomePage() {
         productImage(managedHeroProduct ?? hero) ??
         (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : DEFAULT_HERO_FALLBACK_IMAGE);
     const heroStyle = managedHero ? heroThemeStyle(managedHero, isVipTheme) : undefined;
+    const showHeroImageOverlay = managedHero ? heroUsesImageOverlay(managedHero) : false;
     const quickCollections = collections.slice(0, 5);
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
@@ -777,14 +761,6 @@ export function HomePage() {
                     <BrandLogo url={logoUrl} name={storefrontName} className="brand-mark" />
                     <strong>{storefrontName}</strong>
                 </button>
-                <button
-                    className="search-trigger"
-                    type="button"
-                    onClick={() => navigateTo({ name: 'search' })}
-                >
-                    <Search aria-hidden="true" />
-                    <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
-                </button>
                 <div className="topbar-actions">
                     {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (
                         <select
@@ -919,7 +895,7 @@ export function HomePage() {
                                             fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
                                         />
                                     </button>
-                                    <div className="hero-rich-overlay-shade" />
+                                    {showHeroImageOverlay ? <div className="hero-rich-overlay-shade" /> : null}
 
                                     {/* Dynamic Content Overlay with 3D Cyber Layout */}
                                     {(() => {
@@ -1147,7 +1123,7 @@ export function HomePage() {
                             >
                                 <FlashSaleSection
                                     title={flashSaleBlock?.title || (isZh ? '限时秒杀' : 'Flash sale')}
-                                    subtitle={flashSaleBlock?.subtitle || flashSales[0]?.name}
+                                    subtitle={flashSaleBlock?.subtitle || undefined}
                                     items={flashSaleItems}
                                     locale={locale}
                                     language={language}
@@ -1320,7 +1296,7 @@ function FlashSalePage({
         <Subpage title={isZh ? '限时秒杀' : 'Flash sale'} language={language} onBack={onBack}>
             {items.length ? (
                 <FlashSaleSection
-                    title={sales[0]?.name || (isZh ? '限时秒杀' : 'Flash sale')}
+                    title={isZh ? '限时秒杀' : 'Flash sale'}
                     subtitle={
                         isZh
                             ? '活动价格会在购物车和结算页自动生效'
@@ -1747,6 +1723,7 @@ function FeaturedCollectionSection({
 }) {
     const isZh = language === 'zh';
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const mosaicProducts = products.slice(0, 5);
 
     return (
         <section
@@ -1761,10 +1738,6 @@ function FeaturedCollectionSection({
                         color: block.textColor ?? undefined,
                     }}
                 >
-                    <span className="featured-collection-kicker">
-                        <span aria-hidden="true">01</span>
-                        {isZh ? '本期策展' : 'Curated edit'}
-                    </span>
                     <h2 id={`${block.id}-title`}>{block.title}</h2>
                     {block.subtitle ? <p className="featured-collection-subtitle">{block.subtitle}</p> : null}
                     {block.body ? <p className="featured-collection-body">{block.body}</p> : null}
@@ -1780,24 +1753,27 @@ function FeaturedCollectionSection({
                     ) : null}
                 </div>
 
-                {products.length ? (
+                {mosaicProducts.length ? (
                     <div
-                        className="featured-collection-track"
-                        aria-label={`${block.title}，${
-                            isZh ? '左右滑动查看更多商品' : 'Swipe horizontally for more products'
-                        }`}
+                        className="featured-collection-mosaic"
+                        data-product-count={mosaicProducts.length}
+                        aria-label={block.title}
                     >
-                        {products.map((product, index) => {
+                        {mosaicProducts.map((product, index) => {
                             const imageUrl = productImage(product);
                             const pricedVariant = product.variants.find(
                                 variant => variant.priceWithTax === minimumProductPrice(product),
                             );
+                            const priceLabel = pricedVariant
+                                ? formatMoney(pricedVariant.priceWithTax, pricedVariant.currencyCode, locale)
+                                : null;
                             return (
                                 <button
                                     key={product.id}
-                                    className="featured-collection-product"
+                                    className={`featured-collection-product${index === 0 ? ' is-featured' : ''}`}
                                     type="button"
                                     onClick={() => onContentTarget('PRODUCT', product.id)}
+                                    aria-label={priceLabel ? `${product.name} ${priceLabel}` : product.name}
                                 >
                                     <span className="featured-collection-product-media">
                                         {imageUrl ? (
@@ -1813,30 +1789,16 @@ function FeaturedCollectionSection({
                                             </span>
                                         )}
                                         <span
-                                            className="featured-collection-product-index"
+                                            className="featured-collection-product-overlay"
                                             aria-hidden="true"
                                         >
-                                            {String(index + 1).padStart(2, '0')}
+                                            <strong>{product.name}</strong>
+                                            {priceLabel ? (
+                                                <span className="featured-collection-product-price">
+                                                    {priceLabel}
+                                                </span>
+                                            ) : null}
                                         </span>
-                                    </span>
-                                    <span className="featured-collection-product-copy">
-                                        <span className="featured-collection-product-meta">
-                                            {product.collections[0]?.name ||
-                                                (isZh ? '精选商品' : 'Selected product')}
-                                        </span>
-                                        <strong>{product.name}</strong>
-                                        {product.description ? (
-                                            <small>{trimText(product.description, 68)}</small>
-                                        ) : null}
-                                        {pricedVariant ? (
-                                            <span className="featured-collection-product-price">
-                                                {formatMoney(
-                                                    pricedVariant.priceWithTax,
-                                                    pricedVariant.currencyCode,
-                                                    locale,
-                                                )}
-                                            </span>
-                                        ) : null}
                                     </span>
                                 </button>
                             );

@@ -142,6 +142,7 @@ describe('OrdersPage route query', () => {
 
         expect(markup).toContain('订单测试商品');
         expect(markup).not.toContain('aria-label="Loading"');
+        expect(markup).not.toContain('TEST-1');
     });
 });
 
@@ -169,6 +170,7 @@ describe('LogisticsPage delivery overview', () => {
         expect(markup).toContain('标准配送');
         expect(markup).toContain('TRACK-20841');
         expect(markup).toContain('查看订单详情');
+        expect(markup).not.toContain('TEST-1');
     });
 });
 

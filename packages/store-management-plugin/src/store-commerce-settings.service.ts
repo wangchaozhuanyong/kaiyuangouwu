@@ -19,7 +19,7 @@ import {
     Zone,
     ZoneService,
 } from '@vendure/core';
-import { IsNull } from 'typeorm';
+import { IsNull, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { StoreCommerceConfiguration, UpdateMyStoreCommerceConfigurationInput } from './types';
 
@@ -71,6 +71,7 @@ export class StoreCommerceSettingsService {
         return {
             channelId: channel.id,
             channelCode: channel.code,
+            updatedAt: channel.updatedAt,
             currencyCode: channel.defaultCurrencyCode,
             pricesIncludeTax: channel.pricesIncludeTax,
             countryCode,
@@ -129,6 +130,8 @@ export class StoreCommerceSettingsService {
         input: UpdateMyStoreCommerceConfigurationInput,
     ): Promise<StoreCommerceConfiguration> {
         const normalized = normalizeStoreCommerceInput(input);
+        const channel = await this.lockActiveChannel(ctx);
+        this.assertExpectedUpdatedAt(channel.updatedAt, normalized.expectedUpdatedAt);
         const existing = await this.get(ctx);
         const prepared = await this.translations.prepareLocalizedFields([
             {
@@ -150,7 +153,6 @@ export class StoreCommerceSettingsService {
         const english = new Map(prepared.map(field => [field.path, field.translatedText]));
         normalized.shippingMethodNameEn = english.get('name') ?? '';
         normalized.shippingDescriptionEn = english.get('description') ?? '';
-        const channel = await this.getActiveChannel(ctx);
         const country = await this.countryService.findOneByCode(ctx, normalized.countryCode);
         if (!country.enabled) {
             throw new UserInputError('所选配送国家已停用');
@@ -191,6 +193,30 @@ export class StoreCommerceSettingsService {
             throw new UserInputError('当前店铺不存在');
         }
         return channel;
+    }
+
+    private async lockActiveChannel(ctx: RequestContext): Promise<Channel> {
+        const repository = this.connection.getRepository(ctx, Channel);
+        try {
+            const locked = await repository
+                .createQueryBuilder('channel')
+                .setLock('pessimistic_write')
+                .where('channel.id = :channelId', { channelId: ctx.channelId })
+                .getOne();
+            if (!locked) throw new UserInputError('当前店铺不存在');
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+        return this.getActiveChannel(ctx);
+    }
+
+    private assertExpectedUpdatedAt(current: Date, expected: Date | string): void {
+        const expectedDate = expected instanceof Date ? expected : new Date(expected);
+        if (!Number.isFinite(expectedDate.getTime()) || current.getTime() !== expectedDate.getTime()) {
+            throw new UserInputError(
+                'CONCURRENT_MODIFICATION: 税务与配送配置已被其他管理员更新，请重新载入后合并修改',
+            );
+        }
     }
 
     private async getDefaultTaxCategory(ctx: RequestContext): Promise<TaxCategory | undefined> {
@@ -319,6 +345,15 @@ export class StoreCommerceSettingsService {
             }
         }
     }
+}
+
+function isLockNotSupportedError(error: unknown): boolean {
+    return (
+        error instanceof LockNotSupportedOnGivenDriverError ||
+        (error instanceof Error &&
+            (error.name === 'LockNotSupportedOnGivenDriverError' ||
+                error.message.toLowerCase().includes('locking not supported')))
+    );
 }
 
 export function normalizeStoreCommerceInput(

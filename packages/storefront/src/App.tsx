@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 
 import { ShopApi, ShopApiError } from './api';
 import { categoryTargetSelection } from './category-navigation';
-import { BottomNavigation } from './components/common/bottom-navigation';
+import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import { normalizeHeroAutoplayIntervalSeconds } from './hero-carousel';
 import { buildBestSellerProducts, buildRecommendationProducts } from './home-merchandising';
 import {
@@ -27,7 +27,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from './query-client';
-import { captureReferralAttribution, storefrontVisitorId } from './referral-attribution';
+import { captureReferralAttribution } from './referral-attribution';
 import { productDescriptionText } from './rich-text';
 import { PageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
@@ -402,6 +402,7 @@ export function App() {
     const products = rawProducts;
     const collections = collectionsQuery.data ?? [];
     const contentBlocks = contentQuery.data?.blocks ?? [];
+    const navigationBlock = contentBlocks.find(block => block.type === 'NAVIGATION');
     const activeCoupons = contentQuery.data?.coupons ?? [];
     const activeFlashSales = contentQuery.data?.flashSales ?? [];
     const systemAnnouncements = contentQuery.data?.systemAnnouncements ?? [];
@@ -431,13 +432,8 @@ export function App() {
     const customer = customerQuery.data ?? null;
 
     useEffect(() => {
-        try {
-            const visitorId = storefrontVisitorId();
-            void api.recordStorefrontVisit(visitorId).catch(() => undefined);
-        } catch {
-            // Analytics must never block storefront usage.
-        }
-    }, [api, customer?.id]);
+        void api.recordStorefrontVisit().catch(() => undefined);
+    }, [api]);
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         market.code,
         vendureLanguageCode,
@@ -1255,6 +1251,7 @@ export function App() {
     useEffect(() => {
         const routeLabels: Partial<Record<RouteName, string>> = {
             category: isZh ? '商品' : 'Shop',
+            services: isZh ? '商业服务' : 'Business services',
             cart: isZh ? '购物车' : 'Cart',
             account: isZh ? '我的账户' : 'Account',
             search: isZh ? '搜索商品' : 'Search products',
@@ -1380,14 +1377,6 @@ export function App() {
         },
         [storefrontCode],
     );
-
-    const mainPage: MainPage = rootPages.includes(route.name as MainPage)
-        ? (route.name as MainPage)
-        : route.name === 'product' || route.name === 'search'
-          ? 'category'
-          : route.name === 'purchase' || route.name === 'checkout' || route.name === 'payment'
-            ? 'cart'
-            : 'account';
 
     const toggleLanguage = () =>
         setStorefrontContext(currentContext => {
@@ -1599,11 +1588,12 @@ export function App() {
                         <Outlet />
                     </Suspense>
                 </div>
-                {rootPages.includes(route.name as MainPage) && (
+                {shouldShowBottomNavigation(route.name, navigationBlock) && (
                     <BottomNavigation
-                        active={mainPage}
+                        activeRoute={route.name}
                         cartQuantity={cart?.totalQuantity ?? 0}
                         language={language}
+                        navigationBlock={navigationBlock}
                     />
                 )}
                 {toast && (

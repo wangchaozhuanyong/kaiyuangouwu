@@ -1,5 +1,7 @@
+import { DirectionProvider } from '@/vdb/components/ui/direction.js';
 import { Toaster } from '@/vdb/components/ui/sonner.js';
 import { Spinner } from '@/vdb/components/ui/spinner.js';
+import { LS_KEY_USER_SETTINGS } from '@/vdb/constants.js';
 import { registerDefaults } from '@/vdb/framework/defaults.js';
 import {
     clearCustomFieldsMap,
@@ -9,24 +11,28 @@ import { executeDashboardExtensionCallbacks } from '@/vdb/framework/extension-ap
 import { useDashboardExtensions } from '@/vdb/framework/extension-api/use-dashboard-extensions.js';
 import { useExtendedRouter } from '@/vdb/framework/page/use-extended-router.js';
 import { useAuth } from '@/vdb/hooks/use-auth.js';
+import { useDisplayLocale } from '@/vdb/hooks/use-display-locale.js';
 import { useServerConfig } from '@/vdb/hooks/use-server-config.js';
+import { useUiLanguageLoader } from '@/vdb/hooks/use-ui-language-loader.js';
+import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { defaultLocale, dynamicActivate } from '@/vdb/providers/i18n-provider.js';
+import { useLingui } from '@lingui/react/macro';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AnyRoute, createRouter, RouterOptions, RouterProvider } from '@tanstack/react-router';
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 
-import { DirectionProvider } from '@/vdb/components/ui/direction.js';
-import { useDisplayLocale } from '@/vdb/hooks/use-display-locale.js';
-import { useUiLanguageLoader } from '@/vdb/hooks/use-ui-language-loader.js';
-import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
-import { useLingui } from '@lingui/react/macro';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AppProviders, queryClient } from './app-providers.js';
+import { applyBootstrapTheme } from './bootstrap-theme.js';
 import { setDocumentDirection } from './common/set-document-direction.js';
 import { deriveBaseUrl } from './derive-base-url.js';
 import { routeTree } from './routeTree.gen.js';
 import './styles.css';
+
+// Apply the locally persisted theme before providers and async extensions load,
+// preventing a light splash from flashing in an otherwise dark dashboard.
+applyBootstrapTheme(LS_KEY_USER_SETTINGS);
 
 const processedBaseUrl = deriveBaseUrl(
     typeof import.meta?.url === 'string' ? import.meta.url : '',
@@ -139,7 +145,7 @@ function BootSplash() {
 
 function App() {
     const [i18nLoaded, setI18nLoaded] = React.useState(false);
-    const { extensionsLoaded } = useDashboardExtensions();
+    const { extensionsLoaded, extensionLoadError } = useDashboardExtensions();
     useEffect(() => {
         // With this method we dynamically load the catalogs
         void dynamicActivate(defaultLocale, () => {
@@ -154,6 +160,20 @@ function App() {
         }
     }, [extensionsLoaded]);
 
+    if (extensionLoadError) {
+        return (
+            <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
+                <p className="text-destructive">后台扩展加载失败：{extensionLoadError.message}</p>
+                <button
+                    type="button"
+                    className="rounded-md border px-4 py-2"
+                    onClick={() => window.location.reload()}
+                >
+                    重新加载
+                </button>
+            </div>
+        );
+    }
     if (!i18nLoaded || !extensionsLoaded) {
         // Show a minimal full-screen splash so the user sees that the app is
         // loading rather than a white screen while i18n catalogs and dashboard

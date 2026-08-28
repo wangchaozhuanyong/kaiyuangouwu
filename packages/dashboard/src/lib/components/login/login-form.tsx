@@ -11,7 +11,7 @@ import * as React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useLoginExtensions } from '../../framework/extension-api/use-login-extensions.js';
 import { LogoMark } from '../shared/logo-mark.js';
-import { Field, FieldError } from '../ui/field.js';
+import { Field, FieldError, FieldLabel } from '../ui/field.js';
 import { Form } from '../ui/form.js';
 import { Separator } from '../ui/separator.js';
 
@@ -80,6 +80,9 @@ export function LoginForm({ className, onFormSubmit, isVerifying, loginError, ..
                                     name="username"
                                     render={({ field, fieldState }) => (
                                         <Field data-invalid={fieldState.invalid || undefined}>
+                                            <FieldLabel className="sr-only" htmlFor="field-username">
+                                                <Trans>Email</Trans>
+                                            </FieldLabel>
                                             <Input
                                                 {...field}
                                                 id="field-username"
@@ -95,6 +98,9 @@ export function LoginForm({ className, onFormSubmit, isVerifying, loginError, ..
                                     name="password"
                                     render={({ field, fieldState }) => (
                                         <Field data-invalid={fieldState.invalid || undefined}>
+                                            <FieldLabel className="sr-only" htmlFor="field-password">
+                                                <Trans>Password</Trans>
+                                            </FieldLabel>
                                             <PasswordInput
                                                 {...field}
                                                 id="field-password"

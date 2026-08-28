@@ -60,7 +60,7 @@ export function ProductOptionsTable({
                     onClick={() => setSelectedOption({ id: NEW_ENTITY_PATH })}
                 >
                     <PlusIcon />
-                    <Trans>Add product option</Trans>
+                    <Trans>Add option value</Trans>
                 </Button>
             </div>
             <PaginatedListDataTable

@@ -115,7 +115,7 @@ export function ProductCard({
                 {product.name}
             </strong>
             <span className="mt-[3px] block max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2.5 text-[11.5px] leading-[1.3] text-[var(--muted)] min-[900px]:mt-1.5 min-[900px]:text-[13px]">
-                {trimText(product.description, 26) || variant?.sku}
+                {trimText(product.description, 26)}
             </span>
 
             <footer className="mt-auto flex min-h-[38px] items-end justify-between px-2.5 pt-2">
@@ -125,9 +125,6 @@ export function ProductCard({
                         currency={variant ? variant.currencyCode : market.currencyCode}
                         locale={locale}
                     />
-                    <small className="text-[10.5px] font-medium text-[var(--muted)]">
-                        {isZh ? '含税' : 'incl. tax'}
-                    </small>
                 </div>
                 <button
                     type="button"

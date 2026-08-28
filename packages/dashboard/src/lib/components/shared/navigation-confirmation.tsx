@@ -16,6 +16,10 @@ export interface NavigationConfirmationProps {
     form: UseFormReturn<any>;
 }
 
+export interface UnsavedChangesConfirmationProps {
+    when: boolean;
+}
+
 /**
  * Navigation confirmation dialog that blocks navigation when the form is dirty.
  */
@@ -35,6 +39,40 @@ export function NavigationConfirmation(props: Readonly<NavigationConfirmationPro
         },
         withResolver: true,
         enableBeforeUnload: () => props.form.formState.isDirty,
+    });
+    return (
+        <Dialog open={status === 'blocked'} onOpenChange={reset}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>
+                        <Trans>Confirm navigation</Trans>
+                    </DialogTitle>
+                    <DialogDescription>
+                        <Trans>
+                            Are you sure you want to navigate away from this page? Any unsaved changes will be
+                            lost.
+                        </Trans>
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button variant="outline" onClick={reset}>
+                        <Trans>Cancel</Trans>
+                    </Button>
+                    <Button type="button" onClick={proceed}>
+                        <Trans>Confirm</Trans>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Blocks route changes and browser unloads for non-react-hook-form editors. */
+export function UnsavedChangesConfirmation({ when }: Readonly<UnsavedChangesConfirmationProps>) {
+    const { proceed, reset, status } = useBlocker({
+        shouldBlockFn: () => when,
+        withResolver: true,
+        enableBeforeUnload: () => when,
     });
     return (
         <Dialog open={status === 'blocked'} onOpenChange={reset}>

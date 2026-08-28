@@ -26,7 +26,15 @@ type Mutation {
     deleteProducts(ids: [ID!]!): [DeletionResponse!]!
 
     "Add an OptionGroup to a Product"
-    addOptionGroupToProduct(productId: ID!, optionGroupId: ID!): Product!
+    addOptionGroupToProduct(productId: ID!, optionGroupId: ID!, expectedUpdatedAt: DateTime): Product!
+
+    "Remove multiple OptionGroups from a Product as one atomic operation"
+    removeOptionGroupsFromProduct(
+        productId: ID!
+        optionGroupIds: [ID!]!
+        expectedUpdatedAt: DateTime!
+        force: Boolean
+    ): Product!
 
     """
     Remove an OptionGroup from a Product. If the OptionGroup is in use by any ProductVariants
@@ -34,18 +42,22 @@ type Mutation {
     Setting the `force` argument to `true` will override this and remove the OptionGroup anyway,
     as well as removing any of the group's options from the Product's ProductVariants.
     """
-    removeOptionGroupFromProduct(productId: ID!, optionGroupId: ID!, force: Boolean): RemoveOptionGroupFromProductResult!
+    removeOptionGroupFromProduct(
+        productId: ID!
+        optionGroupId: ID!
+        force: Boolean
+    ): RemoveOptionGroupFromProductResult!
 
     "Create a set of ProductVariants based on the OptionGroups assigned to the given Product"
     createProductVariants(input: [CreateProductVariantInput!]!): [ProductVariant]!
 
     "Update existing ProductVariants"
     updateProductVariants(input: [UpdateProductVariantInput!]!): [ProductVariant]!
-        
-    "Update an existing ProductVariant"
-    updateProductVariant(input: UpdateProductVariantInput!): ProductVariant! 
 
-    "Delete a ProductVariant" 
+    "Update an existing ProductVariant"
+    updateProductVariant(input: UpdateProductVariantInput!): ProductVariant!
+
+    "Delete a ProductVariant"
     deleteProductVariant(id: ID!): DeletionResponse!
 
     "Delete multiple ProductVariants"
@@ -104,6 +116,7 @@ input CreateProductInput {
 
 input UpdateProductInput {
     id: ID!
+    expectedUpdatedAt: DateTime
     enabled: Boolean
     featuredAssetId: ID
     assetIds: [ID!]
@@ -133,7 +146,6 @@ input StockLevelInput {
     stockLocationId: ID!
     stockOnHand: Int!
 }
-
 
 input CreateProductVariantPriceInput {
     currencyCode: CurrencyCode!
