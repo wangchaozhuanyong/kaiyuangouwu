@@ -14,7 +14,6 @@ import {
     Lock,
     Package,
     RotateCcw,
-    Search,
     ShieldCheck,
     ShoppingBag,
     Sparkles,
@@ -766,14 +765,6 @@ export function HomePage() {
                 >
                     <BrandLogo url={logoUrl} name={storefrontName} className="brand-mark" />
                     <strong>{storefrontName}</strong>
-                </button>
-                <button
-                    className="search-trigger"
-                    type="button"
-                    onClick={() => navigateTo({ name: 'search' })}
-                >
-                    <Search aria-hidden="true" />
-                    <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
                 </button>
                 <div className="topbar-actions">
                     {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (

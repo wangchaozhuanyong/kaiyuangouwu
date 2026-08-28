@@ -249,6 +249,7 @@ msgstr "选择国家或地区"
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
@@ -257,6 +258,8 @@ msgid "Select {0}"
 msgstr "选择 {0}"
 
 #. placeholder {0}: selectedItems.length
+#. placeholder {0}: value.length
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-input/relation-selector.tsx
 msgid "Add more ({0} selected)"
 msgstr "继续添加（已选择 {0} 项）"
@@ -1042,6 +1045,7 @@ msgid "Metadata"
 msgstr "元数据"
 
 #: src/app/routes/_authenticated/_option-groups/components/option-group-products-block.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-table/data-table.tsx
 #: src/lib/providers/server-config.tsx
 msgid "Retry"
@@ -1389,6 +1393,8 @@ msgstr "计划任务"
 msgid "Enter transaction ID"
 msgstr "输入交易 ID"
 
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/lib/components/data-table/refresh-button.tsx
 #: src/lib/components/data-table/refresh-button.tsx
 msgid "Refresh data"
@@ -1738,6 +1744,7 @@ msgstr "当前店铺：{displayChannelName}"
 msgid "Inherit from global settings"
 msgstr "从全局设置继承"
 
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-input/relation-selector.tsx
 #: src/lib/components/data-table/data-table-facet-value-faceted-filter.tsx
 #: src/lib/components/data-table/data-table-faceted-filter.tsx
@@ -1797,6 +1804,8 @@ msgstr "正在加载素材..."
 #: src/app/routes/_authenticated/_facets/facets_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$groupId.options_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This field is required"
 msgstr "此项为必填"
@@ -1868,6 +1877,7 @@ msgstr "商品已下架"
 msgid "No countries found"
 msgstr "未找到国家"
 
+#: src/lib/components/ui/sidebar.tsx
 #: src/lib/components/ui/sidebar.tsx
 #: src/lib/components/ui/sidebar.tsx
 msgid "Toggle sidebar"
@@ -2773,6 +2783,8 @@ msgstr "开始于"
 msgid "Duplicate"
 msgstr "复制"
 
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/lib/components/shared/customer-group-selector.tsx
 msgid "No results"
 msgstr "无结果"
@@ -3493,6 +3505,7 @@ msgstr "区域"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "No product groups found"
 msgstr "未找到商品分类"
 
@@ -3633,6 +3646,8 @@ msgstr "默认店铺"
 msgid "Insert a new image with source, title, and dimensions"
 msgstr "插入带有来源、标题和尺寸的新图片"
 
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 msgid "Failed to create facet value"
 msgstr "创建筛选属性值失败"
@@ -4638,7 +4653,7 @@ msgstr "选择日期范围"
 msgid "Product"
 msgstr "商品"
 
-#: src/app/routes/_authenticated/_products/components/product-collections-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Add product group"
 msgstr "添加商品分类"
 
@@ -5222,6 +5237,8 @@ msgid "{0, plural, one {Failed to delete {1} stock location} other {Failed to de
 msgstr "{0, plural, other {无法删除 {2} 个库存点}}"
 
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 msgid "Facet"
 msgstr "筛选属性"
 
@@ -5593,6 +5610,7 @@ msgstr "打开模板 {name}"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Loading product groups..."
 msgstr "正在加载商品分类……"
 
@@ -5961,6 +5979,7 @@ msgstr "自定义字段"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Failed to load product groups"
 msgstr "商品分类加载失败"
 
@@ -7419,6 +7438,7 @@ msgid "Variant name"
 msgstr "SKU 名称"
 
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Remove"
 msgstr "删除"
 
@@ -7581,6 +7601,7 @@ msgid "Company (optional)"
 msgstr "公司名称（选填）"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-input/relation-input.tsx
 msgid "Search collections..."
 msgstr "搜索商品分类..."
@@ -8060,6 +8081,7 @@ msgstr "添加国家"
 #: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Second-level collection"
 msgstr "二级分类"
 
@@ -8943,6 +8965,7 @@ msgstr "二级"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Top-level collection"
 msgstr "一级分类"
 

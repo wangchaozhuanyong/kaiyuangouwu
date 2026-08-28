@@ -249,6 +249,7 @@ msgstr "Select a country or region"
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
@@ -257,6 +258,8 @@ msgid "Select {0}"
 msgstr "Select {0}"
 
 #. placeholder {0}: selectedItems.length
+#. placeholder {0}: value.length
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-input/relation-selector.tsx
 msgid "Add more ({0} selected)"
 msgstr "Add more ({0} selected)"
@@ -1042,6 +1045,7 @@ msgid "Metadata"
 msgstr "Metadata"
 
 #: src/app/routes/_authenticated/_option-groups/components/option-group-products-block.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-table/data-table.tsx
 #: src/lib/providers/server-config.tsx
 msgid "Retry"
@@ -1389,6 +1393,8 @@ msgstr "Scheduled Tasks"
 msgid "Enter transaction ID"
 msgstr "Enter transaction ID"
 
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/lib/components/data-table/refresh-button.tsx
 #: src/lib/components/data-table/refresh-button.tsx
 msgid "Refresh data"
@@ -1738,6 +1744,7 @@ msgstr "Current store: {displayChannelName}"
 msgid "Inherit from global settings"
 msgstr "Inherit from global settings"
 
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-input/relation-selector.tsx
 #: src/lib/components/data-table/data-table-facet-value-faceted-filter.tsx
 #: src/lib/components/data-table/data-table-faceted-filter.tsx
@@ -1797,6 +1804,8 @@ msgstr "Loading asset..."
 #: src/app/routes/_authenticated/_facets/facets_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$groupId.options_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This field is required"
 msgstr "This field is required"
@@ -1868,6 +1877,7 @@ msgstr "Products disabled"
 msgid "No countries found"
 msgstr "No countries found"
 
+#: src/lib/components/ui/sidebar.tsx
 #: src/lib/components/ui/sidebar.tsx
 #: src/lib/components/ui/sidebar.tsx
 msgid "Toggle sidebar"
@@ -2773,6 +2783,8 @@ msgstr "Starts at"
 msgid "Duplicate"
 msgstr "Duplicate"
 
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/lib/components/shared/customer-group-selector.tsx
 msgid "No results"
 msgstr "No results"
@@ -3493,6 +3505,7 @@ msgstr "Zone"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "No product groups found"
 msgstr "No product groups found"
 
@@ -3633,6 +3646,8 @@ msgstr "Default sales channel"
 msgid "Insert a new image with source, title, and dimensions"
 msgstr "Insert a new image with source, title, and dimensions"
 
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 msgid "Failed to create facet value"
 msgstr "Failed to create filter attribute value"
@@ -4638,7 +4653,7 @@ msgstr "Select date range"
 msgid "Product"
 msgstr "Product"
 
-#: src/app/routes/_authenticated/_products/components/product-collections-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Add product group"
 msgstr "Add product group"
 
@@ -5222,6 +5237,8 @@ msgid "{0, plural, one {Failed to delete {1} stock location} other {Failed to de
 msgstr "{0, plural, one {Failed to delete {1} stock location} other {Failed to delete {2} stock locations}}"
 
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
+#: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 msgid "Facet"
 msgstr "Filter attribute"
 
@@ -5593,6 +5610,7 @@ msgstr "Open template {name}"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Loading product groups..."
 msgstr "Loading product groups..."
 
@@ -5961,6 +5979,7 @@ msgstr "Custom fields"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Failed to load product groups"
 msgstr "Failed to load product groups"
 
@@ -7419,6 +7438,7 @@ msgid "Variant name"
 msgstr "SKU name"
 
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Remove"
 msgstr "Remove"
 
@@ -7581,6 +7601,7 @@ msgid "Company (optional)"
 msgstr "Company (optional)"
 
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 #: src/lib/components/data-input/relation-input.tsx
 msgid "Search collections..."
 msgstr "Search product groups..."
@@ -8060,6 +8081,7 @@ msgstr "Add Country"
 #: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-tree-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Second-level collection"
 msgstr "Second-level product group"
 
@@ -8943,6 +8965,7 @@ msgstr "Second level"
 
 #: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
+#: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
 msgid "Top-level collection"
 msgstr "Top-level product group"
 

@@ -21,30 +21,37 @@ export function RichTextInput({
     fieldDef,
     disabled,
     placeholder,
+    id,
+    'aria-describedby': ariaDescribedBy,
+    'aria-errormessage': ariaErrorMessage,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired,
+    required,
 }: Readonly<DashboardFormComponentProps & { placeholder?: string }>) {
     const readOnly = isFieldDisabled(disabled, fieldDef);
     const strippedPlaceholder = useMemo(
         () =>
             placeholder
-                ? new DOMParser().parseFromString(placeholder, 'text/html').body.textContent?.trim() || undefined
+                ? new DOMParser().parseFromString(placeholder, 'text/html').body.textContent?.trim() ||
+                  undefined
                 : undefined,
         [placeholder],
     );
 
     return (
         <Suspense
-            fallback={
-                <div
-                    className="min-h-16 w-full rounded-md border bg-muted/30"
-                    aria-busy="true"
-                />
-            }
+            fallback={<div className="min-h-16 w-full rounded-md border bg-muted/30" aria-busy="true" />}
         >
             <RichTextEditor
                 value={value}
                 onChange={onChange}
                 disabled={readOnly}
                 placeholder={strippedPlaceholder}
+                id={id}
+                aria-describedby={ariaDescribedBy}
+                aria-errormessage={ariaErrorMessage}
+                aria-invalid={ariaInvalid}
+                aria-required={ariaRequired ?? (required || undefined)}
             />
         </Suspense>
     );

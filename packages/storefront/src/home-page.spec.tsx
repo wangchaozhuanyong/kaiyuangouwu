@@ -292,38 +292,19 @@ describe('HomePage localized trust bar layout', () => {
 });
 
 describe('HomePage mobile header layout', () => {
-    it('keeps search on a dedicated full-width row below the brand controls', () => {
+    it('renders the brand controls in one row without a search entry', () => {
         const markup = renderHome();
         const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
         expect(markup).toContain('class="topbar home-topbar"');
+        expect(markup).not.toContain('class="search-trigger"');
         expect(stylesheet).toMatch(
-            /\.home-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) max-content;[^}]*grid-template-rows:\s*44px 42px;/,
-        );
-        expect(stylesheet).toMatch(
-            /\.home-topbar > \.search-trigger\s*\{[^}]*grid-column:\s*1 \/ -1;[^}]*grid-row:\s*2;/,
-        );
-        expect(stylesheet).toMatch(
-            /\.home-topbar > \.topbar-actions\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*1;/,
-        );
-    });
-
-    it('returns search to the first row on desktop', () => {
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-
-        expect(stylesheet).toMatch(
-            new RegExp(
-                String.raw`\.home-topbar\s*\{[^}]*height:\s*72px;` +
-                    String.raw`[^}]*grid-template-columns:\s*minmax\(0, 240px\) max-content;` +
-                    String.raw`[^}]*grid-template-rows:\s*1fr;[^}]*justify-content:\s*space-between;`,
-            ),
-        );
-        expect(stylesheet).toMatch(
-            /\.home-topbar > \.search-trigger\s*\{[^}]*position:\s*absolute;[^}]*right:\s*188px;[^}]*left:\s*calc\(50% \+ 226px\);/,
+            /\.home-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) max-content;/,
         );
         expect(stylesheet).toMatch(
             /\.home-topbar > \.topbar-actions\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*1;/,
         );
+        expect(stylesheet).not.toMatch(/\.home-topbar > \.search-trigger/);
     });
 });
 
