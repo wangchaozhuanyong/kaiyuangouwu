@@ -316,6 +316,7 @@ export interface StoreActivationReadiness {
 
 export interface UpdateStoreProfileInput {
     id: ID;
+    expectedUpdatedAt: Date;
     storefrontNameZh?: string | null;
     storefrontNameEn?: string | null;
     status?: StoreProfileStatus | null;
@@ -327,6 +328,7 @@ export interface UpdateStoreProfileInput {
 }
 
 export interface UpdateMyStoreProfileInput {
+    expectedUpdatedAt: Date;
     storefrontNameZh?: string | null;
     storefrontNameEn?: string | null;
     descriptionZh?: string | null;
@@ -337,6 +339,7 @@ export interface UpdateMyStoreProfileInput {
 export interface StoreCommerceConfiguration {
     channelId: ID;
     channelCode: string;
+    updatedAt: Date;
     currencyCode: CurrencyCode;
     pricesIncludeTax: boolean;
     countryCode: string | null;
@@ -361,6 +364,7 @@ export interface StoreCommerceConfiguration {
 }
 
 export interface UpdateMyStoreCommerceConfigurationInput {
+    expectedUpdatedAt: Date;
     pricesIncludeTax: boolean;
     countryCode: string;
     taxRate: number;
@@ -379,10 +383,12 @@ export interface UpdateMyStoreCommerceConfigurationInput {
 
 export type StoreCurrencyRateMode = 'AUTO' | 'MANUAL';
 export type StoreCurrencyRoundingMode = 'CENT' | 'TENTH' | 'WHOLE';
+export type StoreUsdtRateScheduleMode = 'INTERVAL' | 'DAILY';
 
 export interface StoreCurrencyConfiguration {
     channelId: ID;
     channelCode: string;
+    updatedAt: Date;
     defaultCurrencyCode: CurrencyCode;
     availableCurrencyCodes: CurrencyCode[];
     selectorEnabled: boolean;
@@ -396,10 +402,15 @@ export interface StoreCurrencyConfiguration {
     syncedPriceCount: number;
     usdtDisplayEnabled: boolean;
     usdtMarkupPercent: number;
+    usdtRateScheduleMode: StoreUsdtRateScheduleMode;
+    usdtRateIntervalMinutes: number;
+    usdtRateDailyTime: string;
     cnyPerUsdtRate: number | null;
     myrPerUsdtRate: number | null;
     usdtRateSource: string | null;
     usdtRateUpdatedAt: Date | null;
+    usdtRateNextRunAt: Date;
+    usdtRateExpiresAt: Date | null;
     usdtRateAvailable: boolean;
     usdtPaymentConfigured: boolean;
     usdtPaymentNetwork: string;
@@ -408,6 +419,7 @@ export interface StoreCurrencyConfiguration {
 }
 
 export interface UpdateStoreCurrencyConfigurationInput {
+    expectedUpdatedAt: Date;
     defaultCurrencyCode: CurrencyCode;
     availableCurrencyCodes: CurrencyCode[];
     selectorEnabled: boolean;
@@ -417,6 +429,9 @@ export interface UpdateStoreCurrencyConfigurationInput {
     roundingMode: StoreCurrencyRoundingMode;
     usdtDisplayEnabled: boolean;
     usdtMarkupPercent: number;
+    usdtRateScheduleMode: StoreUsdtRateScheduleMode;
+    usdtRateIntervalMinutes: number;
+    usdtRateDailyTime: string;
 }
 
 export interface StorefrontUsdtCheckoutQuoteView {

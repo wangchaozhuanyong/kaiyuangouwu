@@ -1,9 +1,10 @@
 import { msg } from '@lingui/core/macro';
-import { defineDashboardExtension, NavMenuConfig, NavMenuItem, NavMenuSection } from '@vendure/dashboard';
-import { PanelsTopLeft } from 'lucide-react';
+import { defineDashboardExtension } from '@vendure/dashboard';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
+import type { OperationsNavigationTitles } from './operations-navigation';
+import { organizeOperationsNavigation } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { reviewModerationRoute } from './review-moderation-page';
 import { StoreOverviewWidget } from './store-overview-widget';
@@ -35,49 +36,24 @@ const navigationMessages = {
     storefrontDesign: msg({ id: 'operations.nav.storefrontDesign', message: 'Storefront design' }),
 };
 
-const movedItemIds = new Set([
-    'stock-locations',
-    'shipping-methods',
-    'administrators',
-    'roles',
-    'storefront-content',
-]);
-
-function isSection(item: NavMenuItem | NavMenuSection): item is NavMenuSection {
-    return 'items' in item;
-}
-
-function updateItemTitle(item: NavMenuItem): NavMenuItem {
-    const titleById: Record<string, string> = {
-        products: navigationMessages.productList.id,
-        'product-variants': navigationMessages.skuAndInventory.id,
-        'option-groups': navigationMessages.specificationTemplates.id,
-        facets: navigationMessages.productAttributes.id,
-        collections: navigationMessages.productGroups.id,
-        orders: navigationMessages.orderManagement.id,
-        'stock-locations': navigationMessages.warehouses.id,
-        channels: navigationMessages.stores.id,
-    };
-    return titleById[item.id] ? { ...item, title: titleById[item.id] } : item;
-}
-
-function takeItems(config: NavMenuConfig, ids: string[]): NavMenuItem[] {
-    const itemsById = new Map<string, NavMenuItem>();
-    for (const section of config.sections) {
-        if (!isSection(section)) {
-            continue;
-        }
-        for (const item of section.items ?? []) {
-            if (ids.includes(item.id)) {
-                itemsById.set(item.id, updateItemTitle(item));
-            }
-        }
-    }
-    return ids.flatMap(id => {
-        const item = itemsById.get(id);
-        return item ? [item] : [];
-    });
-}
+const navigationTitles = {
+    workbench: navigationMessages.workbench.id,
+    productCenter: navigationMessages.productCenter.id,
+    orderCenter: navigationMessages.orderCenter.id,
+    orderManagement: navigationMessages.orderManagement.id,
+    customerCenter: navigationMessages.customerCenter.id,
+    marketingCenter: navigationMessages.marketingCenter.id,
+    storeSettings: navigationMessages.storeSettings.id,
+    systemManagement: navigationMessages.systemManagement.id,
+    productList: navigationMessages.productList.id,
+    skuAndInventory: navigationMessages.skuAndInventory.id,
+    productGroups: navigationMessages.productGroups.id,
+    specificationTemplates: navigationMessages.specificationTemplates.id,
+    productAttributes: navigationMessages.productAttributes.id,
+    warehouses: navigationMessages.warehouses.id,
+    stores: navigationMessages.stores.id,
+    storefrontDesign: navigationMessages.storefrontDesign.id,
+} satisfies OperationsNavigationTitles;
 
 defineDashboardExtension({
     routes: [afterSalesRoute, autoCardRoute, reviewModerationRoute],
@@ -101,60 +77,5 @@ defineDashboardExtension({
             requiresPermissions: ['ReadOrder'],
         },
     ],
-    navSections: (config: NavMenuConfig): NavMenuConfig => {
-        const titleBySectionId: Record<string, string> = {
-            insights: navigationMessages.workbench.id,
-            catalog: navigationMessages.productCenter.id,
-            sales: navigationMessages.orderCenter.id,
-            customers: navigationMessages.customerCenter.id,
-            marketing: navigationMessages.marketingCenter.id,
-            settings: navigationMessages.storeSettings.id,
-            system: navigationMessages.systemManagement.id,
-        };
-        const stockAndShippingItems = takeItems(config, ['stock-locations', 'shipping-methods']);
-        const accessItems = takeItems(config, ['administrators', 'roles']);
-        const storefrontContentItem = takeItems(config, ['storefront-content'])[0];
-        const systemItems = config.sections.flatMap(section =>
-            section.id === 'system' && isSection(section) ? (section.items ?? []).map(updateItemTitle) : [],
-        );
-
-        const sections: Array<NavMenuItem | NavMenuSection> = [];
-        for (const section of config.sections) {
-            if (section.id === 'system') {
-                continue;
-            }
-            const title = titleBySectionId[section.id];
-            if (!isSection(section)) {
-                sections.push(title ? { ...section, title } : section);
-                continue;
-            }
-            const ownItems = (section.items ?? [])
-                .filter(item => !movedItemIds.has(item.id))
-                .map(updateItemTitle);
-            const items =
-                section.id === 'catalog'
-                    ? [...ownItems, ...stockAndShippingItems]
-                    : section.id === 'settings'
-                      ? [...ownItems, ...accessItems, ...systemItems]
-                      : ownItems;
-            sections.push({
-                ...section,
-                ...(title ? { title } : {}),
-                items,
-            });
-        }
-
-        if (storefrontContentItem) {
-            const settingsIndex = sections.findIndex(section => section.id === 'settings');
-            sections.splice(settingsIndex < 0 ? sections.length : settingsIndex, 0, {
-                ...storefrontContentItem,
-                title: navigationMessages.storefrontDesign.id,
-                icon: PanelsTopLeft,
-                order: 900,
-                placement: 'top',
-            });
-        }
-
-        return { sections };
-    },
+    navSections: config => organizeOperationsNavigation(config, navigationTitles),
 });

@@ -89,6 +89,7 @@ export class AutoCardAdminResolver {
     }
 
     @Mutation()
+    @Transaction()
     @Allow(Permission.UpdateOrder)
     retryAutoCardDelivery(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.autoCardService.retryDelivery(ctx, id);

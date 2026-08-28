@@ -313,10 +313,11 @@ export class CompleteBilingualServiceCatalog1787612400000 implements MigrationIn
         ) {
             return;
         }
+        const [firstParameter, secondParameter] = this.placeholders(queryRunner, 2);
 
         for (const product of serviceCatalogProducts) {
             const [translation] = (await queryRunner.query(
-                `SELECT "baseId" FROM "product_translation" WHERE "slug" = ? LIMIT 1`,
+                `SELECT "baseId" FROM "product_translation" WHERE "slug" = ${firstParameter} LIMIT 1`,
                 [product.slug],
             )) as Array<{ baseId: string | number }>;
             if (!translation) continue;
@@ -331,7 +332,7 @@ export class CompleteBilingualServiceCatalog1787612400000 implements MigrationIn
                 this.englishProductDescription(product),
             );
             const variants = (await queryRunner.query(
-                `SELECT "id" FROM "product_variant" WHERE "productId" = ? AND "sku" = ?`,
+                `SELECT "id" FROM "product_variant" WHERE "productId" = ${firstParameter} AND "sku" = ${secondParameter}`,
                 [translation.baseId, product.sku],
             )) as Array<{ id: string | number }>;
             for (const variant of variants) {
@@ -348,7 +349,7 @@ export class CompleteBilingualServiceCatalog1787612400000 implements MigrationIn
         if (!(await queryRunner.hasTable('collection_translation'))) return;
         for (const collection of serviceCatalogCollections) {
             const [translation] = (await queryRunner.query(
-                `SELECT "baseId" FROM "collection_translation" WHERE "slug" = ? LIMIT 1`,
+                `SELECT "baseId" FROM "collection_translation" WHERE "slug" = ${firstParameter} LIMIT 1`,
                 [collection.slug],
             )) as Array<{ baseId: string | number }>;
             if (!translation) continue;
@@ -429,17 +430,21 @@ export class CompleteBilingualServiceCatalog1787612400000 implements MigrationIn
         name: string,
         description: string,
     ): Promise<void> {
+        const updateParameters = this.placeholders(queryRunner, 5);
+        const insertParameters = this.placeholders(queryRunner, 6);
         await queryRunner.query(
-            `UPDATE "${table}" SET "name" = ?, "slug" = ?, "description" = ? ` +
-                `WHERE "baseId" = ? AND "languageCode" = ?`,
+            `UPDATE "${table}" SET "name" = ${updateParameters[0]}, "slug" = ${updateParameters[1]}, ` +
+                `"description" = ${updateParameters[2]} WHERE "baseId" = ${updateParameters[3]} ` +
+                `AND "languageCode" = ${updateParameters[4]}`,
             [name, slug, description, baseId, languageCode],
         );
         await queryRunner.query(
             `INSERT INTO "${table}" ("languageCode", "name", "slug", "description", "baseId") ` +
-                `SELECT ?, ?, ?, ?, source."baseId" FROM "${table}" source ` +
-                `WHERE source."baseId" = ? AND NOT EXISTS (` +
+                `SELECT ${insertParameters[0]}, ${insertParameters[1]}, ${insertParameters[2]}, ` +
+                `${insertParameters[3]}, source."baseId" FROM "${table}" source ` +
+                `WHERE source."baseId" = ${insertParameters[4]} AND NOT EXISTS (` +
                 `SELECT 1 FROM "${table}" existing WHERE existing."baseId" = source."baseId" ` +
-                `AND existing."languageCode" = ?) LIMIT 1`,
+                `AND existing."languageCode" = ${insertParameters[5]}) LIMIT 1`,
             [languageCode, name, slug, description, baseId, languageCode],
         );
     }
@@ -451,18 +456,29 @@ export class CompleteBilingualServiceCatalog1787612400000 implements MigrationIn
         languageCode: 'en',
         name: string,
     ): Promise<void> {
+        const updateParameters = this.placeholders(queryRunner, 3);
+        const insertParameters = this.placeholders(queryRunner, 4);
         await queryRunner.query(
-            `UPDATE "${table}" SET "name" = ? WHERE "baseId" = ? AND "languageCode" = ?`,
+            `UPDATE "${table}" SET "name" = ${updateParameters[0]} ` +
+                `WHERE "baseId" = ${updateParameters[1]} AND "languageCode" = ${updateParameters[2]}`,
             [name, baseId, languageCode],
         );
         await queryRunner.query(
             `INSERT INTO "${table}" ("languageCode", "name", "baseId") ` +
-                `SELECT ?, ?, source."baseId" FROM "${table}" source ` +
-                `WHERE source."baseId" = ? AND NOT EXISTS (` +
+                `SELECT ${insertParameters[0]}, ${insertParameters[1]}, source."baseId" ` +
+                `FROM "${table}" source WHERE source."baseId" = ${insertParameters[2]} ` +
+                `AND NOT EXISTS (` +
                 `SELECT 1 FROM "${table}" existing WHERE existing."baseId" = source."baseId" ` +
-                `AND existing."languageCode" = ?) LIMIT 1`,
+                `AND existing."languageCode" = ${insertParameters[3]}) LIMIT 1`,
             [languageCode, name, baseId, languageCode],
         );
+    }
+
+    private placeholders(queryRunner: QueryRunner, count: number): string[] {
+        if (['postgres', 'cockroachdb'].includes(queryRunner.connection.options.type)) {
+            return Array.from({ length: count }, (_, index) => `$${index + 1}`);
+        }
+        return Array.from({ length: count }, () => '?');
     }
 
     private async enableAnsiIdentifierQuotes(queryRunner: QueryRunner): Promise<void> {

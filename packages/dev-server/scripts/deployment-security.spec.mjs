@@ -93,6 +93,8 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sudo -n systemctl reload nginx/u);
     assert.match(runbook, /journalctl -t vendure-production-switch/u);
     assert.match(runbook, /VENDURE_DEPLOYMENT_ID/u);
+    assert.match(runbook, /sync-storefront-media\.mjs --dry-run/u);
+    assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
 });
 
 void test('experimental UI examples do not commit Google API keys', async () => {

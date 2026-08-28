@@ -60,6 +60,7 @@ export interface StoreActivationReadiness {
 
 export interface StoreProfileRecord {
     id: string;
+    updatedAt: string;
     status: StoreProfileStatus;
     sortOrder: number;
     descriptionZh: string;
@@ -92,6 +93,7 @@ export interface UpdateStoreProfileResult {
 const storeProfileFields = gql`
     fragment StoreManagementProfile on StoreProfile {
         id
+        updatedAt
         status
         sortOrder
         descriptionZh

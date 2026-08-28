@@ -12,6 +12,8 @@ import { StoreDomain } from '@vendure/store-domain-plugin';
 import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
 import type { Request } from 'express';
 
+import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
+import { ReferralProgramConfig } from '../entities/referral-program-config.entity';
 import { StoreProfile } from '../entities/store-profile.entity';
 import { StorefrontPromotionPage } from '../entities/storefront-promotion-page.entity';
 import {
@@ -180,13 +182,14 @@ export class StorefrontPromotionService {
     }
 
     private async getBindings(ctx: RequestContext): Promise<StorefrontPromotionBindings> {
-        const [profile, hero, featuredProducts] = await Promise.all([
+        const [profile, hero, featuredProducts, referralShare] = await Promise.all([
             this.connection.getRepository(ctx, StoreProfile).findOne({
                 where: { channelId: ctx.channelId },
                 relations: { logoAsset: true },
             }),
             this.findActiveHero(ctx),
             this.findFeaturedProducts(ctx),
+            this.findReferralShareTemplate(ctx),
         ]);
         const fields = ctx.channel.customFields as StorefrontChannelFields;
         const isEnglish = String(ctx.languageCode).toLowerCase().startsWith('en');
@@ -206,15 +209,75 @@ export class StorefrontPromotionService {
             ? this.assetUrl(ctx.req, hero.imageAsset)
             : this.legacyAssetUrl(ctx.req, hero?.imageUrl);
         const heroImageUrl = this.webpMediaUrl(heroSource, 'storefront-hero-1440') || logoUrl;
+        const referralShareAsset =
+            referralShare?.template.shareBackgroundAsset ??
+            referralShare?.template.posterBackgroundAsset ??
+            null;
+        const shareImageUrl = referralShareAsset
+            ? this.mediaUrl(ctx.req, referralShareAsset.source)
+            : heroImageUrl;
+        const shareTitle = referralShare
+            ? isEnglish
+                ? referralShare.template.headlineEn.trim() || referralShare.template.headlineZh.trim()
+                : referralShare.template.headlineZh.trim() || referralShare.template.headlineEn.trim()
+            : name;
+        const rawShareDescription = referralShare
+            ? isEnglish
+                ? referralShare.template.siteIntroEn.trim() ||
+                  referralShare.template.rewardTextEn.trim() ||
+                  referralShare.template.siteIntroZh.trim()
+                : referralShare.template.siteIntroZh.trim() ||
+                  referralShare.template.rewardTextZh.trim() ||
+                  referralShare.template.siteIntroEn.trim()
+            : description;
+        const shareDescription = rawShareDescription
+            .split('{rewardRate}')
+            .join(String(referralShare?.rewardRate ?? ''))
+            .split('{storeName}')
+            .join(name);
         return {
             'store.name': name,
             'store.description': description,
             'store.logoUrl': logoUrl,
             'store.heroImageUrl': heroImageUrl,
+            'store.shareImageUrl': shareImageUrl,
+            'store.shareTitle': shareTitle,
+            'store.shareDescription': shareDescription,
             'store.currentYear': String(new Date().getFullYear()),
             'store.language': isEnglish ? 'en' : 'zh-CN',
             ...this.featuredProductBindings(ctx, featuredProducts),
         };
+    }
+
+    private async findReferralShareTemplate(
+        ctx: RequestContext,
+    ): Promise<{ template: ReferralPosterTemplate; rewardRate: number } | null> {
+        const config = await this.connection.getRepository(ctx, ReferralProgramConfig).findOne({
+            where: { channelId: ctx.channelId },
+        });
+        const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
+        let template: ReferralPosterTemplate | null = null;
+        if (config && !config.defaultPosterTemplate.includes('_')) {
+            template = await repository.findOne({
+                where: {
+                    id: config.defaultPosterTemplate,
+                    channelId: ctx.channelId,
+                    enabled: true,
+                },
+                relations: { shareBackgroundAsset: true, posterBackgroundAsset: true },
+            });
+        }
+        template ??= await repository.findOne({
+            where: { channelId: ctx.channelId, enabled: true },
+            relations: { shareBackgroundAsset: true, posterBackgroundAsset: true },
+            order: { position: 'ASC', id: 'ASC' },
+        });
+        return template
+            ? {
+                  template,
+                  rewardRate: (config?.rewardRateBps ?? 500) / 100,
+              }
+            : null;
     }
 
     private async findFeaturedProducts(ctx: RequestContext): Promise<FeaturedPromotionProductRow[]> {

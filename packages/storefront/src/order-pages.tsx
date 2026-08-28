@@ -630,7 +630,6 @@ function LogisticsCard({
                         <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
                         <span>
                             <strong>{line.productVariant.name}</strong>
-                            <small>{line.productVariant.sku}</small>
                         </span>
                         <b>×{line.quantity}</b>
                     </div>
@@ -778,9 +777,7 @@ function AfterSalesList({
                         {request.items.map(item => (
                             <span key={item.id}>
                                 <strong>{item.productName}</strong>
-                                <small>
-                                    {item.sku} ×{item.quantity}
-                                </small>
+                                <small>{isZh ? '数量' : 'Qty'} × {item.quantity}</small>
                             </span>
                         ))}
                     </div>
@@ -972,7 +969,6 @@ export function OrderDetailPage({
                         <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
                         <div>
                             <strong>{line.productVariant.name}</strong>
-                            <small>{line.productVariant.sku}</small>
                             <em>
                                 {isAutoCardLine(line)
                                     ? isZh
@@ -1019,7 +1015,6 @@ export function OrderDetailPage({
                             <article key={delivery.orderLineId}>
                                 <span>
                                     <strong>{delivery.name}</strong>
-                                    <small>{delivery.sku}</small>
                                 </span>
                                 {delivery.status === 'READY' && delivery.downloadUrl ? (
                                     <a href={delivery.downloadUrl} rel="noreferrer">
@@ -1058,7 +1053,7 @@ export function OrderDetailPage({
                                 <span>
                                     <strong>{delivery.productName}</strong>
                                     <small>
-                                        {delivery.sku} × {delivery.quantity}
+                                        {isZh ? '数量' : 'Qty'} × {delivery.quantity}
                                     </small>
                                 </span>
                                 <em>{autoCardDeliveryStatus(delivery.state, language)}</em>
@@ -1323,7 +1318,6 @@ function AfterSalesRequestSheet({
                                         />
                                         <span>
                                             <strong>{line.productVariant.name}</strong>
-                                            <small>{line.productVariant.sku}</small>
                                         </span>
                                     </label>
                                     {selected && (
@@ -1486,7 +1480,6 @@ function OrderCard({
     const line = order.lines[0];
     const firstLineName = line?.productVariant.name ?? (isZh ? '订单商品' : 'Order item');
     const hasMultipleLines = order.lines.length > 1;
-    const variantSku = line?.productVariant.sku;
 
     const formattedTime = order.orderPlacedAt ? formatBusinessDate(locale, order.orderPlacedAt) : '';
 
@@ -1511,10 +1504,6 @@ function OrderCard({
                             {isZh
                                 ? `另有 ${order.lines.length - 1} 种商品`
                                 : `${order.lines.length - 1} more items`}
-                        </small>
-                    ) : variantSku ? (
-                        <small className={orderPageClassName('order-product-spec')}>
-                            {isZh ? `规格编码: ${variantSku}` : `SKU: ${variantSku}`}
                         </small>
                     ) : null}
                     <div className={orderPageClassName('order-product-tags')}>

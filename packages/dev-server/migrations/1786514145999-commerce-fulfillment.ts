@@ -6,7 +6,7 @@ const productVariantColumn = 'customFieldsFulfillmenttype';
 export class CommerceFulfillment1786514145999 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         const orderLine = await queryRunner.getTable('order_line');
-        if (!orderLine?.findColumnByName(orderLineColumn)) {
+        if (orderLine && !orderLine.findColumnByName(orderLineColumn)) {
             await queryRunner.addColumn(
                 'order_line',
                 new TableColumn({
@@ -20,7 +20,7 @@ export class CommerceFulfillment1786514145999 implements MigrationInterface {
         }
 
         const productVariant = await queryRunner.getTable('product_variant');
-        if (!productVariant?.findColumnByName(productVariantColumn)) {
+        if (productVariant && !productVariant.findColumnByName(productVariantColumn)) {
             await queryRunner.addColumn(
                 'product_variant',
                 new TableColumn({

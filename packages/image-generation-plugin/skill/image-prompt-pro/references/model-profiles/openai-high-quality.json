@@ -1,0 +1,12 @@
+{
+    "code": "OPENAI_HIGH_QUALITY",
+    "officialModelId": "gpt-image-1",
+    "displayNameZh": "OpenAI 高质量",
+    "displayNameEn": "OpenAI High Quality",
+    "strengths": ["identity-preservation", "high-fidelity-edit", "transparent-background", "product-cutout"],
+    "renderer": {
+        "preferNaturalLanguage": true,
+        "supportsNegativePrompt": false,
+        "supportsReferenceImage": true
+    }
+}

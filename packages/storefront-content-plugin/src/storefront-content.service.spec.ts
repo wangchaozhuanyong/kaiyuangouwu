@@ -119,6 +119,197 @@ describe('StorefrontContentService input validation', () => {
             ),
         ).toThrow(/必须填写优惠码/);
     });
+
+    it('reserves one stable code and a complete design shape for each auth page visual', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const authInput = createInput({
+            code: 'auth-login-visual',
+            type: 'AUTH_LOGIN',
+            layoutVariant: 'HERO_OVERLAY',
+            targetType: 'NONE',
+            targetValue: null,
+            translations: [
+                {
+                    languageCode: LanguageCode.zh_Hans,
+                    title: '登录你的 AI 新世界',
+                    subtitle: '创作、编程与办公工具，一站高效管理',
+                    ctaLabel: 'AI 软件精选平台',
+                },
+            ],
+            settings: { accentColor: '#67e8f9' },
+            items: [0, 1, 2].map(position => ({
+                enabled: true,
+                position,
+                targetType: 'NONE' as const,
+                targetValue: null,
+                translations: [{ languageCode: LanguageCode.zh_Hans, label: `卖点 ${String(position + 1)}` }],
+            })),
+        });
+        const normalized = validate(authInput);
+
+        expect(() => (service as any).validateAuthVisual(normalized, authInput.items)).not.toThrow();
+        expect(() => validate({ ...authInput, code: 'another-login-visual' })).toThrow(/系统保留编码/);
+        expect(() =>
+            (service as any).validateAuthVisual(normalized, authInput.items?.slice(0, 2) ?? []),
+        ).toThrow(/三个顺序固定/);
+        expect(() =>
+            (service as any).validateAuthVisual(
+                { ...normalized, settings: { accentColor: 'cyan' } },
+                authInput.items,
+            ),
+        ).toThrow(/强调色/);
+    });
+
+    it('reserves one system code for the storefront navigation block', () => {
+        expect(() =>
+            validate(
+                createInput({
+                    code: 'another-navigation',
+                    type: 'NAVIGATION',
+                    targetType: 'NONE',
+                    targetValue: null,
+                }),
+            ),
+        ).toThrow(/系统保留编码/);
+
+        expect(() =>
+            validate(
+                createInput({
+                    code: 'storefront-navigation',
+                    type: 'NAVIGATION',
+                    targetType: 'NONE',
+                    targetValue: null,
+                }),
+            ),
+        ).not.toThrow();
+        expect(() =>
+            validate(
+                createInput({
+                    code: 'storefront-navigation',
+                    type: 'CUSTOM',
+                    targetType: 'NONE',
+                    targetValue: null,
+                }),
+            ),
+        ).toThrow(/系统保留编码/);
+    });
+
+    it('limits navigation configuration to five supported internal pages', async () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const item = (position: number, targetValue = '/') => ({
+            enabled: true,
+            position,
+            targetType: 'PAGE' as const,
+            targetValue,
+            translations: [{ languageCode: LanguageCode.zh_Hans, label: '导航 ' + String(position + 1) }],
+        });
+
+        await expect(
+            (service as any).syncItems(
+                { channelId: 'store-a' },
+                { type: 'NAVIGATION' },
+                Array.from({ length: 6 }, (_, index) => item(index)),
+            ),
+        ).rejects.toThrow(/1 到 5/);
+        await expect(
+            (service as any).syncItems({ channelId: 'store-a' }, { type: 'NAVIGATION' }, [item(0, '/admin')]),
+        ).rejects.toThrow(/不支持的站内页面/);
+        expect(() => (service as any).validateNavigationItems([item(0, '/services')])).not.toThrow();
+    });
+
+    it('reserves and validates the category client plugin layout', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const pluginItem = (pluginCode: string, placement = 'BEFORE_PRODUCT_LIST') => ({
+            enabled: true,
+            position: 0,
+            targetType: 'NONE' as const,
+            targetValue: null,
+            settings: { pluginCode, placement },
+            translations: [{ languageCode: LanguageCode.zh_Hans, label: pluginCode }],
+        });
+
+        expect(() =>
+            validate(
+                createInput({
+                    code: 'storefront-client-plugins',
+                    type: 'CLIENT_PLUGINS',
+                    targetType: 'NONE',
+                    targetValue: null,
+                }),
+            ),
+        ).not.toThrow();
+        expect(() =>
+            validate(
+                createInput({
+                    code: 'another-client-plugin-layout',
+                    type: 'CLIENT_PLUGINS',
+                    targetType: 'NONE',
+                    targetValue: null,
+                }),
+            ),
+        ).toThrow(/系统保留编码/);
+        expect(() =>
+            (service as any).validateClientPluginItems([
+                pluginItem('category-coupon-entry'),
+                pluginItem('category-coupon-entry'),
+            ]),
+        ).toThrow(/不能重复添加/);
+        expect(() =>
+            (service as any).validateClientPluginItems([
+                pluginItem('category-coupon-entry', 'INSIDE_PRODUCT_CARD'),
+            ]),
+        ).toThrow(/不支持的分类页位置/);
+        expect(() => (service as any).validateClientPluginItems([pluginItem('not-released')])).toThrow(
+            /尚未在平台发布/,
+        );
+        expect(() =>
+            (service as any).validateClientPluginItems([
+                { ...pluginItem('category-coupon-entry'), targetType: 'URL', targetValue: '/coupons' },
+            ]),
+        ).toThrow(/不能配置独立跳转目标/);
+        expect(() =>
+            (service as any).validateClientPluginItems([
+                {
+                    ...pluginItem('category-coupon-entry'),
+                    settings: {
+                        pluginCode: 'category-coupon-entry',
+                        placement: 'BEFORE_PRODUCT_LIST',
+                        categoryScope: 'SELECTED',
+                        categoryIds: [],
+                        includeChildren: true,
+                    },
+                },
+            ]),
+        ).toThrow(/至少需要选择一个分类/);
+        expect(() =>
+            (service as any).validateClientPluginItems([
+                {
+                    ...pluginItem('category-coupon-entry'),
+                    settings: {
+                        pluginCode: 'category-coupon-entry',
+                        placement: 'BUSINESS_SERVICES_MAIN',
+                        categoryScope: 'SELECTED',
+                        categoryIds: [],
+                        includeChildren: true,
+                    },
+                },
+            ]),
+        ).not.toThrow();
+        expect(() =>
+            (service as any).validateClientPluginItems([
+                {
+                    ...pluginItem('category-coupon-entry'),
+                    settings: {
+                        pluginCode: 'category-coupon-entry',
+                        placement: 'BEFORE_PRODUCT_LIST',
+                        categoryScope: 'SELECTED',
+                        categoryIds: ['collection-1'],
+                        includeChildren: true,
+                    },
+                },
+            ]),
+        ).not.toThrow();
+    });
 });
 
 describe('StorefrontContentService publication guard', () => {
@@ -354,5 +545,84 @@ describe('StorefrontContentService carousel settings', () => {
         await expect(service.updateSettings(context, { heroAutoplayIntervalSeconds: 31 })).rejects.toThrow(
             /3 到 30 秒/,
         );
+    });
+});
+
+describe('StorefrontContentService optimistic concurrency', () => {
+    const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+
+    it('accepts the exact updatedAt version loaded by the editor', () => {
+        const version = new Date('2026-08-27T10:00:00.000Z');
+
+        expect(() => (service as any).assertExpectedUpdatedAt(version, version.toISOString())).not.toThrow();
+    });
+
+    it('rejects a stale or invalid editor version', () => {
+        const current = new Date('2026-08-27T10:00:01.000Z');
+
+        expect(() => (service as any).assertExpectedUpdatedAt(current, '2026-08-27T10:00:00.000Z')).toThrow(
+            /CONCURRENT_MODIFICATION/,
+        );
+        expect(() => (service as any).assertExpectedUpdatedAt(current, 'invalid-date')).toThrow(
+            /CONCURRENT_MODIFICATION/,
+        );
+    });
+
+    it('locks the complete Channel block set before applying a composite change', async () => {
+        const updatedAt = new Date('2026-08-27T10:00:00.000Z');
+        const blocks = [
+            new StorefrontContentBlock({ id: 'block-1', channelId: 'store-a', updatedAt }),
+            new StorefrontContentBlock({ id: 'block-2', channelId: 'store-a', updatedAt }),
+        ];
+        const queryBuilder = {
+            setLock: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            getMany: vi.fn().mockResolvedValue(blocks),
+        };
+        const repository = {
+            createQueryBuilder: vi.fn().mockReturnValue(queryBuilder),
+            find: vi.fn().mockResolvedValue(blocks),
+        };
+        const guardedService = new StorefrontContentService(
+            { getRepository: vi.fn().mockReturnValue(repository) } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await expect(
+            (guardedService as any).lockAndAssertBlockVersions(
+                { channelId: 'store-a' },
+                blocks.map(block => ({ id: block.id, expectedUpdatedAt: updatedAt.toISOString() })),
+            ),
+        ).resolves.toBeUndefined();
+        expect(queryBuilder.setLock).toHaveBeenCalledWith('pessimistic_write');
+        expect(queryBuilder.orderBy).toHaveBeenCalledWith('block.id', 'ASC');
+    });
+
+    it('rejects a composite change when another administrator added or removed a block', async () => {
+        const updatedAt = new Date('2026-08-27T10:00:00.000Z');
+        const blocks = [new StorefrontContentBlock({ id: 'block-1', channelId: 'store-a', updatedAt })];
+        const queryBuilder = {
+            setLock: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            getMany: vi.fn().mockResolvedValue(blocks),
+        };
+        const repository = {
+            createQueryBuilder: vi.fn().mockReturnValue(queryBuilder),
+            find: vi.fn().mockResolvedValue(blocks),
+        };
+        const guardedService = new StorefrontContentService(
+            { getRepository: vi.fn().mockReturnValue(repository) } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+        await expect(
+            (guardedService as any).lockAndAssertBlockVersions({ channelId: 'store-a' }, []),
+        ).rejects.toThrow(/CONCURRENT_MODIFICATION/);
     });
 });

@@ -46,9 +46,13 @@ import {
     FileBasedTemplateLoader,
 } from '@vendure/email-plugin';
 import { HardenPlugin } from '@vendure/harden-plugin';
+import { ImageGenerationPlugin } from '@vendure/image-generation-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
-import { StoreManagementPlugin } from '@vendure/store-management-plugin';
+import {
+    StoreDefaultCurrencyPriceSelectionStrategy,
+    StoreManagementPlugin,
+} from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
@@ -536,8 +540,9 @@ export const devConfig: VendureConfig = {
         paymentMethodHandlers: IS_PRODUCTION ? [] : [dummyPaymentHandler],
     },
     catalogOptions: {
+        productVariantPriceSelectionStrategy: new StoreDefaultCurrencyPriceSelectionStrategy(),
         productVariantPriceUpdateStrategy: new DefaultProductVariantPriceUpdateStrategy({
-            syncPricesAcrossChannels: true,
+            syncPricesAcrossChannels: false,
         }),
     },
     customFields: {
@@ -780,6 +785,44 @@ export const devConfig: VendureConfig = {
                 ],
             },
             {
+                name: 'usdtRateScheduleMode',
+                type: 'string',
+                length: 16,
+                nullable: false,
+                defaultValue: 'INTERVAL',
+                public: false,
+                ui: { dashboard: false },
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: 'USDT 汇率采集计划' },
+                    { languageCode: LanguageCode.en, value: 'USDT rate collection schedule' },
+                ],
+            },
+            {
+                name: 'usdtRateIntervalMinutes',
+                type: 'int',
+                nullable: false,
+                defaultValue: 5,
+                public: false,
+                ui: { dashboard: false },
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: 'USDT 汇率采集间隔（分钟）' },
+                    { languageCode: LanguageCode.en, value: 'USDT rate interval (minutes)' },
+                ],
+            },
+            {
+                name: 'usdtRateDailyTime',
+                type: 'string',
+                length: 5,
+                nullable: false,
+                defaultValue: '10:00',
+                public: false,
+                ui: { dashboard: false },
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: 'USDT 每日采集时间' },
+                    { languageCode: LanguageCode.en, value: 'USDT daily collection time' },
+                ],
+            },
+            {
                 name: 'cnyPerUsdtRate',
                 type: 'float',
                 nullable: true,
@@ -857,6 +900,11 @@ export const devConfig: VendureConfig = {
                       trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
                       bypassHosts: storeDomainBypassHosts(),
                   }),
+                  ImageGenerationPlugin.init({
+                      storageRoot: process.env.IMAGE_GENERATION_STORAGE_ROOT,
+                      downloadSigningSecret: process.env.IMAGE_GENERATION_DOWNLOAD_SECRET,
+                      production: IS_PRODUCTION,
+                  }),
                   StorefrontCatalogPlugin,
                   StorefrontCartPlugin,
                   StorefrontContentPlugin,
@@ -902,7 +950,11 @@ export const devConfig: VendureConfig = {
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
         // Enable if you need to debug the job queue
         // BullMQJobQueuePlugin.init({}),
-        DefaultJobQueuePlugin.init({}),
+        DefaultJobQueuePlugin.init({
+            concurrency: queueName => (queueName === 'image-generation-output' ? 2 : 1),
+            backoffStrategy: (queueName, attempts) =>
+                queueName === 'image-generation-output' ? Math.min(30_000, 1_000 * 2 ** Math.max(0, attempts - 1)) : 1_000,
+        }),
         // JobQueueTestPlugin.init({ queueCount: 10 }),
         DefaultSchedulerPlugin.init({}),
         EmailPlugin.init(emailPluginOptions()),

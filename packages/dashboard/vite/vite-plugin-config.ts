@@ -54,9 +54,17 @@ export function viteConfigPlugin({ packageRoot, useExperimentalBundle }: ViteCon
             config.resolve = {
                 ...config.resolve,
                 // Dashboard extensions can be linked workspace packages. Without explicit
-                // de-duplication Vite may load React once from the app and again from an
-                // extension dependency, which results in an "Invalid hook call" at runtime.
-                dedupe: [...new Set([...(config.resolve?.dedupe ?? []), 'react', 'react-dom'])],
+                // de-duplication Vite may load React or Lingui once from the app and again
+                // from an extension, breaking hooks or leaving the i18n context disconnected.
+                dedupe: [
+                    ...new Set([
+                        ...(config.resolve?.dedupe ?? []),
+                        'react',
+                        'react-dom',
+                        '@lingui/core',
+                        '@lingui/react',
+                    ]),
+                ],
                 alias: {
                     ...(config.resolve?.alias ?? {}),
                     // See the readme for an explanation of this alias.

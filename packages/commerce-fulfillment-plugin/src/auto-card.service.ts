@@ -46,6 +46,7 @@ import {
 const loggerCtx = 'AutoCardService';
 const MAX_ADMIN_PAGE_SIZE = 100;
 const MAX_EMAIL_ATTEMPTS = 5;
+const MANUAL_RETRY_DEDUPLICATION_WINDOW_MS = 30_000;
 
 export interface AutoCardConfigView extends AutoCardConfig {
     fields: AutoCardFieldDefinition[];
@@ -586,12 +587,21 @@ export class AutoCardService {
     }
 
     async retryDelivery(ctx: RequestContext, id: ID): Promise<AutoCardDelivery> {
-        let delivery = await this.deliveryOrThrow(ctx, id);
+        let delivery = await this.lockDeliveryOrThrow(ctx, id);
         if (delivery.state === 'WAITING_STOCK') {
             delivery = await this.allocateExistingDelivery(ctx, delivery);
         }
         if (!['ALLOCATED', 'RETRYING', 'SENT', 'MANUAL_REVIEW'].includes(delivery.state)) {
             throw new UserInputError('当前发卡状态不支持重新发送');
+        }
+        const recentlyDispatched =
+            delivery.lastDispatchedAt != null &&
+            Date.now() - delivery.lastDispatchedAt.getTime() < MANUAL_RETRY_DEDUPLICATION_WINDOW_MS;
+        const dispatchStillPending =
+            recentlyDispatched &&
+            (delivery.state === 'SENT' || (delivery.state === 'RETRYING' && !delivery.lastError));
+        if (dispatchStillPending) {
+            throw new UserInputError('重发请求已进入邮件队列，请勿重复提交');
         }
         if (delivery.state !== 'SENT') {
             delivery.state = 'RETRYING';
@@ -742,7 +752,7 @@ export class AutoCardService {
                 .take(remainingQuantity)
                 .getMany();
         } catch (error) {
-            if (!(error instanceof LockNotSupportedOnGivenDriverError)) throw error;
+            if (!isLockNotSupportedError(error)) throw error;
             candidates = await repository.find({
                 where: { configId: delivery.configId, state: 'AVAILABLE' },
                 order: { sequence: 'ASC', id: 'ASC' },
@@ -920,6 +930,22 @@ export class AutoCardService {
         return delivery;
     }
 
+    private async lockDeliveryOrThrow(ctx: RequestContext, id: ID): Promise<AutoCardDelivery> {
+        const repository = this.connection.getRepository(ctx, AutoCardDelivery);
+        try {
+            const locked = await repository
+                .createQueryBuilder('delivery')
+                .setLock('pessimistic_write')
+                .where('delivery.id = :id', { id })
+                .andWhere('delivery.channelId = :channelId', { channelId: ctx.channelId })
+                .getOne();
+            if (!locked) throw new UserInputError('发卡记录不存在');
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+        return this.deliveryOrThrow(ctx, id);
+    }
+
     private addEvent(
         ctx: RequestContext,
         delivery: AutoCardDelivery,
@@ -938,6 +964,15 @@ export class AutoCardService {
             }),
         );
     }
+}
+
+function isLockNotSupportedError(error: unknown): boolean {
+    return (
+        error instanceof LockNotSupportedOnGivenDriverError ||
+        (error instanceof Error &&
+            (error.name === 'LockNotSupportedOnGivenDriverError' ||
+                error.message.toLowerCase().includes('locking not supported')))
+    );
 }
 
 function boundedInteger(

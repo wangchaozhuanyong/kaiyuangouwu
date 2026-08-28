@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 
+import { Channel } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreProfile } from './entities/store-profile.entity';
@@ -23,6 +24,7 @@ function profile(overrides: Record<string, unknown> = {}) {
     return Object.assign(
         new StoreProfile({
             id: 'profile-1',
+            updatedAt: new Date('2026-08-27T10:00:00.000Z'),
             channel: channel(),
             channelId: 'channel-1',
             status: 'DRAFT',
@@ -46,30 +48,50 @@ function createService(
         checks: [],
     },
 ) {
+    const profileLockBuilder = {
+        setLock: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getOne: vi.fn(() => (profileRepository.findOne as () => Promise<unknown>)()),
+    };
+    Object.assign(profileRepository, {
+        createQueryBuilder: vi.fn().mockReturnValue(profileLockBuilder),
+    });
+    const channelLockBuilder = {
+        setLock: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getOne: vi.fn().mockResolvedValue(channel()),
+    };
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
             if (entity === StoreProfile) return profileRepository;
+            if (entity === Channel) {
+                return { createQueryBuilder: vi.fn().mockReturnValue(channelLockBuilder) };
+            }
             return domainRepository;
         }),
     };
     const channelService = {
         getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform-seller' }),
-        update: vi.fn(async (_ctx, input) => ({ ...channel(), ...input })),
+        update: vi.fn((_ctx, input) => Promise.resolve({ ...channel(), ...input })),
     };
     const activationReadinessService = { get: vi.fn().mockResolvedValue(readiness) };
     const translations = {
-        prepareLocalizedFields: vi.fn(async fields =>
-            fields.map((field: any) => ({
-                path: field.path,
-                sourceText: field.sourceText,
-                translatedText:
-                    field.targetText?.trim() || field.existingTargetText || `translated-${field.path}`,
-                status: 'AUTO_TRANSLATED',
-                origin: 'AUTO',
-                locked: false,
-            })),
+        prepareLocalizedFields: vi.fn(fields =>
+            Promise.resolve(
+                fields.map((field: any) => ({
+                    path: field.path,
+                    sourceText: field.sourceText,
+                    translatedText:
+                        field.targetText?.trim() ||
+                        field.existingTargetText ||
+                        `translated-${field.path}`,
+                    status: 'AUTO_TRANSLATED',
+                    origin: 'AUTO',
+                    locked: false,
+                })),
+            ),
         ),
-        recordPreparedFields: vi.fn(async () => undefined),
+        recordPreparedFields: vi.fn(() => Promise.resolve()),
     };
     return {
         activationReadinessService,
@@ -85,7 +107,7 @@ function createService(
 
 describe('StoreProfileService', () => {
     it('creates an unpublished draft after the current last position', async () => {
-        const save = vi.fn(async value => value);
+        const save = vi.fn(value => Promise.resolve(value));
         const repository = {
             findOne: vi.fn().mockResolvedValue(null),
             find: vi.fn().mockResolvedValue([profile({ sortOrder: 4 })]),
@@ -109,12 +131,16 @@ describe('StoreProfileService', () => {
         const current = profile({ status: 'ACTIVE', isPublished: true });
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
-            save: vi.fn(async value => value),
+            save: vi.fn(value => Promise.resolve(value)),
         };
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { service } = createService(profileRepository, domainRepository);
 
-        const updated = await service.update({} as any, { id: current.id, status: 'ACTIVE' });
+        const updated = await service.update({} as any, {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            status: 'ACTIVE',
+        });
 
         expect(updated).toMatchObject({ status: 'ACTIVE', isPublished: false, isOperational: true });
     });
@@ -123,7 +149,7 @@ describe('StoreProfileService', () => {
         const current = profile({ status: 'DRAFT' });
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
-            save: vi.fn(async value => value),
+            save: vi.fn(value => Promise.resolve(value)),
         };
         const readiness: StoreActivationReadiness = {
             ready: false,
@@ -139,9 +165,13 @@ describe('StoreProfileService', () => {
         };
         const { service } = createService(profileRepository, {}, readiness);
 
-        await expect(service.update({} as any, { id: current.id, status: 'ACTIVE' })).rejects.toThrow(
-            '验证并设置主域名；启用至少一种非测试支付方式',
-        );
+        await expect(
+            service.update({} as any, {
+                id: current.id,
+                expectedUpdatedAt: current.updatedAt,
+                status: 'ACTIVE',
+            }),
+        ).rejects.toThrow('验证并设置主域名；启用至少一种非测试支付方式');
         expect(profileRepository.save).not.toHaveBeenCalled();
     });
 
@@ -149,7 +179,7 @@ describe('StoreProfileService', () => {
         const current = profile();
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
-            save: vi.fn(async value => value),
+            save: vi.fn(value => Promise.resolve(value)),
         };
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { channelService, service } = createService(profileRepository, domainRepository);
@@ -157,6 +187,7 @@ describe('StoreProfileService', () => {
 
         await service.update(ctx, {
             id: current.id,
+            expectedUpdatedAt: current.updatedAt,
             storefrontNameZh: '软件商城',
             storefrontNameEn: 'Software Shop',
         });
@@ -185,13 +216,14 @@ describe('StoreProfileService', () => {
         });
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
-            save: vi.fn(async value => value),
+            save: vi.fn(value => Promise.resolve(value)),
         };
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { channelService, service } = createService(profileRepository, domainRepository);
 
         const updated = await service.update({} as any, {
             id: current.id,
+            expectedUpdatedAt: current.updatedAt,
             descriptionZh: ' AI 软件商城 ',
             internalNote: ' 马来西亚团队跟进 ',
         });
@@ -205,13 +237,14 @@ describe('StoreProfileService', () => {
         const current = profile();
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
-            save: vi.fn(async value => value),
+            save: vi.fn(value => Promise.resolve(value)),
         };
         const domainRepository = { find: vi.fn().mockResolvedValue([]) };
         const { channelService, service } = createService(profileRepository, domainRepository);
         const ctx = { channelId: 'channel-1' } as any;
 
         const updated = await service.updateForMerchant(ctx, {
+            expectedUpdatedAt: current.updatedAt,
             storefrontNameZh: '新店铺',
             storefrontNameEn: 'New Store',
             descriptionZh: '新的中文简介',
@@ -237,16 +270,35 @@ describe('StoreProfileService', () => {
         const current = profile();
         const profileRepository = {
             findOne: vi.fn().mockResolvedValue(current),
-            save: vi.fn(async value => value),
+            save: vi.fn(value => Promise.resolve(value)),
         };
         const { channelService, service } = createService(profileRepository, {});
 
         await expect(
             service.updateForMerchant({ channelId: 'channel-1' } as any, {
+                expectedUpdatedAt: current.updatedAt,
                 storefrontNameZh: '这是一个明显超过限制长度的店铺显示名称',
             }),
         ).rejects.toThrow('1 至 16 个显示单位');
         expect(channelService.update).not.toHaveBeenCalled();
+        expect(profileRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects a stale profile version before applying changes', async () => {
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const { service } = createService(profileRepository, { find: vi.fn().mockResolvedValue([]) });
+
+        await expect(
+            service.update({} as any, {
+                id: current.id,
+                expectedUpdatedAt: new Date('2026-08-27T09:59:59.000Z'),
+                descriptionZh: '旧页面修改',
+            }),
+        ).rejects.toThrow(/CONCURRENT_MODIFICATION/);
         expect(profileRepository.save).not.toHaveBeenCalled();
     });
 });

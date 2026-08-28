@@ -13,6 +13,7 @@ import {
     PageTitle,
     Skeleton,
     Textarea,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -172,9 +173,15 @@ function StorefrontPromotionPage() {
     };
 
     const busy = saveMutation.isPending || publishMutation.isPending || resetMutation.isPending;
+    const isDirty = Boolean(
+        draft &&
+        page &&
+        JSON.stringify(draft) !== JSON.stringify({ contentType: page.contentType, source: page.draftSource }),
+    );
 
     return (
         <Page pageId="storefront-promotion">
+            <UnsavedChangesConfirmation when={isDirty} />
             <PageTitle>短视频推广页</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>

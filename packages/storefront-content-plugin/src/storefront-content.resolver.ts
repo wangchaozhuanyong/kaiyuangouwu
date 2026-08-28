@@ -1,9 +1,10 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
+import { Allow, Ctx, ForbiddenError, ID, Permission, RequestContext, Transaction } from '@vendure/core';
 
 import { storefrontContentPermission } from './constants';
 import { StorefrontContentService } from './storefront-content.service';
 import {
+    ApplyStorefrontContentChangesInput,
     CreateStorefrontContentBlockInput,
     UpdateStorefrontContentBlockInput,
     UpdateStorefrontContentSettingsInput,
@@ -66,6 +67,21 @@ export class StorefrontContentAdminResolver {
         @Args('input') input: UpdateStorefrontContentBlockInput,
     ) {
         return this.storefrontContentService.update(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(storefrontContentPermission.Create, storefrontContentPermission.Update)
+    applyStorefrontContentChanges(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: ApplyStorefrontContentChangesInput,
+    ) {
+        const canUpdate = ctx.userHasPermissions([storefrontContentPermission.Update]);
+        const canCreate = ctx.userHasPermissions([storefrontContentPermission.Create]);
+        if (!canUpdate || (input.creates.length > 0 && !canCreate)) {
+            throw new ForbiddenError();
+        }
+        return this.storefrontContentService.applyChanges(ctx, input);
     }
 
     @Transaction()

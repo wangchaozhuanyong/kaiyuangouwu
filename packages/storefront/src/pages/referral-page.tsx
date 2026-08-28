@@ -1,6 +1,6 @@
 /* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
 import { useQuery } from '@tanstack/react-query';
-import { Check, Copy, Gift, Image, Share2, ShoppingBag, Users, WalletCards } from 'lucide-react';
+import { Check, Copy, Gift, Image, Info, Share2, ShoppingBag, Users, WalletCards } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { ShopApi } from '../api';
@@ -137,16 +137,13 @@ export function ReferralPage() {
             ) : (
                 <div className="mx-auto grid w-full max-w-5xl gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
                     <section className="overflow-hidden rounded-3xl bg-[radial-gradient(circle_at_88%_0%,rgba(251,191,36,0.5),transparent_28%),linear-gradient(145deg,#991b1b,#dc2626_58%,#be123c)] p-5 text-white shadow-[0_18px_50px_-24px_rgba(153,27,27,0.7)] lg:p-7">
-                        <p className="m-0 text-xs font-extrabold uppercase tracking-[0.2em] text-amber-200">
-                            {isZh ? '好友邀请计划' : 'Invite friends'}
-                        </p>
-                        <h1 className="mb-0 mt-3 text-3xl font-black tracking-tight">
-                            {isZh ? '分享好物，奖励可直接抵扣消费' : 'Share more, save on your next order'}
+                        <h1 className="m-0 text-3xl font-black tracking-tight">
+                            {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
                         </h1>
                         <p className="mb-0 mt-3 max-w-xl text-sm leading-6 text-red-50/90">
                             {isZh
-                                ? `好友通过你的链接或邀请码注册并成功消费后，你可获得订单有效商品金额的 ${overview.rewardRate}% 奖励。退款会按比例扣回。`
-                                : `Earn ${overview.rewardRate}% of eligible product spend after an invited friend pays. Refunds are clawed back proportionally.`}
+                                ? `好友成功消费，你可获得 ${overview.rewardRate}% 奖励用于消费抵扣。`
+                                : `Earn ${overview.rewardRate}% in rewards when a friend makes a purchase.`}
                         </p>
                         <div className="mt-6 rounded-2xl border border-white/25 bg-white/12 p-4 backdrop-blur">
                             <small className="font-bold text-red-100">
@@ -213,48 +210,50 @@ export function ReferralPage() {
                             accent="text-violet-600 bg-violet-50"
                         />
                         <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-                            <div className="flex justify-between">
-                                <span>{isZh ? '累计获得' : 'Total earned'}</span>
-                                <strong className="text-slate-900">
-                                    {formatMoney(
-                                        rewardSummary?.grossReward ?? 0,
-                                        market.currencyCode,
-                                        locale,
-                                    )}
+                            <div className="mb-3 flex items-center justify-between">
+                                <strong className="text-sm font-extrabold text-slate-900">
+                                    {isZh ? '奖励概览' : 'Reward overview'}
                                 </strong>
+                                <RewardInfo isZh={isZh} releaseDelayDays={overview.releaseDelayDays} />
                             </div>
-                            <div className="mt-2 flex justify-between">
-                                <span>{isZh ? '退款扣回' : 'Refund clawbacks'}</span>
-                                <strong className="text-red-600">
-                                    -
-                                    {formatMoney(
-                                        rewardSummary?.clawedBackReward ?? 0,
-                                        market.currencyCode,
-                                        locale,
-                                    )}
-                                </strong>
-                            </div>
-                            <p className="mb-0 mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">
-                                {isZh
-                                    ? `奖励在订单成功后进入待生效，默认 ${overview.releaseDelayDays} 天后可用；仅能购物抵扣，提现需联系客服并由有权限的管理员人工处理。`
-                                    : `Rewards become available ${overview.releaseDelayDays} days after payment. They are for order spend; withdrawals require support and authorized manual processing.`}
-                            </p>
+                            <dl className="m-0 grid grid-cols-2 divide-x divide-slate-200 rounded-xl bg-slate-50 py-3 text-center">
+                                <div className="min-w-0 px-3">
+                                    <dt className="text-xs font-semibold text-slate-500">
+                                        {isZh ? '累计获得' : 'Total earned'}
+                                    </dt>
+                                    <dd className="mb-0 mt-1 truncate text-base font-black tabular-nums text-slate-900">
+                                        {formatMoney(
+                                            rewardSummary?.grossReward ?? 0,
+                                            market.currencyCode,
+                                            locale,
+                                        )}
+                                    </dd>
+                                </div>
+                                <div className="min-w-0 px-3">
+                                    <dt className="text-xs font-semibold text-slate-500">
+                                        {isZh ? '退款扣回' : 'Refund clawbacks'}
+                                    </dt>
+                                    <dd className="mb-0 mt-1 truncate text-base font-black tabular-nums text-red-600">
+                                        -
+                                        {formatMoney(
+                                            rewardSummary?.clawedBackReward ?? 0,
+                                            market.currencyCode,
+                                            locale,
+                                        )}
+                                    </dd>
+                                </div>
+                            </dl>
                         </div>
                     </section>
 
                     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
-                        <div className="mb-3 flex items-end justify-between">
-                            <div>
-                                <h2 className="m-0 text-lg font-black text-slate-900">
-                                    {isZh ? '邀请记录' : 'Invitees'}
-                                </h2>
-                                <p className="mb-0 mt-1 text-xs text-slate-500">
-                                    {isZh
-                                        ? '只展示脱敏信息，保护好友隐私'
-                                        : 'Personal details are masked for privacy'}
-                                </p>
-                            </div>
-                            <span className="text-xs font-bold text-slate-500">{overview.invitedCount}</span>
+                        <div className="mb-3 flex items-center justify-between">
+                            <h2 className="m-0 text-lg font-black text-slate-900">
+                                {isZh ? '邀请记录' : 'Invitees'}
+                            </h2>
+                            <span className="text-xs font-bold tabular-nums text-slate-500">
+                                {overview.invitedCount}
+                            </span>
                         </div>
                         {overview.invitees.length ? (
                             <div className="divide-y divide-slate-100">
@@ -297,15 +296,13 @@ export function ReferralPage() {
                     </section>
 
                     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
-                        <div className="mb-3">
+                        <div className="mb-3 flex items-center justify-between">
                             <h2 className="m-0 text-lg font-black text-slate-900">
                                 {isZh ? '奖励流水' : 'Reward activity'}
                             </h2>
-                            <p className="mb-0 mt-1 text-xs text-slate-500">
-                                {isZh
-                                    ? '奖励、生效、退款扣回、消费与人工提款全程留痕'
-                                    : 'A complete trail of rewards, clawbacks, spend and withdrawals'}
-                            </p>
+                            <span className="text-xs font-bold tabular-nums text-slate-500">
+                                {displayLedger.length}
+                            </span>
                         </div>
                         {displayLedger.length ? (
                             <div className="divide-y divide-slate-100">
@@ -334,6 +331,7 @@ export function ReferralPage() {
                     language={language}
                     rewardRate={overview.rewardRate}
                     templates={programQuery.data.posterTemplates}
+                    templateConfigs={programQuery.data.posterTemplateConfigs ?? []}
                     defaultTemplate={programQuery.data.defaultPosterTemplate}
                     onClose={() => setShowPoster(false)}
                     onNotify={onNotify}
@@ -355,15 +353,38 @@ function SummaryCard({
     accent: string;
 }) {
     return (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <span className={`grid size-9 place-items-center rounded-xl ${accent} [&_svg]:size-4`}>
+        <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-4 text-center shadow-sm">
+            <span className={`grid size-10 place-items-center rounded-xl ${accent} [&_svg]:size-[18px]`}>
                 {icon}
             </span>
-            <strong className="mt-4 block truncate text-xl font-black tabular-nums text-slate-900">
+            <strong className="mt-3 block w-full truncate text-center text-xl font-black leading-none tabular-nums text-slate-900">
                 {value}
             </strong>
-            <small className="mt-1 block font-semibold text-slate-500">{label}</small>
+            <small className="mt-2 block text-center text-xs font-semibold leading-4 text-slate-500">
+                {label}
+            </small>
         </div>
+    );
+}
+
+function RewardInfo({ isZh, releaseDelayDays }: { isZh: boolean; releaseDelayDays: number }) {
+    return (
+        <details className="group relative">
+            <summary
+                className="grid size-8 cursor-pointer list-none place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden"
+                aria-label={isZh ? '查看奖励说明' : 'View reward details'}
+            >
+                <Info className="size-4" aria-hidden="true" />
+            </summary>
+            <div
+                className="absolute right-0 z-20 mt-2 w-[min(18rem,calc(100vw-3.5rem))] rounded-xl border border-slate-200 bg-white p-3 text-left text-xs font-medium leading-5 text-slate-600 shadow-[0_14px_36px_-16px_rgba(15,23,42,0.45)]"
+                role="note"
+            >
+                {isZh
+                    ? `奖励在订单成功后进入待生效，默认 ${releaseDelayDays} 天后可用，可用于消费抵扣。`
+                    : `Rewards become available ${releaseDelayDays} days after payment and can be applied to future orders.`}
+            </div>
+        </details>
     );
 }
 

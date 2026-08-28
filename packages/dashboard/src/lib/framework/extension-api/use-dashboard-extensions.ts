@@ -3,6 +3,13 @@ import { runDashboardExtensions } from 'virtual:dashboard-extensions';
 
 import { onExtensionSourceChange } from './define-dashboard-extension.js';
 
+let dashboardExtensionsPromise: Promise<void> | undefined;
+
+function loadDashboardExtensionsOnce(): Promise<void> {
+    dashboardExtensionsPromise ??= runDashboardExtensions();
+    return dashboardExtensionsPromise;
+}
+
 /**
  * @description
  * This hook is used to load dashboard extensions via the `virtual:dashboard-extensions` module,
@@ -12,16 +19,31 @@ import { onExtensionSourceChange } from './define-dashboard-extension.js';
  */
 export function useDashboardExtensions() {
     const [extensionsLoaded, setExtensionsLoaded] = useState(false);
+    const [extensionLoadError, setExtensionLoadError] = useState<Error | null>(null);
     const [reloadCount, setReloadCount] = useState(0);
 
     useEffect(() => {
-        void runDashboardExtensions().then(() => setExtensionsLoaded(true));
-        onExtensionSourceChange(() => {
+        let mounted = true;
+        void loadDashboardExtensionsOnce().then(
+            () => {
+                if (mounted) setExtensionsLoaded(true);
+            },
+            error => {
+                if (mounted) {
+                    setExtensionLoadError(error instanceof Error ? error : new Error('后台扩展加载失败'));
+                }
+            },
+        );
+        const unsubscribe = onExtensionSourceChange(() => {
             // Setting this state var is only really done
             // in order to force a re-render of components using this hook.
             // This allows components to react to HMR events during development.
             setReloadCount(old => old + 1);
         });
+        return () => {
+            mounted = false;
+            unsubscribe?.();
+        };
     }, []);
-    return { extensionsLoaded, reloadCount };
+    return { extensionsLoaded, extensionLoadError, reloadCount };
 }

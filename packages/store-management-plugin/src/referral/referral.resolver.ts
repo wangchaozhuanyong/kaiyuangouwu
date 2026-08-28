@@ -14,6 +14,8 @@ import {
     CreateReferralWithdrawalInput,
     ProcessReferralWithdrawalInput,
     ReferralService,
+    SaveReferralPosterTemplateInput,
+    UpdateReferralPosterTemplateInput,
     UpdateReferralProgramInput,
 } from './referral.service';
 
@@ -61,8 +63,8 @@ export class ReferralShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Public)
-    recordStorefrontVisit(@Ctx() ctx: RequestContext, @Args('visitorId') visitorId?: string) {
-        return this.referralService.recordVisit(ctx, visitorId);
+    recordStorefrontVisit(@Ctx() ctx: RequestContext) {
+        return this.referralService.recordVisit(ctx);
     }
 }
 
@@ -130,11 +132,44 @@ export class ReferralAdminResolver {
         return this.referralService.adminWithdrawals(ctx, skip, take);
     }
 
+    @Query()
+    @Allow(referralPermission.Read)
+    referralCustomerWallets(@Ctx() ctx: RequestContext, @Args('customerId') customerId: ID) {
+        return this.referralService.adminCustomerWallets(ctx, customerId);
+    }
+
     @Transaction()
     @Mutation()
     @Allow(referralPermission.Update)
     updateReferralProgram(@Ctx() ctx: RequestContext, @Args('input') input: UpdateReferralProgramInput) {
         return this.referralService.updateProgram(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(referralPermission.Create)
+    createReferralPosterTemplate(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: SaveReferralPosterTemplateInput,
+    ) {
+        return this.referralService.createPosterTemplate(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(referralPermission.Update)
+    updateReferralPosterTemplate(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateReferralPosterTemplateInput,
+    ) {
+        return this.referralService.updatePosterTemplate(ctx, input);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(referralPermission.Delete)
+    deleteReferralPosterTemplate(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.referralService.deletePosterTemplate(ctx, id);
     }
 
     @Transaction()

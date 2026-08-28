@@ -1,0 +1,45 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://example.invalid/image-prompt-pro/prompt-spec.schema.json",
+    "title": "ImagePromptSpec",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "useCase",
+        "subject",
+        "scene",
+        "composition",
+        "lighting",
+        "style",
+        "colors",
+        "materials",
+        "exactText",
+        "preserve",
+        "avoid",
+        "referenceMode"
+    ],
+    "properties": {
+        "useCase": {
+            "enum": [
+                "product-photo",
+                "ecommerce-poster",
+                "portrait",
+                "interior-design",
+                "illustration",
+                "reference-edit"
+            ]
+        },
+        "subject": { "type": "string", "maxLength": 1200 },
+        "scene": { "type": "string", "maxLength": 800 },
+        "composition": { "type": "string", "maxLength": 800 },
+        "lighting": { "type": "string", "maxLength": 500 },
+        "camera": { "type": "string", "maxLength": 500, "default": "" },
+        "style": { "type": "string", "maxLength": 500 },
+        "colors": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 80 } },
+        "materials": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 120 } },
+        "exactText": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 300 } },
+        "preserve": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 200 } },
+        "avoid": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 160 } },
+        "referenceMode": { "enum": ["NONE", "STYLE", "COMPOSITION", "IDENTITY", "PRODUCT", "EDIT"] }
+    }
+}

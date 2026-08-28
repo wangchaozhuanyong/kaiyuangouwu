@@ -3,6 +3,7 @@ import { AssignedChannels } from '@/vdb/components/shared/assigned-channels.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
 import { TranslatableFormFieldWrapper } from '@/vdb/components/shared/translatable-form-field.js';
+import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
@@ -25,6 +26,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, ParsedLocation, useLocation, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { ProductOptionsTable } from '../_products/components/product-options-table.js';
+import { SharedOptionGroupWarning } from '../_products/components/shared-option-group-warning.js';
 import {
     createProductOptionGroupDocument,
     productIdNameDocument,
@@ -178,36 +180,61 @@ function OptionGroupDetailPage() {
                             label={<Trans>Name</Trans>}
                             render={({ field }) => <Input {...field} />}
                         />
-                        <FormFieldWrapper
-                            control={form.control}
-                            name="code"
-                            label={<Trans>Code</Trans>}
-                            render={({ field }) => (
-                                <SlugInput
-                                    fieldName="code"
-                                    watchFieldName="name"
-                                    entityName="ProductOptionGroup"
-                                    entityId={entity?.id}
-                                    {...field}
-                                />
-                            )}
-                        />
                     </DetailFormGrid>
+                    <details className="rounded-md border bg-muted/20 px-4 py-3">
+                        <summary className="cursor-pointer text-sm font-medium">
+                            <Trans>Details and configuration</Trans>
+                        </summary>
+                        <div className="mt-4">
+                            <FormFieldWrapper
+                                control={form.control}
+                                name="code"
+                                label={<Trans>Code</Trans>}
+                                render={({ field }) => (
+                                    <SlugInput
+                                        fieldName="code"
+                                        watchFieldName="name"
+                                        entityName="ProductOptionGroup"
+                                        entityId={entity?.id}
+                                        {...field}
+                                    />
+                                )}
+                            />
+                        </div>
+                    </details>
                 </PageBlock>
                 <CustomFieldsPageBlock column="main" entityType="ProductOptionGroup" control={form.control} />
                 {entity && (
-                    <PageBlock column="main" blockId="product-options" title={<Trans>Product Options</Trans>}>
-                        <ProductOptionsTable
-                            productOptionGroupId={entity.id}
-                            getOptionHref={optionId => `/option-groups/${entity.id}/options/${optionId}`}
-                            newOptionHref={`/option-groups/${entity.id}/options/new`}
-                            linkSearch={search.from === 'product' ? search : undefined}
-                        />
+                    <PageBlock
+                        column="main"
+                        blockId="products"
+                        title={
+                            <span className="inline-flex items-center gap-2">
+                                <Trans>Linked products</Trans>
+                                <Badge variant="secondary">{entity.productCount}</Badge>
+                            </span>
+                        }
+                        description={
+                            <Trans>
+                                These products currently use this template. Open a product to change or remove
+                                the link.
+                            </Trans>
+                        }
+                    >
+                        <OptionGroupProductsBlock optionGroupId={entity.id} />
                     </PageBlock>
                 )}
                 {entity && (
-                    <PageBlock column="side" blockId="products" title={<Trans>Products</Trans>}>
-                        <OptionGroupProductsBlock optionGroupId={entity.id} />
+                    <PageBlock column="main" blockId="product-options" title={<Trans>Option Values</Trans>}>
+                        <div className="space-y-4">
+                            <SharedOptionGroupWarning productCount={entity.productCount} />
+                            <ProductOptionsTable
+                                productOptionGroupId={entity.id}
+                                getOptionHref={optionId => `/option-groups/${entity.id}/options/${optionId}`}
+                                newOptionHref={`/option-groups/${entity.id}/options/new`}
+                                linkSearch={search.from === 'product' ? search : undefined}
+                            />
+                        </div>
                     </PageBlock>
                 )}
                 {channels.length > 1 && entity && (

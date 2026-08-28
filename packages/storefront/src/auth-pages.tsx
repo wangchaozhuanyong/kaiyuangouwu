@@ -19,7 +19,7 @@ import {
     ACCOUNT_PASSWORD_MIN_LENGTH,
     validateAccountPassword,
 } from './auth-validation';
-import { authVisualAccentColor, resolveAuthVisualMessage } from './auth-visual';
+import { authVisualAccentColor, authVisualOverlayColor, resolveAuthVisualMessage } from './auth-visual';
 import {
     attributionWithinWindow,
     captureReferralAttribution,
@@ -1059,7 +1059,7 @@ function AuthLayout({
     const heroStyle = authVisualVariant
         ? ({
               '--auth-hero-text-color': heroContent?.textColor ?? '#ffffff',
-              '--auth-hero-overlay-color': heroContent?.backgroundColor ?? '#020718',
+              '--auth-hero-overlay-color': authVisualOverlayColor(heroContent),
               '--auth-hero-accent-color': authVisualAccentColor(heroContent, authVisualVariant),
           } as CSSProperties)
         : undefined;
@@ -1077,33 +1077,37 @@ function AuthLayout({
                     decoding="async"
                     fetchPriority="high"
                 />
-                <button
-                    className="auth-back-button"
-                    type="button"
-                    onClick={onBack}
-                    aria-label={language === 'zh' ? '返回' : 'Back'}
-                >
-                    <ArrowLeft aria-hidden="true" />
-                </button>
-                <div className="auth-brand-lockup">
-                    <div className="auth-brand-main">
-                        {logoUrl ? (
-                            <img
-                                className="auth-brand-mark"
-                                src={storefrontWebpUrl(logoUrl, 'thumbnail')}
-                                alt={storefrontName}
-                            />
-                        ) : (
-                            <span className="auth-brand-mark" aria-hidden="true">
-                                桥
-                            </span>
-                        )}
-                        <strong>{storefrontName}</strong>
+                <header className="auth-hero-header">
+                    <button
+                        className="auth-back-button"
+                        type="button"
+                        onClick={onBack}
+                        aria-label={language === 'zh' ? '返回' : 'Back'}
+                    >
+                        <ArrowLeft aria-hidden="true" />
+                    </button>
+                    <div className="auth-brand-lockup">
+                        <div className="auth-brand-main">
+                            {logoUrl ? (
+                                <img
+                                    className="auth-brand-mark"
+                                    src={storefrontWebpUrl(logoUrl, 'thumbnail')}
+                                    alt={storefrontName}
+                                />
+                            ) : (
+                                <span className="auth-brand-mark" aria-hidden="true">
+                                    桥
+                                </span>
+                            )}
+                            <strong>{storefrontName}</strong>
+                        </div>
+                        <small>
+                            {language === 'zh'
+                                ? '智联云端 · 桥接未来'
+                                : 'Cloud intelligence · Bridging tomorrow'}
+                        </small>
                     </div>
-                    <small>
-                        {language === 'zh' ? '智联云端 · 桥接未来' : 'Cloud intelligence · Bridging tomorrow'}
-                    </small>
-                </div>
+                </header>
                 {heroMessage && (
                     <div className="auth-hero-message">
                         <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>

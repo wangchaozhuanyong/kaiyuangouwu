@@ -153,9 +153,7 @@ export function ReviewCenterPage({
                                         <Package aria-hidden="true" />
                                         <span>
                                             <strong>{candidate.productName}</strong>
-                                            <small>
-                                                {candidate.variantName} · {candidate.sku}
-                                            </small>
+                                            <small>{candidate.variantName}</small>
                                         </span>
                                         <span>
                                             {isZh ? '去评价' : 'Review'}

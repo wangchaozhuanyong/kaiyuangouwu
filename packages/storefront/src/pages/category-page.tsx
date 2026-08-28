@@ -1,12 +1,13 @@
+import type { RouteState, SortMode } from '../storefront-router';
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowUpDown, ChevronUp, LayoutGrid, Search, SlidersHorizontal, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
 import { centeredHorizontalScrollLeft } from '../category-navigation';
+import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
 import { ProductRow } from '../components/common/product-row';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
@@ -26,6 +27,7 @@ import {
     MarketConfig,
     Product,
     ProductVariant,
+    StorefrontContentBlock,
     StorefrontLanguage,
 } from '../types';
 
@@ -35,6 +37,7 @@ interface CategoryPageProps {
     api: ShopApi;
     products: Product[];
     collections: CollectionSummary[];
+    contentBlocks: StorefrontContentBlock[];
     loading: boolean;
     error: string | null;
     market: MarketConfig;
@@ -69,6 +72,7 @@ export function CategoryPage() {
         api,
         products,
         collections,
+        contentBlocks,
         loading,
         error,
         market,
@@ -92,6 +96,7 @@ export function CategoryPage() {
     } = useStorefront<CategoryPageProps>();
     const queryClient = useQueryClient();
     const isZh = language === 'zh';
+    const clientPluginBlock = contentBlocks.find(block => block.type === 'CLIENT_PLUGINS');
     const [filterOpen, setFilterOpen] = useState(false);
     const [allCategoriesOpen, setAllCategoriesOpen] = useState(false);
     const [draftType, setDraftType] = useState<'all' | FulfillmentType>(fulfillmentFilter);
@@ -115,6 +120,13 @@ export function CategoryPage() {
     const children = primary?.children ?? [];
     const hasChildCategories = children.length > 0;
     const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
+    const clientPluginCategoryContext = {
+        activeCollectionId: selectedCollectionId,
+        ancestorCollectionIds:
+            activeChildId !== 'all' && activeCollectionId !== selectedCollectionId
+                ? [activeCollectionId]
+                : [],
+    };
     const hasFilters =
         fulfillmentFilter !== 'all' || inStockOnly || minimumPriceInput !== '' || maximumPriceInput !== '';
     const vendureLanguageCode = languageCodeFor(language);
@@ -257,6 +269,14 @@ export function CategoryPage() {
                     </button>
                 </header>
 
+                <CategoryClientPluginSlot
+                    block={clientPluginBlock}
+                    placement="AFTER_HEADER"
+                    categoryContext={clientPluginCategoryContext}
+                    language={language}
+                    onNavigate={navigateTo}
+                />
+
                 <section
                     ref={allCategoriesRef}
                     className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
@@ -381,6 +401,13 @@ export function CategoryPage() {
                         </div>
                     )}
                 </section>
+                <CategoryClientPluginSlot
+                    block={clientPluginBlock}
+                    placement="AFTER_CATEGORY_NAVIGATION"
+                    categoryContext={clientPluginCategoryContext}
+                    language={language}
+                    onNavigate={navigateTo}
+                />
             </div>
 
             <div className={`category-layout${hasChildCategories ? ' has-sidebar' : ' is-full-width'}`}>
@@ -461,6 +488,14 @@ export function CategoryPage() {
                         </button>
                     </nav>
 
+                    <CategoryClientPluginSlot
+                        block={clientPluginBlock}
+                        placement="BEFORE_PRODUCT_LIST"
+                        categoryContext={clientPluginCategoryContext}
+                        language={language}
+                        onNavigate={navigateTo}
+                    />
+
                     {categoryLoading || (loading && !collections.length) ? (
                         <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
                     ) : categoryError && !categoryProducts.length ? (
@@ -531,6 +566,14 @@ export function CategoryPage() {
                             compact
                         />
                     )}
+
+                    <CategoryClientPluginSlot
+                        block={clientPluginBlock}
+                        placement="AFTER_PRODUCT_LIST"
+                        categoryContext={clientPluginCategoryContext}
+                        language={language}
+                        onNavigate={navigateTo}
+                    />
                 </section>
             </div>
 

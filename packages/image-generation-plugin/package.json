@@ -1,0 +1,42 @@
+{
+    "name": "@vendure/image-generation-plugin",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "compile-skill": "node skill/image-prompt-pro/scripts/compile.mjs && node skill/image-prompt-pro/scripts/validate.mjs",
+        "build": "bun run compile-skill && tsc --project tsconfig.build.json",
+        "check-types": "tsc --project tsconfig.json --noEmit",
+        "test": "vitest run",
+        "test:e2e": "cross-env PACKAGE=image-generation-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/image-generation.e2e-spec.ts"
+    },
+    "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "@vendure/store-management-plugin": "0.1.0",
+        "file-type": "21.3.4",
+        "graphql-tag": "^2.12.6",
+        "lucide-react": "^0.475.0",
+        "sharp": "0.35.3",
+        "typeorm": "^0.3.21"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.0",
+        "@types/react": "^19.2.14",
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4"
+    },
+    "peerDependencies": {
+        "@vendure/dashboard": "3.7.2",
+        "react": "^19.2.4"
+    }
+}

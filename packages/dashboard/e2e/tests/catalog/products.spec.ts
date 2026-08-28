@@ -56,10 +56,25 @@ test.describe('Product detail features', () => {
         ).toBeVisible();
         await expect(page.getByRole('button', { name: 'Add product group', exact: true })).toBeVisible();
 
+        // Specification-template relationships stay visible in the main product flow.
+        await expect(
+            page.locator('[data-slot="card-title"]').getByText('Specification templates', {
+                exact: true,
+            }),
+        ).toBeVisible();
+        const openTemplateLibraryButton = page.getByRole('button', {
+            name: 'Open specification template library',
+            exact: true,
+        });
+        await expect(openTemplateLibraryButton).toBeVisible();
+
         // Assets block
         await expect(
             page.locator('[data-slot="card-title"]').getByText('Asset library', { exact: true }),
         ).toBeVisible();
+
+        await openTemplateLibraryButton.click();
+        await expect(page).toHaveURL(/\/option-groups(?:\?|$)/);
     });
 
     test('should display product variants table', async ({ page }) => {

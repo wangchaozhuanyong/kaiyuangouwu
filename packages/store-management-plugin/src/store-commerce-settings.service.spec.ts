@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import { ShippingMethod, TaxCategory, TaxRate, Zone } from '@vendure/core';
+import { Channel, ShippingMethod, TaxCategory, TaxRate, Zone } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -14,6 +14,7 @@ import {
 import { UpdateMyStoreCommerceConfigurationInput } from './types';
 
 const input: UpdateMyStoreCommerceConfigurationInput = {
+    expectedUpdatedAt: new Date('2026-08-27T10:00:00.000Z'),
     pricesIncludeTax: true,
     countryCode: ' my ',
     taxRate: 6,
@@ -80,6 +81,7 @@ describe('StoreCommerceSettingsService', () => {
     it('loads shipping settings without requiring a tax zone', async () => {
         const channel = {
             id: 'channel-1',
+            updatedAt: input.expectedUpdatedAt,
             code: 'my-malaysia',
             defaultCurrencyCode: 'MYR',
             pricesIncludeTax: false,
@@ -145,6 +147,15 @@ describe('StoreCommerceSettingsService', () => {
         const taxRateRepository = { findOne: vi.fn().mockResolvedValue(null) };
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
+                if (entity === Channel) {
+                    return {
+                        createQueryBuilder: vi.fn().mockReturnValue({
+                            setLock: vi.fn().mockReturnThis(),
+                            where: vi.fn().mockReturnThis(),
+                            getOne: vi.fn().mockResolvedValue(channel),
+                        }),
+                    };
+                }
                 if (entity === Zone) return zoneRepository;
                 if (entity === TaxCategory) return taxCategoryRepository;
                 if (entity === TaxRate) return taxRateRepository;
@@ -153,6 +164,7 @@ describe('StoreCommerceSettingsService', () => {
         };
         const channel = {
             id: 'channel-1',
+            updatedAt: input.expectedUpdatedAt,
             code: 'my-malaysia',
             defaultCurrencyCode: 'MYR',
             pricesIncludeTax: false,
@@ -195,17 +207,19 @@ describe('StoreCommerceSettingsService', () => {
             create: vi.fn().mockResolvedValue(configuredMethod),
         };
         const translations = {
-            prepareLocalizedFields: vi.fn(async fields =>
-                fields.map((field: any) => ({
-                    path: field.path,
-                    sourceText: field.sourceText,
-                    translatedText: field.targetText,
-                    status: 'MANUAL_LOCKED',
-                    origin: 'MANUAL',
-                    locked: true,
-                })),
+            prepareLocalizedFields: vi.fn(fields =>
+                Promise.resolve(
+                    fields.map((field: any) => ({
+                        path: field.path,
+                        sourceText: field.sourceText,
+                        translatedText: field.targetText,
+                        status: 'MANUAL_LOCKED',
+                        origin: 'MANUAL',
+                        locked: true,
+                    })),
+                ),
             ),
-            recordPreparedFields: vi.fn(async () => undefined),
+            recordPreparedFields: vi.fn(() => Promise.resolve()),
         };
         const service = new StoreCommerceSettingsService(
             connection as any,

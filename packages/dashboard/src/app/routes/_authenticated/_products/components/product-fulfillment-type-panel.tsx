@@ -55,7 +55,6 @@ export function ProductFulfillmentTypePanel({
             input: variants.map(variant => ({
                 id: variant.id,
                 customFields: getUpdatedFulfillmentCustomFields(variant.customFields, fulfillmentType),
-                trackInventory: fulfillmentType === 'digital' ? ('FALSE' as const) : ('TRUE' as const),
             })),
         });
     };

@@ -32,6 +32,11 @@ import {
     SheetTitle,
     Skeleton,
     Switch,
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -130,11 +135,79 @@ const couponLedgerEventLabels = {
     REFUND_SETTLED: '退款完成',
 } as const;
 
-function CampaignMetric({ label, value }: { label: string; value: string | number }) {
+function CampaignMetric({
+    label,
+    value,
+    detail,
+}: {
+    label: string;
+    value: string | number;
+    detail?: string;
+}) {
     return (
-        <div>
-            <span className="block text-muted-foreground">{label}</span>
-            <strong className="mt-1 block text-sm">{value}</strong>
+        <div className="min-w-0">
+            <span className="block text-[11px] font-medium text-muted-foreground">{label}</span>
+            <strong className="mt-1 block truncate text-sm tabular-nums">{value}</strong>
+            {detail ? (
+                <small className="mt-0.5 block truncate text-[11px] text-muted-foreground">{detail}</small>
+            ) : null}
+        </div>
+    );
+}
+
+function CouponOverview({
+    coupons,
+    currencyCode,
+}: {
+    coupons: StorePromotionCampaignsResult['storeCouponCampaigns'];
+    currencyCode: string;
+}) {
+    const totals = coupons.reduce(
+        (result, coupon) => ({
+            claimed: result.claimed + coupon.claimedCount,
+            available: result.available + coupon.availableCount,
+            used: result.used + coupon.usedCount,
+            discount: result.discount + coupon.discountAmountTotal,
+            revenue: result.revenue + coupon.assistedRevenueTotal,
+        }),
+        { claimed: 0, available: 0, used: 0, discount: 0, revenue: 0 },
+    );
+    const activeCampaigns = coupons.filter(couponIssuanceIsActive).length;
+
+    return (
+        <section aria-label="优惠券运营概览">
+            <div className="grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2 xl:grid-cols-4">
+                <OverviewMetric
+                    label="活动总数"
+                    value={`${coupons.length} 个`}
+                    detail={`${activeCampaigns} 个正在发放`}
+                />
+                <OverviewMetric
+                    label="累计领取"
+                    value={`${totals.claimed} 张`}
+                    detail={`${totals.available} 张当前可用`}
+                />
+                <OverviewMetric
+                    label="当前使用率"
+                    value={formatRate(totals.used, totals.claimed)}
+                    detail={`${totals.used} 张已使用`}
+                />
+                <OverviewMetric
+                    label="带动成交"
+                    value={formatMoney(totals.revenue, currencyCode)}
+                    detail={`优惠金额 ${formatMoney(totals.discount, currencyCode)}`}
+                />
+            </div>
+        </section>
+    );
+}
+
+function OverviewMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+    return (
+        <div className="bg-card px-4 py-4 sm:px-5 sm:py-5">
+            <span className="text-xs font-medium text-muted-foreground">{label}</span>
+            <strong className="mt-2 block text-2xl font-semibold tracking-tight tabular-nums">{value}</strong>
+            <small className="mt-1 block text-xs text-muted-foreground">{detail}</small>
         </div>
     );
 }
@@ -196,115 +269,159 @@ function CouponReport({
     );
 
     return (
-        <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <ReportMetric label="累计发放" value={`${totals.claimed} 张`} />
-                <ReportMetric
-                    label="当前已用"
-                    value={`${totals.used} 张`}
-                    detail={`占发放 ${formatRate(totals.used, totals.claimed)}`}
-                />
-                <ReportMetric
-                    label="当前可用"
-                    value={`${totals.available} 张`}
-                    detail={`购物车锁定 ${totals.locked} 张`}
-                />
-                <ReportMetric label="历史核销订单" value={`${totals.orders} 单`} />
-                <ReportMetric label="历史优惠金额" value={formatMoney(totals.discount, currencyCode)} />
-                <ReportMetric
-                    label="优惠券归因订单金额"
-                    value={formatMoney(totals.revenue, currencyCode)}
-                    detail={`含后续退款订单 · 产出比 ${formatMultiple(totals.revenue, totals.discount)}`}
-                />
+        <div className="space-y-6">
+            <div className="grid gap-3 xl:grid-cols-2">
+                <section className="rounded-xl border bg-card p-5" aria-labelledby="coupon-usage-title">
+                    <div>
+                        <h3 id="coupon-usage-title" className="text-sm font-semibold">
+                            发放与使用
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">当前券库存和历史核销概况</p>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-5 sm:grid-cols-4">
+                        <ReportMetric label="累计发放" value={`${totals.claimed} 张`} />
+                        <ReportMetric
+                            label="当前已用"
+                            value={`${totals.used} 张`}
+                            detail={`使用率 ${formatRate(totals.used, totals.claimed)}`}
+                        />
+                        <ReportMetric
+                            label="当前可用"
+                            value={`${totals.available} 张`}
+                            detail={`锁定 ${totals.locked} 张`}
+                        />
+                        <ReportMetric
+                            label="核销订单"
+                            value={`${totals.orders} 单`}
+                            detail={`退款 ${totals.refundedOrders} 单`}
+                        />
+                    </div>
+                </section>
+                <section className="rounded-xl border bg-card p-5" aria-labelledby="coupon-value-title">
+                    <div>
+                        <h3 id="coupon-value-title" className="text-sm font-semibold">
+                            成交贡献
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">优惠成本与归因订单金额</p>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-5">
+                        <ReportMetric
+                            label="历史优惠金额"
+                            value={formatMoney(totals.discount, currencyCode)}
+                        />
+                        <ReportMetric
+                            label="带动成交"
+                            value={formatMoney(totals.revenue, currencyCode)}
+                            detail={`产出比 ${formatMultiple(totals.revenue, totals.discount)}`}
+                        />
+                    </div>
+                </section>
             </div>
-            <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-muted-foreground">
-                    当前共 {coupons.length} 个优惠券活动、{totals.orders} 个历史核销订单，其中{' '}
-                    {totals.refundedOrders}{' '}
-                    个发生全额退款；数据来自领取记录和订单优惠分摊。跨活动合计按券归因，
-                    叠加多张券的同一订单会分别计入对应活动。
-                </p>
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={!coupons.length}
-                    onClick={() => exportCouponReport(coupons, currencyCode)}
-                >
-                    <Download className="size-4" />
-                    导出 CSV
-                </Button>
-            </div>
-            <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[1450px] text-left text-sm">
-                    <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
-                        <tr>
-                            <ReportHeading>活动</ReportHeading>
-                            <ReportHeading>类型</ReportHeading>
-                            <ReportHeading>发放状态</ReportHeading>
-                            <ReportHeading align="right">发放</ReportHeading>
-                            <ReportHeading align="right">可用</ReportHeading>
-                            <ReportHeading align="right">锁定</ReportHeading>
-                            <ReportHeading align="right">当前已用</ReportHeading>
-                            <ReportHeading align="right">当前已用率</ReportHeading>
-                            <ReportHeading align="right">当前返还</ReportHeading>
-                            <ReportHeading align="right">当前过期</ReportHeading>
-                            <ReportHeading align="right">当前作废</ReportHeading>
-                            <ReportHeading align="right">历史核销订单</ReportHeading>
-                            <ReportHeading align="right">退款订单</ReportHeading>
-                            <ReportHeading align="right">历史优惠金额</ReportHeading>
-                            <ReportHeading align="right">优惠券归因订单金额</ReportHeading>
-                            <ReportHeading align="right">优惠产出比</ReportHeading>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {coupons.map(coupon => (
-                            <tr key={coupon.id} className="border-b last:border-0">
-                                <td className="max-w-60 px-3 py-3 font-medium">{coupon.name}</td>
-                                <td className="px-3 py-3">{couponKindLabels[coupon.kind]}</td>
-                                <td className="px-3 py-3">
-                                    <Badge variant={couponIssuanceIsActive(coupon) ? 'default' : 'secondary'}>
-                                        {couponIssuanceStatusLabel(coupon)}
-                                    </Badge>
-                                </td>
-                                <ReportCell>{coupon.claimedCount}</ReportCell>
-                                <ReportCell>{coupon.availableCount}</ReportCell>
-                                <ReportCell>{coupon.lockedCount}</ReportCell>
-                                <ReportCell>{coupon.usedCount}</ReportCell>
-                                <ReportCell>{formatRate(coupon.usedCount, coupon.claimedCount)}</ReportCell>
-                                <ReportCell>{coupon.returnedCount}</ReportCell>
-                                <ReportCell>{coupon.expiredCount}</ReportCell>
-                                <ReportCell>{coupon.revokedCount}</ReportCell>
-                                <ReportCell>{coupon.redeemedOrderCount}</ReportCell>
-                                <ReportCell>{coupon.refundedOrderCount}</ReportCell>
-                                <ReportCell>
-                                    {formatMoney(coupon.discountAmountTotal, currencyCode)}
-                                </ReportCell>
-                                <ReportCell>
-                                    {formatMoney(coupon.assistedRevenueTotal, currencyCode)}
-                                </ReportCell>
-                                <ReportCell>
-                                    {formatMultiple(coupon.assistedRevenueTotal, coupon.discountAmountTotal)}
-                                </ReportCell>
+
+            <section className="space-y-3" aria-labelledby="coupon-campaign-report-title">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h3 id="coupon-campaign-report-title" className="text-sm font-semibold">
+                            按活动查看
+                        </h3>
+                        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                            数据来自领取记录和订单优惠分摊；叠加多张券时，同一订单会分别归因到对应活动。
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!coupons.length}
+                        onClick={() => exportCouponReport(coupons, currencyCode)}
+                    >
+                        <Download className="size-4" />
+                        导出活动报表
+                    </Button>
+                </div>
+                <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full min-w-[1120px] text-left text-sm">
+                        <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
+                            <tr>
+                                <ReportHeading>活动</ReportHeading>
+                                <ReportHeading>发放状态</ReportHeading>
+                                <ReportHeading align="right">发放</ReportHeading>
+                                <ReportHeading align="right">可用</ReportHeading>
+                                <ReportHeading align="right">当前已用</ReportHeading>
+                                <ReportHeading align="right">核销订单</ReportHeading>
+                                <ReportHeading align="right">历史优惠金额</ReportHeading>
+                                <ReportHeading align="right">带动成交</ReportHeading>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-                {!coupons.length ? (
-                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                        暂无可统计的优惠券活动。
-                    </p>
-                ) : null}
-            </div>
-            <div className="space-y-3 rounded-lg border p-4">
+                        </thead>
+                        <tbody>
+                            {coupons.map(coupon => (
+                                <tr
+                                    key={coupon.id}
+                                    className="border-b transition-colors last:border-0 hover:bg-muted/20"
+                                >
+                                    <td className="max-w-72 px-3 py-3">
+                                        <span className="block truncate font-medium">{coupon.name}</span>
+                                        <small className="mt-0.5 block text-muted-foreground">
+                                            {couponKindLabels[coupon.kind]}
+                                        </small>
+                                    </td>
+                                    <td className="px-3 py-3">
+                                        <Badge
+                                            variant={couponIssuanceIsActive(coupon) ? 'default' : 'secondary'}
+                                        >
+                                            {couponIssuanceStatusLabel(coupon)}
+                                        </Badge>
+                                    </td>
+                                    <ReportCell>{coupon.claimedCount}</ReportCell>
+                                    <ReportCell detail={`锁定 ${coupon.lockedCount}`}>
+                                        {coupon.availableCount}
+                                    </ReportCell>
+                                    <ReportCell
+                                        detail={[
+                                            `使用率 ${formatRate(coupon.usedCount, coupon.claimedCount)}`,
+                                            `返还 ${coupon.returnedCount}`,
+                                            `过期 ${coupon.expiredCount}`,
+                                            `作废 ${coupon.revokedCount}`,
+                                        ].join(' · ')}
+                                    >
+                                        {coupon.usedCount}
+                                    </ReportCell>
+                                    <ReportCell detail={`退款 ${coupon.refundedOrderCount}`}>
+                                        {coupon.redeemedOrderCount}
+                                    </ReportCell>
+                                    <ReportCell>
+                                        {formatMoney(coupon.discountAmountTotal, currencyCode)}
+                                    </ReportCell>
+                                    <ReportCell
+                                        detail={`产出比 ${formatMultiple(coupon.assistedRevenueTotal, coupon.discountAmountTotal)}`}
+                                    >
+                                        {formatMoney(coupon.assistedRevenueTotal, currencyCode)}
+                                    </ReportCell>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {!coupons.length ? (
+                        <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                            暂无可统计的优惠券活动。
+                        </p>
+                    ) : null}
+                </div>
+            </section>
+
+            <section
+                className="space-y-4 rounded-xl border bg-card p-4 sm:p-5"
+                aria-labelledby="coupon-daily-title"
+            >
                 <div>
-                    <h3 className="text-sm font-semibold">每日发放与使用趋势</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        日期区间统计事件发生量；开始和结束日期均包含在内，单次最多查询 366 天。
-                        成交金额按优惠券归因，同一订单叠加多张券时会分别归因。
+                    <h3 id="coupon-daily-title" className="text-sm font-semibold">
+                        每日发放与使用趋势
+                    </h3>
+                    <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                        按日期查询领取、核销和退款变化；开始和结束日期均包含在内，单次最多查询 366 天。
                     </p>
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 md:grid-cols-3">
                     <FormField label="开始日期">
                         <Input
                             type="date"
@@ -342,19 +459,29 @@ function CouponReport({
                         </Select>
                     </FormField>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <ReportMetric label="区间发放" value={`${dailyTotals.claimed} 张`} />
-                    <ReportMetric label="区间核销订单" value={`${dailyTotals.redeemed} 单`} />
-                    <ReportMetric label="区间退款订单" value={`${dailyTotals.refunded} 单`} />
-                    <ReportMetric
-                        label="区间优惠金额"
-                        value={formatMoney(dailyTotals.discount, currencyCode)}
-                    />
-                    <ReportMetric
-                        label="区间归因订单金额"
-                        value={formatMoney(dailyTotals.revenue, currencyCode)}
-                        detail={`产出比 ${formatMultiple(dailyTotals.revenue, dailyTotals.discount)}`}
-                    />
+                <div className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="bg-card p-4">
+                        <ReportMetric label="区间发放" value={`${dailyTotals.claimed} 张`} />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric label="区间核销订单" value={`${dailyTotals.redeemed} 单`} />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric label="区间退款订单" value={`${dailyTotals.refunded} 单`} />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric
+                            label="区间优惠金额"
+                            value={formatMoney(dailyTotals.discount, currencyCode)}
+                        />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric
+                            label="区间归因订单金额"
+                            value={formatMoney(dailyTotals.revenue, currencyCode)}
+                            detail={`产出比 ${formatMultiple(dailyTotals.revenue, dailyTotals.discount)}`}
+                        />
+                    </div>
                 </div>
                 <div className="flex justify-end">
                     <Button
@@ -413,24 +540,32 @@ function CouponReport({
                                 当前日期区间没有优惠券发放或使用数据。
                             </p>
                         ) : null}
-                        {reportPending ? (
-                            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                                正在加载区间报表…
-                            </p>
-                        ) : null}
+                        {reportPending ? <ReportTableSkeleton /> : null}
                     </div>
                 )}
-            </div>
+            </section>
         </div>
     );
 }
 
 function ReportMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
     return (
-        <div className="rounded-lg border bg-card p-4">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <strong className="mt-1 block text-xl">{value}</strong>
-            {detail ? <small className="mt-1 block text-muted-foreground">{detail}</small> : null}
+        <div className="min-w-0">
+            <span className="text-xs font-medium text-muted-foreground">{label}</span>
+            <strong className="mt-1.5 block truncate text-xl font-semibold tracking-tight tabular-nums">
+                {value}
+            </strong>
+            {detail ? <small className="mt-1 block text-xs text-muted-foreground">{detail}</small> : null}
+        </div>
+    );
+}
+
+function ReportTableSkeleton() {
+    return (
+        <div className="space-y-3 p-4" aria-label="正在加载区间报表">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-4/5" />
         </div>
     );
 }
@@ -451,8 +586,279 @@ function ReportHeading({
     );
 }
 
-function ReportCell({ children }: { children: React.ReactNode }) {
-    return <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{children}</td>;
+function ReportCell({ children, detail }: { children: React.ReactNode; detail?: string }) {
+    return (
+        <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+            <span className="block">{children}</span>
+            {detail ? (
+                <small className="mt-0.5 block text-[11px] text-muted-foreground">{detail}</small>
+            ) : null}
+        </td>
+    );
+}
+
+function CouponCampaignList({
+    coupons,
+    currencyCode,
+    actionPending,
+    onCreate,
+    onEdit,
+    onAction,
+}: {
+    coupons: StorePromotionCampaignsResult['storeCouponCampaigns'];
+    currencyCode: string;
+    actionPending: boolean;
+    onCreate: () => void;
+    onEdit: (promotion: { id: string; name: string }) => void;
+    onAction: (action: SensitivePromotionAction) => void;
+}) {
+    return (
+        <section className="space-y-3" aria-labelledby="coupon-campaign-list-title">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h3 id="coupon-campaign-list-title" className="text-sm font-semibold">
+                        优惠券活动
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        先看发放状态和使用表现，需要时再进入敏感操作。
+                    </p>
+                </div>
+                <span className="text-xs text-muted-foreground">共 {coupons.length} 个活动</span>
+            </div>
+
+            {coupons.length ? (
+                <div className="space-y-3">
+                    {coupons.map(coupon => (
+                        <article
+                            key={coupon.id}
+                            className="rounded-xl border bg-card p-4 transition-colors hover:bg-muted/20 sm:p-5"
+                        >
+                            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge
+                                            variant={couponIssuanceIsActive(coupon) ? 'default' : 'secondary'}
+                                        >
+                                            {couponIssuanceStatusLabel(coupon)}
+                                        </Badge>
+                                        <Badge variant="outline">{couponKindLabels[coupon.kind]}</Badge>
+                                    </div>
+                                    <h4 className="mt-3 truncate text-base font-semibold tracking-tight">
+                                        {coupon.name}
+                                    </h4>
+                                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                        {couponSummary(coupon)}
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                                    <Button
+                                        type="button"
+                                        size="icon-sm"
+                                        variant="ghost"
+                                        aria-label={`修改优惠券名称：${coupon.name}`}
+                                        disabled={actionPending}
+                                        onClick={() => onEdit({ id: coupon.id, name: coupon.name })}
+                                    >
+                                        <Pencil className="size-4" />
+                                    </Button>
+                                    {couponIssuanceCanBeStopped(coupon) ? (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={actionPending}
+                                            onClick={() =>
+                                                onAction({
+                                                    kind: 'STOP_ISSUANCE',
+                                                    id: coupon.id,
+                                                    name: coupon.name,
+                                                    claimedCount: coupon.claimedCount,
+                                                })
+                                            }
+                                        >
+                                            停止发放
+                                        </Button>
+                                    ) : null}
+                                    {coupon.availableCount + coupon.returnedCount + coupon.lockedCount > 0 ? (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={actionPending}
+                                            onClick={() =>
+                                                onAction({
+                                                    kind: 'REVOKE_OUTSTANDING',
+                                                    id: coupon.id,
+                                                    name: coupon.name,
+                                                    affectedCount:
+                                                        coupon.availableCount +
+                                                        coupon.returnedCount +
+                                                        coupon.lockedCount,
+                                                })
+                                            }
+                                        >
+                                            <Ban className="size-4" />
+                                            作废未使用券
+                                        </Button>
+                                    ) : null}
+                                    {coupon.claimedCount === 0 ? (
+                                        <Button
+                                            type="button"
+                                            size="icon-sm"
+                                            variant="ghost"
+                                            aria-label={`删除优惠券：${coupon.name}`}
+                                            disabled={actionPending}
+                                            onClick={() =>
+                                                onAction({
+                                                    kind: 'DELETE_COUPON',
+                                                    id: coupon.id,
+                                                    name: coupon.name,
+                                                })
+                                            }
+                                        >
+                                            <Trash2 className="size-4" />
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-px overflow-hidden rounded-lg border bg-border grid-cols-2 lg:grid-cols-4">
+                                <div className="bg-card p-3">
+                                    <CampaignMetric
+                                        label="领取"
+                                        value={`${coupon.claimedCount} 张`}
+                                        detail={`可用 ${coupon.availableCount} · 锁定 ${coupon.lockedCount}`}
+                                    />
+                                </div>
+                                <div className="bg-card p-3">
+                                    <CampaignMetric
+                                        label="使用"
+                                        value={`${coupon.usedCount} 张`}
+                                        detail={`返还 ${coupon.returnedCount} · 过期 ${coupon.expiredCount}`}
+                                    />
+                                </div>
+                                <div className="bg-card p-3">
+                                    <CampaignMetric
+                                        label="核销订单"
+                                        value={`${coupon.redeemedOrderCount} 单`}
+                                        detail={`退款 ${coupon.refundedOrderCount} 单`}
+                                    />
+                                </div>
+                                <div className="bg-card p-3">
+                                    <CampaignMetric
+                                        label="优惠贡献"
+                                        value={formatMoney(coupon.discountAmountTotal, currencyCode)}
+                                        detail={`带动 ${formatMoney(coupon.assistedRevenueTotal, currencyCode)}`}
+                                    />
+                                </div>
+                            </div>
+
+                            {coupon.claimedCount > 0 ? (
+                                <p className="mt-3 text-[11px] text-muted-foreground">
+                                    已产生发放记录，活动不可删除；停止发放不会影响客户已领取的优惠券。
+                                </p>
+                            ) : null}
+                        </article>
+                    ))}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-12 text-center">
+                    <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+                        <BadgePercent className="size-5 text-muted-foreground" aria-hidden="true" />
+                    </div>
+                    <h4 className="mt-4 text-sm font-semibold">还没有优惠券活动</h4>
+                    <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                        创建第一张券后，可在这里查看发放状态、使用表现和成交贡献。
+                    </p>
+                    <Button type="button" size="sm" className="mt-4" onClick={onCreate}>
+                        <Plus className="size-4" />
+                        新建优惠券活动
+                    </Button>
+                </div>
+            )}
+        </section>
+    );
+}
+
+function CouponLedger({
+    ledger,
+    currencyCode,
+}: {
+    ledger: StorePromotionCampaignsResult['storeCouponLedger'];
+    currencyCode: string;
+}) {
+    return (
+        <section className="space-y-3" aria-labelledby="coupon-ledger-title">
+            <div>
+                <h3 id="coupon-ledger-title" className="text-sm font-semibold">
+                    最近使用流水
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                    记录领取、锁定、核销、返还、过期和退款事件，共 {ledger.totalItems} 条。
+                </p>
+            </div>
+            <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full min-w-[820px] text-left text-sm">
+                    <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
+                        <tr>
+                            <th className="px-3 py-2 font-medium">时间</th>
+                            <th className="px-3 py-2 font-medium">事件</th>
+                            <th className="px-3 py-2 font-medium">优惠券</th>
+                            <th className="px-3 py-2 font-medium">客户</th>
+                            <th className="px-3 py-2 font-medium">订单</th>
+                            <th className="px-3 py-2 text-right font-medium">优惠金额</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {ledger.items.map(entry => (
+                            <tr
+                                key={entry.id}
+                                className="border-b transition-colors last:border-0 hover:bg-muted/20"
+                            >
+                                <td className="whitespace-nowrap px-3 py-3 text-xs">
+                                    {new Date(entry.createdAt).toLocaleString()}
+                                </td>
+                                <td className="px-3 py-3">
+                                    <Badge variant="outline">
+                                        {couponLedgerEventLabels[entry.eventType]}
+                                    </Badge>
+                                </td>
+                                <td className="max-w-64 px-3 py-3 font-medium">
+                                    <span className="block truncate">{entry.campaignName}</span>
+                                </td>
+                                <td className="px-3 py-3">
+                                    <div>{entry.customerName}</div>
+                                    <small className="text-muted-foreground">{entry.customerEmail}</small>
+                                </td>
+                                <td className="px-3 py-3">
+                                    {entry.orderCode ?? '—'}
+                                    {entry.refundId ? (
+                                        <small className="block text-muted-foreground">
+                                            退款 #{entry.refundId}
+                                        </small>
+                                    ) : null}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+                                    {entry.discountAmount == null
+                                        ? '—'
+                                        : formatMoney(entry.discountAmount, currencyCode)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {!ledger.items.length ? (
+                    <div className="px-4 py-10 text-center">
+                        <p className="text-sm font-medium">暂无优惠券流水</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            客户领取或使用优惠券后，相关事件会显示在这里。
+                        </p>
+                    </div>
+                ) : null}
+            </div>
+        </section>
+    );
 }
 
 export const storeCouponCampaignRoute: DashboardRouteDefinition = {
@@ -601,241 +1007,76 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
             </PageActionBar>
             <PageLayout>
                 {mode === 'COUPONS' ? (
-                    <>
-                        <PageBlock
-                            column="full"
-                            blockId="store-coupon-campaigns"
-                            title="优惠券"
-                            description="创建满减、消费折扣、分类折扣和单品折扣券；客户在前台领取，结算时由真实 Promotion 规则计算。"
-                        >
-                            <CampaignState query={query} onRetry={() => void query.refetch()}>
-                                <div className="grid gap-3 lg:grid-cols-2">
-                                    {query.data?.storeCouponCampaigns.map(coupon => (
-                                        <div key={coupon.id} className="rounded-lg border p-4">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <strong className="truncate text-sm">
-                                                            {coupon.name}
-                                                        </strong>
-                                                        <Badge variant="outline">
-                                                            {couponKindLabels[coupon.kind]}
-                                                        </Badge>
-                                                        <Badge
-                                                            variant={
-                                                                couponIssuanceIsActive(coupon)
-                                                                    ? 'default'
-                                                                    : 'secondary'
-                                                            }
-                                                        >
-                                                            {couponIssuanceStatusLabel(coupon)}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="mt-1 text-xs text-muted-foreground">
-                                                        {couponSummary(coupon)}
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-muted-foreground">
-                                                        领取 {coupon.claimedCount} · 已用 {coupon.usedCount} ·
-                                                        返还 {coupon.returnedCount} · 过期{' '}
-                                                        {coupon.expiredCount}
-                                                    </p>
-                                                </div>
-                                                <div className="flex flex-wrap items-center justify-end gap-2">
-                                                    <Button
-                                                        type="button"
-                                                        size="icon-sm"
-                                                        variant="ghost"
-                                                        aria-label="修改优惠券名称"
-                                                        onClick={() =>
-                                                            setEditingName({
-                                                                id: coupon.id,
-                                                                name: coupon.name,
-                                                            })
-                                                        }
-                                                    >
-                                                        <Pencil className="size-4" />
-                                                    </Button>
-                                                    {couponIssuanceCanBeStopped(coupon) ? (
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                setSensitiveAction({
-                                                                    kind: 'STOP_ISSUANCE',
-                                                                    id: coupon.id,
-                                                                    name: coupon.name,
-                                                                    claimedCount: coupon.claimedCount,
-                                                                })
-                                                            }
-                                                        >
-                                                            停止发放
-                                                        </Button>
-                                                    ) : null}
-                                                    {coupon.availableCount +
-                                                        coupon.returnedCount +
-                                                        coupon.lockedCount >
-                                                    0 ? (
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                setSensitiveAction({
-                                                                    kind: 'REVOKE_OUTSTANDING',
-                                                                    id: coupon.id,
-                                                                    name: coupon.name,
-                                                                    affectedCount:
-                                                                        coupon.availableCount +
-                                                                        coupon.returnedCount +
-                                                                        coupon.lockedCount,
-                                                                })
-                                                            }
-                                                        >
-                                                            <Ban className="size-4" />
-                                                            作废未使用券
-                                                        </Button>
-                                                    ) : null}
-                                                    {coupon.claimedCount === 0 ? (
-                                                        <Button
-                                                            type="button"
-                                                            size="icon-sm"
-                                                            variant="ghost"
-                                                            aria-label="删除优惠券"
-                                                            onClick={() =>
-                                                                setSensitiveAction({
-                                                                    kind: 'DELETE_COUPON',
-                                                                    id: coupon.id,
-                                                                    name: coupon.name,
-                                                                })
-                                                            }
-                                                        >
-                                                            <Trash2 className="size-4" />
-                                                        </Button>
-                                                    ) : null}
-                                                </div>
-                                            </div>
-                                            <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs sm:grid-cols-4">
-                                                <CampaignMetric
-                                                    label="可用券"
-                                                    value={coupon.availableCount}
-                                                />
-                                                <CampaignMetric
-                                                    label="核销订单"
-                                                    value={coupon.redeemedOrderCount}
-                                                />
-                                                <CampaignMetric
-                                                    label="优惠金额"
-                                                    value={formatMoney(
-                                                        coupon.discountAmountTotal,
-                                                        activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                                    )}
-                                                />
-                                                <CampaignMetric
-                                                    label="带动成交"
-                                                    value={formatMoney(
-                                                        coupon.assistedRevenueTotal,
-                                                        activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                                    )}
-                                                />
-                                            </div>
-                                            {coupon.claimedCount > 0 ? (
-                                                <p className="mt-3 text-xs text-muted-foreground">
-                                                    已产生发放记录，活动不可删除；可以停止发放或作废未使用券。
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    ))}
-                                    {!query.data?.storeCouponCampaigns.length ? (
-                                        <p className="text-sm text-muted-foreground">还没有优惠券。</p>
-                                    ) : null}
-                                </div>
-                            </CampaignState>
-                        </PageBlock>
-
-                        <PageBlock
-                            column="full"
-                            blockId="store-coupon-report"
-                            title="优惠券经营报表"
-                            description="按活动统计发放、可用、锁定、核销、返还、过期、作废、优惠金额和带动成交。"
-                        >
-                            <CampaignState query={query} onRetry={() => void query.refetch()}>
-                                <CouponReport
+                    <PageBlock
+                        column="full"
+                        blockId="store-coupon-center"
+                        title="优惠券管理"
+                        description="集中管理优惠券活动、经营报表和客户使用流水。"
+                    >
+                        <CampaignState query={query} onRetry={() => void query.refetch()}>
+                            <div className="space-y-6">
+                                <CouponOverview
                                     coupons={query.data?.storeCouponCampaigns ?? []}
                                     currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
-                                    dailyMetrics={reportQuery.data?.storeCouponDailyReport ?? []}
-                                    filter={reportFilter}
-                                    reportPending={reportQuery.isPending || reportQuery.isFetching}
-                                    reportError={reportValidationError ?? reportQuery.error}
-                                    onFilterChange={setReportFilter}
                                 />
-                            </CampaignState>
-                        </PageBlock>
 
-                        <PageBlock
-                            column="full"
-                            blockId="store-coupon-ledger"
-                            title="优惠券使用流水"
-                            description={`记录领取、锁定、核销、返还、过期和退款事件，共 ${query.data?.storeCouponLedger.totalItems ?? 0} 条。`}
-                        >
-                            <CampaignState query={query} onRetry={() => void query.refetch()}>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[760px] text-left text-sm">
-                                        <thead className="border-b text-xs text-muted-foreground">
-                                            <tr>
-                                                <th className="px-2 py-2 font-medium">时间</th>
-                                                <th className="px-2 py-2 font-medium">事件</th>
-                                                <th className="px-2 py-2 font-medium">优惠券</th>
-                                                <th className="px-2 py-2 font-medium">客户</th>
-                                                <th className="px-2 py-2 font-medium">订单</th>
-                                                <th className="px-2 py-2 text-right font-medium">优惠金额</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {query.data?.storeCouponLedger.items.map(entry => (
-                                                <tr key={entry.id} className="border-b last:border-0">
-                                                    <td className="px-2 py-3 text-xs">
-                                                        {new Date(entry.createdAt).toLocaleString()}
-                                                    </td>
-                                                    <td className="px-2 py-3">
-                                                        <Badge variant="outline">
-                                                            {couponLedgerEventLabels[entry.eventType]}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="px-2 py-3">{entry.campaignName}</td>
-                                                    <td className="px-2 py-3">
-                                                        <div>{entry.customerName}</div>
-                                                        <small className="text-muted-foreground">
-                                                            {entry.customerEmail}
-                                                        </small>
-                                                    </td>
-                                                    <td className="px-2 py-3">
-                                                        {entry.orderCode ?? '—'}
-                                                        {entry.refundId ? (
-                                                            <small className="block text-muted-foreground">
-                                                                退款 #{entry.refundId}
-                                                            </small>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="px-2 py-3 text-right">
-                                                        {entry.discountAmount == null
-                                                            ? '—'
-                                                            : formatMoney(
-                                                                  entry.discountAmount,
-                                                                  activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                                              )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {!query.data?.storeCouponLedger.items.length ? (
-                                        <p className="py-4 text-sm text-muted-foreground">暂无优惠券流水。</p>
-                                    ) : null}
-                                </div>
-                            </CampaignState>
-                        </PageBlock>
-                    </>
+                                <Tabs defaultValue="campaigns" className="space-y-5">
+                                    <TabsList className="grid h-auto w-full grid-cols-3 p-1 sm:w-auto sm:min-w-[430px]">
+                                        <TabsTrigger value="campaigns" className="gap-2 py-2">
+                                            活动管理
+                                            <span className="text-[11px] text-muted-foreground">
+                                                {query.data?.storeCouponCampaigns.length ?? 0}
+                                            </span>
+                                        </TabsTrigger>
+                                        <TabsTrigger value="report" className="py-2">
+                                            经营报表
+                                        </TabsTrigger>
+                                        <TabsTrigger value="ledger" className="gap-2 py-2">
+                                            使用流水
+                                            <span className="text-[11px] text-muted-foreground">
+                                                {query.data?.storeCouponLedger.totalItems ?? 0}
+                                            </span>
+                                        </TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="campaigns" className="mt-0">
+                                        <CouponCampaignList
+                                            coupons={query.data?.storeCouponCampaigns ?? []}
+                                            currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
+                                            actionPending={sensitiveMutation.isPending}
+                                            onCreate={() => setCouponOpen(true)}
+                                            onEdit={setEditingName}
+                                            onAction={setSensitiveAction}
+                                        />
+                                    </TabsContent>
+
+                                    <TabsContent value="report" className="mt-0">
+                                        <CouponReport
+                                            coupons={query.data?.storeCouponCampaigns ?? []}
+                                            currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
+                                            dailyMetrics={reportQuery.data?.storeCouponDailyReport ?? []}
+                                            filter={reportFilter}
+                                            reportPending={reportQuery.isPending || reportQuery.isFetching}
+                                            reportError={reportValidationError ?? reportQuery.error}
+                                            onFilterChange={setReportFilter}
+                                        />
+                                    </TabsContent>
+
+                                    <TabsContent value="ledger" className="mt-0">
+                                        <CouponLedger
+                                            ledger={
+                                                query.data?.storeCouponLedger ?? {
+                                                    items: [],
+                                                    totalItems: 0,
+                                                }
+                                            }
+                                            currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
+                                        />
+                                    </TabsContent>
+                                </Tabs>
+                            </div>
+                        </CampaignState>
+                    </PageBlock>
                 ) : null}
 
                 {mode === 'FLASH_SALES' ? (
@@ -1133,7 +1374,7 @@ function CouponEditor({
     onSaved: () => Promise<void>;
 }) {
     const [draft, setDraft] = useState<CouponDraft>(() => newCouponDraft());
-    const requestClose = useDraftCloseGuard(open, draft, onClose);
+    const { requestClose, isDirty } = useDraftCloseGuard(open, draft, onClose);
     const [productPickerOpen, setProductPickerOpen] = useState(false);
     const mutation = useMutation({
         mutationFn: (value: CouponDraft) =>
@@ -1164,223 +1405,226 @@ function CouponEditor({
     };
 
     return (
-        <Sheet open={open} onOpenChange={value => !value && requestClose()}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
-                <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
-                    <SheetTitle>新建优惠券</SheetTitle>
-                    <SheetDescription>
-                        设置优惠规则后，客户可在商城客户端领取；系统会自动生成内部识别码。
-                    </SheetDescription>
-                </SheetHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField label="优惠券名称">
-                            <Input
-                                value={draft.name}
-                                onChange={event => update('name', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="优惠券类型">
-                            <Select
-                                value={draft.kind}
-                                onValueChange={value => value && update('kind', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {(Object.keys(couponKindLabels) as StoreCouponKind[]).map(kind => (
-                                        <SelectItem key={kind} value={kind}>
-                                            {couponKindLabels[kind]}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </FormField>
-                        <FormField label="最低消费金额" hint="0 表示无门槛，金额单位为店铺币种。">
-                            <Input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={draft.minimumSpend}
-                                onChange={event => update('minimumSpend', event.target.value)}
-                            />
-                        </FormField>
-                        {draft.kind === 'ORDER_FIXED' ? (
-                            <FormField label="减免金额">
+        <>
+            <UnsavedChangesConfirmation when={isDirty} />
+            <Sheet open={open} onOpenChange={value => !value && requestClose()}>
+                <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[640px] sm:max-w-[640px]">
+                    <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
+                        <SheetTitle>新建优惠券</SheetTitle>
+                        <SheetDescription>
+                            设置优惠规则后，客户可在商城客户端领取；系统会自动生成内部识别码。
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <FormField label="优惠券名称">
+                                <Input
+                                    value={draft.name}
+                                    onChange={event => update('name', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="优惠券类型">
+                                <Select
+                                    value={draft.kind}
+                                    onValueChange={value => value && update('kind', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {(Object.keys(couponKindLabels) as StoreCouponKind[]).map(kind => (
+                                            <SelectItem key={kind} value={kind}>
+                                                {couponKindLabels[kind]}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </FormField>
+                            <FormField label="最低消费金额" hint="0 表示无门槛，金额单位为店铺币种。">
                                 <Input
                                     type="number"
-                                    min={0.01}
+                                    min={0}
                                     step="0.01"
-                                    value={draft.discountAmount}
-                                    onChange={event => update('discountAmount', event.target.value)}
+                                    value={draft.minimumSpend}
+                                    onChange={event => update('minimumSpend', event.target.value)}
                                 />
                             </FormField>
-                        ) : (
-                            <FormField label="享受折扣" hint="例如 8.5 表示按 8.5 折结算。">
+                            {draft.kind === 'ORDER_FIXED' ? (
+                                <FormField label="减免金额">
+                                    <Input
+                                        type="number"
+                                        min={0.01}
+                                        step="0.01"
+                                        value={draft.discountAmount}
+                                        onChange={event => update('discountAmount', event.target.value)}
+                                    />
+                                </FormField>
+                            ) : (
+                                <FormField label="享受折扣" hint="例如 8.5 表示按 8.5 折结算。">
+                                    <Input
+                                        type="number"
+                                        min={0.1}
+                                        max={9.9}
+                                        step="0.1"
+                                        value={draft.discountRate}
+                                        onChange={event => update('discountRate', event.target.value)}
+                                    />
+                                </FormField>
+                            )}
+                            {draft.kind === 'COLLECTION_PERCENTAGE' ? (
+                                <FormField label="适用分类" className="sm:col-span-2">
+                                    <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border p-3">
+                                        {collections.map(collection => (
+                                            <Button
+                                                key={collection.id}
+                                                type="button"
+                                                size="sm"
+                                                variant={
+                                                    draft.collectionIds.includes(collection.id)
+                                                        ? 'default'
+                                                        : 'outline'
+                                                }
+                                                onClick={() => toggleCollection(collection.id)}
+                                            >
+                                                {collection.name}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </FormField>
+                            ) : null}
+                            {draft.kind === 'PRODUCT_PERCENTAGE' ? (
+                                <FormField
+                                    label="适用商品"
+                                    className="sm:col-span-2"
+                                    hint="选择器支持按分类筛选。"
+                                >
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setProductPickerOpen(true)}
+                                    >
+                                        <Plus className="size-4" />
+                                        已选择 {draft.productIds.length} 个商品
+                                    </Button>
+                                    <ProductMultiSelectorDialog
+                                        mode="product"
+                                        initialSelectionIds={draft.productIds}
+                                        onSelectionChange={ids => update('productIds', ids)}
+                                        open={productPickerOpen}
+                                        onOpenChange={setProductPickerOpen}
+                                    />
+                                </FormField>
+                            ) : null}
+                            <FormField label="优惠可用开始时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.startsAt}
+                                    onChange={event => update('startsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="优惠可用结束时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.endsAt}
+                                    onChange={event => update('endsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="总使用次数" hint="留空表示不限制。">
                                 <Input
                                     type="number"
-                                    min={0.1}
-                                    max={9.9}
-                                    step="0.1"
-                                    value={draft.discountRate}
-                                    onChange={event => update('discountRate', event.target.value)}
+                                    min={1}
+                                    value={draft.usageLimit}
+                                    onChange={event => update('usageLimit', event.target.value)}
                                 />
                             </FormField>
-                        )}
-                        {draft.kind === 'COLLECTION_PERCENTAGE' ? (
-                            <FormField label="适用分类" className="sm:col-span-2">
-                                <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border p-3">
-                                    {collections.map(collection => (
-                                        <Button
-                                            key={collection.id}
-                                            type="button"
-                                            size="sm"
-                                            variant={
-                                                draft.collectionIds.includes(collection.id)
-                                                    ? 'default'
-                                                    : 'outline'
-                                            }
-                                            onClick={() => toggleCollection(collection.id)}
-                                        >
-                                            {collection.name}
-                                        </Button>
-                                    ))}
+                            <FormField label="每位客户可用次数" hint="留空表示不限制。">
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={draft.perCustomerUsageLimit}
+                                    onChange={event => update('perCustomerUsageLimit', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="领取开始时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.claimStartsAt}
+                                    onChange={event => update('claimStartsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="领取结束时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.claimEndsAt}
+                                    onChange={event => update('claimEndsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="领取后有效天数" hint="留空则有效至活动结束。">
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={draft.validityDays}
+                                    onChange={event => update('validityDays', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="发放总量" hint="留空表示不限制领取数量。">
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={draft.issueLimit}
+                                    onChange={event => update('issueLimit', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="每位客户领取限制">
+                                <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm">
+                                    每个活动限领 1 张
                                 </div>
                             </FormField>
-                        ) : null}
-                        {draft.kind === 'PRODUCT_PERCENTAGE' ? (
-                            <FormField
-                                label="适用商品"
-                                className="sm:col-span-2"
-                                hint="选择器支持按分类筛选。"
-                            >
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setProductPickerOpen(true)}
+                            <FormField label="叠加规则">
+                                <Select
+                                    value={draft.stackPolicy}
+                                    onValueChange={value => value && update('stackPolicy', value)}
                                 >
-                                    <Plus className="size-4" />
-                                    已选择 {draft.productIds.length} 个商品
-                                </Button>
-                                <ProductMultiSelectorDialog
-                                    mode="product"
-                                    initialSelectionIds={draft.productIds}
-                                    onSelectionChange={ids => update('productIds', ids)}
-                                    open={productPickerOpen}
-                                    onOpenChange={setProductPickerOpen}
-                                />
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="EXCLUSIVE">不可与其他优惠券叠加</SelectItem>
+                                        <SelectItem value="STACKABLE">允许叠加</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </FormField>
-                        ) : null}
-                        <FormField label="优惠可用开始时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.startsAt}
-                                onChange={event => update('startsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="优惠可用结束时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.endsAt}
-                                onChange={event => update('endsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="总使用次数" hint="留空表示不限制。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.usageLimit}
-                                onChange={event => update('usageLimit', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="每位客户可用次数" hint="留空表示不限制。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.perCustomerUsageLimit}
-                                onChange={event => update('perCustomerUsageLimit', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="领取开始时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.claimStartsAt}
-                                onChange={event => update('claimStartsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="领取结束时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.claimEndsAt}
-                                onChange={event => update('claimEndsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="领取后有效天数" hint="留空则有效至活动结束。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.validityDays}
-                                onChange={event => update('validityDays', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="发放总量" hint="留空表示不限制领取数量。">
-                            <Input
-                                type="number"
-                                min={1}
-                                value={draft.issueLimit}
-                                onChange={event => update('issueLimit', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="每位客户领取限制">
-                            <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm">
-                                每个活动限领 1 张
-                            </div>
-                        </FormField>
-                        <FormField label="叠加规则">
-                            <Select
-                                value={draft.stackPolicy}
-                                onValueChange={value => value && update('stackPolicy', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="EXCLUSIVE">不可与其他优惠券叠加</SelectItem>
-                                    <SelectItem value="STACKABLE">允许叠加</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </FormField>
-                        <FormField label="取消订单返券">
-                            <div className="flex h-9 items-center justify-between rounded-md border px-3">
-                                <span className="text-sm">订单取消后恢复可用</span>
-                                <Switch
-                                    checked={draft.returnOnCancellation}
-                                    onCheckedChange={value => update('returnOnCancellation', value)}
-                                />
-                            </div>
-                        </FormField>
-                        <FormField label="全额退款返券">
-                            <div className="flex h-9 items-center justify-between rounded-md border px-3">
-                                <span className="text-sm">退款结算后恢复可用</span>
-                                <Switch
-                                    checked={draft.returnOnFullRefund}
-                                    onCheckedChange={value => update('returnOnFullRefund', value)}
-                                />
-                            </div>
-                        </FormField>
+                            <FormField label="取消订单返券">
+                                <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                                    <span className="text-sm">订单取消后恢复可用</span>
+                                    <Switch
+                                        checked={draft.returnOnCancellation}
+                                        onCheckedChange={value => update('returnOnCancellation', value)}
+                                    />
+                                </div>
+                            </FormField>
+                            <FormField label="全额退款返券">
+                                <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                                    <span className="text-sm">退款结算后恢复可用</span>
+                                    <Switch
+                                        checked={draft.returnOnFullRefund}
+                                        onCheckedChange={value => update('returnOnFullRefund', value)}
+                                    />
+                                </div>
+                            </FormField>
+                        </div>
                     </div>
-                </div>
-                <SheetFooter className="shrink-0 border-t px-6 py-4">
-                    <Button variant="outline" onClick={requestClose}>
-                        取消
-                    </Button>
-                    <Button disabled={mutation.isPending} onClick={submit}>
-                        {mutation.isPending ? '正在创建' : '创建优惠券'}
-                    </Button>
-                </SheetFooter>
-            </SheetContent>
-        </Sheet>
+                    <SheetFooter className="shrink-0 border-t px-6 py-4">
+                        <Button variant="outline" onClick={requestClose}>
+                            取消
+                        </Button>
+                        <Button disabled={mutation.isPending} onClick={submit}>
+                            {mutation.isPending ? '正在创建' : '创建优惠券'}
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        </>
     );
 }
 
@@ -1393,11 +1637,12 @@ function FlashSaleEditor({
     onClose: () => void;
     onSaved: () => Promise<void>;
 }) {
+    const { activeChannel } = useChannel();
     const [draft, setDraft] = useState<FlashSaleDraft>(() => newFlashSaleDraft());
-    const requestClose = useDraftCloseGuard(open, draft, onClose);
+    const { requestClose, isDirty } = useDraftCloseGuard(open, draft, onClose);
     const [productPickerOpen, setProductPickerOpen] = useState(false);
     const productQuery = useQuery({
-        queryKey: ['store-promotion-products', draft.productIds],
+        queryKey: ['store-promotion-products', activeChannel?.id, draft.productIds],
         queryFn: () =>
             api.query<StorePromotionProductsResult>(storePromotionProductsQuery, {
                 ids: draft.productIds,
@@ -1428,133 +1673,143 @@ function FlashSaleEditor({
     };
 
     return (
-        <Sheet open={open} onOpenChange={value => !value && requestClose()}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[82vw] sm:max-w-[1200px]">
-                <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
-                    <SheetTitle>新建限时秒杀</SheetTitle>
-                    <SheetDescription>
-                        先批量设置降价百分比，需要时再给某个规格填写单独秒杀价。
-                    </SheetDescription>
-                </SheetHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField label="活动名称" className="sm:col-span-2">
-                            <Input
-                                value={draft.name}
-                                onChange={event => update('name', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField
-                            label="秒杀商品"
-                            className="sm:col-span-2"
-                            hint="选择器支持先按分类筛选商品。"
-                        >
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setProductPickerOpen(true)}
+        <>
+            <UnsavedChangesConfirmation when={isDirty} />
+            <Sheet open={open} onOpenChange={value => !value && requestClose()}>
+                <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[82vw] sm:max-w-[1200px]">
+                    <SheetHeader className="shrink-0 border-b px-6 py-5 text-left">
+                        <SheetTitle>新建限时秒杀</SheetTitle>
+                        <SheetDescription>
+                            先批量设置降价百分比，需要时再给某个规格填写单独秒杀价。
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <FormField
+                                label="活动名称"
+                                className="sm:col-span-2"
+                                hint="仅供管理后台识别，不会展示在客户端。"
                             >
-                                <Plus className="size-4" />
-                                已选择 {draft.productIds.length} 个商品
-                            </Button>
-                            <ProductMultiSelectorDialog
-                                mode="product"
-                                initialSelectionIds={draft.productIds}
-                                onSelectionChange={ids => update('productIds', ids)}
-                                open={productPickerOpen}
-                                onOpenChange={setProductPickerOpen}
-                            />
-                        </FormField>
-                        <FormField label="批量降价百分比" hint="例如 20 表示统一降价 20%。">
-                            <Input
-                                type="number"
-                                min={0}
-                                max={99}
-                                step="1"
-                                value={draft.percentageOff}
-                                onChange={event => update('percentageOff', event.target.value)}
-                            />
-                        </FormField>
-                        <div />
-                        <FormField label="开始时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.startsAt}
-                                onChange={event => update('startsAt', event.target.value)}
-                            />
-                        </FormField>
-                        <FormField label="结束时间">
-                            <Input
-                                type="datetime-local"
-                                value={draft.endsAt}
-                                onChange={event => update('endsAt', event.target.value)}
-                            />
-                        </FormField>
-                    </div>
-                    {products.length ? (
-                        <div className="space-y-3 border-t pt-4">
-                            <h3 className="text-sm font-medium">单独规格秒杀价（可选）</h3>
-                            {products.flatMap(product =>
-                                product.variants.map(variant => (
-                                    <div
-                                        key={variant.id}
-                                        className="grid items-center gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_140px]"
-                                    >
-                                        <div className="min-w-0">
-                                            <strong className="block truncate text-sm">{product.name}</strong>
-                                            <span className="text-xs text-muted-foreground">
-                                                {variant.name} · 原价{' '}
-                                                {formatMoney(variant.priceWithTax, variant.currencyCode)}
-                                            </span>
-                                        </div>
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            step="0.01"
-                                            placeholder="单独秒杀价"
-                                            value={draft.variantPrices[variant.id] ?? ''}
-                                            onChange={event =>
-                                                update('variantPrices', {
-                                                    ...draft.variantPrices,
-                                                    [variant.id]: event.target.value,
-                                                })
-                                            }
-                                        />
-                                    </div>
-                                )),
-                            )}
+                                <Input
+                                    value={draft.name}
+                                    onChange={event => update('name', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField
+                                label="秒杀商品"
+                                className="sm:col-span-2"
+                                hint="选择器支持先按分类筛选商品。"
+                            >
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setProductPickerOpen(true)}
+                                >
+                                    <Plus className="size-4" />
+                                    已选择 {draft.productIds.length} 个商品
+                                </Button>
+                                <ProductMultiSelectorDialog
+                                    mode="product"
+                                    initialSelectionIds={draft.productIds}
+                                    onSelectionChange={ids => update('productIds', ids)}
+                                    open={productPickerOpen}
+                                    onOpenChange={setProductPickerOpen}
+                                />
+                            </FormField>
+                            <FormField label="批量降价百分比" hint="例如 20 表示统一降价 20%。">
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={99}
+                                    step="1"
+                                    value={draft.percentageOff}
+                                    onChange={event => update('percentageOff', event.target.value)}
+                                />
+                            </FormField>
+                            <div />
+                            <FormField label="开始时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.startsAt}
+                                    onChange={event => update('startsAt', event.target.value)}
+                                />
+                            </FormField>
+                            <FormField label="结束时间">
+                                <Input
+                                    type="datetime-local"
+                                    value={draft.endsAt}
+                                    onChange={event => update('endsAt', event.target.value)}
+                                />
+                            </FormField>
                         </div>
-                    ) : null}
-                </div>
-                <SheetFooter className="shrink-0 border-t px-6 py-4">
-                    <Button variant="outline" onClick={requestClose}>
-                        取消
-                    </Button>
-                    <Button disabled={mutation.isPending} onClick={submit}>
-                        {mutation.isPending ? '正在创建' : '创建秒杀'}
-                    </Button>
-                </SheetFooter>
-            </SheetContent>
-        </Sheet>
+                        {products.length ? (
+                            <div className="space-y-3 border-t pt-4">
+                                <h3 className="text-sm font-medium">单独规格秒杀价（可选）</h3>
+                                {products.flatMap(product =>
+                                    product.variants.map(variant => (
+                                        <div
+                                            key={variant.id}
+                                            className="grid items-center gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_140px]"
+                                        >
+                                            <div className="min-w-0">
+                                                <strong className="block truncate text-sm">
+                                                    {product.name}
+                                                </strong>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {variant.name} · 原价{' '}
+                                                    {formatMoney(variant.priceWithTax, variant.currencyCode)}
+                                                </span>
+                                            </div>
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                placeholder="单独秒杀价"
+                                                value={draft.variantPrices[variant.id] ?? ''}
+                                                onChange={event =>
+                                                    update('variantPrices', {
+                                                        ...draft.variantPrices,
+                                                        [variant.id]: event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    )),
+                                )}
+                            </div>
+                        ) : null}
+                    </div>
+                    <SheetFooter className="shrink-0 border-t px-6 py-4">
+                        <Button variant="outline" onClick={requestClose}>
+                            取消
+                        </Button>
+                        <Button disabled={mutation.isPending} onClick={submit}>
+                            {mutation.isPending ? '正在创建' : '创建秒杀'}
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        </>
     );
 }
 
 function useDraftCloseGuard<T>(open: boolean, draft: T, onClose: () => void) {
-    const initialDraftRef = useRef('');
-    const wasOpenRef = useRef(false);
+    const [initialDraft, setInitialDraft] = useState<string | null>(null);
+    const wasOpen = useRef(false);
 
     useEffect(() => {
-        if (open && !wasOpenRef.current) {
-            initialDraftRef.current = JSON.stringify(draft);
-        }
-        wasOpenRef.current = open;
+        if (open && !wasOpen.current) setInitialDraft(JSON.stringify(draft));
+        if (!open) setInitialDraft(null);
+        wasOpen.current = open;
     }, [draft, open]);
 
-    return () => {
-        const isDirty = initialDraftRef.current !== JSON.stringify(draft);
+    const isDirty = Boolean(open && initialDraft !== null && initialDraft !== JSON.stringify(draft));
+    const requestClose = () => {
         if (isDirty && !window.confirm('有未保存的修改，确定放弃吗？')) return;
         onClose();
     };
+
+    return { isDirty, requestClose };
 }
 
 function CampaignState({

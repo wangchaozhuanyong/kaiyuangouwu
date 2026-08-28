@@ -1,4 +1,5 @@
 /* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
+import type { RouteState } from '../storefront-router';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -23,7 +24,6 @@ import {
     WalletCards,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { compactUiCopy, languageCodeFor } from '../i18n';
@@ -491,7 +491,6 @@ export function AccountPage() {
                                 <ProductVariantImage variant={variant} alt={variant.name} />
                                 <span>
                                     <strong>{variant.name}</strong>
-                                    <small>{variant.sku}</small>
                                 </span>
                                 <button
                                     type="button"
