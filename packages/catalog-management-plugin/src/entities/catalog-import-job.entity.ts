@@ -32,6 +32,9 @@ export class CatalogImportJob extends VendureEntity {
     @Column({ type: 'varchar', length: 3 })
     currencyCode: CurrencyCode;
 
+    @Column({ type: 'boolean', default: false })
+    clearBlankFields: boolean;
+
     @Column({ type: 'varchar', length: 255 })
     originalFilename: string;
 

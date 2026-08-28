@@ -94,6 +94,7 @@ export class CatalogImportService {
                 channelId: ctx.channelId,
                 stockLocationId: input.stockLocationId,
                 currencyCode: input.currencyCode,
+                clearBlankFields: Boolean(input.clearBlankFields),
                 fileHash: parsed.fileHash,
                 state: Not('ROLLED_BACK'),
             },
@@ -106,6 +107,7 @@ export class CatalogImportService {
                 channelId: ctx.channelId,
                 stockLocationId: input.stockLocationId,
                 currencyCode: input.currencyCode,
+                clearBlankFields: Boolean(input.clearBlankFields),
                 originalFilename: fileInfo.filename.replace(/[\\/\0]/g, '_').slice(0, 255),
                 mimeType: fileInfo.mimetype || 'application/octet-stream',
                 byteSize: parsed.byteSize,
@@ -293,7 +295,12 @@ export class CatalogImportService {
             row.expectedProductUpdatedAt = null;
             row.expectedVariantUpdatedAt = variant.updatedAt;
             row.beforeSnapshot = snapshot;
-            row.plannedChanges = this.diffRow(row.normalizedData, snapshot, row.job.currencyCode);
+            row.plannedChanges = this.diffRow(
+                row.normalizedData,
+                snapshot,
+                row.job.currencyCode,
+                row.job.clearBlankFields,
+            );
             row.message = '管理员已指定要更新的 SKU';
         }
         const saved = await repository.save(row);
@@ -528,6 +535,12 @@ export class CatalogImportService {
                 const variants = targetProduct.variants.filter(variant => variantMatches(variant, row));
                 if (variants.length > 1) return conflictPlan('规格和单位匹配到多个 SKU');
                 targetVariant = variants[0];
+                if (!targetVariant && clearsVariantIdentity(row, Boolean(input.clearBlankFields))) {
+                    if (targetProduct.variants.length > 1) {
+                        return conflictPlan('清空规格或单位时无法唯一确定 SKU，请人工选择');
+                    }
+                    targetVariant = targetProduct.variants[0];
+                }
             }
         }
 
@@ -562,7 +575,7 @@ export class CatalogImportService {
             stockLocationId: input.stockLocationId,
             currencyCode: input.currencyCode,
         } as CatalogImportJob);
-        const changes = this.diffRow(row, snapshot, input.currencyCode);
+        const changes = this.diffRow(row, snapshot, input.currencyCode, Boolean(input.clearBlankFields));
         if (Object.keys(changes).filter(key => key !== 'safeAction').length === 0) {
             return {
                 action: 'SKIP_UNCHANGED',
@@ -596,7 +609,7 @@ export class CatalogImportService {
         const [product, stock, cost, policy] = await Promise.all([
             this.connection.getRepository(ctx, Product).findOne({
                 where: { id: variant.productId },
-                relations: ['translations', 'facetValues'],
+                relations: ['translations', 'facetValues', 'facetValues.facet'],
             }),
             this.connection.getRepository(ctx, StockLevel).findOne({
                 where: { productVariantId: variant.id, stockLocationId: job.stockLocationId },
@@ -623,6 +636,8 @@ export class CatalogImportService {
             productDescription:
                 product?.translations.find(t => t.languageCode === ctx.languageCode)?.description ?? '',
             productFacetValueIds: product?.facetValues?.map(value => String(value.id)) ?? [],
+            productBrand: facetNames(product?.facetValues, 'catalog-brand')[0] ?? null,
+            productTags: facetNames(product?.facetValues, 'catalog-tag'),
             sku: variant.sku,
             variantEnabled: variant.enabled,
             barcode: stringValue(customFields.barcode),
@@ -646,19 +661,44 @@ export class CatalogImportService {
         row: NormalizedCatalogRow,
         snapshot: Record<string, unknown>,
         currencyCode: CurrencyCode,
+        clearBlankFields: boolean,
     ): Record<string, unknown> {
         const changes: Record<string, unknown> = {};
         changed(changes, 'productEnabled', row.enabled, snapshot.productEnabled);
-        if (row.description)
-            changed(changes, 'productDescription', row.description, snapshot.productDescription);
+        changedOptional(
+            changes,
+            'productDescription',
+            row.description,
+            snapshot.productDescription,
+            shouldClear(row, 'description', clearBlankFields),
+            '',
+        );
         if (row.sku) changed(changes, 'sku', row.sku, snapshot.sku);
-        if (row.barcode) changed(changes, 'barcode', row.barcode, snapshot.barcode);
-        if (row.specification) changed(changes, 'specification', row.specification, snapshot.specification);
-        if (row.primaryUnit) {
-            changed(changes, 'saleUnit', row.primaryUnit, snapshot.saleUnit);
-            changed(changes, 'purchaseUnit', row.primaryUnit, snapshot.purchaseUnit);
+        changedOptional(
+            changes,
+            'barcode',
+            row.barcode,
+            snapshot.barcode,
+            shouldClear(row, 'barcode', clearBlankFields),
+        );
+        changedOptional(
+            changes,
+            'specification',
+            row.specification,
+            snapshot.specification,
+            shouldClear(row, 'specification', clearBlankFields),
+        );
+        if (row.primaryUnit || shouldClear(row, 'primaryUnit', clearBlankFields)) {
+            changedOptional(changes, 'saleUnit', row.primaryUnit, snapshot.saleUnit, true);
+            changedOptional(changes, 'purchaseUnit', row.primaryUnit, snapshot.purchaseUnit, true);
         }
-        changed(changes, 'shelfLifeDays', row.shelfLifeDays, snapshot.shelfLifeDays);
+        changedOptional(
+            changes,
+            'shelfLifeDays',
+            row.shelfLifeDays,
+            snapshot.shelfLifeDays,
+            shouldClear(row, 'shelfLifeDays', clearBlankFields),
+        );
         changed(changes, 'sellingPrice', money(row.sellingPrice), snapshot.sellingPrice);
         changed(
             changes,
@@ -667,10 +707,35 @@ export class CatalogImportService {
             snapshot.purchaseCostMicrounits,
         );
         changed(changes, 'stockOnHand', row.stockOnHand, snapshot.stockOnHand);
-        changed(changes, 'minimumStock', row.minimumStock, snapshot.minimumStock);
-        changed(changes, 'maximumStock', row.maximumStock, snapshot.maximumStock);
-        if (row.brand) changes.brand = { from: null, to: row.brand };
-        if (row.tags.length > 0) changes.tags = { from: null, to: row.tags };
+        changedOptional(
+            changes,
+            'minimumStock',
+            row.minimumStock,
+            snapshot.minimumStock,
+            shouldClear(row, 'minimumStock', clearBlankFields),
+        );
+        changedOptional(
+            changes,
+            'maximumStock',
+            row.maximumStock,
+            snapshot.maximumStock,
+            shouldClear(row, 'maximumStock', clearBlankFields),
+        );
+        changedOptional(
+            changes,
+            'brand',
+            row.brand || null,
+            snapshot.productBrand,
+            shouldClear(row, 'brand', clearBlankFields),
+        );
+        changedOptional(
+            changes,
+            'tags',
+            row.tags.length > 0 ? row.tags : null,
+            snapshot.productTags,
+            shouldClear(row, 'tags', clearBlankFields),
+            [],
+        );
         if (row.manufacturedAt || row.lotCode) changes.inventoryLot = { from: null, to: true };
         changes.currencyCode = currencyCode;
         if (Object.keys(changes).length === 1) return {};
@@ -693,7 +758,7 @@ export class CatalogImportService {
             product =
                 (await this.connection.getRepository(ctx, Product).findOne({
                     where: { id: productId, deletedAt: IsNull() },
-                    relations: ['translations', 'facetValues'],
+                    relations: ['translations', 'facetValues', 'facetValues.facet'],
                 })) ?? undefined;
             if (!product) throw new UserInputError('预览中的商品已不存在');
             if (
@@ -722,7 +787,7 @@ export class CatalogImportService {
             product =
                 (await this.connection.getRepository(ctx, Product).findOne({
                     where: { id: created.id },
-                    relations: ['translations', 'facetValues'],
+                    relations: ['translations', 'facetValues', 'facetValues.facet'],
                 })) ?? undefined;
             productByKey.set(row.productKey, productId);
         }
@@ -771,9 +836,28 @@ export class CatalogImportService {
                 : null,
         };
         const facetValueIds = await this.resolveFacetValues(ctx, row.normalizedData);
+        const replaceBrand =
+            Boolean(row.normalizedData.brand) ||
+            shouldClear(row.normalizedData, 'brand', job.clearBlankFields);
+        const replaceTags =
+            row.normalizedData.tags.length > 0 ||
+            shouldClear(row.normalizedData, 'tags', job.clearBlankFields);
+        const retainedFacetValueIds = (product.facetValues ?? [])
+            .filter(value => {
+                const code = value.facet?.code;
+                return !(
+                    (replaceBrand && code === 'catalog-brand') ||
+                    (replaceTags && code === 'catalog-tag')
+                );
+            })
+            .map(value => value.id);
+        const nextFacetValueIds = [...new Set([...retainedFacetValueIds, ...facetValueIds])];
+        const replaceDescription =
+            Boolean(row.normalizedData.description) ||
+            shouldClear(row.normalizedData, 'description', job.clearBlankFields);
         if (
             !productCreated &&
-            (row.normalizedData.description || row.normalizedData.enabled != null || facetValueIds.length)
+            (replaceDescription || row.normalizedData.enabled != null || replaceBrand || replaceTags)
         ) {
             const translation =
                 product.translations.find(item => item.languageCode === ctx.languageCode) ??
@@ -782,10 +866,8 @@ export class CatalogImportService {
                 id: product.id,
                 expectedUpdatedAt: product.updatedAt,
                 ...(row.normalizedData.enabled != null ? { enabled: row.normalizedData.enabled } : {}),
-                facetValueIds: [
-                    ...new Set([...(product.facetValues?.map(value => value.id) ?? []), ...facetValueIds]),
-                ],
-                ...(row.normalizedData.description
+                facetValueIds: nextFacetValueIds,
+                ...(replaceDescription
                     ? {
                           translations: [
                               {
@@ -840,7 +922,7 @@ export class CatalogImportService {
         } else {
             const customFields = {
                 ...((variant.customFields ?? {}) as Record<string, unknown>),
-                ...nonBlankVariantCustomFields(row.normalizedData),
+                ...variantCustomFieldUpdates(row.normalizedData, job.clearBlankFields),
             };
             await this.productVariantService.update(ctx, [
                 {
@@ -881,13 +963,19 @@ export class CatalogImportService {
                 String(row.id),
             );
         }
-        if (row.normalizedData.minimumStock != null || row.normalizedData.maximumStock != null) {
+        const updateMinimumStock =
+            row.normalizedData.minimumStock != null ||
+            shouldClear(row.normalizedData, 'minimumStock', job.clearBlankFields);
+        const updateMaximumStock =
+            row.normalizedData.maximumStock != null ||
+            shouldClear(row.normalizedData, 'maximumStock', job.clearBlankFields);
+        if (updateMinimumStock || updateMaximumStock) {
             await this.operations.savePolicy(
                 ctx,
                 variant.id,
                 job.stockLocationId,
-                row.normalizedData.minimumStock ?? nullableNumber(before.minimumStock),
-                row.normalizedData.maximumStock ?? nullableNumber(before.maximumStock),
+                updateMinimumStock ? row.normalizedData.minimumStock : nullableNumber(before.minimumStock),
+                updateMaximumStock ? row.normalizedData.maximumStock : nullableNumber(before.maximumStock),
             );
         }
         let lotId: ID | null = null;
@@ -1088,6 +1176,7 @@ export class CatalogImportService {
             .createQueryBuilder('product')
             .leftJoinAndSelect('product.translations', 'productTranslation')
             .leftJoinAndSelect('product.facetValues', 'productFacetValue')
+            .leftJoinAndSelect('productFacetValue.facet', 'productFacet')
             .leftJoinAndSelect('product.variants', 'variant', 'variant.deletedAt IS NULL')
             .leftJoinAndSelect('variant.translations', 'variantTranslation')
             .leftJoinAndSelect('variant.productVariantPrices', 'variantPrice')
@@ -1352,7 +1441,24 @@ function createChanges(row: NormalizedCatalogRow, currencyCode: CurrencyCode): R
 
 function changed(target: Record<string, unknown>, key: string, next: unknown, previous: unknown): void {
     if (next === null || next === undefined || next === '') return;
-    if (next !== previous) target[key] = { from: previous ?? null, to: next };
+    if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
+}
+
+function changedOptional(
+    target: Record<string, unknown>,
+    key: string,
+    next: unknown,
+    previous: unknown,
+    clear: boolean,
+    clearedValue: unknown = null,
+): void {
+    if (!isBlankValue(next)) {
+        if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
+        return;
+    }
+    if (clear && !isBlankValue(previous)) {
+        target[key] = { from: previous, to: clearedValue };
+    }
 }
 
 function money(value: number | null): number {
@@ -1379,10 +1485,69 @@ function variantCustomFields(row: NormalizedCatalogRow): Record<string, unknown>
     };
 }
 
-function nonBlankVariantCustomFields(row: NormalizedCatalogRow): Record<string, unknown> {
-    return Object.fromEntries(
-        Object.entries(variantCustomFields(row)).filter(([, value]) => value !== null && value !== ''),
+function variantCustomFieldUpdates(
+    row: NormalizedCatalogRow,
+    clearBlankFields: boolean,
+): Record<string, unknown> {
+    const updates: Record<string, unknown> = {};
+    optionalUpdate(updates, 'barcode', row.barcode, shouldClear(row, 'barcode', clearBlankFields));
+    optionalUpdate(
+        updates,
+        'specification',
+        row.specification,
+        shouldClear(row, 'specification', clearBlankFields),
     );
+    const clearUnit = shouldClear(row, 'primaryUnit', clearBlankFields);
+    optionalUpdate(updates, 'saleUnit', row.primaryUnit, clearUnit);
+    optionalUpdate(updates, 'purchaseUnit', row.primaryUnit, clearUnit);
+    optionalUpdate(
+        updates,
+        'shelfLifeDays',
+        row.shelfLifeDays,
+        shouldClear(row, 'shelfLifeDays', clearBlankFields),
+    );
+    return updates;
+}
+
+function optionalUpdate(target: Record<string, unknown>, key: string, value: unknown, clear: boolean): void {
+    if (!isBlankValue(value)) target[key] = value;
+    else if (clear) target[key] = null;
+}
+
+export function shouldClear(
+    row: NormalizedCatalogRow,
+    field: keyof NormalizedCatalogRow,
+    clearBlankFields: boolean,
+): boolean {
+    if (!clearBlankFields || !Object.prototype.hasOwnProperty.call(row.raw, field)) return false;
+    return isBlankValue(row.raw[String(field)]);
+}
+
+export function clearsVariantIdentity(row: NormalizedCatalogRow, clearBlankFields: boolean): boolean {
+    return (
+        shouldClear(row, 'specification', clearBlankFields) ||
+        shouldClear(row, 'primaryUnit', clearBlankFields)
+    );
+}
+
+function isBlankValue(value: unknown): boolean {
+    return (
+        value === null ||
+        value === undefined ||
+        (typeof value === 'string' && value.trim() === '') ||
+        (Array.isArray(value) && value.length === 0)
+    );
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function facetNames(values: FacetValue[] | undefined, facetCode: string): string[] {
+    return (values ?? [])
+        .filter(value => value.facet?.code === facetCode)
+        .map(value => value.translations[0]?.name ?? value.code)
+        .sort((left, right) => left.localeCompare(right, 'zh-Hans'));
 }
 
 function manualProductFilter(productIds: string[], combineWithAnd = true) {

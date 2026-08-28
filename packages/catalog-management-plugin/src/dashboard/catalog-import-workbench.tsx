@@ -18,6 +18,7 @@ import {
     SheetHeader,
     SheetTitle,
     Skeleton,
+    Switch,
     Table,
     TableBody,
     TableCell,
@@ -89,6 +90,7 @@ function CatalogImportWorkbench({
     const [file, setFile] = useState<File | null>(null);
     const [stockLocationId, setStockLocationId] = useState('');
     const [currencyCode, setCurrencyCode] = useState('');
+    const [clearBlankFields, setClearBlankFields] = useState(false);
     const [jobId, setJobId] = useState<string | null>(null);
     const [actionFilter, setActionFilter] = useState<ActionFilter>('ALL');
     const [targetVariantByRow, setTargetVariantByRow] = useState<Record<string, string>>({});
@@ -154,6 +156,7 @@ function CatalogImportWorkbench({
                         channelId: activeChannel.id,
                         stockLocationId,
                         currencyCode,
+                        clearBlankFields,
                     },
                 },
             );
@@ -206,6 +209,7 @@ function CatalogImportWorkbench({
         setJobId(null);
         setActionFilter('ALL');
         setTargetVariantByRow({});
+        setClearBlankFields(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -239,13 +243,25 @@ function CatalogImportWorkbench({
                                 locations={locations}
                                 channelCode={activeChannel?.code ?? ''}
                                 currencyCode={currencyCode}
+                                clearBlankFields={clearBlankFields}
                                 availableCurrencyCodes={activeChannel?.availableCurrencyCodes ?? []}
                                 isPending={previewMutation.isPending}
                                 fileInputRef={fileInputRef}
                                 onFileChange={event => setFile(event.target.files?.[0] ?? null)}
                                 onStockLocationChange={setStockLocationId}
                                 onCurrencyCodeChange={setCurrencyCode}
-                                onPreview={() => previewMutation.mutate()}
+                                onClearBlankFieldsChange={setClearBlankFields}
+                                onPreview={() => {
+                                    if (
+                                        clearBlankFields &&
+                                        !window.confirm(
+                                            '已启用空白清除模式。文件中已提供但留空的描述、品牌、标签、条码、规格、单位、保质期和库存预警值将在执行时清除。确认创建预览吗？',
+                                        )
+                                    ) {
+                                        return;
+                                    }
+                                    previewMutation.mutate();
+                                }}
                                 onDownloadTemplate={() => void downloadTemplate()}
                             />
                         ) : jobQuery.isLoading || !job ? (
@@ -259,6 +275,11 @@ function CatalogImportWorkbench({
                                             {job.stockLocation.name} · {job.currencyCode} ·{' '}
                                             {formatBytes(job.byteSize)}
                                         </p>
+                                        {job.clearBlankFields && (
+                                            <Badge variant="destructive" className="mt-2">
+                                                空白清除模式
+                                            </Badge>
+                                        )}
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         <Button variant="outline" onClick={reset} disabled={running}>
@@ -281,7 +302,17 @@ function CatalogImportWorkbench({
                                         )}
                                         <Button
                                             disabled={!canExecute || executeMutation.isPending}
-                                            onClick={() => executeMutation.mutate()}
+                                            onClick={() => {
+                                                if (
+                                                    job.clearBlankFields &&
+                                                    !window.confirm(
+                                                        '即将执行空白字段清除。请确认已检查完所有预览差异。',
+                                                    )
+                                                ) {
+                                                    return;
+                                                }
+                                                executeMutation.mutate();
+                                            }}
                                         >
                                             {executeMutation.isPending || running ? (
                                                 <Loader2 className="mr-2 size-4 animate-spin" />
@@ -401,7 +432,7 @@ function CatalogImportWorkbench({
                     </TabsContent>
                 </Tabs>
                 <SheetFooter className="border-t px-6 py-3 text-xs text-muted-foreground">
-                    空白单元格不会清空已有值；数字 0 会正常更新；所有写入均保留导入审计记录。
+                    默认不会用空白单元格清除已有值；数字 0 会正常更新；所有写入均保留导入审计记录。
                 </SheetFooter>
             </SheetContent>
         </Sheet>
@@ -414,12 +445,14 @@ function UploadPanel({
     locations,
     channelCode,
     currencyCode,
+    clearBlankFields,
     availableCurrencyCodes,
     isPending,
     fileInputRef,
     onFileChange,
     onStockLocationChange,
     onCurrencyCodeChange,
+    onClearBlankFieldsChange,
     onPreview,
     onDownloadTemplate,
 }: Readonly<{
@@ -428,12 +461,14 @@ function UploadPanel({
     locations: Array<{ id: string; name: string }>;
     channelCode: string;
     currencyCode: string;
+    clearBlankFields: boolean;
     availableCurrencyCodes: string[];
     isPending: boolean;
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onStockLocationChange: (value: string) => void;
     onCurrencyCodeChange: (value: string) => void;
+    onClearBlankFieldsChange: (value: boolean) => void;
     onPreview: () => void;
     onDownloadTemplate: () => void;
 }>) {
@@ -496,6 +531,22 @@ function UploadPanel({
                             ))}
                         </SelectContent>
                     </Select>
+                </div>
+                <div className="flex items-start justify-between gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4 md:col-span-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="catalog-clear-blank-fields" className="text-destructive">
+                            空白字段清除模式（高风险）
+                        </Label>
+                        <p className="text-xs leading-5 text-muted-foreground">
+                            默认关闭。开启后，仅对文件中实际存在的列生效；留空的描述、品牌、标签、条码、规格、单位、保质期和库存预警值会被清除。SKU、价格、成本和库存数不会被空值清除。
+                        </p>
+                    </div>
+                    <Switch
+                        id="catalog-clear-blank-fields"
+                        checked={clearBlankFields}
+                        onCheckedChange={onClearBlankFieldsChange}
+                        aria-label="启用空字段清除模式"
+                    />
                 </div>
                 {file && (
                     <div className="rounded-lg bg-muted p-3 text-sm md:col-span-3">

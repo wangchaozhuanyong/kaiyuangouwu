@@ -12,6 +12,7 @@ const importJobFields = gql`
             name
         }
         currencyCode
+        clearBlankFields
         originalFilename
         byteSize
         fileHash
@@ -215,6 +216,7 @@ export interface CatalogImportJobRecord {
     stockLocationId: string;
     stockLocation: { id: string; name: string };
     currencyCode: string;
+    clearBlankFields: boolean;
     originalFilename: string;
     byteSize: number;
     fileHash: string;

@@ -40,6 +40,7 @@ export const adminApiExtensions = gql`
         stockLocationId: ID!
         stockLocation: CatalogImportStockLocation!
         currencyCode: CurrencyCode!
+        clearBlankFields: Boolean!
         originalFilename: String!
         mimeType: String!
         byteSize: Int!
@@ -145,6 +146,7 @@ export const adminApiExtensions = gql`
         channelId: ID!
         stockLocationId: ID!
         currencyCode: CurrencyCode!
+        clearBlankFields: Boolean = false
     }
 
     input ResolveCatalogImportRowInput {

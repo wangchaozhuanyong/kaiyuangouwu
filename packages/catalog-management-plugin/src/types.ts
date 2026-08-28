@@ -20,6 +20,7 @@ export interface CatalogImportContextInput {
     channelId: ID;
     stockLocationId: ID;
     currencyCode: CurrencyCode;
+    clearBlankFields?: boolean;
 }
 
 export interface ResolveCatalogImportRowInput {
