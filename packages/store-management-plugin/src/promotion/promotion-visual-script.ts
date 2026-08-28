@@ -370,6 +370,7 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
         );
         revealElements.forEach(element => revealObserver.observe(element));
     }
+    window.setTimeout(() => revealElements.forEach(reveal), 1400);
 
     document.querySelectorAll('[data-promo-surface]').forEach(surface => {
         if (!(surface instanceof HTMLElement)) return;

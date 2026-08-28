@@ -132,7 +132,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-section { padding: clamp(84px, 9vw, 132px) 0 clamp(98px, 10vw, 148px); border-top: 1px solid var(--line); }
         .promo-section-header { display: grid; grid-template-columns: minmax(0, 0.88fr) minmax(320px, 0.62fr); align-items: end; gap: clamp(38px, 7vw, 110px); }
         .promo-kicker { margin: 0 0 18px; color: var(--accent); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; letter-spacing: 0.17em; text-transform: uppercase; }
-        .promo-section-title { max-width: 13ch; margin: 0; color: var(--ink); font-size: clamp(38px, 4.8vw, 68px); font-weight: 560; letter-spacing: -0.062em; line-height: 0.99; text-wrap: balance; }
+        .promo-section-title { max-width: 13ch; margin: 0; color: var(--ink); font-size: clamp(38px, 4.8vw, 68px); font-weight: 560; letter-spacing: -0.062em; line-height: 0.99; word-break: keep-all; }
         .promo-section-intro { max-width: 48ch; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.75; text-wrap: pretty; }
         .promo-capability-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; margin-top: 54px; }
         .promo-capability { --spotlight-x: 50%; --spotlight-y: 50%; position: relative; min-height: 260px; display: flex; flex-direction: column; overflow: hidden; padding: clamp(26px, 3vw, 38px); border: 1px solid var(--line); border-radius: var(--radius-card); background: radial-gradient(360px circle at var(--spotlight-x) var(--spotlight-y), rgba(145, 230, 196, 0.095), transparent 60%), linear-gradient(145deg, rgba(14, 23, 23, 0.92), rgba(8, 14, 15, 0.84)); box-shadow: inset 0 1px rgba(229, 255, 244, 0.035); transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 240ms ease, box-shadow 240ms ease; }
@@ -278,7 +278,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
 
             <section class="promo-section promo-shell" id="services">
                 <div class="promo-section-header" data-promo-reveal>
-                    <div><p class="promo-kicker">Service matrix / 02</p><h2 class="promo-section-title">不是商品列表，是数字服务的导航层。</h2></div>
+                    <div><p class="promo-kicker">Service matrix / 02</p><h2 class="promo-section-title">不展示商品列表，<br>只讲清服务方向。</h2></div>
                     <p class="promo-section-intro">我们把分散的 AI 工具、软件订阅和数字服务整理为清楚的进入路径。这一页帮你判断业务是否匹配，具体方案则回到主站确认。</p>
                 </div>
                 <div class="promo-capability-grid">
@@ -291,7 +291,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
 
             <section class="promo-section">
                 <div class="promo-layer-layout promo-shell">
-                    <div class="promo-layer-heading" data-promo-reveal><p class="promo-kicker">Clear boundary / 03</p><h2 class="promo-section-title">两层职责，信息不混在一起。</h2><p class="promo-section-intro">推广页负责讲清业务，主站负责给出可以决策和交易的完整信息。</p></div>
+                    <div class="promo-layer-heading" data-promo-reveal><p class="promo-kicker">Clear boundary / 03</p><h2 class="promo-section-title">介绍与交易，<br>各自清楚。</h2><p class="promo-section-intro">推广页负责讲清业务，主站负责给出可以决策和交易的完整信息。</p></div>
                     <div class="promo-layer-stack">
                         <article class="promo-layer" data-promo-surface data-promo-reveal><div class="promo-layer-topline"><span>Promotion layer</span><span>Public introduction</span></div><h3>推广介绍层</h3><p>对外介绍品牌定位、服务类型与进入路径，不展开实时商品、价格或库存。</p><div class="promo-layer-items"><span>业务范围</span><span>服务路径</span><span>主站入口</span></div></article>
                         <article class="promo-layer promo-layer-primary" data-promo-surface data-promo-reveal><div class="promo-layer-topline"><span>Store layer</span><span>Protected business</span></div><h3>主站业务层</h3><p>访客主动点击进入后，再查看完整商品信息、实时价格、交付条件、订单记录与售后支持。</p><div class="promo-layer-items"><span>商品详情</span><span>价格与交付</span><span>订单与售后</span></div></article>
@@ -301,7 +301,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
 
             <section class="promo-section promo-shell">
                 <div class="promo-process-layout">
-                    <div class="promo-process-copy" data-promo-reveal><p class="promo-kicker">Entry sequence / 04</p><h2 class="promo-section-title">先判断，再进入，最后决策。</h2><p class="promo-section-intro">这一页不催促交易。它的任务是让你明白这是什么类型的站点，以及下一步应该去哪里。</p></div>
+                    <div class="promo-process-copy" data-promo-reveal><p class="promo-kicker">Entry sequence / 04</p><h2 class="promo-section-title">先了解，<br>再进入，最后决定。</h2><p class="promo-section-intro">这一页不催促交易。它的任务是让你明白这是什么类型的站点，以及下一步应该去哪里。</p></div>
                     <ol class="promo-process-list" data-promo-reveal>
                         <li class="promo-process-item"><span class="promo-process-index">01</span><div><strong>快速确认业务是否匹配</strong><p>通过服务类型和边界说明，判断这里是否值得继续了解。</p></div></li>
                         <li class="promo-process-item"><span class="promo-process-index">02</span><div><strong>主动点击进入业务主站</strong><p>只有当你决定继续时，页面才把你带入完整主站。</p></div></li>
