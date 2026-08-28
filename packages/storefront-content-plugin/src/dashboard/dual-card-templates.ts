@@ -5,20 +5,20 @@ export const DEFAULT_DUAL_CARD_TEMPLATE_ID = 'tech-duo';
 export const dualCardTemplates = [
     {
         id: DEFAULT_DUAL_CARD_TEMPLATE_ID,
-        labelZh: '科技双生',
-        labelEn: 'Tech Duo',
-        descriptionZh: '截图同款，深海青与数字紫组合',
-        descriptionEn: 'Screenshot default with deep teal and digital violet',
+        labelZh: '清透彩玻',
+        labelEn: 'Aurora Glass',
+        descriptionZh: '浅色薄荷青与雾蓝组合，适合 AI 与数字服务',
+        descriptionEn: 'Light mint and mist blue for AI and digital services',
         cards: [
             {
-                background: 'linear-gradient(145deg, #0c1929, #111d2e 52%, #0e2a3d)',
-                accent: '#67e8f9',
-                border: '#22677b',
+                background: 'linear-gradient(145deg, #f4fffb, #f7fffd 52%, #fff8f6)',
+                accent: '#079681',
+                border: '#8edfd1',
             },
             {
-                background: 'linear-gradient(145deg, #1a1035, #150d2e 52%, #0f172a)',
-                accent: '#c4b5fd',
-                border: '#59458d',
+                background: 'linear-gradient(145deg, #f6faff, #f7f8ff 52%, #fff9f6)',
+                accent: '#377de8',
+                border: '#a8c9f8',
             },
         ],
     },

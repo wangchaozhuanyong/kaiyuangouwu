@@ -1737,7 +1737,17 @@ function DualCardTemplatePicker({
                                             style={{ borderColor: card.accent }}
                                         />
                                         <span className="space-y-1">
-                                            <span className="block h-1.5 w-3/4 rounded-sm bg-white/85" />
+                                            <span
+                                                className="block h-1.5 w-3/4 rounded-sm"
+                                                style={{
+                                                    backgroundColor:
+                                                        template.id === 'tech-duo'
+                                                            ? index === 0
+                                                                ? '#173f3b'
+                                                                : '#263f65'
+                                                            : 'rgba(255, 255, 255, 0.85)',
+                                                }}
+                                            />
                                             <span
                                                 className="block h-1 w-1/2 rounded-sm"
                                                 style={{ backgroundColor: card.accent }}

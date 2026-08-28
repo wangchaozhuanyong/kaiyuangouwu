@@ -19,6 +19,7 @@ import {
     Sparkles,
     Tag,
     Truck,
+    Waypoints,
     WifiOff,
     Zap,
 } from 'lucide-react';
@@ -1407,8 +1408,9 @@ function HomeDualCategoryShowcase({
             data-card-template={template}
             aria-label={block.title || (isZh ? '核心品类精选' : 'Core Categories')}
         >
-            {block.items.slice(0, 2).map(item => {
+            {block.items.slice(0, 2).map((item, index) => {
                 const disabled = item.targetType === 'NONE' || !item.targetValue;
+                const ShowcaseIcon = index === 0 ? Waypoints : Headphones;
                 const badgeLabel = localizedDualCardItemSetting(
                     item.settings,
                     'badgeLabel',
@@ -1425,7 +1427,7 @@ function HomeDualCategoryShowcase({
                     <button
                         key={item.id}
                         type="button"
-                        className={`showcase-card${item.imageUrl ? ' has-managed-image' : ''}`}
+                        className={`showcase-card showcase-card--${index === 0 ? 'gateway' : 'support'}${item.imageUrl ? ' has-managed-image' : ''}`}
                         disabled={disabled}
                         onClick={() => onContentTarget(item.targetType, item.targetValue)}
                     >
@@ -1436,6 +1438,11 @@ function HomeDualCategoryShowcase({
                                 </span>
                                 <span className="showcase-card-image-shade" aria-hidden="true" />
                             </>
+                        ) : null}
+                        {template === 'tech-duo' ? (
+                            <span className="showcase-card-icon" aria-hidden="true">
+                                <ShowcaseIcon />
+                            </span>
                         ) : null}
                         <div className="showcase-content">
                             {badgeLabel ? <span className="showcase-badge">{badgeLabel}</span> : null}

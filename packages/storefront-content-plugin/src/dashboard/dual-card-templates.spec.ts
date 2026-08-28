@@ -4,6 +4,7 @@ import {
     DEFAULT_DUAL_CARD_TEMPLATE_ID,
     applyCoreCategoryDefaults,
     dualCardTemplateId,
+    dualCardTemplates,
 } from './dual-card-templates';
 import { ContentBlock } from './storefront-content.graphql';
 
@@ -37,6 +38,18 @@ describe('dual-card templates', () => {
     it('uses the screenshot template when the stored value is missing or unknown', () => {
         expect(dualCardTemplateId(null)).toBe(DEFAULT_DUAL_CARD_TEMPLATE_ID);
         expect(dualCardTemplateId({ dualCardTemplate: 'unknown' })).toBe(DEFAULT_DUAL_CARD_TEMPLATE_ID);
+    });
+
+    it('keeps the default dashboard preview aligned with the light storefront theme', () => {
+        const template = dualCardTemplates.find(item => item.id === DEFAULT_DUAL_CARD_TEMPLATE_ID);
+
+        expect(template).toMatchObject({
+            labelZh: '清透彩玻',
+            cards: [
+                { accent: '#079681', border: '#8edfd1' },
+                { accent: '#377de8', border: '#a8c9f8' },
+            ],
+        });
     });
 
     it('seeds a ready-to-edit pair of cards without requiring catalog IDs', () => {

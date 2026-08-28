@@ -77,6 +77,22 @@ describe('HomeDualCategoryShowcase', () => {
         }
     });
 
+    it('renders the light tech-duo card roles and decorative icons', () => {
+        const markup = renderToStaticMarkup(
+            <HomeDualCategoryShowcase
+                language="zh"
+                block={blockFixture({ dualCardTemplate: 'tech-duo' })}
+                onContentTarget={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('showcase-card--gateway');
+        expect(markup).toContain('showcase-card--support');
+        expect(markup).toContain('lucide-waypoints');
+        expect(markup).toContain('lucide-headphones');
+        expect(markup.match(/showcase-card-icon/g)).toHaveLength(2);
+    });
+
     it('renders nothing for an empty managed block', () => {
         const markup = renderToStaticMarkup(
             <HomeDualCategoryShowcase
