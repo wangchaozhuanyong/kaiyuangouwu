@@ -10,9 +10,11 @@ import { manageCatalogImportPermission } from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
+import { InventoryLotMovement } from './entities/inventory-lot-movement.entity';
 import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
+import { InventoryLotLifecycleService } from './inventory-lot-lifecycle.service';
 import './types';
 
 @VendurePlugin({
@@ -24,12 +26,14 @@ import './types';
         VariantCostRecord,
         InventoryPolicy,
         InventoryLot,
+        InventoryLotMovement,
     ],
     providers: [
         CatalogFileParserService,
         CatalogOperationsService,
         CatalogImportService,
         CatalogImportQueueService,
+        InventoryLotLifecycleService,
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(manageCatalogImportPermission);

@@ -61,6 +61,7 @@ import { AlignHardenedImageGenerationSchema1787821200000 } from './1787821200000
 import { AddCatalogManagement1787824800000 } from './1787824800000-add-catalog-management';
 import { AddCatalogImportMetadata1787828400000 } from './1787828400000-add-catalog-import-metadata';
 import { AlignCatalogManagementSchema1787832000000 } from './1787832000000-align-catalog-management-schema';
+import { AddInventoryLotMovements1787835600000 } from './1787835600000-add-inventory-lot-movements';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -126,4 +127,5 @@ export const devServerMigrations = [
     AddCatalogManagement1787824800000,
     AddCatalogImportMetadata1787828400000,
     AlignCatalogManagementSchema1787832000000,
+    AddInventoryLotMovements1787835600000,
 ];
