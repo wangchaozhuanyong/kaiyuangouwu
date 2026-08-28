@@ -45,6 +45,7 @@ test.describe('product variant generation', () => {
         await detail.gotoNew();
         await detail.expectNewPageLoaded();
         await detail.fillFields([{ label: 'Product name', value: 'E2E Variant Test Product' }]);
+        await detail.fillRichText('Description', 'Product used to test variant generation');
         // Wait for slug auto-generation
         await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
         await detail.clickCreate();
@@ -464,6 +465,7 @@ test.describe('remove option group from product detail (#4703)', () => {
         await detail.gotoNew();
         await detail.expectNewPageLoaded();
         await detail.fillFields([{ label: 'Product name', value: 'E2E Remove Option Group Product' }]);
+        await detail.fillRichText('Description', 'Product used to test option group removal');
         await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
         await detail.clickCreate();
         await detail.expectSuccessToast(/created/i);

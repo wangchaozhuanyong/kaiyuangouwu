@@ -74,6 +74,11 @@ export class BaseDetailPage {
         await this.formItem(label).getByRole('textbox').fill(value);
     }
 
+    /** Fill a contenteditable rich-text field identified by its label. */
+    async fillRichText(label: string, value: string) {
+        await this.formItem(label).locator('[contenteditable="true"]').fill(value);
+    }
+
     /** Fill a number input field identified by its label (uses spinbutton role). */
     async fillNumber(label: string, value: string) {
         await this.formItem(label).getByRole('spinbutton').fill(value);

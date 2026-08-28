@@ -201,8 +201,9 @@ test.describe('Default-language product editing', () => {
         await dp.expectNewPageLoaded();
 
         const name = `OSS579 Only-EN ${Date.now()}`;
-        // Slug is auto-generated from the name (its input is disabled), so filling the name is enough.
+        // Slug is auto-generated from the name (its input is disabled).
         await dp.fillInput('Product name', name);
+        await dp.fillRichText('Description', 'Default-language-only product description');
 
         const createRequest = page.waitForRequest(
             req => req.method() === 'POST' && (req.postData() ?? '').includes('mutation CreateProduct('),
