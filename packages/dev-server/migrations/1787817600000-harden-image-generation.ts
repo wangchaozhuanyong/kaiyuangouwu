@@ -73,7 +73,7 @@ export class HardenImageGeneration1787817600000 implements MigrationInterface {
                         { name: 'outputId', type: idType },
                         { name: 'state', type: 'varchar', length: '24', default: "'PENDING'" },
                         { name: 'attemptCount', type: 'int', default: 0 },
-                        { name: 'nextAttemptAt', type: dateType, default: now },
+                        { name: 'nextAttemptAt', type: dateType },
                         { name: 'dispatchedAt', type: dateType, isNullable: true },
                         { name: 'lastError', type: 'varchar', length: '500', isNullable: true },
                     ],
