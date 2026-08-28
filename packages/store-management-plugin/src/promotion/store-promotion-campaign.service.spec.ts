@@ -90,6 +90,42 @@ describe('StorePromotionCampaignService', () => {
         );
     });
 
+    it('keeps the flash-sale image synchronized with the current product image', async () => {
+        const baseVariant = productVariant('variant-1', 10_000);
+        const variant = {
+            ...baseVariant,
+            featuredAsset: { preview: 'preview/old-variant.webp' },
+            product: {
+                ...baseVariant.product,
+                featuredAsset: { preview: 'preview/current-product.webp' },
+            },
+        };
+        const harness = createHarness({
+            variants: [variant],
+            promotions: [
+                {
+                    id: 'flash-sale-1',
+                    name: '商品主图同步测试',
+                    enabled: true,
+                    startsAt: null,
+                    endsAt: null,
+                    actions: [
+                        {
+                            code: 'store_flash_sale_price',
+                            args: {
+                                variantRules: JSON.stringify([{ variantId: 'variant-1', percentageOff: 20 }]),
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        const sales = await harness.service.findFlashSales(ctx, true);
+
+        expect(sales[0].items[0].imageUrl).toBe('/assets/preview/current-product.webp');
+    });
+
     it('returns an exact flash-sale price in the requested storefront currency', async () => {
         const variant = productVariant('variant-1', 5_991, 'MYR');
         const harness = createHarness({

@@ -730,7 +730,7 @@ export class StorePromotionCampaignService {
                     convertedSalePrice ??
                     Math.round(originalPrice * (1 - Math.min(100, rule.percentageOff ?? 0) / 100));
                 const imageIdentifier =
-                    variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview ?? null;
+                    variant.product.featuredAsset?.preview ?? variant.featuredAsset?.preview ?? null;
                 return {
                     productId: String(variant.product.id),
                     productVariantId: String(variant.id),
