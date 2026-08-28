@@ -4,29 +4,31 @@
     "rules": [
         {
             "priority": 10,
-            "modelCode": "OPENAI_HIGH_QUALITY",
-            "when": [
-                "identity-preservation",
-                "high-fidelity-edit",
-                "transparent-background",
-                "product-cutout"
-            ],
-            "reasonZh": "更适合身份一致性、精细编辑和透明背景",
-            "reasonEn": "Best suited to identity consistency, precise edits, and transparent backgrounds"
+            "modelCode": "OPENAI_IMAGE_2",
+            "when": ["identity-preservation", "exact-text", "poster", "infographic", "complex-layout"],
+            "reasonZh": "旗舰档更适合身份一致性、准确文字和复杂版式",
+            "reasonEn": "The premium tier is best suited to identity consistency, exact text, and complex layouts"
         },
         {
             "priority": 20,
-            "modelCode": "GEMINI_PRO",
-            "when": ["exact-text", "poster", "infographic", "complex-layout"],
-            "reasonZh": "更适合准确文字、海报和复杂版式",
-            "reasonEn": "Best suited to accurate text, posters, and complex layouts"
+            "modelCode": "OPENAI_IMAGE_1_5",
+            "when": ["high-fidelity-edit", "transparent-background", "product-cutout"],
+            "reasonZh": "增强档更适合精细编辑、商品抠图和透明背景",
+            "reasonEn": "The enhanced tier is best suited to precise edits, product cutouts, and transparent backgrounds"
         },
         {
             "priority": 30,
+            "modelCode": "OPENAI_HIGH_QUALITY",
+            "when": ["product-scene", "social-art"],
+            "reasonZh": "标准档适合日常商品场景和社交配图",
+            "reasonEn": "The standard tier is suitable for everyday product scenes and social visuals"
+        },
+        {
+            "priority": 40,
             "modelCode": "GEMINI_FLASH",
-            "when": ["general", "product-scene", "social-art", "illustration"],
-            "reasonZh": "生成速度与成本更均衡",
-            "reasonEn": "Balanced for speed and cost"
+            "when": ["general", "illustration"],
+            "reasonZh": "适合快速试稿，生成速度与成本更均衡",
+            "reasonEn": "Balanced for fast drafts, speed, and cost"
         }
     ]
 }

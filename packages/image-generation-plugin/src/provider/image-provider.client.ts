@@ -38,6 +38,7 @@ export class ImageProviderClient {
         if (protocol === 'OPENAI_COMPATIBLE_CHAT') return this.openAiChat(baseUrl, apiKey, input);
         if (protocol === 'GEMINI_INTERACTIONS') return this.geminiInteractions(baseUrl, apiKey, input);
         if (protocol === 'GEMINI_NATIVE') return this.geminiNative(baseUrl, apiKey, input);
+        if (protocol === 'GEMINI_NATIVE_STREAM') return this.geminiNativeStream(baseUrl, apiKey, input);
         throw new DefinitiveImageProviderError('不支持的生图协议');
     }
 
@@ -269,17 +270,7 @@ export class ImageProviderClient {
         apiKey: string,
         input: ProviderGenerationInput,
     ): Promise<ProviderGenerationResult> {
-        const parts: Array<Record<string, unknown>> = [
-            { text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}` },
-        ];
-        if (input.reference) {
-            parts.push({
-                inlineData: {
-                    mimeType: input.reference.mimeType,
-                    data: input.reference.bytes.toString('base64'),
-                },
-            });
-        }
+        const parts = geminiParts(input);
         const endpoint = this.safeUrls.endpoint(
             baseUrl,
             `models/${encodeURIComponent(input.providerModelId)}:generateContent`,
@@ -298,6 +289,48 @@ export class ImageProviderClient {
             { 'x-goog-api-key': apiKey },
         );
         return this.imageResult(response);
+    }
+
+    private async geminiNativeStream(
+        baseUrl: URL,
+        apiKey: string,
+        input: ProviderGenerationInput,
+    ): Promise<ProviderGenerationResult> {
+        const parts = geminiParts(input);
+        const endpoint = this.safeUrls.endpoint(
+            baseUrl,
+            `models/${encodeURIComponent(input.providerModelId)}:streamGenerateContent`,
+        );
+        endpoint.searchParams.set('alt', 'sse');
+        const response = await this.request(endpoint, {
+            method: 'POST',
+            redirect: 'manual',
+            headers: {
+                ...this.headers(apiKey),
+                accept: 'text/event-stream',
+                'content-type': 'application/json',
+                'idempotency-key': input.idempotencyKey,
+                'x-goog-api-key': apiKey,
+            },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    imageConfig: { aspectRatio: input.aspectRatio },
+                },
+            }),
+        });
+        const text = await readResponseText(response, MAX_PROVIDER_JSON_BYTES);
+        if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试');
+        if (response.status >= 300 && response.status < 400) {
+            throw new DefinitiveImageProviderError('中转站重定向已被安全策略拒绝');
+        }
+        if (!response.ok) {
+            throw new DefinitiveImageProviderError(
+                `中转站返回 HTTP ${response.status}${text ? `：${text.slice(0, 300)}` : ''}`,
+            );
+        }
+        return this.imageResult(parseGeminiStreamResponse(text));
     }
 
     private async geminiInteractions(
@@ -470,6 +503,46 @@ function openAiSize(aspectRatio: string): string {
     if (['3:4', '9:16'].includes(aspectRatio)) return '1024x1536';
     if (['4:3', '16:9'].includes(aspectRatio)) return '1536x1024';
     return '1024x1024';
+}
+
+function geminiParts(input: ProviderGenerationInput): Array<Record<string, unknown>> {
+    const parts: Array<Record<string, unknown>> = [
+        { text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}` },
+    ];
+    if (input.reference) {
+        parts.push({
+            inlineData: {
+                mimeType: input.reference.mimeType,
+                data: input.reference.bytes.toString('base64'),
+            },
+        });
+    }
+    return parts;
+}
+
+function parseGeminiStreamResponse(text: string): unknown {
+    const normalized = text.replace(/\r\n?/gu, '\n').trim();
+    const events: unknown[] = [];
+    for (const block of normalized.split(/\n\n+/gu)) {
+        const data = block
+            .split('\n')
+            .filter(line => line.startsWith('data:'))
+            .map(line => line.slice(5).trimStart())
+            .join('\n')
+            .trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+            events.push(JSON.parse(data) as unknown);
+        } catch {
+            throw new DefinitiveImageProviderError('中转站返回了无效的 Gemini 流式数据');
+        }
+    }
+    if (events.length) return events;
+    try {
+        return JSON.parse(normalized) as unknown;
+    } catch {
+        throw new DefinitiveImageProviderError('中转站没有返回可识别的 Gemini 流式数据');
+    }
 }
 
 function objectAt(value: unknown, path: Array<string | number>): unknown {

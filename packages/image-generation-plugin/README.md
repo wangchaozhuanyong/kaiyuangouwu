@@ -13,13 +13,14 @@
 
 前台入口是客户端插件位 `BUSINESS_SERVICES_MAIN`，页面路由为 `/image-studio`。客户端永远不会获得中转站 API Key、中转站基础地址或内部模型 ID。
 
-## 首期模型
+## 上线模型
 
-| 前台名称      | 官方模型 ID              | 默认协议                 | 自动推荐场景                         |
-| ------------- | ------------------------ | ------------------------ | ------------------------------------ |
-| OpenAI 高质量 | `gpt-image-1`            | `OPENAI_RESPONSES_IMAGE` | 人物一致性、高保真编辑、商品图与插画 |
-| Gemini 快速   | `gemini-3.1-flash-image` | `GEMINI_INTERACTIONS`    | 通用生图、商品场景、社媒配图、插画   |
-| Gemini 专业   | `gemini-3-pro-image`     | `GEMINI_INTERACTIONS`    | 精确文字、海报、信息图、复杂版式     |
+| 前台名称               | 官方模型 ID              | 默认协议                 | 自动推荐场景                   |
+| ---------------------- | ------------------------ | ------------------------ | ------------------------------ |
+| Codex 图片 1           | `gpt-image-1`            | `OPENAI_RESPONSES_IMAGE` | 商品场景、社交配图             |
+| Codex 图片 1.5         | `gpt-image-1.5`          | `OPENAI_RESPONSES_IMAGE` | 精细编辑、商品抠图、透明背景   |
+| Codex 图片 2           | `gpt-image-2`            | `OPENAI_RESPONSES_IMAGE` | 身份一致性、准确文字、复杂版式 |
+| Gemini 3.1 Flash Image | `gemini-3.1-flash-image` | `GEMINI_NATIVE_STREAM`   | 快速试稿、插画、性价比优先     |
 
 管理员可为每个模型改写中转站实际模型 ID、调用协议、中英文名称与用途说明、排序和单张售价。这些说明会显示在客户选择模型的卡片上。同一店铺启用的模型必须使用同一币种，避免客户余额与模型价格错配。
 
@@ -33,7 +34,8 @@
 - `OPENAI_IMAGES`：`/images/generations` 和 `/images/edits`。
 - `OPENAI_COMPATIBLE_CHAT`：`/chat/completions`，支持返回 base64、data URL 或公网图片 URL。
 - `GEMINI_INTERACTIONS`：`/interactions`，用于当前 Gemini 图片模型，支持文字和参考图输入。
-- `GEMINI_NATIVE`：`/models/{model}:generateContent`，保留给只支持旧接口的中转站。
+- `GEMINI_NATIVE`：`/models/{model}:generateContent`，保留给只支持同步接口的中转站。
+- `GEMINI_NATIVE_STREAM`：`/models/{model}:streamGenerateContent?alt=sse`，用于可能超过边缘同步超时的 Gemini 生图请求。
 
 中转站返回的图片最大 25MB。所有远程 URL 都会拒绝内网、本机、云元数据地址和 HTTP 重定向；生产环境只允许 HTTPS。
 
@@ -58,7 +60,9 @@
 
 ## 费用与可靠性
 
-- 2026-08-27 真实中转站测试：`gpt-5.4-mini + gpt-image-1`、1:1、1024×1024、low 质量成功生成 1 张，账单实扣 0.15 个中转站计费单位。上线定价必须预留失败重试、免费提示词优化、汇率波动和运维利润。
+- 2026-08-28 中转站账号测试：`gpt-image-1`、`gpt-image-1.5`、`gpt-image-2` 均通过 `/responses` 图片工具成功返回 PNG。当前用户 Key 的历史 `/responses` 图片记录按张扣 `$0.150000`；三个图片模型仍需分别用生产 Key 生成后复核中转站是否采用相同按张价。
+- 2026-08-28 Gemini 中转站实测：`gemini-3.1-flash-image` 通过 Antigravity 原生流式接口成功返回图片，两次成功账单分别为 `$0.004410` 和 `$0.004672`。同步接口可能触发边缘 504，因此生产配置使用流式协议。
+- 上线定价必须预留失败重试、免费提示词优化、汇率波动和运维利润；管理后台仍可随时调整每个模型的独立单张售价。
 
 - 提交时按“单价快照 × 张数”从邀请返利 `availableBalance` 原子预占。
 - 每张图使用独立输出记录和幂等键。图片已写入私有存储后才结算；失败或取消仅退回本张。

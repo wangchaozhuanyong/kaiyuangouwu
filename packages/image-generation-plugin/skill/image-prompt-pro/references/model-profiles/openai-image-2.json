@@ -1,0 +1,12 @@
+{
+    "code": "OPENAI_IMAGE_2",
+    "officialModelId": "gpt-image-2",
+    "displayNameZh": "Codex 图片 2",
+    "displayNameEn": "Codex Image 2",
+    "strengths": ["identity-preservation", "exact-text", "poster", "infographic", "complex-layout"],
+    "renderer": {
+        "preferNaturalLanguage": true,
+        "supportsNegativePrompt": false,
+        "supportsReferenceImage": true
+    }
+}

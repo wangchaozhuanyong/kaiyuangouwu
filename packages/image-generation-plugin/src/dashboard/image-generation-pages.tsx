@@ -239,7 +239,7 @@ function ImageGenerationSettingsPage() {
                     title="模型与单张价格"
                     description="友好名称、用途说明和官方模型 ID 会展示给客户。保存并测试只读元数据，不发起生图；是否收取请求费以中转站规则为准。"
                 >
-                    <div className="grid gap-4 xl:grid-cols-3">
+                    <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
                         {draft.models.map(model => (
                             <div key={model.code} className="space-y-3 rounded-lg border p-4">
                                 <div className="flex items-center justify-between">
@@ -324,6 +324,9 @@ function ImageGenerationSettingsPage() {
                                             Gemini Interactions（推荐）
                                         </option>
                                         <option value="GEMINI_NATIVE">Gemini GenerateContent（兼容）</option>
+                                        <option value="GEMINI_NATIVE_STREAM">
+                                            Gemini StreamGenerateContent（当前中转站推荐）
+                                        </option>
                                     </select>
                                 </Field>
                                 <Field label={`单张价格（${model.currencyCode}）`}>
@@ -635,7 +638,7 @@ function ProviderCredentialCard({
 }
 
 function providerName(scope: ImageProviderAdminConfigRecord['scope']): string {
-    return scope === 'OPENAI' ? 'OpenAI' : 'Gemini';
+    return scope === 'OPENAI' ? 'Codex / GPT' : 'Gemini';
 }
 
 function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {

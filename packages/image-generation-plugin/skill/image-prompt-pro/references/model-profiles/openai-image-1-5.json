@@ -1,0 +1,12 @@
+{
+    "code": "OPENAI_IMAGE_1_5",
+    "officialModelId": "gpt-image-1.5",
+    "displayNameZh": "Codex 图片 1.5",
+    "displayNameEn": "Codex Image 1.5",
+    "strengths": ["high-fidelity-edit", "transparent-background", "product-cutout"],
+    "renderer": {
+        "preferNaturalLanguage": true,
+        "supportsNegativePrompt": false,
+        "supportsReferenceImage": true
+    }
+}

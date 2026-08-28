@@ -13,31 +13,42 @@ export const launchModelDefinitions = [
     {
         code: 'OPENAI_HIGH_QUALITY',
         officialModelId: 'gpt-image-1',
-        nameZh: 'OpenAI 高质量',
-        nameEn: 'OpenAI High Quality',
-        descriptionZh: '适合重视指令遵循、细节和成品质量的广告图与商品图。',
-        descriptionEn: 'Best for ads and product images where instruction following and detail matter.',
+        nameZh: 'Codex 图片 1',
+        nameEn: 'Codex Image 1',
+        descriptionZh: '标准质量档，适合商品场景、社交配图和日常创作。',
+        descriptionEn: 'Standard tier for product scenes, social visuals, and everyday creation.',
+        protocol: 'OPENAI_RESPONSES_IMAGE',
+    },
+    {
+        code: 'OPENAI_IMAGE_1_5',
+        officialModelId: 'gpt-image-1.5',
+        nameZh: 'Codex 图片 1.5',
+        nameEn: 'Codex Image 1.5',
+        descriptionZh: '增强质量档，适合精细编辑、商品抠图和透明背景。',
+        descriptionEn: 'Enhanced tier for precise edits, product cutouts, and transparent backgrounds.',
+        protocol: 'OPENAI_RESPONSES_IMAGE',
+    },
+    {
+        code: 'OPENAI_IMAGE_2',
+        officialModelId: 'gpt-image-2',
+        nameZh: 'Codex 图片 2',
+        nameEn: 'Codex Image 2',
+        descriptionZh: '旗舰质量档，适合复杂版式、准确文字和身份一致性要求。',
+        descriptionEn: 'Premium tier for complex layouts, exact text, and identity consistency.',
         protocol: 'OPENAI_RESPONSES_IMAGE',
     },
     {
         code: 'GEMINI_FLASH',
         officialModelId: 'gemini-3.1-flash-image',
-        nameZh: 'Gemini 快速',
-        nameEn: 'Gemini Fast',
+        nameZh: 'Gemini 3.1 Flash Image',
+        nameEn: 'Gemini 3.1 Flash Image',
         descriptionZh: '适合快速试稿、批量创意和日常生图，优先考虑速度与性价比。',
         descriptionEn: 'Best for fast drafts, creative variations, and everyday image generation.',
-        protocol: 'GEMINI_INTERACTIONS',
-    },
-    {
-        code: 'GEMINI_PRO',
-        officialModelId: 'gemini-3-pro-image',
-        nameZh: 'Gemini 专业',
-        nameEn: 'Gemini Pro',
-        descriptionZh: '适合复杂构图、参考图理解和精细成品，优先考虑质量。',
-        descriptionEn: 'Best for complex composition, reference understanding, and refined final images.',
-        protocol: 'GEMINI_INTERACTIONS',
+        protocol: 'GEMINI_NATIVE_STREAM',
     },
 ] as const;
+
+export const retiredLaunchModelCodes = new Set(['GEMINI_PRO']);
 
 export const supportedAspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'] as const;
 export const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;

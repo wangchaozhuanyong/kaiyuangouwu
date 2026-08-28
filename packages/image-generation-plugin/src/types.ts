@@ -6,7 +6,8 @@ export type ImageProviderProtocol =
     | 'OPENAI_IMAGES'
     | 'OPENAI_COMPATIBLE_CHAT'
     | 'GEMINI_INTERACTIONS'
-    | 'GEMINI_NATIVE';
+    | 'GEMINI_NATIVE'
+    | 'GEMINI_NATIVE_STREAM';
 export type ImageProviderScope = 'OPENAI' | 'GEMINI';
 export type ImageGenerationState =
     'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';

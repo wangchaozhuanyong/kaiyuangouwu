@@ -1,7 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 
-import { launchModelDefinitions } from './constants';
+import { launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
@@ -98,16 +98,14 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         const [openAiCredential, geminiCredential, models] = await Promise.all([
             this.credential(undefined, 'OPENAI'),
             this.credential(undefined, 'GEMINI'),
-            this.connection.getRepository(ctx, ImageModelConfig).find({
-                where: { channelId: ctx.channelId, enabled: true },
-                order: { position: 'ASC', id: 'ASC' },
-            }),
+            this.getOrCreateModels(ctx),
         ]);
         const credentials = new Map<ImageProviderScope, ImageProviderCredential | null>([
             ['OPENAI', openAiCredential],
             ['GEMINI', geminiCredential],
         ]);
         const availableModels = models.filter(model => {
+            if (!model.enabled) return false;
             const credential = credentials.get(providerScopeForModel(model.protocol, model.providerModelId));
             return model.healthStatus === 'HEALTHY' && credentialReady(credential);
         });
@@ -225,7 +223,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
 
     async saveModel(ctx: RequestContext, input: SaveImageModelInput) {
         const definition = launchModelDefinitions.find(model => model.code === input.code);
-        if (!definition) throw new UserInputError('首期只支持三个已审核模型');
+        if (!definition) throw new UserInputError('只支持当前已审核的生图模型');
         if (!Number.isSafeInteger(input.unitPrice) || input.unitPrice < 0)
             throw new UserInputError('单价必须是非负整数');
         if (input.enabled && input.unitPrice <= 0)
@@ -239,6 +237,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 'OPENAI_COMPATIBLE_CHAT',
                 'GEMINI_INTERACTIONS',
                 'GEMINI_NATIVE',
+                'GEMINI_NATIVE_STREAM',
             ].includes(input.protocol)
         )
             throw new UserInputError('协议类型无效');
@@ -423,6 +422,34 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             where: { channelId: ctx.channelId },
             order: { position: 'ASC' },
         });
+        const retired = existing.filter(model => retiredLaunchModelCodes.has(model.code));
+        if (retired.length) {
+            await repository
+                .createQueryBuilder()
+                .update(ImageModelConfig)
+                .set({ enabled: false, isDefault: false })
+                .where('channelId = :channelId', { channelId: ctx.channelId })
+                .andWhere('code IN (:...codes)', { codes: retired.map(model => model.code) })
+                .execute();
+            for (const model of retired) Object.assign(model, { enabled: false, isDefault: false });
+
+            const config = await this.getOrCreateConfig(ctx);
+            if (retiredLaunchModelCodes.has(config.defaultModelCode)) {
+                const replacementCode =
+                    existing.find(model => model.enabled && !retiredLaunchModelCodes.has(model.code))?.code ??
+                    launchModelDefinitions[0].code;
+                config.defaultModelCode = replacementCode;
+                await this.connection
+                    .getRepository(ctx, ImageGenerationConfig)
+                    .save(config, { reload: false });
+                await repository.update(
+                    { channelId: ctx.channelId, code: replacementCode },
+                    { isDefault: true },
+                );
+                const replacement = existing.find(model => model.code === replacementCode);
+                if (replacement) replacement.isDefault = true;
+            }
+        }
         const existingCodes = new Set(existing.map(model => model.code));
         const currencyCode = ctx.channel.defaultCurrencyCode;
         for (const [position, definition] of launchModelDefinitions.entries()) {
@@ -451,7 +478,9 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 ),
             );
         }
-        return existing.sort((left, right) => left.position - right.position);
+        return existing
+            .filter(model => !retiredLaunchModelCodes.has(model.code))
+            .sort((left, right) => left.position - right.position);
     }
 }
 
@@ -473,6 +502,7 @@ export function providerScopeForModel(
 ): ImageProviderScope {
     return protocol === 'GEMINI_INTERACTIONS' ||
         protocol === 'GEMINI_NATIVE' ||
+        protocol === 'GEMINI_NATIVE_STREAM' ||
         /^(?:models\/)?(?:gemini|imagen)-/iu.test(providerModelId.trim())
         ? 'GEMINI'
         : 'OPENAI';

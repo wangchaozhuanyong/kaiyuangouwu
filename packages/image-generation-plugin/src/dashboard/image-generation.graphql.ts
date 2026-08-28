@@ -192,7 +192,8 @@ export interface ImageAdminModelRecord {
         | 'OPENAI_IMAGES'
         | 'OPENAI_COMPATIBLE_CHAT'
         | 'GEMINI_INTERACTIONS'
-        | 'GEMINI_NATIVE';
+        | 'GEMINI_NATIVE'
+        | 'GEMINI_NATIVE_STREAM';
     unitPrice: number;
     currencyCode: string;
     position: number;

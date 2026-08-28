@@ -23,6 +23,7 @@ describe('image generation GraphQL surface', () => {
         expect(schema).toContain('enum ImageProviderScope');
         expect(schema).toContain('OPENAI_RESPONSES_IMAGE');
         expect(schema).toContain('GEMINI_INTERACTIONS');
+        expect(schema).toContain('GEMINI_NATIVE_STREAM');
         expect(schema).toContain('testImageProviderConnection(scope: ImageProviderScope!)');
         expect(schema).toContain('extend type ImageStudioModel');
         expect(schema).toContain('testImageModel');

@@ -1,9 +1,9 @@
 {
     "code": "GEMINI_FLASH",
     "officialModelId": "gemini-3.1-flash-image",
-    "displayNameZh": "Gemini 快速",
-    "displayNameEn": "Gemini Fast",
-    "strengths": ["general", "product-scene", "social-art", "illustration"],
+    "displayNameZh": "Gemini 3.1 Flash Image",
+    "displayNameEn": "Gemini 3.1 Flash Image",
+    "strengths": ["general", "illustration", "fast-draft", "cost-sensitive"],
     "renderer": {
         "preferNaturalLanguage": true,
         "supportsNegativePrompt": false,

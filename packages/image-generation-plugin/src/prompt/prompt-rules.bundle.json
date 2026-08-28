@@ -3,8 +3,8 @@
   "models": [
     {
       "code": "GEMINI_FLASH",
-      "displayNameEn": "Gemini Fast",
-      "displayNameZh": "Gemini 快速",
+      "displayNameEn": "Gemini 3.1 Flash Image",
+      "displayNameZh": "Gemini 3.1 Flash Image",
       "officialModelId": "gemini-3.1-flash-image",
       "renderer": {
         "preferNaturalLanguage": true,
@@ -13,32 +13,15 @@
       },
       "strengths": [
         "general",
-        "product-scene",
-        "social-art",
-        "illustration"
-      ]
-    },
-    {
-      "code": "GEMINI_PRO",
-      "displayNameEn": "Gemini Pro",
-      "displayNameZh": "Gemini 专业",
-      "officialModelId": "gemini-3-pro-image",
-      "renderer": {
-        "preferNaturalLanguage": true,
-        "supportsNegativePrompt": false,
-        "supportsReferenceImage": true
-      },
-      "strengths": [
-        "exact-text",
-        "poster",
-        "infographic",
-        "complex-layout"
+        "illustration",
+        "fast-draft",
+        "cost-sensitive"
       ]
     },
     {
       "code": "OPENAI_HIGH_QUALITY",
-      "displayNameEn": "OpenAI High Quality",
-      "displayNameZh": "OpenAI 高质量",
+      "displayNameEn": "Codex Image 1",
+      "displayNameZh": "Codex 图片 1",
       "officialModelId": "gpt-image-1",
       "renderer": {
         "preferNaturalLanguage": true,
@@ -46,10 +29,42 @@
         "supportsReferenceImage": true
       },
       "strengths": [
-        "identity-preservation",
+        "product-scene",
+        "social-art"
+      ]
+    },
+    {
+      "code": "OPENAI_IMAGE_1_5",
+      "displayNameEn": "Codex Image 1.5",
+      "displayNameZh": "Codex 图片 1.5",
+      "officialModelId": "gpt-image-1.5",
+      "renderer": {
+        "preferNaturalLanguage": true,
+        "supportsNegativePrompt": false,
+        "supportsReferenceImage": true
+      },
+      "strengths": [
         "high-fidelity-edit",
         "transparent-background",
         "product-cutout"
+      ]
+    },
+    {
+      "code": "OPENAI_IMAGE_2",
+      "displayNameEn": "Codex Image 2",
+      "displayNameZh": "Codex 图片 2",
+      "officialModelId": "gpt-image-2",
+      "renderer": {
+        "preferNaturalLanguage": true,
+        "supportsNegativePrompt": false,
+        "supportsReferenceImage": true
+      },
+      "strengths": [
+        "identity-preservation",
+        "exact-text",
+        "poster",
+        "infographic",
+        "complex-layout"
       ]
     }
   ],
@@ -57,23 +72,12 @@
     "defaultStrategy": "BALANCED",
     "rules": [
       {
-        "modelCode": "OPENAI_HIGH_QUALITY",
+        "modelCode": "OPENAI_IMAGE_2",
         "priority": 10,
-        "reasonEn": "Best suited to identity consistency, precise edits, and transparent backgrounds",
-        "reasonZh": "更适合身份一致性、精细编辑和透明背景",
+        "reasonEn": "The premium tier is best suited to identity consistency, exact text, and complex layouts",
+        "reasonZh": "旗舰档更适合身份一致性、准确文字和复杂版式",
         "when": [
           "identity-preservation",
-          "high-fidelity-edit",
-          "transparent-background",
-          "product-cutout"
-        ]
-      },
-      {
-        "modelCode": "GEMINI_PRO",
-        "priority": 20,
-        "reasonEn": "Best suited to accurate text, posters, and complex layouts",
-        "reasonZh": "更适合准确文字、海报和复杂版式",
-        "when": [
           "exact-text",
           "poster",
           "infographic",
@@ -81,14 +85,33 @@
         ]
       },
       {
-        "modelCode": "GEMINI_FLASH",
+        "modelCode": "OPENAI_IMAGE_1_5",
+        "priority": 20,
+        "reasonEn": "The enhanced tier is best suited to precise edits, product cutouts, and transparent backgrounds",
+        "reasonZh": "增强档更适合精细编辑、商品抠图和透明背景",
+        "when": [
+          "high-fidelity-edit",
+          "transparent-background",
+          "product-cutout"
+        ]
+      },
+      {
+        "modelCode": "OPENAI_HIGH_QUALITY",
         "priority": 30,
-        "reasonEn": "Balanced for speed and cost",
-        "reasonZh": "生成速度与成本更均衡",
+        "reasonEn": "The standard tier is suitable for everyday product scenes and social visuals",
+        "reasonZh": "标准档适合日常商品场景和社交配图",
+        "when": [
+          "product-scene",
+          "social-art"
+        ]
+      },
+      {
+        "modelCode": "GEMINI_FLASH",
+        "priority": 40,
+        "reasonEn": "Balanced for fast drafts, speed, and cost",
+        "reasonZh": "适合快速试稿，生成速度与成本更均衡",
         "when": [
           "general",
-          "product-scene",
-          "social-art",
           "illustration"
         ]
       }
@@ -203,7 +226,7 @@
     "title": "ImagePromptSpec",
     "type": "object"
   },
-  "sourceHash": "1173e49e57b4de6b8c5582ec956ad340d77091ccc02a8791e24ce9dc0cdd0eb4",
+  "sourceHash": "82e12d43adf47d85990601b4447dfca7a37326dc87cff98950e637bac63a6d47",
   "useCases": [
     {
       "avoid": [

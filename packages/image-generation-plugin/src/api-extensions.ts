@@ -7,6 +7,7 @@ const commonTypes = gql`
         OPENAI_COMPATIBLE_CHAT
         GEMINI_INTERACTIONS
         GEMINI_NATIVE
+        GEMINI_NATIVE_STREAM
     }
 
     enum ImageProviderScope {

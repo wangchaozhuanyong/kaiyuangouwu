@@ -1,5 +1,5 @@
-import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 
@@ -200,6 +200,76 @@ describe('ImageProviderClient', () => {
                     aspect_ratio: '3:4',
                     image_size: '1K',
                 },
+            }),
+        );
+    });
+
+    it('supports Gemini native SSE image generation without waiting for a synchronous edge response', async () => {
+        const encoded = Buffer.from('stream-image-bytes'.repeat(16)).toString('base64');
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                [
+                    `data: ${JSON.stringify({ responseId: 'gemini-stream-1', candidates: [] })}`,
+                    '',
+                    `data: ${JSON.stringify({
+                        candidates: [
+                            {
+                                content: {
+                                    parts: [{ inlineData: { mimeType: 'image/jpeg', data: encoded } }],
+                                },
+                            },
+                        ],
+                    })}`,
+                    '',
+                    'data: [DONE]',
+                    '',
+                ].join('\n'),
+                { status: 200, headers: { 'content-type': 'text/event-stream' } },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        const result = await client.generate(credential, 'GEMINI_NATIVE_STREAM', {
+            providerModelId: 'gemini-3.1-flash-image',
+            prompt: 'keep the product and replace the background',
+            aspectRatio: '3:4',
+            reference: { bytes: Buffer.from('reference-image'), mimeType: 'image/png' },
+            idempotencyKey: 'image-job-gemini-stream-1',
+        });
+
+        expect(result).toMatchObject({ mimeType: 'image/jpeg' });
+        expect(result.bytes.length).toBeGreaterThan(0);
+        const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+        expect(url).toEqual(
+            new URL(
+                'https://relay.example.com/v1/models/gemini-3.1-flash-image:streamGenerateContent?alt=sse',
+            ),
+        );
+        expect(init.headers).toEqual(
+            expect.objectContaining({
+                accept: 'text/event-stream',
+                'idempotency-key': 'image-job-gemini-stream-1',
+                'x-goog-api-key': 'relay-key',
+            }),
+        );
+        expect(parseJsonRequestBody(init)).toEqual(
+            expect.objectContaining({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            expect.objectContaining({ text: expect.stringContaining('Aspect ratio: 3:4') }),
+                            expect.objectContaining({
+                                inlineData: expect.objectContaining({ mimeType: 'image/png' }),
+                            }),
+                        ],
+                    },
+                ],
+                generationConfig: expect.objectContaining({
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    imageConfig: { aspectRatio: '3:4' },
+                }),
             }),
         );
     });

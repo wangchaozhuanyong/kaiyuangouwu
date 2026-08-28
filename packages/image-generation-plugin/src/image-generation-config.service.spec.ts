@@ -5,6 +5,7 @@ import { providerScopeForModel } from './image-generation-config.service';
 describe('providerScopeForModel', () => {
     it('routes native Gemini models to the Gemini credential', () => {
         expect(providerScopeForModel('GEMINI_NATIVE', 'gemini-3.1-flash-image')).toBe('GEMINI');
+        expect(providerScopeForModel('GEMINI_NATIVE_STREAM', 'gemini-3.1-flash-image')).toBe('GEMINI');
         expect(providerScopeForModel('GEMINI_INTERACTIONS', 'relay-image-model')).toBe('GEMINI');
     });
 
