@@ -73,6 +73,9 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('data-promo-signal-core-logo');
         expect(service.defaultTemplate).toContain('data-promo-surface');
         expect(service.defaultTemplate).toContain('data-promo-reveal');
+        expect(service.defaultTemplate).toContain('promo-capability-glyph-code');
+        expect(service.defaultTemplate).toContain('promo-final-title-line');
+        expect(service.defaultTemplate).toContain('--faint: #7f918a');
         expect(service.defaultTemplate).toContain('data-store-entry');
         expect(service.defaultTemplateVersion).toBe(8);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);

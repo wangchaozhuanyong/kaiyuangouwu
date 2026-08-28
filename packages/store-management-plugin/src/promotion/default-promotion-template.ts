@@ -23,7 +23,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             --ink: #edf4f0;
             --ink-soft: #c7d4ce;
             --muted: #93a39d;
-            --faint: #65736e;
+            --faint: #7f918a;
             --accent: #91e6c4;
             --accent-strong: #b9f2da;
             --accent-ink: #092019;
@@ -89,9 +89,9 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-logo { width: 28px; height: 28px; object-fit: contain; }
         .promo-brand-copy { min-width: 0; display: grid; gap: 3px; }
         .promo-brand-name { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 650; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
-        .promo-brand-type { color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; }
+        .promo-brand-type { color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
         .promo-header-tools { display: flex; align-items: center; gap: 20px; }
-        .promo-system-status { display: flex; align-items: center; gap: 8px; color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; letter-spacing: 0.1em; }
+        .promo-system-status { display: flex; align-items: center; gap: 8px; color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 11px; letter-spacing: 0.09em; }
         .promo-system-status::before { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px rgba(145, 230, 196, 0.58); content: ""; }
         .promo-header-entry-form, .promo-entry-form, .promo-footer-form { margin: 0; }
         .promo-header-entry { min-height: 42px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--ink-soft); background: rgba(145, 230, 196, 0.04); font-size: 12px; font-weight: 650; cursor: pointer; transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 220ms ease, color 220ms ease, background 220ms ease; }
@@ -113,7 +113,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-entry-button:active { transform: scale(0.985); }
         .promo-secondary-button { padding: 11px 2px; border-bottom: 1px solid var(--line-strong); color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; transition: color 180ms ease, border-color 180ms ease, transform 180ms ease; }
         .promo-secondary-button:hover { border-color: var(--accent); color: var(--ink); transform: translateX(3px); }
-        .promo-boundary-note { display: flex; align-items: center; gap: 10px; margin: 28px 0 0; color: var(--faint); font-size: 11px; line-height: 1.5; }
+        .promo-boundary-note { display: flex; align-items: center; gap: 10px; margin: 28px 0 0; color: var(--faint); font-size: 12px; line-height: 1.55; }
         .promo-boundary-note::before { width: 14px; height: 14px; border: 1px solid var(--line-strong); border-radius: 50%; box-shadow: inset 0 0 0 4px var(--bg), inset 0 0 0 7px var(--accent); content: ""; }
         .promo-signal-stage { --signal-x: 0px; --signal-y: 0px; position: relative; min-height: clamp(530px, 52vw, 720px); transform: translate3d(var(--signal-x), var(--signal-y), 0); transition: transform 240ms ease-out; }
         .promo-signal-stage::before { position: absolute; inset: 10% 2% 7%; border: 1px solid rgba(145, 230, 196, 0.08); border-radius: 50%; background: radial-gradient(circle at 50% 48%, rgba(100, 198, 159, 0.11), rgba(28, 68, 56, 0.035) 44%, transparent 72%); filter: blur(16px); content: ""; }
@@ -122,8 +122,8 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-signal-core-logo { position: absolute; z-index: 3; top: 50.4%; left: 50%; width: clamp(68px, 6.4vw, 88px); height: clamp(68px, 6.4vw, 88px); padding: clamp(11px, 1vw, 14px); border: 1px solid rgba(184, 242, 218, 0.3); border-radius: 23%; object-fit: contain; background: linear-gradient(145deg, rgba(19, 44, 37, 0.76), rgba(7, 17, 15, 0.88)); box-shadow: 0 0 0 1px rgba(145, 230, 196, 0.08), 0 0 34px rgba(93, 203, 158, 0.24), inset 0 1px rgba(236, 255, 247, 0.14), inset 0 -12px 26px rgba(2, 12, 9, 0.3); transform: translate(-50%, -50%); backdrop-filter: blur(12px) saturate(118%); animation: promo-core-breathe 5.8s ease-in-out infinite; pointer-events: none; }
         .promo-signal-label { position: absolute; z-index: 3; display: grid; grid-template-columns: 7px minmax(0, 1fr); gap: 3px 9px; min-width: 146px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(8, 15, 15, 0.68); box-shadow: 0 18px 54px rgba(0, 12, 9, 0.24), inset 0 1px rgba(224, 255, 243, 0.04); backdrop-filter: blur(18px) saturate(112%); animation: promo-label-float 6s ease-in-out infinite; }
         .promo-signal-label::before { grid-row: 1 / span 2; align-self: center; width: 5px; height: 5px; border: 1px solid var(--accent); border-radius: 50%; box-shadow: 0 0 10px rgba(145, 230, 196, 0.44); content: ""; }
-        .promo-signal-label strong { color: var(--ink-soft); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; }
-        .promo-signal-label small { color: var(--faint); font-size: 10px; line-height: 1.4; }
+        .promo-signal-label strong { color: var(--ink-soft); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+        .promo-signal-label small { color: var(--faint); font-size: 11px; line-height: 1.4; }
         .promo-signal-label:nth-of-type(1) { top: 14%; right: 0; animation-delay: -1.6s; }
         .promo-signal-label:nth-of-type(2) { top: 35%; left: -1%; animation-delay: -3.5s; }
         .promo-signal-label:nth-of-type(3) { right: -1%; bottom: 19%; animation-delay: -4.8s; }
@@ -141,12 +141,16 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-capability:hover::after { width: 76px; background: var(--accent); }
         .promo-capability:nth-child(1), .promo-capability:nth-child(4) { grid-column: span 7; }
         .promo-capability:nth-child(2), .promo-capability:nth-child(3) { grid-column: span 5; }
-        .promo-capability-index { color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; letter-spacing: 0.14em; }
-        .promo-capability-glyph { position: relative; width: 52px; height: 52px; margin: 34px 0 26px; border: 1px solid var(--line-strong); border-radius: 14px; transform: rotate(45deg); transition: transform 300ms ease, border-color 240ms ease; }
-        .promo-capability-glyph::before, .promo-capability-glyph::after { position: absolute; border: 1px solid rgba(145, 230, 196, 0.44); content: ""; }
-        .promo-capability-glyph::before { inset: 10px; }
-        .promo-capability-glyph::after { inset: 18px; background: var(--accent); box-shadow: 0 0 14px rgba(145, 230, 196, 0.36); }
-        .promo-capability:hover .promo-capability-glyph { border-color: rgba(145, 230, 196, 0.42); transform: rotate(58deg); }
+        .promo-capability-index { color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 11px; letter-spacing: 0.13em; }
+        .promo-capability-glyph { --glyph-angle: 0deg; --glyph-counter-angle: 0deg; position: relative; width: 52px; height: 52px; display: grid; place-items: center; margin: 34px 0 26px; border: 1px solid var(--line-strong); border-radius: 14px; transform: rotate(var(--glyph-angle)); transition: transform 300ms ease, border-color 240ms ease, border-radius 240ms ease; }
+        .promo-capability-glyph::before { position: absolute; inset: 8px; border: 1px solid rgba(145, 230, 196, 0.3); border-radius: inherit; content: ""; }
+        .promo-capability-glyph::after { position: absolute; right: 7px; bottom: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px rgba(145, 230, 196, 0.48); content: ""; }
+        .promo-capability-glyph-code { position: relative; z-index: 1; color: var(--accent); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; transform: rotate(var(--glyph-counter-angle)); }
+        .promo-capability:nth-child(1) .promo-capability-glyph { --glyph-angle: 45deg; --glyph-counter-angle: -45deg; }
+        .promo-capability:nth-child(2) .promo-capability-glyph { border-radius: 50%; }
+        .promo-capability:nth-child(3) .promo-capability-glyph { border-radius: 17px 5px; }
+        .promo-capability:nth-child(4) .promo-capability-glyph { border-radius: 5px 17px; }
+        .promo-capability:hover .promo-capability-glyph { border-color: rgba(145, 230, 196, 0.42); transform: translateY(-2px) rotate(var(--glyph-angle)) scale(1.035); }
         .promo-capability h3 { max-width: 16ch; margin: auto 0 0; color: var(--ink); font-size: clamp(23px, 2.4vw, 32px); font-weight: 580; letter-spacing: -0.04em; line-height: 1.12; }
         .promo-capability p { max-width: 48ch; margin: 13px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
         .promo-layer-layout { display: grid; grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr); align-items: start; gap: clamp(54px, 9vw, 132px); }
@@ -155,7 +159,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-layer-stack { display: grid; gap: 16px; }
         .promo-layer { --spotlight-x: 50%; --spotlight-y: 50%; position: relative; overflow: hidden; padding: clamp(30px, 4vw, 48px); border: 1px solid var(--line); border-radius: var(--radius-outer); background: radial-gradient(420px circle at var(--spotlight-x) var(--spotlight-y), rgba(145, 230, 196, 0.075), transparent 62%), var(--surface); box-shadow: inset 0 1px rgba(229, 255, 244, 0.035); }
         .promo-layer-primary { margin-left: clamp(0px, 5vw, 70px); background: radial-gradient(420px circle at var(--spotlight-x) var(--spotlight-y), rgba(145, 230, 196, 0.1), transparent 62%), var(--surface-strong); }
-        .promo-layer-topline { display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; }
+        .promo-layer-topline { display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--faint); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
         .promo-layer-topline::after { width: 8px; height: 8px; border: 1px solid var(--accent); border-radius: 50%; content: ""; }
         .promo-layer h3 { margin: 44px 0 0; color: var(--ink); font-size: clamp(28px, 3.4vw, 46px); font-weight: 560; letter-spacing: -0.052em; }
         .promo-layer p { max-width: 54ch; margin: 16px 0 0; color: var(--muted); font-size: 14px; line-height: 1.75; }
@@ -165,21 +169,23 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-process-copy .promo-section-intro { margin-top: 24px; }
         .promo-process-list { margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
         .promo-process-item { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 22px; padding: 29px 0 31px; border-bottom: 1px solid var(--line); }
-        .promo-process-index { padding-top: 4px; color: var(--accent); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; letter-spacing: 0.13em; font-variant-numeric: tabular-nums; }
+        .promo-process-index { padding-top: 4px; color: var(--accent); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 11px; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
         .promo-process-item strong { display: block; color: var(--ink); font-size: 20px; font-weight: 580; letter-spacing: -0.025em; }
         .promo-process-item p { max-width: 54ch; margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
         .promo-final { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(280px, 0.94fr); align-items: end; gap: clamp(42px, 8vw, 110px); margin-bottom: clamp(44px, 6vw, 82px); padding: clamp(42px, 6vw, 78px); border: 1px solid rgba(145, 230, 196, 0.2); border-radius: var(--radius-outer); background: radial-gradient(circle at 78% 36%, rgba(107, 198, 162, 0.13), transparent 31%), linear-gradient(142deg, rgba(17, 30, 29, 0.96), rgba(7, 13, 14, 0.94)); box-shadow: var(--shadow), inset 0 1px rgba(231, 255, 245, 0.05); }
         .promo-final::before { position: absolute; top: 0; right: 12%; width: 1px; height: 100%; background: linear-gradient(transparent, rgba(145, 230, 196, 0.18), transparent); content: ""; transform: rotate(16deg); }
         .promo-final h2 { max-width: 12ch; margin: 0; color: var(--ink); font-size: clamp(42px, 5.4vw, 72px); font-weight: 560; letter-spacing: -0.064em; line-height: 0.98; text-wrap: balance; }
+        .promo-final-title-line { display: inline; }
         .promo-final p { max-width: 47ch; margin: 22px 0 32px; color: var(--muted); font-size: 14px; line-height: 1.72; }
         .promo-final-signal { display: grid; gap: 0; border-top: 1px solid var(--line); }
         .promo-final-signal span { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; min-height: 66px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: 13px; }
-        .promo-final-signal b { color: var(--accent); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.12em; }
-        .promo-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 0 34px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; }
+        .promo-final-signal b { color: var(--accent); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; }
+        .promo-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 0 34px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
         .promo-footer-meta { display: flex; flex-wrap: wrap; gap: 9px 18px; }
         .promo-footer-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 18px; }
-        .promo-footer-link { padding: 7px 0; border: 0; color: var(--muted); background: transparent; font-size: 11px; cursor: pointer; transition: color 180ms ease; }
+        .promo-footer-link { min-width: 44px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 2px; border: 0; color: var(--muted); background: transparent; font-size: 12px; cursor: pointer; transition: color 180ms ease, transform 180ms ease; }
         .promo-footer-link:hover { color: var(--ink); }
+        .promo-footer-link:active { transform: scale(0.97); }
         :where(.promo-header-entry, .promo-entry-button, .promo-secondary-button, .promo-footer-link):focus-visible { outline: 3px solid rgba(145, 230, 196, 0.72); outline-offset: 4px; }
         .promo-motion-ready [data-promo-reveal] { opacity: 0; transform: translate3d(0, 28px, 0); clip-path: inset(0 0 18% 0); transition: opacity 700ms ease, transform 760ms cubic-bezier(0.18, 0.85, 0.2, 1), clip-path 760ms cubic-bezier(0.18, 0.85, 0.2, 1); }
         .promo-motion-ready [data-promo-reveal].is-visible { opacity: 1; transform: translate3d(0, 0, 0); clip-path: inset(0 0 0 0); }
@@ -201,9 +207,9 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             .promo-header { min-height: 74px; }
             .promo-system-status { display: none; }
             .promo-header-tools { gap: 0; }
-            .promo-brand-type { font-size: 8px; }
-            .promo-header-entry { min-height: 39px; padding-inline: 12px; }
-            .promo-hero { gap: 22px; padding: 50px 0 72px; }
+            .promo-brand-type { font-size: 9px; letter-spacing: 0.14em; }
+            .promo-header-entry { min-height: 44px; padding-inline: 12px; }
+            .promo-hero { gap: 16px; padding: 44px 0 52px; }
             .promo-coordinate { margin-bottom: 22px; }
             .promo-title { font-size: clamp(42px, 11.5vw, 54px); }
             .promo-description { margin-top: 23px; }
@@ -212,25 +218,34 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             .promo-secondary-button { width: fit-content; }
             .promo-boundary-note { align-items: flex-start; }
             .promo-boundary-note::before { flex: none; margin-top: 1px; }
-            .promo-signal-stage { min-height: 96vw; margin-inline: -10px; }
+            .promo-signal-stage { min-height: 84vw; margin-inline: -10px; }
             .promo-signal-core-logo { width: 60px; height: 60px; padding: 9px; }
             .promo-signal-label { min-width: 118px; padding: 9px 10px; }
             .promo-signal-label:nth-of-type(1) { right: 3%; }
             .promo-signal-label:nth-of-type(2) { left: 4%; }
             .promo-signal-label:nth-of-type(3) { right: 2%; }
-            .promo-section { padding: 72px 0 84px; }
+            .promo-section { padding: 56px 0 64px; }
             .promo-section-title { font-size: clamp(38px, 11vw, 54px); }
-            .promo-capability-grid { grid-template-columns: 1fr; margin-top: 38px; }
-            .promo-capability:nth-child(n) { grid-column: 1; min-height: 232px; }
-            .promo-capability-glyph { margin: 28px 0 22px; }
+            .promo-capability-grid { grid-template-columns: 1fr; gap: 12px; margin-top: 30px; }
+            .promo-capability:nth-child(n) { grid-column: 1; min-height: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr); grid-template-areas: "index index" "glyph title" "glyph copy"; column-gap: 16px; padding: 22px; }
+            .promo-capability-index { grid-area: index; margin-bottom: 20px; }
+            .promo-capability-glyph { grid-area: glyph; width: 44px; height: 44px; margin: 0; }
+            .promo-capability-glyph-code { font-size: 9px; }
+            .promo-capability h3 { grid-area: title; align-self: end; margin: 0; font-size: 22px; }
+            .promo-capability p { grid-area: copy; margin: 8px 0 0; }
             .promo-layer-primary { margin-left: 0; }
-            .promo-layer { padding: 28px 24px; border-radius: 22px; }
-            .promo-layer h3 { margin-top: 34px; }
-            .promo-process-item { grid-template-columns: 38px minmax(0, 1fr); gap: 12px; padding: 24px 0 26px; }
+            .promo-layer { padding: 24px 22px; border-radius: 22px; }
+            .promo-layer h3 { margin-top: 26px; }
+            .promo-layer-items { margin-top: 22px; }
+            .promo-process-copy .promo-section-intro { margin-top: 18px; }
+            .promo-process-item { grid-template-columns: 38px minmax(0, 1fr); gap: 12px; padding: 19px 0 21px; }
             .promo-process-item strong { font-size: 18px; }
-            .promo-final { padding: 36px 24px; border-radius: 22px; }
-            .promo-final-signal span { grid-template-columns: 44px minmax(0, 1fr); min-height: 60px; }
-            .promo-footer { align-items: flex-start; flex-direction: column; }
+            .promo-final { padding: 30px 22px; border-radius: 22px; }
+            .promo-final h2 { max-width: none; font-size: clamp(38px, 10.2vw, 40px); letter-spacing: -0.055em; text-wrap: initial; }
+            .promo-final-title-line { display: block; }
+            .promo-final p { margin: 18px 0 26px; }
+            .promo-final-signal span { grid-template-columns: 44px minmax(0, 1fr); min-height: 54px; }
+            .promo-footer { align-items: flex-start; flex-direction: column; gap: 16px; padding: 24px 0 28px; }
             .promo-footer-nav { justify-content: flex-start; }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -282,10 +297,10 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
                     <p class="promo-section-intro">我们把分散的 AI 工具、软件订阅和数字服务整理为清楚的进入路径。这一页帮你判断业务是否匹配，具体方案则回到主站确认。</p>
                 </div>
                 <div class="promo-capability-grid">
-                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">01 / AI</span><span class="promo-capability-glyph" aria-hidden="true"></span><h3>AI 接入与效率工具</h3><p>了解工具的适用场景、接入方式和使用边界，再到主站选择对应方案。</p></article>
-                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">02 / SOFTWARE</span><span class="promo-capability-glyph" aria-hidden="true"></span><h3>软件订阅与数字授权</h3><p>统一查找常用数字服务入口，减少在多个平台之间反复筛选。</p></article>
-                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">03 / DELIVERY</span><span class="promo-capability-glyph" aria-hidden="true"></span><h3>数字商品与交付说明</h3><p>交付方式、使用说明和限制条件在主站商品与订单链路中统一展示。</p></article>
-                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">04 / SUPPORT</span><span class="promo-capability-glyph" aria-hidden="true"></span><h3>订单查询与持续支持</h3><p>从购买前的范围确认，到交付后的订单查询与售后支持，都回到同一业务入口。</p></article>
+                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">01 / AI</span><span class="promo-capability-glyph" aria-hidden="true"><span class="promo-capability-glyph-code">AI</span></span><h3>AI 接入与效率工具</h3><p>了解工具的适用场景、接入方式和使用边界，再到主站选择对应方案。</p></article>
+                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">02 / SOFTWARE</span><span class="promo-capability-glyph" aria-hidden="true"><span class="promo-capability-glyph-code">SW</span></span><h3>软件订阅与数字授权</h3><p>统一查找常用数字服务入口，减少在多个平台之间反复筛选。</p></article>
+                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">03 / DELIVERY</span><span class="promo-capability-glyph" aria-hidden="true"><span class="promo-capability-glyph-code">DX</span></span><h3>数字商品与交付说明</h3><p>交付方式、使用说明和限制条件在主站商品与订单链路中统一展示。</p></article>
+                    <article class="promo-capability" data-promo-surface data-promo-reveal><span class="promo-capability-index">04 / SUPPORT</span><span class="promo-capability-glyph" aria-hidden="true"><span class="promo-capability-glyph-code">CS</span></span><h3>订单查询与持续支持</h3><p>从购买前的范围确认，到交付后的订单查询与售后支持，都回到同一业务入口。</p></article>
                 </div>
             </section>
 
@@ -311,7 +326,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             </section>
 
             <section class="promo-final promo-shell" data-promo-reveal>
-                <div><p class="promo-kicker">Continue to store / 05</p><h2>继续进入，查看与你需求匹配的服务。</h2><p>主站会展示当前可用内容、完整说明与服务条件。请确认信息后再进行后续操作。</p><form class="promo-entry-form" data-store-entry><button class="promo-entry-button" type="submit">进入业务主站</button></form></div>
+                <div><p class="promo-kicker">Continue to store / 05</p><h2><span class="promo-final-title-line">继续进入，</span><span class="promo-final-title-line">查看与你需求</span><span class="promo-final-title-line">匹配的服务。</span></h2><p>主站会展示当前可用内容、完整说明与服务条件。请确认信息后再进行后续操作。</p><form class="promo-entry-form" data-store-entry><button class="promo-entry-button" type="submit">进入业务主站</button></form></div>
                 <div class="promo-final-signal" aria-label="主站信息范围"><span><b>INFO</b>完整商品与服务说明</span><span><b>ORDER</b>价格、交付与订单状态</span><span><b>CARE</b>客服、条款与售后入口</span></div>
             </section>
         </main>
