@@ -77,6 +77,14 @@ export const facetDetailDocument = graphql(`
     }
 `);
 
+export const facetForValueEditorDocument = graphql(`
+    query FacetForValueEditor($id: ID!) {
+        facet(id: $id) {
+            id
+        }
+    }
+`);
+
 export const createFacetDocument = graphql(`
     mutation CreateFacet($input: CreateFacetInput!) {
         createFacet(input: $input) {
