@@ -3,6 +3,7 @@ import { PageBreadcrumb } from '@/vdb/components/layout/generated-breadcrumbs.js
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
 import { TranslatableFormFieldWrapper } from '@/vdb/components/shared/translatable-form-field.js';
+import { Alert, AlertDescription, AlertTitle } from '@/vdb/components/ui/alert.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
@@ -18,14 +19,18 @@ import {
 } from '@/vdb/framework/layout-engine/page-layout.js';
 import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-loader.js';
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
+import { api } from '@/vdb/graphql/api.js';
+import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { ExternalLink, X } from 'lucide-react';
+import { AlertCircle, ExternalLink, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+
 import {
     createFacetValueDocument,
+    facetForValueEditorDocument,
     facetValueDetailDocument,
     updateFacetValueDocument,
 } from './facets.graphql.js';
@@ -78,6 +83,18 @@ export function FacetValueEditor({
     const createAnotherRef = useRef(false);
     const creatingNewEntity = facetValueId === NEW_ENTITY_PATH;
     const { t } = useLingui();
+    const { activeChannel } = useChannel();
+    const missingFacetHandledRef = useRef(false);
+
+    const parentFacetQuery = useQuery({
+        queryKey: ['FacetValueEditorParentFacet', facetId, activeChannel?.id],
+        queryFn: () => api.query(facetForValueEditorDocument, { id: facetId }),
+        enabled: creatingNewEntity,
+        retry: false,
+    });
+    const parentFacetCheckPending = creatingNewEntity && parentFacetQuery.isFetching;
+    const parentFacetMissing =
+        creatingNewEntity && parentFacetQuery.isSuccess && !parentFacetQuery.data?.facet;
 
     const { form, submitHandler, entity, isPending, resetForm } = useDetailPage({
         pageId,
@@ -143,6 +160,32 @@ export function FacetValueEditor({
         onDirtyChange?.(form.formState.isDirty);
     }, [form.formState.isDirty, onDirtyChange]);
 
+    useEffect(() => {
+        if (!parentFacetMissing) {
+            missingFacetHandledRef.current = false;
+            return;
+        }
+        if (missingFacetHandledRef.current) {
+            return;
+        }
+        missingFacetHandledRef.current = true;
+        toast.error(t`Failed to create facet value`, {
+            description: `${t`Facet`} #${facetId}: ${t`No results`}. ${t`Refresh data`}.`,
+        });
+        if (presentation === 'sheet') {
+            onRequestClose?.();
+        } else {
+            void navigate({ to: '/facets' });
+        }
+    }, [facetId, navigate, onRequestClose, parentFacetMissing, presentation, t]);
+
+    const submitDisabled =
+        !form.formState.isDirty ||
+        !form.formState.isValid ||
+        isPending ||
+        parentFacetCheckPending ||
+        parentFacetMissing;
+
     return (
         <Page
             pageId={pageId}
@@ -169,7 +212,7 @@ export function FacetValueEditor({
                     <Button
                         type="submit"
                         variant="outline"
-                        disabled={!form.formState.isDirty || !form.formState.isValid || isPending}
+                        disabled={submitDisabled}
                         onClick={() => {
                             createAnotherRef.current = true;
                         }}
@@ -180,7 +223,7 @@ export function FacetValueEditor({
                 <ActionBarItem itemId="save-button" requiresPermission={['UpdateProduct', 'UpdateCatalog']}>
                     <Button
                         type="submit"
-                        disabled={!form.formState.isDirty || !form.formState.isValid || isPending}
+                        disabled={submitDisabled}
                         onClick={() => {
                             createAnotherRef.current = false;
                         }}
@@ -207,6 +250,20 @@ export function FacetValueEditor({
                 )}
             </PageActionBar>
             <PageLayout>
+                {parentFacetMissing && (
+                    <PageBlock column="main" blockId="parent-facet-missing">
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>
+                                <Trans>Failed to create facet value</Trans>
+                            </AlertTitle>
+                            <AlertDescription>
+                                <Trans>Facet</Trans> #{facetId}: <Trans>No results</Trans>.{' '}
+                                <Trans>Refresh data</Trans>.
+                            </AlertDescription>
+                        </Alert>
+                    </PageBlock>
+                )}
                 {entity?.facet && (
                     <PageBlock column="side" blockId="facet-info">
                         <div className="space-y-2">

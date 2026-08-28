@@ -1,7 +1,9 @@
 import { setupI18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { useForm } from 'react-hook-form';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserSettingsContext, type UserSettingsContextType } from '../../providers/user-settings.js';
@@ -9,7 +11,13 @@ import type { ActionBarItemPosition } from '../extension-api/types/layout.js';
 import { globalRegistry } from '../registry/global-registry.js';
 import { ActionBarItem } from './action-bar-item-wrapper.js';
 import { registerDashboardActionBarItem, registerDashboardPageBlock } from './layout-extensions.js';
-import { PageActionBar, PageActionBarRight, PageBlock, PageLayout } from './page-layout.js';
+import {
+    PageActionBar,
+    PageActionBarRight,
+    PageBlock,
+    PageContentWithOptionalForm,
+    PageLayout,
+} from './page-layout.js';
 import { PageContext } from './page-provider.js';
 
 const useIsMobileMock = vi.hoisted(() => vi.fn(() => false));
@@ -36,6 +44,12 @@ vi.mock('@/vdb/hooks/use-local-format.js', () => ({
         formatDate: (value: string | Date) => String(value),
     }),
 }));
+
+vi.mock('@/vdb/components/shared/navigation-confirmation.js', () => ({
+    NavigationConfirmation: () => null,
+}));
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function registerBlock(
     id: string,
@@ -446,5 +460,42 @@ describe('PageLayout', () => {
         );
 
         expect(getRenderedActionBarIds(markup)).toEqual(['save']);
+    });
+
+    it('does not bubble a page form submission to a parent editor', () => {
+        const parentSubmit = vi.fn();
+        const childSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+        const container = document.createElement('div');
+        const root = createRoot(container);
+        document.body.appendChild(container);
+
+        function FormHarness() {
+            const form = useForm({ defaultValues: { name: '' } });
+            return (
+                <div onSubmit={parentSubmit}>
+                    <PageContentWithOptionalForm
+                        form={form}
+                        submitHandler={childSubmit}
+                        pageHeader={null}
+                        pageContent={<button type="submit">Save child</button>}
+                    />
+                </div>
+            );
+        }
+
+        try {
+            act(() => root.render(<FormHarness />));
+            act(() => {
+                container
+                    .querySelector('form')
+                    ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            });
+
+            expect(childSubmit).toHaveBeenCalledOnce();
+            expect(parentSubmit).not.toHaveBeenCalled();
+        } finally {
+            act(() => root.unmount());
+            container.remove();
+        }
     });
 });
