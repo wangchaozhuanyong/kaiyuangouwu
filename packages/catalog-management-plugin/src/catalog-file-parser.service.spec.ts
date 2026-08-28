@@ -86,6 +86,17 @@ describe('CatalogFileParserService', () => {
         expect(catalogRowFingerprint(rows[0])).not.toBe(catalogRowFingerprint(rows[1]));
     });
 
+    it('prefers an explicit SKU for stable follow-up import identity', () => {
+        const withSku = workbookBuffer([
+            ['名称', '分类', 'SKU', '规格', '主单位', '进货价', '销售价'],
+            ['商品', '零食', 'SKU-001', '500g', '包', 3, 5],
+            ['商品', '零食', 'SKU-002', '500g', '包', 3, 5],
+        ]);
+        const { rows } = parser.parseBuffer(withSku, 'catalog.xlsx');
+
+        expect(catalogSourceKey(rows[0])).not.toBe(catalogSourceKey(rows[1]));
+    });
+
     it('isolates an invalid row and rejects unsupported files before any database work', () => {
         const invalid = workbookBuffer([
             headers,

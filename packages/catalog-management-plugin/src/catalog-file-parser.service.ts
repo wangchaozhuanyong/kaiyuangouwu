@@ -13,6 +13,11 @@ const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
     商品名称: 'name',
     分类: 'category',
     商品分类: 'category',
+    门店: 'channelCode',
+    门店编码: 'channelCode',
+    仓库: 'stockLocationCode',
+    仓库编码: 'stockLocationCode',
+    币种: 'currencyCode',
     规格: 'specification',
     主单位: 'primaryUnit',
     单位: 'primaryUnit',
@@ -55,6 +60,7 @@ export interface ParsedCatalogFile {
     rows: NormalizedCatalogRow[];
     errors: ParsedCatalogRowError[];
     headers: string[];
+    fieldMapping: Record<string, string>;
 }
 
 export interface ParsedCatalogRowError {
@@ -143,6 +149,12 @@ export class CatalogFileParserService {
             rows,
             errors,
             headers,
+            fieldMapping: Object.fromEntries(
+                headers.flatMap((header, index) => {
+                    const field = columnFields[index];
+                    return header && field ? [[header, String(field)]] : [];
+                }),
+            ),
         };
     }
 }
@@ -152,8 +164,9 @@ export function catalogProductKey(row: Pick<NormalizedCatalogRow, 'name' | 'cate
 }
 
 export function catalogSourceKey(
-    row: Pick<NormalizedCatalogRow, 'name' | 'category' | 'specification' | 'primaryUnit'>,
+    row: Pick<NormalizedCatalogRow, 'name' | 'category' | 'specification' | 'primaryUnit' | 'sku'>,
 ): string {
+    if (row.sku) return sha256(`sku\u001f${normalizeIdentity(row.sku)}`);
     return sha256(
         [row.name, row.category, row.specification, row.primaryUnit].map(normalizeIdentity).join('\u001f'),
     );
@@ -208,6 +221,9 @@ function normalizeRow(
         rowNumber,
         name,
         category,
+        channelCode: textValue(values.get('channelCode')),
+        stockLocationCode: textValue(values.get('stockLocationCode')),
+        currencyCode: textValue(values.get('currencyCode')).toUpperCase(),
         specification: textValue(values.get('specification')),
         primaryUnit: textValue(values.get('primaryUnit')),
         stockOnHand,
@@ -248,6 +264,9 @@ function invalidRow(
         rowNumber,
         name: textValue(cells[fields.indexOf('name')]),
         category: textValue(cells[fields.indexOf('category')]),
+        channelCode: textValue(cells[fields.indexOf('channelCode')]),
+        stockLocationCode: textValue(cells[fields.indexOf('stockLocationCode')]),
+        currencyCode: textValue(cells[fields.indexOf('currencyCode')]).toUpperCase(),
         specification: textValue(cells[fields.indexOf('specification')]),
         primaryUnit: textValue(cells[fields.indexOf('primaryUnit')]),
         stockOnHand: null,

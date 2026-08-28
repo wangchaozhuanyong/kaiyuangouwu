@@ -44,6 +44,9 @@ export const adminApiExtensions = gql`
         mimeType: String!
         byteSize: Int!
         fileHash: String!
+        sheetName: String
+        detectedHeaders: [String!]
+        fieldMapping: JSON
         state: CatalogImportState!
         actorId: String
         totalRows: Int!
@@ -187,6 +190,7 @@ export const adminApiExtensions = gql`
         catalogImportRows(jobId: ID!, action: CatalogImportAction): [CatalogImportRow!]!
         catalogProductWorkspace(productId: ID!): CatalogProductWorkspace!
         catalogStandardImportTemplate: String!
+        catalogImportReport(id: ID!): String!
     }
 
     extend type Mutation {

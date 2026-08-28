@@ -6,6 +6,7 @@ import {
     JobQueueService,
     RequestContextService,
     TransactionalConnection,
+    User,
 } from '@vendure/core';
 
 import { CatalogImportService } from './catalog-import.service';
@@ -46,9 +47,16 @@ export class CatalogImportQueueService implements OnApplicationBootstrap {
             relations: ['channel'],
         });
         if (!importJob || importJob.state !== 'QUEUED') return { importJobId: job.data.importJobId };
+        const actor = importJob.actorId
+            ? await this.connection.rawConnection.getRepository(User).findOne({
+                  where: { id: importJob.actorId as ID },
+                  relations: { roles: { channels: true } },
+              })
+            : null;
         const ctx = await this.requestContextService.create({
             apiType: 'admin',
             channelOrToken: importJob.channel,
+            user: actor ?? undefined,
         });
         await this.imports.executeJob(ctx, importJob.id, progress => job.setProgress(progress));
         return { importJobId: job.data.importJobId };

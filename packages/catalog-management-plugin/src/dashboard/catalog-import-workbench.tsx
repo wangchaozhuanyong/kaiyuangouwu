@@ -54,6 +54,7 @@ import {
     CatalogImportRowRecord,
     catalogImportJobQuery,
     catalogImportJobsQuery,
+    catalogImportReportQuery,
     catalogImportRowsQuery,
     catalogStandardImportTemplateQuery,
     createCatalogImportPreviewMutation,
@@ -87,6 +88,7 @@ function CatalogImportWorkbench({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [file, setFile] = useState<File | null>(null);
     const [stockLocationId, setStockLocationId] = useState('');
+    const [currencyCode, setCurrencyCode] = useState('');
     const [jobId, setJobId] = useState<string | null>(null);
     const [actionFilter, setActionFilter] = useState<ActionFilter>('ALL');
     const [targetVariantByRow, setTargetVariantByRow] = useState<Record<string, string>>({});
@@ -103,6 +105,12 @@ function CatalogImportWorkbench({
     useEffect(() => {
         if (!stockLocationId && locations[0]) setStockLocationId(locations[0].id);
     }, [locations, stockLocationId]);
+    useEffect(() => {
+        if (!activeChannel) return;
+        if (!activeChannel.availableCurrencyCodes.some(code => code === currencyCode)) {
+            setCurrencyCode(activeChannel.defaultCurrencyCode);
+        }
+    }, [activeChannel, currencyCode]);
 
     const historyQuery = useQuery({
         queryKey: ['catalog-import-history', activeChannel?.id],
@@ -145,7 +153,7 @@ function CatalogImportWorkbench({
                     input: {
                         channelId: activeChannel.id,
                         stockLocationId,
-                        currencyCode: activeChannel.defaultCurrencyCode,
+                        currencyCode,
                     },
                 },
             );
@@ -229,11 +237,14 @@ function CatalogImportWorkbench({
                                 file={file}
                                 stockLocationId={stockLocationId}
                                 locations={locations}
-                                currencyCode={activeChannel?.defaultCurrencyCode ?? ''}
+                                channelCode={activeChannel?.code ?? ''}
+                                currencyCode={currencyCode}
+                                availableCurrencyCodes={activeChannel?.availableCurrencyCodes ?? []}
                                 isPending={previewMutation.isPending}
                                 fileInputRef={fileInputRef}
                                 onFileChange={event => setFile(event.target.files?.[0] ?? null)}
                                 onStockLocationChange={setStockLocationId}
+                                onCurrencyCodeChange={setCurrencyCode}
                                 onPreview={() => previewMutation.mutate()}
                                 onDownloadTemplate={() => void downloadTemplate()}
                             />
@@ -252,6 +263,12 @@ function CatalogImportWorkbench({
                                     <div className="flex flex-wrap gap-2">
                                         <Button variant="outline" onClick={reset} disabled={running}>
                                             选择其他文件
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => void downloadReport(job.id, job.originalFilename)}
+                                        >
+                                            <Download className="mr-2 size-4" /> 下载报告
                                         </Button>
                                         {['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(job.state) && (
                                             <Button
@@ -395,22 +412,28 @@ function UploadPanel({
     file,
     stockLocationId,
     locations,
+    channelCode,
     currencyCode,
+    availableCurrencyCodes,
     isPending,
     fileInputRef,
     onFileChange,
     onStockLocationChange,
+    onCurrencyCodeChange,
     onPreview,
     onDownloadTemplate,
 }: Readonly<{
     file: File | null;
     stockLocationId: string;
     locations: Array<{ id: string; name: string }>;
+    channelCode: string;
     currencyCode: string;
+    availableCurrencyCodes: string[];
     isPending: boolean;
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onStockLocationChange: (value: string) => void;
+    onCurrencyCodeChange: (value: string) => void;
     onPreview: () => void;
     onDownloadTemplate: () => void;
 }>) {
@@ -422,8 +445,8 @@ function UploadPanel({
                     支持 Numbers、Excel 和 CSV。上传只创建预览，不会自动新增或修改商品。
                 </AlertDescription>
             </Alert>
-            <div className="grid gap-5 rounded-xl border p-6 md:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
+            <div className="grid gap-5 rounded-xl border p-6 md:grid-cols-3">
+                <div className="space-y-2 md:col-span-3">
                     <Label htmlFor="catalog-import-file">商品资料文件</Label>
                     <Input
                         ref={fileInputRef}
@@ -433,6 +456,10 @@ function UploadPanel({
                         onChange={onFileChange}
                     />
                     <p className="text-xs text-muted-foreground">单个文件最大 20MB，最多 20,000 行。</p>
+                </div>
+                <div className="space-y-2">
+                    <Label>目标门店（Dashboard 当前门店）</Label>
+                    <Input value={channelCode} disabled />
                 </div>
                 <div className="space-y-2">
                     <Label>目标仓库</Label>
@@ -454,18 +481,35 @@ function UploadPanel({
                 </div>
                 <div className="space-y-2">
                     <Label>目标币种</Label>
-                    <Input value={currencyCode} disabled />
+                    <Select
+                        value={currencyCode}
+                        onValueChange={value => value && onCurrencyCodeChange(value)}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="请选择币种" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {availableCurrencyCodes.map(code => (
+                                <SelectItem key={code} value={code}>
+                                    {code}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
                 {file && (
-                    <div className="rounded-lg bg-muted p-3 text-sm md:col-span-2">
+                    <div className="rounded-lg bg-muted p-3 text-sm md:col-span-3">
                         已选择：{file.name} · {formatBytes(file.size)}
                     </div>
                 )}
-                <div className="flex flex-wrap justify-end gap-2 md:col-span-2">
+                <div className="flex flex-wrap justify-end gap-2 md:col-span-3">
                     <Button variant="outline" onClick={onDownloadTemplate}>
                         <Download className="mr-2 size-4" /> 下载标准模板
                     </Button>
-                    <Button disabled={!file || !stockLocationId || isPending} onClick={onPreview}>
+                    <Button
+                        disabled={!file || !stockLocationId || !currencyCode || isPending}
+                        onClick={onPreview}
+                    >
                         {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                         解析并预览
                     </Button>
@@ -643,18 +687,32 @@ async function downloadTemplate(): Promise<void> {
         const result = await api.query<{ catalogStandardImportTemplate: string }>(
             catalogStandardImportTemplateQuery,
         );
-        const blob = new Blob([`\uFEFF${result.catalogStandardImportTemplate}`], {
-            type: 'text/csv;charset=utf-8',
-        });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = '商品导入标准模板.csv';
-        anchor.click();
-        URL.revokeObjectURL(url);
+        downloadCsv(result.catalogStandardImportTemplate, '商品导入标准模板.csv');
     } catch (error) {
         toast.error(errorMessage(error));
     }
+}
+
+async function downloadReport(jobId: string, originalFilename: string): Promise<void> {
+    try {
+        const result = await api.query<{ catalogImportReport: string }>(catalogImportReportQuery, {
+            id: jobId,
+        });
+        const safeName = originalFilename.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_');
+        downloadCsv(result.catalogImportReport, `${safeName || '商品导入'}-导入报告.csv`);
+    } catch (error) {
+        toast.error(errorMessage(error));
+    }
+}
+
+function downloadCsv(content: string, filename: string): void {
+    const blob = new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
 }
 
 function actionLabel(action: ActionFilter): string {

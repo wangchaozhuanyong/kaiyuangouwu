@@ -44,6 +44,15 @@ export class CatalogImportJob extends VendureEntity {
     @Column({ type: 'varchar', length: 64 })
     fileHash: string;
 
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    sheetName: string | null;
+
+    @Column({ type: 'simple-json', nullable: true })
+    detectedHeaders: string[] | null;
+
+    @Column({ type: 'simple-json', nullable: true })
+    fieldMapping: Record<string, string> | null;
+
     @Column({ type: 'varchar', length: 24, default: 'PREVIEW_READY' })
     state: CatalogImportState;
 

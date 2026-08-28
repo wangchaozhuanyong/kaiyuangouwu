@@ -63,6 +63,9 @@ export interface NormalizedCatalogRow {
     rowNumber: number;
     name: string;
     category: string;
+    channelCode: string;
+    stockLocationCode: string;
+    currencyCode: string;
     specification: string;
     primaryUnit: string;
     stockOnHand: number | null;

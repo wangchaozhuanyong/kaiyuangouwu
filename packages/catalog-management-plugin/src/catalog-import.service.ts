@@ -85,6 +85,7 @@ export class CatalogImportService {
         input: CatalogImportContextInput,
     ): Promise<CatalogImportJob> {
         this.assertContext(ctx, input);
+        const targetStockLocation = await this.operations.requireStockLocation(ctx, input.stockLocationId);
         const parsed = await this.parser.parseUpload(file);
         const fileInfo = await file;
         const repository = this.connection.getRepository(ctx, CatalogImportJob);
@@ -109,6 +110,9 @@ export class CatalogImportService {
                 mimeType: fileInfo.mimetype || 'application/octet-stream',
                 byteSize: parsed.byteSize,
                 fileHash: parsed.fileHash,
+                sheetName: parsed.sheetName.slice(0, 255),
+                detectedHeaders: parsed.headers,
+                fieldMapping: parsed.fieldMapping,
                 state: 'PREVIEW_READY',
                 actorId: ctx.activeUserId ? String(ctx.activeUserId) : null,
                 totalRows: parsed.rows.length + parsed.errors.length,
@@ -133,7 +137,10 @@ export class CatalogImportService {
                 const duplicateRows = duplicateGroups.get(sourceKey) ?? [];
                 const fingerprints = new Set(duplicateRows.map(catalogRowFingerprint));
                 let plan: PlannedRow;
-                if (fingerprints.size > 1) {
+                const scopeError = importScopeError(row, ctx, input, targetStockLocation);
+                if (scopeError) {
+                    plan = { ...emptyPlan('ERROR'), message: scopeError };
+                } else if (fingerprints.size > 1) {
                     plan = conflictPlan('同一商品、分类、规格和单位在文件中出现不同数值，请人工确认');
                 } else if (duplicateRows[0]?.rowNumber !== row.rowNumber) {
                     plan = {
@@ -387,6 +394,9 @@ export class CatalogImportService {
             [
                 '名称（必填）',
                 '分类（必填）',
+                '门店编码',
+                '仓库编码',
+                '币种',
                 'SKU',
                 '条码',
                 '规格',
@@ -410,6 +420,9 @@ export class CatalogImportService {
                 '示例分类',
                 '',
                 '',
+                '',
+                '',
+                '',
                 '500ml',
                 '瓶',
                 '10',
@@ -431,6 +444,45 @@ export class CatalogImportService {
             .join('\r\n');
     }
 
+    async report(ctx: RequestContext, id: ID): Promise<string> {
+        const job = await this.findJob(ctx, id);
+        const rows = await this.findRows(ctx, id);
+        return [
+            [
+                '行号',
+                '结果',
+                '处理选择',
+                '商品名称',
+                '分类',
+                'SKU',
+                '规格',
+                '单位',
+                '目标商品ID',
+                '目标SKU ID',
+                '说明',
+                '应用时间',
+                '文件摘要',
+            ],
+            ...rows.map(row => [
+                String(row.rowNumber),
+                row.action,
+                row.resolution ?? '',
+                row.normalizedData.name,
+                row.normalizedData.category,
+                row.normalizedData.sku,
+                row.normalizedData.specification,
+                row.normalizedData.primaryUnit,
+                row.targetProductId ? String(row.targetProductId) : '',
+                row.targetVariantId ? String(row.targetVariantId) : '',
+                row.message ?? '',
+                row.appliedAt?.toISOString() ?? '',
+                job.fileHash,
+            ]),
+        ]
+            .map(values => values.map(csvCell).join(','))
+            .join('\r\n');
+    }
+
     private async planRow(
         ctx: RequestContext,
         row: NormalizedCatalogRow,
@@ -438,7 +490,12 @@ export class CatalogImportService {
         catalogIndex: CatalogIndexProduct[],
         binding?: CatalogSourceBinding,
     ): Promise<PlannedRow> {
-        const warning = validationWarning(row);
+        const warnings = [validationWarning(row)];
+        const categoryExists = catalogIndex.some(item =>
+            item.categories.has(normalizeIdentity(row.category)),
+        );
+        if (!categoryExists) warnings.push('分类不存在，确认后将创建新分类');
+        const warning = warnings.filter((value): value is string => Boolean(value)).join('；') || null;
         let targetProduct: Product | undefined;
         let targetVariant: ProductVariant | undefined;
         if (binding) {
@@ -482,7 +539,18 @@ export class CatalogImportService {
                 expectedProductUpdatedAt: targetProduct?.updatedAt ?? null,
                 expectedVariantUpdatedAt: null,
                 beforeSnapshot: targetProduct
-                    ? { productId: String(targetProduct.id), productCreated: false }
+                    ? {
+                          productId: String(targetProduct.id),
+                          productCreated: false,
+                          variantCreated: true,
+                          productEnabled: targetProduct.enabled,
+                          productDescription:
+                              targetProduct.translations.find(
+                                  translation => translation.languageCode === ctx.languageCode,
+                              )?.description ?? '',
+                          productFacetValueIds:
+                              targetProduct.facetValues?.map(value => String(value.id)) ?? [],
+                      }
                     : null,
                 plannedChanges: { safeAction: 'CREATE', ...createChanges(row, input.currencyCode) },
                 message: targetProduct ? '将在现有商品下创建新 SKU' : '将创建商品和 SKU',
@@ -619,6 +687,8 @@ export class CatalogImportService {
         let product: Product | undefined;
         let variant: ProductVariant | undefined;
         const productCreated = !productId;
+        const productAlreadyHandled =
+            productId != null && String(productByKey.get(row.productKey)) === String(productId);
         if (productId) {
             product =
                 (await this.connection.getRepository(ctx, Product).findOne({
@@ -628,6 +698,7 @@ export class CatalogImportService {
             if (!product) throw new UserInputError('预览中的商品已不存在');
             if (
                 row.expectedProductUpdatedAt &&
+                !productAlreadyHandled &&
                 row.resolution !== 'UPDATE_EXISTING' &&
                 product.updatedAt.getTime() !== row.expectedProductUpdatedAt.getTime()
             ) {
@@ -676,15 +747,28 @@ export class CatalogImportService {
         }
         const variantCreated = !variant;
 
-        const before = row.beforeSnapshot ?? {
-            productId: String(product.id),
-            productCreated,
-            variantCreated,
-            productEnabled: product.enabled,
-            productDescription:
-                product.translations.find(translation => translation.languageCode === ctx.languageCode)
-                    ?.description ?? '',
-            productFacetValueIds: product.facetValues?.map(value => String(value.id)) ?? [],
+        const existingBinding = await this.connection.getRepository(ctx, CatalogSourceBinding).findOne({
+            where: { channelId: ctx.channelId, sourceKey: row.sourceKey },
+        });
+        const before: Record<string, unknown> = {
+            ...(row.beforeSnapshot ?? {
+                productId: String(product.id),
+                productCreated,
+                variantCreated,
+                productEnabled: product.enabled,
+                productDescription:
+                    product.translations.find(translation => translation.languageCode === ctx.languageCode)
+                        ?.description ?? '',
+                productFacetValueIds: product.facetValues?.map(value => String(value.id)) ?? [],
+            }),
+            sourceBinding: existingBinding
+                ? {
+                      productId: String(existingBinding.productId),
+                      variantId: String(existingBinding.variantId),
+                      lastFingerprint: existingBinding.lastFingerprint,
+                      lastFileHash: existingBinding.lastFileHash,
+                  }
+                : null,
         };
         const facetValueIds = await this.resolveFacetValues(ctx, row.normalizedData);
         if (
@@ -794,7 +878,7 @@ export class CatalogImportService {
                 job.currencyCode,
                 microunits(row.normalizedData.purchaseCost),
                 'IMPORT',
-                String(job.id),
+                String(row.id),
             );
         }
         if (row.normalizedData.minimumStock != null || row.normalizedData.maximumStock != null) {
@@ -855,6 +939,7 @@ export class CatalogImportService {
         };
         row.appliedAt = new Date();
         row.message = row.action === 'CREATE' ? '新增成功' : '更新成功';
+        productByKey.set(row.productKey, product.id);
         await this.connection.getRepository(ctx, CatalogImportRow).save(row);
     }
 
@@ -912,6 +997,13 @@ export class CatalogImportService {
                     maximumStock: nullableNumber(before.maximumStock),
                     currencyCode: job.currencyCode,
                 });
+                await this.connection.getRepository(ctx, VariantCostRecord).delete({
+                    variantId: variant.id,
+                    channelId: ctx.channelId,
+                    currencyCode: job.currencyCode,
+                    source: 'IMPORT',
+                    sourceReference: String(row.id),
+                });
                 if (before.purchaseCostMicrounits != null) {
                     await this.operations.recordCost(
                         ctx,
@@ -925,11 +1017,40 @@ export class CatalogImportService {
             }
         }
         if (product) {
-            await this.productService.update(ctx, {
-                id: product.id,
-                expectedUpdatedAt: product.updatedAt,
-                enabled: Boolean(before.productCreated) ? false : Boolean(before.productEnabled),
-            });
+            if (Boolean(before.productCreated)) {
+                await this.productService.update(ctx, {
+                    id: product.id,
+                    expectedUpdatedAt: product.updatedAt,
+                    enabled: false,
+                });
+            } else {
+                const translation =
+                    product.translations.find(item => item.languageCode === ctx.languageCode) ??
+                    product.translations[0];
+                await this.productService.update(ctx, {
+                    id: product.id,
+                    expectedUpdatedAt: product.updatedAt,
+                    enabled:
+                        typeof before.productEnabled === 'boolean' ? before.productEnabled : product.enabled,
+                    facetValueIds: stringArray(before.productFacetValueIds).map(value => value as ID),
+                    ...(translation
+                        ? {
+                              translations: [
+                                  {
+                                      id: translation.id,
+                                      languageCode: translation.languageCode,
+                                      name: translation.name,
+                                      slug: translation.slug,
+                                      description:
+                                          typeof before.productDescription === 'string'
+                                              ? before.productDescription
+                                              : translation.description,
+                                  },
+                              ],
+                          }
+                        : {}),
+                });
+            }
         }
         if (applied.lotId) {
             await this.connection.getRepository(ctx, InventoryLot).update(applied.lotId, {
@@ -937,11 +1058,26 @@ export class CatalogImportService {
                 state: 'VOID',
             });
         }
-        await this.connection.getRepository(ctx, CatalogSourceBinding).delete({
-            channelId: ctx.channelId,
-            sourceKey: row.sourceKey,
-            lastFileHash: job.fileHash,
-        });
+        const priorBinding = recordValue(before.sourceBinding);
+        if (priorBinding) {
+            await this.connection.getRepository(ctx, CatalogSourceBinding).upsert(
+                {
+                    channelId: ctx.channelId,
+                    sourceKey: row.sourceKey,
+                    productId: String(priorBinding.productId) as ID,
+                    variantId: String(priorBinding.variantId) as ID,
+                    lastFingerprint: String(priorBinding.lastFingerprint),
+                    lastFileHash: String(priorBinding.lastFileHash),
+                },
+                ['channelId', 'sourceKey'],
+            );
+        } else {
+            await this.connection.getRepository(ctx, CatalogSourceBinding).delete({
+                channelId: ctx.channelId,
+                sourceKey: row.sourceKey,
+                lastFileHash: job.fileHash,
+            });
+        }
         row.message = '已安全回滚；导入创建且已有引用的商品仅被禁用';
         await this.connection.getRepository(ctx, CatalogImportRow).save(row);
     }
@@ -951,6 +1087,7 @@ export class CatalogImportService {
             .getRepository(ctx, Product)
             .createQueryBuilder('product')
             .leftJoinAndSelect('product.translations', 'productTranslation')
+            .leftJoinAndSelect('product.facetValues', 'productFacetValue')
             .leftJoinAndSelect('product.variants', 'variant', 'variant.deletedAt IS NULL')
             .leftJoinAndSelect('variant.translations', 'variantTranslation')
             .leftJoinAndSelect('variant.productVariantPrices', 'variantPrice')
@@ -1154,6 +1291,34 @@ function validationWarning(row: NormalizedCatalogRow): string | null {
     return null;
 }
 
+function importScopeError(
+    row: NormalizedCatalogRow,
+    ctx: RequestContext,
+    input: CatalogImportContextInput,
+    stockLocation: { id: ID; name: string },
+): string | null {
+    if (
+        row.channelCode &&
+        ![String(ctx.channelId), normalizeIdentity(ctx.channel.code)].includes(
+            normalizeIdentity(row.channelCode),
+        )
+    ) {
+        return '文件门店与当前选择的门店不一致，默认不执行';
+    }
+    if (
+        row.stockLocationCode &&
+        ![String(stockLocation.id), normalizeIdentity(stockLocation.name)].includes(
+            normalizeIdentity(row.stockLocationCode),
+        )
+    ) {
+        return '文件仓库与当前选择的仓库不一致，默认不执行';
+    }
+    if (row.currencyCode && row.currencyCode !== String(input.currencyCode)) {
+        return '文件币种与当前选择的币种不一致，默认不执行';
+    }
+    return null;
+}
+
 function groupRows(rows: NormalizedCatalogRow[]): Map<string, NormalizedCatalogRow[]> {
     const groups = new Map<string, NormalizedCatalogRow[]>();
     for (const row of rows)
@@ -1256,6 +1421,16 @@ function numberValue(value: unknown): number | null {
 
 function nullableNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function stringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.map(String) : [];
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+    return value != null && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
 }
 
 function safeMessage(error: unknown): string {

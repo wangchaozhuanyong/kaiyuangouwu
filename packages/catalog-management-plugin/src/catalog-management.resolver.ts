@@ -54,6 +54,12 @@ export class CatalogManagementAdminResolver {
         return this.imports.standardTemplate();
     }
 
+    @Query()
+    @Allow(manageCatalogImportPermission.Read)
+    catalogImportReport(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.imports.report(ctx, id);
+    }
+
     @Mutation()
     @Allow(manageCatalogImportPermission.Create)
     createCatalogImportPreview(

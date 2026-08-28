@@ -109,7 +109,7 @@ export class CatalogOperationsService {
     }
 
     async updateVariant(ctx: RequestContext, input: UpdateCatalogVariantOperationsInput) {
-        await this.assertStockLocation(ctx, input.stockLocationId);
+        await this.requireStockLocation(ctx, input.stockLocationId);
         validatePolicy(input.minimumStock, input.maximumStock);
         if (input.stockOnHand != null && input.stockOnHand < 0) {
             throw new UserInputError('库存不能为负数');
@@ -186,7 +186,7 @@ export class CatalogOperationsService {
     }
 
     async saveLot(ctx: RequestContext, input: SaveInventoryLotInput, adjustStock = true) {
-        await this.assertStockLocation(ctx, input.stockLocationId);
+        await this.requireStockLocation(ctx, input.stockLocationId);
         if (!input.lotCode.trim()) throw new UserInputError('批次号不能为空');
         if (input.quantityOnHand < 0 || !Number.isInteger(input.quantityOnHand)) {
             throw new UserInputError('批次数量必须是非负整数');
@@ -303,7 +303,7 @@ export class CatalogOperationsService {
         return locations.map(location => ({ id: String(location.id), name: location.name }));
     }
 
-    private async assertStockLocation(ctx: RequestContext, stockLocationId: ID): Promise<void> {
+    async requireStockLocation(ctx: RequestContext, stockLocationId: ID): Promise<StockLocation> {
         const found = await this.connection
             .getRepository(ctx, StockLocation)
             .createQueryBuilder('location')
@@ -313,6 +313,7 @@ export class CatalogOperationsService {
             .where('location.id = :stockLocationId', { stockLocationId })
             .getOne();
         if (!found) throw new UserInputError('所选仓库不属于当前门店');
+        return found;
     }
 }
 

@@ -15,6 +15,9 @@ const importJobFields = gql`
         originalFilename
         byteSize
         fileHash
+        sheetName
+        detectedHeaders
+        fieldMapping
         state
         totalRows
         createdCount
@@ -125,6 +128,12 @@ export const catalogStandardImportTemplateQuery = gql`
     }
 `;
 
+export const catalogImportReportQuery = gql`
+    query CatalogImportReport($id: ID!) {
+        catalogImportReport(id: $id)
+    }
+`;
+
 export const catalogProductWorkspaceQuery = gql`
     query CatalogProductWorkspace($productId: ID!) {
         catalogProductWorkspace(productId: $productId) {
@@ -209,6 +218,9 @@ export interface CatalogImportJobRecord {
     originalFilename: string;
     byteSize: number;
     fileHash: string;
+    sheetName: string | null;
+    detectedHeaders: string[] | null;
+    fieldMapping: Record<string, string> | null;
     state:
         | 'PREVIEW_READY'
         | 'QUEUED'
