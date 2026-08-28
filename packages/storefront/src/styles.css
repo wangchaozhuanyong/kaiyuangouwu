@@ -424,13 +424,8 @@ img {
 }
 
 .home-topbar {
-    height: auto;
-    min-height: 108px;
-    padding: 6px 12px 10px;
     grid-template-columns: minmax(0, 1fr) max-content;
-    grid-template-rows: 44px 42px;
     column-gap: 10px;
-    row-gap: 6px;
 }
 
 .home-topbar > .brand {
@@ -441,25 +436,6 @@ img {
 .home-topbar > .topbar-actions {
     grid-column: 2;
     grid-row: 1;
-}
-
-.home-topbar > .search-trigger {
-    width: 100%;
-    height: 42px;
-    padding: 0 12px;
-    grid-column: 1 / -1;
-    grid-row: 2;
-    border-color: #dce4eb;
-    border-radius: 12px;
-    background: #f8fafc;
-    box-shadow:
-        inset 0 1px 2px rgba(15, 23, 42, 0.035),
-        0 1px 2px rgba(15, 23, 42, 0.025);
-}
-
-.home-topbar > .search-trigger:hover {
-    border-color: #cbd7e2;
-    background: #f5f8fb;
 }
 
 .category-topbar {
@@ -9152,17 +9128,6 @@ img.fatal-error-mark {
         right: 32px;
         bottom: auto;
         left: calc(50% + 226px);
-    }
-
-    .home-topbar > .search-trigger {
-        width: auto;
-        position: absolute;
-        top: 14px;
-        right: 188px;
-        bottom: auto;
-        left: calc(50% + 226px);
-        grid-column: auto;
-        grid-row: auto;
     }
 
     .home-topbar > .topbar-actions {

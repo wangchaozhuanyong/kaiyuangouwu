@@ -7,8 +7,17 @@ import { useUserSettings } from '@/vdb/hooks/use-user-settings.js';
 import { getLocaleFallbackPlaceholder } from '@/vdb/utils/get-locale-fallback-placeholder.js';
 import { Trans } from '@lingui/react/macro';
 import React, { useEffect, useMemo } from 'react';
-import { Controller, ControllerProps, FieldPath, FieldValues, useFormContext } from 'react-hook-form';
+import {
+    Controller,
+    ControllerProps,
+    FieldPath,
+    FieldValues,
+    FieldError as ReactHookFormFieldError,
+    useFormContext,
+} from 'react-hook-form';
+
 import { Field, FieldDescription, FieldError, FieldLabel } from '../ui/field.js';
+
 import { applyControlProps } from './apply-control-props.js';
 import { FormFieldWrapper } from './form-field-wrapper.js';
 
@@ -112,7 +121,13 @@ const TranslatableFieldController = <TFieldValues extends TranslatableEntity | T
 export type TranslatableFormFieldWrapperProps<
     TFieldValues extends TranslatableEntity | TranslatableEntity[],
 > = TranslatableFormFieldProps<TFieldValues> &
-    Omit<React.ComponentProps<typeof FormFieldWrapper<TFieldValues>>, 'name'>;
+    Omit<React.ComponentProps<typeof FormFieldWrapper<TFieldValues>>, 'name'> & {
+        /**
+         * An optional page-level validation error for rules which cannot be expressed by the
+         * generated GraphQL schema, such as rejecting visually empty rich-text HTML.
+         */
+        validationError?: ReactHookFormFieldError;
+    };
 
 /**
  * @description
@@ -156,6 +171,7 @@ export const TranslatableFormFieldWrapper = <
     label,
     description,
     renderFormControl = true,
+    validationError,
     ...controllerProps
 }: TranslatableFormFieldWrapperProps<TFieldValues>) => {
     const { name, render, ...rest } = controllerProps;
@@ -177,7 +193,9 @@ export const TranslatableFormFieldWrapper = <
                 name={name}
                 label={label}
                 render={renderArgs => {
-                    const { fieldState } = renderArgs;
+                    const fieldState = validationError
+                        ? { ...renderArgs.fieldState, invalid: true, error: validationError }
+                        : renderArgs.fieldState;
                     const fieldId = `field-${String(name)}`;
                     const descriptionId = description ? `${fieldId}-description` : undefined;
                     const errorId = fieldState.invalid ? `${fieldId}-error` : undefined;

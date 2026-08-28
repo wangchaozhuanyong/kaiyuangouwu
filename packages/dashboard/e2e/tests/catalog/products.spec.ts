@@ -12,10 +12,39 @@ createCrudTestSuite({
     createFields: [{ label: 'Product name', value: 'E2E Test Product' }],
     afterFillCreate: async (_page, detail) => {
         await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
+        await detail
+            .formItem('Description')
+            .locator('[contenteditable="true"]')
+            .fill('E2E product description');
     },
 });
 
 test.describe('Product detail features', () => {
+    test('should require a meaningful Simplified Chinese description before creation', async ({ page }) => {
+        await page.goto('/products/new');
+        const nameInput = page
+            .locator('[data-slot="field"]')
+            .filter({ has: page.getByText('Product name', { exact: true }) })
+            .getByRole('textbox');
+        await nameInput.fill('Description validation product');
+
+        const descriptionField = page.locator('[data-slot="field"]').filter({
+            has: page.getByText('Description', { exact: true }),
+        });
+        const editor = descriptionField.locator('[contenteditable="true"]');
+
+        await expect(descriptionField.getByText('This field is required')).toBeVisible();
+        await expect(editor).toHaveAttribute('aria-required', 'true');
+        await expect(editor).toHaveAttribute('aria-invalid', 'true');
+        await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
+
+        await editor.fill('A complete product description');
+
+        await expect(descriptionField.getByText('This field is required')).not.toBeVisible();
+        await expect(editor).not.toHaveAttribute('aria-invalid', 'true');
+        await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeEnabled();
+    });
+
     test('should display all detail page sections', async ({ page }) => {
         // Navigate to the seeded "Laptop" product via search to avoid race conditions
         await page.goto('/products');
