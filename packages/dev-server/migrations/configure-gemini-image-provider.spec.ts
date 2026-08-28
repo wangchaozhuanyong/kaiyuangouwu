@@ -2,6 +2,7 @@ import { DataSource, Table } from 'typeorm';
 import { describe, expect, it } from 'vitest';
 
 import { ConfigureGeminiImageProvider1787810400000 } from './1787810400000-configure-gemini-image-provider';
+import { EnforceGeminiImageProvider1787814000000 } from './1787814000000-enforce-gemini-image-provider';
 
 describe('Gemini image provider configuration migration', () => {
     it('updates only the expected Gemini credential and remains idempotent', async () => {
@@ -63,6 +64,28 @@ describe('Gemini image provider configuration migration', () => {
                     healthStatus: 'HEALTHY',
                     healthMessage: 'keep',
                     lastTestedAt: '2026-08-27 00:00:00',
+                },
+            ]);
+
+            await queryRunner.query(
+                `UPDATE "image_provider_credential"
+                 SET "baseUrl" = 'https://legacy.example/v1', "healthStatus" = 'UNHEALTHY'
+                 WHERE "id" = 1`,
+            );
+            const enforcement = new EnforceGeminiImageProvider1787814000000();
+            await enforcement.up(queryRunner);
+            await enforcement.up(queryRunner);
+
+            expect(
+                await queryRunner.query(
+                    `SELECT "baseUrl", "healthStatus", "healthMessage" FROM "image_provider_credential" WHERE "id" = 1`,
+                ),
+            ).toEqual([
+                {
+                    baseUrl: 'https://codexgemini.cc/antigravity/v1beta',
+                    healthStatus: 'HEALTHY',
+                    healthMessage:
+                        'Antigravity v1beta model list verified for gemini-3.1-flash-image on 2026-08-28',
                 },
             ]);
         } finally {
