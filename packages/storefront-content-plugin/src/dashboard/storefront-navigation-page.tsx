@@ -6,9 +6,7 @@ import {
     Button,
     ChannelCodeLabel,
     DashboardRouteDefinition,
-    ImageSizeHint,
     Input,
-    Label,
     Page,
     PageActionBar,
     PageActionBarRight,
@@ -34,7 +32,6 @@ import {
     ArrowUp,
     GripVertical,
     Image as ImageIcon,
-    ImagePlus,
     Plus,
     RefreshCw,
     Save,
@@ -42,6 +39,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { CompactAssetControl, EditorField as Field } from './compact-editor';
 import {
     ContentBlock,
     ContentItem,
@@ -282,7 +280,7 @@ function NavigationItemEditor({
 
     return (
         <div
-            className={`rounded-lg border bg-background p-4 transition-opacity ${dragging ? 'opacity-50' : ''}`}
+            className={`@container/navigation-item rounded-lg border bg-background p-3 transition-opacity ${dragging ? 'opacity-50' : ''}`}
             draggable
             onDragStart={event => {
                 event.dataTransfer.effectAllowed = 'move';
@@ -298,10 +296,10 @@ function NavigationItemEditor({
                 onDrop();
             }}
         >
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-3 flex min-h-7 items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <span
-                        className="flex size-8 cursor-grab items-center justify-center rounded text-muted-foreground active:cursor-grabbing"
+                        className="flex size-7 cursor-grab items-center justify-center rounded text-muted-foreground active:cursor-grabbing"
                         title="拖动排序"
                     >
                         <GripVertical className="size-4" aria-hidden="true" />
@@ -311,7 +309,7 @@ function NavigationItemEditor({
                 <div className="flex items-center gap-1">
                     <Button
                         type="button"
-                        size="icon"
+                        size="icon-sm"
                         variant="ghost"
                         disabled={index === 0}
                         aria-label="上移"
@@ -321,7 +319,7 @@ function NavigationItemEditor({
                     </Button>
                     <Button
                         type="button"
-                        size="icon"
+                        size="icon-sm"
                         variant="ghost"
                         disabled={index === count - 1}
                         aria-label="下移"
@@ -331,7 +329,7 @@ function NavigationItemEditor({
                     </Button>
                     <Button
                         type="button"
-                        size="icon"
+                        size="icon-sm"
                         variant="ghost"
                         disabled={count === 1}
                         aria-label="删除导航项目"
@@ -342,8 +340,9 @@ function NavigationItemEditor({
                 </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="grid items-start gap-3 @xl/navigation-item:grid-cols-2 @2xl/navigation-item:grid-cols-12">
                 <NavigationIconPicker
+                    className="@2xl/navigation-item:col-span-3"
                     item={item}
                     onChange={asset =>
                         onChange({
@@ -354,25 +353,23 @@ function NavigationItemEditor({
                         })
                     }
                 />
-                <div className="grid content-start gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                    <Field label="中文名称">
-                        <Input
-                            value={zhLabel}
-                            maxLength={20}
-                            placeholder="例如：首页"
-                            onChange={event => updateTranslation('zh_Hans', event.target.value)}
-                        />
-                    </Field>
-                    <Field label="英文名称（可选）">
-                        <Input
-                            value={enLabel}
-                            maxLength={20}
-                            placeholder="未填写时自动翻译"
-                            onChange={event => updateTranslation('en', event.target.value)}
-                        />
-                    </Field>
-                </div>
-                <Field label="跳转页面">
+                <Field compact className="@2xl/navigation-item:col-span-3" label="中文名称">
+                    <Input
+                        value={zhLabel}
+                        maxLength={20}
+                        placeholder="例如：首页"
+                        onChange={event => updateTranslation('zh_Hans', event.target.value)}
+                    />
+                </Field>
+                <Field compact className="@2xl/navigation-item:col-span-3" label="英文名称（可选）">
+                    <Input
+                        value={enLabel}
+                        maxLength={20}
+                        placeholder="未填写时自动翻译"
+                        onChange={event => updateTranslation('en', event.target.value)}
+                    />
+                </Field>
+                <Field compact className="@2xl/navigation-item:col-span-3" label="跳转页面">
                     <Select
                         value={item.targetValue ?? '/'}
                         onValueChange={value =>
@@ -398,37 +395,28 @@ function NavigationItemEditor({
 }
 
 function NavigationIconPicker({
+    className,
     item,
     onChange,
 }: Readonly<{
+    className?: string;
     item: ContentItem;
     onChange: (asset: NonNullable<ContentItem['imageAsset']> | null) => void;
 }>) {
     const [open, setOpen] = useState(false);
     const preview = item.imageAsset?.preview ?? item.imageUrl;
     return (
-        <Field label="导航图标">
-            <div className="flex items-center gap-3 rounded-md border p-3">
-                {preview ? (
-                    <img className="size-14 rounded-md border object-contain p-1" src={preview} alt="" />
-                ) : (
-                    <div className="flex size-14 items-center justify-center rounded-md border border-dashed bg-muted/40">
-                        <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />
-                    </div>
-                )}
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
-                        <ImagePlus className="size-4" aria-hidden="true" />
-                        {preview ? '替换图标' : '选择图标'}
-                    </Button>
-                    {preview ? (
-                        <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)}>
-                            使用系统图标
-                        </Button>
-                    ) : null}
-                </div>
-            </div>
-            <ImageSizeHint guidance="icon" />
+        <Field compact label="导航图标" className={className}>
+            <CompactAssetControl
+                preview={preview}
+                alt={item.imageAsset?.name ?? '导航图标'}
+                fileName={item.imageAsset?.name}
+                selectLabel={preview ? '替换图标' : '选择图标'}
+                removeLabel="使用系统图标"
+                imageFit="contain"
+                onSelect={() => setOpen(true)}
+                onRemove={() => onChange(null)}
+            />
             <AssetPickerDialog
                 open={open}
                 onClose={() => setOpen(false)}
@@ -469,15 +457,6 @@ function NavigationPreview({ items }: Readonly<{ items: ContentItem[] }>) {
                     );
                 })}
             </div>
-        </div>
-    );
-}
-
-function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
-    return (
-        <div className="min-w-0 space-y-2">
-            <Label>{label}</Label>
-            {children}
         </div>
     );
 }

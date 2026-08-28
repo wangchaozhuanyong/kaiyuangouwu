@@ -2,9 +2,7 @@ import {
     AssetPickerDialog,
     Badge,
     Button,
-    ImageSizeHint,
     Input,
-    Label,
     Sheet,
     SheetContent,
     SheetDescription,
@@ -21,10 +19,8 @@ import {
     Clock3,
     ExternalLink,
     GripVertical,
-    ImagePlus,
     MessageCircle,
     PhoneCall,
-    QrCode,
     Send,
     Users,
     X,
@@ -32,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
+import { CompactAssetControl, EditorField as Field } from './compact-editor';
 import { ContentBlock, ContentItem } from './storefront-content.graphql';
 import {
     SupportChannelKey,
@@ -148,6 +145,7 @@ export function SupportSettingsEditor({
         typeof selected.item.settings?.supportAccount === 'string'
             ? selected.item.settings.supportAccount
             : '';
+    const selectedImagePreview = selected.item.imageAsset?.preview ?? selected.item.imageUrl;
 
     return (
         <>
@@ -169,16 +167,16 @@ export function SupportSettingsEditor({
                     </SheetHeader>
 
                     <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_360px] lg:overflow-hidden">
-                        <div className="min-w-0 space-y-6 px-6 py-5 lg:overflow-y-auto">
-                            <section className="space-y-4 rounded-lg border bg-muted/15 p-4">
+                        <div className="min-w-0 space-y-4 px-5 py-4 lg:overflow-y-auto">
+                            <section className="space-y-3 rounded-lg border bg-muted/15 p-3">
                                 <div className="flex items-center gap-2">
                                     <Clock3 className="size-4 text-primary" aria-hidden="true" />
                                     <h3 className="text-sm font-semibold">
                                         {isZh ? '客服内容' : 'Service details'}
                                     </h3>
                                 </div>
-                                <div className="grid gap-4 sm:grid-cols-[minmax(120px,0.7fr)_1fr_1fr]">
-                                    <Field label={isZh ? '展示日期' : 'Days'}>
+                                <div className="grid gap-3 sm:grid-cols-[minmax(120px,0.7fr)_1fr_1fr]">
+                                    <Field compact label={isZh ? '展示日期' : 'Days'}>
                                         <Input
                                             value={isZh ? serviceTime.daysZh : serviceTime.daysEn}
                                             onChange={event =>
@@ -189,7 +187,7 @@ export function SupportSettingsEditor({
                                             }
                                         />
                                     </Field>
-                                    <Field label={isZh ? '开始时间' : 'Start time'}>
+                                    <Field compact label={isZh ? '开始时间' : 'Start time'}>
                                         <Input
                                             type="time"
                                             value={serviceTime.startTime}
@@ -198,7 +196,7 @@ export function SupportSettingsEditor({
                                             }
                                         />
                                     </Field>
-                                    <Field label={isZh ? '结束时间' : 'End time'}>
+                                    <Field compact label={isZh ? '结束时间' : 'End time'}>
                                         <Input
                                             type="time"
                                             value={serviceTime.endTime}
@@ -208,7 +206,7 @@ export function SupportSettingsEditor({
                                         />
                                     </Field>
                                 </div>
-                                <Field label={isZh ? '客服说明' : 'Service note'}>
+                                <Field compact label={isZh ? '客服说明' : 'Service note'}>
                                     <Input
                                         value={bodyTranslation?.body ?? ''}
                                         placeholder={
@@ -242,19 +240,19 @@ export function SupportSettingsEditor({
                                     <table className="w-full text-sm">
                                         <thead className="bg-muted/45 text-xs text-muted-foreground">
                                             <tr>
-                                                <th className="w-12 px-3 py-3 text-left">
+                                                <th className="w-12 px-3 py-2 text-left">
                                                     {isZh ? '排序' : 'Order'}
                                                 </th>
-                                                <th className="px-3 py-3 text-left">
+                                                <th className="px-3 py-2 text-left">
                                                     {isZh ? '渠道' : 'Channel'}
                                                 </th>
-                                                <th className="hidden px-3 py-3 text-left sm:table-cell">
+                                                <th className="hidden px-3 py-2 text-left sm:table-cell">
                                                     {isZh ? '跳转方式' : 'Mode'}
                                                 </th>
-                                                <th className="w-24 px-3 py-3 text-left">
+                                                <th className="w-24 px-3 py-2 text-left">
                                                     {isZh ? '状态' : 'Status'}
                                                 </th>
-                                                <th className="w-20 px-3 py-3 text-right">
+                                                <th className="w-20 px-3 py-2 text-right">
                                                     {isZh ? '操作' : 'Action'}
                                                 </th>
                                             </tr>
@@ -284,7 +282,7 @@ export function SupportSettingsEditor({
                                                             setDraggedChannel(null);
                                                         }}
                                                     >
-                                                        <td className="px-3 py-3">
+                                                        <td className="px-3 py-2">
                                                             <GripVertical
                                                                 className="size-4 cursor-grab text-muted-foreground"
                                                                 aria-label={
@@ -292,7 +290,7 @@ export function SupportSettingsEditor({
                                                                 }
                                                             />
                                                         </td>
-                                                        <td className="px-3 py-3">
+                                                        <td className="px-3 py-2">
                                                             <button
                                                                 type="button"
                                                                 className="flex items-center gap-2 text-left"
@@ -311,12 +309,12 @@ export function SupportSettingsEditor({
                                                                 </span>
                                                             </button>
                                                         </td>
-                                                        <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
+                                                        <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">
                                                             {isZh
                                                                 ? channel.targetModeZh
                                                                 : channel.targetModeEn}
                                                         </td>
-                                                        <td className="px-3 py-3">
+                                                        <td className="px-3 py-2">
                                                             <div className="flex items-center gap-2">
                                                                 <Switch
                                                                     checked={item.enabled}
@@ -342,7 +340,7 @@ export function SupportSettingsEditor({
                                                                 </span>
                                                             </div>
                                                         </td>
-                                                        <td className="px-3 py-3 text-right">
+                                                        <td className="px-3 py-2 text-right">
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
@@ -396,8 +394,8 @@ export function SupportSettingsEditor({
                                 ) : null}
                             </div>
 
-                            <div className="mt-5 space-y-4">
-                                <Field label={isZh ? '显示名称' : 'Display name'}>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+                                <Field compact label={isZh ? '显示名称' : 'Display name'}>
                                     <Input
                                         value={selectedTranslation?.label ?? ''}
                                         onChange={event =>
@@ -407,18 +405,10 @@ export function SupportSettingsEditor({
                                         }
                                     />
                                 </Field>
-                                <Field label={isZh ? '辅助说明' : 'Helper text'}>
-                                    <Textarea
-                                        rows={3}
-                                        value={selectedTranslation?.description ?? ''}
-                                        onChange={event =>
-                                            updateItemTranslation(selected.index, selected.item, {
-                                                description: event.target.value,
-                                            })
-                                        }
-                                    />
-                                </Field>
-                                <Field label={isZh ? '账号或群号（可选）' : 'Account or group ID (optional)'}>
+                                <Field
+                                    compact
+                                    label={isZh ? '账号或群号（可选）' : 'Account or group ID (optional)'}
+                                >
                                     <Input
                                         value={supportAccount}
                                         onChange={event =>
@@ -432,82 +422,55 @@ export function SupportSettingsEditor({
                                         }
                                     />
                                 </Field>
+                                <Field
+                                    compact
+                                    className="sm:col-span-2 lg:col-span-2"
+                                    label={isZh ? '辅助说明' : 'Helper text'}
+                                >
+                                    <Textarea
+                                        className="min-h-9 resize-y py-2"
+                                        rows={1}
+                                        value={selectedTranslation?.description ?? ''}
+                                        onChange={event =>
+                                            updateItemTranslation(selected.index, selected.item, {
+                                                description: event.target.value,
+                                            })
+                                        }
+                                    />
+                                </Field>
 
                                 {selected.channel.key === 'WECHAT' ? (
-                                    <Field label={isZh ? '微信二维码' : 'WeChat QR code'}>
-                                        <div className="rounded-lg border bg-background p-3">
-                                            <div className="flex items-center gap-3">
-                                                {selected.item.imageAsset?.preview ||
-                                                selected.item.imageUrl ? (
-                                                    <img
-                                                        className="size-24 shrink-0 rounded-md border bg-white object-contain p-1"
-                                                        src={
-                                                            selected.item.imageAsset?.preview ??
-                                                            selected.item.imageUrl ??
-                                                            undefined
-                                                        }
-                                                        alt={
-                                                            isZh ? '微信客服二维码预览' : 'WeChat QR preview'
-                                                        }
-                                                    />
-                                                ) : (
-                                                    <div className="flex size-24 shrink-0 items-center justify-center rounded-md border border-dashed bg-muted/40">
-                                                        <QrCode
-                                                            className="size-7 text-muted-foreground"
-                                                            aria-hidden="true"
-                                                        />
-                                                    </div>
-                                                )}
-                                                <div className="min-w-0 flex-1 space-y-2">
-                                                    <p className="text-xs leading-5 text-muted-foreground">
-                                                        {isZh
-                                                            ? '上传清晰的正方形二维码，客户端点击“扫码”后放大展示。'
-                                                            : 'Upload a clear square QR code for the storefront sheet.'}
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => setAssetPickerOpen(true)}
-                                                        >
-                                                            <ImagePlus
-                                                                className="size-4"
-                                                                aria-hidden="true"
-                                                            />
-                                                            {selected.item.imageAsset ||
-                                                            selected.item.imageUrl
-                                                                ? isZh
-                                                                    ? '更换二维码'
-                                                                    : 'Replace QR'
-                                                                : isZh
-                                                                  ? '选择或上传'
-                                                                  : 'Select or upload'}
-                                                        </Button>
-                                                        {selected.item.imageAsset ||
-                                                        selected.item.imageUrl ? (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() =>
-                                                                    updateItem(selected.index, {
-                                                                        ...selected.item,
-                                                                        imageAsset: null,
-                                                                        imageAssetId: null,
-                                                                        imageUrl: null,
-                                                                    })
-                                                                }
-                                                            >
-                                                                <X className="size-4" aria-hidden="true" />
-                                                                {isZh ? '移除' : 'Remove'}
-                                                            </Button>
-                                                        ) : null}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <ImageSizeHint guidance="icon" />
-                                        </div>
+                                    <Field
+                                        compact
+                                        className="sm:col-span-2 lg:col-span-2"
+                                        label={isZh ? '微信二维码' : 'WeChat QR code'}
+                                    >
+                                        <CompactAssetControl
+                                            preview={selectedImagePreview}
+                                            alt={isZh ? '微信客服二维码预览' : 'WeChat QR preview'}
+                                            fileName={selected.item.imageAsset?.name}
+                                            selectLabel={
+                                                selectedImagePreview
+                                                    ? isZh
+                                                        ? '更换二维码'
+                                                        : 'Replace QR'
+                                                    : isZh
+                                                      ? '选择或上传'
+                                                      : 'Select or upload'
+                                            }
+                                            removeLabel={isZh ? '移除二维码' : 'Remove QR code'}
+                                            previewClassName="size-10 bg-white p-0.5"
+                                            imageFit="contain"
+                                            onSelect={() => setAssetPickerOpen(true)}
+                                            onRemove={() =>
+                                                updateItem(selected.index, {
+                                                    ...selected.item,
+                                                    imageAsset: null,
+                                                    imageAssetId: null,
+                                                    imageUrl: null,
+                                                })
+                                            }
+                                        />
                                         <AssetPickerDialog
                                             open={assetPickerOpen}
                                             onClose={() => setAssetPickerOpen(false)}
@@ -530,6 +493,8 @@ export function SupportSettingsEditor({
                                     </Field>
                                 ) : (
                                     <Field
+                                        compact
+                                        className="sm:col-span-2 lg:col-span-2"
                                         label={isZh ? '跳转链接' : 'Direct link'}
                                         hint={
                                             isZh
@@ -537,21 +502,42 @@ export function SupportSettingsEditor({
                                                 : 'Use an official HTTPS link with a browser fallback.'
                                         }
                                     >
-                                        <Input
-                                            inputMode="url"
-                                            autoCapitalize="none"
-                                            spellCheck={false}
-                                            placeholder={selected.channel.linkPlaceholder}
-                                            value={selected.item.targetValue ?? ''}
-                                            onChange={event => {
-                                                const targetValue = event.target.value || null;
-                                                updateItem(selected.index, {
-                                                    ...selected.item,
-                                                    targetType: targetValue ? 'URL' : 'NONE',
-                                                    targetValue,
-                                                });
-                                            }}
-                                        />
+                                        <div className="flex min-w-0 gap-2">
+                                            <Input
+                                                inputMode="url"
+                                                autoCapitalize="none"
+                                                spellCheck={false}
+                                                placeholder={selected.channel.linkPlaceholder}
+                                                value={selected.item.targetValue ?? ''}
+                                                onChange={event => {
+                                                    const targetValue = event.target.value || null;
+                                                    updateItem(selected.index, {
+                                                        ...selected.item,
+                                                        targetType: targetValue ? 'URL' : 'NONE',
+                                                        targetValue,
+                                                    });
+                                                }}
+                                            />
+                                            <Button
+                                                className="shrink-0"
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="outline"
+                                                aria-label={isZh ? '测试跳转' : 'Test link'}
+                                                title={isZh ? '测试跳转' : 'Test link'}
+                                                disabled={!supportLinkIsValid(selected.item.targetValue)}
+                                                onClick={() =>
+                                                    selected.item.targetValue &&
+                                                    window.open(
+                                                        selected.item.targetValue,
+                                                        '_blank',
+                                                        'noopener,noreferrer',
+                                                    )
+                                                }
+                                            >
+                                                <ExternalLink className="size-4" aria-hidden="true" />
+                                            </Button>
+                                        </div>
                                         {selected.item.targetValue ? (
                                             <p
                                                 className={`mt-2 flex items-center gap-1 text-xs ${
@@ -574,23 +560,6 @@ export function SupportSettingsEditor({
                                                       : 'Enter a complete HTTP(S) URL'}
                                             </p>
                                         ) : null}
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={!supportLinkIsValid(selected.item.targetValue)}
-                                            onClick={() =>
-                                                selected.item.targetValue &&
-                                                window.open(
-                                                    selected.item.targetValue,
-                                                    '_blank',
-                                                    'noopener,noreferrer',
-                                                )
-                                            }
-                                        >
-                                            <ExternalLink className="size-4" aria-hidden="true" />
-                                            {isZh ? '测试跳转' : 'Test link'}
-                                        </Button>
                                     </Field>
                                 )}
                             </div>
@@ -608,19 +577,5 @@ export function SupportSettingsEditor({
                 </SheetContent>
             </Sheet>
         </>
-    );
-}
-
-function Field({
-    label,
-    hint,
-    children,
-}: Readonly<{ label: string; hint?: string; children: React.ReactNode }>) {
-    return (
-        <div className="min-w-0 space-y-2">
-            <Label>{label}</Label>
-            {children}
-            {hint ? <p className="text-xs leading-5 text-muted-foreground">{hint}</p> : null}
-        </div>
     );
 }
