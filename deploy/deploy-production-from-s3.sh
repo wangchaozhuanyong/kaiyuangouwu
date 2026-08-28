@@ -159,7 +159,7 @@ set -a
 source "${environment_file}"
 set +a
 
-NODE_ENV=production READINESS_PROCESS_ROLE=migration \
+NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
 (
     cd "${candidate}"

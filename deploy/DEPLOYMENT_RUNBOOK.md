@@ -60,7 +60,8 @@ bun run build
 bun run test
 READINESS_PROCESS_ROLE=server bun run --cwd packages/dev-server audit:production-env
 READINESS_PROCESS_ROLE=worker bun run --cwd packages/dev-server audit:production-env
-READINESS_PROCESS_ROLE=migration bun run --cwd packages/dev-server audit:production-env
+RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 READINESS_PROCESS_ROLE=migration \
+    bun run --cwd packages/dev-server audit:production-env
 bun run --cwd packages/storefront test
 bun run --cwd packages/storefront build
 bun run --cwd packages/dev-server build

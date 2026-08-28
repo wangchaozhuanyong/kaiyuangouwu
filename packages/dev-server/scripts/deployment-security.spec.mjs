@@ -103,6 +103,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
         path.join(repositoryRoot, '.github/workflows/deploy_production_runtime.yml'),
         'utf8',
     );
+    const migrationReadinessCommand = [
+        'NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \\',
+        '    node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"',
+    ].join('\n');
 
     assert.match(script, /vendure-production-deploy\.lock/u);
     assert.match(script, /flock --exclusive --wait 300/u);
@@ -110,7 +114,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /sha256sum --check/u);
     assert.match(script, /verify-runtime\.mjs" --expected-sha/u);
     assert.match(script, /vendure-mysql-backup\.service/u);
-    assert.match(script, /RUN_MIGRATIONS=true/u);
+    assert.ok(script.includes(migrationReadinessCommand));
     assert.match(script, /switch-production-runtime\.sh/u);
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
