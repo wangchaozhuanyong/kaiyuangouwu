@@ -110,9 +110,13 @@ function StorefrontClientPluginPage() {
     );
 
     useEffect(() => {
-        if (!activeChannel?.id || contentQuery.isPending) return;
+        if (!activeChannel?.id || contentQuery.isError) {
+            setDraft(null);
+            return;
+        }
+        if (contentQuery.isPending) return;
         setDraft(createClientPluginDraft(pluginBlock));
-    }, [activeChannel?.id, contentQuery.isPending, pluginBlock]);
+    }, [activeChannel?.id, contentQuery.isError, contentQuery.isPending, pluginBlock]);
 
     const saveMutation = useMutation({
         mutationFn: async (block: ContentBlock) => {
@@ -132,9 +136,15 @@ function StorefrontClientPluginPage() {
 
     const installedCodes = new Set(draft?.items.map(clientPluginCode).filter(Boolean) ?? []);
     const valid = Boolean(draft && clientPluginDraftIsValid(draft));
+    const configReady = Boolean(draft && !contentQuery.isPending && !contentQuery.isError);
     const isDirty = Boolean(
-        draft && JSON.stringify(draft) !== JSON.stringify(createClientPluginDraft(pluginBlock)),
+        configReady && JSON.stringify(draft) !== JSON.stringify(createClientPluginDraft(pluginBlock)),
     );
+    const contentErrorMessage = contentQuery.isError
+        ? contentQuery.error instanceof Error
+            ? contentQuery.error.message
+            : String(contentQuery.error)
+        : null;
 
     return (
         <Page pageId="storefront-client-plugins">
@@ -143,7 +153,7 @@ function StorefrontClientPluginPage() {
             <PageActionBar>
                 <PageActionBarRight>
                     <Button
-                        disabled={!draft || !valid || saveMutation.isPending}
+                        disabled={!configReady || !valid || saveMutation.isPending}
                         onClick={() => draft && saveMutation.mutate(draft)}
                     >
                         <Save className="size-4" aria-hidden="true" />
@@ -168,20 +178,31 @@ function StorefrontClientPluginPage() {
                     </div>
 
                     {contentQuery.isError ? (
-                        <Alert variant="destructive">
-                            <AlertDescription className="flex items-center justify-between gap-3">
-                                <span>插件配置加载失败</span>
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                                <span className="min-w-0">
+                                    <strong className="block">插件配置加载失败</strong>
+                                    <span className="mt-1 block break-words text-xs">
+                                        {contentErrorMessage || '请确认管理接口可用后重试。'}
+                                    </span>
+                                </span>
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    disabled={contentQuery.isFetching}
                                     onClick={() => void contentQuery.refetch()}
                                 >
-                                    <RefreshCw className="size-4" aria-hidden="true" />
-                                    重试
+                                    <RefreshCw
+                                        className={`size-4 ${contentQuery.isFetching ? 'animate-spin' : ''}`}
+                                        aria-hidden="true"
+                                    />
+                                    {contentQuery.isFetching ? '重试中' : '重试'}
                                 </Button>
                             </AlertDescription>
                         </Alert>
-                    ) : contentQuery.isPending || !draft ? (
+                    ) : null}
+
+                    {contentQuery.isPending || (!draft && !contentQuery.isError) ? (
                         <div className="grid gap-4 md:grid-cols-2" aria-busy="true">
                             <Skeleton className="h-44 w-full" />
                             <Skeleton className="h-44 w-full" />
@@ -193,6 +214,7 @@ function StorefrontClientPluginPage() {
                                     key={definition.code}
                                     definition={definition}
                                     installed={installedCodes.has(definition.code)}
+                                    disabled={!configReady}
                                     onAdd={() =>
                                         setDraft(current => current && addClientPlugin(current, definition))
                                     }
@@ -213,7 +235,15 @@ function StorefrontClientPluginPage() {
                     title="已添加到客户端"
                     description="选择插件显示在商品分类页或商业服务页；同一位置的插件按照这里的顺序显示。"
                 >
-                    {!draft || contentQuery.isPending ? (
+                    {contentQuery.isError ? (
+                        <div className="flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center">
+                            <RefreshCw className="size-8 text-muted-foreground" aria-hidden="true" />
+                            <strong className="text-sm">暂时无法读取已添加的插件</strong>
+                            <span className="text-sm text-muted-foreground">
+                                恢复插件配置连接后，此处会显示当前店铺的插件。
+                            </span>
+                        </div>
+                    ) : !draft || contentQuery.isPending ? (
                         <Skeleton className="h-36 w-full" aria-busy="true" />
                     ) : !draft.items.length ? (
                         <div className="flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center">
@@ -299,11 +329,13 @@ function StorefrontClientPluginPage() {
 function PluginCatalogCard({
     definition,
     installed,
+    disabled,
     onAdd,
     onRemove,
 }: Readonly<{
     definition: ClientPluginDefinition;
     installed: boolean;
+    disabled: boolean;
     onAdd: () => void;
     onRemove: () => void;
 }>) {
@@ -316,8 +348,8 @@ function PluginCatalogCard({
                 </span>
                 <div className="flex items-center gap-2">
                     <Badge variant="outline">v{definition.version}</Badge>
-                    <Badge variant={installed ? 'default' : 'secondary'}>
-                        {installed ? '已添加' : '可添加'}
+                    <Badge variant={disabled ? 'outline' : installed ? 'default' : 'secondary'}>
+                        {disabled ? '状态未知' : installed ? '已添加' : '可添加'}
                     </Badge>
                 </div>
             </div>
@@ -328,10 +360,11 @@ function PluginCatalogCard({
                 type="button"
                 className="mt-4 w-full"
                 variant={installed ? 'outline' : 'default'}
+                disabled={disabled}
                 onClick={installed ? onRemove : onAdd}
             >
                 {installed ? <Trash2 className="size-4" /> : <PackagePlus className="size-4" />}
-                {installed ? '从客户端移除' : '添加到客户端'}
+                {disabled ? '配置恢复后可操作' : installed ? '从客户端移除' : '添加到客户端'}
             </Button>
         </article>
     );
