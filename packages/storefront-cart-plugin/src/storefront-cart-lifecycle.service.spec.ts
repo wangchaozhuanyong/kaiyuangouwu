@@ -1,8 +1,13 @@
 import 'reflect-metadata';
 
-import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@vendure/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontCartLifecycleService } from './storefront-cart-lifecycle.service';
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
 
 describe('StorefrontCartLifecycleService login handling', () => {
     function setup() {
@@ -49,5 +54,21 @@ describe('StorefrontCartLifecycleService login handling', () => {
 
         expect(connection.withTransaction).toHaveBeenCalledWith(shopContext, expect.any(Function));
         expect(storefrontCartService.mergeAfterLogin).toHaveBeenCalledWith(transactionContext, 'customer-1');
+    });
+
+    it('rolls back a failed cart merge without rejecting shop login', async () => {
+        const { connection, loginHandler } = setup();
+        const mergeError = new Error('cart transaction failed');
+        connection.withTransaction.mockRejectedValueOnce(mergeError);
+        const warnSpy = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+
+        await expect(
+            loginHandler.handler({ ctx: { apiType: 'shop' }, user: { id: 'customer-1' } }),
+        ).resolves.toBeUndefined();
+        expect(warnSpy).toHaveBeenCalledWith(
+            'Cart merge after login failed (cart transaction failed). ' +
+                'Login will continue and the cart will be retried on the next interaction.',
+            'StorefrontCartLifecycleService',
+        );
     });
 });

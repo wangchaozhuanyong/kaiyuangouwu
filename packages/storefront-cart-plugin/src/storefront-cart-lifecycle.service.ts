@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import {
     EventBus,
+    Logger,
     LoginEvent,
     OrderPlacedEvent,
     RequestContext,
@@ -13,6 +14,8 @@ import { StorefrontCartCheckout } from './entities/storefront-cart-checkout.enti
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
 import { StorefrontCartService } from './storefront-cart.service';
+
+const loggerCtx = 'StorefrontCartLifecycleService';
 
 @Injectable()
 export class StorefrontCartLifecycleService implements OnApplicationBootstrap {
@@ -32,13 +35,25 @@ export class StorefrontCartLifecycleService implements OnApplicationBootstrap {
         this.eventBus.registerBlockingEventHandler({
             event: LoginEvent,
             id: 'storefront-cart-merge-on-login',
-            handler: event =>
-                event.ctx.apiType === 'shop'
-                    ? this.connection.withTransaction(event.ctx, txCtx =>
-                          this.storefrontCartService.mergeAfterLogin(txCtx, event.user.id),
-                      )
-                    : Promise.resolve(),
+            handler: event => this.mergeCartAfterLogin(event),
         });
+    }
+
+    private async mergeCartAfterLogin(event: LoginEvent): Promise<void> {
+        if (event.ctx.apiType !== 'shop') {
+            return;
+        }
+        try {
+            await this.connection.withTransaction(event.ctx, txCtx =>
+                this.storefrontCartService.mergeAfterLogin(txCtx, event.user.id),
+            );
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            Logger.warn(
+                `Cart merge after login failed (${reason}). Login will continue and the cart will be retried on the next interaction.`,
+                loggerCtx,
+            );
+        }
     }
 
     private async completeCheckout(event: OrderPlacedEvent): Promise<void> {
