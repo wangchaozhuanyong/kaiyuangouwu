@@ -633,7 +633,7 @@ img.fatal-error-mark {
 }
 
 .currency-select {
-    width: 64px;
+    width: 76px;
     height: 40px;
     padding: 0 7px;
     border: 1px solid var(--line);
@@ -8959,7 +8959,7 @@ img.fatal-error-mark {
     }
 
     .currency-select {
-        width: 58px;
+        width: 72px;
         height: 38px;
         padding: 0 5px;
     }
