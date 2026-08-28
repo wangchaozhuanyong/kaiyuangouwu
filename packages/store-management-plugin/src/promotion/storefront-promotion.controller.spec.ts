@@ -43,7 +43,11 @@ describe('StorefrontPromotionController', () => {
         expect(contentSecurityPolicy).toContain(
             `script-src-elem 'sha256-${PROMOTION_VISUAL_SCRIPT_SHA256}' https://static.cloudflareinsights.com`,
         );
-        expect(contentSecurityPolicy).toContain('connect-src https://cloudflareinsights.com');
+        expect(contentSecurityPolicy).toContain("connect-src 'self' https://cloudflareinsights.com");
+        expect(response.setHeader).toHaveBeenCalledWith(
+            'X-Robots-Tag',
+            'index, nofollow, max-image-preview:large',
+        );
     });
 
     it('does not issue an entry cookie without a valid signed proof', async () => {

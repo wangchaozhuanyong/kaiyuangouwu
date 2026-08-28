@@ -120,6 +120,7 @@ export class StorefrontPromotionController {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
         res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('X-Robots-Tag', 'index, nofollow, max-image-preview:large');
         res.setHeader(
             'Content-Security-Policy',
             [
@@ -134,7 +135,7 @@ export class StorefrontPromotionController {
                 "style-src 'self' 'unsafe-inline' https:",
                 "script-src 'none'",
                 `script-src-elem 'sha256-${PROMOTION_VISUAL_SCRIPT_SHA256}' https://static.cloudflareinsights.com`,
-                'connect-src https://cloudflareinsights.com',
+                "connect-src 'self' https://cloudflareinsights.com",
             ].join('; '),
         );
     }

@@ -145,11 +145,11 @@ const FRAGMENT_SHADER_SOURCE = `
         float fresnel = sphere * pow(normalizedRadius, 4.2);
         float upperReflection = sphere * pow(max(normal.y, 0.0), 3.0) * (0.18 + diffuse * 0.26);
 
-        vec3 deepBlue = vec3(0.012, 0.055, 0.12);
-        vec3 glassBlue = vec3(0.04, 0.34, 0.72);
-        vec3 iceBlue = vec3(0.08, 0.62, 1.0);
-        vec3 mineralTeal = vec3(0.04, 0.87, 0.77);
-        vec3 warmMetal = vec3(0.92, 0.65, 0.42);
+        vec3 deepBlue = vec3(0.012, 0.032, 0.028);
+        vec3 glassBlue = vec3(0.06, 0.31, 0.25);
+        vec3 iceBlue = vec3(0.47, 0.91, 0.73);
+        vec3 mineralTeal = vec3(0.22, 0.68, 0.53);
+        vec3 warmMetal = vec3(0.58, 0.72, 0.65);
         vec3 color = mix(deepBlue, glassBlue, 0.24) * sphere * (0.72 + diffuse * 0.3);
         float alpha = sphere * (0.3 + diffuse * 0.06);
 
@@ -352,6 +352,47 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
         stage.dataset.motion = reducedMotion.matches ? 'reduced' : shouldAnimate() ? 'running' : 'paused';
     };
 
+    document.documentElement.classList.add('promo-motion-ready');
+    const revealElements = Array.from(document.querySelectorAll('[data-promo-reveal]'));
+    const reveal = element => element.classList.add('is-visible');
+    if (reducedMotion.matches || !('IntersectionObserver' in window)) {
+        revealElements.forEach(reveal);
+    } else {
+        const revealObserver = new IntersectionObserver(
+            entries => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    reveal(entry.target);
+                    revealObserver.unobserve(entry.target);
+                });
+            },
+            { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
+        );
+        revealElements.forEach(element => revealObserver.observe(element));
+    }
+
+    document.querySelectorAll('[data-promo-surface]').forEach(surface => {
+        if (!(surface instanceof HTMLElement)) return;
+        surface.addEventListener(
+            'pointermove',
+            event => {
+                const bounds = surface.getBoundingClientRect();
+                surface.style.setProperty('--spotlight-x', (event.clientX - bounds.left).toFixed(1) + 'px');
+                surface.style.setProperty('--spotlight-y', (event.clientY - bounds.top).toFixed(1) + 'px');
+            },
+            { passive: true },
+        );
+    });
+
+    const page = document.querySelector('[data-promo-page]');
+    const updateScrollProgress = () => {
+        if (!(page instanceof HTMLElement)) return;
+        const scrollable = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+        page.style.setProperty('--page-progress', Math.min(1, Math.max(0, window.scrollY / scrollable)).toFixed(4));
+    };
+    window.addEventListener('scroll', updateScrollProgress, { passive: true });
+    updateScrollProgress();
+
     const updatePointer = event => {
         const bounds = stage.getBoundingClientRect();
         const nextX = ((event.clientX - bounds.left) / Math.max(bounds.width, 1)) * 2 - 1;
@@ -490,17 +531,17 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
                 centerY,
                 radius,
             );
-            sphereGradient.addColorStop(0, 'rgba(70, 200, 255, .38)');
-            sphereGradient.addColorStop(0.45, 'rgba(14, 91, 181, .21)');
-            sphereGradient.addColorStop(0.86, 'rgba(5, 26, 55, .12)');
-            sphereGradient.addColorStop(1, 'rgba(77, 181, 255, .62)');
+            sphereGradient.addColorStop(0, 'rgba(145, 230, 196, .38)');
+            sphereGradient.addColorStop(0.45, 'rgba(40, 121, 94, .21)');
+            sphereGradient.addColorStop(0.86, 'rgba(7, 29, 23, .12)');
+            sphereGradient.addColorStop(1, 'rgba(111, 210, 170, .62)');
             context.fillStyle = sphereGradient;
             context.beginPath();
             context.arc(centerX, centerY, radius, 0, Math.PI * 2);
             context.fill();
 
             context.save();
-            context.strokeStyle = 'rgba(120, 206, 255, .32)';
+            context.strokeStyle = 'rgba(161, 228, 201, .32)';
             context.lineWidth = Math.max(2, scale * 0.004);
             context.beginPath();
             context.arc(centerX, centerY, radius * 1.06, 0, Math.PI * 2);
@@ -513,7 +554,7 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
             context.restore();
 
             const elapsed = reducedMotion.matches ? 0 : time * 0.000055;
-            const colors = ['rgba(67, 177, 255, .9)', 'rgba(46, 232, 201, .78)', 'rgba(255, 198, 126, .62)'];
+            const colors = ['rgba(145, 230, 196, .9)', 'rgba(80, 190, 148, .78)', 'rgba(180, 218, 200, .62)'];
             for (let index = 0; index < 7; index += 1) {
                 context.save();
                 context.translate(centerX, centerY);
@@ -548,16 +589,16 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
                 const particleX = centerX + Math.cos(angle) * particleRadius;
                 const particleY = centerY + Math.sin(angle) * particleRadius * (0.4 + (index % 4) * 0.09);
                 const particleSize = Math.max(1.2, scale * (0.002 + (index % 3) * 0.0008));
-                context.fillStyle = index % 3 === 1 ? 'rgba(68, 228, 204, .76)' : 'rgba(102, 196, 255, .72)';
+                context.fillStyle = index % 3 === 1 ? 'rgba(99, 214, 169, .76)' : 'rgba(157, 232, 202, .72)';
                 context.beginPath();
                 context.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
                 context.fill();
             }
 
             const core = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 0.32);
-            core.addColorStop(0, 'rgba(226, 250, 255, 1)');
-            core.addColorStop(0.2, 'rgba(60, 183, 255, .95)');
-            core.addColorStop(1, 'rgba(30, 202, 195, 0)');
+            core.addColorStop(0, 'rgba(237, 255, 247, 1)');
+            core.addColorStop(0.2, 'rgba(122, 226, 184, .95)');
+            core.addColorStop(1, 'rgba(48, 156, 116, 0)');
             context.fillStyle = core;
             context.beginPath();
             context.arc(centerX, centerY, radius * 0.32, 0, Math.PI * 2);
@@ -567,11 +608,11 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
             context.save();
             context.translate(centerX, centerY);
             context.rotate(Math.PI * 0.25 + coreRotation);
-            context.strokeStyle = 'rgba(108, 215, 255, .96)';
+            context.strokeStyle = 'rgba(164, 238, 208, .96)';
             context.lineWidth = Math.max(2, scale * 0.007);
             context.strokeRect(-radius * 0.16, -radius * 0.16, radius * 0.32, radius * 0.32);
             context.rotate(-coreRotation * 1.65);
-            context.strokeStyle = 'rgba(62, 232, 205, .86)';
+            context.strokeStyle = 'rgba(90, 207, 160, .86)';
             context.lineWidth = Math.max(2, scale * 0.005);
             context.strokeRect(-radius * 0.105, -radius * 0.105, radius * 0.21, radius * 0.21);
             context.restore();
@@ -579,12 +620,12 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
             context.save();
             context.translate(centerX, centerY + radius * 1.17);
             context.scale(1, 0.18);
-            context.strokeStyle = 'rgba(65, 165, 255, .58)';
+            context.strokeStyle = 'rgba(91, 190, 151, .58)';
             context.lineWidth = Math.max(5, scale * 0.012);
             context.beginPath();
             context.arc(0, 0, radius * 0.95, 0, Math.PI * 2);
             context.stroke();
-            context.strokeStyle = 'rgba(117, 213, 255, .34)';
+            context.strokeStyle = 'rgba(170, 229, 205, .34)';
             context.lineWidth = Math.max(2, scale * 0.004);
             context.beginPath();
             context.arc(0, 0, radius * 1.13, 0, Math.PI * 2);

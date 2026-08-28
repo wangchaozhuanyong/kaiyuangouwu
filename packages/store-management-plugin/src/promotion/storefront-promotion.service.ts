@@ -1,13 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-    Asset,
-    ConfigService,
-    Product,
-    RequestContext,
-    SearchIndexItem,
-    TransactionalConnection,
-    UserInputError,
-} from '@vendure/core';
+import { Asset, ConfigService, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
 import type { Request } from 'express';
@@ -30,14 +22,6 @@ import {
 interface StorefrontChannelFields {
     storefrontNameZh?: string | null;
     storefrontNameEn?: string | null;
-}
-
-interface FeaturedPromotionProductRow {
-    productId: string | number;
-    productName: string;
-    description: string;
-    productPreview: string;
-    minimumPriceWithTax: string | number;
 }
 
 @Injectable()
@@ -182,13 +166,12 @@ export class StorefrontPromotionService {
     }
 
     private async getBindings(ctx: RequestContext): Promise<StorefrontPromotionBindings> {
-        const [profile, hero, featuredProducts, referralShare] = await Promise.all([
+        const [profile, hero, referralShare] = await Promise.all([
             this.connection.getRepository(ctx, StoreProfile).findOne({
                 where: { channelId: ctx.channelId },
                 relations: { logoAsset: true },
             }),
             this.findActiveHero(ctx),
-            this.findFeaturedProducts(ctx),
             this.findReferralShareTemplate(ctx),
         ]);
         const fields = ctx.channel.customFields as StorefrontChannelFields;
@@ -245,7 +228,6 @@ export class StorefrontPromotionService {
             'store.shareDescription': shareDescription,
             'store.currentYear': String(new Date().getFullYear()),
             'store.language': isEnglish ? 'en' : 'zh-CN',
-            ...this.featuredProductBindings(ctx, featuredProducts),
         };
     }
 
@@ -278,100 +260,6 @@ export class StorefrontPromotionService {
                   rewardRate: (config?.rewardRateBps ?? 500) / 100,
               }
             : null;
-    }
-
-    private async findFeaturedProducts(ctx: RequestContext): Promise<FeaturedPromotionProductRow[]> {
-        return this.connection
-            .getRepository(ctx, SearchIndexItem)
-            .createQueryBuilder('promotion_item')
-            .innerJoin(Product, 'promotion_product', 'promotion_product.id = promotion_item.productId')
-            .select('promotion_item.productId', 'productId')
-            .addSelect('MIN(promotion_item.productName)', 'productName')
-            .addSelect('MIN(promotion_item.description)', 'description')
-            .addSelect('MIN(promotion_item.productPreview)', 'productPreview')
-            .addSelect('MIN(promotion_item.priceWithTax)', 'minimumPriceWithTax')
-            .where('promotion_item.channelId = :promotionChannelId', {
-                promotionChannelId: ctx.channelId,
-            })
-            .andWhere('promotion_item.languageCode = :promotionLanguageCode', {
-                promotionLanguageCode: ctx.languageCode,
-            })
-            .andWhere('promotion_item.enabled = :promotionEnabled', { promotionEnabled: true })
-            .andWhere('promotion_product.enabled = :promotionProductEnabled', {
-                promotionProductEnabled: true,
-            })
-            .andWhere('promotion_product.deletedAt IS NULL')
-            .groupBy('promotion_item.productId')
-            .addOrderBy('productName', 'ASC')
-            .addOrderBy('promotion_item.productId', 'ASC')
-            .limit(3)
-            .getRawMany<FeaturedPromotionProductRow>();
-    }
-
-    private featuredProductBindings(
-        ctx: RequestContext,
-        products: FeaturedPromotionProductRow[],
-    ): Pick<
-        StorefrontPromotionBindings,
-        | 'store.featuredProduct1Id'
-        | 'store.featuredProduct1Name'
-        | 'store.featuredProduct1Description'
-        | 'store.featuredProduct1PriceLabel'
-        | 'store.featuredProduct1ImageUrl'
-        | 'store.featuredProduct2Id'
-        | 'store.featuredProduct2Name'
-        | 'store.featuredProduct2Description'
-        | 'store.featuredProduct2PriceLabel'
-        | 'store.featuredProduct2ImageUrl'
-        | 'store.featuredProduct3Id'
-        | 'store.featuredProduct3Name'
-        | 'store.featuredProduct3Description'
-        | 'store.featuredProduct3PriceLabel'
-        | 'store.featuredProduct3ImageUrl'
-    > {
-        const currencyCode = String(ctx.channel.defaultCurrencyCode || 'USD');
-        const locale = String(ctx.languageCode).toLowerCase().startsWith('en') ? 'en-US' : 'zh-CN';
-        const slots = [0, 1, 2].map(index => {
-            const product = products[index];
-            if (!product) return { id: '', name: '', description: '', priceLabel: '', imageUrl: '' };
-            const preview = product.productPreview
-                ? this.webpMediaUrl(
-                      this.mediaUrl(ctx.req, product.productPreview),
-                      'storefront-thumbnail-640',
-                  )
-                : '';
-            return {
-                id: String(product.productId),
-                name: this.truncate(product.productName?.trim() || '', 54),
-                description: this.truncate(product.description?.trim() || '', 92),
-                priceLabel: this.formatMoney(Number(product.minimumPriceWithTax || 0), currencyCode, locale),
-                imageUrl: preview,
-            };
-        });
-        const [first, second, third] = slots;
-        return {
-            'store.featuredProduct1Id': first?.id ?? '',
-            'store.featuredProduct1Name': first?.name ?? '',
-            'store.featuredProduct1Description': first?.description ?? '',
-            'store.featuredProduct1PriceLabel': first?.priceLabel ?? '',
-            'store.featuredProduct1ImageUrl': first?.imageUrl ?? '',
-            'store.featuredProduct2Id': second?.id ?? '',
-            'store.featuredProduct2Name': second?.name ?? '',
-            'store.featuredProduct2Description': second?.description ?? '',
-            'store.featuredProduct2PriceLabel': second?.priceLabel ?? '',
-            'store.featuredProduct2ImageUrl': second?.imageUrl ?? '',
-            'store.featuredProduct3Id': third?.id ?? '',
-            'store.featuredProduct3Name': third?.name ?? '',
-            'store.featuredProduct3Description': third?.description ?? '',
-            'store.featuredProduct3PriceLabel': third?.priceLabel ?? '',
-            'store.featuredProduct3ImageUrl': third?.imageUrl ?? '',
-        };
-    }
-
-    private formatMoney(value: number, currencyCode: string, locale: string): string {
-        const formatter = new Intl.NumberFormat(locale, { style: 'currency', currency: currencyCode });
-        const digits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
-        return `${formatter.format(value / 10 ** digits)} 起`;
     }
 
     private async findActiveHero(ctx: RequestContext): Promise<StorefrontContentBlock | null> {

@@ -21,30 +21,12 @@ export interface StorefrontPromotionBindings {
     'store.shareDescription'?: string;
     'store.currentYear': string;
     'store.language': string;
-    'store.featuredProduct1Id': string;
-    'store.featuredProduct1Name': string;
-    'store.featuredProduct1Description': string;
-    'store.featuredProduct1PriceLabel': string;
-    'store.featuredProduct1ImageUrl': string;
-    'store.featuredProduct2Id': string;
-    'store.featuredProduct2Name': string;
-    'store.featuredProduct2Description': string;
-    'store.featuredProduct2PriceLabel': string;
-    'store.featuredProduct2ImageUrl': string;
-    'store.featuredProduct3Id': string;
-    'store.featuredProduct3Name': string;
-    'store.featuredProduct3Description': string;
-    'store.featuredProduct3PriceLabel': string;
-    'store.featuredProduct3ImageUrl': string;
 }
 
 const PROMOTION_IMAGE_BINDINGS: ReadonlyArray<keyof StorefrontPromotionBindings> = [
     'store.logoUrl',
     'store.heroImageUrl',
     'store.shareImageUrl',
-    'store.featuredProduct1ImageUrl',
-    'store.featuredProduct2ImageUrl',
-    'store.featuredProduct3ImageUrl',
 ];
 
 interface RenderPromotionInput {
@@ -107,7 +89,7 @@ const FALLBACK_ENTRY_FORM = `<form data-store-entry style="position:fixed;right:
 
 const PROMOTION_ACCESSIBILITY_STYLE = `<style data-storefront-promotion-accessibility>
     :where(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible {
-        outline: 3px solid #38bdf8;
+        outline: 3px solid #91e6c4;
         outline-offset: 3px;
     }
 </style>`;
@@ -324,7 +306,7 @@ export class StorefrontPromotionHtmlService {
         $('style[data-storefront-promotion-accessibility]').remove();
         $('head').append(PROMOTION_ACCESSIBILITY_STYLE);
         $('meta[name="robots"]').remove();
-        $('head').append('<meta name="robots" content="index,follow,max-image-preview:large">');
+        $('head').append('<meta name="robots" content="index,nofollow,max-image-preview:large">');
         if ($('title').length === 0) {
             $('head').append(`<title>${this.escapeHtml(bindings['store.name'])}</title>`);
         }
