@@ -11,6 +11,7 @@ import { useLingui } from '@lingui/react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import * as React from 'react';
 import { Fragment } from 'react';
+import { translateNavTitle } from './nav-title.js';
 
 export interface BreadcrumbPair {
     label: string | React.ReactElement;
@@ -73,8 +74,6 @@ export function GeneratedBreadcrumbs() {
     // nav-main.tsx); page-level breadcrumbs from loaders may be dynamic entity
     // names (product/collection/facet names) and must NOT be passed through
     // i18n.t() — the BreadcrumbLink render below renders `label` as-is.
-    const translateSectionTitle = (title: string) => (title in i18n.messages ? i18n.t(title) : title);
-
     const checkSectionItems = (
         section: NavMenuSection | NavMenuItem,
         cleanPath: string,
@@ -86,7 +85,7 @@ export function GeneratedBreadcrumbs() {
         for (const item of section.items) {
             if (!item?.url) continue;
             if (pathMatches(cleanPath, item.url)) {
-                return { label: translateSectionTitle(section.title), path: item.url };
+                return { label: translateNavTitle(i18n, section.title), path: item.url };
             }
         }
         return undefined;
@@ -97,7 +96,7 @@ export function GeneratedBreadcrumbs() {
         cleanPath: string,
     ): BreadcrumbPair | undefined => {
         if ('url' in section && section.url && pathMatches(cleanPath, section.url)) {
-            return { label: translateSectionTitle(section.title), path: section.url };
+            return { label: translateNavTitle(i18n, section.title), path: section.url };
         }
         return undefined;
     };

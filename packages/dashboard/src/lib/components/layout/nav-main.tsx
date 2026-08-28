@@ -23,7 +23,9 @@ import { Trans } from '@lingui/react/macro';
 import { Link, useRouter, useRouterState } from '@tanstack/react-router';
 import { ChevronRight } from 'lucide-react';
 import * as React from 'react';
+
 import { NavItemWrapper } from './nav-item-wrapper.js';
+import { translateNavTitle } from './nav-title.js';
 
 // Utility to sort items & sections by the optional `order` prop (ascending) and then alphabetically by title
 function sortByOrder<T extends { order?: number; title: string }>(a: T, b: T) {
@@ -62,11 +64,11 @@ function CollapsedSectionMenu({
                 }
             >
                 {item.icon && <item.icon />}
-                <span>{i18n.t(item.title)}</span>
+                <span>{translateNavTitle(i18n, item.title)}</span>
             </HoverCardTrigger>
             <HoverCardContent side="right" align="start" sideOffset={4} className="w-auto min-w-[8rem] p-1">
                 <p className="px-2 py-1.5 text-sm font-semibold" data-testid="sidebar-hover-title">
-                    {i18n.t(item.title)}
+                    {translateNavTitle(i18n, item.title)}
                 </p>
                 <div className="bg-border my-1 h-px" />
                 {item.items?.map(subItem => (
@@ -79,11 +81,12 @@ function CollapsedSectionMenu({
                         <Link
                             to={subItem.url}
                             className={cn(
-                                'flex items-center rounded-sm px-2 py-1.5 text-sm outline-hidden hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                                'flex items-center rounded-sm px-2 py-1.5 text-sm outline-hidden',
+                                'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
                                 isPathActive(subItem.url) && 'bg-accent text-accent-foreground font-medium',
                             )}
                         >
-                            {i18n.t(subItem.title)}
+                            {translateNavTitle(i18n, subItem.title)}
                         </Link>
                     </NavItemWrapper>
                 ))}
@@ -258,12 +261,12 @@ export function NavMain({ items }: Readonly<{ items: Array<NavMenuSection | NavM
                 <NavItemWrapper key={item.id} locationId={item.id} order={item.order} offset={true}>
                     <SidebarMenuItem>
                         <SidebarMenuButton
-                            tooltip={i18n.t(item.title)}
+                            tooltip={translateNavTitle(i18n, item.title)}
                             render={<Link to={item.url} />}
                             isActive={isPathActive(item.url)}
                         >
                             {item.icon && <item.icon />}
-                            <span>{i18n.t(item.title)}</span>
+                            <span>{translateNavTitle(i18n, item.title)}</span>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </NavItemWrapper>
@@ -288,9 +291,11 @@ export function NavMain({ items }: Readonly<{ items: Array<NavMenuSection | NavM
                     className="group/collapsible"
                 >
                     <SidebarMenuItem>
-                        <CollapsibleTrigger render={<SidebarMenuButton tooltip={i18n.t(item.title)} />}>
+                        <CollapsibleTrigger
+                            render={<SidebarMenuButton tooltip={translateNavTitle(i18n, item.title)} />}
+                        >
                             {item.icon && <item.icon />}
-                            <span>{i18n.t(item.title)}</span>
+                            <span>{translateNavTitle(i18n, item.title)}</span>
                             <ChevronRight className="ms-auto transition-transform duration-200 rtl:rotate-180 group-data-open/collapsible:rotate-90" />
                         </CollapsibleTrigger>
                         <CollapsibleContent>
@@ -307,7 +312,7 @@ export function NavMain({ items }: Readonly<{ items: Array<NavMenuSection | NavM
                                                 render={<Link to={subItem.url} />}
                                                 isActive={isPathActive(subItem.url)}
                                             >
-                                                <span>{i18n.t(subItem.title)}</span>
+                                                <span>{translateNavTitle(i18n, subItem.title)}</span>
                                             </SidebarMenuSubButton>
                                         </SidebarMenuSubItem>
                                     </NavItemWrapper>
