@@ -26,6 +26,8 @@ import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-lo
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
+import { hasMeaningfulRichText } from '@/vdb/utils/rich-text-content.js';
+import { contentSourceLanguageCode } from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Layers, LibraryBig, Package, PlusIcon } from 'lucide-react';
@@ -157,16 +159,49 @@ function ProductDetailPage() {
         createDocument: createProductDocument,
         updateDocument: updateProductDocument,
         extendSchema: schema =>
-            schema.refine(
-                values =>
-                    values.translations?.some((translation: { slug?: string | null }) =>
-                        Boolean(translation.slug?.trim()),
-                    ),
-                {
-                    path: ['translations', 0, 'slug'],
-                    message: t`This field is required`,
-                },
-            ),
+            schema.superRefine((values, ctx) => {
+                const translations = values.translations ?? [];
+                const configuredSourceIndex = translations.findIndex(
+                    (translation: { languageCode?: string | null }) =>
+                        translation.languageCode === contentSourceLanguageCode,
+                );
+                const populatedIndex = translations.findIndex(
+                    (translation: {
+                        name?: string | null;
+                        slug?: string | null;
+                        description?: string | null;
+                    }) =>
+                        Boolean(translation.name?.trim()) ||
+                        Boolean(translation.slug?.trim()) ||
+                        hasMeaningfulRichText(translation.description),
+                );
+                const configuredSource = translations[configuredSourceIndex];
+                const sourceIndex =
+                    configuredSourceIndex >= 0 &&
+                    (Boolean(configuredSource?.name?.trim()) ||
+                        Boolean(configuredSource?.slug?.trim()) ||
+                        hasMeaningfulRichText(configuredSource?.description))
+                        ? configuredSourceIndex
+                        : populatedIndex >= 0
+                          ? populatedIndex
+                          : Math.max(configuredSourceIndex, 0);
+                const sourceTranslation = translations[sourceIndex];
+
+                if (!sourceTranslation?.slug?.trim()) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['translations', sourceIndex, 'slug'],
+                        message: t`This field is required`,
+                    });
+                }
+                if (!hasMeaningfulRichText(sourceTranslation?.description)) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['translations', sourceIndex, 'description'],
+                        message: t`This field is required`,
+                    });
+                }
+            }),
         setValuesForUpdate: currentEntity => {
             return {
                 id: currentEntity.id,
@@ -275,8 +310,17 @@ function ProductDetailPage() {
                     <TranslatableFormFieldWrapper
                         control={form.control}
                         name="description"
-                        label={<Trans>Description</Trans>}
-                        render={({ field }) => <RichTextInput {...field} />}
+                        label={
+                            <>
+                                <span>
+                                    <Trans>Description</Trans>
+                                </span>
+                                <span className="ml-1 text-destructive" aria-hidden="true">
+                                    *
+                                </span>
+                            </>
+                        }
+                        render={({ field }) => <RichTextInput {...field} required aria-required="true" />}
                     />
                 </PageBlock>
                 <CustomFieldsPageBlock column="main" entityType="Product" control={form.control} />

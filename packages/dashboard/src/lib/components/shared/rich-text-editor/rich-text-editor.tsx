@@ -5,6 +5,7 @@ import { TableKit } from '@tiptap/extension-table';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import type { AriaAttributes } from 'react';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 
 import { ResponsiveToolbar } from './responsive-toolbar.js';
@@ -54,11 +55,23 @@ const extensions = [
     }),
 ];
 
-export interface RichTextEditorProps {
+function setOptionalAttribute(element: HTMLElement, name: string, value: string | undefined): void {
+    if (value) {
+        element.setAttribute(name, value);
+    } else {
+        element.removeAttribute(name);
+    }
+}
+
+export interface RichTextEditorProps extends Pick<
+    AriaAttributes,
+    'aria-describedby' | 'aria-errormessage' | 'aria-invalid' | 'aria-required'
+> {
     value: string;
     onChange: (value: string) => void;
     disabled?: boolean;
     placeholder?: string;
+    id?: string;
 }
 
 export function RichTextEditor({
@@ -66,8 +79,19 @@ export function RichTextEditor({
     onChange,
     disabled = false,
     placeholder,
+    id,
+    'aria-describedby': ariaDescribedBy,
+    'aria-errormessage': ariaErrorMessage,
+    'aria-invalid': ariaInvalid,
+    'aria-required': ariaRequired,
 }: Readonly<RichTextEditorProps>) {
     const isInternalUpdate = useRef(false);
+    const isInvalid =
+        ariaInvalid === true ||
+        ariaInvalid === 'true' ||
+        ariaInvalid === 'grammar' ||
+        ariaInvalid === 'spelling';
+    const isRequired = ariaRequired === true || ariaRequired === 'true';
 
     const editorExtensions = useMemo(() => {
         return placeholder ? [...extensions, Placeholder.configure({ placeholder })] : extensions;
@@ -92,12 +116,28 @@ export function RichTextEditor({
             },
             editorProps: {
                 attributes: {
+                    ...(id ? { id } : {}),
+                    ...(ariaDescribedBy ? { 'aria-describedby': ariaDescribedBy } : {}),
+                    ...(ariaErrorMessage ? { 'aria-errormessage': ariaErrorMessage } : {}),
+                    ...(isInvalid ? { 'aria-invalid': 'true' } : {}),
+                    ...(isRequired ? { 'aria-required': 'true' } : {}),
                     class: `rich-text-editor placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/10 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive field-sizing-content min-h-16 w-full bg-transparent px-3 py-2 text-base transition-[color,box-shadow] outline-none md:text-sm max-h-[500px] overflow-y-auto ${disabled ? 'cursor-not-allowed' : ''}`,
                 },
             },
         },
         [editorExtensions],
     );
+
+    useLayoutEffect(() => {
+        if (!editor || editor.isDestroyed) return;
+
+        const editorElement = editor.view.dom;
+        setOptionalAttribute(editorElement, 'id', id);
+        setOptionalAttribute(editorElement, 'aria-describedby', ariaDescribedBy);
+        setOptionalAttribute(editorElement, 'aria-errormessage', ariaErrorMessage);
+        setOptionalAttribute(editorElement, 'aria-invalid', isInvalid ? 'true' : undefined);
+        setOptionalAttribute(editorElement, 'aria-required', isRequired ? 'true' : undefined);
+    }, [editor, id, ariaDescribedBy, ariaErrorMessage, isInvalid, isRequired]);
 
     useLayoutEffect(() => {
         if (editor && !editor.isDestroyed && !isInternalUpdate.current) {
