@@ -10,6 +10,7 @@ export const storePromotionCampaignsQuery = gql`
             startsAt
             endsAt
             minimumSpend
+            currencyCode
             discountAmount
             discountRate
             collectionIds
@@ -36,6 +37,11 @@ export const storePromotionCampaignsQuery = gql`
             refundedOrderCount
             discountAmountTotal
             assistedRevenueTotal
+            financialTotals {
+                currencyCode
+                discountAmountTotal
+                assistedRevenueTotal
+            }
         }
         storeCouponLedger(options: { take: 50 }) {
             totalItems
@@ -103,6 +109,7 @@ export const storeCouponDailyReportQuery = gql`
     query StoreCouponDailyReport($from: DateTime!, $to: DateTime!, $campaignId: ID) {
         storeCouponDailyReport(from: $from, to: $to, campaignId: $campaignId) {
             date
+            currencyCode
             claimedCount
             redeemedCount
             refundedCount
@@ -187,6 +194,7 @@ export interface StoreCouponRecord {
     startsAt: string | null;
     endsAt: string | null;
     minimumSpend: number;
+    currencyCode: string;
     discountAmount: number | null;
     discountRate: number | null;
     collectionIds: string[];
@@ -213,6 +221,11 @@ export interface StoreCouponRecord {
     refundedOrderCount: number;
     discountAmountTotal: number;
     assistedRevenueTotal: number;
+    financialTotals: Array<{
+        currencyCode: string;
+        discountAmountTotal: number;
+        assistedRevenueTotal: number;
+    }>;
 }
 
 export interface StoreCouponLedgerRecord {
@@ -243,6 +256,7 @@ export interface StoreCouponLedgerRecord {
 
 export interface StoreCouponDailyMetricRecord {
     date: string;
+    currencyCode: string;
     claimedCount: number;
     redeemedCount: number;
     refundedCount: number;

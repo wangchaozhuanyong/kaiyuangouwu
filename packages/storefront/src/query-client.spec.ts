@@ -83,6 +83,15 @@ describe('public React Query session cache', () => {
         );
     });
 
+    it('isolates the same market cache by settlement currency', () => {
+        const cny = storefrontQueryKeys.market({ code: 'store-1', currencyCode: 'CNY' });
+        const myr = storefrontQueryKeys.market({ code: 'store-1', currencyCode: 'MYR' });
+
+        expect(storefrontQueryKeys.product(cny, 'zh_Hans', '1')).not.toEqual(
+            storefrontQueryKeys.product(myr, 'zh_Hans', '1'),
+        );
+    });
+
     it('isolates private route data by customer and filter conditions', () => {
         const firstCustomerOrders = storefrontQueryKeys.customerOrders('my', 'zh_Hans', 'customer-1', {
             tab: 'all',

@@ -68,9 +68,12 @@ function renderReferralPage(): string {
     vi.stubGlobal('window', { location: { origin: 'https://storefront.example.com' } });
     const client = createStorefrontQueryClient();
     const languageCode = languageCodeFor('zh');
-    client.setQueryData(storefrontQueryKeys.referralProgram(market.code, languageCode), program);
     client.setQueryData(
-        storefrontQueryKeys.customerReferral(market.code, languageCode, customer.id),
+        storefrontQueryKeys.referralProgram(storefrontQueryKeys.market(market), languageCode),
+        program,
+    );
+    client.setQueryData(
+        storefrontQueryKeys.customerReferral(storefrontQueryKeys.market(market), languageCode, customer.id),
         overview,
     );
 

@@ -6,6 +6,8 @@ import { CustomerCoupon } from '../entities/customer-coupon.entity';
 
 import {
     collectionPercentageDiscount,
+    currencyMinimumOrderAmount,
+    currencyOrderFixedDiscount,
     customerCouponEntitlement,
     flashSalePriceAction,
     parseFlashSaleVariantRules,
@@ -111,6 +113,72 @@ describe('store commerce promotion actions', () => {
                 {} as any,
             ),
         ).toBe(-0);
+    });
+
+    it('converts an exact flash-sale price into the order currency', () => {
+        const context = {
+            currencyCode: 'MYR',
+            channel: {
+                defaultCurrencyCode: 'CNY',
+                pricesIncludeTax: true,
+                customFields: {
+                    cnyToMyrRate: 0.5991,
+                    currencyRateMarkupBps: 0,
+                    currencyRoundingMode: 'CENT',
+                },
+            },
+        } as any;
+        const line = {
+            unitPrice: 5_991,
+            unitPriceWithTax: 5_991,
+            productVariant: { id: 'variant-1' },
+        } as any;
+
+        expect(
+            flashSalePriceAction.execute(
+                context,
+                line,
+                actionArgs({
+                    variantRules: JSON.stringify([{ variantId: 'variant-1', salePrice: 8_000 }]),
+                }),
+                {} as any,
+                {} as any,
+            ),
+        ).toBe(-1_198);
+    });
+
+    it('converts coupon thresholds and fixed discounts into the order currency', async () => {
+        const context = {
+            currencyCode: 'MYR',
+            channel: {
+                defaultCurrencyCode: 'CNY',
+                pricesIncludeTax: true,
+                customFields: {
+                    cnyToMyrRate: 0.6,
+                    currencyRateMarkupBps: 0,
+                    currencyRoundingMode: 'CENT',
+                },
+            },
+        } as any;
+        const order = { subTotal: 6_000, subTotalWithTax: 6_000 } as any;
+
+        await expect(
+            currencyMinimumOrderAmount.check(
+                context,
+                order,
+                actionArgs({ amount: 10_000, currencyCode: 'CNY', taxInclusive: 'true' }),
+                {} as any,
+            ),
+        ).resolves.toBe(true);
+        expect(
+            currencyOrderFixedDiscount.execute(
+                context,
+                order,
+                actionArgs({ discount: 2_000, currencyCode: 'CNY' }),
+                {} as any,
+                {} as any,
+            ),
+        ).toBe(-1_200);
     });
 
     it('applies collection discounts only to variants inside a selected category', async () => {

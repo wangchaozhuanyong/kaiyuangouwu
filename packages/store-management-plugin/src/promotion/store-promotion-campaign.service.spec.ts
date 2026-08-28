@@ -9,6 +9,8 @@ import { StorePromotionCampaignService } from './store-promotion-campaign.servic
 const ctx = {
     channelId: 'channel-1',
     languageCode: 'zh_Hans',
+    currencyCode: 'CNY',
+    channel: { defaultCurrencyCode: 'CNY', customFields: {} },
 } as any;
 
 describe('StorePromotionCampaignService', () => {
@@ -30,12 +32,18 @@ describe('StorePromotionCampaignService', () => {
                 enabled: true,
                 conditions: [
                     operationInput('store_customer_coupon_entitlement', {}),
-                    operationInput('minimum_order_amount', {
+                    operationInput('store_currency_minimum_order_amount', {
                         amount: '10000',
+                        currencyCode: 'CNY',
                         taxInclusive: 'true',
                     }),
                 ],
-                actions: [operationInput('order_fixed_discount', { discount: '2000' })],
+                actions: [
+                    operationInput('store_currency_order_fixed_discount', {
+                        discount: '2000',
+                        currencyCode: 'CNY',
+                    }),
+                ],
                 perCustomerUsageLimit: 1,
             }),
         );
@@ -80,6 +88,54 @@ describe('StorePromotionCampaignService', () => {
                 imageUrl: '/assets/preview/product.webp',
             }),
         );
+    });
+
+    it('returns an exact flash-sale price in the requested storefront currency', async () => {
+        const variant = productVariant('variant-1', 5_991, 'MYR');
+        const harness = createHarness({
+            variants: [variant],
+            promotions: [
+                {
+                    id: 'flash-sale-1',
+                    name: '跨币种秒杀',
+                    enabled: true,
+                    startsAt: null,
+                    endsAt: null,
+                    actions: [
+                        {
+                            code: 'store_flash_sale_price',
+                            args: {
+                                variantRules: JSON.stringify([{ variantId: 'variant-1', salePrice: 8_000 }]),
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+        const myrContext = {
+            ...ctx,
+            currencyCode: 'MYR',
+            channel: {
+                defaultCurrencyCode: 'CNY',
+                customFields: {
+                    cnyToMyrRate: 0.5991,
+                    currencyRateMarkupBps: 0,
+                    currencyRoundingMode: 'CENT',
+                },
+            },
+        };
+
+        await expect(harness.service.findFlashSales(myrContext, true)).resolves.toEqual([
+            expect.objectContaining({
+                items: [
+                    expect.objectContaining({
+                        originalPrice: 5_991,
+                        salePrice: 4_793,
+                        currencyCode: 'MYR',
+                    }),
+                ],
+            }),
+        ]);
     });
 
     it('rejects overlapping flash sales for the same variant', async () => {
@@ -212,6 +268,7 @@ describe('StorePromotionCampaignService', () => {
                 ledger: [
                     {
                         date: '2026-08-25',
+                        currencyCode: 'CNY',
                         claimedCount: '4',
                         returnedCount: '1',
                         expiredCount: '2',
@@ -221,12 +278,13 @@ describe('StorePromotionCampaignService', () => {
                 usage: [
                     {
                         date: '2026-08-25',
+                        currencyCode: 'CNY',
                         redeemedCount: '3',
                         discountAmountTotal: '600',
                         assistedRevenueTotal: '9000',
                     },
                 ],
-                refund: [{ date: '2026-08-26', refundedCount: '1' }],
+                refund: [{ date: '2026-08-26', currencyCode: 'CNY', refundedCount: '1' }],
             },
         });
 
@@ -240,6 +298,7 @@ describe('StorePromotionCampaignService', () => {
         ).resolves.toEqual([
             {
                 date: '2026-08-25',
+                currencyCode: 'CNY',
                 claimedCount: 4,
                 redeemedCount: 3,
                 refundedCount: 0,
@@ -251,6 +310,7 @@ describe('StorePromotionCampaignService', () => {
             },
             {
                 date: '2026-08-26',
+                currencyCode: 'CNY',
                 claimedCount: 0,
                 redeemedCount: 0,
                 refundedCount: 1,
@@ -320,6 +380,7 @@ function createHarness({
             where: vi.fn().mockReturnThis(),
             andWhere: vi.fn().mockReturnThis(),
             groupBy: vi.fn().mockReturnThis(),
+            addGroupBy: vi.fn().mockReturnThis(),
             getRawMany: vi.fn().mockResolvedValue(rows),
         };
         return builder;
@@ -402,12 +463,12 @@ function operationInput(code: string, values: Record<string, string>) {
     };
 }
 
-function productVariant(id: string, priceWithTax: number) {
+function productVariant(id: string, priceWithTax: number, currencyCode = 'CNY') {
     return {
         id,
         name: '默认规格',
         priceWithTax,
-        currencyCode: 'CNY',
+        currencyCode,
         featuredAsset: { preview: 'preview/product.webp' },
         product: {
             id: 'product-1',

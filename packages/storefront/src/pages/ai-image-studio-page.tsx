@@ -17,7 +17,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from '
 import { ShopApi } from '../api';
 import { PageSkeleton } from '../route-loading';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { formatMoney, SafeImage } from '../storefront-ui/product-display';
+import { SafeImage } from '../storefront-ui/product-display';
 import {
     ActiveCustomer,
     ImageGenerationJob,
@@ -36,6 +36,15 @@ interface AiImageStudioPageProps {
     onBack: () => void;
     onSignIn: () => void;
     onNotify: (message: string) => void;
+}
+
+function formatBillingMoney(value: number, currencyCode: string, locale: string): string {
+    return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: currencyCode,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    }).format(value / 100);
 }
 
 const aspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
@@ -274,7 +283,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             <div className="ai-studio-balance">
                                 <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
                                 <strong>
-                                    {formatMoney(
+                                    {formatBillingMoney(
                                         balance,
                                         selectedModel?.currencyCode ?? market.currencyCode,
                                         market.locale,
@@ -393,6 +402,11 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
 
                     <section className="ai-studio-options">
                         <h3>{isZh ? '选择模型' : 'Choose a model'}</h3>
+                        <p className="ai-studio-billing-note">
+                            {isZh
+                                ? 'AI 工坊按模型标注的币种计费，不随商城展示币种切换。'
+                                : 'AI Studio bills in each model’s listed currency, independently of the store display currency.'}
+                        </p>
                         <div className="ai-studio-model-grid">
                             {config.models.map(model => (
                                 <button
@@ -405,8 +419,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     <code>{model.officialModelId}</code>
                                     <small>{isZh ? model.descriptionZh : model.descriptionEn}</small>
                                     <strong>
-                                        {formatMoney(model.unitPrice, model.currencyCode, market.locale)} /{' '}
-                                        {isZh ? '张' : 'image'}
+                                        {formatBillingMoney(
+                                            model.unitPrice,
+                                            model.currencyCode,
+                                            market.locale,
+                                        )}{' '}
+                                        / {isZh ? '张' : 'image'}
                                     </strong>
                                 </button>
                             ))}
@@ -470,7 +488,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             <div>
                                 <small>{isZh ? '预计冻结' : 'Estimated hold'}</small>
                                 <strong>
-                                    {formatMoney(
+                                    {formatBillingMoney(
                                         estimatedPrice,
                                         selectedModel?.currencyCode ?? market.currencyCode,
                                         market.locale,
@@ -603,8 +621,9 @@ function GenerationCard({
             </div>
             <footer>
                 <span>
-                    {formatMoney(job.capturedAmount, job.currencyCode, locale)} {isZh ? '已结算' : 'charged'}{' '}
-                    · {formatMoney(job.releasedAmount, job.currencyCode, locale)}{' '}
+                    {formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}{' '}
+                    {isZh ? '已结算' : 'charged'} ·{' '}
+                    {formatBillingMoney(job.releasedAmount, job.currencyCode, locale)}{' '}
                     {isZh ? '已退回' : 'released'}
                 </span>
                 <div>

@@ -350,21 +350,21 @@ export function App() {
     }, []);
 
     const productsQuery = useQuery({
-        queryKey: storefrontQueryKeys.products(market.code, vendureLanguageCode, 16),
+        queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 16),
         queryFn: ({ signal }) => api.products(16, signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
     const collectionsQuery = useQuery({
-        queryKey: storefrontQueryKeys.collections(market.code, vendureLanguageCode),
+        queryKey: storefrontQueryKeys.collections(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.collections(signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
     const configQuery = useQuery({
-        queryKey: storefrontQueryKeys.config(market.code, vendureLanguageCode),
+        queryKey: storefrontQueryKeys.config(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.storefrontConfig(signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -378,15 +378,18 @@ export function App() {
         usdtMarkupPercent: configQuery.data?.currencyConfiguration?.usdtMarkupPercent ?? 0,
     });
     const contentQuery = useQuery({
-        queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
+        queryKey: storefrontQueryKeys.content(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.storefrontContent(signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
         refetchInterval: 60_000,
     });
-    const cartQueryKey = storefrontQueryKeys.cart(market.code, vendureLanguageCode);
-    const customerQueryKey = storefrontQueryKeys.customer(market.code, vendureLanguageCode);
+    const cartQueryKey = storefrontQueryKeys.cart(storefrontQueryKeys.market(market), vendureLanguageCode);
+    const customerQueryKey = storefrontQueryKeys.customer(
+        storefrontQueryKeys.market(market),
+        vendureLanguageCode,
+    );
     const cartQuery = useQuery({
         queryKey: cartQueryKey,
         queryFn: ({ signal }) => api.cart(signal),
@@ -435,7 +438,7 @@ export function App() {
         void api.recordStorefrontVisit().catch(() => undefined);
     }, [api]);
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
-        market.code,
+        storefrontQueryKeys.market(market),
         vendureLanguageCode,
         customer?.id ?? '',
     );
@@ -449,7 +452,7 @@ export function App() {
     const myCoupons = customerCouponsQuery.data ?? [];
     const customerCouponUsageRecordsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerCouponUsageRecords(
-            market.code,
+            storefrontQueryKeys.market(market),
             vendureLanguageCode,
             customer?.id ?? '',
         ),
@@ -475,7 +478,7 @@ export function App() {
     const showRecommendations =
         Boolean(recommendationsBlock) || !configuredBlockTypes.includes('RECOMMENDATIONS');
     const bestSellerCatalogQuery = useQuery({
-        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, {
+        queryKey: storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), vendureLanguageCode, {
             purpose: 'home-best-sellers',
             sort: 'sales',
             take: 48,
@@ -489,7 +492,7 @@ export function App() {
     const bestSellerCandidates = bestSellerCatalogQuery.data?.items ?? products;
     const bestSellerSalesQuery = useQuery({
         queryKey: [
-            ...storefrontQueryKeys.scope(market.code, vendureLanguageCode),
+            ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
             'home-best-seller-sales',
             bestSellerCandidates.map(product => product.id),
         ],
@@ -520,7 +523,7 @@ export function App() {
         language,
     });
     const recommendationCatalogQuery = useQuery({
-        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, {
+        queryKey: storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), vendureLanguageCode, {
             purpose: 'home-recommendations',
             sort: 'recommended',
             take: 48,
@@ -611,11 +614,11 @@ export function App() {
                 ? text.loadError
                 : null;
     const activeQueryFetchCount = useIsFetching({
-        queryKey: storefrontQueryKeys.scope(market.code, vendureLanguageCode),
+        queryKey: storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
     });
     const setCart = useCallback(
         (nextCart: StorefrontCart) => queryClient.setQueryData(cartQueryKey, nextCart),
-        [market.code, queryClient, vendureLanguageCode],
+        [market.code, market.currencyCode, queryClient, vendureLanguageCode],
     );
     const setCustomer = useCallback(
         (
@@ -626,22 +629,34 @@ export function App() {
                 typeof nextCustomer === 'function' ? nextCustomer(currentCustomer ?? null) : nextCustomer,
             );
         },
-        [market.code, queryClient, vendureLanguageCode],
+        [market.code, market.currencyCode, queryClient, vendureLanguageCode],
     );
     const clearPrivateQueryCache = useCallback(() => {
         queryClient.removeQueries({
-            queryKey: storefrontQueryKeys.privateScope(market.code, vendureLanguageCode),
+            predicate: query =>
+                query.queryKey[0] === 'storefront' &&
+                typeof query.queryKey[1] === 'string' &&
+                query.queryKey[1].startsWith(`${market.code}:`) &&
+                query.queryKey[3] === 'private',
         });
-    }, [market.code, queryClient, vendureLanguageCode]);
+    }, [market.code, queryClient]);
     const invalidateCustomerRouteQueries = useCallback(async () => {
         if (!customer) return;
         await queryClient.invalidateQueries({
-            queryKey: storefrontQueryKeys.customerScope(market.code, vendureLanguageCode, customer.id),
+            queryKey: storefrontQueryKeys.customerScope(
+                storefrontQueryKeys.market(market),
+                vendureLanguageCode,
+                customer.id,
+            ),
             refetchType: 'none',
         });
-    }, [customer, market.code, queryClient, vendureLanguageCode]);
+    }, [customer, market.code, market.currencyCode, queryClient, vendureLanguageCode]);
     const productQuery = useQuery({
-        queryKey: storefrontQueryKeys.product(market.code, vendureLanguageCode, route.id ?? ''),
+        queryKey: storefrontQueryKeys.product(
+            storefrontQueryKeys.market(market),
+            vendureLanguageCode,
+            route.id ?? '',
+        ),
         queryFn: async ({ signal }) => {
             const product = await api.product(route.id ?? '', signal);
             if (!product) throw new Error(isZh ? '商品不存在或已下架' : 'Product not found');
@@ -662,7 +677,7 @@ export function App() {
               : '';
     const orderQuery = useQuery({
         queryKey: storefrontQueryKeys.order(
-            market.code,
+            storefrontQueryKeys.market(market),
             vendureLanguageCode,
             customer?.id ?? '',
             route.id ?? '',
@@ -690,7 +705,11 @@ export function App() {
     const cacheProducts = useCallback(
         (items: Product[]) => {
             for (const product of items) {
-                const queryKey = storefrontQueryKeys.product(market.code, vendureLanguageCode, product.id);
+                const queryKey = storefrontQueryKeys.product(
+                    storefrontQueryKeys.market(market),
+                    vendureLanguageCode,
+                    product.id,
+                );
                 queryClient.setQueryData(queryKey, product);
                 void queryClient.prefetchQuery({
                     queryKey,
@@ -700,7 +719,7 @@ export function App() {
                 });
             }
         },
-        [market.code, queryClient, vendureLanguageCode],
+        [market.code, market.currencyCode, queryClient, vendureLanguageCode],
     );
 
     const notify = useCallback((message: string) => {
@@ -1061,7 +1080,10 @@ export function App() {
                     ...(current ?? []).filter(coupon => coupon.id !== claimedCoupon.id),
                 ]);
                 await queryClient.invalidateQueries({
-                    queryKey: storefrontQueryKeys.content(market.code, vendureLanguageCode),
+                    queryKey: storefrontQueryKeys.content(
+                        storefrontQueryKeys.market(market),
+                        vendureLanguageCode,
+                    ),
                 });
                 notify(isZh ? '优惠券领取成功' : 'Coupon claimed');
                 return null;
@@ -1140,7 +1162,7 @@ export function App() {
             const cancelledOrder = await api.cancelMyAuthorizedOrder(order.id, reason);
             queryClient.setQueryData(
                 storefrontQueryKeys.order(
-                    market.code,
+                    storefrontQueryKeys.market(market),
                     vendureLanguageCode,
                     customer?.id ?? 'guest',
                     order.id,
@@ -1187,7 +1209,7 @@ export function App() {
             if (customer) {
                 await queryClient.invalidateQueries({
                     queryKey: storefrontQueryKeys.afterSalesRequests(
-                        market.code,
+                        storefrontQueryKeys.market(market),
                         vendureLanguageCode,
                         customer.id,
                     ),
@@ -1197,7 +1219,17 @@ export function App() {
             notify(isZh ? '售后申请已提交' : 'Return request submitted');
             navigate({ name: 'orders', tab: 'service' });
         },
-        [api, customer, isZh, market.code, navigate, notify, queryClient, vendureLanguageCode],
+        [
+            api,
+            customer,
+            isZh,
+            market.code,
+            market.currencyCode,
+            navigate,
+            notify,
+            queryClient,
+            vendureLanguageCode,
+        ],
     );
 
     const beginCheckout = useCallback(async () => {
@@ -1405,11 +1437,15 @@ export function App() {
                 writeStoredSettlementCurrency(market.code, currencyCode);
                 setDisplayCurrencyCode(currencyCode);
                 if (currencyCode !== 'USDT' && currencyCode !== market.currencyCode) {
+                    if (route.name === 'category' && (minimumPrice || maximumPrice)) {
+                        setMinimumPrice('');
+                        setMaximumPrice('');
+                        navigate({ ...route, minPrice: undefined, maxPrice: undefined }, true);
+                    }
                     setStorefrontContext(current => ({
                         ...current,
                         market: { ...current.market, currencyCode },
                     }));
-                    queryClient.removeQueries({ queryKey: ['storefront', market.code] });
                 }
                 notify(
                     language === 'zh'
@@ -1433,8 +1469,11 @@ export function App() {
             language,
             market.code,
             market.currencyCode,
+            maximumPrice,
+            minimumPrice,
+            navigate,
             notify,
-            queryClient,
+            route,
             text.loadError,
         ],
     );

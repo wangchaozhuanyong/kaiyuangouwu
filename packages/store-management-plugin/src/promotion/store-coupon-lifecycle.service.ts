@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    CurrencyCode,
     Customer,
     CustomerService,
     EventBus,
@@ -26,6 +27,7 @@ import {
 } from '../entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
+import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import {
     StoreCouponCampaignActionResult,
     StoreCouponLedgerEntryList,
@@ -42,7 +44,7 @@ import {
     couponLedgerEventTypes,
     usableCustomerCouponStatuses,
 } from './coupon-lifecycle.constants';
-import { numberArg } from './promotion-operation-args';
+import { numberArg, stringArg } from './promotion-operation-args';
 
 @Injectable()
 export class StoreCouponLifecycleService implements OnApplicationBootstrap {
@@ -108,7 +110,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 await this.revokeCoupon(ctx, coupon, '优惠券活动已删除或停用，系统自动作废');
             }
         }
-        return coupons.map(coupon => this.toCustomerCouponView(coupon));
+        return coupons.map(coupon => this.toCustomerCouponView(ctx, coupon));
     }
 
     async findMyUsageRecords(ctx: RequestContext): Promise<StoreCouponUsageRecordView[]> {
@@ -134,8 +136,22 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                     campaignKind: allocation.customerCoupon.campaignKind,
                     status: allocation.status as 'USED' | 'REFUNDED',
                     currencyCode: allocation.currencyCode,
-                    minimumSpend: allocation.customerCoupon.minimumSpend,
-                    discountAmount: allocation.customerCoupon.discountAmount,
+                    minimumSpend:
+                        convertChannelAmount(
+                            ctx,
+                            allocation.customerCoupon.minimumSpend,
+                            allocation.customerCoupon.currencyCode,
+                            allocation.currencyCode,
+                        ) ?? 0,
+                    discountAmount:
+                        allocation.customerCoupon.discountAmount == null
+                            ? null
+                            : convertChannelAmount(
+                                  ctx,
+                                  allocation.customerCoupon.discountAmount,
+                                  allocation.customerCoupon.currencyCode,
+                                  allocation.currencyCode,
+                              ),
                     discountRate: allocation.customerCoupon.discountRate,
                     savedAmount: allocation.discountAmountWithTax,
                     usedAt: allocation.usedAt,
@@ -211,7 +227,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 note: '优惠券已锁定到购物车订单',
             });
         }
-        return this.toCustomerCouponView(coupon);
+        return this.toCustomerCouponView(ctx, coupon);
     }
 
     async remove(ctx: RequestContext, customerCouponId: ID): Promise<StoreCustomerCouponView> {
@@ -219,11 +235,11 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         await this.lockRow(ctx, CustomerCoupon, customerCouponId);
         const coupon = await this.ownedCouponOrThrow(ctx, customerCouponId, customer.id);
         if (coupon.status !== 'LOCKED' || coupon.lockedOrderId == null) {
-            return this.toCustomerCouponView(coupon);
+            return this.toCustomerCouponView(ctx, coupon);
         }
         const order = await this.orderService.findOne(ctx, coupon.lockedOrderId, ['lines', 'shippingLines']);
         await this.releaseLockedCoupon(ctx, coupon, order ?? null, '客户在购物车取消使用优惠券');
-        return this.toCustomerCouponView(coupon);
+        return this.toCustomerCouponView(ctx, coupon);
     }
 
     async revoke(ctx: RequestContext, customerCouponId: ID, reason?: string | null) {
@@ -237,7 +253,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             throw new UserInputError('当前状态的优惠券不能撤销');
         }
         await this.revokeCoupon(ctx, coupon, reason?.trim() || '管理员撤销优惠券');
-        return this.toCustomerCouponView(coupon);
+        return this.toCustomerCouponView(ctx, coupon);
     }
 
     async revokeCampaignOutstanding(
@@ -463,6 +479,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 campaignName: promotion.name,
                 campaignKind: rule.kind,
                 minimumSpend: rule.minimumSpend,
+                currencyCode: rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
                 discountAmount: rule.discountAmount,
                 discountRate: rule.discountRate,
                 claimedAt: now,
@@ -486,7 +503,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             idempotencyKey: `CLAIMED:${coupon.id}`,
             note: grantedByAdmin ? '管理员发放优惠券' : '客户领取优惠券',
         });
-        return this.toCustomerCouponView(coupon);
+        return this.toCustomerCouponView(ctx, coupon);
     }
 
     private async redeemForPaidOrder(ctx: RequestContext, orderId: ID): Promise<void> {
@@ -829,15 +846,22 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         return '优惠券当前不可用';
     }
 
-    private toCustomerCouponView(coupon: CustomerCoupon): StoreCustomerCouponView {
+    private toCustomerCouponView(ctx: RequestContext, coupon: CustomerCoupon): StoreCustomerCouponView {
+        const minimumSpend =
+            convertChannelAmount(ctx, coupon.minimumSpend, coupon.currencyCode, ctx.currencyCode) ?? 0;
+        const discountAmount =
+            coupon.discountAmount == null
+                ? null
+                : convertChannelAmount(ctx, coupon.discountAmount, coupon.currencyCode, ctx.currencyCode);
         return {
             id: coupon.id,
             campaignId: coupon.promotionId,
             campaignName: coupon.campaignName,
             campaignKind: coupon.campaignKind,
             status: coupon.status,
-            minimumSpend: coupon.minimumSpend,
-            discountAmount: coupon.discountAmount,
+            minimumSpend,
+            currencyCode: ctx.currencyCode,
+            discountAmount,
             discountRate: coupon.discountRate,
             claimedAt: coupon.claimedAt,
             validFrom: coupon.validFrom,
@@ -935,19 +959,25 @@ function couponRuleSnapshot(promotion: Promotion) {
     const kind = action ? couponKindForAction(action.code) : null;
     if (!action || !kind) return null;
     const minimumCondition = promotion.conditions.find(
-        candidate => candidate.code === 'minimum_order_amount',
+        candidate =>
+            candidate.code === 'store_currency_minimum_order_amount' ||
+            candidate.code === 'minimum_order_amount',
     );
     const percentageOff = numberArg(action, 'discount');
     return {
         kind,
         minimumSpend: numberArg(minimumCondition, 'amount'),
+        currencyCode: (stringArg(minimumCondition, 'currencyCode') || stringArg(action, 'currencyCode')) as
+            CurrencyCode | undefined,
         discountAmount: kind === 'ORDER_FIXED' ? numberArg(action, 'discount') : null,
         discountRate: kind === 'ORDER_FIXED' ? null : Math.round((10 - percentageOff / 10) * 100) / 100,
     } as const;
 }
 
 function couponKindForAction(code: string) {
-    if (code === 'order_fixed_discount') return 'ORDER_FIXED' as const;
+    if (code === 'order_fixed_discount' || code === 'store_currency_order_fixed_discount') {
+        return 'ORDER_FIXED' as const;
+    }
     if (code === 'order_percentage_discount') return 'ORDER_PERCENTAGE' as const;
     if (code === 'store_collection_percentage_discount') return 'COLLECTION_PERCENTAGE' as const;
     if (code === 'products_percentage_discount') return 'PRODUCT_PERCENTAGE' as const;

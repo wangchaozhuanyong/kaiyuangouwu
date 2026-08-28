@@ -185,6 +185,7 @@ const customerCouponFields = `
     campaignKind
     status
     minimumSpend
+    currencyCode
     discountAmount
     discountRate
     claimedAt
@@ -552,6 +553,7 @@ export class ShopApi {
                     claimEndsAt
                     validityDays
                     minimumSpend
+                    currencyCode
                     discountAmount
                     discountRate
                     remainingIssueCount
@@ -1205,6 +1207,7 @@ export class ShopApi {
                         enabled
                         rewardRate
                         releaseDelayDays
+                        currencyCode
                         minimumOrderAmount
                         maxRewardPerOrder
                         allowBalanceSpend

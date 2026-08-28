@@ -499,7 +499,12 @@ export function HomePage() {
     const customerAwareCoupons = coupons.map(coupon =>
         claimedCampaignIdSet.has(coupon.id) ? { ...coupon, claimed: true, claimable: false } : coupon,
     );
-    const campaignCouponCards = couponCardsFromCampaigns(customerAwareCoupons, language, market.currencyCode);
+    const campaignCouponCards = couponCardsFromCampaigns(
+        customerAwareCoupons,
+        language,
+        market.currencyCode,
+        displayCurrencyCode,
+    );
     const couponCards = campaignCouponCards.filter(
         (coupon, index, items) =>
             items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
@@ -904,7 +909,9 @@ export function HomePage() {
                                             fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
                                         />
                                     </button>
-                                    {showHeroImageOverlay ? <div className="hero-rich-overlay-shade" /> : null}
+                                    {showHeroImageOverlay ? (
+                                        <div className="hero-rich-overlay-shade" />
+                                    ) : null}
 
                                     {/* Dynamic Content Overlay with 3D Cyber Layout */}
                                     {(() => {

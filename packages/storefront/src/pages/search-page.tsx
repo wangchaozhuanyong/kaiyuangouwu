@@ -2,6 +2,7 @@ import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/re
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ArrowLeft, CircleAlert, Download, LayoutGrid, Search, ShoppingBag, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+// eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
@@ -54,7 +55,11 @@ export function SearchPage() {
     const term = submittedQuery.trim();
     const searchInput = { term, sort: resultSort };
     const searchQuery = useInfiniteQuery({
-        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, searchInput),
+        queryKey: storefrontQueryKeys.catalog(
+            storefrontQueryKeys.market(market),
+            vendureLanguageCode,
+            searchInput,
+        ),
         queryFn: ({ pageParam, signal }) =>
             api.catalog({ ...searchInput, skip: pageParam, take: 20 }, signal),
         initialPageParam: 0,
@@ -105,7 +110,11 @@ export function SearchPage() {
 
     useEffect(() => {
         for (const product of results) {
-            const queryKey = storefrontQueryKeys.product(market.code, vendureLanguageCode, product.id);
+            const queryKey = storefrontQueryKeys.product(
+                storefrontQueryKeys.market(market),
+                vendureLanguageCode,
+                product.id,
+            );
             queryClient.setQueryData(queryKey, product);
             void queryClient.prefetchQuery({
                 queryKey,
@@ -114,7 +123,7 @@ export function SearchPage() {
                 meta: publicQueryMeta(),
             });
         }
-    }, [market.code, queryClient, results, vendureLanguageCode]);
+    }, [market.code, market.currencyCode, queryClient, results, vendureLanguageCode]);
 
     const loadMore = () => searchQuery.fetchNextPage();
 

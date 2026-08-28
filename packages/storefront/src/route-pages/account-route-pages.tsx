@@ -168,6 +168,7 @@ export function CouponsRoutePage() {
                     myCoupons: runtime.myCoupons,
                     usageRecords: runtime.couponUsageRecords,
                     currencyCode: runtime.market.currencyCode,
+                    displayCurrencyCode: runtime.displayCurrencyCode,
                     language: runtime.language,
                     loading: runtime.cartLoading,
                     onClaim: runtime.claimCoupon,

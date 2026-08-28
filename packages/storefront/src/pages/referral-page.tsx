@@ -34,14 +34,17 @@ export function ReferralPage() {
     const [copied, setCopied] = useState(false);
     const [showPoster, setShowPoster] = useState(false);
     const programQuery = useQuery({
-        queryKey: storefrontQueryKeys.referralProgram(market.code, languageCodeFor(language)),
+        queryKey: storefrontQueryKeys.referralProgram(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+        ),
         queryFn: ({ signal }) => api.referralProgram(signal),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const overviewQuery = useQuery({
         queryKey: storefrontQueryKeys.customerReferral(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),

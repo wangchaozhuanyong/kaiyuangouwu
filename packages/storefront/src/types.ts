@@ -361,6 +361,7 @@ export interface ReferralProgram {
     enabled: boolean;
     rewardRate: number;
     releaseDelayDays: number;
+    currencyCode?: string;
     minimumOrderAmount: number;
     maxRewardPerOrder?: number | null;
     allowBalanceSpend: boolean;
@@ -673,6 +674,7 @@ export interface StorefrontCouponCampaign {
     claimEndsAt: string | null;
     validityDays: number | null;
     minimumSpend: number;
+    currencyCode?: string;
     discountAmount: number | null;
     discountRate: number | null;
     remainingIssueCount: number | null;
@@ -689,6 +691,7 @@ export interface StoreCustomerCoupon {
     campaignKind: StorefrontCouponCampaignKind;
     status: StoreCustomerCouponStatus;
     minimumSpend: number;
+    currencyCode?: string;
     discountAmount: number | null;
     discountRate: number | null;
     claimedAt: string;

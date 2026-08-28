@@ -1,8 +1,9 @@
-import type { RouteState, SortMode } from '../storefront-router';
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowUpDown, ChevronUp, LayoutGrid, Search, SlidersHorizontal, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+// eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
+import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
@@ -139,7 +140,11 @@ export function CategoryPage() {
         maxPriceWithTax: priceInputToMinorUnits(maximumPriceInput),
     };
     const catalogQuery = useInfiniteQuery({
-        queryKey: storefrontQueryKeys.catalog(market.code, vendureLanguageCode, catalogInput),
+        queryKey: storefrontQueryKeys.catalog(
+            storefrontQueryKeys.market(market),
+            vendureLanguageCode,
+            catalogInput,
+        ),
         queryFn: ({ pageParam, signal }) =>
             api.catalog({ ...catalogInput, skip: pageParam, take: 12 }, signal),
         initialPageParam: 0,
@@ -203,7 +208,11 @@ export function CategoryPage() {
 
     useEffect(() => {
         for (const product of categoryProducts) {
-            const queryKey = storefrontQueryKeys.product(market.code, vendureLanguageCode, product.id);
+            const queryKey = storefrontQueryKeys.product(
+                storefrontQueryKeys.market(market),
+                vendureLanguageCode,
+                product.id,
+            );
             queryClient.setQueryData(queryKey, product);
             void queryClient.prefetchQuery({
                 queryKey,
@@ -212,7 +221,7 @@ export function CategoryPage() {
                 meta: publicQueryMeta(),
             });
         }
-    }, [categoryProducts, market.code, queryClient, vendureLanguageCode]);
+    }, [categoryProducts, market.code, market.currencyCode, queryClient, vendureLanguageCode]);
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
 

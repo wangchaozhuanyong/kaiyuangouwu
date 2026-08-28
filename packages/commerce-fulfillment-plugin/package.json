@@ -7,6 +7,7 @@
     "scripts": {
         "build": "tsc --project tsconfig.build.json",
         "check-types": "tsc --project tsconfig.json --noEmit",
+        "pretest": "bun run --cwd ../store-management-plugin build",
         "test": "vitest run"
     },
     "dependencies": {
@@ -16,6 +17,7 @@
         "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "@vendure/email-plugin": "3.7.2",
+        "@vendure/store-management-plugin": "0.1.0",
         "graphql-tag": "^2.12.6"
     },
     "devDependencies": {

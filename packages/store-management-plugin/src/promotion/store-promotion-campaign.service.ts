@@ -9,6 +9,7 @@ import type { ProductVariant } from '@vendure/core';
 import {
     Collection,
     ConfigService,
+    CurrencyCode,
     CustomerService,
     idsAreEqual,
     isGraphQlErrorResult,
@@ -26,10 +27,12 @@ import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from '../entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
+import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import {
     CreateStoreCouponCampaignInput,
     CreateStoreFlashSaleInput,
     StoreCouponCampaignKind,
+    StoreCouponCampaignStats,
     StoreCouponCampaignView,
     StoreCouponDailyMetricView,
     StoreFlashSaleItemView,
@@ -53,7 +56,7 @@ export class StorePromotionCampaignService {
     async findCoupons(ctx: RequestContext): Promise<StoreCouponCampaignView[]> {
         const promotions = await this.findPromotions(ctx);
         const couponPromotions = promotions.flatMap(promotion => {
-            const view = this.toCouponView(promotion);
+            const view = this.toCouponView(promotion, ctx);
             return view ? [{ promotion, view }] : [];
         });
         if (!couponPromotions.length) return [];
@@ -81,7 +84,7 @@ export class StorePromotionCampaignService {
             : [];
         const configsByPromotion = new Map(configs.map(config => [String(config.promotionId), config]));
         const customerCounts = new Map(customerRows.map(row => [String(row.promotionId), Number(row.count)]));
-        const statsByPromotion = this.campaignStats(statusRows, allocationRows);
+        const statsByPromotion = this.campaignStats(statusRows, allocationRows, ctx.currencyCode);
 
         return couponPromotions.map(({ promotion, view }) => {
             const config = configsByPromotion.get(String(promotion.id));
@@ -153,22 +156,26 @@ export class StorePromotionCampaignService {
             .getRepository(ctx, CouponOrderAllocation)
             .createQueryBuilder('allocation')
             .select('DATE(allocation.usedAt)', 'date')
+            .addSelect('allocation.currencyCode', 'currencyCode')
             .addSelect('COUNT(DISTINCT allocation.orderId)', 'redeemedCount')
             .addSelect('COALESCE(SUM(allocation.discountAmountWithTax), 0)', 'discountAmountTotal')
             .addSelect('COALESCE(SUM(allocation.orderTotalWithTax), 0)', 'assistedRevenueTotal')
             .where('allocation.channelId = :channelId', { channelId: ctx.channelId })
             .andWhere("allocation.status IN ('USED', 'REFUNDED')")
             .andWhere('allocation.usedAt >= :from AND allocation.usedAt < :to', { from, to })
-            .groupBy('DATE(allocation.usedAt)');
+            .groupBy('DATE(allocation.usedAt)')
+            .addGroupBy('allocation.currencyCode');
         const refundQuery = this.connection
             .getRepository(ctx, CouponOrderAllocation)
             .createQueryBuilder('allocation')
             .select('DATE(allocation.refundedAt)', 'date')
+            .addSelect('allocation.currencyCode', 'currencyCode')
             .addSelect('COUNT(DISTINCT allocation.orderId)', 'refundedCount')
             .where('allocation.channelId = :channelId', { channelId: ctx.channelId })
             .andWhere("allocation.status = 'REFUNDED'")
             .andWhere('allocation.refundedAt >= :from AND allocation.refundedAt < :to', { from, to })
-            .groupBy('DATE(allocation.refundedAt)');
+            .groupBy('DATE(allocation.refundedAt)')
+            .addGroupBy('allocation.currencyCode');
         if (campaignId != null) {
             ledgerQuery.andWhere('ledger.promotionId = :campaignId', { campaignId });
             usageQuery.andWhere('allocation.promotionId = :campaignId', { campaignId });
@@ -178,6 +185,7 @@ export class StorePromotionCampaignService {
         const [ledgerRows, usageRows, refundRows] = await Promise.all([
             ledgerQuery.getRawMany<{
                 date: string | Date;
+                currencyCode: CurrencyCode;
                 claimedCount: string;
                 returnedCount: string;
                 expiredCount: string;
@@ -185,38 +193,47 @@ export class StorePromotionCampaignService {
             }>(),
             usageQuery.getRawMany<{
                 date: string | Date;
+                currencyCode: CurrencyCode;
                 redeemedCount: string;
                 discountAmountTotal: string;
                 assistedRevenueTotal: string;
             }>(),
-            refundQuery.getRawMany<{ date: string | Date; refundedCount: string }>(),
+            refundQuery.getRawMany<{
+                date: string | Date;
+                currencyCode: CurrencyCode;
+                refundedCount: string;
+            }>(),
         ]);
         const daily = new Map<string, StoreCouponDailyMetricView>();
-        const metricFor = (value: string | Date) => {
+        const metricFor = (value: string | Date, currencyCode: CurrencyCode) => {
             const date = reportDateKey(value);
-            const existing = daily.get(date);
+            const key = `${date}:${currencyCode}`;
+            const existing = daily.get(key);
             if (existing) return existing;
-            const metric = emptyDailyCouponMetric(date);
-            daily.set(date, metric);
+            const metric = emptyDailyCouponMetric(date, currencyCode);
+            daily.set(key, metric);
             return metric;
         };
         for (const row of ledgerRows) {
-            const metric = metricFor(row.date);
+            const metric = metricFor(row.date, ctx.currencyCode);
             metric.claimedCount = Number(row.claimedCount);
             metric.returnedCount = Number(row.returnedCount);
             metric.expiredCount = Number(row.expiredCount);
             metric.revokedCount = Number(row.revokedCount);
         }
         for (const row of usageRows) {
-            const metric = metricFor(row.date);
+            const metric = metricFor(row.date, row.currencyCode);
             metric.redeemedCount = Number(row.redeemedCount);
             metric.discountAmountTotal = Number(row.discountAmountTotal);
             metric.assistedRevenueTotal = Number(row.assistedRevenueTotal);
         }
         for (const row of refundRows) {
-            metricFor(row.date).refundedCount = Number(row.refundedCount);
+            metricFor(row.date, row.currencyCode).refundedCount = Number(row.refundedCount);
         }
-        return [...daily.values()].sort((left, right) => left.date.localeCompare(right.date));
+        return [...daily.values()].sort(
+            (left, right) =>
+                left.date.localeCompare(right.date) || left.currencyCode.localeCompare(right.currencyCode),
+        );
     }
 
     async createCoupon(
@@ -228,7 +245,7 @@ export class StorePromotionCampaignService {
         if (isGraphQlErrorResult(result)) {
             throw new UserInputError(result.message);
         }
-        const view = this.toCouponView(result);
+        const view = this.toCouponView(result, ctx);
         if (!view) {
             throw new UserInputError('优惠券创建后无法识别，请检查优惠动作配置');
         }
@@ -324,7 +341,11 @@ export class StorePromotionCampaignService {
                 if (salePrice >= variant.priceWithTax) {
                     throw new UserInputError(`规格“${variant.name}”的秒杀价必须低于原价`);
                 }
-                return { variantId: String(variant.id), salePrice };
+                return {
+                    variantId: String(variant.id),
+                    salePrice,
+                    currencyCode: ctx.channel.defaultCurrencyCode,
+                };
             }
             if (input.percentageOff <= 0) {
                 throw new UserInputError('未设置单独秒杀价的规格，批量降价比例必须大于 0');
@@ -454,6 +475,7 @@ export class StorePromotionCampaignService {
         input: CreateStoreCouponCampaignInput,
     ): Promise<CreatePromotionInput> {
         const name = this.requiredText(input.name, '优惠券名称', 120);
+        const sourceCurrencyCode = ctx.channel?.defaultCurrencyCode ?? ctx.currencyCode;
         const couponCode = createInternalCouponCode();
         const minimumSpend = input.minimumSpend ?? 0;
         if (!Number.isInteger(minimumSpend) || minimumSpend < 0) {
@@ -461,7 +483,13 @@ export class StorePromotionCampaignService {
         }
         const conditions = [operation('store_customer_coupon_entitlement', {})];
         if (minimumSpend) {
-            conditions.push(operation('minimum_order_amount', { amount: minimumSpend, taxInclusive: true }));
+            conditions.push(
+                operation('store_currency_minimum_order_amount', {
+                    amount: minimumSpend,
+                    currencyCode: sourceCurrencyCode,
+                    taxInclusive: true,
+                }),
+            );
         }
         const actions: ConfigurableOperationInput[] = [];
         if (input.kind === 'ORDER_FIXED') {
@@ -469,7 +497,12 @@ export class StorePromotionCampaignService {
             if (!Number.isInteger(amount) || amount <= 0) {
                 throw new UserInputError('满减券的减免金额必须大于 0');
             }
-            actions.push(operation('order_fixed_discount', { discount: amount }));
+            actions.push(
+                operation('store_currency_order_fixed_discount', {
+                    discount: amount,
+                    currencyCode: sourceCurrencyCode,
+                }),
+            );
         } else {
             const percentageOff = discountRateToPercentageOff(input.discountRate);
             if (input.kind === 'ORDER_PERCENTAGE') {
@@ -529,14 +562,32 @@ export class StorePromotionCampaignService {
         };
     }
 
-    private toCouponView(promotion: Promotion): StoreCouponCampaignView | null {
+    private toCouponView(promotion: Promotion, ctx?: RequestContext): StoreCouponCampaignView | null {
         if (!promotion.couponCode) return null;
         const action = promotion.actions.find(candidate => couponKindForAction(candidate.code));
         const kind = action ? couponKindForAction(action.code) : null;
         if (!action || !kind) return null;
         const minimumCondition = promotion.conditions.find(
-            condition => condition.code === 'minimum_order_amount',
+            condition =>
+                condition.code === 'store_currency_minimum_order_amount' ||
+                condition.code === 'minimum_order_amount',
         );
+        const sourceCurrencyCode = (stringArg(minimumCondition, 'currencyCode') ||
+            stringArg(action, 'currencyCode') ||
+            ctx?.channel.defaultCurrencyCode ||
+            CurrencyCode.CNY) as CurrencyCode;
+        const targetCurrencyCode = ctx?.currencyCode ?? sourceCurrencyCode;
+        const minimumSpend = ctx
+            ? (convertChannelAmount(
+                  ctx,
+                  numberArg(minimumCondition, 'amount'),
+                  sourceCurrencyCode,
+                  targetCurrencyCode,
+              ) ?? 0)
+            : numberArg(minimumCondition, 'amount');
+        const fixedDiscount = ctx
+            ? convertChannelAmount(ctx, numberArg(action, 'discount'), sourceCurrencyCode, targetCurrencyCode)
+            : numberArg(action, 'discount');
         const percentageOff = numberArg(action, 'discount');
         return {
             id: promotion.id,
@@ -546,8 +597,9 @@ export class StorePromotionCampaignService {
             enabled: promotion.enabled,
             startsAt: promotion.startsAt,
             endsAt: promotion.endsAt,
-            minimumSpend: numberArg(minimumCondition, 'amount'),
-            discountAmount: kind === 'ORDER_FIXED' ? numberArg(action, 'discount') : null,
+            minimumSpend,
+            currencyCode: targetCurrencyCode,
+            discountAmount: kind === 'ORDER_FIXED' ? fixedDiscount : null,
             discountRate: kind === 'ORDER_FIXED' ? null : percentageOffToDiscountRate(percentageOff),
             collectionIds: idListArg(action, 'collectionIds'),
             productVariantIds: idListArg(action, 'productVariantIds'),
@@ -587,6 +639,7 @@ export class StorePromotionCampaignService {
             .getRepository(ctx, CouponOrderAllocation)
             .createQueryBuilder('allocation')
             .select('allocation.promotionId', 'promotionId')
+            .addSelect('allocation.currencyCode', 'currencyCode')
             .addSelect('COUNT(allocation.id)', 'redeemedOrderCount')
             .addSelect(
                 `SUM(CASE WHEN allocation.status = 'REFUNDED' THEN 1 ELSE 0 END)`,
@@ -598,8 +651,10 @@ export class StorePromotionCampaignService {
             .andWhere('allocation.promotionId IN (:...promotionIds)', { promotionIds })
             .andWhere("allocation.status IN ('USED', 'REFUNDED')")
             .groupBy('allocation.promotionId')
+            .addGroupBy('allocation.currencyCode')
             .getRawMany<{
                 promotionId: string;
+                currencyCode: CurrencyCode;
                 redeemedOrderCount: string;
                 refundedOrderCount: string;
                 discountAmountTotal: string;
@@ -611,11 +666,13 @@ export class StorePromotionCampaignService {
         statusRows: Array<{ promotionId: string; status: string; count: string }>,
         allocationRows: Array<{
             promotionId: string;
+            currencyCode: CurrencyCode;
             redeemedOrderCount: string;
             refundedOrderCount: string;
             discountAmountTotal: string;
             assistedRevenueTotal: string;
         }>,
+        selectedCurrencyCode: CurrencyCode,
     ) {
         const result = new Map<string, ReturnType<typeof emptyCampaignStats>>();
         for (const row of statusRows) {
@@ -632,10 +689,17 @@ export class StorePromotionCampaignService {
         }
         for (const row of allocationRows) {
             const stats = result.get(String(row.promotionId)) ?? emptyCampaignStats();
-            stats.redeemedOrderCount = Number(row.redeemedOrderCount);
-            stats.refundedOrderCount = Number(row.refundedOrderCount);
-            stats.discountAmountTotal = Number(row.discountAmountTotal);
-            stats.assistedRevenueTotal = Number(row.assistedRevenueTotal);
+            stats.redeemedOrderCount += Number(row.redeemedOrderCount);
+            stats.refundedOrderCount += Number(row.refundedOrderCount);
+            stats.financialTotals.push({
+                currencyCode: row.currencyCode,
+                discountAmountTotal: Number(row.discountAmountTotal),
+                assistedRevenueTotal: Number(row.assistedRevenueTotal),
+            });
+            if (row.currencyCode === selectedCurrencyCode) {
+                stats.discountAmountTotal = Number(row.discountAmountTotal);
+                stats.assistedRevenueTotal = Number(row.assistedRevenueTotal);
+            }
             result.set(String(row.promotionId), stats);
         }
         return result;
@@ -653,8 +717,17 @@ export class StorePromotionCampaignService {
                 const variant = await this.productVariantService.findOne(ctx, rule.variantId);
                 if (!variant) return null;
                 const originalPrice = variant.priceWithTax;
+                const convertedSalePrice =
+                    rule.salePrice == null
+                        ? null
+                        : convertChannelAmount(
+                              ctx,
+                              rule.salePrice,
+                              rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
+                              ctx.currencyCode,
+                          );
                 const salePrice =
-                    rule.salePrice ??
+                    convertedSalePrice ??
                     Math.round(originalPrice * (1 - Math.min(100, rule.percentageOff ?? 0) / 100));
                 const imageIdentifier =
                     variant.featuredAsset?.preview ?? variant.product.featuredAsset?.preview ?? null;
@@ -832,7 +905,8 @@ function percentageOffToDiscountRate(value: number): number {
 }
 
 function couponKindForAction(code: string): StoreCouponCampaignKind | null {
-    if (code === 'order_fixed_discount') return 'ORDER_FIXED';
+    if (code === 'order_fixed_discount' || code === 'store_currency_order_fixed_discount')
+        return 'ORDER_FIXED';
     if (code === 'order_percentage_discount') return 'ORDER_PERCENTAGE';
     if (code === 'store_collection_percentage_discount') return 'COLLECTION_PERCENTAGE';
     if (code === 'products_percentage_discount') return 'PRODUCT_PERCENTAGE';
@@ -856,7 +930,7 @@ function dateRangesOverlap(
     return firstStartTime < secondEndTime && secondStartTime < firstEndTime;
 }
 
-function emptyCampaignStats() {
+function emptyCampaignStats(): StoreCouponCampaignStats {
     return {
         claimedCount: 0,
         availableCount: 0,
@@ -869,6 +943,7 @@ function emptyCampaignStats() {
         refundedOrderCount: 0,
         discountAmountTotal: 0,
         assistedRevenueTotal: 0,
+        financialTotals: [],
     };
 }
 
@@ -879,9 +954,10 @@ function reportDateKey(value: string | Date): string {
     return date.toISOString().slice(0, 10);
 }
 
-function emptyDailyCouponMetric(date: string): StoreCouponDailyMetricView {
+function emptyDailyCouponMetric(date: string, currencyCode: CurrencyCode): StoreCouponDailyMetricView {
     return {
         date,
+        currencyCode,
         claimedCount: 0,
         redeemedCount: 0,
         refundedCount: 0,

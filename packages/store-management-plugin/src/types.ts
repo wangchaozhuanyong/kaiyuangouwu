@@ -96,6 +96,13 @@ export interface StoreCouponCampaignStats {
     refundedOrderCount: number;
     discountAmountTotal: number;
     assistedRevenueTotal: number;
+    financialTotals: StoreCouponFinancialTotal[];
+}
+
+export interface StoreCouponFinancialTotal {
+    currencyCode: CurrencyCode;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
 }
 
 export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
@@ -107,6 +114,7 @@ export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
     startsAt: Date | null;
     endsAt: Date | null;
     minimumSpend: number;
+    currencyCode: CurrencyCode;
     discountAmount: number | null;
     discountRate: number | null;
     collectionIds: ID[];
@@ -133,6 +141,7 @@ export interface StoreCustomerCouponView {
     campaignKind: StoreCouponCampaignKind;
     status: StoreCustomerCouponStatus;
     minimumSpend: number;
+    currencyCode: CurrencyCode;
     discountAmount: number | null;
     discountRate: number | null;
     claimedAt: Date;
@@ -261,6 +270,7 @@ export interface StoreCouponCampaignActionResult {
 
 export interface StoreCouponDailyMetricView {
     date: string;
+    currencyCode: CurrencyCode;
     claimedCount: number;
     redeemedCount: number;
     refundedCount: number;

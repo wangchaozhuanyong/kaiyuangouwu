@@ -22,7 +22,11 @@ export function useProductsByIdsQuery({
     language: StorefrontLanguage;
 }) {
     return useQuery({
-        queryKey: storefrontQueryKeys.productsByIds(market.code, languageCodeFor(language), productIds),
+        queryKey: storefrontQueryKeys.productsByIds(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+            productIds,
+        ),
         queryFn: ({ signal }) => api.productsByIds(productIds, signal),
         enabled: productIds.length > 0,
         staleTime: PUBLIC_QUERY_STALE_TIME,

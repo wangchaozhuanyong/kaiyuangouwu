@@ -25,11 +25,17 @@ const order = {
 const calculatorArgs = [
     { name: 'baseRate', value: '1200' },
     { name: 'freeAbove', value: '10000' },
+    { name: 'currencyCode', value: 'CNY' },
     { name: 'taxRate', value: '0' },
     { name: 'priceIncludesTax', value: 'false' },
     { name: 'estimateMinDays', value: '2' },
     { name: 'estimateMaxDays', value: '4' },
 ];
+
+const ctx = {
+    currencyCode: 'CNY',
+    channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+} as any;
 
 describe('physical shipping totals', () => {
     it('excludes digital lines from subtotal and quantity thresholds', () => {
@@ -40,12 +46,7 @@ describe('physical shipping totals', () => {
 
 describe('physicalSubtotalShippingCalculator', () => {
     it('charges the configured rate below the physical subtotal threshold', async () => {
-        const quote = await physicalSubtotalShippingCalculator.calculate(
-            {} as any,
-            order,
-            calculatorArgs,
-            {} as any,
-        );
+        const quote = await physicalSubtotalShippingCalculator.calculate(ctx, order, calculatorArgs, ctx);
 
         expect(quote).toMatchObject({
             price: 1200,
@@ -62,6 +63,30 @@ describe('physicalSubtotalShippingCalculator', () => {
         );
 
         expect(quote).toMatchObject({ price: 0, metadata: { freeShippingApplied: true } });
+    });
+
+    it('converts the configured rate and threshold into the order currency', async () => {
+        const quote = await physicalSubtotalShippingCalculator.calculate(
+            {
+                currencyCode: 'MYR',
+                channel: {
+                    defaultCurrencyCode: 'CNY',
+                    customFields: {
+                        cnyToMyrRate: 0.6,
+                        currencyRateMarkupBps: 0,
+                        currencyRoundingMode: 'CENT',
+                    },
+                },
+            } as any,
+            order,
+            calculatorArgs,
+            {} as any,
+        );
+
+        expect(quote).toMatchObject({
+            price: 720,
+            metadata: { freeShippingThreshold: 6_000, freeShippingApplied: false },
+        });
     });
 });
 

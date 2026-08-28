@@ -1,5 +1,14 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { Channel, Customer, EntityId, Money, Order, Promotion, VendureEntity } from '@vendure/core';
+import {
+    Channel,
+    CurrencyCode,
+    Customer,
+    EntityId,
+    Money,
+    Order,
+    Promotion,
+    VendureEntity,
+} from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, VersionColumn } from 'typeorm';
 
 import { CustomerCouponStatus } from '../promotion/coupon-lifecycle.constants';
@@ -56,6 +65,9 @@ export class CustomerCoupon extends VendureEntity {
 
     @Money({ default: 0 })
     minimumSpend: number;
+
+    @Column({ type: 'varchar', length: 3 })
+    currencyCode: CurrencyCode;
 
     @Money({ nullable: true })
     discountAmount: number | null;

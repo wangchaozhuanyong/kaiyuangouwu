@@ -1,5 +1,6 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { Order, ShippingCalculator, ShippingEligibilityChecker } from '@vendure/core';
+import { convertChannelAmount } from '@vendure/store-management-plugin/currency-conversion';
 
 import { getOrderLineFulfillmentType } from './fulfillment-classification';
 
@@ -57,6 +58,14 @@ export const physicalSubtotalShippingCalculator = new ShippingCalculator({
                 { languageCode: LanguageCode.en, value: 'Set to 0 to disable free shipping' },
             ],
         },
+        currencyCode: {
+            type: 'string',
+            defaultValue: '',
+            label: [
+                { languageCode: LanguageCode.zh_Hans, value: '运费配置币种' },
+                { languageCode: LanguageCode.en, value: 'Shipping configuration currency' },
+            ],
+        },
         taxRate: {
             type: 'float',
             defaultValue: 0,
@@ -95,15 +104,22 @@ export const physicalSubtotalShippingCalculator = new ShippingCalculator({
     },
     calculate: (ctx, order, args) => {
         const physicalSubtotalWithTax = physicalOrderSubtotalWithTax(order);
-        const freeShippingApplied = args.freeAbove > 0 && physicalSubtotalWithTax >= args.freeAbove;
+        const sourceCurrency = (args.currencyCode ||
+            ctx.channel.defaultCurrencyCode) as typeof ctx.currencyCode;
+        const baseRate = convertChannelAmount(ctx, args.baseRate, sourceCurrency, ctx.currencyCode);
+        const freeAbove = convertChannelAmount(ctx, args.freeAbove, sourceCurrency, ctx.currencyCode);
+        if (baseRate == null || freeAbove == null) {
+            throw new Error('运费币种汇率配置无效');
+        }
+        const freeShippingApplied = freeAbove > 0 && physicalSubtotalWithTax >= freeAbove;
         return {
-            price: freeShippingApplied ? 0 : args.baseRate,
+            price: freeShippingApplied ? 0 : baseRate,
             taxRate: args.taxRate,
             priceIncludesTax: args.priceIncludesTax,
             metadata: {
                 physicalSubtotalWithTax,
                 physicalQuantity: physicalOrderQuantity(order),
-                freeShippingThreshold: args.freeAbove,
+                freeShippingThreshold: freeAbove,
                 freeShippingApplied,
                 estimateMinDays: Math.max(0, args.estimateMinDays),
                 estimateMaxDays: Math.max(args.estimateMinDays, args.estimateMaxDays),

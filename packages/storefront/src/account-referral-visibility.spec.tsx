@@ -68,16 +68,33 @@ function renderAccount(referralEnabled: boolean): string {
         defaultPosterTemplate: 'BRAND_MINIMAL',
         posterTemplates: ['BRAND_MINIMAL', 'BENEFIT_RED_GOLD', 'PRODUCT_STORY', 'PREMIUM_DARK'],
     };
-    client.setQueryData(storefrontQueryKeys.referralProgram(market.code, languageCode), program);
-    client.setQueryData(storefrontQueryKeys.customerOrderCounts(market.code, languageCode, customer.id), {
-        pending: 0,
-        shipping: 0,
-        receiving: 0,
-    });
-    client.setQueryData(storefrontQueryKeys.afterSalesRequests(market.code, languageCode, customer.id), []);
+    client.setQueryData(
+        storefrontQueryKeys.referralProgram(storefrontQueryKeys.market(market), languageCode),
+        program,
+    );
+    client.setQueryData(
+        storefrontQueryKeys.customerOrderCounts(
+            storefrontQueryKeys.market(market),
+            languageCode,
+            customer.id,
+        ),
+        {
+            pending: 0,
+            shipping: 0,
+            receiving: 0,
+        },
+    );
+    client.setQueryData(
+        storefrontQueryKeys.afterSalesRequests(storefrontQueryKeys.market(market), languageCode, customer.id),
+        [],
+    );
     if (referralEnabled) {
         client.setQueryData(
-            storefrontQueryKeys.customerReferral(market.code, languageCode, customer.id),
+            storefrontQueryKeys.customerReferral(
+                storefrontQueryKeys.market(market),
+                languageCode,
+                customer.id,
+            ),
             overview,
         );
     }

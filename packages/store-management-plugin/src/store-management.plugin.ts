@@ -46,6 +46,8 @@ import { MerchantInitialPasswordResolver } from './merchant-initial-password.res
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
 import {
     collectionPercentageDiscount,
+    currencyMinimumOrderAmount,
+    currencyOrderFixedDiscount,
     customerCouponEntitlement,
     flashSalePriceAction,
 } from './promotion/store-commerce-promotion-actions';
@@ -101,6 +103,8 @@ import {
 } from './system-announcement.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
 import { StorefrontPromotionPluginOptions } from './types';
+// eslint-disable-next-line import/order -- organize-imports sorts this sibling file before the usdt directory.
+import { UsdtOtcRateService } from './usdt-otc-rate.service';
 import { usdtTrc20PaymentHandler } from './usdt/usdt-payment-handler';
 import {
     configureUsdtPaymentProofSecret,
@@ -113,7 +117,6 @@ import {
     loadUsdtWalletConfiguration,
     UsdtWalletConfigurationService,
 } from './usdt/usdt-wallet-configuration.service';
-import { UsdtOtcRateService } from './usdt-otc-rate.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin],
@@ -202,14 +205,20 @@ import { UsdtOtcRateService } from './usdt-otc-rate.service';
         ) {
             config.paymentOptions.paymentMethodHandlers.push(usdtTrc20PaymentHandler);
         }
-        if (
-            !config.promotionOptions.promotionConditions.some(
-                candidate => candidate.code === customerCouponEntitlement.code,
-            )
-        ) {
-            config.promotionOptions.promotionConditions.push(customerCouponEntitlement);
+        for (const condition of [customerCouponEntitlement, currencyMinimumOrderAmount]) {
+            if (
+                !config.promotionOptions.promotionConditions.some(
+                    candidate => candidate.code === condition.code,
+                )
+            ) {
+                config.promotionOptions.promotionConditions.push(condition);
+            }
         }
-        for (const action of [collectionPercentageDiscount, flashSalePriceAction]) {
+        for (const action of [
+            collectionPercentageDiscount,
+            flashSalePriceAction,
+            currencyOrderFixedDiscount,
+        ]) {
             if (!config.promotionOptions.promotionActions.some(candidate => candidate.code === action.code)) {
                 config.promotionOptions.promotionActions.push(action);
             }

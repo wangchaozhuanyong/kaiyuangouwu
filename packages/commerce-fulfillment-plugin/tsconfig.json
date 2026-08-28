@@ -4,7 +4,10 @@
         "noEmit": true,
         "types": ["node", "vitest/globals"],
         "paths": {
-            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"]
+            "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"],
+            "@vendure/store-management-plugin/currency-conversion": [
+                "../store-management-plugin/src/store-currency-price-selection-strategy.ts"
+            ]
         }
     },
     "include": ["src/**/*.ts"]

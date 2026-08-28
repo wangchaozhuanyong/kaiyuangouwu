@@ -4,8 +4,8 @@ export const PUBLIC_QUERY_STALE_TIME = 60_000;
 export const ROUTE_QUERY_STALE_TIME = 30_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
-export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v1';
-const PUBLIC_QUERY_CACHE_VERSION = 1;
+export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v2';
+const PUBLIC_QUERY_CACHE_VERSION = 2;
 
 interface PersistedPublicQueryCache {
     version: number;
@@ -107,6 +107,7 @@ export function watchPublicQueryCache(
 }
 
 export const storefrontQueryKeys = {
+    market: (market: { code: string; currencyCode: string }) => `${market.code}:${market.currencyCode}`,
     scope: (marketCode: string, languageCode: string) => ['storefront', marketCode, languageCode] as const,
     config: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'config'] as const,

@@ -1,3 +1,4 @@
+import { convertMinorPriceToUsdt } from './money-display';
 import {
     StoreCouponUsageRecord,
     StoreCustomerCoupon,
@@ -61,19 +62,23 @@ export function couponCardsFromCampaigns(
     campaigns: StorefrontCouponCampaign[],
     language: StorefrontLanguage,
     currencyCode: string,
+    displayCurrencyCode = currencyCode,
 ): StorefrontCouponCard[] {
     const isZh = language === 'zh';
-    const currencyUnit = currencySymbol(currencyCode, language);
     return campaigns.filter(isDisplayableCampaign).map(coupon => {
         const isFixed = coupon.kind === 'ORDER_FIXED';
-        const minimum = formatMinorAmount(coupon.minimumSpend, language);
-        const value = isFixed
-            ? formatMinorAmount(coupon.discountAmount ?? 0, language)
-            : formatDiscountRate(coupon.discountRate);
+        const money = displayMoneyParts(coupon.minimumSpend, currencyCode, displayCurrencyCode, language);
+        const discountMoney = displayMoneyParts(
+            coupon.discountAmount ?? 0,
+            currencyCode,
+            displayCurrencyCode,
+            language,
+        );
+        const value = isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate);
         const threshold = coupon.minimumSpend
             ? isZh
-                ? `满 ${currencyUnit}${minimum} 可用`
-                : `Spend ${currencyUnit}${minimum}`
+                ? `满 ${money.unit}${money.value} 可用`
+                : `Spend ${money.unit}${money.value}`
             : isZh
               ? '无门槛'
               : 'No minimum';
@@ -81,7 +86,7 @@ export function couponCardsFromCampaigns(
             id: coupon.id,
             campaignId: coupon.id,
             value,
-            unit: isFixed ? currencyUnit : isZh ? '折' : 'x',
+            unit: isFixed ? discountMoney.unit : isZh ? '折' : 'x',
             unitBefore: isFixed,
             title: coupon.name,
             description: threshold,
@@ -98,24 +103,28 @@ export function couponCardFromCustomerCoupon(
     language: StorefrontLanguage,
     currencyCode: string,
     _index = 0,
+    displayCurrencyCode = currencyCode,
 ): StorefrontCouponCard {
     const isZh = language === 'zh';
-    const currencyUnit = currencySymbol(currencyCode, language);
+    const minimumMoney = displayMoneyParts(coupon.minimumSpend, currencyCode, displayCurrencyCode, language);
+    const discountMoney = displayMoneyParts(
+        coupon.discountAmount ?? 0,
+        currencyCode,
+        displayCurrencyCode,
+        language,
+    );
     const isFixed = coupon.campaignKind === 'ORDER_FIXED';
-    const minimum = formatMinorAmount(coupon.minimumSpend, language);
     return {
         id: coupon.id,
         campaignId: coupon.campaignId,
-        value: isFixed
-            ? formatMinorAmount(coupon.discountAmount ?? 0, language)
-            : formatDiscountRate(coupon.discountRate),
-        unit: isFixed ? currencyUnit : isZh ? '折' : 'x',
+        value: isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate),
+        unit: isFixed ? discountMoney.unit : isZh ? '折' : 'x',
         unitBefore: isFixed,
         title: coupon.campaignName,
         description: coupon.minimumSpend
             ? isZh
-                ? `满 ${currencyUnit}${minimum} 可用`
-                : `Spend ${currencyUnit}${minimum}`
+                ? `满 ${minimumMoney.unit}${minimumMoney.value} 可用`
+                : `Spend ${minimumMoney.unit}${minimumMoney.value}`
             : isZh
               ? '无门槛'
               : 'No minimum',
@@ -124,6 +133,27 @@ export function couponCardFromCustomerCoupon(
         claimed: true,
         claimable: false,
     };
+}
+
+function displayMoneyParts(
+    value: number,
+    sourceCurrencyCode: string,
+    displayCurrencyCode: string,
+    language: StorefrontLanguage,
+): { value: string; unit: string } {
+    if (displayCurrencyCode === 'USDT') {
+        const amount = convertMinorPriceToUsdt(value, sourceCurrencyCode);
+        if (amount != null) {
+            return {
+                value: new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: amount < 1 ? 4 : 2,
+                }).format(amount),
+                unit: '≈₮',
+            };
+        }
+    }
+    return { value: formatMinorAmount(value, language), unit: currencySymbol(sourceCurrencyCode, language) };
 }
 
 export function couponCardFromUsageRecord(

@@ -78,14 +78,21 @@ export function PaymentPage({
     const isTestMode = import.meta.env.DEV;
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
     const methodsQuery = useQuery({
-        queryKey: storefrontQueryKeys.paymentMethods(market.code, languageCodeFor(language), order?.id ?? ''),
+        queryKey: storefrontQueryKeys.paymentMethods(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+            order?.id ?? '',
+        ),
         queryFn: ({ signal }) => api.eligiblePaymentMethods(signal),
         enabled: isPending,
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const referralProgramQuery = useQuery({
-        queryKey: storefrontQueryKeys.referralProgram(market.code, languageCodeFor(language)),
+        queryKey: storefrontQueryKeys.referralProgram(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+        ),
         queryFn: ({ signal }) => api.referralProgram(signal),
         enabled: Boolean(customer && isPending),
         staleTime: ROUTE_QUERY_STALE_TIME,
@@ -93,7 +100,7 @@ export function PaymentPage({
     });
     const referralOverviewQuery = useQuery({
         queryKey: storefrontQueryKeys.customerReferral(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
@@ -621,7 +628,12 @@ export function PaymentPage({
                                 <dd>{shippingEstimate(order, language)}</dd>
                             </div>
                         )}
-                        <TaxSummaryRows order={order} locale={locale} language={language} />
+                        <TaxSummaryRows
+                            order={order}
+                            locale={locale}
+                            language={language}
+                            useDisplayCurrency
+                        />
                         <div className="summary-total">
                             <dt>{isZh ? '应付合计' : 'Total due'}</dt>
                             <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
@@ -719,7 +731,11 @@ export function OrderConfirmationPage({
     const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const orderQuery = useQuery({
-        queryKey: storefrontQueryKeys.orderByCode(market.code, languageCodeFor(language), code),
+        queryKey: storefrontQueryKeys.orderByCode(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+            code,
+        ),
         queryFn: ({ signal }) => api.orderByConfirmationToken(confirmationToken, signal),
         enabled: Boolean(code && confirmationToken),
         initialData: confirmationToken && initialOrder?.code === code ? initialOrder : undefined,

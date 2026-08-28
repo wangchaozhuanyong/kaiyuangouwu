@@ -31,6 +31,7 @@ interface CouponCenterPageProps {
     myCoupons: StoreCustomerCoupon[];
     usageRecords: StoreCouponUsageRecord[];
     currencyCode: string;
+    displayCurrencyCode: string;
     language: StorefrontLanguage;
     loading: boolean;
     onClaim: (campaignId: string) => Promise<string | null>;
@@ -43,8 +44,16 @@ export function CouponCenterPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { coupons, myCoupons, usageRecords, currencyCode, language, loading, onClaim } =
-        useStorefront<CouponCenterPageProps>();
+    const {
+        coupons,
+        myCoupons,
+        usageRecords,
+        currencyCode,
+        displayCurrencyCode,
+        language,
+        loading,
+        onClaim,
+    } = useStorefront<CouponCenterPageProps>();
     const isZh = language === 'zh';
     const [activeTab, setActiveTab] = useState<CouponCenterTab>('ACTIVITIES');
     const [claimingId, setClaimingId] = useState<string | null>(null);
@@ -53,7 +62,12 @@ export function CouponCenterPage() {
     const customerAwareCampaigns = coupons.map(campaign =>
         claimedCampaignIds.has(campaign.id) ? { ...campaign, claimed: true, claimable: false } : campaign,
     );
-    const campaignCards = couponCardsFromCampaigns(customerAwareCampaigns, language, currencyCode);
+    const campaignCards = couponCardsFromCampaigns(
+        customerAwareCampaigns,
+        language,
+        currencyCode,
+        displayCurrencyCode,
+    );
     const campaignIds = new Set(
         couponCampaignsForTab(customerAwareCampaigns, activeTab).map(campaign => campaign.id),
     );
@@ -175,7 +189,13 @@ export function CouponCenterPage() {
                 <section className="coupon-center-panel" aria-busy={loading}>
                     <div className="coupon-center-ticket-list">
                         {visibleCustomerCoupons.map((coupon, index) => {
-                            const card = couponCardFromCustomerCoupon(coupon, language, currencyCode, index);
+                            const card = couponCardFromCustomerCoupon(
+                                coupon,
+                                language,
+                                currencyCode,
+                                index,
+                                displayCurrencyCode,
+                            );
                             const locked = isLockedCoupon(coupon);
                             return (
                                 <CouponTicket

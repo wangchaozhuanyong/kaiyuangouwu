@@ -69,10 +69,15 @@ function renderOrders(cachedOrders?: Order[], language: StorefrontLanguage = 'zh
     const client = createStorefrontQueryClient();
     if (cachedOrders) {
         client.setQueryData(
-            storefrontQueryKeys.customerOrders(market.code, market.defaultLanguageCode, customer.id, {
-                tab: 'all',
-                orderCode: '',
-            }),
+            storefrontQueryKeys.customerOrders(
+                storefrontQueryKeys.market(market),
+                market.defaultLanguageCode,
+                customer.id,
+                {
+                    tab: 'all',
+                    orderCode: '',
+                },
+            ),
             {
                 pages: [{ items: cachedOrders, totalItems: cachedOrders.length }],
                 pageParams: [0],
@@ -98,9 +103,14 @@ function renderLogistics(cachedOrders?: Order[]) {
     const client = createStorefrontQueryClient();
     if (cachedOrders) {
         client.setQueryData(
-            storefrontQueryKeys.customerOrders(market.code, market.defaultLanguageCode, customer.id, {
-                view: 'logistics',
-            }),
+            storefrontQueryKeys.customerOrders(
+                storefrontQueryKeys.market(market),
+                market.defaultLanguageCode,
+                customer.id,
+                {
+                    view: 'logistics',
+                },
+            ),
             {
                 pages: [{ items: cachedOrders, totalItems: cachedOrders.length }],
                 pageParams: [0],

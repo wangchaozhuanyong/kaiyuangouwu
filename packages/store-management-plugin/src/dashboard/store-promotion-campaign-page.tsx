@@ -168,8 +168,6 @@ function CouponReport({
             revoked: result.revoked + coupon.revokedCount,
             orders: result.orders + coupon.redeemedOrderCount,
             refundedOrders: result.refundedOrders + coupon.refundedOrderCount,
-            discount: result.discount + coupon.discountAmountTotal,
-            revenue: result.revenue + coupon.assistedRevenueTotal,
         }),
         {
             claimed: 0,
@@ -181,20 +179,18 @@ function CouponReport({
             revoked: 0,
             orders: 0,
             refundedOrders: 0,
-            discount: 0,
-            revenue: 0,
         },
     );
+    const financialTotals = mergeFinancialTotals(coupons.flatMap(coupon => coupon.financialTotals));
     const dailyTotals = dailyMetrics.reduce(
         (result, item) => ({
             claimed: result.claimed + item.claimedCount,
             redeemed: result.redeemed + item.redeemedCount,
             refunded: result.refunded + item.refundedCount,
-            discount: result.discount + item.discountAmountTotal,
-            revenue: result.revenue + item.assistedRevenueTotal,
         }),
-        { claimed: 0, redeemed: 0, refunded: 0, discount: 0, revenue: 0 },
+        { claimed: 0, redeemed: 0, refunded: 0 },
     );
+    const dailyFinancialTotals = mergeFinancialTotals(dailyMetrics);
 
     return (
         <div className="space-y-4">
@@ -211,11 +207,14 @@ function CouponReport({
                     detail={`购物车锁定 ${totals.locked} 张`}
                 />
                 <ReportMetric label="历史核销订单" value={`${totals.orders} 单`} />
-                <ReportMetric label="历史优惠金额" value={formatMoney(totals.discount, currencyCode)} />
+                <ReportMetric
+                    label="历史优惠金额"
+                    value={formatFinancialValues(financialTotals, 'discountAmountTotal')}
+                />
                 <ReportMetric
                     label="优惠券归因订单金额"
-                    value={formatMoney(totals.revenue, currencyCode)}
-                    detail={`含后续退款订单 · 产出比 ${formatMultiple(totals.revenue, totals.discount)}`}
+                    value={formatFinancialValues(financialTotals, 'assistedRevenueTotal')}
+                    detail={`含后续退款订单 · 产出比 ${formatFinancialMultiples(financialTotals)}`}
                 />
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -279,14 +278,12 @@ function CouponReport({
                                 <ReportCell>{coupon.redeemedOrderCount}</ReportCell>
                                 <ReportCell>{coupon.refundedOrderCount}</ReportCell>
                                 <ReportCell>
-                                    {formatMoney(coupon.discountAmountTotal, currencyCode)}
+                                    {formatFinancialValues(coupon.financialTotals, 'discountAmountTotal')}
                                 </ReportCell>
                                 <ReportCell>
-                                    {formatMoney(coupon.assistedRevenueTotal, currencyCode)}
+                                    {formatFinancialValues(coupon.financialTotals, 'assistedRevenueTotal')}
                                 </ReportCell>
-                                <ReportCell>
-                                    {formatMultiple(coupon.assistedRevenueTotal, coupon.discountAmountTotal)}
-                                </ReportCell>
+                                <ReportCell>{formatFinancialMultiples(coupon.financialTotals)}</ReportCell>
                             </tr>
                         ))}
                     </tbody>
@@ -349,12 +346,12 @@ function CouponReport({
                     <ReportMetric label="区间退款订单" value={`${dailyTotals.refunded} 单`} />
                     <ReportMetric
                         label="区间优惠金额"
-                        value={formatMoney(dailyTotals.discount, currencyCode)}
+                        value={formatFinancialValues(dailyFinancialTotals, 'discountAmountTotal')}
                     />
                     <ReportMetric
                         label="区间归因订单金额"
-                        value={formatMoney(dailyTotals.revenue, currencyCode)}
-                        detail={`产出比 ${formatMultiple(dailyTotals.revenue, dailyTotals.discount)}`}
+                        value={formatFinancialValues(dailyFinancialTotals, 'assistedRevenueTotal')}
+                        detail={`产出比 ${formatFinancialMultiples(dailyFinancialTotals)}`}
                     />
                 </div>
                 <div className="flex justify-end">
@@ -391,8 +388,13 @@ function CouponReport({
                             </thead>
                             <tbody>
                                 {dailyMetrics.map(item => (
-                                    <tr key={item.date} className="border-b last:border-0">
-                                        <td className="whitespace-nowrap px-3 py-3">{item.date}</td>
+                                    <tr
+                                        key={`${item.date}:${item.currencyCode}`}
+                                        className="border-b last:border-0"
+                                    >
+                                        <td className="whitespace-nowrap px-3 py-3">
+                                            {item.date} · {item.currencyCode}
+                                        </td>
                                         <ReportCell>{item.claimedCount}</ReportCell>
                                         <ReportCell>{item.redeemedCount}</ReportCell>
                                         <ReportCell>{item.refundedCount}</ReportCell>
@@ -400,10 +402,10 @@ function CouponReport({
                                         <ReportCell>{item.expiredCount}</ReportCell>
                                         <ReportCell>{item.revokedCount}</ReportCell>
                                         <ReportCell>
-                                            {formatMoney(item.discountAmountTotal, currencyCode)}
+                                            {formatMoney(item.discountAmountTotal, item.currencyCode)}
                                         </ReportCell>
                                         <ReportCell>
-                                            {formatMoney(item.assistedRevenueTotal, currencyCode)}
+                                            {formatMoney(item.assistedRevenueTotal, item.currencyCode)}
                                         </ReportCell>
                                     </tr>
                                 ))}
@@ -1802,6 +1804,41 @@ function formatDateRange(startsAt: string | null, endsAt: string | null): string
 function formatMoney(value: number, currencyCode: string): string {
     return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: currencyCode }).format(value / 100);
 }
+type CouponFinancialTotal = {
+    currencyCode: string;
+    discountAmountTotal: number;
+    assistedRevenueTotal: number;
+};
+function mergeFinancialTotals(items: CouponFinancialTotal[]): CouponFinancialTotal[] {
+    const totals = new Map<string, CouponFinancialTotal>();
+    for (const item of items) {
+        const current = totals.get(item.currencyCode) ?? {
+            currencyCode: item.currencyCode,
+            discountAmountTotal: 0,
+            assistedRevenueTotal: 0,
+        };
+        current.discountAmountTotal += item.discountAmountTotal;
+        current.assistedRevenueTotal += item.assistedRevenueTotal;
+        totals.set(item.currencyCode, current);
+    }
+    return [...totals.values()].sort((left, right) => left.currencyCode.localeCompare(right.currencyCode));
+}
+function formatFinancialValues(
+    totals: CouponFinancialTotal[],
+    field: 'discountAmountTotal' | 'assistedRevenueTotal',
+): string {
+    return totals.length ? totals.map(item => formatMoney(item[field], item.currencyCode)).join(' / ') : '—';
+}
+function formatFinancialMultiples(totals: CouponFinancialTotal[]): string {
+    return totals.length
+        ? totals
+              .map(
+                  item =>
+                      `${item.currencyCode} ${formatMultiple(item.assistedRevenueTotal, item.discountAmountTotal)}`,
+              )
+              .join(' / ')
+        : '—';
+}
 function formatRate(value: number, total: number): string {
     return total > 0 ? `${((value / total) * 100).toFixed(1)}%` : '0.0%';
 }
@@ -1841,7 +1878,7 @@ function couponIssuanceStatusLabel(
 }
 function exportCouponReport(
     coupons: StorePromotionCampaignsResult['storeCouponCampaigns'],
-    currencyCode: string,
+    _currencyCode: string,
 ) {
     const rows: Array<Array<string | number>> = [
         [
@@ -1858,28 +1895,35 @@ function exportCouponReport(
             '当前作废',
             '历史核销订单数',
             '退款订单数',
-            `历史优惠金额(${currencyCode})`,
-            `优惠券归因订单金额-含后续退款(${currencyCode})`,
+            '币种',
+            '历史优惠金额',
+            '优惠券归因订单金额-含后续退款',
             '优惠产出比',
         ],
-        ...coupons.map(coupon => [
-            coupon.name,
-            couponKindLabels[coupon.kind],
-            couponIssuanceStatusLabel(coupon),
-            coupon.claimedCount,
-            coupon.availableCount,
-            coupon.lockedCount,
-            coupon.usedCount,
-            formatRate(coupon.usedCount, coupon.claimedCount),
-            coupon.returnedCount,
-            coupon.expiredCount,
-            coupon.revokedCount,
-            coupon.redeemedOrderCount,
-            coupon.refundedOrderCount,
-            (coupon.discountAmountTotal / 100).toFixed(2),
-            (coupon.assistedRevenueTotal / 100).toFixed(2),
-            formatMultiple(coupon.assistedRevenueTotal, coupon.discountAmountTotal),
-        ]),
+        ...coupons.flatMap(coupon =>
+            (coupon.financialTotals.length
+                ? coupon.financialTotals
+                : [{ currencyCode: '', discountAmountTotal: 0, assistedRevenueTotal: 0 }]
+            ).map(total => [
+                coupon.name,
+                couponKindLabels[coupon.kind],
+                couponIssuanceStatusLabel(coupon),
+                coupon.claimedCount,
+                coupon.availableCount,
+                coupon.lockedCount,
+                coupon.usedCount,
+                formatRate(coupon.usedCount, coupon.claimedCount),
+                coupon.returnedCount,
+                coupon.expiredCount,
+                coupon.revokedCount,
+                coupon.redeemedOrderCount,
+                coupon.refundedOrderCount,
+                total.currencyCode,
+                (total.discountAmountTotal / 100).toFixed(2),
+                (total.assistedRevenueTotal / 100).toFixed(2),
+                formatMultiple(total.assistedRevenueTotal, total.discountAmountTotal),
+            ]),
+        ),
     ];
     const csv = `\uFEFF${rows.map(row => row.map(csvValue).join(',')).join('\r\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -1893,23 +1937,25 @@ function exportCouponReport(
 }
 function exportCouponDailyReport(
     metrics: StoreCouponDailyReportResult['storeCouponDailyReport'],
-    currencyCode: string,
+    _currencyCode: string,
     filter: CouponReportFilter,
 ) {
     const rows: Array<Array<string | number>> = [
         [
             '日期',
+            '币种',
             '发放数量',
             '核销订单数',
             '退款订单数',
             '返还事件数',
             '过期事件数',
             '作废事件数',
-            `优惠金额(${currencyCode})`,
-            `优惠券归因订单金额(${currencyCode})`,
+            '优惠金额',
+            '优惠券归因订单金额',
         ],
         ...metrics.map(item => [
             item.date,
+            item.currencyCode,
             item.claimedCount,
             item.redeemedCount,
             item.refundedCount,

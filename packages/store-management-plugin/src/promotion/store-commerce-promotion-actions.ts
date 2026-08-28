@@ -1,15 +1,18 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    CurrencyCode,
     idsAreEqual,
     ProductVariant,
     PromotionCondition,
     PromotionItemAction,
+    PromotionOrderAction,
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
 
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
+import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 
 let connection: TransactionalConnection;
 
@@ -50,7 +53,55 @@ interface FlashSaleVariantRule {
     variantId: string;
     salePrice?: number;
     percentageOff?: number;
+    currencyCode?: CurrencyCode;
 }
+
+export const currencyMinimumOrderAmount = new PromotionCondition({
+    code: 'store_currency_minimum_order_amount',
+    description: [
+        { languageCode: LanguageCode.zh_Hans, value: '订单商品小计满指定币种金额' },
+        { languageCode: LanguageCode.en, value: 'Order subtotal reaches a currency-aware amount' },
+    ],
+    args: {
+        amount: { type: 'int', ui: { component: 'currency-form-input' } },
+        currencyCode: { type: 'string' },
+        taxInclusive: { type: 'boolean', defaultValue: true },
+    },
+    check(ctx, order, args) {
+        const amount = convertChannelAmount(
+            ctx,
+            args.amount,
+            args.currencyCode as CurrencyCode,
+            ctx.currencyCode,
+        );
+        if (amount == null) return false;
+        return (args.taxInclusive ? order.subTotalWithTax : order.subTotal) >= amount;
+    },
+    priorityValue: 10,
+});
+
+export const currencyOrderFixedDiscount = new PromotionOrderAction({
+    code: 'store_currency_order_fixed_discount',
+    description: [
+        { languageCode: LanguageCode.zh_Hans, value: '订单按指定币种固定金额立减' },
+        { languageCode: LanguageCode.en, value: 'Apply a currency-aware fixed order discount' },
+    ],
+    args: {
+        discount: { type: 'int', ui: { component: 'currency-form-input' } },
+        currencyCode: { type: 'string' },
+    },
+    execute(ctx, order, args) {
+        const discount = convertChannelAmount(
+            ctx,
+            args.discount,
+            args.currencyCode as CurrencyCode,
+            ctx.currencyCode,
+        );
+        if (discount == null) return 0;
+        const upperBound = ctx.channel.pricesIncludeTax ? order.subTotalWithTax : order.subTotal;
+        return -Math.min(discount, upperBound);
+    },
+});
 
 export const collectionPercentageDiscount = new PromotionItemAction({
     code: 'store_collection_percentage_discount',
@@ -111,7 +162,15 @@ export const flashSalePriceAction = new PromotionItemAction({
             return 0;
         }
         const unitPrice = ctx.channel.pricesIncludeTax ? orderLine.unitPriceWithTax : orderLine.unitPrice;
-        const configuredSalePrice = rule.salePrice != null ? Math.max(0, rule.salePrice) : null;
+        const configuredSalePrice =
+            rule.salePrice != null
+                ? convertChannelAmount(
+                      ctx,
+                      Math.max(0, rule.salePrice),
+                      rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
+                      ctx.currencyCode,
+                  )
+                : null;
         const targetPrice =
             configuredSalePrice != null
                 ? ctx.channel.pricesIncludeTax || orderLine.unitPriceWithTax <= 0
@@ -140,8 +199,12 @@ export function parseFlashSaleVariantRules(value: string): FlashSaleVariantRule[
                 typeof candidate.percentageOff === 'number' && Number.isFinite(candidate.percentageOff)
                     ? candidate.percentageOff
                     : undefined;
+            const currencyCode =
+                candidate.currencyCode === CurrencyCode.CNY || candidate.currencyCode === CurrencyCode.MYR
+                    ? candidate.currencyCode
+                    : undefined;
             if (salePrice == null && percentageOff == null) return [];
-            return [{ variantId: candidate.variantId, salePrice, percentageOff }];
+            return [{ variantId: candidate.variantId, salePrice, percentageOff, currencyCode }];
         });
     } catch {
         return [];

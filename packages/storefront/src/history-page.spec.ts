@@ -42,7 +42,11 @@ function renderHistory(cachedProducts?: Product[]) {
     const productIds = [product.id];
     if (cachedProducts) {
         client.setQueryData(
-            storefrontQueryKeys.productsByIds(market.code, market.defaultLanguageCode, productIds),
+            storefrontQueryKeys.productsByIds(
+                storefrontQueryKeys.market(market),
+                market.defaultLanguageCode,
+                productIds,
+            ),
             cachedProducts,
         );
     }
@@ -70,7 +74,11 @@ function renderFavorites(cachedProducts?: Product[]) {
     const productIds = [product.id];
     if (cachedProducts) {
         client.setQueryData(
-            storefrontQueryKeys.productsByIds(market.code, market.defaultLanguageCode, productIds),
+            storefrontQueryKeys.productsByIds(
+                storefrontQueryKeys.market(market),
+                market.defaultLanguageCode,
+                productIds,
+            ),
             cachedProducts,
         );
     }

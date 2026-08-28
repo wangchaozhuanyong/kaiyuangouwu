@@ -32,6 +32,7 @@ import { ReferralReward } from '../entities/referral-reward.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 import { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 import { StorefrontDailyVisitor } from '../entities/storefront-daily-visitor.entity';
+import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import { StorefrontPromotionPluginOptions } from '../types';
 
 import {
@@ -179,6 +180,7 @@ export class ReferralService implements OnApplicationBootstrap {
         config.releaseDelayDays = input.releaseDelayDays;
         config.minimumOrderAmount = input.minimumOrderAmount;
         config.maxRewardPerOrder = input.maxRewardPerOrder ?? null;
+        config.currencyCode = ctx.channel.defaultCurrencyCode;
         config.allowBalanceSpend = input.allowBalanceSpend;
         config.attributionWindowDays = input.attributionWindowDays;
         config.defaultPosterTemplate = input.defaultPosterTemplate;
@@ -1060,13 +1062,31 @@ export class ReferralService implements OnApplicationBootstrap {
         const externalSettled = settledPayments
             .filter(payment => payment.method !== REFERRAL_BALANCE_PAYMENT_METHOD_CODE)
             .reduce((total, payment) => total + payment.amount, 0);
+        const minimumOrderAmount = convertChannelAmount(
+            ctx,
+            config.minimumOrderAmount,
+            config.currencyCode,
+            order.currencyCode,
+        );
+        const maxRewardPerOrder =
+            config.maxRewardPerOrder == null
+                ? null
+                : convertChannelAmount(
+                      ctx,
+                      config.maxRewardPerOrder,
+                      config.currencyCode,
+                      order.currencyCode,
+                  );
+        if (minimumOrderAmount == null || (config.maxRewardPerOrder != null && maxRewardPerOrder == null)) {
+            return;
+        }
         const { eligibleAmount, rewardAmount } = calculateReferralReward({
             productNet,
             settledTotal: settledTotal || order.totalWithTax,
             externalSettled,
             rewardRateBps: config.rewardRateBps,
-            minimumOrderAmount: config.minimumOrderAmount,
-            maxRewardPerOrder: config.maxRewardPerOrder,
+            minimumOrderAmount,
+            maxRewardPerOrder,
         });
         if (rewardAmount <= 0) return;
 
@@ -1335,6 +1355,7 @@ export class ReferralService implements OnApplicationBootstrap {
                 rewardRateBps: 500,
                 releaseDelayDays: 7,
                 minimumOrderAmount: 0,
+                currencyCode: ctx.channel.defaultCurrencyCode,
                 maxRewardPerOrder: null,
                 allowBalanceSpend: true,
                 attributionWindowDays: 30,
@@ -1390,14 +1411,21 @@ export class ReferralService implements OnApplicationBootstrap {
             },
             order: { position: 'ASC', id: 'ASC' },
         });
+        const minimumOrderAmount =
+            convertChannelAmount(ctx, config.minimumOrderAmount, config.currencyCode, ctx.currencyCode) ?? 0;
+        const maxRewardPerOrder =
+            config.maxRewardPerOrder == null
+                ? null
+                : convertChannelAmount(ctx, config.maxRewardPerOrder, config.currencyCode, ctx.currencyCode);
         return {
             channelId: config.channelId,
             updatedAt: config.updatedAt,
             enabled: config.enabled,
             rewardRate: config.rewardRateBps / 100,
             releaseDelayDays: config.releaseDelayDays,
-            minimumOrderAmount: config.minimumOrderAmount,
-            maxRewardPerOrder: config.maxRewardPerOrder,
+            currencyCode: ctx.currencyCode,
+            minimumOrderAmount,
+            maxRewardPerOrder,
             allowBalanceSpend: config.allowBalanceSpend,
             attributionWindowDays: config.attributionWindowDays,
             defaultPosterTemplate: config.defaultPosterTemplate,

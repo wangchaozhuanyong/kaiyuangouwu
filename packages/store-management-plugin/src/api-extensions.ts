@@ -122,6 +122,7 @@ const commonTypes = gql`
         campaignKind: StoreCouponCampaignKind!
         status: StoreCustomerCouponStatus!
         minimumSpend: Money!
+        currencyCode: CurrencyCode!
         discountAmount: Money
         discountRate: Float
         claimedAt: DateTime!
@@ -161,6 +162,7 @@ const commonTypes = gql`
         enabled: Boolean!
         rewardRate: Float!
         releaseDelayDays: Int!
+        currencyCode: CurrencyCode!
         minimumOrderAmount: Money!
         maxRewardPerOrder: Money
         allowBalanceSpend: Boolean!
@@ -437,6 +439,7 @@ export const adminApiExtensions = gql`
         startsAt: DateTime
         endsAt: DateTime
         minimumSpend: Money!
+        currencyCode: CurrencyCode!
         discountAmount: Money
         discountRate: Float
         collectionIds: [ID!]!
@@ -461,6 +464,13 @@ export const adminApiExtensions = gql`
         revokedCount: Int!
         redeemedOrderCount: Int!
         refundedOrderCount: Int!
+        discountAmountTotal: Money!
+        assistedRevenueTotal: Money!
+        financialTotals: [StoreCouponFinancialTotal!]!
+    }
+
+    type StoreCouponFinancialTotal {
+        currencyCode: CurrencyCode!
         discountAmountTotal: Money!
         assistedRevenueTotal: Money!
     }
@@ -532,6 +542,7 @@ export const adminApiExtensions = gql`
 
     type StoreCouponDailyMetric {
         date: String!
+        currencyCode: CurrencyCode!
         claimedCount: Int!
         redeemedCount: Int!
         refundedCount: Int!
@@ -933,6 +944,7 @@ export const shopApiExtensions = gql`
         startsAt: DateTime
         endsAt: DateTime
         minimumSpend: Money!
+        currencyCode: CurrencyCode!
         discountAmount: Money
         discountRate: Float
         claimStartsAt: DateTime

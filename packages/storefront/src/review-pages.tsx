@@ -46,7 +46,7 @@ export function ReviewCenterPage({
     const queryClient = useQueryClient();
     const reviewsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerReviews(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
@@ -57,7 +57,7 @@ export function ReviewCenterPage({
     });
     const candidatesQuery = useQuery({
         queryKey: storefrontQueryKeys.reviewCandidates(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
@@ -74,14 +74,14 @@ export function ReviewCenterPage({
         await Promise.all([
             queryClient.invalidateQueries({
                 queryKey: storefrontQueryKeys.customerReviews(
-                    market.code,
+                    storefrontQueryKeys.market(market),
                     languageCodeFor(language),
                     customer?.id ?? '',
                 ),
             }),
             queryClient.invalidateQueries({
                 queryKey: storefrontQueryKeys.reviewCandidates(
-                    market.code,
+                    storefrontQueryKeys.market(market),
                     languageCodeFor(language),
                     customer?.id ?? '',
                 ),
@@ -237,7 +237,11 @@ export function ProductReviewsSection({
 }) {
     const isZh = language === 'zh';
     const query = useQuery({
-        queryKey: storefrontQueryKeys.productReviews(market.code, languageCodeFor(language), productId),
+        queryKey: storefrontQueryKeys.productReviews(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+            productId,
+        ),
         queryFn: ({ signal }) => api.productReviews(productId, signal),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,

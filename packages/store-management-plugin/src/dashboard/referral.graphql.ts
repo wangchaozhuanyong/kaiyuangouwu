@@ -7,6 +7,7 @@ const referralProgramFields = gql`
         enabled
         rewardRate
         releaseDelayDays
+        currencyCode
         minimumOrderAmount
         maxRewardPerOrder
         allowBalanceSpend
@@ -395,6 +396,7 @@ export interface ReferralProgramRecord {
     enabled: boolean;
     rewardRate: number;
     releaseDelayDays: number;
+    currencyCode: string;
     minimumOrderAmount: number;
     maxRewardPerOrder: number | null;
     allowBalanceSpend: boolean;

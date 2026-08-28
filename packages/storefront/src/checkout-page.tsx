@@ -1036,7 +1036,7 @@ function PriceSummary({
                     <dd>-{formatMoney(discount, order.currencyCode, locale)}</dd>
                 </div>
             )}
-            <TaxSummaryRows order={order} locale={locale} language={language} />
+            <TaxSummaryRows order={order} locale={locale} language={language} useDisplayCurrency />
             <div className={checkoutPageClassName('summary-total')}>
                 <dt>{isZh ? '合计' : 'Total'}</dt>
                 <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>

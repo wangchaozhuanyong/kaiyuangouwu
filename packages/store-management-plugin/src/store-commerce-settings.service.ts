@@ -297,7 +297,7 @@ export class StoreCommerceSettingsService {
             method => method.code === code,
         );
         const checker = shippingCheckerInput(input.countryCode, input.blockedPostalPrefixes);
-        const calculator = shippingCalculatorInput(input);
+        const calculator = shippingCalculatorInput({ ...input, currencyCode: channel.defaultCurrencyCode });
         const translations = [
             {
                 languageCode: LanguageCode.zh_Hans,
@@ -411,13 +411,14 @@ export function shippingCalculatorInput(
         | 'shippingPriceIncludesTax'
         | 'estimateMinDays'
         | 'estimateMaxDays'
-    >,
+    > & { currencyCode?: string },
 ): ConfigurableOperationInput {
     return {
         code: SHIPPING_CALCULATOR_CODE,
         arguments: [
             { name: 'baseRate', value: String(input.baseRate) },
             { name: 'freeAbove', value: String(input.freeShippingThreshold) },
+            ...(input.currencyCode ? [{ name: 'currencyCode', value: input.currencyCode }] : []),
             { name: 'taxRate', value: String(input.shippingTaxRate) },
             { name: 'priceIncludesTax', value: String(input.shippingPriceIncludesTax) },
             { name: 'estimateMinDays', value: String(input.estimateMinDays) },

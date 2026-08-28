@@ -1,5 +1,5 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { Channel, EntityId, Money, VendureEntity } from '@vendure/core';
+import { Channel, CurrencyCode, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 @Entity({ name: 'referral_program_config' })
@@ -27,6 +27,9 @@ export class ReferralProgramConfig extends VendureEntity {
 
     @Money({ default: 0 })
     minimumOrderAmount: number;
+
+    @Column({ type: 'varchar', length: 3 })
+    currencyCode: CurrencyCode;
 
     @Money({ nullable: true })
     maxRewardPerOrder: number | null;

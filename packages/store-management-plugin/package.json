@@ -12,6 +12,10 @@
         "./account-entry-proof": {
             "types": "./dist/promotion/account-entry-proof.d.ts",
             "default": "./dist/promotion/account-entry-proof.js"
+        },
+        "./currency-conversion": {
+            "types": "./dist/store-currency-price-selection-strategy.d.ts",
+            "default": "./dist/store-currency-price-selection-strategy.js"
         }
     },
     "scripts": {

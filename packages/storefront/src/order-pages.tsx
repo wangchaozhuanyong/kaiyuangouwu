@@ -91,7 +91,7 @@ export function OrdersPage({
     const queryClient = useQueryClient();
     const ordersQuery = useInfiniteQuery({
         queryKey: storefrontQueryKeys.customerOrders(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
             { tab, orderCode },
@@ -121,7 +121,7 @@ export function OrdersPage({
     );
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
@@ -138,7 +138,7 @@ export function OrdersPage({
             const cancelled = await api.cancelAfterSalesRequest(id);
             queryClient.setQueryData<AfterSalesRequest[]>(
                 storefrontQueryKeys.afterSalesRequests(
-                    market.code,
+                    storefrontQueryKeys.market(market),
                     languageCodeFor(language),
                     customer?.id ?? '',
                 ),
@@ -349,7 +349,7 @@ export function LogisticsPage({
     const pageSize = 10;
     const logisticsQuery = useInfiniteQuery({
         queryKey: storefrontQueryKeys.customerOrders(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
             { view: 'logistics' },
@@ -777,7 +777,9 @@ function AfterSalesList({
                         {request.items.map(item => (
                             <span key={item.id}>
                                 <strong>{item.productName}</strong>
-                                <small>{isZh ? '数量' : 'Qty'} × {item.quantity}</small>
+                                <small>
+                                    {isZh ? '数量' : 'Qty'} × {item.quantity}
+                                </small>
                             </span>
                         ))}
                     </div>

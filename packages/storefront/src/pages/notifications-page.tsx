@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { Bell, ChevronRight, RotateCcw, WifiOff } from 'lucide-react';
+// eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
@@ -35,7 +36,7 @@ export function NotificationsPage() {
     const orders = customer?.orders.items ?? [];
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),

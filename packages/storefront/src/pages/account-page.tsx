@@ -1,5 +1,4 @@
 /* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
-import type { RouteState } from '../storefront-router';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -24,6 +23,8 @@ import {
     WalletCards,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
+// eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
+import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { compactUiCopy, languageCodeFor } from '../i18n';
@@ -95,7 +96,7 @@ export function AccountPage() {
     const orders = customer?.orders.items ?? [];
     const countsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerOrderCounts(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
@@ -105,7 +106,10 @@ export function AccountPage() {
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const referralProgramQuery = useQuery({
-        queryKey: storefrontQueryKeys.referralProgram(market.code, languageCodeFor(language)),
+        queryKey: storefrontQueryKeys.referralProgram(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+        ),
         queryFn: ({ signal }) => api.referralProgram(signal),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -113,7 +117,7 @@ export function AccountPage() {
     const referralEnabled = isReferralClientFeatureEnabled(referralProgramQuery.data);
     const referralOverviewQuery = useQuery({
         queryKey: storefrontQueryKeys.customerReferral(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
@@ -128,7 +132,7 @@ export function AccountPage() {
     const counts = countsQuery.data ?? { pending: 0, shipping: 0, receiving: 0 };
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
-            market.code,
+            storefrontQueryKeys.market(market),
             languageCodeFor(language),
             customer?.id ?? '',
         ),
