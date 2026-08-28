@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- This CLI reports workflow progress and failures to the terminal. */
 import { spawn, spawnSync } from 'node:child_process';
 import { get as httpGet } from 'node:http';
 import { get as httpsGet } from 'node:https';
@@ -227,6 +228,21 @@ const watchers = [
         onSuccessfulRebuild: () => server.restart(),
     }),
     startWatcher({
+        label: 'two-factor-dashboard-plugin',
+        command: process.execPath,
+        args: [
+            typescriptCliPath,
+            '--project',
+            path.join(repoRoot, 'packages/two-factor-dashboard-plugin/tsconfig.build.json'),
+            '--watch',
+            '--preserveWatchOutput',
+            '--locale',
+            'en',
+        ],
+        env: watcherEnvironment,
+        onSuccessfulRebuild: () => server.restart(),
+    }),
+    startWatcher({
         label: 'store-domain-plugin',
         command: process.execPath,
         args: [
@@ -385,6 +401,7 @@ async function buildPrerequisites(env) {
         ['@vendure/email-plugin', path.join(repoRoot, 'packages/email-plugin')],
         ['@vendure/commerce-fulfillment-plugin', path.join(repoRoot, 'packages/commerce-fulfillment-plugin')],
         ['@vendure/operations-dashboard-plugin', path.join(repoRoot, 'packages/operations-dashboard-plugin')],
+        ['@vendure/two-factor-dashboard-plugin', path.join(repoRoot, 'packages/two-factor-dashboard-plugin')],
         ['@vendure/store-domain-plugin', path.join(repoRoot, 'packages/store-domain-plugin')],
         ['@vendure/storefront-cart-plugin', path.join(repoRoot, 'packages/storefront-cart-plugin')],
         ['@vendure/storefront-catalog-plugin', path.join(repoRoot, 'packages/storefront-catalog-plugin')],

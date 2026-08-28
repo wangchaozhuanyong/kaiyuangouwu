@@ -10,6 +10,7 @@
             "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"],
             "@vendure/image-generation-plugin": ["../image-generation-plugin/src/index.ts"],
             "@vendure/operations-dashboard-plugin": ["../operations-dashboard-plugin/src/index.ts"],
+            "@vendure/two-factor-dashboard-plugin": ["../two-factor-dashboard-plugin/src/index.ts"],
             "@vendure/store-management-plugin": ["../store-management-plugin/src/index.ts"],
             "@vendure/storefront-cart-plugin": ["../storefront-cart-plugin/src/index.ts"],
             "@vendure/storefront-content-plugin": ["../storefront-content-plugin/src/index.ts"],

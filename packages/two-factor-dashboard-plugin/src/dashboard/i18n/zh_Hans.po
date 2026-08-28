@@ -1,0 +1,381 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_Hans\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.nav.section"
+msgstr "AI 服务管理"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.title"
+msgstr "2FA 动态码"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.description"
+msgstr "单独查询或批量管理动态验证码，密钥不上传服务器"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.batchImport"
+msgstr "批量导入"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.addAccount"
+msgstr "添加账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.loggedInOnly"
+msgstr "登录后可用"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.quickQuery"
+msgstr "单独查询验证码"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.secret"
+msgstr "2FA 密钥"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.secretPlaceholder"
+msgstr "粘贴 Base32 密钥"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.paste"
+msgstr "一键粘贴"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.query"
+msgstr "查询验证码"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.currentCode"
+msgstr "当前验证码"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.copy"
+msgstr "复制"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.clear"
+msgstr "清空"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.saveToList"
+msgstr "添加到账号列表"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.queryMemoryNotice"
+msgstr "本次查询不写入 Session Storage，刷新或离开页面后清除"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacyTitle"
+msgstr "数据与隐私说明"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacyStorage"
+msgstr "存储位置：当前浏览器 Session Storage（不是服务器缓存）"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacy.noDatabase"
+msgstr "不写入服务器数据库"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacy.noUpload"
+msgstr "密钥不上传服务器"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacy.localGeneration"
+msgstr "验证码在本机浏览器生成"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacy.refresh"
+msgstr "刷新页面账号数据仍保留"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacy.clear"
+msgstr "退出登录或关闭标签页自动清除"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacy.limit"
+msgstr "仅限登录用户使用 · 最多保存 100 个账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacy.publicDevice"
+msgstr "本功能不会对 Session Storage 中的密钥另行加密，请勿在公共或共享设备上使用。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.expandPrivacy"
+msgstr "展开说明"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.collapsePrivacy"
+msgstr "收起说明"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.privacySummary"
+msgstr "仅保存在当前浏览器会话 · 不写数据库 · 不上传服务器"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.accountList"
+msgstr "2FA 账号列表"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.searchPlaceholder"
+msgstr "搜索项目名称"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.clearAll"
+msgstr "清空全部"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.projectName"
+msgstr "项目名称"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.projectNamePlaceholder"
+msgstr "例如：ChatGPT-客服01"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.dynamicCode"
+msgstr "动态验证码"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.remainingTime"
+msgstr "剩余时间"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.recentUse"
+msgstr "最近使用"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.actions"
+msgstr "操作"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.edit"
+msgstr "修改"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.delete"
+msgstr "删除"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.reveal"
+msgstr "显示密钥"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.hide"
+msgstr "隐藏密钥"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.neverUsed"
+msgstr "尚未使用"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.justNow"
+msgstr "刚刚"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.minutesAgo"
+msgstr "分钟前"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.hoursAgo"
+msgstr "小时前"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.daysAgo"
+msgstr "天前"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.seconds"
+msgstr "秒"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.codesRefresh"
+msgstr "验证码每 30 秒自动更新"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.clockHint"
+msgstr "验证码无效时，请检查设备时间是否设置为自动同步。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.emptyTitle"
+msgstr "暂无已保存账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.emptyDescription"
+msgstr "添加一个账号或批量导入密钥后即可开始使用。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.addDialogTitle"
+msgstr "添加 2FA 账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.addDialogDescription"
+msgstr "账号仅保存在当前浏览器会话中。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.editDialogTitle"
+msgstr "修改 2FA 账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.editDialogDescription"
+msgstr "修改内容仍然只保存在当前浏览器会话中。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.cancel"
+msgstr "取消"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.save"
+msgstr "保存"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.batchDialogTitle"
+msgstr "批量导入 2FA 账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.batchDialogDescription"
+msgstr "每行一个账号，支持带项目名称或只填写密钥。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.batchFormat"
+msgstr "格式：项目名称 | 2FA 密钥，或一行一个密钥"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.batchPlaceholder"
+msgstr "ChatGPT-客服01 | JBSWY3DPEHPK3PXP\nGEZDGNBVGY3TQOJQ"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.importAccounts"
+msgstr "导入账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.validRows"
+msgstr "有效行"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.invalidRows"
+msgstr "错误行"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.invalidLine"
+msgstr "第"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.invalidMissingName"
+msgstr "必须填写项目名称"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.invalidMissingSecret"
+msgstr "必须填写 2FA 密钥"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.invalidSecret"
+msgstr "Base32 密钥格式错误"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.invalidDuplicate"
+msgstr "密钥重复"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.invalidLimit"
+msgstr "已达到 100 个账号上限"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.projectRequired"
+msgstr "请输入项目名称"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.projectTooLong"
+msgstr "项目名称不能超过 80 个字符"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.duplicateSecret"
+msgstr "这个 2FA 密钥已经存在"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.accountLimit"
+msgstr "最多只能保存 100 个账号"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.queryFailed"
+msgstr "无法使用这个密钥生成验证码"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.clipboardEmpty"
+msgstr "剪贴板中没有内容"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.clipboardDenied"
+msgstr "浏览器拒绝读取剪贴板，请手动粘贴到输入框。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.copied"
+msgstr "验证码已复制"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.copyFailed"
+msgstr "验证码复制失败"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.pasted"
+msgstr "密钥已粘贴"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.accountAdded"
+msgstr "账号已添加"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.accountUpdated"
+msgstr "账号已修改"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.accountDeleted"
+msgstr "账号已删除"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.accountsImported"
+msgstr "账号已批量导入"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.accountsCleared"
+msgstr "所有账号已清空"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.storageUnavailable"
+msgstr "浏览器无法使用 Session Storage。仍可单独查询，但不能保存账号。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.deleteConfirmTitle"
+msgstr "删除这个账号？"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.deleteConfirmDescription"
+msgstr "账号将从当前浏览器会话中移除。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.clearConfirmTitle"
+msgstr "清空全部 2FA 账号？"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.clearConfirmDescription"
+msgstr "当前浏览器会话中保存的全部账号都将被移除。"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.confirmDelete"
+msgstr "确认删除"
+
+#. js-lingui-explicit-id
+msgid "twoFactor.confirmClear"
+msgstr "确认清空"

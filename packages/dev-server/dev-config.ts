@@ -57,6 +57,7 @@ import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { StorefrontReviewPlugin } from '@vendure/storefront-review-plugin';
+import { TwoFactorDashboardPlugin } from '@vendure/two-factor-dashboard-plugin';
 import 'dotenv/config';
 import { createRequire } from 'node:module';
 import path from 'path';
@@ -888,6 +889,7 @@ export const devConfig: VendureConfig = {
             : []),
         // FieldTestPlugin,
         OperationsDashboardPlugin,
+        TwoFactorDashboardPlugin,
         ...(!BOOTSTRAP_BASE_SCHEMA
             ? [
                   ContentTranslationPlugin.init({

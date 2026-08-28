@@ -486,6 +486,7 @@
         "@vendure/storefront-catalog-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
         "@vendure/storefront-review-plugin": "0.1.0",
+        "@vendure/two-factor-dashboard-plugin": "0.1.0",
         "dotenv": "^16.6.1",
       },
       "devDependencies": {
@@ -841,6 +842,26 @@
         "pg": "^8.11.3",
         "rimraf": "^5.0.5",
         "typescript": "5.8.2",
+      },
+    },
+    "packages/two-factor-dashboard-plugin": {
+      "name": "@vendure/two-factor-dashboard-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lingui/core": "^5.9.3",
+        "@lingui/react": "^5.9.3",
+        "lucide-react": "^0.475.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "typescript": "5.9.3",
+        "vitest": "^3.2.4",
+      },
+      "peerDependencies": {
+        "@vendure/core": "3.7.2",
+        "@vendure/dashboard": "3.7.2",
+        "react": "^19.2.4",
       },
     },
     "packages/ui-devkit": {
@@ -3051,6 +3072,8 @@
     "@vendure/telemetry-plugin": ["@vendure/telemetry-plugin@workspace:packages/telemetry-plugin"],
 
     "@vendure/testing": ["@vendure/testing@workspace:packages/testing"],
+
+    "@vendure/two-factor-dashboard-plugin": ["@vendure/two-factor-dashboard-plugin@workspace:packages/two-factor-dashboard-plugin"],
 
     "@vendure/ui-devkit": ["@vendure/ui-devkit@workspace:packages/ui-devkit"],
 
