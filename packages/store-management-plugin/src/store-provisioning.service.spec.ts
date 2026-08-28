@@ -302,6 +302,14 @@ describe('StoreProvisioningService', () => {
         expect(storeAdministratorPermissions).toContain('UpdateStoreProfile');
         expect(storeAdministratorPermissions).toEqual(
             expect.arrayContaining([
+                'CreateCatalogImport',
+                'ReadCatalogImport',
+                'UpdateCatalogImport',
+                'DeleteCatalogImport',
+            ]),
+        );
+        expect(storeAdministratorPermissions).toEqual(
+            expect.arrayContaining([
                 referralPermission.Create,
                 referralPermission.Read,
                 referralPermission.Update,

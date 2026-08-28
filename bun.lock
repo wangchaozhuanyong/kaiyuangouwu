@@ -185,6 +185,29 @@
         "typescript": "5.8.2",
       },
     },
+    "packages/catalog-management-plugin": {
+      "name": "@vendure/catalog-management-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "lucide-react": "^0.475.0",
+        "typeorm": "^0.3.21",
+        "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "typescript": "5.8.2",
+        "vitest": "^3.2.4",
+      },
+      "peerDependencies": {
+        "@vendure/dashboard": "3.7.2",
+        "react": "^19.2.4",
+      },
+    },
     "packages/cli": {
       "name": "@vendure/cli",
       "version": "3.7.2",
@@ -471,6 +494,7 @@
       "dependencies": {
         "@nestjs/axios": "^4.0.0",
         "@vendure/asset-server-plugin": "3.7.2",
+        "@vendure/catalog-management-plugin": "0.1.0",
         "@vendure/commerce-fulfillment-plugin": "0.1.0",
         "@vendure/common": "3.7.2",
         "@vendure/content-translation-plugin": "0.1.0",
@@ -3026,6 +3050,8 @@
     "@vendure/admin-ui-plugin": ["@vendure/admin-ui-plugin@workspace:packages/admin-ui-plugin"],
 
     "@vendure/asset-server-plugin": ["@vendure/asset-server-plugin@workspace:packages/asset-server-plugin"],
+
+    "@vendure/catalog-management-plugin": ["@vendure/catalog-management-plugin@workspace:packages/catalog-management-plugin"],
 
     "@vendure/cli": ["@vendure/cli@workspace:packages/cli"],
 
@@ -5957,6 +5983,8 @@
 
     "wsl-utils": ["wsl-utils@0.1.0", "", { "dependencies": { "is-wsl": "^3.1.0" } }, "sha512-h3Fbisa2nKGPxCpm89Hk33lBLsnaGBvctQopaBSOW/uIs6FTe1ATyAnKFJrzVs9vpGdsTe73WF3V4lIsk4Gacw=="],
 
+    "xlsx": ["xlsx@https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz", { "bin": { "xlsx": "./bin/xlsx.njs" } }, "sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA=="],
+
     "xml-name-validator": ["xml-name-validator@5.0.0", "", {}, "sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg=="],
 
     "xmlchars": ["xmlchars@2.2.0", "", {}, "sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw=="],
@@ -6524,6 +6552,8 @@
     "@vendure/admin-ui-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 
     "@vendure/asset-server-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
+
+    "@vendure/catalog-management-plugin/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 
     "@vendure/cli/typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
 

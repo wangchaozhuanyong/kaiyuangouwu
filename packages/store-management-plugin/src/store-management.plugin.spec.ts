@@ -84,6 +84,10 @@ describe('StoreManagementPlugin promotion options', () => {
 
         expect(storeAdministrator.permissions).toEqual(
             expect.arrayContaining([
+                'CreateCatalogImport',
+                'ReadCatalogImport',
+                'UpdateCatalogImport',
+                'DeleteCatalogImport',
                 referralPermission.Create,
                 referralPermission.Read,
                 referralPermission.Update,

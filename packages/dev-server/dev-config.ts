@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import { OnApplicationBootstrap } from '@nestjs/common';
 import { AssetServerPlugin, PresetOnlyStrategy } from '@vendure/asset-server-plugin';
+import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import {
     AutoCardDeliveryReadyEvent,
     AutoCardService,
@@ -904,6 +905,7 @@ export const devConfig: VendureConfig = {
                       },
                   }),
                   CommerceFulfillmentPlugin,
+                  CatalogManagementPlugin,
                   StoreManagementPlugin.init({
                       enabled: storefrontPromotionGateEnabled,
                       signingSecret: storefrontEntrySecret,

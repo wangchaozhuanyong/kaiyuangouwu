@@ -8,6 +8,7 @@ import {
     LanguageCode,
     PaymentMethod,
     PaymentMethodService,
+    Permission,
     PluginCommonModule,
     RequestContextService,
     Role,
@@ -397,6 +398,10 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
 
     private async ensurePrimaryStoreAdminPermissions(): Promise<void> {
         const permissions = [
+            'CreateCatalogImport' as Permission,
+            'ReadCatalogImport' as Permission,
+            'UpdateCatalogImport' as Permission,
+            'DeleteCatalogImport' as Permission,
             referralPermission.Create,
             referralPermission.Read,
             referralPermission.Update,

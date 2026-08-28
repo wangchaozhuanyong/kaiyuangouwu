@@ -58,6 +58,7 @@ import { ConfigureGeminiImageProvider1787810400000 } from './1787810400000-confi
 import { EnforceGeminiImageProvider1787814000000 } from './1787814000000-enforce-gemini-image-provider';
 import { HardenImageGeneration1787817600000 } from './1787817600000-harden-image-generation';
 import { AlignHardenedImageGenerationSchema1787821200000 } from './1787821200000-align-hardened-image-generation-schema';
+import { AddCatalogManagement1787824800000 } from './1787824800000-add-catalog-management';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -120,4 +121,5 @@ export const devServerMigrations = [
     EnforceGeminiImageProvider1787814000000,
     HardenImageGeneration1787817600000,
     AlignHardenedImageGenerationSchema1787821200000,
+    AddCatalogManagement1787824800000,
 ];
