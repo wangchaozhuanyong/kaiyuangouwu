@@ -874,6 +874,15 @@ export const devConfig: VendureConfig = {
                       apiMode: 'prod',
                       hideFieldSuggestions: true,
                       maxQueryComplexity: productionQueryComplexity(),
+                      customComplexityFactors: {
+                          // This authenticated resolver is capped at 50 jobs and only returns the
+                          // active customer's own history. Avoid charging the same bounded nested
+                          // lists three times (page -> jobs -> outputs), which otherwise rejects the
+                          // image studio's normal 20-item history query at the production limit.
+                          'Query.myImageGenerationJobs': 1,
+                          'ImageGenerationJobList.items': 1,
+                          'ImageGenerationJob.outputs': 1,
+                      },
                   }),
               ]
             : []),
@@ -953,7 +962,9 @@ export const devConfig: VendureConfig = {
         DefaultJobQueuePlugin.init({
             concurrency: queueName => (queueName === 'image-generation-output' ? 2 : 1),
             backoffStrategy: (queueName, attempts) =>
-                queueName === 'image-generation-output' ? Math.min(30_000, 1_000 * 2 ** Math.max(0, attempts - 1)) : 1_000,
+                queueName === 'image-generation-output'
+                    ? Math.min(30_000, 1_000 * 2 ** Math.max(0, attempts - 1))
+                    : 1_000,
         }),
         // JobQueueTestPlugin.init({ queueCount: 10 }),
         DefaultSchedulerPlugin.init({}),
