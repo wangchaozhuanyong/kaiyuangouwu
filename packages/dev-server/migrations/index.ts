@@ -52,6 +52,7 @@ import { AddReferralPosterTemplates1787785200000 } from './1787785200000-add-ref
 import { AddUsdtRateSchedule1787788800000 } from './1787788800000-add-usdt-rate-schedule';
 import { AddImageGeneration1787792400000 } from './1787792400000-add-image-generation';
 import { AddFixedMoneySourceCurrency1787796000000 } from './1787796000000-add-fixed-money-source-currency';
+import { AlignImageGenerationSchema1787803200000 } from './1787803200000-align-image-generation-schema';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -108,4 +109,5 @@ export const devServerMigrations = [
     AddUsdtRateSchedule1787788800000,
     AddImageGeneration1787792400000,
     AddFixedMoneySourceCurrency1787796000000,
+    AlignImageGenerationSchema1787803200000,
 ];

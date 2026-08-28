@@ -5,6 +5,7 @@ import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 @Entity({ name: 'image_private_asset' })
 @Index('IDX_image_private_asset_owner_created', ['customerId', 'createdAt'])
 @Index('IDX_image_private_asset_expiry', ['expiresAt'])
+@Index('IDX_image_private_asset_storage_key', ['storageKey'], { unique: true })
 export class ImagePrivateAsset extends VendureEntity {
     constructor(input?: DeepPartial<ImagePrivateAsset>) {
         super(input);
@@ -27,7 +28,7 @@ export class ImagePrivateAsset extends VendureEntity {
     @Column({ type: 'varchar', length: 16 })
     kind: string;
 
-    @Column({ type: 'varchar', length: 255, unique: true })
+    @Column({ type: 'varchar', length: 255 })
     storageKey: string;
 
     @Column({ type: 'varchar', length: 80 })

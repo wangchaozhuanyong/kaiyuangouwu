@@ -28,9 +28,10 @@ export class ImageGenerationConfig extends VendureEntity {
     @Column({ type: 'varchar', length: 32, default: '2026-08-27' })
     termsVersion: string;
 
-    @Column({ type: 'text', default: '' })
+    // MySQL rejects literal defaults on TEXT columns, so callers must always provide both values.
+    @Column({ type: 'text' })
     termsZh: string;
 
-    @Column({ type: 'text', default: '' })
+    @Column({ type: 'text' })
     termsEn: string;
 }
