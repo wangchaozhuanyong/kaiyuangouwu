@@ -89,6 +89,11 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，无�
 发布判断以 `PRODUCTION_MEMORY` 记录为准。归档在同一发布文件系统内使用原子移动保留，API 通过健康检查后
 才启动 Worker，两个 Node 进程均设 768 MiB 自动重启上限，避免重复复制归档、并发冷启动和失控增长造成峰值。
 
+`Monitor Production Health` 工作流在每小时的第 17 和 47 分自动巡检，也可手动触发。它使用同一个
+GitHub OIDC 临时角色通过 AWS SSM 执行只读检查：物理可用内存与 Swap 余量、API/Worker 的 PM2
+状态与运行目录、本机及公网 `/health`。任一项不符合门禁时工作流失败并保留当次
+`PRODUCTION_MEMORY` 趋势数据；不依赖 SSH 或长期 AWS Access Key。
+
 若候选 API 未通过健康检查且自动回滚本身失败，可手动运行 `Recover Current Production Runtime` 工作流。
 它只会读取 `kaiyuangouwu-current` 与 `current-sha` 指向的最后一个已验证运行包，要求两者 SHA 一致，
 并通过 `deploy/recover-current-production-runtime.sh` 在同一生产锁内重建 PM2 进程；不会回退 Git、数据库或版本标记。

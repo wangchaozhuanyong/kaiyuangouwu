@@ -173,6 +173,32 @@ void test('production swap setup is fixed-size, persistent, and low-swappiness',
     assert.doesNotMatch(script, /swapoff/u);
 });
 
+void test('scheduled production monitor checks memory, processes, and health through OIDC SSM', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/monitor-production-health.sh'), 'utf8');
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/monitor_production_health.yml'),
+        'utf8',
+    );
+
+    assert.match(script, /production-memory-guard\.cjs/u);
+    assert.match(script, /--stage scheduled-monitor --check/u);
+    assert.match(script, /127\.0\.0\.1:3002\/health/u);
+    assert.match(script, /https:\/\/damatong\.net\/health/u);
+    assert.match(script, /pm2 jlist/u);
+    assert.match(script, /vendure-api/u);
+    assert.match(script, /vendure-worker/u);
+    assert.match(script, /PRODUCTION_HEALTH_MONITOR_OK/u);
+
+    assert.match(workflow, /schedule:/u);
+    assert.match(workflow, /workflow_dispatch:/u);
+    assert.match(workflow, /id-token: write/u);
+    assert.match(workflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
+    assert.match(workflow, /AWS-RunShellScript/u);
+    assert.match(workflow, /monitor-production-health\.sh/u);
+    assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
+    assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
+});
+
 void test('OIDC production recovery restarts only the last verified immutable runtime', async () => {
     const script = await readFile(
         path.join(repositoryRoot, 'deploy/recover-current-production-runtime.sh'),

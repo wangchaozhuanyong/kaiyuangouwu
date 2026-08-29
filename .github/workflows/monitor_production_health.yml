@@ -1,0 +1,86 @@
+name: Monitor Production Health
+
+on:
+    schedule:
+        - cron: '17,47 * * * *'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    id-token: write
+
+concurrency:
+    group: production-health-monitor
+    cancel-in-progress: false
+
+jobs:
+    monitor:
+        name: check production memory and processes through AWS SSM
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        env:
+            AWS_REGION: ap-northeast-1
+            AWS_ACCOUNT_ID: '079740175286'
+            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+            INSTANCE_ID: i-041a146558e432cbf
+
+        steps:
+            - name: Configure short-lived AWS credentials
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+              with:
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+                  role-session-name: vendure-health-monitor-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Check production health
+              run: |
+                  REMOTE_COMMAND="sudo -H -u ubuntu /bin/bash /var/www/kaiyuangouwu/deploy/monitor-production-health.sh"
+                  jq -n --arg command "$REMOTE_COMMAND" \
+                    '{commands: [$command], executionTimeout: ["300"]}' > "$RUNNER_TEMP/ssm-parameters.json"
+
+                  COMMAND_ID="$(aws ssm send-command \
+                    --region "$AWS_REGION" \
+                    --document-name AWS-RunShellScript \
+                    --instance-ids "$INSTANCE_ID" \
+                    --comment "Monitor Vendure production health" \
+                    --parameters "file://$RUNNER_TEMP/ssm-parameters.json" \
+                    --timeout-seconds 120 \
+                    --query 'Command.CommandId' \
+                    --output text)"
+                  test -n "$COMMAND_ID"
+
+                  status=Pending
+                  for attempt in $(seq 1 60); do
+                    status="$(aws ssm get-command-invocation \
+                      --region "$AWS_REGION" \
+                      --command-id "$COMMAND_ID" \
+                      --instance-id "$INSTANCE_ID" \
+                      --query Status \
+                      --output text 2>/dev/null || true)"
+                    case "$status" in
+                      Success|Failed|Cancelled|TimedOut|Cancelling)
+                        break
+                        ;;
+                    esac
+                    sleep 5
+                  done
+
+                  aws ssm get-command-invocation \
+                    --region "$AWS_REGION" \
+                    --command-id "$COMMAND_ID" \
+                    --instance-id "$INSTANCE_ID" \
+                    --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+                    --output json | tee "$RUNNER_TEMP/production-health.json"
+                  test "$status" = Success
+
+                  {
+                    echo "## Production health monitor"
+                    echo
+                    echo "- SSM command: \`$COMMAND_ID\`"
+                    echo "- Status: \`$status\`"
+                    echo
+                    echo '```text'
+                    jq -r '.Output' "$RUNNER_TEMP/production-health.json"
+                    echo '```'
+                  } >> "$GITHUB_STEP_SUMMARY"
