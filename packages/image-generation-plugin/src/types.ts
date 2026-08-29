@@ -39,6 +39,7 @@ export interface SaveImageGenerationConfigInput {
     termsVersion: string;
     termsZh: string;
     termsEn: string;
+    models?: SaveImageModelInput[];
 }
 
 export interface SaveImageProviderCredentialInput {

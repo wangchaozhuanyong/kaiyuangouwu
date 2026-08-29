@@ -209,6 +209,7 @@ function ImageGenerationSettingsPage() {
                     termsVersion: value.termsVersion,
                     termsZh: value.termsZh,
                     termsEn: value.termsEn,
+                    models: value.models.map(modelInput),
                 },
             }),
         onSuccess: () => {
@@ -318,6 +319,13 @@ function ImageGenerationSettingsPage() {
             models: draft.models.map(model => (model.code === code ? { ...model, ...values } : model)),
         });
     };
+    const setDefaultModel = (code: string) => {
+        setDraft({
+            ...draft,
+            defaultModelCode: code,
+            models: draft.models.map(model => ({ ...model, isDefault: model.code === code })),
+        });
+    };
     return (
         <Page pageId="image-generation-settings">
             <PageTitle>AI 生图服务</PageTitle>
@@ -325,7 +333,7 @@ function ImageGenerationSettingsPage() {
                 <PageActionBarRight>
                     <Button disabled={saveConfig.isPending} onClick={() => saveConfig.mutate(draft)}>
                         <Save className="mr-2 h-4 w-4" />
-                        保存基础配置
+                        保存全部设置
                     </Button>
                 </PageActionBarRight>
             </PageActionBar>
@@ -370,9 +378,7 @@ function ImageGenerationSettingsPage() {
                                 <select
                                     className="h-9 w-full rounded-md border bg-background px-3"
                                     value={draft.defaultModelCode}
-                                    onChange={event =>
-                                        setDraft({ ...draft, defaultModelCode: event.target.value })
-                                    }
+                                    onChange={event => setDefaultModel(event.target.value)}
                                 >
                                     {draft.models.map(model => (
                                         <option key={model.code} value={model.code}>
@@ -572,7 +578,11 @@ function ImageGenerationSettingsPage() {
                                     <Toggle
                                         label="设为默认"
                                         checked={model.isDefault}
-                                        onChange={isDefault => updateModel(model.code, { isDefault })}
+                                        onChange={isDefault => {
+                                            if (isDefault) setDefaultModel(model.code);
+                                            else if (draft.defaultModelCode !== model.code)
+                                                updateModel(model.code, { isDefault: false });
+                                        }}
                                     />
                                     <Toggle
                                         label="中转站保证幂等"

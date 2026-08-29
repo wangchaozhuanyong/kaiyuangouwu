@@ -500,6 +500,7 @@ export const adminApiExtensions = gql`
         termsVersion: String!
         termsZh: String!
         termsEn: String!
+        models: [SaveImageModelInput!]
     }
 
     input SaveImageProviderCredentialInput {
