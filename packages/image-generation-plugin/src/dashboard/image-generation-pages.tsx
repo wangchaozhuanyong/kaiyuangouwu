@@ -37,6 +37,7 @@ import {
     saveImageCredentialMutation,
     saveImageGenerationConfigMutation,
     saveImageModelMutation,
+    smokeTestImageModelMutation,
     testImageModelMutation,
     testImageProviderMutation,
 } from './image-generation.graphql';
@@ -120,6 +121,29 @@ function ImageGenerationSettingsPage() {
         },
         onSuccess: result => {
             (result.testImageModel.ok ? toast.success : toast.error)(result.testImageModel.message);
+            void query.refetch();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const smokeTestModel = useMutation({
+        mutationFn: async (model: ImageAdminModelRecord) => {
+            await api.mutate(saveImageModelMutation, { input: modelInput(model) });
+            return api.mutate<{
+                smokeTestImageModel: {
+                    ok: boolean;
+                    message: string;
+                    actualCostMicrounits?: number | null;
+                    costCurrency?: string | null;
+                };
+            }>(smokeTestImageModelMutation, { code: model.code });
+        },
+        onSuccess: result => {
+            const test = result.smokeTestImageModel;
+            const cost =
+                test.actualCostMicrounits == null
+                    ? ''
+                    : ` · 上游返回成本 ${(test.actualCostMicrounits / 1_000_000).toFixed(6)} ${test.costCurrency ?? ''}`;
+            (test.ok ? toast.success : toast.error)(`${test.message}${cost}`);
             void query.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -237,7 +261,7 @@ function ImageGenerationSettingsPage() {
                     column="full"
                     blockId="image-models"
                     title="模型与单张价格"
-                    description="友好名称、用途说明和官方模型 ID 会展示给客户。保存并测试只读元数据，不发起生图；是否收取请求费以中转站规则为准。"
+                    description="友好名称、用途说明和官方模型 ID 会展示给客户。只读测试不生图；真实生图测试可能产生上游费用。健康结果 24 小时后过期。"
                 >
                     <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
                         {draft.models.map(model => (
@@ -350,25 +374,126 @@ function ImageGenerationSettingsPage() {
                                     checked={model.isDefault}
                                     onChange={isDefault => updateModel(model.code, { isDefault })}
                                 />
-                                <div className="grid grid-cols-2 gap-2">
+                                <Toggle
+                                    label="中转站保证幂等"
+                                    checked={model.supportsIdempotency}
+                                    onChange={supportsIdempotency =>
+                                        updateModel(model.code, { supportsIdempotency })
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    仅在中转站明确保证同一幂等键不会重复生图时开启。
+                                </p>
+                                <div className="grid gap-2 sm:grid-cols-3">
                                     <Button
                                         variant="outline"
-                                        disabled={saveModel.isPending || testModel.isPending}
+                                        disabled={
+                                            saveModel.isPending ||
+                                            testModel.isPending ||
+                                            smokeTestModel.isPending
+                                        }
                                         onClick={() => saveModel.mutate(model)}
                                     >
                                         保存模型
                                     </Button>
                                     <Button
                                         variant="outline"
-                                        disabled={saveModel.isPending || testModel.isPending}
+                                        disabled={
+                                            saveModel.isPending ||
+                                            testModel.isPending ||
+                                            smokeTestModel.isPending
+                                        }
                                         onClick={() => testModel.mutate(model)}
                                     >
                                         <RefreshCw className="mr-2 h-4 w-4" />
-                                        保存并测试
+                                        只读测试
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        disabled={
+                                            saveModel.isPending ||
+                                            testModel.isPending ||
+                                            smokeTestModel.isPending
+                                        }
+                                        onClick={() => {
+                                            if (
+                                                window.confirm(
+                                                    '将真实生成 1 张简单测试图，中转站可能收费。是否继续？',
+                                                )
+                                            )
+                                                smokeTestModel.mutate(model);
+                                        }}
+                                    >
+                                        付费生图测试
                                     </Button>
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </PageBlock>
+
+                <PageBlock
+                    column="full"
+                    blockId="image-cost-audit"
+                    title="近 30 天成本对账"
+                    description="销售额是成功图的原始售价合计（未减人工退款）；上游成本仅在中转站返回费用字段时可对账，不同币种不自动换算。"
+                >
+                    {data.imageGenerationCostSummary.truncated ? (
+                        <Alert className="mb-3">
+                            <AlertDescription>记录超过 20,000 条，当前仅展示截断统计。</AlertDescription>
+                        </Alert>
+                    ) : null}
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b text-left">
+                                    <th className="p-2">模型</th>
+                                    <th>请求/成功</th>
+                                    <th>重试/未知/失败</th>
+                                    <th>原始销售额</th>
+                                    <th>上游成本</th>
+                                    <th>缺失成本</th>
+                                    <th>平均耗时</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.imageGenerationCostSummary.items.map(item => (
+                                    <tr
+                                        key={`${item.modelCode}:${item.saleCurrencyCode}:${item.costCurrency}`}
+                                        className="border-b"
+                                    >
+                                        <td className="p-2">
+                                            {item.modelCode}
+                                            <div className="text-xs text-muted-foreground">
+                                                {item.providerScope}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {item.attempts} / {item.successes}
+                                        </td>
+                                        <td>
+                                            {item.retries} / {item.unknowns} / {item.failures}
+                                        </td>
+                                        <td>
+                                            {minorToMajor(item.grossRevenue, item.saleCurrencyCode)}{' '}
+                                            {item.saleCurrencyCode}
+                                        </td>
+                                        <td>
+                                            {item.actualCost.toFixed(6)} {item.costCurrency}
+                                        </td>
+                                        <td>{item.missingCostCount}</td>
+                                        <td>{item.averageLatencyMs}ms</td>
+                                    </tr>
+                                ))}
+                                {!data.imageGenerationCostSummary.items.length ? (
+                                    <tr>
+                                        <td className="p-4 text-muted-foreground" colSpan={7}>
+                                            暂无真实生图成本记录。
+                                        </td>
+                                    </tr>
+                                ) : null}
+                            </tbody>
+                        </table>
                     </div>
                 </PageBlock>
 

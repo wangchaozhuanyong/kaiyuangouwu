@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { isPrivateAddress, SafeProviderUrlService } from './safe-provider-url.service';
 
 describe('SafeProviderUrlService', () => {
+    const originalRemoteHosts = process.env.IMAGE_GENERATION_REMOTE_IMAGE_HOSTS;
+    afterEach(() => {
+        if (originalRemoteHosts == null) delete process.env.IMAGE_GENERATION_REMOTE_IMAGE_HOSTS;
+        else process.env.IMAGE_GENERATION_REMOTE_IMAGE_HOSTS = originalRemoteHosts;
+    });
     it.each([
         '127.0.0.1',
         '10.1.2.3',
@@ -36,5 +41,17 @@ describe('SafeProviderUrlService', () => {
         expect(
             service.endpoint(new URL('https://relay.example.com/openai/v1'), 'images/generations').toString(),
         ).toBe('https://relay.example.com/openai/v1/images/generations');
+    });
+
+    it('requires an exact remote-image hostname allowlist and returns a pinned public address', async () => {
+        const service = new SafeProviderUrlService();
+        process.env.IMAGE_GENERATION_REMOTE_IMAGE_HOSTS = '8.8.8.8';
+
+        await expect(service.resolveRemoteImage('https://1.1.1.1/image.png')).rejects.toThrow('白名单');
+        await expect(service.resolveRemoteImage('https://8.8.8.8/image.png')).resolves.toEqual({
+            url: new URL('https://8.8.8.8/image.png'),
+            address: '8.8.8.8',
+            family: 4,
+        });
     });
 });

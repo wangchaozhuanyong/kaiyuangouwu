@@ -8,20 +8,37 @@ import {
     UserInputError,
 } from '@vendure/core';
 import { ReferralWallet, ReferralWalletSpendService } from '@vendure/store-management-plugin';
-import { In } from 'typeorm';
+import { In, IsNull, LessThan, MoreThan, MoreThanOrEqual, Not } from 'typeorm';
 
-import { MAX_GENERATION_COUNT, MAX_PROMPT_LENGTH, supportedAspectRatios } from './constants';
+import {
+    MAX_ACTIVE_GENERATION_JOBS,
+    MAX_ACTIVE_REFERENCE_ASSETS,
+    MAX_ACTIVE_REFERENCE_BYTES,
+    MAX_GENERATION_COUNT,
+    MAX_PROMPT_LENGTH,
+    MAX_REFERENCE_BYTES,
+    MAX_REFERENCE_UPLOADS_PER_DAY,
+    MAX_REFERENCE_UPLOADS_PER_MINUTE,
+    supportedAspectRatios,
+} from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
+import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
+import { ImageGenerationDispatch } from './entities/image-generation-dispatch.entity';
 import { ImageGenerationJob } from './entities/image-generation-job.entity';
 import { ImageGenerationOutput } from './entities/image-generation-output.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePrivateAsset } from './entities/image-private-asset.entity';
-import { ImageGenerationConfigService } from './image-generation-config.service';
+import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
+import {
+    ImageGenerationConfigService,
+    modelReady,
+    providerScopeForModel,
+} from './image-generation-config.service';
 import { deriveImageJobSettlement } from './image-generation-state';
-import { ImagePromptEngineService } from './prompt/image-prompt-engine.service';
+import { ImagePromptEngineService, startOfBeijingDay } from './prompt/image-prompt-engine.service';
 import { PromptRulesService } from './prompt/prompt-rules.service';
 import { ImagePrivateStorageService, UploadedImageFile } from './storage/image-private-storage.service';
-import { CreateImageGenerationInput, ImageReferenceMode } from './types';
+import { CreateImageGenerationInput, ImageProviderScope, ImageReferenceMode } from './types';
 
 @Injectable()
 export class ImageGenerationService {
@@ -62,6 +79,24 @@ export class ImageGenerationService {
         let created: ImageGenerationJob;
         try {
             created = await this.connection.withTransaction(ctx, async txCtx => {
+                if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
+                    await this.connection
+                        .getRepository(txCtx, Customer)
+                        .createQueryBuilder('customer')
+                        .setLock('pessimistic_write')
+                        .where('customer.id = :id', { id: customer.id })
+                        .getOne();
+                }
+                const activeJobCount = await this.connection.getRepository(txCtx, ImageGenerationJob).count({
+                    where: {
+                        channelId: txCtx.channelId,
+                        customerId: customer.id,
+                        state: In(['QUEUED', 'RUNNING', 'UNKNOWN']),
+                    },
+                });
+                if (activeJobCount >= MAX_ACTIVE_GENERATION_JOBS) {
+                    throw new UserInputError(`同时进行的生图任务不能超过 ${MAX_ACTIVE_GENERATION_JOBS} 个`);
+                }
                 const config = await this.connection.getRepository(txCtx, ImageGenerationConfig).findOne({
                     where: { channelId: txCtx.channelId },
                 });
@@ -69,8 +104,10 @@ export class ImageGenerationService {
                 const model = await this.connection.getRepository(txCtx, ImageModelConfig).findOne({
                     where: { channelId: txCtx.channelId, code: normalized.modelCode, enabled: true },
                 });
-                if (!model || model.healthStatus === 'UNHEALTHY')
-                    throw new UserInputError('所选模型当前不可用');
+                if (!model || !modelReady(model)) throw new UserInputError('所选模型当前不可用');
+                const providerScope = providerScopeForModel(model.protocol, model.providerModelId);
+                const credential = await this.configService.requireCredential(txCtx, providerScope);
+                const credentialFingerprint = this.configService.credentialFingerprint(credential);
                 if (
                     model.unitPrice !== normalized.expectedUnitPrice ||
                     model.currencyCode !== normalized.currencyCode
@@ -111,6 +148,9 @@ export class ImageGenerationService {
                         officialModelIdSnapshot: model.officialModelId,
                         providerModelIdSnapshot: model.providerModelId,
                         protocolSnapshot: model.protocol,
+                        providerScopeSnapshot: providerScope,
+                        providerCredentialFingerprint: credentialFingerprint,
+                        providerIdempotencySupportedSnapshot: model.supportsIdempotency,
                         originalPrompt: normalized.prompt,
                         finalPrompt,
                         promptSpec: promptSpec as unknown as Record<string, any>,
@@ -150,23 +190,32 @@ export class ImageGenerationService {
                 await this.connection.getRepository(txCtx, ImageGenerationJob).save(job, { reload: false });
                 const outputs: ImageGenerationOutput[] = [];
                 for (let outputIndex = 0; outputIndex < normalized.quantity; outputIndex++) {
-                    outputs.push(
-                        await this.connection.getRepository(txCtx, ImageGenerationOutput).save(
-                            new ImageGenerationOutput({
-                                jobId: job.id,
-                                outputIndex,
-                                state: 'QUEUED',
-                                attemptCount: 0,
-                                providerIdempotencyKey: `image-${String(job.id)}-${outputIndex}`,
-                                providerRequestId: null,
-                                assetId: null,
-                                errorMessage: null,
-                                unknownAt: null,
-                                completedAt: null,
-                                walletSettled: false,
-                                refundedAt: null,
-                            }),
-                        ),
+                    const output = await this.connection.getRepository(txCtx, ImageGenerationOutput).save(
+                        new ImageGenerationOutput({
+                            jobId: job.id,
+                            outputIndex,
+                            state: 'QUEUED',
+                            attemptCount: 0,
+                            providerIdempotencyKey: `image-${String(job.id)}-${outputIndex}`,
+                            providerRequestId: null,
+                            assetId: null,
+                            errorMessage: null,
+                            unknownAt: null,
+                            completedAt: null,
+                            walletSettled: false,
+                            refundedAt: null,
+                        }),
+                    );
+                    outputs.push(output);
+                    await this.connection.getRepository(txCtx, ImageGenerationDispatch).save(
+                        new ImageGenerationDispatch({
+                            outputId: output.id,
+                            state: 'PENDING',
+                            attemptCount: 0,
+                            nextAttemptAt: new Date(),
+                            dispatchedAt: null,
+                            lastError: null,
+                        }),
                     );
                 }
                 job.outputs = outputs;
@@ -187,15 +236,9 @@ export class ImageGenerationService {
             return this.jobView(raced, customer.id);
         }
 
-        if (!this.enqueueOutput) {
-            await this.failBeforeDispatch(ctx, created, '生图任务队列尚未就绪');
-        } else {
+        if (this.enqueueOutput) {
             for (const output of created.outputs) {
-                try {
-                    await this.enqueueOutput(output.id);
-                } catch {
-                    await this.failQueuedOutput(ctx, output.id, '生图任务加入队列失败');
-                }
+                await this.enqueueOutput(output.id).catch(() => undefined);
             }
         }
         return this.findMine(ctx, created.id);
@@ -206,7 +249,69 @@ export class ImageGenerationService {
         const customer = await this.activeCustomer(ctx);
         if (!(await this.configService.shopConfig(ctx)).enabled)
             throw new UserInputError('当前店铺的 AI 图片工坊不可用');
-        const asset = await this.storage.storeReference(ctx, customer.id, await upload);
+        const file = await upload;
+        const asset = await this.connection.withTransaction(ctx, async txCtx => {
+            if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
+                await this.connection
+                    .getRepository(txCtx, Customer)
+                    .createQueryBuilder('customer')
+                    .setLock('pessimistic_write')
+                    .where('customer.id = :id', { id: customer.id })
+                    .getOne();
+            }
+            const repository = this.connection.getRepository(txCtx, ImagePrivateAsset);
+            const now = Date.now();
+            const [minuteCount, dayCount, activeCount, activeSize] = await Promise.all([
+                repository.count({
+                    where: {
+                        channelId: txCtx.channelId,
+                        customerId: customer.id,
+                        kind: 'REFERENCE',
+                        createdAt: MoreThanOrEqual(new Date(now - 60_000)),
+                    },
+                }),
+                repository.count({
+                    where: {
+                        channelId: txCtx.channelId,
+                        customerId: customer.id,
+                        kind: 'REFERENCE',
+                        createdAt: MoreThanOrEqual(startOfBeijingDay(now)),
+                    },
+                }),
+                repository.count({
+                    where: {
+                        channelId: txCtx.channelId,
+                        customerId: customer.id,
+                        kind: 'REFERENCE',
+                        deletedAt: IsNull(),
+                        expiresAt: MoreThan(new Date()),
+                    },
+                }),
+                repository
+                    .createQueryBuilder('asset')
+                    .select('COALESCE(SUM(asset.byteSize), 0)', 'total')
+                    .where('asset.channelId = :channelId', { channelId: txCtx.channelId })
+                    .andWhere('asset.customerId = :customerId', { customerId: customer.id })
+                    .andWhere('asset.kind = :kind', { kind: 'REFERENCE' })
+                    .andWhere('asset.deletedAt IS NULL')
+                    .andWhere('asset.expiresAt > :now', { now: new Date() })
+                    .getRawOne<{ total: string | number }>(),
+            ]);
+            if (minuteCount >= MAX_REFERENCE_UPLOADS_PER_MINUTE)
+                throw new UserInputError('参考图每分钟最多上传 5 张，请稍后再试');
+            if (dayCount >= MAX_REFERENCE_UPLOADS_PER_DAY)
+                throw new UserInputError('今天的参考图上传额度已用完');
+            if (activeCount >= MAX_ACTIVE_REFERENCE_ASSETS)
+                throw new UserInputError('最多保留 10 张有效参考图，请等待过期后再上传');
+            const remainingBytes = MAX_ACTIVE_REFERENCE_BYTES - Number(activeSize?.total ?? 0);
+            if (remainingBytes <= 0) throw new UserInputError('参考图总容量已达到 100MB');
+            return this.storage.storeReference(
+                txCtx,
+                customer.id,
+                file,
+                Math.min(MAX_REFERENCE_BYTES, remainingBytes),
+            );
+        });
         return this.assetView(asset, customer.id);
     }
 
@@ -298,6 +403,153 @@ export class ImageGenerationService {
         return { items: items.map(job => this.jobView(job, job.customerId)), totalItems };
     }
 
+    async adminCostSummary(ctx: RequestContext, days = 30) {
+        const normalizedDays = Math.min(365, Math.max(1, Math.floor(days || 30)));
+        const from = new Date(Date.now() - normalizedDays * 24 * 60 * 60_000);
+        const events = await this.connection.getRepository(ctx, ImageGenerationCostEvent).find({
+            where: { channelId: ctx.channelId, createdAt: MoreThanOrEqual(from) },
+            select: {
+                modelCodeSnapshot: true,
+                providerScopeSnapshot: true,
+                saleUnitPriceSnapshot: true,
+                saleCurrencyCode: true,
+                outcome: true,
+                latencyMs: true,
+                actualCostMicrounits: true,
+                costCurrency: true,
+            },
+            order: { createdAt: 'DESC' },
+            take: 20_000,
+        });
+        const grouped = new Map<
+            string,
+            {
+                modelCode: string;
+                providerScope: string;
+                saleCurrencyCode: string;
+                costCurrency: string;
+                attempts: number;
+                successes: number;
+                retries: number;
+                failures: number;
+                unknowns: number;
+                missingCostCount: number;
+                grossRevenue: number;
+                actualCostMicrounits: number;
+                latencyTotal: number;
+            }
+        >();
+        for (const event of events) {
+            const costCurrency = event.costCurrency ?? 'UNKNOWN';
+            const key = [
+                event.modelCodeSnapshot,
+                event.providerScopeSnapshot,
+                event.saleCurrencyCode,
+                costCurrency,
+            ].join(':');
+            const item = grouped.get(key) ?? {
+                modelCode: event.modelCodeSnapshot,
+                providerScope: event.providerScopeSnapshot,
+                saleCurrencyCode: event.saleCurrencyCode,
+                costCurrency,
+                attempts: 0,
+                successes: 0,
+                retries: 0,
+                failures: 0,
+                unknowns: 0,
+                missingCostCount: 0,
+                grossRevenue: 0,
+                actualCostMicrounits: 0,
+                latencyTotal: 0,
+            };
+            item.attempts += 1;
+            item.latencyTotal += event.latencyMs;
+            if (event.outcome === 'SUCCEEDED') {
+                item.successes += 1;
+                item.grossRevenue += event.saleUnitPriceSnapshot;
+            } else if (event.outcome === 'RETRY') item.retries += 1;
+            else if (event.outcome === 'UNKNOWN') item.unknowns += 1;
+            else item.failures += 1;
+            if (event.actualCostMicrounits == null) item.missingCostCount += 1;
+            else item.actualCostMicrounits += event.actualCostMicrounits;
+            grouped.set(key, item);
+        }
+        return {
+            from,
+            to: new Date(),
+            truncated: events.length >= 20_000,
+            items: [...grouped.values()].map(item => ({
+                ...item,
+                actualCost: item.actualCostMicrounits / 1_000_000,
+                averageLatencyMs: item.attempts ? Math.round(item.latencyTotal / item.attempts) : 0,
+            })),
+        };
+    }
+
+    async deleteJob(ctx: RequestContext, id: ID): Promise<boolean> {
+        const customer = await this.activeCustomer(ctx);
+        const job = await this.connection.getRepository(ctx, ImageGenerationJob).findOne({
+            where: { id, channelId: ctx.channelId, customerId: customer.id },
+            relations: { outputs: { asset: true }, referenceAsset: true },
+        });
+        if (!job) return false;
+        if (!['PARTIAL_SUCCESS', 'SUCCEEDED', 'FAILED', 'CANCELLED'].includes(job.state)) {
+            throw new UserInputError('只能删除已结束的生图任务');
+        }
+        for (const output of job.outputs) {
+            if (output.assetId) await this.storage.deleteOwned(ctx, output.assetId, customer.id);
+        }
+        const referenceAssetId = job.referenceAssetId;
+        await this.connection.getRepository(ctx, ImageGenerationJob).delete({ id: job.id });
+        if (referenceAssetId) {
+            const remainingReferences = await this.connection.getRepository(ctx, ImageGenerationJob).count({
+                where: { channelId: ctx.channelId, customerId: customer.id, referenceAssetId },
+            });
+            if (remainingReferences === 0) {
+                await this.storage.deleteOwned(ctx, referenceAssetId, customer.id);
+            }
+        }
+        return true;
+    }
+
+    async purgeSensitiveRecords(): Promise<number> {
+        const rawConnection = this.connection.rawConnection;
+        const expiredOptimizations = await rawConnection.getRepository(ImagePromptOptimization).find({
+            where: { createdAt: LessThan(new Date(Date.now() - 30 * 24 * 60 * 60_000)) },
+            select: { id: true },
+            take: 10_000,
+        });
+        const promptDelete = expiredOptimizations.length
+            ? await rawConnection
+                  .getRepository(ImagePromptOptimization)
+                  .delete({ id: In(expiredOptimizations.map(item => item.id)) })
+            : { affected: 0 };
+        const jobs = await rawConnection.getRepository(ImageGenerationJob).find({
+            where: {
+                completedAt: LessThan(new Date(Date.now() - 90 * 24 * 60 * 60_000)),
+                originalPrompt: Not('[已按保留策略删除]'),
+            },
+            take: 200,
+        });
+        let redacted = 0;
+        for (const job of jobs) {
+            await rawConnection.getRepository(ImageGenerationJob).update(
+                { id: job.id },
+                {
+                    originalPrompt: '[已按保留策略删除]',
+                    finalPrompt: '[已按保留策略删除]',
+                    promptSpec: null,
+                    errorMessage: null,
+                },
+            );
+            await rawConnection
+                .getRepository(ImageGenerationOutput)
+                .update({ jobId: job.id }, { providerRequestId: null, errorMessage: null });
+            redacted += 1;
+        }
+        return (promptDelete.affected ?? 0) + redacted;
+    }
+
     async adminRetryUnknown(ctx: RequestContext, outputId: ID) {
         const output = await this.connection.getRepository(ctx, ImageGenerationOutput).findOne({
             where: { id: outputId },
@@ -307,7 +559,20 @@ export class ImageGenerationService {
             throw new UserInputError('找不到该生图输出');
         if (output.state !== 'UNKNOWN' || output.walletSettled)
             throw new UserInputError('只有尚未退款的 UNKNOWN 输出可人工重试');
+        if (!output.job.providerIdempotencySupportedSnapshot)
+            throw new UserInputError('该模型未确认支持中转站幂等，不能安全人工重试');
         if (!this.enqueueOutput) throw new UserInputError('生图任务队列尚未就绪');
+        const credential = await this.configService.requireCredential(
+            ctx,
+            output.job.providerScopeSnapshot as ImageProviderScope,
+        );
+        const currentFingerprint = this.configService.credentialFingerprint(credential);
+        if (
+            output.job.providerCredentialFingerprint &&
+            output.job.providerCredentialFingerprint !== currentFingerprint
+        ) {
+            throw new UserInputError('中转站账号或地址已更换，不能使用旧幂等键重试');
+        }
         const transition = await this.connection
             .getRepository(ctx, ImageGenerationOutput)
             .update(
@@ -318,11 +583,24 @@ export class ImageGenerationService {
         output.state = 'QUEUED';
         output.unknownAt = null;
         output.errorMessage = '管理员确认后使用相同幂等键重试';
+        await this.connection.getRepository(ctx, ImageGenerationDispatch).upsert(
+            {
+                outputId: output.id,
+                state: 'PENDING',
+                attemptCount: 0,
+                nextAttemptAt: new Date(),
+                dispatchedAt: null,
+                lastError: null,
+            },
+            ['outputId'],
+        );
         try {
             await this.enqueueOutput(output.id);
         } catch {
-            await this.failQueuedOutput(ctx, output.id, '管理员重试时加入队列失败');
-            throw new UserInputError('重试任务加入队列失败，系统已安全处理预占费用');
+            output.errorMessage = '即时入队失败，系统将在后台自动补发';
+            await this.connection
+                .getRepository(ctx, ImageGenerationOutput)
+                .update({ id: output.id, state: 'QUEUED' }, { errorMessage: output.errorMessage });
         }
         await this.refreshJob(ctx, output.jobId);
         return this.connection.getRepository(ctx, ImageGenerationOutput).findOneByOrFail({ id: output.id });
@@ -516,14 +794,6 @@ export class ImageGenerationService {
             output.walletSettled = true;
             return true;
         });
-    }
-
-    private async failBeforeDispatch(
-        ctx: RequestContext,
-        job: ImageGenerationJob,
-        message: string,
-    ): Promise<void> {
-        for (const output of job.outputs) await this.failQueuedOutput(ctx, output.id, message);
     }
 
     async refreshJob(ctx: RequestContext, jobId: ID): Promise<void> {

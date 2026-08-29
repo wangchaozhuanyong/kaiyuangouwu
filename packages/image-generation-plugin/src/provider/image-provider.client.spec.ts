@@ -3,7 +3,12 @@ import type { ImageProviderCipherService } from '../security/image-provider-ciph
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 
-import { ImageProviderClient, RetryableImageProviderError } from './image-provider.client';
+import {
+    AmbiguousImageProviderError,
+    DefinitiveImageProviderError,
+    ImageProviderClient,
+    RetryableImageProviderError,
+} from './image-provider.client';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -12,6 +17,9 @@ describe('ImageProviderClient', () => {
         validate: vi.fn((value: string) => Promise.resolve(new URL(value))),
         endpoint: vi.fn(
             (base: URL, pathname: string) => new URL(`${base.toString().replace(/\/$/u, '')}/${pathname}`),
+        ),
+        resolveRemoteImage: vi.fn((value: string) =>
+            Promise.resolve({ url: new URL(value), address: '93.184.216.34', family: 4 }),
         ),
     };
     const cipher = {
@@ -121,6 +129,100 @@ describe('ImageProviderClient', () => {
                 idempotencyKey: 'image-job-2',
             }),
         ).rejects.toBeInstanceOf(RetryableImageProviderError);
+    });
+
+    it('classifies uncertain upstream failures separately from definitive request failures', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(new Response('{"error":"timeout at relay"}', { status: 504 }))
+            .mockResolvedValueOnce(new Response('{"error":"invalid input"}', { status: 400 }));
+        vi.stubGlobal('fetch', fetchMock);
+        const client = new ImageProviderClient(cipher, safeUrls);
+        const input = {
+            providerModelId: 'gpt-image-2',
+            prompt: 'product photo',
+            aspectRatio: '1:1',
+            idempotencyKey: 'image-job-http-failure',
+        };
+
+        await expect(client.generate(credential, 'OPENAI_IMAGES', input)).rejects.toBeInstanceOf(
+            AmbiguousImageProviderError,
+        );
+        await expect(client.generate(credential, 'OPENAI_IMAGES', input)).rejects.toBeInstanceOf(
+            DefinitiveImageProviderError,
+        );
+    });
+
+    it('captures request, usage, and cost telemetry without storing response image bytes', async () => {
+        const encoded = Buffer.from('telemetry-image'.repeat(16)).toString('base64');
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        id: 'cost-request-1',
+                        data: [{ b64_json: encoded }],
+                        usage: { total_tokens: 321, total_cost: 0.004672 },
+                    }),
+                    { status: 200, headers: { 'x-request-id': 'header-request-1' } },
+                ),
+            ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        const result = await client.generate(credential, 'OPENAI_IMAGES', {
+            providerModelId: 'gpt-image-2',
+            prompt: 'product photo',
+            aspectRatio: '1:1',
+            idempotencyKey: 'image-job-telemetry',
+        });
+
+        expect(result.telemetry).toEqual(
+            expect.objectContaining({
+                httpStatus: 200,
+                providerRequestId: 'cost-request-1',
+                actualCostMicrounits: 4_672,
+                costCurrency: 'USD',
+                usage: { total_tokens: 321, total_cost: 0.004672 },
+            }),
+        );
+        expect(JSON.stringify(result.telemetry)).not.toContain(encoded);
+    });
+
+    it('keeps cost telemetry when the paid response does not contain a usable image', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        id: 'charged-invalid-image',
+                        data: [],
+                        usage: { total_cost: 0.15 },
+                    }),
+                    { status: 200 },
+                ),
+            ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        try {
+            await client.generate(credential, 'OPENAI_IMAGES', {
+                providerModelId: 'gpt-image-2',
+                prompt: 'product photo',
+                aspectRatio: '1:1',
+                idempotencyKey: 'image-job-invalid-paid-response',
+            });
+            throw new Error('Expected generation to fail');
+        } catch (error) {
+            expect(error).toBeInstanceOf(DefinitiveImageProviderError);
+            expect((error as DefinitiveImageProviderError).details).toEqual(
+                expect.objectContaining({
+                    providerRequestId: 'charged-invalid-image',
+                    actualCostMicrounits: 150_000,
+                    costCurrency: 'USD',
+                }),
+            );
+        }
     });
 
     it('accepts a data URL embedded in an OpenAI-compatible chat response', async () => {

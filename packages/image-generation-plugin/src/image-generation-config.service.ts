@@ -1,7 +1,9 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { createHash, randomUUID } from 'node:crypto';
 
-import { launchModelDefinitions, retiredLaunchModelCodes } from './constants';
+import { IMAGE_HEALTH_MAX_AGE_MS, launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
@@ -19,11 +21,12 @@ import {
 } from './types';
 
 const DEFAULT_TERMS_ZH =
-    '我确认拥有提示词和参考图的使用权；内容会发送至第三方中转站及模型提供方；生成结果可能存在错误；禁止违法、侵权、冒充、欺诈及未成年人敏感内容。参考图在任务结束后保留24小时，生成图默认保留90天。';
+    '我确认拥有提示词和参考图的使用权；内容会发送至第三方中转站及模型提供方；生成结果可能存在错误；禁止违法、侵权、冒充、欺诈及未成年人敏感内容。参考图在任务结束后保留24小时，提示词优化记录保留30天，生成图和任务提示词默认保留90天。';
 const DEFAULT_TERMS_EN = [
     'I have rights to the prompt and reference image. Content is sent to the relay and model provider. ',
     'AI output may be inaccurate. Illegal, infringing, deceptive, impersonation, fraud, and sensitive ',
-    'minor content are prohibited. References are kept 24 hours after completion and outputs for 90 days.',
+    'minor content are prohibited. References are kept 24 hours after completion, prompt optimizations ',
+    'for 30 days, and generated outputs and job prompts for 90 days.',
 ].join('');
 const PROVIDER_SCOPES = ['OPENAI', 'GEMINI'] as const satisfies readonly ImageProviderScope[];
 
@@ -107,7 +110,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         const availableModels = models.filter(model => {
             if (!model.enabled) return false;
             const credential = credentials.get(providerScopeForModel(model.protocol, model.providerModelId));
-            return model.healthStatus === 'HEALTHY' && credentialReady(credential);
+            return modelReady(model) && credentialReady(credential);
         });
         const optimizerAvailable =
             credentialReady(openAiCredential) && Boolean(openAiCredential?.textModelId.trim());
@@ -221,6 +224,51 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         return { ...result, testedAt: model.lastTestedAt };
     }
 
+    async smokeTestModel(ctx: RequestContext, code: string) {
+        const model = await this.getModel(ctx, code);
+        if (!model) throw new UserInputError('找不到生图模型');
+        const scope = providerScopeForModel(model.protocol, model.providerModelId);
+        const credential = await this.requireConfiguredCredential(ctx, scope);
+        if (!credential.enabled || !healthIsFresh(credential.lastTestedAt)) {
+            throw new UserInputError('请先完成中转站连接测试');
+        }
+        const startedAt = Date.now();
+        try {
+            const result = await this.providerClient.generate(credential, model.protocol, {
+                providerModelId: model.providerModelId,
+                prompt: 'A simple blue circle centered on a clean white background, no text.',
+                aspectRatio: '1:1',
+                idempotencyKey: `image-smoke-${String(model.id)}-${randomUUID()}`,
+            });
+            model.healthStatus = 'HEALTHY';
+            model.healthMessage = `付费真实生图测试成功，耗时 ${Date.now() - startedAt}ms`;
+            model.lastTestedAt = new Date();
+            model.consecutiveFailures = 0;
+            await this.connection.getRepository(ctx, ImageModelConfig).save(model, { reload: false });
+            return {
+                ok: true,
+                message: model.healthMessage,
+                testedAt: model.lastTestedAt,
+                actualCostMicrounits: result.telemetry?.actualCostMicrounits ?? null,
+                costCurrency: result.telemetry?.costCurrency ?? null,
+            };
+        } catch (error) {
+            const telemetry = errorTelemetry(error);
+            model.healthStatus = 'UNHEALTHY';
+            model.healthMessage = `付费真实生图测试失败：${safeMessage(error)}`.slice(0, 500);
+            model.lastTestedAt = new Date();
+            model.consecutiveFailures += 1;
+            await this.connection.getRepository(ctx, ImageModelConfig).save(model, { reload: false });
+            return {
+                ok: false,
+                message: model.healthMessage,
+                testedAt: model.lastTestedAt,
+                actualCostMicrounits: telemetry.actualCostMicrounits ?? null,
+                costCurrency: telemetry.costCurrency ?? null,
+            };
+        }
+    }
+
     async saveModel(ctx: RequestContext, input: SaveImageModelInput) {
         const definition = launchModelDefinitions.find(model => model.code === input.code);
         if (!definition) throw new UserInputError('只支持当前已审核的生图模型');
@@ -283,9 +331,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 currencyCode: input.currencyCode,
                 position: input.position,
                 isDefault: input.isDefault,
+                supportsIdempotency: input.supportsIdempotency,
                 healthStatus: mappingChanged ? 'UNTESTED' : (model?.healthStatus ?? 'UNTESTED'),
                 healthMessage: mappingChanged ? null : (model?.healthMessage ?? null),
                 lastTestedAt: mappingChanged ? null : (model?.lastTestedAt ?? null),
+                consecutiveFailures: mappingChanged ? 0 : (model?.consecutiveFailures ?? 0),
             };
             model = await repository.save(
                 model ? Object.assign(model, values) : new ImageModelConfig(values),
@@ -357,10 +407,76 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         scope: ImageProviderScope = 'OPENAI',
     ): Promise<ImageProviderCredential> {
         return this.requireConfiguredCredential(ctx, scope).then(value => {
-            if (!value.enabled || value.healthStatus !== 'HEALTHY')
+            if (!credentialReady(value))
                 throw new UserInputError(`${scope} 生图中转站尚未启用或未通过连接测试`);
             return value;
         });
+    }
+
+    credentialFingerprint(credential: ImageProviderCredential): string {
+        return createHash('sha256')
+            .update(
+                JSON.stringify({
+                    scope: credential.scope,
+                    baseUrl: credential.baseUrl,
+                    textModelId: credential.textModelId,
+                    encryptedApiKey: credential.encryptedApiKey,
+                }),
+            )
+            .digest('hex');
+    }
+
+    async recordRuntimeResult(
+        ctx: RequestContext,
+        modelConfigId: ID,
+        result: {
+            ok: boolean;
+            message?: string;
+            credentialScope?: ImageProviderScope;
+            authFailure?: boolean;
+        },
+    ): Promise<void> {
+        const repository = this.connection.getRepository(ctx, ImageModelConfig);
+        const model = await repository.findOne({ where: { id: modelConfigId } });
+        if (!model) return;
+        if (result.ok) {
+            await repository.update(
+                { id: model.id },
+                {
+                    consecutiveFailures: 0,
+                    healthStatus: 'HEALTHY',
+                    healthMessage: '最近一次真实生图成功',
+                    lastTestedAt: new Date(),
+                },
+            );
+            return;
+        }
+        await repository.increment({ id: model.id }, 'consecutiveFailures', 1);
+        const refreshed = await repository.findOne({ where: { id: model.id } });
+        if (refreshed && refreshed.consecutiveFailures >= 3) {
+            await repository.update(
+                { id: model.id },
+                {
+                    healthStatus: 'UNHEALTHY',
+                    healthMessage:
+                        `连续 ${refreshed.consecutiveFailures} 次调用失败：${result.message ?? '未知错误'}`.slice(
+                            0,
+                            500,
+                        ),
+                    lastTestedAt: new Date(),
+                },
+            );
+        }
+        if (result.authFailure && result.credentialScope) {
+            await this.connection.getRepository(ctx, ImageProviderCredential).update(
+                { scope: result.credentialScope },
+                {
+                    healthStatus: 'UNHEALTHY',
+                    healthMessage: '运行时鉴权失败，请检查 API Key',
+                    lastTestedAt: new Date(),
+                },
+            );
+        }
     }
 
     private requireConfiguredCredential(
@@ -471,9 +587,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                         currencyCode,
                         position,
                         isDefault: definition.code === 'OPENAI_HIGH_QUALITY',
+                        supportsIdempotency: false,
                         healthStatus: 'UNTESTED',
                         healthMessage: null,
                         lastTestedAt: null,
+                        consecutiveFailures: 0,
                     }),
                 ),
             );
@@ -509,5 +627,27 @@ export function providerScopeForModel(
 }
 
 function credentialReady(credential: ImageProviderCredential | null | undefined): boolean {
-    return Boolean(credential?.enabled && credential.healthStatus === 'HEALTHY');
+    return Boolean(
+        credential?.enabled &&
+        credential.healthStatus === 'HEALTHY' &&
+        healthIsFresh(credential.lastTestedAt),
+    );
+}
+
+export function modelReady(model: ImageModelConfig): boolean {
+    return model.healthStatus === 'HEALTHY' && healthIsFresh(model.lastTestedAt);
+}
+
+function healthIsFresh(lastTestedAt: Date | null | undefined): boolean {
+    return Boolean(lastTestedAt && lastTestedAt.getTime() >= Date.now() - IMAGE_HEALTH_MAX_AGE_MS);
+}
+
+function safeMessage(error: unknown): string {
+    return (error instanceof Error ? error.message : String(error)).slice(0, 300);
+}
+
+function errorTelemetry(error: unknown): { actualCostMicrounits?: number; costCurrency?: string } {
+    if (!error || typeof error !== 'object' || !('details' in error)) return {};
+    const details = (error as { details?: unknown }).details;
+    return details && typeof details === 'object' ? details : {};
 }

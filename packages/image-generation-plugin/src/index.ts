@@ -1,5 +1,7 @@
 export { manageImageGenerationPermission } from './constants.js';
 export { ImageGenerationConfig } from './entities/image-generation-config.entity.js';
+export { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity.js';
+export { ImageGenerationDispatch } from './entities/image-generation-dispatch.entity.js';
 export { ImageGenerationJob } from './entities/image-generation-job.entity.js';
 export { ImageGenerationOutput } from './entities/image-generation-output.entity.js';
 export { ImageModelConfig } from './entities/image-model-config.entity.js';

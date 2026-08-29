@@ -64,6 +64,15 @@ export class ImageGenerationJob extends VendureEntity {
     @Column({ type: 'varchar', length: 32 })
     protocolSnapshot: string;
 
+    @Column({ type: 'varchar', length: 24 })
+    providerScopeSnapshot: string;
+
+    @Column({ type: 'varchar', length: 64 })
+    providerCredentialFingerprint: string;
+
+    @Column('boolean', { default: false })
+    providerIdempotencySupportedSnapshot: boolean;
+
     @Column({ type: 'text' })
     originalPrompt: string;
 

@@ -56,6 +56,7 @@ import { AlignImageGenerationSchema1787803200000 } from './1787803200000-align-i
 import { RepairFixedMoneyJson1787806800000 } from './1787806800000-repair-fixed-money-json';
 import { ConfigureGeminiImageProvider1787810400000 } from './1787810400000-configure-gemini-image-provider';
 import { EnforceGeminiImageProvider1787814000000 } from './1787814000000-enforce-gemini-image-provider';
+import { HardenImageGeneration1787817600000 } from './1787817600000-harden-image-generation';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -116,4 +117,5 @@ export const devServerMigrations = [
     RepairFixedMoneyJson1787806800000,
     ConfigureGeminiImageProvider1787810400000,
     EnforceGeminiImageProvider1787814000000,
+    HardenImageGeneration1787817600000,
 ];

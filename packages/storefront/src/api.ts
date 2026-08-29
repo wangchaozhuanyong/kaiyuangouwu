@@ -1489,6 +1489,14 @@ export class ShopApi {
         return result.deleteMyGeneratedImage;
     }
 
+    async deleteMyImageGenerationJob(id: string): Promise<boolean> {
+        const result = await this.request<{ deleteMyImageGenerationJob: boolean }>(
+            `mutation DeleteMyImageGenerationJob($id: ID!) { deleteMyImageGenerationJob(id: $id) }`,
+            { id },
+        );
+        return result.deleteMyImageGenerationJob;
+    }
+
     async recordStorefrontVisit(): Promise<boolean> {
         const result = await this.request<{ recordStorefrontVisit: { recorded: boolean } }>(
             `
