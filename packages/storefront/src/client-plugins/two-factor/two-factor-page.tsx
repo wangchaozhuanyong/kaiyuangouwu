@@ -388,6 +388,7 @@ export function TwoFactorPage({
                                     <button
                                         className={secondaryButtonClass}
                                         type="button"
+                                        disabled={!storageAvailable}
                                         onClick={() => quickSecret && openAccountForm(undefined, quickSecret)}
                                     >
                                         <Plus className="size-4" aria-hidden="true" />
