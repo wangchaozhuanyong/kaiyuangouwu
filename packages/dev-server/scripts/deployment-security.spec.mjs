@@ -161,6 +161,7 @@ void test('production swap setup is fixed-size, persistent, and low-swappiness',
 
     assert.match(script, /swap_file="\$\{swap_directory\}\/production\.swap"/u);
     assert.match(script, /swap_size_mib=2048/u);
+    assert.match(script, /minimum_active_swap_mib=2000/u);
     assert.match(script, /disk_reserve_bytes/u);
     assert.match(script, /mkswap/u);
     assert.match(script, /swapon/u);
