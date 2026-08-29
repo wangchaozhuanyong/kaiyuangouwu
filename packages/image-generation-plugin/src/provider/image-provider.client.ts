@@ -184,7 +184,7 @@ export class ImageProviderClient {
         apiKey: string,
         input: ProviderGenerationInput,
     ): Promise<ProviderGenerationResult> {
-        const size = openAiSize(input.aspectRatio);
+        const size = openAiSize(input.aspectRatio, input.resolution ?? '1K', input.providerModelId);
         let response: ProviderJsonResponse;
         if (input.reference) {
             const form = new FormData();
@@ -252,7 +252,7 @@ export class ImageProviderClient {
                         type: 'image_generation',
                         model: input.providerModelId,
                         quality: 'low',
-                        size: openAiSize(input.aspectRatio),
+                        size: openAiSize(input.aspectRatio, input.resolution ?? '1K', input.providerModelId),
                         output_format: 'png',
                         action: input.reference ? 'edit' : 'generate',
                     },
@@ -311,7 +311,7 @@ export class ImageProviderClient {
                 contents: [{ role: 'user', parts }],
                 generationConfig: {
                     responseModalities: ['TEXT', 'IMAGE'],
-                    imageConfig: { aspectRatio: input.aspectRatio },
+                    imageConfig: { aspectRatio: input.aspectRatio, imageSize: input.resolution ?? '1K' },
                 },
             },
             input.idempotencyKey,
@@ -345,7 +345,7 @@ export class ImageProviderClient {
                 contents: [{ role: 'user', parts }],
                 generationConfig: {
                     responseModalities: ['TEXT', 'IMAGE'],
-                    imageConfig: { aspectRatio: input.aspectRatio },
+                    imageConfig: { aspectRatio: input.aspectRatio, imageSize: input.resolution ?? '1K' },
                 },
             }),
         });
@@ -395,7 +395,7 @@ export class ImageProviderClient {
                     type: 'image',
                     mime_type: 'image/png',
                     aspect_ratio: input.aspectRatio,
-                    image_size: '1K',
+                    image_size: input.resolution ?? '1K',
                 },
             },
             input.idempotencyKey,
@@ -626,7 +626,37 @@ async function pinnedImageDownload(input: {
     });
 }
 
-function openAiSize(aspectRatio: string): string {
+function openAiSize(aspectRatio: string, resolution: string, providerModelId: string): string {
+    if (
+        providerModelId
+            .trim()
+            .replace(/^models\//iu, '')
+            .toLowerCase() === 'gpt-image-2'
+    ) {
+        const sizes: Record<string, Record<string, string>> = {
+            '1K': {
+                '1:1': '1024x1024',
+                '3:4': '768x1024',
+                '4:3': '1024x768',
+                '9:16': '624x1104',
+                '16:9': '1104x624',
+            },
+            '2K': {
+                '1:1': '2048x2048',
+                '3:4': '1536x2048',
+                '4:3': '2048x1536',
+                '9:16': '1152x2048',
+                '16:9': '2048x1152',
+            },
+            '4K': {
+                '9:16': '2160x3840',
+                '16:9': '3840x2160',
+            },
+        };
+        const size = sizes[resolution]?.[aspectRatio];
+        if (!size) throw new DefinitiveImageProviderError('GPT Image 2 不支持所选画幅的原生清晰度');
+        return size;
+    }
     if (['3:4', '9:16'].includes(aspectRatio)) return '1024x1536';
     if (['4:3', '16:9'].includes(aspectRatio)) return '1536x1024';
     return '1024x1024';

@@ -8,6 +8,7 @@ import { ImageGenerationConfig } from './entities/image-generation-config.entity
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
+import { supportsNativeResolution } from './image-resolution';
 import { PromptRulesService } from './prompt/prompt-rules.service';
 import { ImageProviderClient } from './provider/image-provider.client';
 import { ImageProviderCipherService } from './security/image-provider-cipher.service';
@@ -126,7 +127,6 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             maxReferenceBytes: 10 * 1024 * 1024,
             maxReferencePixels: 40_000_000,
             maxQuantity: 4,
-            resolution: '1K',
             models: availableModels,
         };
     }
@@ -238,6 +238,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 providerModelId: model.providerModelId,
                 prompt: 'A simple blue circle centered on a clean white background, no text.',
                 aspectRatio: '1:1',
+                resolution: '1K',
                 idempotencyKey: `image-smoke-${String(model.id)}-${randomUUID()}`,
             });
             model.healthStatus = 'HEALTHY';
@@ -272,10 +273,16 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     async saveModel(ctx: RequestContext, input: SaveImageModelInput) {
         const definition = launchModelDefinitions.find(model => model.code === input.code);
         if (!definition) throw new UserInputError('只支持当前已审核的生图模型');
-        if (!Number.isSafeInteger(input.unitPrice) || input.unitPrice < 0)
-            throw new UserInputError('单价必须是非负整数');
+        for (const [label, price] of [
+            ['1K', input.unitPrice],
+            ['2K', input.unitPrice2K],
+            ['4K', input.unitPrice4K],
+        ] as const) {
+            if (!Number.isSafeInteger(price) || price < 0)
+                throw new UserInputError(`${label} 单价必须是非负整数`);
+        }
         if (input.enabled && input.unitPrice <= 0)
-            throw new UserInputError('启用模型前必须设置大于 0 的单张价格');
+            throw new UserInputError('启用模型前必须设置大于 0 的 1K 单张价格');
         if (!Number.isInteger(input.position) || input.position < 0 || input.position > 1_000)
             throw new UserInputError('排序无效');
         if (
@@ -289,6 +296,20 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             ].includes(input.protocol)
         )
             throw new UserInputError('协议类型无效');
+        const resolutionModel = {
+            officialModelId: definition.officialModelId,
+            providerModelId: input.providerModelId,
+            protocol: input.protocol,
+            unitPrice: input.unitPrice,
+            unitPrice2K: input.unitPrice2K,
+            unitPrice4K: input.unitPrice4K,
+        };
+        if (input.unitPrice2K > 0 && !supportsNativeResolution(resolutionModel, '2K')) {
+            throw new UserInputError('当前模型或协议不支持原生 2K，请将 2K 价格设为 0');
+        }
+        if (input.unitPrice4K > 0 && !supportsNativeResolution(resolutionModel, '4K')) {
+            throw new UserInputError('当前模型或协议不支持原生 4K，请将 4K 价格设为 0');
+        }
         return this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ImageModelConfig);
             const [existingModels, config] = await Promise.all([
@@ -328,6 +349,8 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 providerModelId: requiredText(input.providerModelId, 160, '中转站模型 ID'),
                 protocol: input.protocol,
                 unitPrice: input.unitPrice,
+                unitPrice2K: input.unitPrice2K,
+                unitPrice4K: input.unitPrice4K,
                 currencyCode: input.currencyCode,
                 position: input.position,
                 isDefault: input.isDefault,
@@ -584,6 +607,8 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                         providerModelId: definition.officialModelId,
                         protocol: definition.protocol,
                         unitPrice: 0,
+                        unitPrice2K: 0,
+                        unitPrice4K: 0,
                         currencyCode,
                         position,
                         isDefault: definition.code === 'OPENAI_HIGH_QUALITY',

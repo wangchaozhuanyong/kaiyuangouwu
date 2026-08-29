@@ -43,6 +43,12 @@ const commonTypes = gql`
         CANCELLED
     }
 
+    type ImageResolutionOption {
+        resolution: String!
+        unitPrice: Money!
+        supportedAspectRatios: [String!]!
+    }
+
     type ImageStudioModel implements Node {
         id: ID!
         createdAt: DateTime!
@@ -56,6 +62,9 @@ const commonTypes = gql`
         officialModelId: String!
         protocol: ImageProviderProtocol!
         unitPrice: Money!
+        unitPrice2K: Money!
+        unitPrice4K: Money!
+        resolutionOptions: [ImageResolutionOption!]!
         currencyCode: CurrencyCode!
         position: Int!
         isDefault: Boolean!
@@ -105,6 +114,7 @@ const commonTypes = gql`
         referenceMode: ImageReferenceMode!
         referenceAsset: ImagePrivateAssetView
         aspectRatio: String!
+        resolution: String!
         quantity: Int!
         unitPriceSnapshot: Money!
         reservedAmount: Money!
@@ -154,6 +164,7 @@ const commonTypes = gql`
         referenceAssetId: ID
         referenceMode: ImageReferenceMode
         aspectRatio: String!
+        resolution: String!
         quantity: Int!
         expectedUnitPrice: Money!
         currencyCode: CurrencyCode!
@@ -177,7 +188,6 @@ export const shopApiExtensions = gql`
         maxReferenceBytes: Int!
         maxReferencePixels: Int!
         maxQuantity: Int!
-        resolution: String!
         models: [ImageStudioModel!]!
     }
 
@@ -301,6 +311,8 @@ export const adminApiExtensions = gql`
         providerModelId: String!
         protocol: ImageProviderProtocol!
         unitPrice: Money!
+        unitPrice2K: Money!
+        unitPrice4K: Money!
         currencyCode: CurrencyCode!
         position: Int!
         isDefault: Boolean!

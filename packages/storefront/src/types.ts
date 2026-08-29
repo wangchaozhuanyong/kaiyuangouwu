@@ -761,6 +761,7 @@ export interface StorefrontContentResponse {
 }
 
 export type ImageReferenceMode = 'NONE' | 'STYLE' | 'COMPOSITION' | 'IDENTITY' | 'PRODUCT' | 'EDIT';
+export type ImageResolution = '1K' | '2K' | '4K';
 export type ImageGenerationState =
     'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 export type ImageOutputState = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
@@ -774,6 +775,13 @@ export interface ImageStudioModel {
     descriptionEn: string;
     officialModelId: string;
     unitPrice: number;
+    unitPrice2K: number;
+    unitPrice4K: number;
+    resolutionOptions: Array<{
+        resolution: ImageResolution;
+        unitPrice: number;
+        supportedAspectRatios: string[];
+    }>;
     currencyCode: string;
     position: number;
     isDefault: boolean;
@@ -792,7 +800,6 @@ export interface ImageStudioConfig {
     maxReferenceBytes: number;
     maxReferencePixels: number;
     maxQuantity: number;
-    resolution: string;
     models: ImageStudioModel[];
 }
 
@@ -833,6 +840,7 @@ export interface ImageGenerationJob {
     referenceMode: ImageReferenceMode;
     referenceAsset?: ImagePrivateAssetView | null;
     aspectRatio: string;
+    resolution: ImageResolution;
     quantity: number;
     unitPriceSnapshot: number;
     reservedAmount: number;
@@ -872,6 +880,7 @@ export interface CreateImageGenerationInput {
     referenceAssetId?: string | null;
     referenceMode?: ImageReferenceMode | null;
     aspectRatio: string;
+    resolution: ImageResolution;
     quantity: number;
     expectedUnitPrice: number;
     currencyCode: string;

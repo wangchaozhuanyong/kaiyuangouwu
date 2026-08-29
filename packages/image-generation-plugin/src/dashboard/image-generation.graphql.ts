@@ -13,6 +13,13 @@ const modelFields = gql`
         providerModelId
         protocol
         unitPrice
+        unitPrice2K
+        unitPrice4K
+        resolutionOptions {
+            resolution
+            unitPrice
+            supportedAspectRatios
+        }
         currencyCode
         position
         isDefault
@@ -77,6 +84,7 @@ export const imageGenerationAdminQuery = gql`
                 state
                 modelNameSnapshot
                 officialModelIdSnapshot
+                resolution
                 quantity
                 unitPriceSnapshot
                 capturedAmount
@@ -228,6 +236,13 @@ export interface ImageAdminModelRecord {
         | 'GEMINI_NATIVE'
         | 'GEMINI_NATIVE_STREAM';
     unitPrice: number;
+    unitPrice2K: number;
+    unitPrice4K: number;
+    resolutionOptions: Array<{
+        resolution: '1K' | '2K' | '4K';
+        unitPrice: number;
+        supportedAspectRatios: string[];
+    }>;
     currencyCode: string;
     position: number;
     isDefault: boolean;
@@ -267,6 +282,7 @@ export interface ImageAdminJobRecord {
     state: string;
     modelNameSnapshot: string;
     officialModelIdSnapshot: string;
+    resolution: '1K' | '2K' | '4K';
     quantity: number;
     unitPriceSnapshot: number;
     capturedAmount: number;

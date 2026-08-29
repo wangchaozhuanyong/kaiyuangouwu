@@ -23,6 +23,7 @@ import {
     ImageGenerationJob,
     ImagePrivateAssetView,
     ImageReferenceMode,
+    ImageResolution,
     ImageStudioConfig,
     MarketConfig,
     StorefrontLanguage,
@@ -65,10 +66,10 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [optimizationReason, setOptimizationReason] = useState('');
     const [modelCode, setModelCode] = useState('');
     const [aspectRatio, setAspectRatio] = useState('1:1');
+    const [resolution, setResolution] = useState<ImageResolution>('1K');
     const [quantity, setQuantity] = useState(1);
     const [referenceMode, setReferenceMode] = useState<ImageReferenceMode>('NONE');
     const [reference, setReference] = useState<ImagePrivateAssetView | null>(null);
-    const [termsAccepted, setTermsAccepted] = useState(false);
     const [busy, setBusy] = useState<'OPTIMIZE' | 'UPLOAD' | 'GENERATE' | ''>('');
     const [actionError, setActionError] = useState('');
     const pollStartedAt = useRef(Date.now());
@@ -111,16 +112,38 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     }, [jobs, load]);
 
     const selectedModel = config?.models.find(model => model.code === modelCode) ?? config?.models[0];
-    const estimatedPrice = (selectedModel?.unitPrice ?? 0) * quantity;
+    const pricedResolutionOptions =
+        selectedModel?.resolutionOptions.filter(option => option.unitPrice > 0) ?? [];
+    const selectedResolutionOption =
+        pricedResolutionOptions.find(
+            option => option.resolution === resolution && option.supportedAspectRatios.includes(aspectRatio),
+        ) ?? pricedResolutionOptions.find(option => option.supportedAspectRatios.includes(aspectRatio));
+    const effectiveResolution = selectedResolutionOption?.resolution;
+    useEffect(() => {
+        if (effectiveResolution && effectiveResolution !== resolution) setResolution(effectiveResolution);
+    }, [effectiveResolution, resolution]);
+    const estimatedPrice = (selectedResolutionOption?.unitPrice ?? 0) * quantity;
     const canGenerate = Boolean(
         customer &&
         config?.enabled &&
         selectedModel &&
+        selectedResolutionOption &&
         prompt.trim() &&
-        termsAccepted &&
         balance >= estimatedPrice &&
         !busy,
     );
+    const selectModel = (code: string) => {
+        setModelCode(code);
+        const model = config?.models.find(item => item.code === code);
+        if (!model) return;
+        const priced = model.resolutionOptions.filter(option => option.unitPrice > 0);
+        const next =
+            priced.find(
+                option =>
+                    option.resolution === resolution && option.supportedAspectRatios.includes(aspectRatio),
+            ) ?? priced.find(option => option.supportedAspectRatios.includes(aspectRatio));
+        if (next) setResolution(next.resolution);
+    };
     const statusSummary = useMemo(
         () =>
             jobs.reduce(
@@ -141,7 +164,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             setOptimized(true);
             setOptimizationReason(result.recommendationReason);
             if (config?.models.some(model => model.code === result.recommendedModelCode)) {
-                setModelCode(result.recommendedModelCode);
+                selectModel(result.recommendedModelCode);
             }
         } catch (error) {
             setActionError(errorMessage(error));
@@ -154,14 +177,6 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         const file = event.target.files?.[0];
         event.target.value = '';
         if (!file) return;
-        if (!termsAccepted) {
-            setActionError(
-                isZh
-                    ? '请先阅读并勾选服务条款，再上传参考图'
-                    : 'Accept the terms before uploading a reference',
-            );
-            return;
-        }
         if (config && file.size > config.maxReferenceBytes) {
             setActionError(isZh ? '参考图不能超过 10MB' : 'Reference images must be 10MB or smaller');
             return;
@@ -180,7 +195,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     };
 
     const generate = async () => {
-        if (!canGenerate || !selectedModel || !config) return;
+        if (!canGenerate || !selectedModel || !selectedResolutionOption || !config) return;
         setBusy('GENERATE');
         setActionError('');
         try {
@@ -191,8 +206,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 referenceAssetId: reference?.id ?? null,
                 referenceMode: reference ? referenceMode : 'NONE',
                 aspectRatio,
+                resolution: selectedResolutionOption.resolution,
                 quantity,
-                expectedUnitPrice: selectedModel.unitPrice,
+                expectedUnitPrice: selectedResolutionOption.unitPrice,
                 currencyCode: selectedModel.currencyCode,
                 idempotencyKey: requestId(),
                 termsAccepted: true,
@@ -243,8 +259,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         setOriginalPrompt('');
         setOptimized(false);
         setOptimizationReason('');
-        setModelCode(job.modelCodeSnapshot);
+        selectModel(job.modelCodeSnapshot);
         setAspectRatio(job.aspectRatio);
+        setResolution(job.resolution);
         setQuantity(job.quantity);
         setReference(null);
         setReferenceMode('NONE');
@@ -353,7 +370,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             </div>
                         ) : null}
                         <div className="ai-studio-reference">
-                            <label className={termsAccepted ? '' : 'is-disabled'}>
+                            <label>
                                 <ImagePlus />
                                 {busy === 'UPLOAD'
                                     ? isZh
@@ -369,7 +386,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 <input
                                     type="file"
                                     accept="image/jpeg,image/png,image/webp"
-                                    disabled={!termsAccepted || Boolean(busy)}
+                                    disabled={Boolean(busy)}
                                     onChange={event => void uploadReference(event)}
                                 />
                             </label>
@@ -428,7 +445,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     type="button"
                                     key={model.code}
                                     className={model.code === selectedModel?.code ? 'is-selected' : ''}
-                                    onClick={() => setModelCode(model.code)}
+                                    onClick={() => selectModel(model.code)}
                                 >
                                     <span>{isZh ? model.displayNameZh : model.displayNameEn}</span>
                                     <code>{model.officialModelId}</code>
@@ -439,7 +456,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                             model.currencyCode,
                                             market.locale,
                                         )}{' '}
-                                        / {isZh ? '张' : 'image'}
+                                        / {isZh ? '张（1K 起）' : 'image (from 1K)'}
                                     </strong>
                                 </button>
                             ))}
@@ -449,7 +466,19 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 <span>{isZh ? '图片比例' : 'Aspect ratio'}</span>
                                 <select
                                     value={aspectRatio}
-                                    onChange={event => setAspectRatio(event.target.value)}
+                                    onChange={event => {
+                                        const nextAspectRatio = event.target.value;
+                                        setAspectRatio(nextAspectRatio);
+                                        const current = pricedResolutionOptions.find(
+                                            option => option.resolution === resolution,
+                                        );
+                                        if (!current?.supportedAspectRatios.includes(nextAspectRatio)) {
+                                            const fallback = pricedResolutionOptions.find(option =>
+                                                option.supportedAspectRatios.includes(nextAspectRatio),
+                                            );
+                                            if (fallback) setResolution(fallback.resolution);
+                                        }
+                                    }}
                                 >
                                     {aspectRatios.map(value => (
                                         <option key={value}>{value}</option>
@@ -469,63 +498,93 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     )}
                                 </select>
                             </label>
-                            <div>
+                            <label>
                                 <span>{isZh ? '清晰度' : 'Resolution'}</span>
-                                <strong>{config.resolution}</strong>
-                            </div>
+                                <select
+                                    value={selectedResolutionOption?.resolution ?? resolution}
+                                    onChange={event => {
+                                        const next = pricedResolutionOptions.find(
+                                            option => option.resolution === event.target.value,
+                                        );
+                                        if (!next) return;
+                                        setResolution(next.resolution);
+                                        if (!next.supportedAspectRatios.includes(aspectRatio)) {
+                                            setAspectRatio(next.supportedAspectRatios[0] ?? '1:1');
+                                        }
+                                    }}
+                                >
+                                    {pricedResolutionOptions.map(option => (
+                                        <option key={option.resolution} value={option.resolution}>
+                                            {option.resolution} ·{' '}
+                                            {formatBillingMoney(
+                                                option.unitPrice,
+                                                selectedModel?.currencyCode ?? market.currencyCode,
+                                                market.locale,
+                                            )}
+                                        </option>
+                                    ))}
+                                </select>
+                                <small>
+                                    {isZh
+                                        ? '由模型原生生成；不使用后期放大'
+                                        : 'Generated natively by the model; no upscaling'}
+                                </small>
+                            </label>
                         </div>
                     </section>
 
                     <section className="ai-studio-checkout">
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={termsAccepted}
-                                onChange={event => setTermsAccepted(event.target.checked)}
-                            />
-                            <span>
-                                {isZh
-                                    ? `我已阅读并同意 AI 图片服务条款（${config.termsVersion}）`
-                                    : `I accept the AI image terms (${config.termsVersion})`}
-                            </span>
-                        </label>
-                        <details>
-                            <summary>{isZh ? '查看数据与使用说明' : 'View data and usage terms'}</summary>
-                            <p>{isZh ? config.termsZh : config.termsEn}</p>
-                        </details>
                         {actionError ? (
                             <div className="ai-studio-error">
                                 <CircleAlert />
                                 {actionError}
                             </div>
                         ) : null}
-                        <div className="ai-studio-submit">
-                            <div>
-                                <small>{isZh ? '预计冻结' : 'Estimated hold'}</small>
-                                <strong>
-                                    {formatBillingMoney(
-                                        estimatedPrice,
-                                        selectedModel?.currencyCode ?? market.currencyCode,
-                                        market.locale,
-                                    )}
-                                </strong>
-                                <span>
-                                    {isZh
-                                        ? '仅对成功图片结算，失败自动退回'
-                                        : 'Only successful images are charged'}
-                                </span>
+                        <div className="ai-studio-settlement">
+                            <div className="ai-studio-settlement-summary">
+                                <div className="ai-studio-settlement-amount" aria-live="polite">
+                                    <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
+                                    <strong>
+                                        {formatBillingMoney(
+                                            estimatedPrice,
+                                            selectedModel?.currencyCode ?? market.currencyCode,
+                                            market.locale,
+                                        )}
+                                    </strong>
+                                </div>
+                                <div className="ai-studio-settlement-refund">
+                                    <RotateCcw aria-hidden="true" />
+                                    <div>
+                                        <strong>
+                                            {isZh ? '按成功图片结算' : 'Charged for successful images'}
+                                        </strong>
+                                        <span>
+                                            {isZh
+                                                ? '生成失败的图片金额将自动退回'
+                                                : 'Holds for failed images are returned automatically'}
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                            <button type="button" disabled={!canGenerate} onClick={() => void generate()}>
+                            <button
+                                className="ai-studio-generate-button"
+                                type="button"
+                                disabled={!canGenerate}
+                                onClick={() => void generate()}
+                            >
                                 {busy === 'GENERATE' ? <LoaderCircle className="spin" /> : <WandSparkles />}
                                 {isZh ? '开始生成' : 'Generate'}
                             </button>
                         </div>
                         {balance < estimatedPrice ? (
-                            <p className="ai-studio-low-balance">
-                                {isZh
-                                    ? '返利可用余额不足，请先通过邀请返利获得余额。'
-                                    : 'Not enough referral balance.'}
-                            </p>
+                            <div className="ai-studio-low-balance" role="alert">
+                                <CircleAlert aria-hidden="true" />
+                                <span>
+                                    {isZh
+                                        ? '返利可用余额不足，请先通过邀请返利获得余额。'
+                                        : 'Not enough referral balance.'}
+                                </span>
+                            </div>
                         ) : null}
                     </section>
 
@@ -594,7 +653,9 @@ function GenerationCard({
             <header>
                 <div>
                     <strong>{job.modelNameSnapshot}</strong>
-                    <code>{job.officialModelIdSnapshot}</code>
+                    <code>
+                        {job.officialModelIdSnapshot} · {job.resolution}
+                    </code>
                 </div>
                 <span className={`ai-generation-status is-${job.state.toLowerCase()}`}>
                     {stateLabel(job.state, isZh)}

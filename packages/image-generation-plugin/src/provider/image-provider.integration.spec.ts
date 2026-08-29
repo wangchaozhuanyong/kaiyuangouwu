@@ -92,7 +92,7 @@ describe('ImageProviderClient mock relay integration', () => {
         expect(edited.bytes.toString('base64')).toBe(imageBase64);
         const generationRequest = requests.find(item => item.path === '/v1/images/generations');
         expect(JSON.parse(generationRequest?.body.toString('utf8') ?? '{}')).toEqual(
-            expect.objectContaining({ model: 'gpt-image-2', size: '1536x1024' }),
+            expect.objectContaining({ model: 'gpt-image-2', size: '1104x624' }),
         );
         expect(generationRequest?.headers['idempotency-key']).toBe('output-generate-1');
         const editRequest = requests.find(item => item.path === '/v1/images/edits');

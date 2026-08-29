@@ -17,6 +17,7 @@ export type {
     ImageOutputState,
     ImageProviderProtocol,
     ImageReferenceMode,
+    ImageResolution,
     OptimizeImagePromptInput,
     SaveImageGenerationConfigInput,
     SaveImageModelInput,

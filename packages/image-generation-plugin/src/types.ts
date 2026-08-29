@@ -13,6 +13,7 @@ export type ImageGenerationState =
     'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 export type ImageOutputState = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 export type ImageReferenceMode = 'NONE' | 'STYLE' | 'COMPOSITION' | 'IDENTITY' | 'PRODUCT' | 'EDIT';
+export type ImageResolution = '1K' | '2K' | '4K';
 
 export interface ImageGenerationPluginOptions {
     storageRoot?: string;
@@ -47,6 +48,8 @@ export interface SaveImageModelInput {
     providerModelId: string;
     protocol: ImageProviderProtocol;
     unitPrice: number;
+    unitPrice2K: number;
+    unitPrice4K: number;
     currencyCode: CurrencyCode;
     position: number;
     isDefault: boolean;
@@ -60,6 +63,7 @@ export interface CreateImageGenerationInput {
     referenceAssetId?: ID | null;
     referenceMode?: ImageReferenceMode | null;
     aspectRatio: string;
+    resolution: ImageResolution;
     quantity: number;
     expectedUnitPrice: number;
     currencyCode: CurrencyCode;
@@ -76,6 +80,7 @@ export interface ProviderGenerationInput {
     providerModelId: string;
     prompt: string;
     aspectRatio: string;
+    resolution?: ImageResolution;
     reference?: { bytes: Buffer; mimeType: string };
     idempotencyKey: string;
 }

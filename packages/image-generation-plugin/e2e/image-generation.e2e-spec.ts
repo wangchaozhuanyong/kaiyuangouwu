@@ -11,6 +11,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -27,6 +28,9 @@ const pngBase64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 const referenceFixture = path.join(storageRoot, 'reference-fixture.png');
 writeFileSync(referenceFixture, Buffer.from(pngBase64, 'base64'), { mode: 0o600 });
+let generatedPngBase64 = pngBase64;
+let generated2KPngBase64 = pngBase64;
+let providerRequestedResolution = '';
 const originalMasterKey = process.env.IMAGE_GENERATION_MASTER_KEY;
 const originalFetch = globalThis.fetch;
 process.env.IMAGE_GENERATION_MASTER_KEY = 'image-generation-e2e-master-key-over-thirty-two-chars';
@@ -176,6 +180,13 @@ const STUDIO_CONFIG = gql`
                 descriptionZh
                 officialModelId
                 unitPrice
+                unitPrice2K
+                unitPrice4K
+                resolutionOptions {
+                    resolution
+                    unitPrice
+                    supportedAspectRatios
+                }
                 currencyCode
             }
         }
@@ -202,6 +213,8 @@ const CREATE = gql`
             id
             state
             quantity
+            resolution
+            unitPriceSnapshot
             reservedAmount
             capturedAmount
             releasedAmount
@@ -285,6 +298,20 @@ const DELETE_JOB = gql`
 
 describe('AI image generation full flow', () => {
     beforeAll(async () => {
+        generatedPngBase64 = (
+            await sharp({
+                create: { width: 1024, height: 1024, channels: 3, background: '#f7f7f7' },
+            })
+                .png()
+                .toBuffer()
+        ).toString('base64');
+        generated2KPngBase64 = (
+            await sharp({
+                create: { width: 2048, height: 2048, channels: 3, background: '#f7f7f7' },
+            })
+                .png()
+                .toBuffer()
+        ).toString('base64');
         vi.stubGlobal('fetch', providerFetch);
         await server.init({
             initialData: {
@@ -354,6 +381,8 @@ describe('AI image generation full flow', () => {
                 providerModelId: 'gpt-image-1',
                 protocol: 'OPENAI_RESPONSES_IMAGE',
                 unitPrice: 100,
+                unitPrice2K: 0,
+                unitPrice4K: 0,
                 currencyCode: 'USD',
                 position: 0,
                 isDefault: true,
@@ -363,6 +392,26 @@ describe('AI image generation full flow', () => {
         expect((await adminClient.query(TEST_MODEL, { code: 'OPENAI_HIGH_QUALITY' })).testImageModel.ok).toBe(
             true,
         );
+        await adminClient.query(SAVE_MODEL, {
+            input: {
+                code: 'GEMINI_FLASH',
+                enabled: true,
+                displayNameZh: 'Gemini 快速生图',
+                displayNameEn: 'Gemini Fast Image',
+                descriptionZh: '支持原生多档清晰度',
+                descriptionEn: 'Supports native resolution tiers',
+                providerModelId: 'gemini-3.1-flash-image',
+                protocol: 'GEMINI_INTERACTIONS',
+                unitPrice: 80,
+                unitPrice2K: 250,
+                unitPrice4K: 400,
+                currencyCode: 'USD',
+                position: 3,
+                isDefault: false,
+                supportsIdempotency: false,
+            },
+        });
+        expect((await adminClient.query(TEST_MODEL, { code: 'GEMINI_FLASH' })).testImageModel.ok).toBe(true);
         expect(
             (
                 await adminClient.query(SAVE_CONFIG, {
@@ -409,14 +458,24 @@ describe('AI image generation full flow', () => {
         expect(studio.imageStudioConfig).toMatchObject({
             enabled: true,
             defaultModelCode: 'OPENAI_HIGH_QUALITY',
-            models: [
+            models: expect.arrayContaining([
                 expect.objectContaining({
                     code: 'OPENAI_HIGH_QUALITY',
                     descriptionZh: '适合高质量商品图和广告图',
                     officialModelId: 'gpt-image-1',
                     unitPrice: 100,
                 }),
-            ],
+                expect.objectContaining({
+                    code: 'GEMINI_FLASH',
+                    unitPrice: 80,
+                    unitPrice2K: 250,
+                    unitPrice4K: 400,
+                    resolutionOptions: expect.arrayContaining([
+                        expect.objectContaining({ resolution: '2K', unitPrice: 250 }),
+                        expect.objectContaining({ resolution: '4K', unitPrice: 400 }),
+                    ]),
+                }),
+            ]),
         });
         expect(studio.imageStudioBalance).toBe(500);
 
@@ -440,6 +499,7 @@ describe('AI image generation full flow', () => {
                     optimizedPrompt: optimization.optimizedPrompt,
                     referenceMode: 'NONE',
                     aspectRatio: '1:1',
+                    resolution: '1K',
                     quantity: 2,
                     expectedUnitPrice: 100,
                     currencyCode: 'USD',
@@ -490,6 +550,7 @@ describe('AI image generation full flow', () => {
                     prompt: '这次由模拟中转站返回确定性失败',
                     referenceMode: 'NONE',
                     aspectRatio: '1:1',
+                    resolution: '1K',
                     quantity: 1,
                     expectedUnitPrice: 100,
                     currencyCode: 'USD',
@@ -556,6 +617,7 @@ describe('AI image generation full flow', () => {
                     referenceAssetId: reference.id,
                     referenceMode: 'PRODUCT',
                     aspectRatio: '1:1',
+                    resolution: '1K',
                     quantity: 1,
                     expectedUnitPrice: 100,
                     currencyCode: 'USD',
@@ -572,6 +634,31 @@ describe('AI image generation full flow', () => {
         });
         expect(referenceSucceeded.imageStudioBalance).toBe(300);
         expect(providerSawReference).toBe(true);
+
+        providerRequestedResolution = '';
+        const twoKCreated = (
+            await shopClient.query(CREATE, {
+                input: {
+                    modelCode: 'GEMINI_FLASH',
+                    prompt: '原生 2K 商品海报',
+                    referenceMode: 'NONE',
+                    aspectRatio: '1:1',
+                    resolution: '2K',
+                    quantity: 1,
+                    expectedUnitPrice: 250,
+                    currencyCode: 'USD',
+                    idempotencyKey: 'e2e-native-2k-0001',
+                    termsAccepted: true,
+                },
+            })
+        ).createImageGeneration;
+        expect(twoKCreated).toMatchObject({ resolution: '2K', unitPriceSnapshot: 250, reservedAmount: 250 });
+        const twoKSucceeded = await waitForJob(twoKCreated.id, ['SUCCEEDED']);
+        expect(twoKSucceeded.imageStudioBalance).toBe(50);
+        expect(providerRequestedResolution).toBe('2K');
+        const twoKToken = twoKSucceeded.myImageGenerationJob.outputs[0].imageUrl.split('/').at(-1);
+        const twoKAuthorized = await server.app.get(ImagePrivateStorageService).authorize(twoKToken);
+        expect(twoKAuthorized?.asset).toMatchObject({ width: 2048, height: 2048 });
 
         const retainedReference = await connection.rawConnection
             .getRepository(ImagePrivateAsset)
@@ -608,7 +695,7 @@ describe('AI image generation full flow', () => {
         );
         await expect(
             connection.rawConnection.getRepository(ImageGenerationDispatch).countBy({ state: 'COMPLETED' }),
-        ).resolves.toBe(4);
+        ).resolves.toBe(5);
 
         expect(
             (await shopClient.query(DELETE_JOB, { id: referenceCreated.id })).deleteMyImageGenerationJob,
@@ -617,7 +704,7 @@ describe('AI image generation full flow', () => {
             connection.rawConnection.getRepository(ImageGenerationJob).findOneBy({ id: referenceCreated.id }),
         ).resolves.toBeNull();
         await expect(connection.rawConnection.getRepository(ImageGenerationCostEvent).count()).resolves.toBe(
-            4,
+            5,
         );
     }, 30_000);
 });
@@ -693,8 +780,24 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
         return new Response(
             JSON.stringify({
                 id: 'image-e2e-provider-request',
-                output: [{ type: 'image_generation_call', result: pngBase64 }],
+                output: [{ type: 'image_generation_call', result: generatedPngBase64 }],
                 usage: { total_cost: 0.004672, output_images: 1 },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+    }
+    if (url.pathname.endsWith('/interactions') && typeof init?.body === 'string') {
+        const payload = JSON.parse(init.body) as { response_format?: { image_size?: string } };
+        providerRequestedResolution = payload.response_format?.image_size ?? '';
+        return new Response(
+            JSON.stringify({
+                id: 'image-e2e-gemini-request',
+                output_image: {
+                    type: 'image',
+                    mime_type: 'image/png',
+                    data: providerRequestedResolution === '2K' ? generated2KPngBase64 : generatedPngBase64,
+                },
+                usage: { total_cost: 0.01, output_images: 1 },
             }),
             { status: 200, headers: { 'content-type': 'application/json' } },
         );
@@ -704,7 +807,7 @@ async function providerFetch(input: string | URL | Request, init?: RequestInit):
             id: 'image-e2e-provider-request',
             data: [
                 {
-                    b64_json: pngBase64,
+                    b64_json: generatedPngBase64,
                 },
             ],
         }),

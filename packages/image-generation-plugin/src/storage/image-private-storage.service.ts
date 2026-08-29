@@ -11,7 +11,7 @@ import { In, LessThan } from 'typeorm';
 
 import { IMAGE_GENERATION_OPTIONS, MAX_REFERENCE_BYTES, MAX_REFERENCE_PIXELS } from '../constants';
 import { ImagePrivateAsset } from '../entities/image-private-asset.entity';
-import { ImageGenerationPluginOptions, ProviderGenerationResult } from '../types';
+import { ImageGenerationPluginOptions, ImageResolution, ProviderGenerationResult } from '../types';
 
 const DEVELOPMENT_SECRET = 'vendure-development-image-download-signing-secret-do-not-use';
 const OUTPUT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
@@ -72,6 +72,7 @@ export class ImagePrivateStorageService {
         customerId: ID,
         result: ProviderGenerationResult,
         outputName: string,
+        resolution: ImageResolution,
     ): Promise<ImagePrivateAsset> {
         if (result.bytes.length > MAX_GENERATED_BYTES) throw new UserInputError('生成图片超过 25MB');
         return this.store(
@@ -82,6 +83,7 @@ export class ImagePrivateStorageService {
             outputName,
             result.metadata ?? null,
             OUTPUT_RETENTION_MS,
+            resolution,
         );
     }
 
@@ -226,6 +228,7 @@ export class ImagePrivateStorageService {
         originalName: string,
         providerMetadata: Record<string, any> | null,
         retentionMs: number,
+        expectedResolution?: ImageResolution,
     ): Promise<ImagePrivateAsset> {
         const detected = await fileTypeFromBuffer(bytes);
         if (!detected || !['image/jpeg', 'image/png', 'image/webp'].includes(detected.mime)) {
@@ -242,6 +245,28 @@ export class ImagePrivateStorageService {
         }
         if (!metadata.width || !metadata.height || metadata.width * metadata.height > MAX_REFERENCE_PIXELS) {
             throw new UserInputError('图片不能超过 4000 万像素');
+        }
+        if (expectedResolution) {
+            const requirement = {
+                '1K': { minimumLongEdge: 1_000, minimumPixels: 650_000 },
+                '2K': { minimumLongEdge: 1_900, minimumPixels: 2_200_000 },
+                '4K': { minimumLongEdge: 3_700, minimumPixels: 8_000_000 },
+            }[expectedResolution];
+            if (
+                Math.max(metadata.width, metadata.height) < requirement.minimumLongEdge ||
+                metadata.width * metadata.height < requirement.minimumPixels
+            ) {
+                throw new UserInputError(
+                    `中转站未返回原生 ${expectedResolution} 图片（实际 ${metadata.width}×${metadata.height}）`,
+                );
+            }
+            providerMetadata = {
+                ...(providerMetadata ?? {}),
+                requestedResolution: expectedResolution,
+                actualWidth: metadata.width,
+                actualHeight: metadata.height,
+                nativeResolutionVerified: true,
+            };
         }
         const now = new Date();
         const dateSegment = now.toISOString().slice(0, 7);

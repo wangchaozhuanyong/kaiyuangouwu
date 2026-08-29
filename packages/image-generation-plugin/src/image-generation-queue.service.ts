@@ -299,6 +299,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
                     providerModelId: output.job.providerModelIdSnapshot,
                     prompt: output.job.finalPrompt,
                     aspectRatio: output.job.aspectRatio,
+                    resolution: output.job.resolution,
                     reference,
                     idempotencyKey: output.providerIdempotencyKey,
                 },
@@ -310,6 +311,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
                 output.job.customerId,
                 result,
                 `ai-${String(output.job.id)}-${output.outputIndex + 1}.png`,
+                output.job.resolution,
             );
             providerStage = 'STORED';
             const generatedAsset = storedAsset;

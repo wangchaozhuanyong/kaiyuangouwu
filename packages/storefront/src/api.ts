@@ -224,6 +224,7 @@ const imageGenerationJobFields = `
     promptSkillHash
     referenceMode
     aspectRatio
+    resolution
     quantity
     unitPriceSnapshot
     reservedAmount
@@ -1356,8 +1357,12 @@ export class ShopApi {
                 query ImageStudioConfig {
                     imageStudioConfig {
                         enabled promptOptimizationEnabled defaultModelCode termsVersion termsZh termsEn
-                        outputRetentionDays referenceRetentionHours maxReferenceBytes maxReferencePixels maxQuantity resolution
-                        models { id code displayNameZh displayNameEn descriptionZh descriptionEn officialModelId unitPrice currencyCode position isDefault healthStatus }
+                        outputRetentionDays referenceRetentionHours maxReferenceBytes maxReferencePixels maxQuantity
+                        models {
+                            id code displayNameZh displayNameEn descriptionZh descriptionEn officialModelId
+                            unitPrice unitPrice2K unitPrice4K currencyCode position isDefault healthStatus
+                            resolutionOptions { resolution unitPrice supportedAspectRatios }
+                        }
                     }
                 }
             `,

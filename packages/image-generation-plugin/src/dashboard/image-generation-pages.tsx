@@ -199,7 +199,7 @@ function ImageGenerationSettingsPage() {
                     column="full"
                     blockId="image-base"
                     title="基础设置"
-                    description="客户从返利余额按成功生成的图片数量付费。首期固定 1K，支持 1–4 张和一张参考图。"
+                    description="客户从返利余额按实际选择的模型和原生清晰度付费，支持 1–4 张和一张参考图。"
                 >
                     {!draft.credentialEnabled ? (
                         <Alert>
@@ -212,13 +212,19 @@ function ImageGenerationSettingsPage() {
                             checked={draft.enabled}
                             onChange={enabled => setDraft({ ...draft, enabled })}
                         />
-                        <Toggle
-                            label="免费提示词优化"
-                            checked={draft.promptOptimizationEnabled}
-                            onChange={promptOptimizationEnabled =>
-                                setDraft({ ...draft, promptOptimizationEnabled })
-                            }
-                        />
+                        <div className="space-y-1">
+                            <Toggle
+                                label="免费提示词优化"
+                                checked={draft.promptOptimizationEnabled}
+                                onChange={promptOptimizationEnabled =>
+                                    setDraft({ ...draft, promptOptimizationEnabled })
+                                }
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                “免费”仅指不向客户端用户扣费；每次优化仍会调用已配置的文本模型，消耗中转站
+                                Token 或额度。
+                            </p>
+                        </div>
                         <Field label="默认模型">
                             <select
                                 className="h-9 w-full rounded-md border bg-background px-3"
@@ -333,10 +339,7 @@ function ImageGenerationSettingsPage() {
                                         className="h-9 w-full rounded-md border bg-background px-3"
                                         value={model.protocol}
                                         onChange={event =>
-                                            updateModel(model.code, {
-                                                protocol: event.target
-                                                    .value as ImageAdminModelRecord['protocol'],
-                                            })
+                                            updateModel(model.code, protocolChange(model, event.target.value))
                                         }
                                     >
                                         <option value="OPENAI_RESPONSES_IMAGE">
@@ -355,22 +358,51 @@ function ImageGenerationSettingsPage() {
                                         </option>
                                     </select>
                                 </Field>
-                                <Field label={`单张价格（${model.currencyCode}）`}>
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={minorToMajor(model.unitPrice, model.currencyCode)}
-                                        onChange={event =>
-                                            updateModel(model.code, {
-                                                unitPrice: majorToMinor(
-                                                    event.target.value,
-                                                    model.currencyCode,
-                                                ),
-                                            })
-                                        }
-                                    />
-                                </Field>
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                    {(
+                                        [
+                                            ['1K', 'unitPrice'],
+                                            ['2K', 'unitPrice2K'],
+                                            ['4K', 'unitPrice4K'],
+                                        ] as const
+                                    ).map(([resolution, priceField]) => {
+                                        const supported = modelSupportsResolution(model, resolution);
+                                        return (
+                                            <Field
+                                                key={resolution}
+                                                label={`${resolution} 单张价格（${model.currencyCode}）`}
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    disabled={!supported}
+                                                    value={minorToMajor(
+                                                        model[priceField],
+                                                        model.currencyCode,
+                                                    )}
+                                                    onChange={event =>
+                                                        updateModel(model.code, {
+                                                            [priceField]: majorToMinor(
+                                                                event.target.value,
+                                                                model.currencyCode,
+                                                            ),
+                                                        })
+                                                    }
+                                                />
+                                                {!supported ? (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        当前模型/协议不支持原生 {resolution}
+                                                    </span>
+                                                ) : resolution !== '1K' ? (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        价格设为 0 时客户端不开放该档
+                                                    </span>
+                                                ) : null}
+                                            </Field>
+                                        );
+                                    })}
+                                </div>
                                 <Toggle
                                     label="设为默认"
                                     checked={model.isDefault}
@@ -384,7 +416,7 @@ function ImageGenerationSettingsPage() {
                                     }
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                    仅在中转站明确保证同一幂等键不会重复生图时开启。
+                                    只有确认中转站对相同幂等键不会重复生图、不会重复计费时才能开启。开启后系统才可对结果未知任务使用原幂等键安全重试；若中转站不保证，重试可能产生重复图片和重复费用。
                                 </p>
                                 <div className="grid gap-2 sm:grid-cols-3">
                                     <Button
@@ -561,7 +593,7 @@ function ImageGenerationSettingsPage() {
                                         <td>
                                             {job.modelNameSnapshot}
                                             <div className="text-xs text-muted-foreground">
-                                                {job.officialModelIdSnapshot}
+                                                {job.officialModelIdSnapshot} · {job.resolution}
                                             </div>
                                         </td>
                                         <td>
@@ -826,9 +858,37 @@ function modelInput(model: ImageAdminModelRecord) {
         healthStatus: _health,
         healthMessage: _healthMessage,
         lastTestedAt: _lastTestedAt,
+        resolutionOptions: _resolutionOptions,
         ...input
     } = model;
     return input;
+}
+function protocolChange(model: ImageAdminModelRecord, value: string): Partial<ImageAdminModelRecord> {
+    const protocol = value as ImageAdminModelRecord['protocol'];
+    const changed = { ...model, protocol };
+    return {
+        protocol,
+        unitPrice2K: modelSupportsResolution(changed, '2K') ? model.unitPrice2K : 0,
+        unitPrice4K: modelSupportsResolution(changed, '4K') ? model.unitPrice4K : 0,
+    };
+}
+function modelSupportsResolution(
+    model: Pick<ImageAdminModelRecord, 'officialModelId' | 'providerModelId' | 'protocol'>,
+    resolution: '1K' | '2K' | '4K',
+) {
+    if (resolution === '1K') return true;
+    const official = model.officialModelId.replace(/^models\//iu, '').toLowerCase();
+    const provider = model.providerModelId.replace(/^models\//iu, '').toLowerCase();
+    const geminiNative = ['GEMINI_INTERACTIONS', 'GEMINI_NATIVE', 'GEMINI_NATIVE_STREAM'].includes(
+        model.protocol,
+    );
+    if (geminiNative && /^(?:gemini-3(?:\.\d+)?-(?:pro|flash)-image)(?:-|$)/u.test(official)) {
+        return true;
+    }
+    return (
+        ['OPENAI_IMAGES', 'OPENAI_RESPONSES_IMAGE'].includes(model.protocol) &&
+        (official === 'gpt-image-2' || provider === 'gpt-image-2')
+    );
 }
 function currencyFactor(currency: string) {
     return ['JPY', 'KRW', 'VND'].includes(currency) ? 1 : 100;

@@ -35,6 +35,7 @@ import {
     providerScopeForModel,
 } from './image-generation-config.service';
 import { deriveImageJobSettlement } from './image-generation-state';
+import { isImageResolution, resolutionPrice, supportsNativeResolution } from './image-resolution';
 import { ImagePromptEngineService, startOfBeijingDay } from './prompt/image-prompt-engine.service';
 import { PromptRulesService } from './prompt/prompt-rules.service';
 import { ImagePrivateStorageService, UploadedImageFile } from './storage/image-private-storage.service';
@@ -108,8 +109,13 @@ export class ImageGenerationService {
                 const providerScope = providerScopeForModel(model.protocol, model.providerModelId);
                 const credential = await this.configService.requireCredential(txCtx, providerScope);
                 const credentialFingerprint = this.configService.credentialFingerprint(credential);
+                if (!supportsNativeResolution(model, normalized.resolution, normalized.aspectRatio)) {
+                    throw new UserInputError('所选模型不支持该画幅的原生清晰度');
+                }
+                const unitPrice = resolutionPrice(model, normalized.resolution);
+                if (unitPrice <= 0) throw new UserInputError('所选清晰度尚未配置价格');
                 if (
-                    model.unitPrice !== normalized.expectedUnitPrice ||
+                    unitPrice !== normalized.expectedUnitPrice ||
                     model.currencyCode !== normalized.currencyCode
                 ) {
                     throw new UserInputError('PRICE_CHANGED：模型价格已更新，请确认新价格后重新提交');
@@ -135,7 +141,7 @@ export class ImageGenerationService {
                 const promptSpec = this.rules.fallbackSpec(normalized.prompt, normalized.referenceMode);
                 const finalPrompt = this.compileFinalPrompt(normalized, promptSpec);
                 this.promptEngine.assertSafe(finalPrompt);
-                const amount = model.unitPrice * normalized.quantity;
+                const amount = unitPrice * normalized.quantity;
                 const job = await this.connection.getRepository(txCtx, ImageGenerationJob).save(
                     new ImageGenerationJob({
                         channelId: txCtx.channelId,
@@ -157,8 +163,9 @@ export class ImageGenerationService {
                         promptSkillHash: this.rules.sourceHash,
                         referenceMode: normalized.referenceMode,
                         aspectRatio: normalized.aspectRatio,
+                        resolution: normalized.resolution,
                         quantity: normalized.quantity,
-                        unitPriceSnapshot: model.unitPrice,
+                        unitPriceSnapshot: unitPrice,
                         reservedAmount: amount,
                         capturedAmount: 0,
                         releasedAmount: 0,
@@ -182,8 +189,9 @@ export class ImageGenerationService {
                     actorType: 'CUSTOMER',
                     metadata: {
                         modelCode: model.code,
+                        resolution: normalized.resolution,
                         quantity: normalized.quantity,
-                        unitPrice: model.unitPrice,
+                        unitPrice,
                     },
                 });
                 job.walletUsageId = usage.id;
@@ -714,6 +722,8 @@ export class ImageGenerationService {
         if (optimizedPrompt.length > 8_000) throw new UserInputError('优化后的提示词不能超过 8000 个字符');
         if (!supportedAspectRatios.includes(input.aspectRatio as (typeof supportedAspectRatios)[number]))
             throw new UserInputError('图片比例无效');
+        const resolution = String(input.resolution).toUpperCase();
+        if (!isImageResolution(resolution)) throw new UserInputError('图片清晰度无效');
         if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > MAX_GENERATION_COUNT)
             throw new UserInputError('每次只能生成 1 至 4 张图片');
         if (!Number.isSafeInteger(input.expectedUnitPrice) || input.expectedUnitPrice <= 0)
@@ -722,7 +732,7 @@ export class ImageGenerationService {
         const idempotencyKey = input.idempotencyKey.trim();
         if (!/^[a-zA-Z0-9._:-]{8,64}$/u.test(idempotencyKey)) throw new UserInputError('请求幂等键无效');
         const referenceMode = normalizeReferenceMode(input.referenceMode);
-        return { ...input, prompt, optimizedPrompt, idempotencyKey, referenceMode };
+        return { ...input, prompt, optimizedPrompt, idempotencyKey, referenceMode, resolution };
     }
 
     private assertSameCreateRequest(
@@ -742,6 +752,7 @@ export class ImageGenerationService {
             job.referenceMode !== input.referenceMode ||
             !sameReference ||
             job.aspectRatio !== input.aspectRatio ||
+            job.resolution !== input.resolution ||
             job.quantity !== input.quantity ||
             job.unitPriceSnapshot !== input.expectedUnitPrice ||
             job.currencyCode !== input.currencyCode

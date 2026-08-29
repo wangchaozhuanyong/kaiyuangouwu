@@ -64,6 +64,7 @@ import { AlignCatalogManagementSchema1787832000000 } from './1787832000000-align
 import { AddInventoryLotMovements1787835600000 } from './1787835600000-add-inventory-lot-movements';
 import { AddCatalogImportBlankClearing1787839200000 } from './1787839200000-add-catalog-import-blank-clearing';
 import { AlignCatalogImportBlankClearing1787842800000 } from './1787842800000-align-catalog-import-blank-clearing';
+import { AddImageResolutionPricing1787846400000 } from './1787846400000-add-image-resolution-pricing';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -132,4 +133,5 @@ export const devServerMigrations = [
     AddInventoryLotMovements1787835600000,
     AddCatalogImportBlankClearing1787839200000,
     AlignCatalogImportBlankClearing1787842800000,
+    AddImageResolutionPricing1787846400000,
 ];

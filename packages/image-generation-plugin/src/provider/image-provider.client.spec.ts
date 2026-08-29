@@ -92,21 +92,20 @@ describe('ImageProviderClient', () => {
 
     it('keeps base64 image payloads out of persisted provider metadata', async () => {
         const encoded = Buffer.from('fake-image-bytes').toString('base64');
-        vi.stubGlobal(
-            'fetch',
-            vi.fn().mockResolvedValue(
-                new Response(JSON.stringify({ id: 'request-1', data: [{ b64_json: encoded.repeat(16) }] }), {
-                    status: 200,
-                    headers: { 'content-type': 'application/json' },
-                }),
-            ),
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ id: 'request-1', data: [{ b64_json: encoded.repeat(16) }] }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
         );
+        vi.stubGlobal('fetch', fetchMock);
         const client = new ImageProviderClient(cipher, safeUrls);
 
         const result = await client.generate(credential, 'OPENAI_IMAGES', {
             providerModelId: 'gpt-image-2',
             prompt: 'product photo',
-            aspectRatio: '1:1',
+            aspectRatio: '16:9',
+            resolution: '4K',
             idempotencyKey: 'image-job-1',
         });
 
@@ -115,6 +114,10 @@ describe('ImageProviderClient', () => {
             expect.objectContaining({ delivery: 'inline', providerRequestId: 'request-1' }),
         );
         expect(JSON.stringify(result.metadata)).not.toContain(encoded);
+        const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+        expect(parseJsonRequestBody(init)).toEqual(
+            expect.objectContaining({ model: 'gpt-image-2', size: '3840x2160' }),
+        );
     });
 
     it('classifies HTTP 429 as the only automatic retry condition', async () => {
@@ -276,6 +279,7 @@ describe('ImageProviderClient', () => {
             providerModelId: 'models/gemini-3.1-flash-image',
             prompt: 'keep the product and replace the background',
             aspectRatio: '3:4',
+            resolution: '4K',
             reference: { bytes: Buffer.from('reference-image'), mimeType: 'image/png' },
             idempotencyKey: 'image-job-interactions-1',
         });
@@ -300,7 +304,7 @@ describe('ImageProviderClient', () => {
                     type: 'image',
                     mime_type: 'image/png',
                     aspect_ratio: '3:4',
-                    image_size: '1K',
+                    image_size: '4K',
                 },
             }),
         );
@@ -336,6 +340,7 @@ describe('ImageProviderClient', () => {
             providerModelId: 'gemini-3.1-flash-image',
             prompt: 'keep the product and replace the background',
             aspectRatio: '3:4',
+            resolution: '2K',
             reference: { bytes: Buffer.from('reference-image'), mimeType: 'image/png' },
             idempotencyKey: 'image-job-gemini-stream-1',
         });
@@ -370,7 +375,7 @@ describe('ImageProviderClient', () => {
                 ],
                 generationConfig: expect.objectContaining({
                     responseModalities: ['TEXT', 'IMAGE'],
-                    imageConfig: { aspectRatio: '3:4' },
+                    imageConfig: { aspectRatio: '3:4', imageSize: '2K' },
                 }),
             }),
         );

@@ -114,6 +114,35 @@ describe('ImagePrivateStorageService reference lifecycle', () => {
     });
 });
 
+describe('ImagePrivateStorageService generated resolution verification', () => {
+    it('rejects a relay image that is smaller than the requested native tier', async () => {
+        const storageRoot = await mkdtemp(path.join(tmpdir(), 'image-generated-resolution-'));
+        const source = await sharp({
+            create: { width: 1024, height: 1024, channels: 3, background: '#ffffff' },
+        })
+            .png()
+            .toBuffer();
+        const repository = { save: vi.fn() };
+        const connection = {
+            getRepository: vi.fn(() => repository),
+            rawConnection: { options: { type: 'sqljs' } },
+        } as unknown as TransactionalConnection;
+        const service = new ImagePrivateStorageService(connection, { production: false, storageRoot });
+
+        await expect(
+            service.storeGenerated(
+                context(),
+                10,
+                { bytes: source, mimeType: 'image/png' },
+                'generated.png',
+                '2K',
+            ),
+        ).rejects.toThrow('中转站未返回原生 2K 图片');
+        expect(repository.save).not.toHaveBeenCalled();
+        await rm(storageRoot, { recursive: true, force: true });
+    });
+});
+
 function referenceAsset(expiresAt: Date): ImagePrivateAsset {
     const asset = new ImagePrivateAsset({
         channelId: 1,

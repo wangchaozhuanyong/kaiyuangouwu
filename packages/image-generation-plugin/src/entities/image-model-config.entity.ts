@@ -4,6 +4,8 @@ import { Channel, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import type { ImageProviderProtocol } from '../types';
 
+import { resolutionOptionsForModel } from '../image-resolution';
+
 @Entity({ name: 'image_model_config' })
 @Index('IDX_image_model_config_channel_code', ['channelId', 'code'], { unique: true })
 @Index('IDX_image_model_config_channel_position', ['channelId', 'position'])
@@ -49,6 +51,12 @@ export class ImageModelConfig extends VendureEntity {
     @Money({ default: 0 })
     unitPrice: number;
 
+    @Money({ default: 0 })
+    unitPrice2K: number;
+
+    @Money({ default: 0 })
+    unitPrice4K: number;
+
     @Column({ type: 'varchar', length: 3 })
     currencyCode: CurrencyCode;
 
@@ -72,4 +80,8 @@ export class ImageModelConfig extends VendureEntity {
 
     @Column('int', { default: 0 })
     consecutiveFailures: number;
+
+    get resolutionOptions() {
+        return resolutionOptionsForModel(this);
+    }
 }
