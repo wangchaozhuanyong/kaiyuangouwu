@@ -349,6 +349,7 @@ export const shopApiExtensions = gql`
 
     extend type ProductVariant {
         autoCardAvailableStock: Int
+        saleableStockLevel: Int
     }
 
     extend type Mutation {

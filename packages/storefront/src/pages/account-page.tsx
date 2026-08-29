@@ -41,7 +41,6 @@ import {
     ActiveCustomer,
     MarketConfig,
     Product,
-    ProductVariant,
     StorefrontContentTargetType,
     StorefrontLanguage,
 } from '../types';
@@ -60,9 +59,7 @@ interface AccountPageProps {
     favoriteProductCount: number;
     announcementCount: number;
     couponCount: number;
-    addingVariantId: string | null;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
-    onAdd: (variant: ProductVariant) => void;
     onLogout: () => void;
 }
 
@@ -86,9 +83,7 @@ export function AccountPage() {
         favoriteProductCount,
         announcementCount,
         couponCount,
-        addingVariantId,
         onContentTarget,
-        onAdd,
         onLogout,
     } = useStorefront<AccountPageProps>();
     const isZh = language === 'zh';
@@ -519,9 +514,7 @@ export function AccountPage() {
                 products={products.slice(0, 4)}
                 market={market}
                 locale={locale}
-                addingVariantId={addingVariantId}
                 onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                onAdd={onAdd}
             />
             <LegalFooter
                 storefrontName={storefrontName}

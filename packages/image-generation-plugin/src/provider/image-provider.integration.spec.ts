@@ -93,12 +93,13 @@ describe('ImageProviderClient mock relay integration', () => {
         expect(edited.bytes.toString('base64')).toBe(imageBase64);
         const generationRequest = requests.find(item => item.path === '/v1/images/generations');
         expect(JSON.parse(generationRequest?.body.toString('utf8') ?? '{}')).toEqual(
-            expect.objectContaining({ model: 'gpt-image-2', size: '1104x624' }),
+            expect.objectContaining({ model: 'gpt-image-2', quality: 'medium', size: '1104x624' }),
         );
         expect(generationRequest?.headers['idempotency-key']).toBe('output-generate-1');
         const editRequest = requests.find(item => item.path === '/v1/images/edits');
         expect(editRequest?.headers['content-type']).toContain('multipart/form-data');
         expect(editRequest?.body.toString('utf8')).toContain('keep product and replace background');
+        expect(editRequest?.body.toString('utf8')).toContain('medium');
     });
 
     it('generates through the OpenAI Responses image tool protocol', async () => {
@@ -120,7 +121,7 @@ describe('ImageProviderClient mock relay integration', () => {
                     expect.objectContaining({
                         type: 'image_generation',
                         model: 'gpt-image-1',
-                        quality: 'low',
+                        quality: 'medium',
                         size: '1024x1024',
                         action: 'generate',
                     }),

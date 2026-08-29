@@ -81,7 +81,6 @@ import {
     CollectionSummary,
     MarketConfig,
     Product,
-    ProductVariant,
     StorefrontContentBlock,
     StorefrontContentItem,
     StorefrontContentTargetType,
@@ -354,10 +353,8 @@ interface HomePageProps {
     storefrontName: string;
     storefrontDescription: string;
     logoUrl: string | null;
-    addingVariantId: string | null;
     couponLoading: boolean;
     onCategorySelect: (collection: CollectionSummary) => void;
-    onAdd: (variant: ProductVariant) => void;
     onToggleLanguage: () => void;
     availableCurrencyCodes: string[];
     currencySelectorEnabled: boolean;
@@ -397,10 +394,8 @@ export function HomePage() {
         storefrontName,
         storefrontDescription,
         logoUrl,
-        addingVariantId,
         couponLoading,
         onCategorySelect,
-        onAdd,
         onToggleLanguage,
         availableCurrencyCodes,
         currencySelectorEnabled,
@@ -779,7 +774,7 @@ export function HomePage() {
                         >
                             {availableCurrencyCodes.map(currencyCode => (
                                 <option key={currencyCode} value={currencyCode}>
-                                    {currencyCode === 'USDT' ? 'USDT（参考价）' : currencyCode}
+                                    {currencyCode}
                                 </option>
                             ))}
                         </select>
@@ -1103,8 +1098,6 @@ export function HomePage() {
                                     language={language}
                                     locale={locale}
                                     market={market}
-                                    addingVariantId={addingVariantId}
-                                    onAdd={onAdd}
                                     onContentTarget={onContentTarget}
                                 />
                             </div>
@@ -1155,9 +1148,7 @@ export function HomePage() {
                                     products={bestSellerProducts}
                                     market={market}
                                     locale={locale}
-                                    addingVariantId={addingVariantId}
                                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                                    onAdd={onAdd}
                                 />
                             </div>
                         ) : null}
@@ -1181,9 +1172,7 @@ export function HomePage() {
                                     products={recommendationProducts}
                                     market={market}
                                     locale={locale}
-                                    addingVariantId={addingVariantId}
                                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                                    onAdd={onAdd}
                                 />
                             </div>
                         ) : null}
@@ -1337,20 +1326,16 @@ function RecommendationPage({
     market,
     locale,
     language,
-    addingVariantId,
     onBack,
     onProduct,
-    onAdd,
 }: {
     products: Product[];
     block?: StorefrontContentBlock;
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
-    addingVariantId: string | null;
     onBack: () => void;
     onProduct: (product: Product) => void;
-    onAdd: (variant: ProductVariant) => void;
 }) {
     const isZh = language === 'zh';
     return (
@@ -1370,9 +1355,7 @@ function RecommendationPage({
                     products={products}
                     market={market}
                     locale={locale}
-                    addingVariantId={addingVariantId}
                     onProduct={onProduct}
-                    onAdd={onAdd}
                 />
             ) : (
                 <EmptyState
@@ -1511,8 +1494,6 @@ function ManagedContentSection({
     language,
     locale,
     market,
-    addingVariantId,
-    onAdd,
     onContentTarget,
 }: {
     block: StorefrontContentBlock;
@@ -1520,8 +1501,6 @@ function ManagedContentSection({
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
-    addingVariantId: string | null;
-    onAdd: (variant: ProductVariant) => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
@@ -1550,8 +1529,6 @@ function ManagedContentSection({
                 language={language}
                 locale={locale}
                 market={market}
-                addingVariantId={addingVariantId}
-                onAdd={onAdd}
                 onContentTarget={onContentTarget}
             />
         );
@@ -1632,8 +1609,6 @@ function CategoryPromotionSection({
     language,
     locale,
     market,
-    addingVariantId,
-    onAdd,
     onContentTarget,
 }: {
     block: StorefrontContentBlock;
@@ -1641,8 +1616,6 @@ function CategoryPromotionSection({
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
-    addingVariantId: string | null;
-    onAdd: (variant: ProductVariant) => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
@@ -1699,9 +1672,7 @@ function CategoryPromotionSection({
                                 product={product}
                                 market={market}
                                 locale={locale}
-                                adding={product.variants.some(variant => variant.id === addingVariantId)}
                                 onOpen={() => onContentTarget('PRODUCT', product.id)}
-                                onAdd={() => product.variants[0] && onAdd(product.variants[0])}
                             />
                         ))}
                     </div>

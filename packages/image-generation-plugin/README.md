@@ -24,6 +24,8 @@
 
 管理员可为每个模型改写中转站实际模型 ID、调用协议、中英文名称与用途说明、排序，以及 1K、2K、4K 的独立单张售价。这些说明会显示在客户选择模型的卡片上。同一店铺启用的模型必须使用同一币种，避免客户余额与模型价格错配。2K/4K 价格为 0 时客户端不开放该档。
 
+当前站点接入的是订阅账号中转，不是官方按量 API Key。后台“中转站调用方式”会按模型类型过滤：Codex 图片只显示 Codex/OpenAI 兼容方式，Gemini 图片只显示 Gemini 兼容方式。当前 Codex 订阅中转应选择“订阅中转：Responses 生图”，Gemini 订阅中转应选择“订阅中转：流式 Gemini 生图”。
+
 清晰度不是前端标签或后期放大：服务端把所选档位写入上游模型请求，并在结算前检查返回图片的真实像素。中转站忽略参数或返回低于所选档位的图片时，该张任务失败并退回费用。旧版 `gpt-image-1`、`gpt-image-1.5` 只开放 1K；`gpt-image-2` 开放 1K/2K，4K 仅支持 9:16 与 16:9；Gemini 3 图片模型通过原生协议开放 1K/2K/4K。
 
 ## 中转站接入
@@ -38,6 +40,8 @@
 - `GEMINI_INTERACTIONS`：`/interactions`，用于当前 Gemini 图片模型，支持文字和参考图输入。
 - `GEMINI_NATIVE`：`/models/{model}:generateContent`，保留给只支持同步接口的中转站。
 - `GEMINI_NATIVE_STREAM`：`/models/{model}:streamGenerateContent?alt=sse`，用于可能超过边缘同步超时的 Gemini 生图请求。
+
+Codex 图片请求固定传 `quality: "medium"`。`OPENAI_RESPONSES_IMAGE`、`OPENAI_IMAGES` 文字生图和 `OPENAI_IMAGES` 参考图编辑使用相同质量，避免因省略质量参数而退回 `auto`，导致成本和成品档位不稳定。
 
 中转站返回的图片最大 25MB。远程图片 URL 默认禁用；如果中转站不返回内联图片，必须在 `IMAGE_GENERATION_REMOTE_IMAGE_HOSTS` 中设置精确域名白名单。下载时会固定已验证 DNS 结果，并拒绝内网、本机、云元数据地址及 HTTP 重定向；生产环境只允许 HTTPS。
 

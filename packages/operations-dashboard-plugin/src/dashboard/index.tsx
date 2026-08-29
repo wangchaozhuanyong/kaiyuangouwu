@@ -1,9 +1,10 @@
+import type { OperationsNavigationTitles } from './operations-navigation';
 import { msg } from '@lingui/core/macro';
 import { defineDashboardExtension } from '@vendure/dashboard';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
-import { organizeOperationsNavigation, type OperationsNavigationTitles } from './operations-navigation';
+import { organizeOperationsNavigation } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { reviewModerationRoute } from './review-moderation-page';
 import { StoreOverviewWidget } from './store-overview-widget';
@@ -15,13 +16,14 @@ const navigationMessages = {
     orderManagement: msg({ id: 'operations.nav.orderManagement', message: 'Order management' }),
     customerCenter: msg({ id: 'operations.nav.customerCenter', message: 'Customer center' }),
     marketingCenter: msg({ id: 'operations.nav.marketingCenter', message: 'Marketing center' }),
-    inventoryAndFulfillment: msg({
-        id: 'operations.nav.inventoryAndFulfillment',
-        message: 'Inventory & fulfillment',
+    storeAndMerchants: msg({ id: 'operations.nav.storeAndMerchants', message: 'Stores & merchants' }),
+    commerceAndRegions: msg({
+        id: 'operations.nav.commerceAndRegions',
+        message: 'Payments, tax & regions',
     }),
-    storeSettings: msg({ id: 'operations.nav.storeSettings', message: 'Store settings' }),
+    aiServices: msg({ id: 'operations.nav.aiServices', message: 'AI services' }),
     accountsAndAccess: msg({ id: 'operations.nav.accountsAndAccess', message: 'Accounts & access' }),
-    systemManagement: msg({ id: 'operations.nav.systemManagement', message: 'System management' }),
+    systemOperations: msg({ id: 'operations.nav.systemOperations', message: 'System operations' }),
     productList: msg({ id: 'operations.nav.productList', message: 'Product list' }),
     skuAndInventory: msg({ id: 'operations.nav.skuAndInventory', message: 'SKUs & inventory' }),
     productGroups: msg({ id: 'operations.nav.productGroups', message: 'Product groups' }),
@@ -42,8 +44,11 @@ const navigationTitles = {
     orderManagement: navigationMessages.orderManagement.id,
     customerCenter: navigationMessages.customerCenter.id,
     marketingCenter: navigationMessages.marketingCenter.id,
-    storeSettings: navigationMessages.storeSettings.id,
-    systemManagement: navigationMessages.systemManagement.id,
+    storeAndMerchants: navigationMessages.storeAndMerchants.id,
+    commerceAndRegions: navigationMessages.commerceAndRegions.id,
+    aiServices: navigationMessages.aiServices.id,
+    accountsAndAccess: navigationMessages.accountsAndAccess.id,
+    systemOperations: navigationMessages.systemOperations.id,
     productList: navigationMessages.productList.id,
     skuAndInventory: navigationMessages.skuAndInventory.id,
     productGroups: navigationMessages.productGroups.id,

@@ -14,6 +14,7 @@ import { Suspense, useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
+import { productAvailability, productAvailabilityLabel } from '../product-availability';
 import { ProductReviewsSection } from '../review-pages';
 import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
 import { routeNavigateOptions } from '../storefront-router';
@@ -96,10 +97,9 @@ export function ProductDetailPage() {
         variant?.customFields.digitalDeliveryMode ?? 'manual_service';
     const isAutoCard = isDigital && digitalDeliveryMode === 'auto_card';
     const isFileDownload = isDigital && digitalDeliveryMode === 'file_download';
-    const unavailable =
-        !variant ||
-        (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
-        (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
+    const availability = productAvailability(variant);
+    const unavailable = availability.soldOut;
+    const stockLabel = productAvailabilityLabel(availability, language);
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
     const descriptionText = productDescriptionText(product.description);
     const descriptionHtml = sanitizeProductDescription(product.description);
@@ -200,21 +200,7 @@ export function ProductDetailPage() {
                         ) : null}
                     </p>
                     <span>
-                        {unavailable
-                            ? isZh
-                                ? '暂时无法购买'
-                                : 'Unavailable'
-                            : isAutoCard
-                              ? isZh
-                                  ? `可用 ${variant?.autoCardAvailableStock ?? 0} 份`
-                                  : `${variant?.autoCardAvailableStock ?? 0} available`
-                              : isDigital
-                                ? isZh
-                                    ? '可在线购买'
-                                    : 'Available online'
-                                : isZh
-                                  ? '库存充足'
-                                  : 'In stock'}
+                        {stockLabel}
                     </span>
                 </div>
                 <div className="detail-tags">
@@ -394,15 +380,7 @@ export function ProductDetailPage() {
                     </div>
                     <div>
                         <dt>{isZh ? '库存' : 'Stock'}</dt>
-                        <dd>
-                            {unavailable
-                                ? isZh
-                                    ? '暂时缺货'
-                                    : 'Unavailable'
-                                : isZh
-                                  ? '库存充足'
-                                  : 'In stock'}
-                        </dd>
+                        <dd>{stockLabel}</dd>
                     </div>
                     <div>
                         <dt>{isZh ? '交付' : 'Delivery'}</dt>
@@ -452,9 +430,7 @@ export function ProductDetailPage() {
                 products={similarProducts}
                 market={market}
                 locale={locale}
-                addingVariantId={addingVariantId}
                 onProduct={item => navigateTo({ name: 'product', id: item.id })}
-                onAdd={item => onAdd(item)}
             />
             <div className="detail-action-bar">
                 <button
@@ -496,13 +472,17 @@ export function ProductDetailPage() {
                     disabled={unavailable || addingVariantId !== null}
                     onClick={() => variant && onAdd(variant)}
                 >
-                    {addingVariantId === variant?.id
+                    {unavailable
                         ? isZh
-                            ? '添加中'
-                            : 'Adding'
-                        : isZh
-                          ? '加入购物车'
-                          : 'Add to cart'}
+                            ? '已售罄'
+                            : 'Sold out'
+                        : addingVariantId === variant?.id
+                          ? isZh
+                              ? '添加中'
+                              : 'Adding'
+                          : isZh
+                            ? '加入购物车'
+                            : 'Add to cart'}
                 </button>
                 <button
                     type="button"
@@ -511,8 +491,8 @@ export function ProductDetailPage() {
                 >
                     {unavailable
                         ? isZh
-                            ? '暂时缺货'
-                            : 'Unavailable'
+                            ? '已售罄'
+                            : 'Sold out'
                         : addingVariantId === variant?.id
                           ? isZh
                               ? '准备中'

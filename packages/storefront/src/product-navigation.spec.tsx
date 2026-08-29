@@ -31,7 +31,7 @@ const digitalProduct: Product = {
             sku: 'CHATGPT-PLUS',
             priceWithTax: 9900,
             currencyCode: 'MYR',
-            stockLevel: 'IN_STOCK',
+            saleableStockLevel: null,
             featuredAsset: null,
             product: { id: 'product-1', name: 'ChatGPT Plus 成品号', featuredAsset: null },
             autoCardAvailableStock: 10,
@@ -62,25 +62,22 @@ describe('product image navigation layers', () => {
                 product={manualServiceProduct}
                 market={market}
                 locale={market.locale}
-                adding={false}
                 onOpen={vi.fn()}
-                onAdd={vi.fn()}
             />,
         );
 
         expect(markup).not.toContain('人工数字服务');
+        expect(markup).toContain('不限库存');
     });
 
-    it('keeps the full-card link above generated product covers while preserving action buttons', () => {
+    it('keeps the full-card link and favorite action without rendering quick add controls', () => {
         const markup = renderToStaticMarkup(
             <ProductCard
                 product={digitalProduct}
                 market={market}
                 locale={market.locale}
-                adding={false}
                 onOpen={vi.fn()}
                 onFavorite={vi.fn()}
-                onAdd={vi.fn()}
             />,
         );
 
@@ -88,26 +85,29 @@ describe('product image navigation layers', () => {
         expect(markup).toContain('z-10');
         expect(markup).toContain('z-20');
         expect(markup).toContain('ai-product-cover');
+        expect(markup).toContain('库存 10');
+        expect(markup).not.toContain('加入购物车');
+        expect(markup).not.toContain('含税');
     });
 
-    it('keeps list-row links above generated cover layers and add buttons above the link', () => {
+    it('keeps list-row links above generated cover layers without add buttons', () => {
         const markup = renderToStaticMarkup(
             <ProductRow
                 product={digitalProduct}
                 market={market}
                 locale={market.locale}
                 language="zh"
-                adding={false}
                 onOpen={vi.fn()}
-                onAdd={vi.fn()}
             />,
         );
         const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
         expect(markup).toContain('product-row-detail-link');
         expect(markup).toContain('ai-product-cover');
+        expect(markup).toContain('库存 10');
+        expect(markup).not.toContain('加入购物车');
         expect(stylesheet).toMatch(/\.product-row-detail-link\s*\{[^}]*z-index:\s*10;/);
-        expect(stylesheet).toMatch(/\.row-add\s*\{[^}]*z-index:\s*20;/);
+        expect(stylesheet).not.toMatch(/\.row-add\s*\{/);
     });
 
     it('keeps list-row prices inline instead of applying copy layout to nested price spans', () => {
@@ -117,17 +117,35 @@ describe('product image navigation layers', () => {
                 market={market}
                 locale={market.locale}
                 language="zh"
-                adding={false}
                 onOpen={vi.fn()}
-                onAdd={vi.fn()}
             />,
         );
         const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
         expect(markup).toContain('price-lockup');
         expect(stylesheet).toMatch(/\.price-lockup\s*\{[^}]*display:\s*inline-flex;/);
-        expect(stylesheet).toMatch(/\.product-row-desc,\s*\.product-row-badge\s*\{/);
+        expect(stylesheet).toMatch(/\.product-row-desc\s*\{/);
         expect(stylesheet).not.toMatch(/\.product-row\s+span\s*,\s*\.product-row\s+small\s*\{/);
+    });
+
+    it('shows sold-out status and keeps card title and subtitle on one line', () => {
+        const soldOutProduct: Product = {
+            ...digitalProduct,
+            name: 'A very long product title that must remain on one line',
+            variants: [{ ...digitalProduct.variants[0], autoCardAvailableStock: 0 }],
+        };
+        const markup = renderToStaticMarkup(
+            <ProductCard
+                product={soldOutProduct}
+                market={market}
+                locale={market.locale}
+                onOpen={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('已售罄');
+        expect(markup).toContain('whitespace-nowrap');
+        expect(markup).not.toContain('-webkit-line-clamp:2');
     });
 
     it('does not use the internal SKU as customer-facing fallback copy', () => {
@@ -137,9 +155,7 @@ describe('product image navigation layers', () => {
                 product={productWithoutDescription}
                 market={market}
                 locale={market.locale}
-                adding={false}
                 onOpen={vi.fn()}
-                onAdd={vi.fn()}
             />,
         );
         const rowMarkup = renderToStaticMarkup(
@@ -148,9 +164,7 @@ describe('product image navigation layers', () => {
                 market={market}
                 locale={market.locale}
                 language="zh"
-                adding={false}
                 onOpen={vi.fn()}
-                onAdd={vi.fn()}
             />,
         );
 

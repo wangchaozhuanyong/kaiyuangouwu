@@ -63,6 +63,8 @@ describe('ShopApi storefront mutations', () => {
             variables: Record<string, unknown>;
         };
         expect(request.query).toContain('query StorefrontProducts($options: ProductListOptions)');
+        expect(request.query).toContain('saleableStockLevel');
+        expect(request.query).not.toMatch(/\bstockLevel\b/);
         expect(request.variables).toEqual({ options: { take: 16, sort: { name: 'ASC' } } });
     });
 
@@ -767,7 +769,7 @@ describe('ShopApi storefront mutations', () => {
                 variants: [
                     {
                         priceWithTax: 2400,
-                        stockLevel: 'IN_STOCK',
+                        saleableStockLevel: null,
                         customFields: { fulfillmentType: 'digital' },
                     },
                 ],
@@ -779,7 +781,7 @@ describe('ShopApi storefront mutations', () => {
                 variants: [
                     {
                         priceWithTax: 2500,
-                        stockLevel: 'IN_STOCK',
+                        saleableStockLevel: 8,
                         customFields: { fulfillmentType: 'physical' },
                     },
                 ],
@@ -791,7 +793,7 @@ describe('ShopApi storefront mutations', () => {
                 variants: [
                     {
                         priceWithTax: 2200,
-                        stockLevel: 'OUT_OF_STOCK',
+                        saleableStockLevel: 0,
                         customFields: { fulfillmentType: 'physical' },
                     },
                 ],
@@ -803,7 +805,7 @@ describe('ShopApi storefront mutations', () => {
                 variants: [
                     {
                         priceWithTax: 1500,
-                        stockLevel: 'IN_STOCK',
+                        saleableStockLevel: 5,
                         customFields: { fulfillmentType: 'physical' },
                     },
                 ],

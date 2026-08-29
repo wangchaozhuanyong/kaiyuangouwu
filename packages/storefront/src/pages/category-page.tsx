@@ -12,6 +12,7 @@ import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-regist
 import { ProductRow } from '../components/common/product-row';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
+import { productAvailability } from '../product-availability';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -27,7 +28,6 @@ import {
     FulfillmentType,
     MarketConfig,
     Product,
-    ProductVariant,
     StorefrontContentBlock,
     StorefrontLanguage,
 } from '../types';
@@ -51,7 +51,6 @@ interface CategoryPageProps {
     inStockOnly: boolean;
     minimumPrice: string;
     maximumPrice: string;
-    addingVariantId: string | null;
     onCollectionChange: (collectionId: string, childId: string) => void;
     onChildChange: (childId: string) => void;
     onSortChange: (sort: SortMode) => void;
@@ -61,7 +60,6 @@ interface CategoryPageProps {
         minimumPrice: string,
         maximumPrice: string,
     ) => void;
-    onAdd: (variant: ProductVariant) => void;
     onNotify: () => void;
     onRetry: () => void;
 }
@@ -86,12 +84,10 @@ export function CategoryPage() {
         inStockOnly,
         minimumPrice: minimumPriceInput,
         maximumPrice: maximumPriceInput,
-        addingVariantId,
         onCollectionChange,
         onChildChange,
         onSortChange,
         onFilterChange,
-        onAdd,
         onNotify,
         onRetry,
     } = useStorefront<CategoryPageProps>();
@@ -172,7 +168,7 @@ export function CategoryPage() {
                 type === 'all' ||
                 product.variants.some(variant => variant.customFields.fulfillmentType === type);
             const stockMatch =
-                !stockOnly || product.variants.some(variant => variant.stockLevel !== 'OUT_OF_STOCK');
+                !stockOnly || product.variants.some(variant => !productAvailability(variant).soldOut);
             const price = minimumProductPrice(product) / 100;
             const minimumMatch = minimum === '' || price >= Number(minimum);
             const maximumMatch = maximum === '' || price <= Number(maximum);
@@ -526,11 +522,7 @@ export function CategoryPage() {
                                         market={market}
                                         locale={locale}
                                         language={language}
-                                        adding={product.variants.some(
-                                            variant => variant.id === addingVariantId,
-                                        )}
                                         onOpen={() => navigateTo({ name: 'product', id: product.id })}
-                                        onAdd={() => product.variants[0] && onAdd(product.variants[0])}
                                     />
                                 ))}
                             </div>

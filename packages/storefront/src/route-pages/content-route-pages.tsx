@@ -1,7 +1,7 @@
 import { lazy } from 'react';
 
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
-import { Product, ProductVariant } from '../types';
+import { Product } from '../types';
 
 import { RoutePageContext as PageContext, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
@@ -92,10 +92,8 @@ export function RecommendationsRoutePage() {
             market={runtime.market}
             locale={runtime.locale}
             language={runtime.language}
-            addingVariantId={runtime.addingVariantId}
             onBack={runtime.goBack}
             onProduct={(product: Product) => runtime.navigate({ name: 'product', id: product.id })}
-            onAdd={(variant: ProductVariant) => void runtime.addToCart(variant)}
         />
     );
 }

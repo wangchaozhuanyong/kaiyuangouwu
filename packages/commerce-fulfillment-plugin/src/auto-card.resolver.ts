@@ -6,6 +6,7 @@ import {
     Order,
     Permission,
     ProductVariant,
+    ProductVariantService,
     RequestContext,
     Transaction,
 } from '@vendure/core';
@@ -108,11 +109,34 @@ export class AutoCardOrderResolver {
 
 @Resolver('ProductVariant')
 export class AutoCardProductVariantResolver {
-    constructor(private readonly autoCardService: AutoCardService) {}
+    constructor(
+        private readonly autoCardService: AutoCardService,
+        private readonly productVariantService: ProductVariantService,
+    ) {}
 
     @ResolveField()
     @Allow(Permission.Public)
     autoCardAvailableStock(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
         return this.autoCardService.availableStockForVariant(ctx, variant.id);
     }
+
+    @ResolveField()
+    @Allow(Permission.Public)
+    async saleableStockLevel(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
+        const isAutoCard =
+            variant.customFields.fulfillmentType === 'digital' &&
+            variant.customFields.digitalDeliveryMode === 'auto_card';
+        if (isAutoCard) {
+            const stockLevel = await this.autoCardService.availableStockForVariant(ctx, variant.id);
+            return normalizePublicSaleableStockLevel(stockLevel ?? 0);
+        }
+        const stockLevel = await this.productVariantService.getSaleableStockLevel(ctx, variant);
+        return normalizePublicSaleableStockLevel(stockLevel);
+    }
+}
+
+export function normalizePublicSaleableStockLevel(stockLevel: number): number | null {
+    if (stockLevel === Number.MAX_SAFE_INTEGER) return null;
+    if (!Number.isFinite(stockLevel)) return null;
+    return Math.max(0, Math.floor(stockLevel));
 }

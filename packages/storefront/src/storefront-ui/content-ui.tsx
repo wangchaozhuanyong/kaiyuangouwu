@@ -26,7 +26,6 @@ import { routePath } from '../storefront-router';
 import {
     MarketConfig,
     Product,
-    ProductVariant,
     StorefrontContentBlock,
     StorefrontContentItem,
     StorefrontContentTargetType,
@@ -302,20 +301,16 @@ export function RecommendationPage({
     market,
     locale,
     language,
-    addingVariantId,
     onBack,
     onProduct,
-    onAdd,
 }: {
     products: Product[];
     block?: StorefrontContentBlock;
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
-    addingVariantId: string | null;
     onBack: () => void;
     onProduct: (product: Product) => void;
-    onAdd: (variant: ProductVariant) => void;
 }) {
     const isZh = language === 'zh';
     return (
@@ -335,9 +330,7 @@ export function RecommendationPage({
                     products={products}
                     market={market}
                     locale={locale}
-                    addingVariantId={addingVariantId}
                     onProduct={onProduct}
-                    onAdd={onAdd}
                 />
             ) : (
                 <EmptyState

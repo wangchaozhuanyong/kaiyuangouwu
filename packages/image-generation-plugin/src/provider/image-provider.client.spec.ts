@@ -132,7 +132,7 @@ describe('ImageProviderClient', () => {
                     expect.objectContaining({
                         type: 'image_generation',
                         model: 'gpt-image-1',
-                        quality: 'low',
+                        quality: 'medium',
                         size: '1024x1536',
                         action: 'edit',
                     }),
@@ -169,7 +169,7 @@ describe('ImageProviderClient', () => {
         expect(JSON.stringify(result.metadata)).not.toContain(encoded);
         const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
         expect(parseJsonRequestBody(init)).toEqual(
-            expect.objectContaining({ model: 'gpt-image-2', size: '3840x2160' }),
+            expect.objectContaining({ model: 'gpt-image-2', quality: 'medium', size: '3840x2160' }),
         );
     });
 

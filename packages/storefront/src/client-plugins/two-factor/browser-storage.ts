@@ -1,7 +1,8 @@
 import { normalizeBase32Secret } from './totp';
 import { MAX_TWO_FACTOR_ACCOUNTS, TwoFactorAccount } from './types';
 
-const STORAGE_PREFIX = 'storefront-two-factor-session:v1:';
+const STORAGE_PREFIX = 'storefront-two-factor-local:v1:';
+const LEGACY_SESSION_STORAGE_PREFIX = 'storefront-two-factor-session:v1:';
 
 export interface StoredAccountsResult {
     accounts: TwoFactorAccount[];
@@ -12,14 +13,27 @@ function storageKey(ownerId: string): string {
     return `${STORAGE_PREFIX}${ownerId}`;
 }
 
-function resolveSessionStorage(): Storage | null {
+function legacyStorageKey(ownerId: string): string {
+    return `${LEGACY_SESSION_STORAGE_PREFIX}${ownerId}`;
+}
+
+function resolveLocalStorage(): Storage | null {
     if (typeof window === 'undefined') return null;
     try {
-        const storage = window.sessionStorage;
+        const storage = window.localStorage;
         const probeKey = `${STORAGE_PREFIX}probe`;
         storage.setItem(probeKey, '1');
         storage.removeItem(probeKey);
         return storage;
+    } catch {
+        return null;
+    }
+}
+
+function resolveLegacySessionStorage(): Storage | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        return window.sessionStorage;
     } catch {
         return null;
     }
@@ -45,24 +59,33 @@ function isStoredAccount(value: unknown): value is TwoFactorAccount {
     }
 }
 
-export function loadSessionAccounts(
+function readAccounts(storage: Storage, key: string): TwoFactorAccount[] | null {
+    const serialized = storage.getItem(key);
+    if (!serialized) return null;
+    const parsed = JSON.parse(serialized) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isStoredAccount).slice(0, MAX_TWO_FACTOR_ACCOUNTS);
+}
+
+export function loadBrowserAccounts(
     ownerId: string,
-    storage = resolveSessionStorage(),
+    storage = resolveLocalStorage(),
+    legacyStorage = resolveLegacySessionStorage(),
 ): StoredAccountsResult {
     if (!ownerId || !storage) return { accounts: [], available: false };
     const key = storageKey(ownerId);
     try {
-        const serialized = storage.getItem(key);
-        if (!serialized) return { accounts: [], available: true };
-        const parsed = JSON.parse(serialized) as unknown;
-        if (!Array.isArray(parsed)) {
-            storage.removeItem(key);
-            return { accounts: [], available: true };
-        }
-        return {
-            accounts: parsed.filter(isStoredAccount).slice(0, MAX_TWO_FACTOR_ACCOUNTS),
-            available: true,
-        };
+        const accounts = readAccounts(storage, key);
+        if (accounts !== null) return { accounts, available: true };
+
+        if (!legacyStorage) return { accounts: [], available: true };
+        const legacyKey = legacyStorageKey(ownerId);
+        const legacyAccounts = readAccounts(legacyStorage, legacyKey);
+        if (legacyAccounts === null) return { accounts: [], available: true };
+
+        storage.setItem(key, JSON.stringify(legacyAccounts));
+        legacyStorage.removeItem(legacyKey);
+        return { accounts: legacyAccounts, available: true };
     } catch {
         try {
             storage.removeItem(key);
@@ -73,10 +96,10 @@ export function loadSessionAccounts(
     }
 }
 
-export function saveSessionAccounts(
+export function saveBrowserAccounts(
     ownerId: string,
     accounts: TwoFactorAccount[],
-    storage = resolveSessionStorage(),
+    storage = resolveLocalStorage(),
 ): boolean {
     if (!ownerId || !storage || accounts.length > MAX_TWO_FACTOR_ACCOUNTS) return false;
     try {
@@ -87,25 +110,11 @@ export function saveSessionAccounts(
     }
 }
 
-export function clearSessionAccounts(ownerId: string, storage = resolveSessionStorage()): void {
+export function clearBrowserAccounts(ownerId: string, storage = resolveLocalStorage()): void {
     if (!ownerId || !storage) return;
     try {
         storage.removeItem(storageKey(ownerId));
     } catch {
         // Clearing local 2FA data remains best-effort when storage is restricted.
-    }
-}
-
-export function clearAllStorefrontTwoFactorSessions(storage = resolveSessionStorage()): void {
-    if (!storage) return;
-    try {
-        const keys: string[] = [];
-        for (let index = 0; index < storage.length; index += 1) {
-            const key = storage.key(index);
-            if (key?.startsWith(STORAGE_PREFIX)) keys.push(key);
-        }
-        for (const key of keys) storage.removeItem(key);
-    } catch {
-        // Logout must still complete when storage is unavailable.
     }
 }

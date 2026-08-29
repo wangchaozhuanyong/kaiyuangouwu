@@ -19,6 +19,7 @@ const MAX_PROVIDER_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_PROVIDER_JSON_BYTES = 40 * 1024 * 1024;
 const MAX_PROMPT_RESPONSE_BYTES = 1024 * 1024;
 const MAX_MODEL_RESPONSE_BYTES = 1024 * 1024;
+const OPENAI_IMAGE_QUALITY = 'medium';
 
 export type ImageProviderErrorDetails = ProviderTelemetry;
 
@@ -214,6 +215,7 @@ export class ImageProviderClient {
             form.set('model', input.providerModelId);
             form.set('prompt', input.prompt);
             form.set('size', size);
+            form.set('quality', OPENAI_IMAGE_QUALITY);
             form.set('n', '1');
             form.set(
                 'image',
@@ -234,6 +236,7 @@ export class ImageProviderClient {
                     model: input.providerModelId,
                     prompt: input.prompt,
                     size,
+                    quality: OPENAI_IMAGE_QUALITY,
                     n: 1,
                     response_format: 'b64_json',
                 },
@@ -274,7 +277,7 @@ export class ImageProviderClient {
                     {
                         type: 'image_generation',
                         model: input.providerModelId,
-                        quality: 'low',
+                        quality: OPENAI_IMAGE_QUALITY,
                         size: openAiSize(input.aspectRatio, input.resolution ?? '1K', input.providerModelId),
                         output_format: 'png',
                         action: input.reference ? 'edit' : 'generate',

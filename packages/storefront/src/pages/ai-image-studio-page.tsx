@@ -30,6 +30,7 @@ import {
     MarketConfig,
     StorefrontLanguage,
 } from '../types';
+import { customerImageResolutions, imageResolutionAvailability } from './ai-image-studio-resolution';
 
 interface AiImageStudioPageProps {
     api: ShopApi;
@@ -522,16 +523,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     onClick={() => selectModel(model.code)}
                                 >
                                     <span>{isZh ? model.displayNameZh : model.displayNameEn}</span>
-                                    <code>{model.officialModelId}</code>
                                     <small>{isZh ? model.descriptionZh : model.descriptionEn}</small>
-                                    <strong>
-                                        {formatBillingMoney(
-                                            model.unitPrice,
-                                            model.currencyCode,
-                                            market.locale,
-                                        )}{' '}
-                                        / {isZh ? '张（1K 起）' : 'image (from 1K)'}
-                                    </strong>
                                     <small>
                                         {model.dailyFreeImageUnlimited
                                             ? isZh
@@ -585,38 +577,72 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     )}
                                 </select>
                             </label>
-                            <label>
+                            <div className="ai-studio-resolution-field">
                                 <span>{isZh ? '清晰度' : 'Resolution'}</span>
-                                <select
-                                    value={selectedResolutionOption?.resolution ?? resolution}
-                                    onChange={event => {
-                                        const next = pricedResolutionOptions.find(
-                                            option => option.resolution === event.target.value,
-                                        );
-                                        if (!next) return;
-                                        setResolution(next.resolution);
-                                        if (!next.supportedAspectRatios.includes(aspectRatio)) {
-                                            setAspectRatio(next.supportedAspectRatios[0] ?? '1:1');
-                                        }
-                                    }}
+                                <div
+                                    className="ai-studio-resolution-picker"
+                                    role="group"
+                                    aria-label={isZh ? '选择清晰度' : 'Choose resolution'}
                                 >
-                                    {pricedResolutionOptions.map(option => (
-                                        <option key={option.resolution} value={option.resolution}>
-                                            {option.resolution} ·{' '}
-                                            {formatBillingMoney(
-                                                option.unitPrice,
-                                                selectedModel?.currencyCode ?? market.currencyCode,
-                                                market.locale,
-                                            )}
-                                        </option>
-                                    ))}
-                                </select>
+                                    {customerImageResolutions.map(value => {
+                                        const availability = imageResolutionAvailability(
+                                            selectedModel,
+                                            value,
+                                            aspectRatio,
+                                        );
+                                        const selected =
+                                            availability.status === 'AVAILABLE' &&
+                                            selectedResolutionOption?.resolution === value;
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={value}
+                                                className={`${selected ? 'is-selected' : ''} ${availability.status !== 'AVAILABLE' ? 'is-unavailable' : ''}`.trim()}
+                                                aria-pressed={selected}
+                                                aria-disabled={availability.status !== 'AVAILABLE'}
+                                                onClick={() => {
+                                                    if (availability.status === 'UNSUPPORTED') {
+                                                        onNotify(
+                                                            isZh
+                                                                ? `当前模型不支持 ${value}`
+                                                                : `This model does not support ${value}`,
+                                                        );
+                                                        return;
+                                                    }
+                                                    if (availability.status === 'ASPECT_RATIO_UNSUPPORTED') {
+                                                        onNotify(
+                                                            isZh
+                                                                ? `当前模型的 ${value} 不支持 ${aspectRatio} 比例`
+                                                                : `${value} is not available for the ${aspectRatio} aspect ratio on this model`,
+                                                        );
+                                                        return;
+                                                    }
+                                                    setResolution(value);
+                                                }}
+                                            >
+                                                <strong>{value}</strong>
+                                                <small>
+                                                    {availability.status === 'AVAILABLE'
+                                                        ? formatBillingMoney(
+                                                              availability.option.unitPrice,
+                                                              selectedModel?.currencyCode ??
+                                                                  market.currencyCode,
+                                                              market.locale,
+                                                          ) + (isZh ? '/张' : '/image')
+                                                        : isZh
+                                                          ? '当前模型不支持'
+                                                          : 'Not supported'}
+                                                </small>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                                 <small>
                                     {isZh
                                         ? '由模型原生生成；不使用后期放大'
                                         : 'Generated natively by the model; no upscaling'}
                                 </small>
-                            </label>
+                            </div>
                         </div>
                     </section>
 

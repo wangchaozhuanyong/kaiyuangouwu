@@ -10,7 +10,11 @@ describe('restrictPlatformNavigation', () => {
                 {
                     id: 'catalog',
                     title: 'Catalog',
-                    items: [{ id: 'products', title: 'Products', url: '/products' }],
+                    items: [
+                        { id: 'products', title: 'Products', url: '/products' },
+                        { id: 'stock-locations', title: 'Stock', url: '/stock-locations' },
+                        { id: 'shipping-methods', title: 'Shipping', url: '/shipping-methods' },
+                    ],
                 },
                 {
                     id: 'marketing',
@@ -18,8 +22,8 @@ describe('restrictPlatformNavigation', () => {
                     items: [{ id: 'promotions', title: 'Promotions', url: '/promotions' }],
                 },
                 {
-                    id: 'settings',
-                    title: 'Settings',
+                    id: 'store-and-merchants',
+                    title: 'Stores & merchants',
                     items: [
                         {
                             id: 'channels',
@@ -27,9 +31,12 @@ describe('restrictPlatformNavigation', () => {
                             url: '/channels',
                             requiresPermission: ['ReadChannel'],
                         },
-                        { id: 'stock-locations', title: 'Stock', url: '/stock-locations' },
-                        { id: 'payment-methods', title: 'Payments', url: '/payment-methods' },
                     ],
+                },
+                {
+                    id: 'commerce-and-regions',
+                    title: 'Payments, tax & regions',
+                    items: [{ id: 'payment-methods', title: 'Payments', url: '/payment-methods' }],
                 },
             ],
         };
@@ -37,26 +44,35 @@ describe('restrictPlatformNavigation', () => {
         const result = restrictPlatformNavigation(config);
         const catalog = result.sections.find(section => section.id === 'catalog');
         const marketing = result.sections.find(section => section.id === 'marketing');
-        const settings = result.sections.find(section => section.id === 'settings');
-        expect(catalog).toEqual(config.sections[0]);
+        const storeSettings = result.sections.find(section => section.id === 'store-and-merchants');
+        const commerceSettings = result.sections.find(section => section.id === 'commerce-and-regions');
+        const catalogItems = catalog && 'items' in catalog ? (catalog.items ?? []) : [];
+        expect(catalogItems).toEqual([
+            expect.objectContaining({ id: 'products' }),
+            expect.objectContaining({ id: 'stock-locations' }),
+            expect.objectContaining({ id: 'shipping-methods', requiresPermission: ['CreateChannel'] }),
+        ]);
+        expect(catalogItems[0]).not.toHaveProperty('requiresPermission');
+        expect(catalogItems[1]).not.toHaveProperty('requiresPermission');
         const marketingItems = marketing && 'items' in marketing ? (marketing.items ?? []) : [];
         expect(marketingItems).toEqual([
             expect.objectContaining({ id: 'promotions', requiresPermission: ['CreateChannel'] }),
         ]);
-        const settingsItems = settings && 'items' in settings ? (settings.items ?? []) : [];
-        expect(settingsItems).toEqual([
+        const storeSettingsItems =
+            storeSettings && 'items' in storeSettings ? (storeSettings.items ?? []) : [];
+        expect(storeSettingsItems).toEqual([
             expect.objectContaining({ id: 'channels', requiresPermission: ['CreateChannel'] }),
-            expect.objectContaining({ id: 'stock-locations' }),
+        ]);
+        const commerceSettingsItems =
+            commerceSettings && 'items' in commerceSettings ? (commerceSettings.items ?? []) : [];
+        expect(commerceSettingsItems).toEqual([
             expect.objectContaining({ id: 'payment-methods', requiresPermission: ['CreateChannel'] }),
         ]);
-        expect(settingsItems[1]).not.toHaveProperty('requiresPermission');
         expect(config.sections[2]).toEqual({
-            id: 'settings',
-            title: 'Settings',
+            id: 'store-and-merchants',
+            title: 'Stores & merchants',
             items: [
                 { id: 'channels', title: 'Channels', url: '/channels', requiresPermission: ['ReadChannel'] },
-                { id: 'stock-locations', title: 'Stock', url: '/stock-locations' },
-                { id: 'payment-methods', title: 'Payments', url: '/payment-methods' },
             ],
         });
     });

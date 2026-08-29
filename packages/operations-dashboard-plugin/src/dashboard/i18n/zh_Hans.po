@@ -679,13 +679,23 @@ msgstr "账号与权限"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
+msgid "operations.nav.aiServices"
+msgstr "AI 服务"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.commerceAndRegions"
+msgstr "交易与区域"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.customerCenter"
 msgstr "客户"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
-msgid "operations.nav.inventoryAndFulfillment"
-msgstr "库存与履约"
+#~ msgid "operations.nav.inventoryAndFulfillment"
+#~ msgstr "库存与履约"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -734,6 +744,11 @@ msgstr "规格模板库"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
+msgid "operations.nav.storeAndMerchants"
+msgstr "店铺与商家"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.storefrontDesign"
 msgstr "店铺装修"
 
@@ -744,13 +759,18 @@ msgstr "店铺"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
-msgid "operations.nav.storeSettings"
-msgstr "设置"
+#~ msgid "operations.nav.storeSettings"
+#~ msgstr "设置"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
-msgid "operations.nav.systemManagement"
-msgstr "系统管理"
+#~ msgid "operations.nav.systemManagement"
+#~ msgstr "系统管理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.systemOperations"
+msgstr "系统运维"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx

@@ -1,5 +1,5 @@
-import type { NavMenuConfig, NavMenuItem, NavMenuSection } from '@vendure/dashboard';
-import { PanelsTopLeft } from 'lucide-react';
+import { NavMenuConfig, NavMenuItem, NavMenuSection } from '@vendure/dashboard';
+import { Bot, Landmark, PanelsTopLeft, ShieldCheck, Store, Wrench } from 'lucide-react';
 
 export interface OperationsNavigationTitles {
     workbench: string;
@@ -8,8 +8,11 @@ export interface OperationsNavigationTitles {
     orderManagement: string;
     customerCenter: string;
     marketingCenter: string;
-    storeSettings: string;
-    systemManagement: string;
+    storeAndMerchants: string;
+    commerceAndRegions: string;
+    aiServices: string;
+    accountsAndAccess: string;
+    systemOperations: string;
     productList: string;
     skuAndInventory: string;
     productGroups: string;
@@ -20,23 +23,68 @@ export interface OperationsNavigationTitles {
     storefrontDesign: string;
 }
 
-const storefrontDesignSectionId = 'storefront-design';
-const storefrontDesignItemIds = [
-    'storefront-content',
-    'storefront-carousel',
-    'storefront-site-content',
-    'storefront-navigation',
-    'auth-visuals',
-    'storefront-client-plugins',
-    'storefront-promotion',
-];
-const movedItemIds = new Set([
-    'stock-locations',
-    'shipping-methods',
-    'administrators',
-    'roles',
-    ...storefrontDesignItemIds,
-]);
+const relocatedItemIds = new Set(['stock-locations', 'shipping-methods', 'storefront-content']);
+
+const settingsGroups = [
+    {
+        id: 'store-and-merchants',
+        titleKey: 'storeAndMerchants',
+        icon: Store,
+        order: 100,
+        itemIds: [
+            'my-store-profile',
+            'my-store-domains',
+            'sellers',
+            'channels',
+            'store-provisioning',
+            'store-management',
+        ],
+    },
+    {
+        id: 'commerce-and-regions',
+        titleKey: 'commerceAndRegions',
+        icon: Landmark,
+        order: 200,
+        itemIds: [
+            'store-currency-settings',
+            'store-commerce-settings',
+            'payment-methods',
+            'tax-categories',
+            'tax-rates',
+            'countries',
+            'zones',
+        ],
+    },
+    {
+        id: 'ai-service-settings',
+        titleKey: 'aiServices',
+        icon: Bot,
+        order: 300,
+        itemIds: ['image-generation-access', 'image-generation-settings'],
+    },
+    {
+        id: 'accounts-and-access',
+        titleKey: 'accountsAndAccess',
+        icon: ShieldCheck,
+        order: 400,
+        itemIds: ['administrators', 'roles', 'api-keys'],
+    },
+    {
+        id: 'system-operations',
+        titleKey: 'systemOperations',
+        icon: Wrench,
+        order: 500,
+        itemIds: [
+            'job-queue',
+            'scheduled-tasks',
+            'settings-store',
+            'global-settings',
+            'system-announcements',
+        ],
+    },
+] as const;
+
+const groupedItemIds = new Set<string>(settingsGroups.flatMap(group => group.itemIds));
 
 function isSection(item: NavMenuItem | NavMenuSection): item is NavMenuSection {
     return 'items' in item;
@@ -56,22 +104,32 @@ function updateItemTitle(item: NavMenuItem, titles: OperationsNavigationTitles):
     return titleById[item.id] ? { ...item, title: titleById[item.id] } : item;
 }
 
-function takeItems(config: NavMenuConfig, ids: string[], titles: OperationsNavigationTitles): NavMenuItem[] {
-    const itemsById = new Map<string, NavMenuItem>();
-    for (const section of config.sections) {
-        if (!isSection(section)) {
-            continue;
-        }
-        for (const item of section.items ?? []) {
-            if (ids.includes(item.id)) {
-                itemsById.set(item.id, updateItemTitle(item, titles));
-            }
-        }
-    }
+function allItems(config: NavMenuConfig): NavMenuItem[] {
+    return config.sections.flatMap(section => (isSection(section) ? (section.items ?? []) : []));
+}
+
+function takeItems(
+    config: NavMenuConfig,
+    ids: readonly string[],
+    titles: OperationsNavigationTitles,
+): NavMenuItem[] {
+    const itemsById = new Map(allItems(config).map(item => [item.id, updateItemTitle(item, titles)]));
     return ids.flatMap(id => {
         const item = itemsById.get(id);
         return item ? [item] : [];
     });
+}
+
+function withSectionOrder(items: NavMenuItem[]): NavMenuItem[] {
+    return items.map((item, index) => ({ ...item, order: (index + 1) * 100 }));
+}
+
+function ungroupedSettingsItems(config: NavMenuConfig, titles: OperationsNavigationTitles): NavMenuItem[] {
+    return config.sections
+        .filter(section => (section.id === 'settings' || section.id === 'system') && isSection(section))
+        .flatMap(section => (isSection(section) ? (section.items ?? []) : []))
+        .filter(item => !groupedItemIds.has(item.id) && !relocatedItemIds.has(item.id))
+        .map(item => updateItemTitle(item, titles));
 }
 
 export function organizeOperationsNavigation(
@@ -84,24 +142,13 @@ export function organizeOperationsNavigation(
         sales: titles.orderCenter,
         customers: titles.customerCenter,
         marketing: titles.marketingCenter,
-        settings: titles.storeSettings,
-        system: titles.systemManagement,
     };
     const stockAndShippingItems = takeItems(config, ['stock-locations', 'shipping-methods'], titles);
-    const accessItems = takeItems(config, ['administrators', 'roles'], titles);
-    const storefrontDesignItems = takeItems(config, storefrontDesignItemIds, titles).map((item, index) => ({
-        ...item,
-        order: (index + 1) * 100,
-    }));
-    const systemItems = config.sections.flatMap(section =>
-        section.id === 'system' && isSection(section)
-            ? (section.items ?? []).map(item => updateItemTitle(item, titles))
-            : [],
-    );
-
+    const storefrontContentItem = takeItems(config, ['storefront-content'], titles)[0];
     const sections: Array<NavMenuItem | NavMenuSection> = [];
+
     for (const section of config.sections) {
-        if (section.id === 'system' || section.id === storefrontDesignSectionId) {
+        if (section.id === 'settings' || section.id === 'system') {
             continue;
         }
         const title = titleBySectionId[section.id];
@@ -110,30 +157,39 @@ export function organizeOperationsNavigation(
             continue;
         }
         const ownItems = (section.items ?? [])
-            .filter(item => !movedItemIds.has(item.id))
+            .filter(item => !relocatedItemIds.has(item.id))
             .map(item => updateItemTitle(item, titles));
-        const items =
-            section.id === 'catalog'
-                ? [...ownItems, ...stockAndShippingItems]
-                : section.id === 'settings'
-                  ? [...ownItems, ...accessItems, ...systemItems]
-                  : ownItems;
         sections.push({
             ...section,
             ...(title ? { title } : {}),
-            items,
+            items: section.id === 'catalog' ? [...ownItems, ...stockAndShippingItems] : ownItems,
         });
     }
 
-    if (storefrontDesignItems.length) {
-        const settingsIndex = sections.findIndex(section => section.id === 'settings');
-        sections.splice(settingsIndex < 0 ? sections.length : settingsIndex, 0, {
-            id: storefrontDesignSectionId,
+    if (storefrontContentItem) {
+        sections.push({
+            ...storefrontContentItem,
             title: titles.storefrontDesign,
             icon: PanelsTopLeft,
             order: 900,
             placement: 'top',
-            items: storefrontDesignItems,
+        });
+    }
+
+    const ungroupedItems = ungroupedSettingsItems(config, titles);
+    for (const group of settingsGroups) {
+        const knownItems = takeItems(config, group.itemIds, titles);
+        const items = group.id === 'system-operations' ? [...knownItems, ...ungroupedItems] : knownItems;
+        if (items.length === 0) {
+            continue;
+        }
+        sections.push({
+            id: group.id,
+            title: titles[group.titleKey],
+            icon: group.icon,
+            order: group.order,
+            placement: 'bottom',
+            items: withSectionOrder(items),
         });
     }
 

@@ -26,7 +26,10 @@ export interface ProductVariant {
     sku: string;
     priceWithTax: number;
     currencyCode: string;
-    stockLevel: 'IN_STOCK' | 'OUT_OF_STOCK';
+    /** Legacy Vendure stock label retained for cached/test compatibility. */
+    stockLevel?: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+    /** Exact saleable quantity after allocations and the out-of-stock threshold, or null when untracked. */
+    saleableStockLevel?: number | null;
     featuredAsset: Asset | null;
     product: { id: string; name: string; featuredAsset: Asset | null };
     autoCardAvailableStock?: number | null;

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { ProductCard } from '../components/common/product-card';
-import { MarketConfig, Product, ProductVariant } from '../types';
+import { MarketConfig, Product } from '../types';
 
 import { SectionHeader } from './page-shell';
 
@@ -16,11 +16,9 @@ export function ProductSection({
     products,
     market,
     locale,
-    addingVariantId,
     favoriteProductIds,
     onProduct,
     onFavorite,
-    onAdd,
 }: {
     title?: string;
     subtitle?: string;
@@ -32,11 +30,9 @@ export function ProductSection({
     products: Product[];
     market: MarketConfig;
     locale: string;
-    addingVariantId: string | null;
     favoriteProductIds?: string[];
     onProduct: (product: Product) => void;
     onFavorite?: (product: Product) => void;
-    onAdd: (variant: ProductVariant) => void;
 }) {
     if (!products.length) return null;
     return (
@@ -58,11 +54,9 @@ export function ProductSection({
                         product={product}
                         market={market}
                         locale={locale}
-                        adding={product.variants.some(variant => variant.id === addingVariantId)}
                         favorite={favoriteProductIds?.includes(product.id)}
                         onOpen={() => onProduct(product)}
                         onFavorite={onFavorite ? () => onFavorite(product) : undefined}
-                        onAdd={() => product.variants[0] && onAdd(product.variants[0])}
                     />
                 ))}
             </div>

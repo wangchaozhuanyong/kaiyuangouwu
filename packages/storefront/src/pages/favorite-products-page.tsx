@@ -10,7 +10,7 @@ import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import { useStorefront } from '../StorefrontContext';
-import { MarketConfig, ProductVariant, StorefrontLanguage } from '../types';
+import { MarketConfig, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
@@ -20,8 +20,6 @@ interface FavoriteProductsPageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
-    addingVariantId: string | null;
-    onAdd: (variant: ProductVariant) => void;
     onRemove: (productId: string) => void;
     onClear: () => void;
 }
@@ -31,7 +29,7 @@ export function FavoriteProductsPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { api, productIds, market, locale, language, addingVariantId, onAdd, onRemove, onClear } =
+    const { api, productIds, market, locale, language, onRemove, onClear } =
         useStorefront<FavoriteProductsPageProps>();
     const isZh = language === 'zh';
     const favoritesQuery = useProductsByIdsQuery({ api, productIds, market, language });
@@ -84,11 +82,9 @@ export function FavoriteProductsPage() {
                     products={availableProducts}
                     market={market}
                     locale={locale}
-                    addingVariantId={addingVariantId}
                     favoriteProductIds={productIds}
                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
                     onFavorite={product => onRemove(product.id)}
-                    onAdd={onAdd}
                 />
             ) : (
                 <EmptyState
