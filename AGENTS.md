@@ -71,6 +71,16 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 - `minor` — new features
 - `major` — breaking changes
 
+### Mandatory Production Branch & Release Evidence Policy
+
+- Production-bound changes must first be merged into `main` as an intentional, reviewed diff. Before merging, update the source branch against the latest `origin/main` and inspect both the complete diff and changed-file list. Never merge or commit an old workspace, release directory, WIP snapshot, or historical branch wholesale.
+- Production may deploy only an exact 40-character commit currently reachable from `origin/main`, or an immutable formal release tag that resolves to such a commit. Never deploy an uncommitted workspace, feature branch, stale worktree, movable tag, or manually selected `dist` directory.
+- Do not force-push `main` or move/reuse a formal release tag. If `origin/main` changes after validation, stop, update the release candidate, and repeat the checks and build.
+- Delete an already-merged remote feature or hotfix branch only after the production deployment and verification succeed and the deployment record is complete. Keep an active maintenance branch or rollback tag only when its owner and purpose are documented.
+- Every production deployment record must include the source branch, production ref (`main` or formal tag), full commit SHA, formal release tag when used, CI artifact name, artifact SHA-256 (or immutable container image digest), artifact workflow run, deployment workflow run, environment, UTC deployment time, operator, previous production SHA, and verification result. A mutable image version or tag alone is not sufficient evidence.
+- Roll back only to a previously verified immutable artifact and record the rollback reason and SHA. Do not rewind `main`, rebuild from an old branch, or copy old build output over the active runtime.
+- Missing branch ancestry, immutable artifact identity, deployment evidence, or post-deploy verification is a release blocker. Do not bypass it with a manual copy or direct server build.
+
 ## Gotchas
 
 - **Dashboard stale build**: `packages/dev-server/dist/` accumulates stale Vite build artifacts across branch switches. Vite doesn't clean old hashed files, so old chunks can interfere (e.g. overwriting `window.schemaInfo`). Always `rm -rf packages/dev-server/dist` before rebuilding. Build with `bunx vite build --base /dashboard/ --outDir ../dev-server/dist` from `packages/dashboard/`. Also check no stale Vite dev server is running on port 5173 — `DashboardPlugin` auto-proxies to it instead of serving static files.

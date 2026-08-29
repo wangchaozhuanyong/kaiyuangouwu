@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-27
+最后核对：2026-08-29
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -13,6 +13,35 @@
 - 前台：`https://damatong.net`、`https://www.damatong.net`
 - 管理后台：`https://console.damatong.net/dashboard/`
 - 健康检查：`https://damatong.net/health`
+
+## 分支、标签与发布记录硬规则
+
+1. 其他分支中的生产修改必须先基于最新 `origin/main` 整理，只把本次经过审核的差异合并进 `main`。合并前必须检查完整 diff 和变更文件清单；禁止把旧工作区、历史发布目录、WIP 快照或长期未同步的分支整体覆盖进 `main`。
+2. 生产只允许部署 `origin/main` 当前完整的 40 位提交 SHA，或指向 `main` 中该提交的不可变正式版本标签。禁止从功能分支、脏工作树、历史副本、可移动标签或人工挑选的 `dist` 目录部署。
+3. `main` 只允许普通快进更新，禁止强推；正式版本标签一经用于生产不得移动、覆盖或复用。验证后如果 `origin/main` 前移，必须停止并用新提交重新测试、构建和记录。
+4. 已合并的远程功能分支或热修复分支，只能在生产部署、线上验收和发布记录全部完成后删除。仍在维护的长期分支必须明确用途和负责人；生产回滚依据是已验证的不可变制品，不是保留旧功能分支。
+5. 每次部署记录必须固定保存：来源分支、生产引用（`main` 或正式标签）、完整 commit SHA、正式版本标签（如使用）、CI 制品名称、制品 SHA-256、制品工作流运行编号、部署工作流运行编号、环境、UTC 部署时间、操作人、上一个生产 SHA 和验收结果。当前非容器发布以制品名称和 SHA-256 为准；以后使用容器时还必须记录不可变镜像 digest，只有镜像版本名或 tag 不合格。
+6. 缺少分支祖先关系、不可变制品标识、发布记录或上线验收证据时必须停止发布，禁止以手工复制、服务器现场构建或跳过门禁的方式继续。
+7. 回滚只允许切换到上一个已验证的不可变制品，并记录原因、`ROLLBACK_SHA` 和回滚验收结果；禁止强制回退 `main`、从旧分支重新构建或把旧 `dist` 覆盖到当前运行目录。
+
+建议使用以下字段保存每次发布记录；没有使用容器时 `image_digest` 记为 `n/a`：
+
+```text
+source_branch:
+production_ref:
+target_sha:
+release_tag:
+artifact_name:
+artifact_sha256:
+image_digest:
+artifact_workflow_run:
+deployment_workflow_run:
+environment:
+deployed_at_utc:
+operator:
+previous_production_sha:
+verification_result:
+```
 
 ## 当前生产拓扑
 
@@ -293,17 +322,19 @@ sudo -n systemctl reload nginx
 
 ## 标准发布流程
 
-1. 确认本地只包含本次发布代码；设计验收截图、测试报告和其他未跟踪资料不进入发布提交。
-2. 从目标提交创建隔离的干净工作树，运行测试和生产构建；必须显式执行 `@vendure/operations-dashboard-plugin` 菜单回归测试，禁止仅依赖根命令的工作区自动发现。
-3. 将目标提交推送到 `origin/main`，记录完整 Git SHA。
-4. 对该 SHA 手动运行 `Production Runtime Artifact` 工作流；成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成第 5 至 12 步。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
-5. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
-6. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
-7. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
-8. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功。
-9. 从候选产物预演并执行本次审核过的库存继承修复，再预演并执行店铺图片同步；两者写入都必须使用 `--apply --allow-remote`，成功后才原子切换 `kaiyuangouwu-current`。
-10. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
-11. 撤销临时 SSH 规则，仅保留原有固定规则；候选和回滚包按需保留，不删除用户数据。
+1. 将来源分支更新到最新 `origin/main`，检查完整 diff 和变更文件清单，只保留本次经过审核的修改；设计验收截图、测试报告、历史快照和其他未跟踪资料不进入发布提交。
+2. 将审核后的修改合并进 `main`，使用普通快进推送，确认远端 `main` 的完整 SHA；禁止强推。若使用正式版本标签，标签必须指向这个已在 `main` 中的 SHA，且发布后不得移动或复用。
+3. 从该 SHA 创建隔离的干净工作树，运行测试和生产构建；必须显式执行 `@vendure/operations-dashboard-plugin` 菜单回归测试，禁止仅依赖根命令的工作区自动发现。
+4. 创建发布记录并先填写来源分支、生产引用、`TARGET_SHA`、正式标签（如使用）、上一个生产 SHA、环境和操作人；信息不完整时停止。
+5. 对该 SHA 手动运行 `Production Runtime Artifact` 工作流；成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成后续部署。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
+6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
+7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
+8. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
+9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功。
+10. 从候选产物预演并执行本次审核过的库存继承修复，再预演并执行店铺图片同步；两者写入都必须使用 `--apply --allow-remote`，成功后才原子切换 `kaiyuangouwu-current`。
+11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
+12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
+13. 发布与验收成功后，删除已经合并且不再使用的远程功能/热修复分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。
 
 ## 上线验收
 
