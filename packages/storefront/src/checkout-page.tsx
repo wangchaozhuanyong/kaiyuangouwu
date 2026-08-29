@@ -21,6 +21,7 @@ import { smartParseAddressText } from './address-parser';
 import { ShopApi } from './api';
 import { compactUiCopy } from './i18n';
 import { formatDisplayMoney } from './money-display';
+import { variantCanIncreaseQuantity } from './product-availability';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
@@ -982,10 +983,10 @@ function CheckoutItemsGroup({
                                         type="button"
                                         disabled={
                                             quantityUpdatingVariantId === line.productVariant.id ||
-                                            (line.productVariant.customFields.digitalDeliveryMode ===
-                                                'auto_card' &&
-                                                line.quantity >=
-                                                    (line.productVariant.autoCardAvailableStock ?? 0))
+                                            !variantCanIncreaseQuantity(
+                                                line.productVariant,
+                                                line.quantity,
+                                            )
                                         }
                                         onClick={() =>
                                             onQuantity?.(line.productVariant.id, line.quantity + 1)

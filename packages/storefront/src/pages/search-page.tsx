@@ -20,7 +20,7 @@ import { readStoredStrings, scopedStorageKey, SEARCH_HISTORY_STORAGE_KEY } from 
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import { useStorefront } from '../StorefrontContext';
-import { MarketConfig, Product, ProductSearchSort, ProductVariant, StorefrontLanguage } from '../types';
+import { MarketConfig, Product, ProductSearchSort, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
@@ -32,8 +32,6 @@ interface SearchPageProps {
     language: StorefrontLanguage;
     storefrontCode: string;
     initialQuery: string;
-    addingVariantId: string | null;
-    onAdd: (variant: ProductVariant) => void;
 }
 
 export function SearchPage() {
@@ -41,7 +39,7 @@ export function SearchPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { api, products, market, locale, language, storefrontCode, initialQuery, addingVariantId, onAdd } =
+    const { api, products, market, locale, language, storefrontCode, initialQuery } =
         useStorefront<SearchPageProps>();
     const queryClient = useQueryClient();
     const isZh = language === 'zh';
@@ -254,9 +252,7 @@ export function SearchPage() {
                             products={products.slice(0, 2)}
                             market={market}
                             locale={locale}
-                            addingVariantId={addingVariantId}
                             onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                            onAdd={onAdd}
                         />
                     )}
                 </div>
@@ -310,9 +306,7 @@ export function SearchPage() {
                                     market={market}
                                     locale={locale}
                                     language={language}
-                                    adding={product.variants.some(variant => variant.id === addingVariantId)}
                                     onOpen={() => navigateTo({ name: 'product', id: product.id })}
-                                    onAdd={() => product.variants[0] && onAdd(product.variants[0])}
                                 />
                             ))}
                             {searchError && (
@@ -358,9 +352,7 @@ export function SearchPage() {
                             products={relatedProducts}
                             market={market}
                             locale={locale}
-                            addingVariantId={addingVariantId}
                             onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                            onAdd={onAdd}
                         />
                     )}
                 </section>

@@ -679,13 +679,23 @@ msgstr "Accounts & access"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
+msgid "operations.nav.aiServices"
+msgstr "AI services"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.commerceAndRegions"
+msgstr "Payments, tax & regions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.customerCenter"
 msgstr "Customer center"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
-msgid "operations.nav.inventoryAndFulfillment"
-msgstr "Inventory & fulfillment"
+#~ msgid "operations.nav.inventoryAndFulfillment"
+#~ msgstr "Inventory & fulfillment"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
@@ -734,6 +744,11 @@ msgstr "Specification templates"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
+msgid "operations.nav.storeAndMerchants"
+msgstr "Stores & merchants"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
 msgid "operations.nav.storefrontDesign"
 msgstr "Storefront design"
 
@@ -744,13 +759,18 @@ msgstr "Stores"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
-msgid "operations.nav.storeSettings"
-msgstr "Store settings"
+#~ msgid "operations.nav.storeSettings"
+#~ msgstr "Store settings"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx
-msgid "operations.nav.systemManagement"
-msgstr "System management"
+#~ msgid "operations.nav.systemManagement"
+#~ msgstr "System management"
+
+#. js-lingui-explicit-id
+#: src/dashboard/index.tsx
+msgid "operations.nav.systemOperations"
+msgstr "System operations"
 
 #. js-lingui-explicit-id
 #: src/dashboard/index.tsx

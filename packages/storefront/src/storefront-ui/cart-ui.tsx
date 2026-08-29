@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 
+import { variantCanIncreaseQuantity } from '../product-availability';
 import { MarketConfig, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
 
 import { Sheet } from './page-shell';
@@ -413,7 +414,12 @@ export function SwipeableCartLine({
                                         isZh ? `增加 ${productName} 数量` : `Increase ${productName} quantity`
                                     }
                                     onClick={() => onQuantity(line.id, line.quantity + 1)}
-                                    disabled={loading || !line.available}
+                                    disabled={
+                                        loading ||
+                                        !line.available ||
+                                        !variant ||
+                                        !variantCanIncreaseQuantity(variant, line.quantity)
+                                    }
                                 >
                                     <Plus />
                                 </button>

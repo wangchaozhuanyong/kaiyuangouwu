@@ -18,8 +18,7 @@ export function restrictPlatformNavigation(config: NavMenuConfig): NavMenuConfig
             return {
                 ...section,
                 items: section.items?.map(item =>
-                    (section.id === 'settings' && platformSettingsItemIds.has(item.id)) ||
-                    managedReplacementItemIds.has(item.id)
+                    platformSettingsItemIds.has(item.id) || managedReplacementItemIds.has(item.id)
                         ? { ...item, requiresPermission: ['CreateChannel'] }
                         : item,
                 ),

@@ -10,7 +10,7 @@ import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
 import { useStorefront } from '../StorefrontContext';
-import { MarketConfig, ProductVariant, StorefrontLanguage } from '../types';
+import { MarketConfig, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
@@ -20,8 +20,6 @@ interface BrowsingHistoryPageProps {
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
-    addingVariantId: string | null;
-    onAdd: (variant: ProductVariant) => void;
     onClear: () => void;
 }
 
@@ -30,7 +28,7 @@ export function BrowsingHistoryPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { api, productIds, market, locale, language, addingVariantId, onAdd, onClear } =
+    const { api, productIds, market, locale, language, onClear } =
         useStorefront<BrowsingHistoryPageProps>();
     const isZh = language === 'zh';
     const historyQuery = useProductsByIdsQuery({ api, productIds, market, language });
@@ -80,9 +78,7 @@ export function BrowsingHistoryPage() {
                     products={historyProducts}
                     market={market}
                     locale={locale}
-                    addingVariantId={addingVariantId}
                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                    onAdd={onAdd}
                 />
             ) : (
                 <EmptyState

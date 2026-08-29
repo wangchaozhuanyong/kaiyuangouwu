@@ -13,7 +13,6 @@ import {
     ActiveCustomer,
     MarketConfig,
     Product,
-    ProductVariant,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontLanguage,
@@ -31,7 +30,6 @@ interface CartPageProps {
     language: StorefrontLanguage;
     loading: boolean;
     error: string | null;
-    addingVariantId: string | null;
     favoriteProductIds: string[];
     coupons: StoreCustomerCoupon[];
     onToggleAll: () => void;
@@ -42,7 +40,6 @@ interface CartPageProps {
     onFavorite: (productId: string) => void;
     onCheckout: () => void;
     onReopen: () => void;
-    onAdd: (variant: ProductVariant) => void;
     onNotify: (message: string) => void;
     onRetry: () => void;
     onApplyCoupon: (customerCouponId: string) => Promise<string | null>;
@@ -62,7 +59,6 @@ export function CartPage() {
         language,
         loading,
         error,
-        addingVariantId,
         favoriteProductIds,
         coupons,
         onToggleAll,
@@ -73,7 +69,6 @@ export function CartPage() {
         onFavorite,
         onCheckout,
         onReopen,
-        onAdd,
         onNotify,
         onRetry,
         onApplyCoupon,
@@ -416,9 +411,7 @@ export function CartPage() {
                                 .slice(0, 4)}
                             market={market}
                             locale={locale}
-                            addingVariantId={addingVariantId}
                             onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                            onAdd={onAdd}
                         />
                     )}
                 </>

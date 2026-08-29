@@ -1,9 +1,10 @@
+import type { OperationsNavigationTitles } from './operations-navigation';
 import { msg } from '@lingui/core/macro';
-import { defineDashboardExtension, NavMenuConfig, NavMenuItem, NavMenuSection } from '@vendure/dashboard';
-import { PanelsTopLeft } from 'lucide-react';
+import { defineDashboardExtension } from '@vendure/dashboard';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
+import { organizeOperationsNavigation } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { reviewModerationRoute } from './review-moderation-page';
 import { StoreOverviewWidget } from './store-overview-widget';
@@ -15,13 +16,14 @@ const navigationMessages = {
     orderManagement: msg({ id: 'operations.nav.orderManagement', message: 'Order management' }),
     customerCenter: msg({ id: 'operations.nav.customerCenter', message: 'Customer center' }),
     marketingCenter: msg({ id: 'operations.nav.marketingCenter', message: 'Marketing center' }),
-    inventoryAndFulfillment: msg({
-        id: 'operations.nav.inventoryAndFulfillment',
-        message: 'Inventory & fulfillment',
+    storeAndMerchants: msg({ id: 'operations.nav.storeAndMerchants', message: 'Stores & merchants' }),
+    commerceAndRegions: msg({
+        id: 'operations.nav.commerceAndRegions',
+        message: 'Payments, tax & regions',
     }),
-    storeSettings: msg({ id: 'operations.nav.storeSettings', message: 'Store settings' }),
+    aiServices: msg({ id: 'operations.nav.aiServices', message: 'AI services' }),
     accountsAndAccess: msg({ id: 'operations.nav.accountsAndAccess', message: 'Accounts & access' }),
-    systemManagement: msg({ id: 'operations.nav.systemManagement', message: 'System management' }),
+    systemOperations: msg({ id: 'operations.nav.systemOperations', message: 'System operations' }),
     productList: msg({ id: 'operations.nav.productList', message: 'Product list' }),
     skuAndInventory: msg({ id: 'operations.nav.skuAndInventory', message: 'SKUs & inventory' }),
     productGroups: msg({ id: 'operations.nav.productGroups', message: 'Product groups' }),
@@ -35,49 +37,27 @@ const navigationMessages = {
     storefrontDesign: msg({ id: 'operations.nav.storefrontDesign', message: 'Storefront design' }),
 };
 
-const movedItemIds = new Set([
-    'stock-locations',
-    'shipping-methods',
-    'administrators',
-    'roles',
-    'storefront-content',
-]);
-
-function isSection(item: NavMenuItem | NavMenuSection): item is NavMenuSection {
-    return 'items' in item;
-}
-
-function updateItemTitle(item: NavMenuItem): NavMenuItem {
-    const titleById: Record<string, string> = {
-        products: navigationMessages.productList.id,
-        'product-variants': navigationMessages.skuAndInventory.id,
-        'option-groups': navigationMessages.specificationTemplates.id,
-        facets: navigationMessages.productAttributes.id,
-        collections: navigationMessages.productGroups.id,
-        orders: navigationMessages.orderManagement.id,
-        'stock-locations': navigationMessages.warehouses.id,
-        channels: navigationMessages.stores.id,
-    };
-    return titleById[item.id] ? { ...item, title: titleById[item.id] } : item;
-}
-
-function takeItems(config: NavMenuConfig, ids: string[]): NavMenuItem[] {
-    const itemsById = new Map<string, NavMenuItem>();
-    for (const section of config.sections) {
-        if (!isSection(section)) {
-            continue;
-        }
-        for (const item of section.items ?? []) {
-            if (ids.includes(item.id)) {
-                itemsById.set(item.id, updateItemTitle(item));
-            }
-        }
-    }
-    return ids.flatMap(id => {
-        const item = itemsById.get(id);
-        return item ? [item] : [];
-    });
-}
+const navigationTitles = {
+    workbench: navigationMessages.workbench.id,
+    productCenter: navigationMessages.productCenter.id,
+    orderCenter: navigationMessages.orderCenter.id,
+    orderManagement: navigationMessages.orderManagement.id,
+    customerCenter: navigationMessages.customerCenter.id,
+    marketingCenter: navigationMessages.marketingCenter.id,
+    storeAndMerchants: navigationMessages.storeAndMerchants.id,
+    commerceAndRegions: navigationMessages.commerceAndRegions.id,
+    aiServices: navigationMessages.aiServices.id,
+    accountsAndAccess: navigationMessages.accountsAndAccess.id,
+    systemOperations: navigationMessages.systemOperations.id,
+    productList: navigationMessages.productList.id,
+    skuAndInventory: navigationMessages.skuAndInventory.id,
+    productGroups: navigationMessages.productGroups.id,
+    specificationTemplates: navigationMessages.specificationTemplates.id,
+    productAttributes: navigationMessages.productAttributes.id,
+    warehouses: navigationMessages.warehouses.id,
+    stores: navigationMessages.stores.id,
+    storefrontDesign: navigationMessages.storefrontDesign.id,
+} satisfies OperationsNavigationTitles;
 
 defineDashboardExtension({
     routes: [afterSalesRoute, autoCardRoute, reviewModerationRoute],
@@ -101,60 +81,5 @@ defineDashboardExtension({
             requiresPermissions: ['ReadOrder'],
         },
     ],
-    navSections: (config: NavMenuConfig): NavMenuConfig => {
-        const titleBySectionId: Record<string, string> = {
-            insights: navigationMessages.workbench.id,
-            catalog: navigationMessages.productCenter.id,
-            sales: navigationMessages.orderCenter.id,
-            customers: navigationMessages.customerCenter.id,
-            marketing: navigationMessages.marketingCenter.id,
-            settings: navigationMessages.storeSettings.id,
-            system: navigationMessages.systemManagement.id,
-        };
-        const stockAndShippingItems = takeItems(config, ['stock-locations', 'shipping-methods']);
-        const accessItems = takeItems(config, ['administrators', 'roles']);
-        const storefrontContentItem = takeItems(config, ['storefront-content'])[0];
-        const systemItems = config.sections.flatMap(section =>
-            section.id === 'system' && isSection(section) ? (section.items ?? []).map(updateItemTitle) : [],
-        );
-
-        const sections: Array<NavMenuItem | NavMenuSection> = [];
-        for (const section of config.sections) {
-            if (section.id === 'system') {
-                continue;
-            }
-            const title = titleBySectionId[section.id];
-            if (!isSection(section)) {
-                sections.push(title ? { ...section, title } : section);
-                continue;
-            }
-            const ownItems = (section.items ?? [])
-                .filter(item => !movedItemIds.has(item.id))
-                .map(updateItemTitle);
-            const items =
-                section.id === 'catalog'
-                    ? [...ownItems, ...stockAndShippingItems]
-                    : section.id === 'settings'
-                      ? [...ownItems, ...accessItems, ...systemItems]
-                      : ownItems;
-            sections.push({
-                ...section,
-                ...(title ? { title } : {}),
-                items,
-            });
-        }
-
-        if (storefrontContentItem) {
-            const settingsIndex = sections.findIndex(section => section.id === 'settings');
-            sections.splice(settingsIndex < 0 ? sections.length : settingsIndex, 0, {
-                ...storefrontContentItem,
-                title: navigationMessages.storefrontDesign.id,
-                icon: PanelsTopLeft,
-                order: 900,
-                placement: 'top',
-            });
-        }
-
-        return { sections };
-    },
+    navSections: config => organizeOperationsNavigation(config, navigationTitles),
 });

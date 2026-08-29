@@ -49,6 +49,7 @@ import {
     testImageModelMutation,
     testImageProviderMutation,
 } from './image-generation.graphql';
+import { imageProtocolOption, imageProtocolOptionsForModel } from './image-protocol-options';
 
 export const imageGenerationSettingsRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -92,69 +93,74 @@ function ImageGenerationSettingsPage() {
     const config = query.data?.imageGenerationAdminConfig;
     const [draft, setDraft] = useState<ImageAdminConfigRecord | null>(null);
     const [activeTab, setActiveTab] = useState('base');
+    const [historyView, setHistoryView] = useState<'usage' | 'prompts' | 'generation'>('usage');
+    const [usageSearch, setUsageSearch] = useState('');
+    const [usageState, setUsageState] = useState('');
+    const [usageBilling, setUsageBilling] = useState('');
+    const [usageFrom, setUsageFrom] = useState('');
+    const [usageTo, setUsageTo] = useState('');
+    const [usageModel, setUsageModel] = useState('');
+    const [usageKey, setUsageKey] = useState('');
+    const [usageType, setUsageType] = useState('');
+    const [usageFailuresOnly, setUsageFailuresOnly] = useState(false);
+    const [usageMissingCostOnly, setUsageMissingCostOnly] = useState(false);
     const [jobSearch, setJobSearch] = useState('');
     const [jobState, setJobState] = useState('');
     const [jobBilling, setJobBilling] = useState('');
     const [jobFrom, setJobFrom] = useState('');
-    const [jobTo, setJobTo] = useState('');
-    const [jobModel, setJobModel] = useState('');
-    const [jobKey, setJobKey] = useState('');
-    const [jobType, setJobType] = useState('');
-    const [jobFailuresOnly, setJobFailuresOnly] = useState(false);
-    const [jobMissingCostOnly, setJobMissingCostOnly] = useState(false);
     const [usagePage, setUsagePage] = useState(0);
     const [selectedUsage, setSelectedUsage] = useState<{ recordType: string; id: string } | null>(null);
     useEffect(() => {
         setUsagePage(0);
     }, [
-        jobSearch,
-        jobState,
-        jobBilling,
-        jobFrom,
-        jobTo,
-        jobModel,
-        jobKey,
-        jobType,
-        jobFailuresOnly,
-        jobMissingCostOnly,
+        usageSearch,
+        usageState,
+        usageBilling,
+        usageFrom,
+        usageTo,
+        usageModel,
+        usageKey,
+        usageType,
+        usageFailuresOnly,
+        usageMissingCostOnly,
     ]);
     const usageQuery = useQuery({
         queryKey: [
             'image-ai-usage-records',
-            jobSearch,
-            jobState,
-            jobBilling,
-            jobFrom,
-            jobTo,
-            jobModel,
-            jobKey,
-            jobType,
-            jobFailuresOnly,
-            jobMissingCostOnly,
+            usageSearch,
+            usageState,
+            usageBilling,
+            usageFrom,
+            usageTo,
+            usageModel,
+            usageKey,
+            usageType,
+            usageFailuresOnly,
+            usageMissingCostOnly,
             usagePage,
         ],
-        enabled: activeTab === 'jobs',
+        enabled: activeTab === 'jobs' && historyView === 'usage',
         queryFn: () =>
             api.query<ImageAiUsageRecordsQueryResult>(imageAiUsageRecordsQuery, {
                 input: {
                     skip: usagePage * 50,
                     take: 50,
-                    customer: jobSearch || null,
-                    state: jobState || null,
-                    billingMode: jobBilling || null,
-                    from: jobFrom ? `${jobFrom}T00:00:00.000Z` : null,
-                    to: jobTo ? `${jobTo}T23:59:59.999Z` : null,
-                    modelCode: jobModel || null,
-                    credentialCode: jobKey || null,
-                    recordType: jobType || null,
-                    failuresOnly: jobFailuresOnly,
-                    missingCostOnly: jobMissingCostOnly,
+                    customer: usageSearch || null,
+                    state: usageState || null,
+                    billingMode: usageBilling || null,
+                    from: usageFrom ? `${usageFrom}T00:00:00.000Z` : null,
+                    to: usageTo ? `${usageTo}T23:59:59.999Z` : null,
+                    modelCode: usageModel || null,
+                    credentialCode: usageKey || null,
+                    recordType: usageType || null,
+                    failuresOnly: usageFailuresOnly,
+                    missingCostOnly: usageMissingCostOnly,
                 },
             }),
     });
     const usageDetailQuery = useQuery({
         queryKey: ['image-ai-usage-record', selectedUsage?.recordType, selectedUsage?.id],
-        enabled: activeTab === 'jobs' && selectedUsage != null,
+        enabled: activeTab === 'jobs' && historyView === 'usage' && selectedUsage != null,
         queryFn: () =>
             api.query<ImageAiUsageRecordDetailQueryResult>(imageAiUsageRecordDetailQuery, {
                 recordType: selectedUsage?.recordType,
@@ -384,6 +390,12 @@ function ImageGenerationSettingsPage() {
                         title="模型与单张价格"
                         description="友好名称、用途说明和官方模型 ID 会展示给客户。只读测试不生图；真实生图测试可能产生上游费用。健康结果 24 小时后过期。"
                     >
+                        <Alert className="mb-4">
+                            <AlertDescription>
+                                你当前使用订阅号中转：Codex 图片选“Codex 订阅号中转”，Gemini 图片选“Gemini
+                                订阅号中转”。带“高级”的选项只在中转站文档明确要求时使用。
+                            </AlertDescription>
+                        </Alert>
                         <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
                             {draft.models.map(model => (
                                 <div key={model.code} className="space-y-3 rounded-lg border p-4">
@@ -451,7 +463,7 @@ function ImageGenerationSettingsPage() {
                                             }
                                         />
                                     </Field>
-                                    <Field label="协议">
+                                    <Field label="中转站调用方式">
                                         <select
                                             className="h-9 w-full rounded-md border bg-background px-3"
                                             value={model.protocol}
@@ -462,25 +474,31 @@ function ImageGenerationSettingsPage() {
                                                 )
                                             }
                                         >
-                                            <option value="OPENAI_RESPONSES_IMAGE">
-                                                OpenAI Responses Image（当前中转站推荐）
-                                            </option>
-                                            {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
-                                            <option value="OPENAI_IMAGES">OpenAI Images</option>
-                                            {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
-                                            <option value="OPENAI_COMPATIBLE_CHAT">
-                                                OpenAI Compatible Chat
-                                            </option>
-                                            <option value="GEMINI_INTERACTIONS">
-                                                Gemini Interactions（推荐）
-                                            </option>
-                                            <option value="GEMINI_NATIVE">
-                                                Gemini GenerateContent（兼容）
-                                            </option>
-                                            <option value="GEMINI_NATIVE_STREAM">
-                                                Gemini StreamGenerateContent（当前中转站推荐）
-                                            </option>
+                                            <optgroup label="推荐方式">
+                                                {imageProtocolOptionsForModel(model)
+                                                    .filter(option => option.recommended)
+                                                    .map(option => (
+                                                        <option key={option.value} value={option.value}>
+                                                            {option.label}
+                                                        </option>
+                                                    ))}
+                                            </optgroup>
+                                            <optgroup label="高级兼容方式（仅按中转站说明选择）">
+                                                {imageProtocolOptionsForModel(model)
+                                                    .filter(option => !option.recommended)
+                                                    .map(option => (
+                                                        <option key={option.value} value={option.value}>
+                                                            {option.label}
+                                                        </option>
+                                                    ))}
+                                            </optgroup>
                                         </select>
+                                        <p className="text-xs leading-5 text-muted-foreground">
+                                            当前模型：{model.providerModelId || model.officialModelId}
+                                        </p>
+                                        <p className="text-xs leading-5 text-muted-foreground">
+                                            {imageProtocolOption(model.protocol).description}
+                                        </p>
                                     </Field>
                                     <div className="grid gap-3 sm:grid-cols-3">
                                         {(
@@ -935,23 +953,47 @@ function ImageGenerationSettingsPage() {
                     <>
                         <PageBlock
                             column="full"
+                            blockId="history-navigation"
+                            title="记录分类"
+                            description="按记录用途分开查看，每次只展示一张数据表。"
+                        >
+                            <Tabs
+                                value={historyView}
+                                onValueChange={value => {
+                                    setHistoryView(value as typeof historyView);
+                                    setSelectedUsage(null);
+                                }}
+                            >
+                                <TabsList
+                                    className="grid h-auto w-full grid-cols-1 gap-1 sm:grid-cols-3"
+                                    aria-label="任务记录类型"
+                                >
+                                    <TabsTrigger value="usage">AI 使用总览</TabsTrigger>
+                                    <TabsTrigger value="prompts">提示词优化</TabsTrigger>
+                                    <TabsTrigger value="generation">图片生成任务</TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        </PageBlock>
+                        <PageBlock
+                            column="full"
                             blockId="unified-ai-usage"
+                            className={historyView === 'usage' ? undefined : 'hidden'}
                             title={`AI 使用记录（共 ${usageQuery.data?.imageAiUsageRecords.totalItems ?? 0}）`}
                             description="统一记录提示词优化和图片生成；筛选在服务端执行，不受当前页面已加载数量影响。"
                         >
-                            <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <div className="mb-5 grid gap-3 rounded-lg bg-muted/30 p-4 md:grid-cols-2 xl:grid-cols-4">
                                 <Field label="客户">
                                     <Input
                                         placeholder="姓名、邮箱或客户 ID"
-                                        value={jobSearch}
-                                        onChange={event => setJobSearch(event.target.value)}
+                                        value={usageSearch}
+                                        onChange={event => setUsageSearch(event.target.value)}
                                     />
                                 </Field>
                                 <Field label="记录类型">
                                     <select
-                                        className="h-9 rounded-md border bg-background px-3"
-                                        value={jobType}
-                                        onChange={event => setJobType(event.target.value)}
+                                        className="h-9 w-full rounded-md border bg-background px-3"
+                                        value={usageType}
+                                        onChange={event => setUsageType(event.target.value)}
                                     >
                                         <option value="">提示词和生图</option>
                                         <option value="PROMPT_OPTIMIZATION">提示词优化</option>
@@ -961,22 +1003,22 @@ function ImageGenerationSettingsPage() {
                                 <Field label="模型编码">
                                     <Input
                                         placeholder="精确模型编码"
-                                        value={jobModel}
-                                        onChange={event => setJobModel(event.target.value)}
+                                        value={usageModel}
+                                        onChange={event => setUsageModel(event.target.value)}
                                     />
                                 </Field>
                                 <Field label="Key 编码">
                                     <Input
                                         placeholder="稳定 Key 编码"
-                                        value={jobKey}
-                                        onChange={event => setJobKey(event.target.value)}
+                                        value={usageKey}
+                                        onChange={event => setUsageKey(event.target.value)}
                                     />
                                 </Field>
                                 <Field label="状态">
                                     <select
-                                        className="h-9 rounded-md border bg-background px-3"
-                                        value={jobState}
-                                        onChange={event => setJobState(event.target.value)}
+                                        className="h-9 w-full rounded-md border bg-background px-3"
+                                        value={usageState}
+                                        onChange={event => setUsageState(event.target.value)}
                                     >
                                         <option value="">全部状态</option>
                                         {[
@@ -997,9 +1039,9 @@ function ImageGenerationSettingsPage() {
                                 </Field>
                                 <Field label="计费类型">
                                     <select
-                                        className="h-9 rounded-md border bg-background px-3"
-                                        value={jobBilling}
-                                        onChange={event => setJobBilling(event.target.value)}
+                                        className="h-9 w-full rounded-md border bg-background px-3"
+                                        value={usageBilling}
+                                        onChange={event => setUsageBilling(event.target.value)}
                                     >
                                         <option value="">全部计费</option>
                                         <option value="FREE">免费</option>
@@ -1011,26 +1053,26 @@ function ImageGenerationSettingsPage() {
                                 <Field label="开始日期">
                                     <Input
                                         type="date"
-                                        value={jobFrom}
-                                        onChange={event => setJobFrom(event.target.value)}
+                                        value={usageFrom}
+                                        onChange={event => setUsageFrom(event.target.value)}
                                     />
                                 </Field>
                                 <Field label="结束日期">
                                     <Input
                                         type="date"
-                                        value={jobTo}
-                                        onChange={event => setJobTo(event.target.value)}
+                                        value={usageTo}
+                                        onChange={event => setUsageTo(event.target.value)}
                                     />
                                 </Field>
                                 <Toggle
                                     label="仅失败/待确认记录"
-                                    checked={jobFailuresOnly}
-                                    onChange={setJobFailuresOnly}
+                                    checked={usageFailuresOnly}
+                                    onChange={setUsageFailuresOnly}
                                 />
                                 <Toggle
                                     label="仅上游成本缺失"
-                                    checked={jobMissingCostOnly}
-                                    onChange={setJobMissingCostOnly}
+                                    checked={usageMissingCostOnly}
+                                    onChange={setUsageMissingCostOnly}
                                 />
                             </div>
                             {usageQuery.isLoading ? <Skeleton className="h-40 w-full" /> : null}
@@ -1041,7 +1083,7 @@ function ImageGenerationSettingsPage() {
                             ) : null}
                             {usageQuery.data ? (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
+                                    <table className="w-full min-w-[72rem] text-sm [&_td]:px-3 [&_td]:py-3 [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-3">
                                         <thead>
                                             <tr className="border-b text-left">
                                                 <th className="p-2">时间/类型</th>
@@ -1170,7 +1212,7 @@ function ImageGenerationSettingsPage() {
                                 </div>
                             ) : null}
                         </PageBlock>
-                        {selectedUsage ? (
+                        {historyView === 'usage' && selectedUsage ? (
                             <PageBlock
                                 column="full"
                                 blockId="ai-usage-detail"
@@ -1273,11 +1315,12 @@ function ImageGenerationSettingsPage() {
                         <PageBlock
                             column="full"
                             blockId="prompt-audit"
+                            className={historyView === 'prompts' ? undefined : 'hidden'}
                             title={`提示词优化记录（共 ${data.imagePromptOptimizationAudit.totalItems}）`}
                             description="完整提示词仅具备 AI 审计权限的管理员可见；客户前台删除任务不会删除该审计记录。"
                         >
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full min-w-[60rem] text-sm [&_td]:px-3 [&_td]:py-3 [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-3">
                                     <thead>
                                         <tr className="border-b text-left">
                                             <th className="p-2">时间/客户</th>
@@ -1363,10 +1406,11 @@ function ImageGenerationSettingsPage() {
                         <PageBlock
                             column="full"
                             blockId="image-jobs"
+                            className={historyView === 'generation' ? undefined : 'hidden'}
                             title={`任务记录（共 ${data.imageGenerationJobs.totalItems}）`}
                             description="UNKNOWN 不会自动重复生成；15 分钟后自动退回，或由管理员确认后使用同一幂等键重试。"
                         >
-                            <div className="mb-4 grid gap-3 md:grid-cols-4">
+                            <div className="mb-5 grid gap-3 rounded-lg bg-muted/30 p-4 md:grid-cols-2 xl:grid-cols-4">
                                 <Field label="客户/模型/Key">
                                     <Input
                                         placeholder="姓名、邮箱、ID、模型或 Key"
@@ -1376,7 +1420,7 @@ function ImageGenerationSettingsPage() {
                                 </Field>
                                 <Field label="任务状态">
                                     <select
-                                        className="h-9 rounded-md border bg-background px-3"
+                                        className="h-9 w-full rounded-md border bg-background px-3"
                                         value={jobState}
                                         onChange={event => setJobState(event.target.value)}
                                     >
@@ -1398,7 +1442,7 @@ function ImageGenerationSettingsPage() {
                                 </Field>
                                 <Field label="计费类型">
                                     <select
-                                        className="h-9 rounded-md border bg-background px-3"
+                                        className="h-9 w-full rounded-md border bg-background px-3"
                                         value={jobBilling}
                                         onChange={event => setJobBilling(event.target.value)}
                                     >
@@ -1416,7 +1460,7 @@ function ImageGenerationSettingsPage() {
                                 </Field>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full min-w-[72rem] text-sm [&_td]:px-3 [&_td]:py-3 [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-3">
                                     <thead>
                                         <tr className="border-b text-left">
                                             <th className="p-2">时间</th>

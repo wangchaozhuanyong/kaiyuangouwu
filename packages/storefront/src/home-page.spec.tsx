@@ -306,6 +306,26 @@ describe('HomePage mobile header layout', () => {
         );
         expect(stylesheet).not.toMatch(/\.home-topbar > \.search-trigger/);
     });
+
+    it('shows USDT as a payment currency without a reference-price suffix', () => {
+        const markup = renderHome({
+            availableCurrencyCodes: ['CNY', 'MYR', 'USDT'],
+            currencySelectorEnabled: true,
+            displayCurrencyCode: 'USDT',
+            currencyLoading: false,
+            onCurrencyChange: vi.fn(),
+        });
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('<option value="USDT" selected="">USDT</option>');
+        expect(markup).not.toContain('参考价');
+        expect(stylesheet).toMatch(
+            /\.currency-select\s*\{[^}]*width:\s*70px;[^}]*height:\s*40px;[^}]*border-radius:\s*7px;/,
+        );
+        expect(stylesheet).toMatch(
+            /@media \(max-width:\s*370px\)[\s\S]*?\.currency-select\s*\{[^}]*width:\s*68px;[^}]*height:\s*38px;/,
+        );
+    });
 });
 
 describe('HomePage desktop intro layout', () => {
@@ -482,6 +502,14 @@ describe('HomePage core category cards', () => {
         });
 
         expect(markup).toContain('data-card-template="tech-duo"');
+    });
+
+    it('keeps the two managed cards in one row on narrow screens', () => {
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(stylesheet).toMatch(
+            /@media \(max-width: 620px\)[\s\S]*?\.home-dual-showcase\[data-card-template='tech-duo'\]\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
+        );
     });
 });
 

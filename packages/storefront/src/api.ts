@@ -48,6 +48,7 @@ import {
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
+import { productAvailability } from './product-availability';
 
 const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';
@@ -91,7 +92,7 @@ const productFields = `
         sku
         priceWithTax
         currencyCode
-        stockLevel
+        saleableStockLevel
         autoCardAvailableStock
         featuredAsset { id preview }
         product { id name featuredAsset { id preview } }
@@ -154,7 +155,7 @@ const orderFields = `
             sku
             priceWithTax
             currencyCode
-            stockLevel
+            saleableStockLevel
             autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
@@ -270,7 +271,7 @@ const orderSummaryFields = `
             sku
             priceWithTax
             currencyCode
-            stockLevel
+            saleableStockLevel
             autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
@@ -358,7 +359,7 @@ const cartFields = `
             sku
             priceWithTax
             currencyCode
-            stockLevel
+            saleableStockLevel
             autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
@@ -444,7 +445,7 @@ function minimumCatalogPrice(product: Product, input: StorefrontCatalogInput): n
 function matchesCatalogFilters(product: Product, input: StorefrontCatalogInput): boolean {
     const variants = catalogVariants(product, input);
     if (!variants.length) return false;
-    if (input.inStockOnly && !variants.some(variant => variant.stockLevel !== 'OUT_OF_STOCK')) {
+    if (input.inStockOnly && !variants.some(variant => !productAvailability(variant).soldOut)) {
         return false;
     }
     const minimumPrice = Math.min(...variants.map(variant => variant.priceWithTax));

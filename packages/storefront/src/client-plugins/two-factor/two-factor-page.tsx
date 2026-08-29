@@ -1,6 +1,7 @@
 /* eslint-disable max-len -- Bilingual customer-facing copy is intentionally kept next to the UI. */
 import {
     Check,
+    ChevronDown,
     ClipboardPaste,
     Clock3,
     Copy,
@@ -8,6 +9,7 @@ import {
     EyeOff,
     KeyRound,
     LockKeyhole,
+    MoreHorizontal,
     Pencil,
     Plus,
     Search,
@@ -24,7 +26,7 @@ import type { TwoFactorAccount } from './types';
 import { EmptyState, Subpage } from '../../storefront-ui/page-shell';
 
 import { parseBatchImport } from './batch-parser';
-import { clearSessionAccounts, loadSessionAccounts, saveSessionAccounts } from './session-storage';
+import { clearBrowserAccounts, loadBrowserAccounts, saveBrowserAccounts } from './browser-storage';
 import { formatTotpCode, generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
 import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
 
@@ -55,6 +57,8 @@ export function TwoFactorPage({
     const [quickCode, setQuickCode] = useState<string | null>(null);
     const [quickError, setQuickError] = useState('');
     const [querying, setQuerying] = useState(false);
+    const [showQuickDescription, setShowQuickDescription] = useState(false);
+    const [showPrivacyDetails, setShowPrivacyDetails] = useState(false);
     const [showAccountForm, setShowAccountForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [projectName, setProjectName] = useState('');
@@ -98,7 +102,7 @@ export function TwoFactorPage({
             return;
         }
         if (loadedOwnerId.current === ownerId) return;
-        const stored = loadSessionAccounts(ownerId);
+        const stored = loadBrowserAccounts(ownerId);
         loadedOwnerId.current = ownerId;
         setAccounts(stored.accounts);
         setStorageAvailable(stored.available);
@@ -139,7 +143,7 @@ export function TwoFactorPage({
 
     const persistAccounts = useCallback(
         (nextAccounts: TwoFactorAccount[]): boolean => {
-            if (!ownerId || !storageAvailable || !saveSessionAccounts(ownerId, nextAccounts)) {
+            if (!ownerId || !storageAvailable || !saveBrowserAccounts(ownerId, nextAccounts)) {
                 setStorageAvailable(false);
                 onNotify(copy.storageUnavailable);
                 return false;
@@ -288,7 +292,7 @@ export function TwoFactorPage({
 
     const clearAll = () => {
         if (!window.confirm(copy.clearConfirm)) return;
-        clearSessionAccounts(ownerId);
+        clearBrowserAccounts(ownerId);
         setAccounts([]);
         setCodes({});
         onNotify(copy.accountsCleared);
@@ -312,33 +316,52 @@ export function TwoFactorPage({
                         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white">
                             <KeyRound className="size-5" aria-hidden="true" />
                         </span>
-                        <div>
-                            <h1 className="m-0 text-xl font-black text-slate-950">{copy.quickQuery}</h1>
-                            <p className="mb-0 mt-1 text-sm leading-6 text-slate-600">{copy.description}</p>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-3">
+                                <h1 className="m-0 text-xl font-black text-slate-950">{copy.quickQuery}</h1>
+                                <button
+                                    className={descriptionToggleClass}
+                                    type="button"
+                                    aria-expanded={showQuickDescription}
+                                    aria-controls="storefront-two-factor-query-description"
+                                    onClick={() => setShowQuickDescription(value => !value)}
+                                >
+                                    {showQuickDescription ? copy.hideDescription : copy.viewDescription}
+                                    <ChevronDown
+                                        className={`size-4 transition-transform ${showQuickDescription ? 'rotate-180' : ''}`}
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                            </div>
+                            {showQuickDescription ? (
+                                <p
+                                    id="storefront-two-factor-query-description"
+                                    className="mb-0 mt-2 text-sm leading-6 text-slate-600"
+                                >
+                                    {copy.description}
+                                </p>
+                            ) : null}
                         </div>
                     </div>
                     <form className="mt-5 grid gap-3" onSubmit={event => void queryCode(event)}>
-                        <label
-                            className="grid gap-1.5 text-sm font-bold text-slate-800"
-                            htmlFor="storefront-two-factor-secret"
-                        >
+                        <label className="sr-only" htmlFor="storefront-two-factor-secret">
                             {copy.secret}
-                            <input
-                                id="storefront-two-factor-secret"
-                                className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 font-mono text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                                type="password"
-                                autoComplete="off"
-                                spellCheck={false}
-                                value={quickInput}
-                                placeholder={copy.secretPlaceholder}
-                                onChange={event => {
-                                    setQuickInput(event.target.value);
-                                    setQuickSecret(null);
-                                    setQuickCode(null);
-                                    setQuickError('');
-                                }}
-                            />
                         </label>
+                        <input
+                            id="storefront-two-factor-secret"
+                            className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 font-mono text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                            type="password"
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={quickInput}
+                            placeholder={copy.secretPlaceholder}
+                            onChange={event => {
+                                setQuickInput(event.target.value);
+                                setQuickSecret(null);
+                                setQuickCode(null);
+                                setQuickError('');
+                            }}
+                        />
                         {quickError ? (
                             <p className="m-0 text-sm font-semibold text-red-600" role="alert">
                                 {quickError}
@@ -402,27 +425,52 @@ export function TwoFactorPage({
                 </section>
 
                 <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:p-5">
-                    <div className="flex items-center gap-2">
-                        <ShieldCheck className="size-5 text-emerald-600" aria-hidden="true" />
-                        <h2 className="m-0 text-base font-black text-slate-950">{copy.privacyTitle}</h2>
-                    </div>
-                    <ul className="mb-0 mt-4 grid gap-3 p-0 text-sm leading-5 text-slate-600">
-                        {[copy.noDatabase, copy.noUpload, copy.localGeneration, copy.sessionOnly].map(
-                            item => (
-                                <li className="flex list-none items-start gap-2" key={item}>
-                                    <Check
-                                        className="mt-0.5 size-4 shrink-0 text-emerald-600"
-                                        aria-hidden="true"
-                                    />
-                                    {item}
-                                </li>
-                            ),
-                        )}
-                    </ul>
-                    <p className="mb-0 mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-                        <LockKeyhole className="mr-1 inline size-4 align-text-bottom" aria-hidden="true" />
-                        {copy.publicDevice}
-                    </p>
+                    <button
+                        className="flex w-full items-center justify-between gap-3 text-left"
+                        type="button"
+                        aria-expanded={showPrivacyDetails}
+                        aria-controls="storefront-two-factor-privacy-details"
+                        onClick={() => setShowPrivacyDetails(value => !value)}
+                    >
+                        <span className="flex items-center gap-2">
+                            <ShieldCheck className="size-5 text-emerald-600" aria-hidden="true" />
+                            <span className="text-base font-black text-slate-950">{copy.privacyTitle}</span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1 text-sm font-extrabold text-emerald-700">
+                            {showPrivacyDetails ? copy.collapse : copy.expand}
+                            <ChevronDown
+                                className={`size-4 transition-transform ${showPrivacyDetails ? 'rotate-180' : ''}`}
+                                aria-hidden="true"
+                            />
+                        </span>
+                    </button>
+                    {showPrivacyDetails ? (
+                        <div id="storefront-two-factor-privacy-details">
+                            <ul className="mb-0 mt-4 grid gap-3 p-0 text-sm leading-5 text-slate-600">
+                                {[
+                                    copy.noDatabase,
+                                    copy.noUpload,
+                                    copy.localGeneration,
+                                    copy.persistentLocal,
+                                ].map(item => (
+                                    <li className="flex list-none items-start gap-2" key={item}>
+                                        <Check
+                                            className="mt-0.5 size-4 shrink-0 text-emerald-600"
+                                            aria-hidden="true"
+                                        />
+                                        {item}
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="mb-0 mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                                <LockKeyhole
+                                    className="mr-1 inline size-4 align-text-bottom"
+                                    aria-hidden="true"
+                                />
+                                {copy.publicDevice}
+                            </p>
+                        </div>
+                    ) : null}
                     {!storageAvailable ? (
                         <p className="mb-0 mt-3 text-sm font-semibold text-red-600" role="alert">
                             {copy.storageUnavailable}
@@ -611,80 +659,55 @@ export function TwoFactorPage({
                                 const code = codes[account.id];
                                 return (
                                     <article
-                                        className="rounded-2xl border border-slate-200 p-4"
+                                        className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_24px_-22px_rgba(15,23,42,0.65)]"
                                         key={account.id}
                                     >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <h3 className="m-0 break-words text-base font-black text-slate-950">
+                                        <div className="flex min-h-9 items-center gap-2">
+                                            <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
+                                                <h3
+                                                    className="m-0 max-w-[45%] shrink-0 truncate text-sm font-black text-slate-950"
+                                                    title={account.projectName}
+                                                >
                                                     {account.projectName}
                                                 </h3>
-                                                <code className="mt-1 block truncate text-xs text-slate-500">
-                                                    {revealed ? account.secret : maskSecret(account.secret)}
+                                                <code className="min-w-0 truncate text-[11px] text-slate-500">
+                                                    {maskSecret(account.secret)}
                                                 </code>
                                             </div>
-                                            <button
-                                                className={iconButtonClass}
-                                                type="button"
-                                                aria-label={revealed ? copy.hide : copy.reveal}
-                                                onClick={() =>
+                                            <AccountMoreMenu
+                                                account={account}
+                                                copy={copy}
+                                                now={now}
+                                                revealed={revealed}
+                                                onToggleSecret={() =>
                                                     setRevealedIds(current =>
                                                         toggleSetValue(current, account.id),
                                                     )
                                                 }
+                                                onEdit={() => openAccountForm(account)}
+                                                onDelete={() => deleteAccount(account)}
+                                            />
+                                        </div>
+                                        <div className="mt-2 flex min-h-12 items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5">
+                                            <div className="min-w-[6.9rem] shrink-0">
+                                                <span className="sr-only">{copy.dynamicCode}</span>
+                                                <p className="m-0 whitespace-nowrap font-mono text-[1.35rem] font-black leading-none tracking-[0.12em] text-slate-950 tabular-nums">
+                                                    {code ? formatTotpCode(code) : '--- ---'}
+                                                </p>
+                                            </div>
+                                            <CompactCountdown
+                                                seconds={secondsRemaining}
+                                                label={copy.seconds}
+                                            />
+                                            <button
+                                                className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-extrabold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1"
+                                                type="button"
+                                                disabled={!code}
+                                                onClick={() => void copyAccountCode(account)}
                                             >
-                                                {revealed ? (
-                                                    <EyeOff className="size-4" />
-                                                ) : (
-                                                    <Eye className="size-4" />
-                                                )}
+                                                <Copy className="size-4" aria-hidden="true" />
+                                                {copy.copy}
                                             </button>
-                                        </div>
-                                        <div className="mt-4 rounded-xl bg-slate-50 p-3">
-                                            <div className="flex items-center justify-between gap-3">
-                                                <div>
-                                                    <small className="font-bold text-slate-500">
-                                                        {copy.dynamicCode}
-                                                    </small>
-                                                    <p className="mb-0 mt-1 font-mono text-2xl font-black tracking-[0.14em] text-slate-950">
-                                                        {code ? formatTotpCode(code) : '--- ---'}
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    className={secondaryButtonClass}
-                                                    type="button"
-                                                    disabled={!code}
-                                                    onClick={() => void copyAccountCode(account)}
-                                                >
-                                                    <Copy className="size-4" />
-                                                    {copy.copy}
-                                                </button>
-                                            </div>
-                                            <Countdown seconds={secondsRemaining} label={copy.seconds} />
-                                        </div>
-                                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                            <span className="text-xs text-slate-500">
-                                                {copy.recentUse}:{' '}
-                                                {formatRecentUse(account.lastUsedAt, now, copy)}
-                                            </span>
-                                            <div className="flex gap-1">
-                                                <button
-                                                    className={iconButtonClass}
-                                                    type="button"
-                                                    aria-label={copy.edit}
-                                                    onClick={() => openAccountForm(account)}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </button>
-                                                <button
-                                                    className={`${iconButtonClass} text-red-600`}
-                                                    type="button"
-                                                    aria-label={copy.delete}
-                                                    onClick={() => deleteAccount(account)}
-                                                >
-                                                    <Trash2 className="size-4" />
-                                                </button>
-                                            </div>
                                         </div>
                                     </article>
                                 );
@@ -704,7 +727,9 @@ const primaryButtonClass =
 const secondaryButtonClass =
     'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-extrabold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 const iconButtonClass =
-    'inline-grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50';
+    'inline-grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1';
+const descriptionToggleClass =
+    'inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-extrabold text-emerald-700 transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500';
 
 function Countdown({ seconds, label }: Readonly<{ seconds: number; label: string }>) {
     return (
@@ -722,6 +747,139 @@ function Countdown({ seconds, label }: Readonly<{ seconds: number; label: string
         </div>
     );
 }
+
+function CompactCountdown({ seconds, label }: Readonly<{ seconds: number; label: string }>) {
+    return (
+        <div className="min-w-0 flex-1" aria-label={`${seconds} ${label}`}>
+            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
+                <Clock3 className="size-3.5" aria-hidden="true" />
+                <span className="whitespace-nowrap font-mono tabular-nums">
+                    {seconds} {label}
+                </span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div
+                    className="h-full rounded-full bg-emerald-500 transition-[width] duration-300"
+                    style={{ width: `${(seconds / 30) * 100}%` }}
+                />
+            </div>
+        </div>
+    );
+}
+
+interface AccountMoreMenuProps {
+    account: TwoFactorAccount;
+    copy: Copy;
+    now: number;
+    revealed: boolean;
+    onToggleSecret: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+}
+
+function AccountMoreMenu({
+    account,
+    copy,
+    now,
+    revealed,
+    onToggleSecret,
+    onEdit,
+    onDelete,
+}: Readonly<AccountMoreMenuProps>) {
+    const [open, setOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const closeOnOutsideClick = (event: PointerEvent) => {
+            if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            setOpen(false);
+            triggerRef.current?.focus();
+        };
+        document.addEventListener('pointerdown', closeOnOutsideClick);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOnOutsideClick);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [open]);
+
+    return (
+        <div className={`relative shrink-0 ${open ? 'z-[30]' : ''}`} ref={containerRef}>
+            <button
+                ref={triggerRef}
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-lg px-2 text-xs font-extrabold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                type="button"
+                aria-label={`${account.projectName} ${copy.moreActions}`}
+                aria-haspopup="dialog"
+                aria-expanded={open}
+                onClick={() => setOpen(value => !value)}
+            >
+                <MoreHorizontal className="size-4" aria-hidden="true" />
+                {copy.more}
+            </button>
+            {open ? (
+                <div
+                    className="absolute right-0 top-11 w-64 max-w-[calc(100vw-3.5rem)] overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-[0_18px_45px_-18px_rgba(15,23,42,0.45)]"
+                    role="dialog"
+                    aria-label={`${account.projectName} ${copy.moreActions}`}
+                >
+                    <div className="border-b border-slate-100 bg-slate-50/80 p-3">
+                        <span className="text-[11px] font-bold text-slate-500">{copy.secret}</span>
+                        <code
+                            className="mt-1 block break-all rounded-lg bg-white px-2 py-1.5 text-xs text-slate-700"
+                            aria-live="polite"
+                        >
+                            {revealed ? account.secret : maskSecret(account.secret)}
+                        </code>
+                        <p className="mb-0 mt-2 text-xs text-slate-500">
+                            {copy.recentUse}: {formatRecentUse(account.lastUsedAt, now, copy)}
+                        </p>
+                    </div>
+                    <div className="grid gap-1 p-1.5">
+                        <button className={moreMenuButtonClass} type="button" onClick={onToggleSecret}>
+                            {revealed ? (
+                                <EyeOff className="size-4" aria-hidden="true" />
+                            ) : (
+                                <Eye className="size-4" aria-hidden="true" />
+                            )}
+                            {revealed ? copy.hide : copy.reveal}
+                        </button>
+                        <button
+                            className={moreMenuButtonClass}
+                            type="button"
+                            onClick={() => {
+                                setOpen(false);
+                                onEdit();
+                            }}
+                        >
+                            <Pencil className="size-4" aria-hidden="true" />
+                            {copy.edit}
+                        </button>
+                        <button
+                            className={`${moreMenuButtonClass} text-red-600 hover:bg-red-50 hover:text-red-700`}
+                            type="button"
+                            onClick={() => {
+                                setOpen(false);
+                                onDelete();
+                            }}
+                        >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                            {copy.delete}
+                        </button>
+                    </div>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+const moreMenuButtonClass =
+    'flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500';
 
 function toggleSetValue(current: Set<string>, value: string): Set<string> {
     const next = new Set(current);
@@ -768,13 +926,15 @@ function copyFor(language: StorefrontLanguage) {
         title: isZh ? '2FA 动态码' : '2FA codes',
         signInTitle: isZh ? '登录后使用 2FA 工具' : 'Sign in to use the 2FA tool',
         signInDescription: isZh
-            ? '登录后可在当前浏览器会话中查询和管理动态码。'
-            : 'Sign in to query and manage codes in this browser session.',
+            ? '登录后可在当前浏览器中查询和管理动态码。'
+            : 'Sign in to query and manage codes in this browser.',
         signIn: isZh ? '去登录' : 'Sign in',
         quickQuery: isZh ? '查询 2FA 动态码' : 'Query a 2FA code',
         description: isZh
             ? '粘贴 Base32 密钥即可在本机生成验证码，密钥不会上传到服务器。'
             : 'Paste a Base32 secret to generate a code locally. The secret is never uploaded.',
+        viewDescription: isZh ? '查看说明' : 'View details',
+        hideDescription: isZh ? '收起说明' : 'Hide details',
         secret: isZh ? '2FA 密钥' : '2FA secret',
         secretPlaceholder: isZh ? '粘贴 Base32 密钥' : 'Paste a Base32 secret',
         paste: isZh ? '粘贴' : 'Paste',
@@ -788,13 +948,17 @@ function copyFor(language: StorefrontLanguage) {
         noDatabase: isZh ? '不写入服务器数据库' : 'Not written to the server database',
         noUpload: isZh ? '密钥不会上传到服务器' : 'Secrets are never uploaded',
         localGeneration: isZh ? '验证码只在当前浏览器生成' : 'Codes are generated in this browser',
-        sessionOnly: isZh ? '关闭标签页或退出登录后清除' : 'Cleared after closing the tab or signing out',
+        persistentLocal: isZh
+            ? '关闭浏览器或退出登录后仍会保留'
+            : 'Kept after closing the browser or signing out',
+        expand: isZh ? '展开' : 'Expand',
+        collapse: isZh ? '收起' : 'Collapse',
         publicDevice: isZh
-            ? 'Session Storage 不额外加密密钥，请勿在公共或共享设备上使用。'
-            : 'Session Storage does not add encryption. Do not use this tool on a public or shared device.',
+            ? '密钥保存在当前浏览器的本地存储中，不额外加密。仅建议在自己的设备上使用；主动清空账号列表或清除本站站点数据后会被删除。'
+            : "Secrets are kept unencrypted in this browser's local storage. Use this only on your own device; clearing the account list or this site's data removes them.",
         storageUnavailable: isZh
-            ? '当前浏览器无法使用 Session Storage，仍可临时查询，但无法保存账号。'
-            : 'Session Storage is unavailable. You can query a code but cannot save accounts.',
+            ? '当前浏览器无法使用本地存储，仍可临时查询，但无法保存账号。'
+            : 'Local storage is unavailable. You can query a code but cannot save accounts.',
         accountList: isZh ? '2FA 账号列表' : '2FA account list',
         batchImport: isZh ? '批量导入' : 'Bulk import',
         addAccount: isZh ? '添加账号' : 'Add account',
@@ -822,6 +986,8 @@ function copyFor(language: StorefrontLanguage) {
         recentUse: isZh ? '最近使用' : 'Last used',
         reveal: isZh ? '显示密钥' : 'Show secret',
         hide: isZh ? '隐藏密钥' : 'Hide secret',
+        more: isZh ? '更多' : 'More',
+        moreActions: isZh ? '账号详情与操作' : 'Account details and actions',
         edit: isZh ? '编辑' : 'Edit',
         delete: isZh ? '删除' : 'Delete',
         neverUsed: isZh ? '尚未使用' : 'Not used yet',
@@ -845,7 +1011,7 @@ function copyFor(language: StorefrontLanguage) {
         accountsCleared: isZh ? '所有账号已清空' : 'All accounts cleared',
         deleteConfirm: isZh ? '确定删除这个 2FA 账号吗？' : 'Delete this 2FA account?',
         clearConfirm: isZh
-            ? '确定清空当前会话中的所有 2FA 账号吗？'
-            : 'Clear all 2FA accounts in this session?',
+            ? '确定清空当前浏览器中保存的所有 2FA 账号吗？'
+            : 'Clear all 2FA accounts saved in this browser?',
     } as const;
 }

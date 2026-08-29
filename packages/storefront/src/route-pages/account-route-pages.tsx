@@ -1,6 +1,5 @@
 import { lazy } from 'react';
 
-import { clearAllStorefrontTwoFactorSessions } from '../client-plugins/two-factor/session-storage';
 import { ProductVariant } from '../types';
 
 import { RoutePageContext as PageContext, RouteGate, useRouteRuntime as useRuntime } from './shared';
@@ -51,7 +50,6 @@ export function AccountRoutePage() {
                     onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
                     onLogout: () => {
                         void runtime.api.logout().then(() => {
-                            clearAllStorefrontTwoFactorSessions();
                             runtime.clearPrivateQueryCache();
                             runtime.setCustomer(null);
                             runtime.notify(runtime.language === 'zh' ? '已退出登录' : 'Signed out');
