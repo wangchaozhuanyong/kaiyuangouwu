@@ -144,14 +144,10 @@ export class ImagePrivateStorageService {
             where: { id: assetId, channelId: ctx.channelId, customerId },
         });
         if (!asset || asset.deletedAt) return false;
-        if (asset.kind === 'REFERENCE') {
-            asset.deletedAt = new Date();
-            asset.originalName = 'deleted';
-            asset.providerMetadata = null;
-            await repository.save(asset, { reload: false });
-        } else {
-            await repository.remove(asset);
-        }
+        asset.deletedAt = new Date();
+        asset.originalName = 'deleted';
+        asset.providerMetadata = null;
+        await repository.save(asset, { reload: false });
         await unlink(this.absolutePath(asset.storageKey)).catch(() => undefined);
         return true;
     }

@@ -25,7 +25,8 @@ export const purgeExpiredPrivateImagesTask = new ScheduledTask({
 
 export const purgeImageGenerationSensitiveRecordsTask = new ScheduledTask({
     id: 'purge-image-generation-sensitive-records',
-    description: 'Delete expired prompt optimization records and redact old generation prompts',
+    description:
+        'Verify long-term AI audit retention; compliance deletion uses a separately authorized workflow',
     schedule: cron => cron.every(1).days(),
     async execute({ injector }) {
         return injector.get(ImageGenerationService).purgeSensitiveRecords();

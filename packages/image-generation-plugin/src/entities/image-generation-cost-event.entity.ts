@@ -36,6 +36,18 @@ export class ImageGenerationCostEvent extends VendureEntity {
     @Column({ type: 'varchar', length: 64 })
     credentialFingerprint: string;
 
+    @Column({ type: 'varchar', length: 64, default: '' })
+    credentialCodeSnapshot: string;
+
+    @Column({ type: 'varchar', length: 120, default: '' })
+    credentialNameSnapshot: string;
+
+    @Column({ type: 'varchar', length: 8, default: '' })
+    credentialLast4Snapshot: string;
+
+    @Column({ type: 'varchar', length: 160, nullable: true })
+    credentialSelectionReason: string | null;
+
     @Column('int')
     saleUnitPriceSnapshot: number;
 

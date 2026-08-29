@@ -1,5 +1,6 @@
+import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { Channel, EntityId, VendureEntity } from '@vendure/core';
+import { Channel, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 @Entity({ name: 'image_generation_config' })
@@ -22,10 +23,28 @@ export class ImageGenerationConfig extends VendureEntity {
     @Column('boolean', { default: true })
     promptOptimizationEnabled: boolean;
 
+    @Column('int', { default: 3 })
+    promptRateLimitPerMinute: number;
+
+    @Column('int', { default: 20 })
+    promptDailyFreeLimit: number;
+
+    @Column('boolean', { default: false })
+    promptDailyFreeUnlimited: boolean;
+
+    @Column('boolean', { default: false })
+    paidPromptOptimizationEnabled: boolean;
+
+    @Money({ default: 0 })
+    paidPromptOptimizationPrice: number;
+
+    @Column({ type: 'varchar', length: 3, default: CurrencyCode.CNY })
+    paidPromptOptimizationCurrencyCode: CurrencyCode;
+
     @Column({ type: 'varchar', length: 48, default: 'OPENAI_HIGH_QUALITY' })
     defaultModelCode: string;
 
-    @Column({ type: 'varchar', length: 32, default: '2026-08-27' })
+    @Column({ type: 'varchar', length: 32, default: '2026-08-28-audit' })
     termsVersion: string;
 
     // MySQL rejects literal defaults on TEXT columns, so callers must always provide both values.

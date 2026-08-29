@@ -70,6 +70,18 @@ export class ImageGenerationJob extends VendureEntity {
     @Column({ type: 'varchar', length: 64 })
     providerCredentialFingerprint: string;
 
+    @Column({ type: 'varchar', length: 64, default: '' })
+    providerCredentialCodeSnapshot: string;
+
+    @Column({ type: 'varchar', length: 120, default: '' })
+    providerCredentialNameSnapshot: string;
+
+    @Column({ type: 'varchar', length: 8, default: '' })
+    providerCredentialLast4Snapshot: string;
+
+    @Column({ type: 'varchar', length: 160, nullable: true })
+    providerSelectionReason: string | null;
+
     @Column('boolean', { default: false })
     providerIdempotencySupportedSnapshot: boolean;
 
@@ -101,6 +113,21 @@ export class ImageGenerationJob extends VendureEntity {
     reservedAmount: number;
 
     @Money({ default: 0 })
+    expectedChargeAmount: number;
+
+    @Column('int', { default: 0 })
+    freeQuantityReserved: number;
+
+    @Column('int', { default: 0 })
+    freeQuantityCaptured: number;
+
+    @Column('int', { default: 0 })
+    paidQuantityReserved: number;
+
+    @EntityId({ nullable: true })
+    quotaEventId: ID | null;
+
+    @Money({ default: 0 })
     capturedAmount: number;
 
     @Money({ default: 0 })
@@ -126,6 +153,9 @@ export class ImageGenerationJob extends VendureEntity {
 
     @Column({ type: Date, nullable: true })
     completedAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    customerDeletedAt: Date | null;
 
     @OneToMany(() => ImageGenerationOutput, output => output.job)
     outputs: ImageGenerationOutput[];

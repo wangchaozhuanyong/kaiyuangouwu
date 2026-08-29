@@ -778,11 +778,22 @@ export interface ImageStudioModel {
     position: number;
     isDefault: boolean;
     healthStatus: string;
+    freeImageEnabled: boolean;
+    dailyFreeImageLimit: number;
+    dailyFreeImageUnlimited: boolean;
+    paidAfterFreeEnabled: boolean;
+    dailyGenerationSafetyLimit: number;
 }
 
 export interface ImageStudioConfig {
     enabled: boolean;
     promptOptimizationEnabled: boolean;
+    promptRateLimitPerMinute: number;
+    promptDailyFreeLimit: number;
+    promptDailyFreeUnlimited: boolean;
+    paidPromptOptimizationEnabled: boolean;
+    paidPromptOptimizationPrice: number;
+    paidPromptOptimizationCurrencyCode: string;
     defaultModelCode: string;
     termsVersion: string;
     termsZh: string;
@@ -815,6 +826,8 @@ export interface ImageGenerationOutput {
     errorMessage?: string | null;
     completedAt?: string | null;
     refundedAt?: string | null;
+    billingMode: string;
+    chargeAmount: number;
     imageUrl?: string | null;
     downloadUrl?: string | null;
 }
@@ -836,6 +849,10 @@ export interface ImageGenerationJob {
     quantity: number;
     unitPriceSnapshot: number;
     reservedAmount: number;
+    expectedChargeAmount: number;
+    freeQuantityReserved: number;
+    freeQuantityCaptured: number;
+    paidQuantityReserved: number;
     capturedAmount: number;
     releasedAmount: number;
     currencyCode: string;
@@ -853,6 +870,42 @@ export interface ImagePromptOptimizationResult {
     recommendedModelCode: string;
     recommendationReason: string;
     promptSkillHash: string;
+    billingMode: string;
+    chargedAmount: number;
+    currencyCode: string;
+    inputTokens?: number | null;
+    outputTokens?: number | null;
+    totalTokens?: number | null;
+    actualCostMicrounits?: number | null;
+    costCurrency?: string | null;
+    promptQuota: ImagePromptQuotaStatus;
+}
+
+export interface ImageQuotaWindowStatus {
+    limit: number;
+    unlimited: boolean;
+    reserved: number;
+    consumed: number;
+    remaining: number;
+    windowEndsAt: string;
+}
+
+export interface ImagePromptQuotaStatus {
+    minute: ImageQuotaWindowStatus;
+    daily: ImageQuotaWindowStatus;
+    paidEnabled: boolean;
+    paidPrice: number;
+    currencyCode: string;
+}
+
+export interface ImageModelQuotaStatus {
+    modelCode: string;
+    freeImageEnabled: boolean;
+    paidAfterFreeEnabled: boolean;
+    unitPrice: number;
+    currencyCode: string;
+    free: ImageQuotaWindowStatus;
+    safety: ImageQuotaWindowStatus;
 }
 
 export interface ImageModelRecommendation {
@@ -874,6 +927,7 @@ export interface CreateImageGenerationInput {
     aspectRatio: string;
     quantity: number;
     expectedUnitPrice: number;
+    expectedChargeAmount: number;
     currencyCode: string;
     idempotencyKey: string;
     termsAccepted: boolean;

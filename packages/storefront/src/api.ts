@@ -9,9 +9,11 @@ import {
     CustomerAddressUpdateInput,
     CustomerOrderCounts,
     ImageGenerationJob,
+    ImageModelQuotaStatus,
     ImageModelRecommendation,
     ImagePrivateAssetView,
     ImagePromptOptimizationResult,
+    ImagePromptQuotaStatus,
     ImageReferenceMode,
     ImageStudioConfig,
     MarketConfig,
@@ -227,6 +229,10 @@ const imageGenerationJobFields = `
     quantity
     unitPriceSnapshot
     reservedAmount
+    expectedChargeAmount
+    freeQuantityReserved
+    freeQuantityCaptured
+    paidQuantityReserved
     capturedAmount
     releasedAmount
     currencyCode
@@ -234,7 +240,7 @@ const imageGenerationJobFields = `
     errorMessage
     completedAt
     referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
-    outputs { id outputIndex state attemptCount errorMessage completedAt refundedAt imageUrl downloadUrl }
+    outputs { id outputIndex state attemptCount errorMessage completedAt refundedAt billingMode chargeAmount imageUrl downloadUrl }
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order
@@ -1355,9 +1361,15 @@ export class ShopApi {
             `
                 query ImageStudioConfig {
                     imageStudioConfig {
-                        enabled promptOptimizationEnabled defaultModelCode termsVersion termsZh termsEn
+                        enabled promptOptimizationEnabled promptRateLimitPerMinute promptDailyFreeLimit promptDailyFreeUnlimited
+                        paidPromptOptimizationEnabled paidPromptOptimizationPrice paidPromptOptimizationCurrencyCode
+                        defaultModelCode termsVersion termsZh termsEn
                         outputRetentionDays referenceRetentionHours maxReferenceBytes maxReferencePixels maxQuantity resolution
-                        models { id code displayNameZh displayNameEn descriptionZh descriptionEn officialModelId unitPrice currencyCode position isDefault healthStatus }
+                        models {
+                            id code displayNameZh displayNameEn descriptionZh descriptionEn officialModelId
+                            unitPrice currencyCode position isDefault healthStatus freeImageEnabled dailyFreeImageLimit
+                            dailyFreeImageUnlimited paidAfterFreeEnabled dailyGenerationSafetyLimit
+                        }
                     }
                 }
             `,
@@ -1376,19 +1388,56 @@ export class ShopApi {
         return result.imageStudioBalance;
     }
 
+    async imagePromptQuotaStatus(signal?: AbortSignal): Promise<ImagePromptQuotaStatus> {
+        const result = await this.request<{ imagePromptQuotaStatus: ImagePromptQuotaStatus }>(
+            `query ImagePromptQuotaStatus {
+                imagePromptQuotaStatus {
+                    paidEnabled paidPrice currencyCode
+                    minute { limit unlimited reserved consumed remaining windowEndsAt }
+                    daily { limit unlimited reserved consumed remaining windowEndsAt }
+                }
+            }`,
+            undefined,
+            signal,
+        );
+        return result.imagePromptQuotaStatus;
+    }
+
+    async imageModelQuotaStatus(signal?: AbortSignal): Promise<ImageModelQuotaStatus[]> {
+        const result = await this.request<{ imageModelQuotaStatus: ImageModelQuotaStatus[] }>(
+            `query ImageModelQuotaStatus {
+                imageModelQuotaStatus {
+                    modelCode freeImageEnabled paidAfterFreeEnabled unitPrice currencyCode
+                    free { limit unlimited reserved consumed remaining windowEndsAt }
+                    safety { limit unlimited reserved consumed remaining windowEndsAt }
+                }
+            }`,
+            undefined,
+            signal,
+        );
+        return result.imageModelQuotaStatus;
+    }
+
     async optimizeImagePrompt(
         prompt: string,
         referenceMode: ImageReferenceMode,
+        quote?: { expectedPrice?: number | null; currencyCode?: string | null; idempotencyKey?: string },
     ): Promise<ImagePromptOptimizationResult> {
         const result = await this.request<{ optimizeImagePrompt: ImagePromptOptimizationResult }>(
             `
                 mutation OptimizeImagePrompt($input: OptimizeImagePromptInput!) {
                     optimizeImagePrompt(input: $input) {
                         originalPrompt optimizedPrompt promptSpec source recommendedModelCode recommendationReason promptSkillHash
+                        billingMode chargedAmount currencyCode inputTokens outputTokens totalTokens actualCostMicrounits costCurrency
+                        promptQuota {
+                            paidEnabled paidPrice currencyCode
+                            minute { limit unlimited reserved consumed remaining windowEndsAt }
+                            daily { limit unlimited reserved consumed remaining windowEndsAt }
+                        }
                     }
                 }
             `,
-            { input: { prompt, referenceMode } },
+            { input: { prompt, referenceMode, ...quote } },
         );
         return result.optimizeImagePrompt;
     }

@@ -61,6 +61,21 @@ export class ImageModelConfig extends VendureEntity {
     @Column('boolean', { default: false })
     supportsIdempotency: boolean;
 
+    @Column('boolean', { default: false })
+    freeImageEnabled: boolean;
+
+    @Column('int', { default: 0 })
+    dailyFreeImageLimit: number;
+
+    @Column('boolean', { default: false })
+    dailyFreeImageUnlimited: boolean;
+
+    @Column('boolean', { default: true })
+    paidAfterFreeEnabled: boolean;
+
+    @Column('int', { default: 20 })
+    dailyGenerationSafetyLimit: number;
+
     @Column({ type: 'varchar', length: 24, default: 'UNTESTED' })
     healthStatus: string;
 

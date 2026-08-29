@@ -23,6 +23,12 @@ export interface ImageGenerationPluginOptions {
 export interface SaveImageGenerationConfigInput {
     enabled: boolean;
     promptOptimizationEnabled: boolean;
+    promptRateLimitPerMinute: number;
+    promptDailyFreeLimit: number;
+    promptDailyFreeUnlimited: boolean;
+    paidPromptOptimizationEnabled: boolean;
+    paidPromptOptimizationPrice: number;
+    paidPromptOptimizationCurrencyCode: CurrencyCode;
     defaultModelCode: string;
     termsVersion: string;
     termsZh: string;
@@ -30,11 +36,18 @@ export interface SaveImageGenerationConfigInput {
 }
 
 export interface SaveImageProviderCredentialInput {
+    id?: ID | null;
     scope: ImageProviderScope;
+    code: string;
+    name: string;
+    purpose: 'PROMPT' | 'IMAGE' | 'BOTH';
     baseUrl: string;
     apiKey?: string | null;
     textModelId: string;
     enabled: boolean;
+    priority: number;
+    weight: number;
+    modelCodes: string[];
 }
 
 export interface SaveImageModelInput {
@@ -51,6 +64,11 @@ export interface SaveImageModelInput {
     position: number;
     isDefault: boolean;
     supportsIdempotency: boolean;
+    freeImageEnabled: boolean;
+    dailyFreeImageLimit: number;
+    dailyFreeImageUnlimited: boolean;
+    paidAfterFreeEnabled: boolean;
+    dailyGenerationSafetyLimit: number;
 }
 
 export interface CreateImageGenerationInput {
@@ -62,6 +80,7 @@ export interface CreateImageGenerationInput {
     aspectRatio: string;
     quantity: number;
     expectedUnitPrice: number;
+    expectedChargeAmount: number;
     currencyCode: CurrencyCode;
     idempotencyKey: string;
     termsAccepted: boolean;
@@ -70,6 +89,29 @@ export interface CreateImageGenerationInput {
 export interface OptimizeImagePromptInput {
     prompt: string;
     referenceMode?: ImageReferenceMode | null;
+    expectedPrice?: number | null;
+    currencyCode?: CurrencyCode | null;
+    idempotencyKey?: string | null;
+}
+
+export interface ImageAiUsageRecordListInput {
+    skip?: number | null;
+    take?: number | null;
+    recordType?: 'PROMPT_OPTIMIZATION' | 'IMAGE_GENERATION' | null;
+    from?: Date | string | null;
+    to?: Date | string | null;
+    customer?: string | null;
+    modelCode?: string | null;
+    credentialCode?: string | null;
+    state?: string | null;
+    billingMode?: string | null;
+    failuresOnly?: boolean | null;
+    missingCostOnly?: boolean | null;
+}
+
+export interface ProviderPromptResult {
+    text: string;
+    telemetry?: ProviderTelemetry;
 }
 
 export interface ProviderGenerationInput {
@@ -95,6 +137,7 @@ export interface ProviderTelemetry {
     actualCostMicrounits?: number;
     costCurrency?: string;
     usage?: Record<string, any>;
+    retryAfterSeconds?: number;
 }
 
 export interface ImagePromptSpec {
