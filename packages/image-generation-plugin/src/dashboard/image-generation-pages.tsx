@@ -4,6 +4,12 @@ import {
     Badge,
     Button,
     DashboardRouteDefinition,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
     Input,
     Label,
     Page,
@@ -12,19 +18,37 @@ import {
     PageBlock,
     PageLayout,
     PageTitle,
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
     Skeleton,
     Switch,
     Tabs,
     TabsList,
     TabsTrigger,
     Textarea,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import { Archive, Image, KeyRound, Plus, RefreshCw, Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+    Archive,
+    Image,
+    KeyRound,
+    LoaderCircle,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Save,
+    Search,
+    X,
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
     ImageAdminConfigRecord,
@@ -1581,16 +1605,47 @@ function ImageGenerationSettingsPage() {
 }
 
 export function ImageGenerationAccessPage() {
-    const [newKeys, setNewKeys] = useState<ImageProviderAdminConfigRecord[]>([]);
+    const [selectedCredential, setSelectedCredential] = useState<ImageProviderAdminConfigRecord | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [scopeFilter, setScopeFilter] = useState<'ALL' | ImageProviderAdminConfigRecord['scope']>('ALL');
+    const [healthFilter, setHealthFilter] = useState('ALL');
+    const [purposeFilter, setPurposeFilter] = useState<'ALL' | ImageProviderAdminConfigRecord['purpose']>(
+        'ALL',
+    );
     const query = useQuery({
         queryKey: ['image-provider-admin'],
         queryFn: () => api.query<ImageProviderAdminQueryResult>(imageProviderAdminQuery),
     });
-    const configs = query.data?.imageProviderAdminConfigs;
+    const configs = query.data?.imageProviderAdminConfigs ?? [];
+    const models = query.data?.imageGenerationAdminConfig.models ?? [];
+    const filteredConfigs = useMemo(() => {
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+        return configs
+            .filter(config => {
+                const matchesSearch =
+                    !normalizedSearch ||
+                    [config.name, config.code, config.apiKeyLast4, config.baseUrl, config.textModelId]
+                        .join(' ')
+                        .toLowerCase()
+                        .includes(normalizedSearch);
+                return (
+                    matchesSearch &&
+                    (scopeFilter === 'ALL' || config.scope === scopeFilter) &&
+                    (healthFilter === 'ALL' || credentialDisplayStatus(config) === healthFilter) &&
+                    (purposeFilter === 'ALL' || config.purpose === purposeFilter)
+                );
+            })
+            .sort(
+                (left, right) =>
+                    Number(right.credentialEnabled) - Number(left.credentialEnabled) ||
+                    left.priority - right.priority ||
+                    left.name.localeCompare(right.name, 'zh-CN'),
+            );
+    }, [configs, healthFilter, purposeFilter, scopeFilter, searchTerm]);
     if (query.isLoading) return <LoadingPage title="AI 服务接入" />;
     if (query.error)
         return <ErrorPage title="AI 服务接入" retry={() => void query.refetch()} error={query.error} />;
-    if (!configs) return <LoadingPage title="AI 服务接入" />;
+    if (!query.data) return <LoadingPage title="AI 服务接入" />;
     const providerSummaries = (['OPENAI', 'GEMINI'] as const).map(scope => {
         const scoped = configs.filter(config => config.scope === scope);
         return {
@@ -1598,34 +1653,39 @@ export function ImageGenerationAccessPage() {
             configured: scoped.filter(config => config.credentialConfigured).length,
             enabled: scoped.filter(config => config.credentialEnabled).length,
             healthy: scoped.filter(
-                config => config.credentialEnabled && config.providerHealthStatus === 'HEALTHY',
+                config => config.credentialEnabled && credentialDisplayStatus(config) === 'HEALTHY',
             ).length,
             prompt: scoped.filter(
                 config =>
                     config.credentialEnabled &&
-                    config.providerHealthStatus === 'HEALTHY' &&
+                    credentialDisplayStatus(config) === 'HEALTHY' &&
                     ['PROMPT', 'BOTH'].includes(config.purpose),
             ).length,
             image: scoped.filter(
                 config =>
                     config.credentialEnabled &&
-                    config.providerHealthStatus === 'HEALTHY' &&
+                    credentialDisplayStatus(config) === 'HEALTHY' &&
                     ['IMAGE', 'BOTH'].includes(config.purpose),
             ).length,
         };
     });
+    const hasFilters = Boolean(
+        searchTerm || scopeFilter !== 'ALL' || healthFilter !== 'ALL' || purposeFilter !== 'ALL',
+    );
+    const resetFilters = () => {
+        setSearchTerm('');
+        setScopeFilter('ALL');
+        setHealthFilter('ALL');
+        setPurposeFilter('ALL');
+    };
     return (
         <Page pageId="image-generation-access">
             <PageTitle>AI 服务接入</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
-                    <Button
-                        onClick={() =>
-                            setNewKeys(items => [...items, emptyCredential(`new-key-${Date.now()}`)])
-                        }
-                    >
+                    <Button onClick={() => setSelectedCredential(emptyCredential(`new-key-${Date.now()}`))}>
                         <Plus className="mr-2 h-4 w-4" />
-                        添加备用 Key
+                        添加 Key
                     </Button>
                 </PageActionBarRight>
             </PageActionBar>
@@ -1636,120 +1696,448 @@ export function ImageGenerationAccessPage() {
                     title="GPT / Gemini Key 池状态"
                     description="系统不内置或硬编码默认 Key；只使用下方由 SuperAdmin 配置、加密保存且健康检查通过的 Key。"
                 >
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-3 md:grid-cols-2">
                         {providerSummaries.map(summary => (
-                            <div key={summary.scope} className="rounded-lg border p-4">
+                            <div key={summary.scope} className="rounded-lg border bg-muted/20 px-4 py-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <strong>{providerName(summary.scope)}</strong>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium">{providerName(summary.scope)}</span>
+                                        <span className="text-xs tabular-nums text-muted-foreground">
+                                            {summary.configured} 个 Key
+                                        </span>
+                                    </div>
                                     <Badge variant={summary.healthy ? 'success' : 'secondary'}>
                                         {summary.healthy ? '有可用 Key' : '暂无健康 Key'}
                                     </Badge>
                                 </div>
-                                <p className="mt-2 text-sm text-muted-foreground">
-                                    已配置 {summary.configured} 个 · 已启用 {summary.enabled} 个 · 健康{' '}
-                                    {summary.healthy} 个
-                                </p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    提示词候选 {summary.prompt} 个 · 生图候选 {summary.image} 个
-                                </p>
+                                <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                                    {[
+                                        ['启用', summary.enabled],
+                                        ['健康', summary.healthy],
+                                        ['提示词', summary.prompt],
+                                        ['生图', summary.image],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className="rounded-md bg-background px-2 py-1.5">
+                                            <div className="text-sm font-medium tabular-nums">{value}</div>
+                                            <div className="text-[11px] text-muted-foreground">{label}</div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         ))}
                     </div>
                 </PageBlock>
-                {!configs.length && !newKeys.length ? (
-                    <PageBlock column="full" blockId="image-access-empty" title="尚未配置 AI Key">
-                        <Alert>
-                            <AlertDescription>
-                                接口已正常返回，但当前 Key 池为空。请点击“添加备用
-                                Key”完成首个接入；保存并测试正常后，模型才能对客户开放。
-                            </AlertDescription>
-                        </Alert>
-                        <Button className="mt-4" variant="outline" onClick={() => void query.refetch()}>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            重新加载
+                <PageBlock
+                    column="full"
+                    blockId="image-access-credentials"
+                    title={`Key 管理（${filteredConfigs.length}/${configs.length}）`}
+                    description="API Key 始终只显示末四位。可按名称、稳定编码、域名或末四位搜索。"
+                >
+                    <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_10rem_10rem_11rem_auto]">
+                        <div className="relative">
+                            <Search
+                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                                aria-hidden="true"
+                            />
+                            <Input
+                                aria-label="搜索 Key"
+                                className="pl-9"
+                                placeholder="搜索名称、编码、域名或末四位"
+                                value={searchTerm}
+                                onChange={event => setSearchTerm(event.target.value)}
+                            />
+                        </div>
+                        <select
+                            aria-label="按供应商筛选"
+                            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                            value={scopeFilter}
+                            onChange={event =>
+                                setScopeFilter(
+                                    event.target.value as 'ALL' | ImageProviderAdminConfigRecord['scope'],
+                                )
+                            }
+                        >
+                            <option value="ALL">全部供应商</option>
+                            <option value="OPENAI">Codex / GPT</option>
+                            <option value="GEMINI">Gemini</option>
+                        </select>
+                        <select
+                            aria-label="按健康状态筛选"
+                            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                            value={healthFilter}
+                            onChange={event => setHealthFilter(event.target.value)}
+                        >
+                            <option value="ALL">全部状态</option>
+                            <option value="HEALTHY">正常</option>
+                            <option value="UNHEALTHY">异常</option>
+                            <option value="UNTESTED">未测试</option>
+                            <option value="UNCONFIGURED">未配置</option>
+                            <option value="COOLDOWN">冷却中</option>
+                        </select>
+                        <select
+                            aria-label="按用途筛选"
+                            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                            value={purposeFilter}
+                            onChange={event =>
+                                setPurposeFilter(
+                                    event.target.value as 'ALL' | ImageProviderAdminConfigRecord['purpose'],
+                                )
+                            }
+                        >
+                            <option value="ALL">全部用途</option>
+                            <option value="BOTH">提示词和生图</option>
+                            <option value="PROMPT">仅提示词</option>
+                            <option value="IMAGE">仅生图</option>
+                        </select>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label="清除筛选"
+                            title="清除筛选"
+                            disabled={!hasFilters}
+                            onClick={resetFilters}
+                        >
+                            <X className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                    </PageBlock>
-                ) : null}
-                {[...configs, ...newKeys].map(config => (
-                    <ProviderCredentialCard
-                        key={config.id || config.code}
-                        column="full"
-                        blockId={`image-access-${config.id || config.code}`}
-                        config={config}
-                        models={query.data?.imageGenerationAdminConfig.models ?? []}
+                    </div>
+                    <ProviderCredentialList
+                        configs={filteredConfigs}
+                        totalConfigs={configs.length}
+                        hasFilters={hasFilters}
+                        models={models}
+                        onEdit={setSelectedCredential}
                         onChanged={() => void query.refetch()}
-                        onDiscard={() => setNewKeys(items => items.filter(item => item !== config))}
+                        onAdd={() => setSelectedCredential(emptyCredential(`new-key-${Date.now()}`))}
                     />
-                ))}
+                </PageBlock>
             </PageLayout>
+            {selectedCredential ? (
+                <ProviderCredentialEditorSheet
+                    key={selectedCredential.id || selectedCredential.code}
+                    config={selectedCredential}
+                    models={models}
+                    onChanged={() => void query.refetch()}
+                    onClose={() => setSelectedCredential(null)}
+                />
+            ) : null}
         </Page>
     );
 }
 
-function ProviderCredentialCard({
-    column,
-    blockId,
+function ProviderCredentialList({
+    configs,
+    totalConfigs,
+    hasFilters,
+    models,
+    onEdit,
+    onChanged,
+    onAdd,
+}: Readonly<{
+    configs: ImageProviderAdminConfigRecord[];
+    totalConfigs: number;
+    hasFilters: boolean;
+    models: Array<{ code: string; displayNameZh: string }>;
+    onEdit(config: ImageProviderAdminConfigRecord): void;
+    onChanged: () => void;
+    onAdd: () => void;
+}>) {
+    const test = useMutation({
+        mutationFn: (id: string) =>
+            api.mutate<{ testImageProviderCredential: { ok: boolean; message: string } }>(
+                testImageProviderMutation,
+                { id },
+            ),
+        onSuccess: result => {
+            (result.testImageProviderCredential.ok ? toast.success : toast.error)(
+                result.testImageProviderCredential.message,
+            );
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const toggleEnabled = useMutation({
+        mutationFn: ({ config, enabled }: { config: ImageProviderAdminConfigRecord; enabled: boolean }) =>
+            api.mutate(saveImageCredentialMutation, {
+                input: credentialInput(config, enabled),
+            }),
+        onSuccess: () => {
+            toast.success('Key 启用状态已更新');
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+
+    const changeEnabled = (config: ImageProviderAdminConfigRecord, enabled: boolean) => {
+        if (enabled && credentialDisplayStatus(config) !== 'HEALTHY') {
+            toast.error('请先测试连接，确认 Key 健康后再启用');
+            onEdit(config);
+            return;
+        }
+        toggleEnabled.mutate({ config, enabled });
+    };
+
+    if (!totalConfigs) {
+        return (
+            <div className="rounded-lg border border-dashed px-6 py-12 text-center">
+                <KeyRound className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 text-sm font-medium">尚未配置 AI Key</h3>
+                <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                    新建首个 Key 后保存并测试连接，健康的 Key 才会进入模型路由。
+                </p>
+                <Button className="mt-4" type="button" variant="outline" onClick={onAdd}>
+                    <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                    添加第一个 Key
+                </Button>
+            </div>
+        );
+    }
+
+    if (!configs.length && hasFilters) {
+        return (
+            <div className="rounded-lg border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
+                没有符合当前搜索或筛选条件的 Key。
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <div className="hidden overflow-hidden rounded-lg border md:block">
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[72rem] text-sm">
+                        <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                            <tr>
+                                <th className="px-4 py-3 font-medium">Key</th>
+                                <th className="px-3 py-3 font-medium">供应商 / 用途</th>
+                                <th className="px-3 py-3 font-medium">健康状态</th>
+                                <th className="px-3 py-3 font-medium">路由</th>
+                                <th className="px-3 py-3 font-medium">绑定模型</th>
+                                <th className="px-3 py-3 font-medium">最近使用</th>
+                                <th className="px-3 py-3 text-center font-medium">启用</th>
+                                <th className="px-4 py-3 text-right font-medium">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {configs.map(config => {
+                                const isTesting = test.isPending && test.variables === config.id;
+                                const isToggling =
+                                    toggleEnabled.isPending &&
+                                    toggleEnabled.variables?.config.id === config.id;
+                                return (
+                                    <tr
+                                        key={config.id}
+                                        className="align-middle transition-colors hover:bg-muted/20"
+                                    >
+                                        <td className="px-4 py-3">
+                                            <button
+                                                type="button"
+                                                className={
+                                                    'max-w-64 text-left focus-visible:outline-none ' +
+                                                    'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+                                                }
+                                                onClick={() => onEdit(config)}
+                                            >
+                                                <span className="block truncate font-medium">
+                                                    {config.name}
+                                                </span>
+                                                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                                    {config.code} · ••••{config.apiKeyLast4 || '未配置'}
+                                                </span>
+                                                <span className="mt-0.5 block max-w-64 truncate text-xs text-muted-foreground">
+                                                    {providerHost(config.baseUrl)}
+                                                </span>
+                                            </button>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <Badge variant="outline">{providerName(config.scope)}</Badge>
+                                            <div className="mt-1 text-xs text-muted-foreground">
+                                                {providerPurposeZh(config.purpose)}
+                                            </div>
+                                        </td>
+                                        <td className="max-w-60 px-3 py-3">
+                                            <ProviderHealthBadge config={config} />
+                                            <div
+                                                className="mt-1 truncate text-xs text-muted-foreground"
+                                                title={config.providerHealthMessage ?? undefined}
+                                            >
+                                                {providerHealthSummary(config)}
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-3 tabular-nums">
+                                            P{config.priority} · W{config.weight}
+                                        </td>
+                                        <td className="max-w-64 px-3 py-3">
+                                            <ProviderModelBadges config={config} models={models} />
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                                            {formatProviderDate(config.lastUsedAt)}
+                                        </td>
+                                        <td className="px-3 py-3 text-center">
+                                            <Switch
+                                                aria-label={`${config.name}启用状态`}
+                                                checked={config.credentialEnabled}
+                                                disabled={isToggling}
+                                                onCheckedChange={enabled => changeEnabled(config, enabled)}
+                                            />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex justify-end gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={isTesting || !config.credentialConfigured}
+                                                    onClick={() => test.mutate(config.id)}
+                                                >
+                                                    {isTesting ? (
+                                                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <RefreshCw className="h-4 w-4" />
+                                                    )}
+                                                    测试
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => onEdit(config)}
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                    编辑
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div className="grid gap-3 md:hidden">
+                {configs.map(config => {
+                    const isTesting = test.isPending && test.variables === config.id;
+                    const isToggling =
+                        toggleEnabled.isPending && toggleEnabled.variables?.config.id === config.id;
+                    return (
+                        <article key={config.id} className="rounded-lg border bg-background p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="truncate font-medium">{config.name}</h3>
+                                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                        {config.code} · ••••{config.apiKeyLast4 || '未配置'}
+                                    </p>
+                                </div>
+                                <ProviderHealthBadge config={config} />
+                            </div>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <Badge variant="outline">{providerName(config.scope)}</Badge>
+                                <Badge variant="secondary">{providerPurposeZh(config.purpose)}</Badge>
+                                <span className="text-xs tabular-nums text-muted-foreground">
+                                    P{config.priority} · W{config.weight}
+                                </span>
+                            </div>
+                            <div className="mt-3">
+                                <ProviderModelBadges config={config} models={models} />
+                            </div>
+                            <div className="mt-4 flex items-center justify-between border-t pt-3">
+                                <div className="flex items-center gap-2">
+                                    <Switch
+                                        aria-label={`${config.name}启用状态`}
+                                        checked={config.credentialEnabled}
+                                        disabled={isToggling}
+                                        onCheckedChange={enabled => changeEnabled(config, enabled)}
+                                    />
+                                    <span className="text-xs text-muted-foreground">
+                                        {config.credentialEnabled ? '已启用' : '已停用'}
+                                    </span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={isTesting || !config.credentialConfigured}
+                                        onClick={() => test.mutate(config.id)}
+                                    >
+                                        {isTesting ? (
+                                            <LoaderCircle className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <RefreshCw className="h-4 w-4" />
+                                        )}
+                                        测试
+                                    </Button>
+                                    <Button type="button" size="sm" onClick={() => onEdit(config)}>
+                                        <Pencil className="h-4 w-4" />
+                                        编辑
+                                    </Button>
+                                </div>
+                            </div>
+                        </article>
+                    );
+                })}
+            </div>
+        </>
+    );
+}
+
+export function ProviderCredentialEditorSheet({
     config,
     models,
     onChanged,
-    onDiscard,
+    onClose,
 }: Readonly<{
-    column: 'full';
-    blockId: string;
     config: ImageProviderAdminConfigRecord;
     models: Array<{ code: string; displayNameZh: string }>;
     onChanged: () => void;
-    onDiscard: () => void;
+    onClose: () => void;
 }>) {
-    const [code, setCode] = useState('');
-    const [name, setName] = useState('');
-    const [scope, setScope] = useState<ImageProviderAdminConfigRecord['scope']>('OPENAI');
-    const [purpose, setPurpose] = useState<ImageProviderAdminConfigRecord['purpose']>('BOTH');
-    const [baseUrl, setBaseUrl] = useState('');
-    const [apiKey, setApiKey] = useState('');
-    const [textModelId, setTextModelId] = useState('');
-    const [enabled, setEnabled] = useState(false);
-    const [priority, setPriority] = useState(100);
-    const [weight, setWeight] = useState(1);
-    const [modelCodes, setModelCodes] = useState<string[]>([]);
-    useEffect(() => {
-        if (config) {
-            setCode(config.code);
-            setName(config.name);
-            setScope(config.scope);
-            setPurpose(config.purpose);
-            setBaseUrl(config.baseUrl);
-            setTextModelId(config.textModelId);
-            setEnabled(config.credentialEnabled);
-            setApiKey('');
-            setPriority(config.priority);
-            setWeight(config.weight);
-            setModelCodes(config.modelCodes);
-        }
-    }, [config]);
+    const initialDraft = useMemo(() => credentialDraft(config), [config]);
+    const [draft, setDraft] = useState(initialDraft);
+    const [testFeedback, setTestFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+    const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
+    const isDirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
+    const update = <K extends keyof ProviderCredentialDraft>(key: K, value: ProviderCredentialDraft[K]) =>
+        setDraft(current => ({ ...current, [key]: value }));
+    const requestClose = () => {
+        if (isDirty && !window.confirm('有未保存的修改，确定放弃吗？')) return;
+        onClose();
+    };
     const save = useMutation({
-        mutationFn: () =>
-            api.mutate(saveImageCredentialMutation, {
+        mutationFn: async (testAfterSave: boolean) => {
+            const savedResult = await api.mutate<{
+                saveImageProviderCredential: ImageProviderAdminConfigRecord;
+            }>(saveImageCredentialMutation, {
                 input: {
                     id: config.id || null,
-                    scope,
-                    code,
-                    name,
-                    purpose,
-                    baseUrl,
-                    apiKey: apiKey || null,
-                    textModelId,
-                    enabled,
-                    priority,
-                    weight,
-                    modelCodes,
+                    scope: draft.scope,
+                    code: draft.code,
+                    name: draft.name,
+                    purpose: draft.purpose,
+                    baseUrl: draft.baseUrl,
+                    apiKey: draft.apiKey || null,
+                    textModelId: draft.textModelId,
+                    enabled: draft.enabled,
+                    priority: draft.priority,
+                    weight: draft.weight,
+                    modelCodes: draft.modelCodes,
                 },
-            }),
-        onSuccess: () => {
-            toast.success(`${name || providerName(scope)} 已保存`);
-            setApiKey('');
-            if (!config.id) onDiscard();
+            });
+            if (!testAfterSave) return { testResult: null };
+            const testResult = await api.mutate<{
+                testImageProviderCredential: { ok: boolean; message: string };
+            }>(testImageProviderMutation, { id: savedResult.saveImageProviderCredential.id });
+            return { testResult: testResult.testImageProviderCredential };
+        },
+        onSuccess: result => {
+            if (result.testResult) {
+                (result.testResult.ok ? toast.success : toast.error)(result.testResult.message);
+            } else {
+                toast.success(`${draft.name || providerName(draft.scope)} 已保存`);
+            }
             onChanged();
+            onClose();
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -1760,6 +2148,7 @@ function ProviderCredentialCard({
                 { id: config.id },
             ),
         onSuccess: result => {
+            setTestFeedback(result.testImageProviderCredential);
             (result.testImageProviderCredential.ok ? toast.success : toast.error)(
                 result.testImageProviderCredential.message,
             );
@@ -1771,170 +2160,508 @@ function ProviderCredentialCard({
         mutationFn: () => api.mutate(archiveImageProviderMutation, { id: config.id }),
         onSuccess: () => {
             toast.success('Key 已归档，历史任务仍保留快照');
+            setArchiveConfirmationOpen(false);
             onChanged();
+            onClose();
         },
         onError: error => toast.error(errorMessage(error)),
     });
+    const submit = (testAfterSave: boolean) => {
+        const validationError = providerCredentialDraftError(draft, Boolean(config.id));
+        if (validationError) {
+            toast.error(validationError);
+            return;
+        }
+        save.mutate(testAfterSave);
+    };
+    const pending = save.isPending || archive.isPending;
+    const healthStatus = testFeedback
+        ? testFeedback.ok
+            ? 'HEALTHY'
+            : 'UNHEALTHY'
+        : credentialDisplayStatus(config);
+    const healthMessage = testFeedback?.message ?? config.providerHealthMessage;
+
     return (
-        <PageBlock
-            column={column}
-            blockId={blockId}
-            title={config.id ? `${config.name}（尾号 ${config.apiKeyLast4 || '未配置'}）` : '新增 Key'}
-            description={
-                scope === 'OPENAI'
-                    ? '用于 OpenAI 生图和提示词智能优化；同优先级可按权重轮询。'
-                    : '用于 Gemini 生图，也可在 GPT/OpenAI 提示词服务不可用时自动容灾。'
-            }
-        >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                    仅 SuperAdmin 可见。API Key 使用 AES-256-GCM 加密，永远不会发送到客户浏览器。
-                </p>
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        disabled={test.isPending || !config.id || !config.credentialConfigured}
-                        onClick={() => test.mutate()}
-                    >
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        测试连接
-                    </Button>
-                    <Button disabled={save.isPending} onClick={() => save.mutate()}>
-                        <Save className="mr-2 h-4 w-4" />
-                        保存接入
-                    </Button>
-                    {config.id ? (
+        <>
+            <UnsavedChangesConfirmation when={isDirty} />
+            <Sheet open onOpenChange={open => !open && requestClose()}>
+                <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[720px] sm:max-w-[720px]">
+                    <SheetHeader className="shrink-0 border-b px-6 py-5 pr-14 text-left">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <SheetTitle>{config.id ? `编辑 ${config.name}` : '添加 AI Key'}</SheetTitle>
+                                <SheetDescription className="mt-1">
+                                    {config.id
+                                        ? `尾号 ${config.apiKeyLast4 || '未配置'} · 修改连接信息后需要重新测试`
+                                        : '配置连接、路由与模型绑定，保存后才会进入 Key 池。'}
+                                </SheetDescription>
+                            </div>
+                            {config.id ? <ProviderHealthBadge config={config} status={healthStatus} /> : null}
+                        </div>
+                    </SheetHeader>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        {config.id ? (
+                            <section className="mb-6 rounded-lg border bg-muted/20 p-4">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <h3 className="text-sm font-medium">连接状态</h3>
+                                        <p className="mt-1 break-words text-xs text-muted-foreground">
+                                            {healthMessage || '暂无健康检查详情。'}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={test.isPending || !config.credentialConfigured || isDirty}
+                                        title={isDirty ? '请先保存修改后再测试' : undefined}
+                                        onClick={() => test.mutate()}
+                                    >
+                                        {test.isPending ? (
+                                            <LoaderCircle className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <RefreshCw className="h-4 w-4" />
+                                        )}
+                                        测试连接
+                                    </Button>
+                                </div>
+                            </section>
+                        ) : null}
+
+                        <div className="space-y-7">
+                            <section className="space-y-4">
+                                <div>
+                                    <h3 className="text-sm font-medium">基础信息</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        名称用于管理识别，稳定编码会写入调用审计记录。
+                                    </p>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <Field label="Key 名称" htmlFor="provider-key-name">
+                                        <Input
+                                            id="provider-key-name"
+                                            maxLength={120}
+                                            value={draft.name}
+                                            onChange={event => update('name', event.target.value)}
+                                        />
+                                    </Field>
+                                    <Field label="稳定编码" htmlFor="provider-key-code">
+                                        <Input
+                                            id="provider-key-code"
+                                            maxLength={64}
+                                            value={draft.code}
+                                            onChange={event =>
+                                                update('code', event.target.value.toLowerCase())
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="供应商" htmlFor="provider-key-scope">
+                                        <select
+                                            id="provider-key-scope"
+                                            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                                            value={draft.scope}
+                                            onChange={event =>
+                                                update(
+                                                    'scope',
+                                                    event.target
+                                                        .value as ImageProviderAdminConfigRecord['scope'],
+                                                )
+                                            }
+                                        >
+                                            <option value="OPENAI">Codex / GPT</option>
+                                            <option value="GEMINI">Gemini</option>
+                                        </select>
+                                    </Field>
+                                    <Field label="用途" htmlFor="provider-key-purpose">
+                                        <select
+                                            id="provider-key-purpose"
+                                            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                                            value={draft.purpose}
+                                            onChange={event =>
+                                                update(
+                                                    'purpose',
+                                                    event.target
+                                                        .value as ImageProviderAdminConfigRecord['purpose'],
+                                                )
+                                            }
+                                        >
+                                            <option value="BOTH">提示词优化和生图</option>
+                                            <option value="PROMPT">仅提示词优化</option>
+                                            <option value="IMAGE">仅生图</option>
+                                        </select>
+                                    </Field>
+                                </div>
+                                <Toggle
+                                    id="provider-key-enabled"
+                                    label="启用此 Key"
+                                    checked={draft.enabled}
+                                    onChange={enabled => update('enabled', enabled)}
+                                />
+                            </section>
+
+                            <section className="space-y-4 border-t pt-6">
+                                <div>
+                                    <h3 className="text-sm font-medium">接入配置</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        仅 SuperAdmin 可见。API Key 使用 AES-256-GCM
+                                        加密，客户浏览器不会收到完整 Key。
+                                    </p>
+                                </div>
+                                <Field label="API Base URL" htmlFor="provider-key-base-url">
+                                    <Input
+                                        id="provider-key-base-url"
+                                        placeholder="https://relay.example.com/v1"
+                                        value={draft.baseUrl}
+                                        onChange={event => update('baseUrl', event.target.value)}
+                                    />
+                                </Field>
+                                <Field
+                                    label={`API Key${config.apiKeyLast4 ? `（当前末四位 ${config.apiKeyLast4}）` : ''}`}
+                                    htmlFor="provider-key-secret"
+                                >
+                                    <Input
+                                        id="provider-key-secret"
+                                        type="password"
+                                        autoComplete="new-password"
+                                        placeholder={
+                                            config.credentialConfigured
+                                                ? '留空表示不更换'
+                                                : '首次配置必须填写'
+                                        }
+                                        value={draft.apiKey}
+                                        onChange={event => update('apiKey', event.target.value)}
+                                    />
+                                </Field>
+                                <Field
+                                    label={
+                                        draft.scope === 'OPENAI'
+                                            ? '提示词优化 / Responses 编排模型 ID'
+                                            : 'Gemini 提示词优化模型 ID'
+                                    }
+                                    htmlFor="provider-key-text-model"
+                                >
+                                    <Input
+                                        id="provider-key-text-model"
+                                        maxLength={160}
+                                        placeholder={
+                                            draft.scope === 'OPENAI'
+                                                ? '例如中转站可用的 GPT 文本模型'
+                                                : '例如中转站可用的 Gemini 文本模型'
+                                        }
+                                        value={draft.textModelId}
+                                        onChange={event => update('textModelId', event.target.value)}
+                                    />
+                                </Field>
+                                <p className="text-xs text-muted-foreground">
+                                    生产环境只允许 HTTPS，并拒绝 localhost、内网、云元数据地址和重定向。
+                                </p>
+                            </section>
+
+                            <section className="space-y-4 border-t pt-6">
+                                <div>
+                                    <h3 className="text-sm font-medium">路由配置</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        优先级数字越小越优先；同优先级的 Key 按权重轮询。
+                                    </p>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <Field label="优先级" htmlFor="provider-key-priority">
+                                        <Input
+                                            id="provider-key-priority"
+                                            type="number"
+                                            min="0"
+                                            max="10000"
+                                            value={draft.priority}
+                                            onChange={event => update('priority', Number(event.target.value))}
+                                        />
+                                    </Field>
+                                    <Field label="同级轮询权重" htmlFor="provider-key-weight">
+                                        <Input
+                                            id="provider-key-weight"
+                                            type="number"
+                                            min="1"
+                                            max="1000"
+                                            value={draft.weight}
+                                            onChange={event => update('weight', Number(event.target.value))}
+                                        />
+                                    </Field>
+                                </div>
+                            </section>
+
+                            <section className="space-y-4 border-t pt-6">
+                                <div>
+                                    <h3 className="text-sm font-medium">明确绑定的生图模型</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        留空表示按供应商和用途自动路由。
+                                    </p>
+                                </div>
+                                <div className="grid max-h-64 gap-2 overflow-y-auto rounded-lg border bg-muted/10 p-3 sm:grid-cols-2">
+                                    {models.map(model => {
+                                        const id = `provider-model-${model.code}`;
+                                        return (
+                                            <label
+                                                key={model.code}
+                                                htmlFor={id}
+                                                className={
+                                                    'flex cursor-pointer items-start gap-2 rounded-md border ' +
+                                                    'bg-background p-3 text-sm transition-colors hover:bg-muted/30'
+                                                }
+                                            >
+                                                <input
+                                                    id={id}
+                                                    type="checkbox"
+                                                    className="mt-0.5"
+                                                    checked={draft.modelCodes.includes(model.code)}
+                                                    onChange={event =>
+                                                        update(
+                                                            'modelCodes',
+                                                            event.target.checked
+                                                                ? [...draft.modelCodes, model.code]
+                                                                : draft.modelCodes.filter(
+                                                                      value => value !== model.code,
+                                                                  ),
+                                                        )
+                                                    }
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="block font-medium">
+                                                        {model.displayNameZh}
+                                                    </span>
+                                                    <span className="block truncate text-xs text-muted-foreground">
+                                                        {model.code}
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
+                                    {!models.length ? (
+                                        <p className="text-sm text-muted-foreground">暂无可绑定模型。</p>
+                                    ) : null}
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                    <SheetFooter className="shrink-0 border-t px-6 py-4">
+                        <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                {config.id ? (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="text-destructive hover:text-destructive"
+                                        disabled={pending}
+                                        onClick={() => setArchiveConfirmationOpen(true)}
+                                    >
+                                        <Archive className="h-4 w-4" />
+                                        归档 Key
+                                    </Button>
+                                ) : null}
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={pending}
+                                    onClick={requestClose}
+                                >
+                                    取消
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={pending}
+                                    onClick={() => submit(false)}
+                                >
+                                    {save.isPending && save.variables === false ? (
+                                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Save className="h-4 w-4" />
+                                    )}
+                                    保存
+                                </Button>
+                                <Button type="button" disabled={pending} onClick={() => submit(true)}>
+                                    {save.isPending && save.variables === true ? (
+                                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <RefreshCw className="h-4 w-4" />
+                                    )}
+                                    保存并测试
+                                </Button>
+                            </div>
+                        </div>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+            <Dialog open={archiveConfirmationOpen} onOpenChange={setArchiveConfirmationOpen}>
+                <DialogContent className="sm:max-w-[440px]">
+                    <DialogHeader>
+                        <DialogTitle>归档 {config.name}？</DialogTitle>
+                        <DialogDescription>
+                            归档后该 Key 会立即停用并从 Key 池移除，历史任务与审计快照仍会保留。
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
                         <Button
+                            type="button"
                             variant="outline"
+                            disabled={archive.isPending}
+                            onClick={() => setArchiveConfirmationOpen(false)}
+                        >
+                            取消
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
                             disabled={archive.isPending}
                             onClick={() => archive.mutate()}
                         >
-                            <Archive className="mr-2 h-4 w-4" />
-                            归档
+                            {archive.isPending ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Archive className="h-4 w-4" />
+                            )}
+                            确认归档
                         </Button>
-                    ) : (
-                        <Button variant="outline" onClick={onDiscard}>
-                            取消新增
-                        </Button>
-                    )}
-                </div>
-            </div>
-            <Alert className="mt-4">
-                <AlertDescription>
-                    生产环境只允许 HTTPS，且拒绝 localhost、内网、云元数据地址和重定向。当前状态：
-                    {statusZh(config.providerHealthStatus)}
-                    {config.providerHealthMessage ? ` · ${config.providerHealthMessage}` : ''}
-                    。健康状态不会按时间过期；修改 Key、基础地址或模型 ID 后需要重新测试。
-                </AlertDescription>
-            </Alert>
-            <div className="mt-5 grid max-w-3xl gap-5">
-                <Field label="Key 名称">
-                    <Input value={name} onChange={event => setName(event.target.value)} />
-                </Field>
-                <Field label="稳定编码（保存后用于审计）">
-                    <Input value={code} onChange={event => setCode(event.target.value)} />
-                </Field>
-                <Field label="供应商">
-                    <select
-                        className="h-9 w-full rounded-md border bg-background px-3"
-                        value={scope}
-                        onChange={event =>
-                            setScope(event.target.value as ImageProviderAdminConfigRecord['scope'])
-                        }
-                    >
-                        <option value="OPENAI">Codex / GPT</option>
-                        <option value="GEMINI">Gemini</option>
-                    </select>
-                </Field>
-                <Field label="用途">
-                    <select
-                        className="h-9 w-full rounded-md border bg-background px-3"
-                        value={purpose}
-                        onChange={event =>
-                            setPurpose(event.target.value as ImageProviderAdminConfigRecord['purpose'])
-                        }
-                    >
-                        <option value="BOTH">提示词优化和生图</option>
-                        <option value="PROMPT">仅提示词优化</option>
-                        <option value="IMAGE">仅生图</option>
-                    </select>
-                </Field>
-                <Toggle label="启用此 Key" checked={enabled} onChange={setEnabled} />
-                <Field label="API Base URL">
-                    <Input
-                        placeholder="https://relay.example.com/v1"
-                        value={baseUrl}
-                        onChange={event => setBaseUrl(event.target.value)}
-                    />
-                </Field>
-                <Field label={`API Key${config.apiKeyLast4 ? `（当前末四位 ${config.apiKeyLast4}）` : ''}`}>
-                    <Input
-                        type="password"
-                        autoComplete="new-password"
-                        placeholder={config.credentialConfigured ? '留空表示不更换' : '首次配置必须填写'}
-                        value={apiKey}
-                        onChange={event => setApiKey(event.target.value)}
-                    />
-                </Field>
-                <Field
-                    label={
-                        scope === 'OPENAI' ? '提示词优化 / Responses 编排模型 ID' : 'Gemini 提示词优化模型 ID'
-                    }
-                >
-                    <Input
-                        placeholder={
-                            scope === 'OPENAI'
-                                ? '例如中转站可用的 GPT 文本模型'
-                                : '例如中转站可用的 Gemini 文本模型'
-                        }
-                        value={textModelId}
-                        onChange={event => setTextModelId(event.target.value)}
-                    />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="优先级（数字越小越优先）">
-                        <Input
-                            type="number"
-                            min="0"
-                            value={priority}
-                            onChange={event => setPriority(Number(event.target.value) || 0)}
-                        />
-                    </Field>
-                    <Field label="同级轮询权重">
-                        <Input
-                            type="number"
-                            min="1"
-                            value={weight}
-                            onChange={event => setWeight(Number(event.target.value) || 1)}
-                        />
-                    </Field>
-                </div>
-                <Field label="明确绑定的生图模型">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                        {models.map(model => (
-                            <label
-                                key={model.code}
-                                className="flex items-center gap-2 rounded border p-2 text-sm"
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={modelCodes.includes(model.code)}
-                                    onChange={event =>
-                                        setModelCodes(values =>
-                                            event.target.checked
-                                                ? [...values, model.code]
-                                                : values.filter(value => value !== model.code),
-                                        )
-                                    }
-                                />
-                                {model.displayNameZh}（{model.code}）
-                            </label>
-                        ))}
-                    </div>
-                </Field>
-            </div>
-        </PageBlock>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
+}
+
+function ProviderHealthBadge({
+    config,
+    status = credentialDisplayStatus(config),
+}: Readonly<{ config: ImageProviderAdminConfigRecord; status?: string }>) {
+    if (status === 'HEALTHY') return <Badge variant="success">{statusZh(status)}</Badge>;
+    if (status === 'UNHEALTHY') return <Badge variant="destructive">{statusZh(status)}</Badge>;
+    if (status === 'COOLDOWN') return <Badge variant="warning">{statusZh(status)}</Badge>;
+    return <Badge variant="secondary">{statusZh(status)}</Badge>;
+}
+
+function ProviderModelBadges({
+    config,
+    models,
+}: Readonly<{
+    config: ImageProviderAdminConfigRecord;
+    models: Array<{ code: string; displayNameZh: string }>;
+}>) {
+    if (!config.modelCodes.length) {
+        return <span className="text-xs text-muted-foreground">按供应商自动路由</span>;
+    }
+    const modelNames = new Map(models.map(model => [model.code, model.displayNameZh]));
+    const visible = config.modelCodes.slice(0, 2);
+    return (
+        <div className="flex flex-wrap gap-1">
+            {visible.map(code => (
+                <Badge key={code} variant="outline" className="max-w-36 truncate font-normal">
+                    {modelNames.get(code) ?? code}
+                </Badge>
+            ))}
+            {config.modelCodes.length > visible.length ? (
+                <Badge variant="secondary">+{config.modelCodes.length - visible.length}</Badge>
+            ) : null}
+        </div>
+    );
+}
+
+interface ProviderCredentialDraft {
+    code: string;
+    name: string;
+    scope: ImageProviderAdminConfigRecord['scope'];
+    purpose: ImageProviderAdminConfigRecord['purpose'];
+    baseUrl: string;
+    apiKey: string;
+    textModelId: string;
+    enabled: boolean;
+    priority: number;
+    weight: number;
+    modelCodes: string[];
+}
+
+function credentialDraft(config: ImageProviderAdminConfigRecord): ProviderCredentialDraft {
+    return {
+        code: config.code,
+        name: config.name,
+        scope: config.scope,
+        purpose: config.purpose,
+        baseUrl: config.baseUrl,
+        apiKey: '',
+        textModelId: config.textModelId,
+        enabled: config.credentialEnabled,
+        priority: config.priority,
+        weight: config.weight,
+        modelCodes: [...config.modelCodes],
+    };
+}
+
+function providerCredentialDraftError(draft: ProviderCredentialDraft, existing: boolean): string | null {
+    if (!draft.name.trim() || draft.name.trim().length > 120) return 'Key 名称为必填项，最多 120 个字符';
+    if (!/^[a-z0-9][a-z0-9_-]{2,63}$/u.test(draft.code.trim()))
+        return 'Key 稳定编码只能包含小写字母、数字、下划线和连字符，长度 3 到 64 位';
+    if (!draft.baseUrl.trim()) return 'API Base URL 不能为空';
+    if (!existing && !draft.apiKey.trim()) return '首次配置必须填写 API Key';
+    if (!draft.textModelId.trim() || draft.textModelId.trim().length > 160)
+        return '提示词优化模型 ID 为必填项，最多 160 个字符';
+    if (!Number.isSafeInteger(draft.priority) || draft.priority < 0 || draft.priority > 10_000)
+        return 'Key 优先级必须是 0 到 10000 的整数';
+    if (!Number.isSafeInteger(draft.weight) || draft.weight < 1 || draft.weight > 1_000)
+        return 'Key 轮询权重必须是 1 到 1000 的整数';
+    return null;
+}
+
+function credentialInput(config: ImageProviderAdminConfigRecord, enabled: boolean) {
+    return {
+        id: config.id,
+        scope: config.scope,
+        code: config.code,
+        name: config.name,
+        purpose: config.purpose,
+        baseUrl: config.baseUrl,
+        apiKey: null,
+        textModelId: config.textModelId,
+        enabled,
+        priority: config.priority,
+        weight: config.weight,
+        modelCodes: config.modelCodes,
+    };
+}
+
+function credentialDisplayStatus(config: ImageProviderAdminConfigRecord): string {
+    if (config.cooldownUntil && new Date(config.cooldownUntil).getTime() > Date.now()) return 'COOLDOWN';
+    return config.providerHealthStatus;
+}
+
+function providerHealthSummary(config: ImageProviderAdminConfigRecord): string {
+    if (credentialDisplayStatus(config) === 'COOLDOWN') {
+        return `冷却至 ${formatProviderDate(config.cooldownUntil)}`;
+    }
+    return config.providerHealthMessage || '暂无详情';
+}
+
+function providerHost(value: string): string {
+    try {
+        return new URL(value).host;
+    } catch {
+        return value || '未配置 Base URL';
+    }
+}
+
+function formatProviderDate(value?: string | null): string {
+    if (!value) return '尚未使用';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '时间未知' : date.toLocaleString();
+}
+
+function providerPurposeZh(purpose: ImageProviderAdminConfigRecord['purpose']): string {
+    return (
+        {
+            BOTH: '提示词和生图',
+            PROMPT: '仅提示词',
+            IMAGE: '仅生图',
+        } as const
+    )[purpose];
 }
 
 function providerName(scope: ImageProviderAdminConfigRecord['scope']): string {
@@ -2005,6 +2732,7 @@ function statusZh(status: string): string {
                 UNHEALTHY: '异常',
                 UNTESTED: '未测试',
                 UNCONFIGURED: '未配置',
+                COOLDOWN: '冷却中',
                 ACTIVE: '当前使用',
                 INACTIVE: '未启用',
                 PENDING: '待处理',
@@ -2035,23 +2763,29 @@ function billingModeZh(mode: string): string {
     );
 }
 
-function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
+function Field({
+    label,
+    htmlFor,
+    className,
+    children,
+}: Readonly<{ label: string; htmlFor?: string; className?: string; children: React.ReactNode }>) {
     return (
-        <div className="space-y-2">
-            <Label>{label}</Label>
+        <div className={`space-y-2 ${className ?? ''}`}>
+            <Label htmlFor={htmlFor}>{label}</Label>
             {children}
         </div>
     );
 }
 function Toggle({
+    id,
     label,
     checked,
     onChange,
-}: Readonly<{ label: string; checked: boolean; onChange(value: boolean): void }>) {
+}: Readonly<{ id?: string; label: string; checked: boolean; onChange(value: boolean): void }>) {
     return (
         <div className="flex items-center justify-between gap-4 rounded border p-3">
-            <Label>{label}</Label>
-            <Switch checked={checked} onCheckedChange={onChange} />
+            <Label htmlFor={id}>{label}</Label>
+            <Switch id={id} checked={checked} onCheckedChange={onChange} />
         </div>
     );
 }
