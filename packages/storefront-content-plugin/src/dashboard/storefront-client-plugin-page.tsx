@@ -31,12 +31,14 @@ import {
     ArrowRight,
     ArrowUp,
     Headphones,
+    KeyRound,
     PackagePlus,
     Puzzle,
     RefreshCw,
     Save,
     TicketPercent,
     Trash2,
+    WandSparkles,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -339,7 +341,14 @@ function PluginCatalogCard({
     onAdd: () => void;
     onRemove: () => void;
 }>) {
-    const Icon = definition.code === 'category-coupon-entry' ? TicketPercent : Headphones;
+    const Icon =
+        definition.code === 'category-coupon-entry'
+            ? TicketPercent
+            : definition.code === 'ai-image-studio-entry'
+              ? WandSparkles
+              : definition.code === 'two-factor-code-tool'
+                ? KeyRound
+                : Headphones;
     return (
         <article className="flex min-h-44 flex-col rounded-lg border bg-background p-5">
             <div className="mb-4 flex items-start justify-between gap-3">

@@ -1,5 +1,6 @@
 import { Package, UserRound } from 'lucide-react';
 
+import { clearAllStorefrontTwoFactorSessions } from '../client-plugins/two-factor/session-storage';
 import {
     LazyAccountSecurityPage,
     LazyAddressesPage,
@@ -160,6 +161,7 @@ export function AccountSecurityRoutePage() {
                     onBack={runtime.goBack}
                     onLogout={() => {
                         void runtime.api.logout().then(() => {
+                            clearAllStorefrontTwoFactorSessions();
                             runtime.clearPrivateQueryCache();
                             runtime.setCustomer(null);
                             runtime.notify(isZh ? '已退出登录' : 'Signed out');

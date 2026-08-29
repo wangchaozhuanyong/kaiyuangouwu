@@ -1304,6 +1304,7 @@ export function App() {
             referral: isZh ? '邀请返利' : 'Referral rewards',
             support: isZh ? '客服中心' : 'Customer support',
             reviews: isZh ? '评价中心' : 'Reviews',
+            'two-factor': isZh ? '2FA 动态码' : '2FA codes',
             login: isZh ? '登录' : 'Sign in',
             register: isZh ? '注册账户' : 'Create account',
             'verify-account': isZh ? '验证邮箱' : 'Verify email',

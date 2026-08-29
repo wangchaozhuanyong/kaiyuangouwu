@@ -1,7 +1,7 @@
+import { Headphones, KeyRound, TicketPercent, WandSparkles } from 'lucide-react';
+import type { ComponentType } from 'react';
 import type { RouteState } from '../storefront-router';
 import type { StorefrontContentBlock, StorefrontContentItem, StorefrontLanguage } from '../types';
-import { Headphones, TicketPercent, WandSparkles } from 'lucide-react';
-import type { ComponentType } from 'react';
 
 export const clientPluginPlacements = [
     'AFTER_HEADER',
@@ -80,12 +80,42 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
             className="category-client-plugin category-client-plugin-image-studio"
             onClick={() => onNavigate({ name: 'image-studio' })}
         >
-            <span className="category-client-plugin-icon" aria-hidden="true"><WandSparkles /></span>
+            <span className="category-client-plugin-icon" aria-hidden="true">
+                <WandSparkles />
+            </span>
             <span className="category-client-plugin-copy">
                 <strong>{isZh ? 'AI 图片工坊' : 'AI Image Studio'}</strong>
-                <span>{isZh ? '智能优化描述，选择模型快速生成图片' : 'Improve your prompt, choose a model, and create images'}</span>
+                <span>
+                    {isZh
+                        ? '智能优化描述，选择模型快速生成图片'
+                        : 'Improve your prompt, choose a model, and create images'}
+                </span>
             </span>
             <span className="category-client-plugin-action">{isZh ? '开始创作' : 'Create'}</span>
+        </button>
+    );
+}
+
+function TwoFactorEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
+    const isZh = language === 'zh';
+    return (
+        <button
+            type="button"
+            className="category-client-plugin category-client-plugin-two-factor bg-[linear-gradient(135deg,#ecfdf5,#fff_55%,#ecfeff)]"
+            onClick={() => onNavigate({ name: 'two-factor' })}
+        >
+            <span className="category-client-plugin-icon" aria-hidden="true">
+                <KeyRound />
+            </span>
+            <span className="category-client-plugin-copy">
+                <strong>{isZh ? '2FA 动态码' : '2FA codes'}</strong>
+                <span>
+                    {isZh
+                        ? '密钥不上传，在当前浏览器本地生成'
+                        : 'Generate codes locally without uploading secrets'}
+                </span>
+            </span>
+            <span className="category-client-plugin-action">{isZh ? '立即使用' : 'Open'}</span>
         </button>
     );
 }
@@ -95,6 +125,7 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'category-coupon-entry': CouponEntryPlugin,
         'category-support-entry': SupportEntryPlugin,
         'ai-image-studio-entry': AiImageStudioEntryPlugin,
+        'two-factor-code-tool': TwoFactorEntryPlugin,
     };
 
 function itemPlacement(item: StorefrontContentItem): ClientPluginPlacement | null {

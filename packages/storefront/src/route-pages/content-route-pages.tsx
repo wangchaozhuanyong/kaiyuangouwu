@@ -17,6 +17,11 @@ const BusinessServicesPage = lazy(() =>
 const AiImageStudioPage = lazy(() =>
     import('../pages/ai-image-studio-page').then(module => ({ default: module.AiImageStudioPage })),
 );
+const TwoFactorPage = lazy(() =>
+    import('../client-plugins/two-factor/two-factor-page').then(module => ({
+        default: module.TwoFactorPage,
+    })),
+);
 
 export function ServicesRoutePage() {
     const runtime = useRuntime();
@@ -41,6 +46,21 @@ export function ImageStudioRoutePage() {
                 api={runtime.api}
                 customer={runtime.customer}
                 market={runtime.market}
+                language={runtime.language}
+                onBack={runtime.goBack}
+                onSignIn={() => runtime.navigate({ name: 'login' })}
+                onNotify={runtime.notify}
+            />
+        </RouteGate>
+    );
+}
+
+export function TwoFactorRoutePage() {
+    const runtime = useRuntime();
+    return (
+        <RouteGate name="two-factor">
+            <TwoFactorPage
+                customer={runtime.customer}
                 language={runtime.language}
                 onBack={runtime.goBack}
                 onSignIn={() => runtime.navigate({ name: 'login' })}

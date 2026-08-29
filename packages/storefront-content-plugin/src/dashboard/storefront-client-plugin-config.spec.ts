@@ -14,6 +14,15 @@ import {
 } from './storefront-client-plugin-config';
 
 describe('storefront client plugin configuration', () => {
+    it('publishes the customer-facing 2FA tool in the platform catalog', () => {
+        expect(clientPluginCatalog).toContainEqual(
+            expect.objectContaining({
+                code: 'two-factor-code-tool',
+                defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+            }),
+        );
+    });
+
     it('creates an empty valid category plugin layout', () => {
         const draft = createClientPluginDraft();
 
