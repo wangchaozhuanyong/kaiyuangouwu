@@ -6,7 +6,7 @@ readonly swap_directory="/var/lib/vendure-memory"
 readonly swap_file="${swap_directory}/production.swap"
 readonly swap_size_mib=2048
 readonly swap_size_bytes=$((swap_size_mib * 1024 * 1024))
-readonly minimum_active_swap_mib=2000
+readonly minimum_active_swap_mib=2047
 readonly minimum_active_swap_bytes=$((minimum_active_swap_mib * 1024 * 1024))
 readonly disk_reserve_bytes=$((1024 * 1024 * 1024))
 readonly fstab_file="/etc/fstab"
@@ -91,5 +91,5 @@ configure_swappiness
 
 print_memory_snapshot after
 (( $(active_swap_bytes) >= minimum_active_swap_bytes )) ||
-    fail 'at least 2000 MiB of active swap is required after filesystem metadata overhead'
+    fail 'at least 2047 MiB of active swap is required after filesystem metadata overhead'
 printf 'PRODUCTION_SWAP_OK\n'
