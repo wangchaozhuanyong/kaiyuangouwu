@@ -1,4 +1,7 @@
 /* eslint-disable max-len -- Bilingual customer-facing copy is intentionally kept next to the UI. */
+import type { BatchImportErrorCode } from './batch-parser';
+import type { TwoFactorAccount } from './types';
+import type { ActiveCustomer, StorefrontLanguage } from '../../types';
 import {
     Check,
     ClipboardPaste,
@@ -18,13 +21,10 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmptyState, Subpage } from '../../storefront-ui/page-shell';
-import type { ActiveCustomer, StorefrontLanguage } from '../../types';
 
-import type { BatchImportErrorCode } from './batch-parser';
 import { parseBatchImport } from './batch-parser';
 import { clearSessionAccounts, loadSessionAccounts, saveSessionAccounts } from './session-storage';
 import { formatTotpCode, generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
-import type { TwoFactorAccount } from './types';
 import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
 
 interface TwoFactorPageProps {
@@ -387,6 +387,7 @@ export function TwoFactorPage({
                                     <button
                                         className={secondaryButtonClass}
                                         type="button"
+                                        disabled={!storageAvailable}
                                         onClick={() => quickSecret && openAccountForm(undefined, quickSecret)}
                                     >
                                         <Plus className="size-4" aria-hidden="true" />
