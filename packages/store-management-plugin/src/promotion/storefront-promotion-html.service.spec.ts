@@ -82,7 +82,7 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('--faint: #728198');
         expect(service.defaultTemplate).toContain('data-store-entry');
         expect(service.defaultTemplate).toContain('promo-mobile-entry');
-        expect(service.defaultTemplateVersion).toBe(12);
+        expect(service.defaultTemplateVersion).toBe(13);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
     });
 
