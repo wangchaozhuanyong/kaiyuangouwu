@@ -101,7 +101,12 @@ for attempt in $(seq 1 30); do
     if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null; then
         break
     fi
-    [[ "${attempt}" != "30" ]] || fail_switch 'candidate API health check did not pass before worker start'
+    if [[ "${attempt}" == "30" ]]; then
+        printf '%s\n' 'Candidate API health check failed; PM2 diagnostics follow:' >&2
+        pm2 jlist >&2 || true
+        pm2 logs vendure-api --nostream --lines 120 --raw >&2 || true
+        fail_switch 'candidate API health check did not pass before worker start'
+    fi
     sleep 2
 done
 VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-worker --update-env
