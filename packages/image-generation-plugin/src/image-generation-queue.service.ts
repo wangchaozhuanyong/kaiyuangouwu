@@ -7,14 +7,15 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
-import { ReferralWalletSpendService } from '@vendure/store-management-plugin';
 import { In, LessThan, LessThanOrEqual } from 'typeorm';
 
 import { IMAGE_DISPATCH_MAX_AGE_MS, IMAGE_GENERATION_LOGGER_CTX, IMAGE_GENERATION_QUEUE } from './constants';
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageGenerationDispatch } from './entities/image-generation-dispatch.entity';
+import { ImageGenerationJob } from './entities/image-generation-job.entity';
 import { ImageGenerationOutput } from './entities/image-generation-output.entity';
 import { ImagePrivateAsset } from './entities/image-private-asset.entity';
+import { ImageProviderCredential } from './entities/image-provider-credential.entity';
 import { ImageGenerationConfigService, providerScopeForModel } from './image-generation-config.service';
 import { decideImageOutputFailure } from './image-generation-state';
 import { ImageGenerationService } from './image-generation.service';
@@ -42,7 +43,6 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
         private readonly configService: ImageGenerationConfigService,
         private readonly providerClient: ImageProviderClient,
         private readonly storage: ImagePrivateStorageService,
-        private readonly walletSpend: ReferralWalletSpendService,
         private readonly generations: ImageGenerationService,
     ) {}
 
@@ -267,6 +267,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
         let providerTelemetry: ProviderTelemetry | undefined;
         let providerStage: 'NOT_CALLED' | 'CALLING' | 'RETURNED' | 'STORED' = 'NOT_CALLED';
         let providerStartedAt = Date.now();
+        let selectedCredential: ImageProviderCredential | null = null;
         try {
             const providerScope =
                 (output.job.providerScopeSnapshot as ImageProviderScope | undefined) ??
@@ -274,7 +275,33 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
                     output.job.protocolSnapshot as ImageProviderProtocol,
                     output.job.providerModelIdSnapshot,
                 );
-            const credential = await this.configService.requireCredential(ctx, providerScope);
+            selectedCredential = output.job.providerCredentialCodeSnapshot
+                ? await this.configService.credentialByCode(ctx, output.job.providerCredentialCodeSnapshot)
+                : null;
+            if (
+                !selectedCredential?.enabled ||
+                selectedCredential.healthStatus !== 'HEALTHY' ||
+                (selectedCredential.cooldownUntil?.getTime() ?? 0) > Date.now()
+            ) {
+                const route = await this.configService.routeCredential(
+                    ctx,
+                    providerScope,
+                    output.job.modelConfigId,
+                    'IMAGE',
+                );
+                selectedCredential = route.credential;
+                Object.assign(output.job, {
+                    providerCredentialCodeSnapshot: route.credential.code,
+                    providerCredentialNameSnapshot: route.credential.name,
+                    providerCredentialLast4Snapshot: route.credential.apiKeyLast4,
+                    providerCredentialFingerprint: this.configService.credentialFingerprint(route.credential),
+                    providerSelectionReason: route.selectionReason,
+                });
+                await this.connection.getRepository(ctx, ImageGenerationJob).save(output.job, {
+                    reload: false,
+                });
+            }
+            const credential = selectedCredential;
             const currentFingerprint = this.configService.credentialFingerprint(credential);
             if (
                 output.job.providerCredentialFingerprint &&
@@ -315,53 +342,46 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
             );
             providerStage = 'STORED';
             const generatedAsset = storedAsset;
-            const walletUsageId = output.job.walletUsageId;
-            if (!walletUsageId) throw new Error('生图任务缺少返利余额预占记录');
-            await this.connection.withTransaction(ctx, async txCtx => {
-                const completedAt = new Date();
-                const completion = await this.connection.getRepository(txCtx, ImageGenerationOutput).update(
-                    { id: output.id, state: 'RUNNING', walletSettled: false },
-                    {
-                        state: 'SUCCEEDED',
-                        assetId: generatedAsset.id,
-                        providerRequestId: result.providerRequestId?.slice(0, 200) ?? null,
-                        completedAt,
-                        walletSettled: true,
-                    },
-                );
-                if (completion.affected !== 1) {
-                    throw new Error('生图输出状态已变更，无法重复结算');
-                }
-                await this.walletSpend.capture(txCtx, {
-                    usageId: walletUsageId,
-                    amount: output.job.unitPriceSnapshot,
-                    operationKey: `OUTPUT:${String(output.id)}`,
-                    metadata: { jobId: String(output.job.id), outputId: String(output.id) },
-                });
-                output.state = 'SUCCEEDED';
-                output.assetId = generatedAsset.id;
-                output.asset = generatedAsset;
-                output.providerRequestId = result.providerRequestId?.slice(0, 200) ?? null;
-                output.completedAt = completedAt;
-                output.walletSettled = true;
-            });
+            const settled = await this.generations.settleSuccessfulOutput(
+                ctx,
+                output.id,
+                generatedAsset.id,
+                result.providerRequestId,
+            );
+            Object.assign(output, settled, { asset: generatedAsset });
             await this.recordCost(ctx, output, 'SUCCEEDED', providerStartedAt, providerTelemetry);
             await this.configService
                 .recordRuntimeResult(ctx, output.job.modelConfigId, { ok: true })
                 .catch(() => undefined);
+            if (selectedCredential) {
+                await this.configService
+                    .recordCredentialRuntimeSuccess(ctx, selectedCredential)
+                    .catch(() => undefined);
+            }
             await this.completeDispatch(output.id);
         } catch (error) {
             if (storedAsset) {
                 await this.storage.deleteOwned(ctx, storedAsset.id, output.job.customerId).catch(() => false);
                 storedAsset = undefined;
             }
+            const failureDetails = providerErrorDetails(error);
+            const safelyRejected = failureDetails.httpStatus === 401 || failureDetails.httpStatus === 403;
             const failureDecision = decideImageOutputFailure({
-                retryable: error instanceof RetryableImageProviderError,
+                retryable: error instanceof RetryableImageProviderError || safelyRejected,
                 ambiguous: error instanceof AmbiguousImageProviderError,
                 attempts: jobQueueItem.attempts,
                 retries: jobQueueItem.retries,
             });
             const failureMessage = safeError(error);
+            if (selectedCredential && providerStage !== 'NOT_CALLED') {
+                await this.configService
+                    .recordCredentialRuntimeFailure(ctx, selectedCredential, {
+                        httpStatus: failureDetails.httpStatus,
+                        retryAfterSeconds: failureDetails.retryAfterSeconds,
+                        message: failureMessage,
+                    })
+                    .catch(() => undefined);
+            }
             if (providerStage !== 'NOT_CALLED') {
                 await this.recordCost(
                     ctx,
@@ -376,13 +396,12 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
                 !(error instanceof RetryableImageProviderError) &&
                 (providerStage === 'CALLING' || providerStage === 'RETURNED')
             ) {
-                const details = providerErrorDetails(error);
                 await this.configService
                     .recordRuntimeResult(ctx, output.job.modelConfigId, {
                         ok: false,
                         message: failureMessage,
                         credentialScope: output.job.providerScopeSnapshot as ImageProviderScope,
-                        authFailure: details.httpStatus === 401 || details.httpStatus === 403,
+                        authFailure: failureDetails.httpStatus === 401 || failureDetails.httpStatus === 403,
                     })
                     .catch(() => undefined);
             }
@@ -473,7 +492,11 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
                     modelCodeSnapshot: output.job.modelCodeSnapshot,
                     providerScopeSnapshot: output.job.providerScopeSnapshot,
                     credentialFingerprint: output.job.providerCredentialFingerprint,
-                    saleUnitPriceSnapshot: output.job.unitPriceSnapshot,
+                    credentialCodeSnapshot: output.job.providerCredentialCodeSnapshot,
+                    credentialNameSnapshot: output.job.providerCredentialNameSnapshot,
+                    credentialLast4Snapshot: output.job.providerCredentialLast4Snapshot,
+                    credentialSelectionReason: output.job.providerSelectionReason,
+                    saleUnitPriceSnapshot: output.chargeAmount,
                     saleCurrencyCode: output.job.currencyCode,
                     outcome,
                     httpStatus: telemetry?.httpStatus ?? details.httpStatus ?? null,

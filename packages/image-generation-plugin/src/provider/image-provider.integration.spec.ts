@@ -183,7 +183,8 @@ describe('ImageProviderClient mock relay integration', () => {
     it('optimizes prompts through the configured text model', async () => {
         const result = await client().optimizePrompt(credential, 'Return JSON', 'make this prompt better');
 
-        expect(result).toBe('{"subject":"product"}');
+        expect(result.text).toBe('{"subject":"product"}');
+        expect(result.telemetry?.httpStatus).toBe(200);
         const payload = JSON.parse(requests[0].body.toString('utf8')) as { model: string };
         expect(payload.model).toBe('prompt-model');
         expect(requests[0].headers['idempotency-key']).toMatch(/^prompt-/u);

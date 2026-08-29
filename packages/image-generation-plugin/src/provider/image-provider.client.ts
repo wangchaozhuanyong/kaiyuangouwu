@@ -10,6 +10,7 @@ import {
     ImageProviderProtocol,
     ProviderGenerationInput,
     ProviderGenerationResult,
+    ProviderPromptResult,
     ProviderTelemetry,
 } from '../types';
 
@@ -69,12 +70,12 @@ export class ImageProviderClient {
         credential: ImageProviderCredential,
         systemPrompt: string,
         userPrompt: string,
-    ): Promise<string> {
+    ): Promise<ProviderPromptResult> {
         if (!credential.enabled || !credential.textModelId.trim()) {
             throw new DefinitiveImageProviderError('提示词优化模型尚未配置');
         }
         const baseUrl = await this.safeUrls.validate(credential.baseUrl);
-        const { payload: response } = await this.requestJson(
+        const { payload: response, telemetry } = await this.requestJson(
             this.safeUrls.endpoint(baseUrl, 'chat/completions'),
             this.cipher.decrypt(credential.encryptedApiKey),
             {
@@ -94,7 +95,7 @@ export class ImageProviderClient {
         if (typeof content !== 'string' || !content.trim()) {
             throw new DefinitiveImageProviderError('提示词优化模型未返回文本');
         }
-        return content;
+        return { text: content, telemetry };
     }
 
     async testConnection(credential: ImageProviderCredential): Promise<{ ok: boolean; message: string }> {
@@ -781,6 +782,7 @@ function withProviderTelemetry(error: unknown, telemetry: ProviderTelemetry): Im
 }
 
 function responseErrorDetails(response: Response): ImageProviderErrorDetails {
+    const retryAfter = Number(response.headers.get('retry-after'));
     return {
         httpStatus: response.status,
         providerRequestId:
@@ -788,6 +790,7 @@ function responseErrorDetails(response: Response): ImageProviderErrorDetails {
             response.headers.get('request-id') ??
             response.headers.get('x-goog-request-id') ??
             undefined,
+        ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
     };
 }
 

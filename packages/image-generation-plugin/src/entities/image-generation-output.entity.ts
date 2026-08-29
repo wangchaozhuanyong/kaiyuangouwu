@@ -1,5 +1,5 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
-import { EntityId, VendureEntity } from '@vendure/core';
+import { EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, VersionColumn } from 'typeorm';
 
 import { ImageGenerationJob } from './image-generation-job.entity';
@@ -53,6 +53,12 @@ export class ImageGenerationOutput extends VendureEntity {
 
     @Column('boolean', { default: false })
     walletSettled: boolean;
+
+    @Column({ type: 'varchar', length: 16, default: 'PENDING' })
+    billingMode: string;
+
+    @Money({ default: 0 })
+    chargeAmount: number;
 
     @Column({ type: Date, nullable: true })
     refundedAt: Date | null;
