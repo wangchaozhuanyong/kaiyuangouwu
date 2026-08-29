@@ -28,7 +28,7 @@ import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Layers, Package, PlusIcon } from 'lucide-react';
+import { Layers, LibraryBig, Package, PlusIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
@@ -37,11 +37,11 @@ import { ProductCollectionsPanel } from './components/product-collections-panel.
 import { ProductFulfillmentTypePanel } from './components/product-fulfillment-type-panel.js';
 import { ProductOptionGroupBadge } from './components/product-option-group-badge.js';
 import { ProductVariantsTable } from './components/product-variants-table.js';
-import { useRemoveOptionGroup } from './hooks/use-remove-option-group.js';
 import {
     assignProductsToChannelDocument,
     createProductDocument,
     productDetailDocument,
+    removeOptionGroupsFromProductDocument,
     removeProductsFromChannelDocument,
     updateProductDocument,
     withProductVariantCustomFields,
@@ -66,12 +66,14 @@ export const Route = createFileRoute('/_authenticated/_products/products_/$id')(
 
 function NoVariantsPrompt({
     productId,
+    productUpdatedAt,
     productName,
     productTranslations,
     onOptionGroupCreated,
     onVariantCreated,
 }: Readonly<{
     productId: string;
+    productUpdatedAt: string;
     productName: string;
     productTranslations: Array<{ languageCode: string; name: string }>;
     onOptionGroupCreated: () => void;
@@ -109,6 +111,7 @@ function NoVariantsPrompt({
             </button>
             <AddOptionGroupDialog
                 productId={productId}
+                productUpdatedAt={productUpdatedAt}
                 existingGroupIds={[]}
                 onSuccess={onOptionGroupCreated}
                 trigger={
@@ -159,6 +162,7 @@ function ProductDetailPage() {
         setValuesForUpdate: entity => {
             return {
                 id: entity.id,
+                expectedUpdatedAt: entity.updatedAt,
                 enabled: entity.enabled,
                 featuredAssetId: entity.featuredAsset?.id,
                 assetIds: entity.assets.map(asset => asset.id),
@@ -192,27 +196,16 @@ function ProductDetailPage() {
         },
     });
 
-    // The empty-string fallback only ever applies before `entity` has loaded;
-    // `removeAllOptionGroups` is reachable exclusively from the onBack handler below,
-    // which is rendered only once `entity` exists, so the real id is always used.
-    const { removeOptionGroupAsync } = useRemoveOptionGroup(entity?.id ?? '');
-
-    // Batch-removes every option group when the user backs out of variant setup. This is
-    // reached only while the product has zero variants, so ProductOptionInUseError cannot
-    // realistically fire here — the branch is kept as a defensive guard. Note the loop is
-    // not transactional: a mid-list failure leaves earlier groups already removed.
-    const removeAllOptionGroups = async (optionGroups: Array<{ id: string }>) => {
+    const removeAllOptionGroups = async (
+        product: { id: string; updatedAt: string },
+        optionGroups: Array<{ id: string }>,
+    ) => {
         try {
-            for (const group of optionGroups) {
-                const result = await removeOptionGroupAsync(group.id);
-                if (result.__typename === 'ProductOptionInUseError') {
-                    toast.error(t`Could not remove option group`, {
-                        description: result.message,
-                    });
-                    refreshEntity();
-                    return;
-                }
-            }
+            await api.mutate(removeOptionGroupsFromProductDocument, {
+                productId: product.id,
+                optionGroupIds: optionGroups.map(group => group.id),
+                expectedUpdatedAt: product.updatedAt,
+            });
             refreshEntity();
         } catch (error) {
             toast.error(t`Failed to remove option groups`, {
@@ -279,6 +272,68 @@ function ProductDetailPage() {
                     />
                 </PageBlock>
                 <CustomFieldsPageBlock column="main" entityType="Product" control={form.control} />
+                {entity && (
+                    <PageBlock
+                        column="main"
+                        blockId="option-groups"
+                        title={<Trans>Specification templates</Trans>}
+                        description={
+                            <Trans>
+                                Templates define the selectable specifications for this product and are used
+                                to generate SKUs.
+                            </Trans>
+                        }
+                    >
+                        <div className="space-y-3">
+                            {entity.optionGroups.length > 0 ? (
+                                entity.optionGroups.map(group => (
+                                    <ProductOptionGroupBadge
+                                        key={group.id}
+                                        id={group.id}
+                                        name={group.name}
+                                        options={group.options}
+                                        productId={entity.id}
+                                        onRemoved={() => refreshEntity()}
+                                    />
+                                ))
+                            ) : (
+                                <div className="flex flex-col gap-3 rounded-lg bg-muted/40 px-4 py-4 sm:flex-row sm:items-center">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground shadow-sm">
+                                        <Layers className="h-4 w-4" aria-hidden="true" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="font-medium">
+                                            <Trans>No specification template linked</Trans>
+                                        </p>
+                                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                            <Trans>
+                                                A single-SKU product can stay empty. For size, colour, or
+                                                other choices, select a template from the library or create
+                                                one here.
+                                            </Trans>
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <AddOptionGroupDialog
+                                    productId={entity.id}
+                                    productUpdatedAt={entity.updatedAt}
+                                    existingGroupIds={entity.optionGroups.map(group => group.id)}
+                                    onSuccess={() => refreshEntity()}
+                                />
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    render={<Link to="/option-groups" />}
+                                >
+                                    <LibraryBig className="h-4 w-4" aria-hidden="true" />
+                                    <Trans>Open specification template library</Trans>
+                                </Button>
+                            </div>
+                        </div>
+                    </PageBlock>
+                )}
                 {entity && entity.variantList.totalItems > 0 && (
                     <PageBlock
                         column="main"
@@ -325,6 +380,7 @@ function ProductDetailPage() {
                         {entity.optionGroups.length === 0 ? (
                             <NoVariantsPrompt
                                 productId={entity.id}
+                                productUpdatedAt={entity.updatedAt}
                                 productName={entity.name}
                                 productTranslations={entity.translations}
                                 onOptionGroupCreated={() => refreshEntity()}
@@ -338,7 +394,7 @@ function ProductDetailPage() {
                                 optionGroups={entity.optionGroups}
                                 onSuccess={() => refreshEntity()}
                                 onBack={{
-                                    handler: () => removeAllOptionGroups(entity.optionGroups),
+                                    handler: () => removeAllOptionGroups(entity, entity.optionGroups),
                                     confirmation: {
                                         title: t`Remove option groups?`,
                                         description: t`This will remove all option groups from this product and return to the variant setup choice.`,
@@ -346,26 +402,6 @@ function ProductDetailPage() {
                                 }}
                             />
                         )}
-                    </PageBlock>
-                )}
-                {entity && entity.optionGroups.length > 0 && (
-                    <PageBlock column="side" blockId="option-groups" title={<Trans>Product Options</Trans>}>
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                            {entity.optionGroups.map(g => (
-                                <ProductOptionGroupBadge
-                                    key={g.id}
-                                    id={g.id}
-                                    name={g.name}
-                                    productId={entity.id}
-                                    onRemoved={() => refreshEntity()}
-                                />
-                            ))}
-                        </div>
-                        <AddOptionGroupDialog
-                            productId={entity.id}
-                            existingGroupIds={entity.optionGroups.map(g => g.id)}
-                            onSuccess={() => refreshEntity()}
-                        />
                     </PageBlock>
                 )}
                 <PageBlock column="side" blockId="facet-values" title={<Trans>Facet Values</Trans>}>

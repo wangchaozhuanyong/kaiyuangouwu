@@ -38,6 +38,10 @@ export interface RelationSelectorConfig<T = any> {
     buildIdsFilter?: (ids: string[]) => any;
     /** Custom label renderer function for rich display */
     label?: (item: T) => React.ReactNode;
+    /** Optional client-side ordering after all loaded pages have been combined */
+    sortItems?: (first: T, second: T) => number;
+    /** Prevent an item from being selected while keeping it visible for hierarchy diagnostics */
+    isItemDisabled?: (item: T) => boolean;
 }
 
 export interface RelationSelectorProps<T = any> {
@@ -74,12 +78,20 @@ export function RelationSelectorItem<T>({
 }: Readonly<RelationSelectorItemProps<T>>) {
     const id = String(item[config.idKey]);
     const label = config.label ? config.label(item) : String(item[config.labelKey]);
+    const disabled = config.isItemDisabled?.(item) ?? false;
 
     return (
-        <CommandItem key={id} value={id} onSelect={onSelect} className="flex items-center gap-2">
+        <CommandItem
+            key={id}
+            value={id}
+            disabled={disabled}
+            onSelect={onSelect}
+            className="flex items-center gap-2"
+        >
             {showCheckbox && (
                 <Checkbox
                     checked={isSelected}
+                    disabled={disabled}
                     onCheckedChange={() => onSelect()}
                     onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 />
@@ -146,7 +158,10 @@ export function useRelationSelector<T>(config: RelationSelectorConfig<T>) {
         initialPageParam: 0,
     });
 
-    const items = data?.pages.flatMap(page => page?.items ?? []) ?? [];
+    const items = React.useMemo(() => {
+        const loadedItems = data?.pages.flatMap(page => page?.items ?? []) ?? [];
+        return config.sortItems ? [...loadedItems].sort(config.sortItems) : loadedItems;
+    }, [config.sortItems, data?.pages]);
 
     // Function to fetch items by IDs
     const fetchItemsByIds = React.useCallback(

@@ -1,7 +1,12 @@
+import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 import { describe, expect, it } from 'vitest';
 
-import { authVisualAccentColor, findAuthVisualContent, resolveAuthVisualMessage } from './auth-visual';
-import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
+import {
+    authVisualAccentColor,
+    authVisualOverlayColor,
+    findAuthVisualContent,
+    resolveAuthVisualMessage,
+} from './auth-visual';
 
 function block(type: StorefrontContentBlockType): StorefrontContentBlock {
     return {
@@ -61,5 +66,16 @@ describe('managed auth visuals', () => {
             title: '创建专属 AI 效率中心',
         });
         expect(authVisualAccentColor(undefined, 'register')).toBe('#fdba74');
+        expect(authVisualOverlayColor(undefined)).toBe('#0B1E2D');
+    });
+
+    it('keeps managed colors authoritative after a media publish', () => {
+        const content = block('AUTH_REGISTER');
+        content.imageUrl = '/assets/preview/08/auth-register-ai-campaign-v2__preview.jpg';
+        content.backgroundColor = '#16051f';
+        content.settings = { accentColor: '#fdba74' };
+
+        expect(authVisualAccentColor(content, 'register')).toBe('#fdba74');
+        expect(authVisualOverlayColor(content)).toBe('#16051f');
     });
 });

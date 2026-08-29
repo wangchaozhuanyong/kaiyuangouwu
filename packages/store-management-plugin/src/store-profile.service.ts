@@ -17,7 +17,7 @@ import {
     isGraphQlErrorResult,
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
-import { In } from 'typeorm';
+import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { StoreProfile } from './entities/store-profile.entity';
 import { StoreActivationReadinessService } from './store-activation-readiness.service';
@@ -76,13 +76,8 @@ export class StoreProfileService {
 
     async update(ctx: RequestContext, input: UpdateStoreProfileInput): Promise<StoreProfile> {
         const repository = this.connection.getRepository(ctx, StoreProfile);
-        const profile = await repository.findOne({
-            where: { id: input.id },
-            relations: { channel: { seller: true }, logoAsset: true },
-        });
-        if (!profile) {
-            throw new EntityNotFoundError(StoreProfile.name, input.id);
-        }
+        const profile = await this.lockProfileById(ctx, input.id);
+        this.assertExpectedUpdatedAt(profile.updatedAt, input.expectedUpdatedAt);
 
         const status = input.status ?? profile.status;
         const activating = profile.status !== 'ACTIVE' && status === 'ACTIVE';
@@ -138,7 +133,8 @@ export class StoreProfileService {
 
     async updateForMerchant(ctx: RequestContext, input: UpdateMyStoreProfileInput): Promise<StoreProfile> {
         const repository = this.connection.getRepository(ctx, StoreProfile);
-        const profile = await this.findByChannel(ctx, ctx.channelId);
+        const profile = await this.lockProfileByChannel(ctx, ctx.channelId);
+        this.assertExpectedUpdatedAt(profile.updatedAt, input.expectedUpdatedAt);
         const prepared = await this.prepareProfileTranslations(input, profile);
         const localized = new Map(prepared.map(field => [field.path, field.translatedText]));
         profile.descriptionZh = this.normalizeDescription(
@@ -269,6 +265,67 @@ export class StoreProfileService {
         return profile;
     }
 
+    private async lockProfileById(ctx: RequestContext, id: ID): Promise<StoreProfile> {
+        await this.lockProfileRow(ctx, 'profile.id = :id', { id });
+        const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
+            where: { id },
+            relations: { channel: { seller: true }, logoAsset: true },
+        });
+        if (!profile) throw new EntityNotFoundError(StoreProfile.name, id);
+        await this.lockChannelRow(ctx, profile.channelId);
+        return (await this.connection.getRepository(ctx, StoreProfile).findOne({
+            where: { id },
+            relations: { channel: { seller: true }, logoAsset: true },
+        })) as StoreProfile;
+    }
+
+    private async lockProfileByChannel(ctx: RequestContext, channelId: ID): Promise<StoreProfile> {
+        await this.lockProfileRow(ctx, 'profile.channelId = :channelId', { channelId });
+        await this.lockChannelRow(ctx, channelId);
+        return this.findByChannel(ctx, channelId);
+    }
+
+    private async lockProfileRow(
+        ctx: RequestContext,
+        where: string,
+        parameters: Record<string, ID>,
+    ): Promise<void> {
+        try {
+            const locked = await this.connection
+                .getRepository(ctx, StoreProfile)
+                .createQueryBuilder('profile')
+                .setLock('pessimistic_write')
+                .where(where, parameters)
+                .getOne();
+            if (!locked) throw new EntityNotFoundError(StoreProfile.name, Object.values(parameters)[0]);
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+    }
+
+    private async lockChannelRow(ctx: RequestContext, channelId: ID): Promise<void> {
+        try {
+            const locked = await this.connection
+                .getRepository(ctx, Channel)
+                .createQueryBuilder('channel')
+                .setLock('pessimistic_write')
+                .where('channel.id = :channelId', { channelId })
+                .getOne();
+            if (!locked) throw new EntityNotFoundError(Channel.name, channelId);
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+    }
+
+    private assertExpectedUpdatedAt(current: Date, expected: Date | string): void {
+        const expectedDate = expected instanceof Date ? expected : new Date(expected);
+        if (!Number.isFinite(expectedDate.getTime()) || current.getTime() !== expectedDate.getTime()) {
+            throw new UserInputError(
+                'CONCURRENT_MODIFICATION: 店铺资料已被其他管理员更新，请重新载入后合并修改',
+            );
+        }
+    }
+
     private async findAsset(ctx: RequestContext, id: ID): Promise<Asset> {
         const asset = await this.connection.getRepository(ctx, Asset).findOne({ where: { id } });
         if (!asset) {
@@ -357,4 +414,13 @@ export class StoreProfileService {
         }
         profile.channel = updatedChannel;
     }
+}
+
+function isLockNotSupportedError(error: unknown): boolean {
+    return (
+        error instanceof LockNotSupportedOnGivenDriverError ||
+        (error instanceof Error &&
+            (error.name === 'LockNotSupportedOnGivenDriverError' ||
+                error.message.toLowerCase().includes('locking not supported')))
+    );
 }

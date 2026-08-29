@@ -52,7 +52,13 @@ function SetProductsEnabledBulkAction({
         mutationFn: (currentPassword: string) =>
             api.mutate(
                 updateProductsDocument,
-                { input: selection.map(product => ({ id: product.id, enabled })) },
+                {
+                    input: selection.map(product => ({
+                        id: product.id,
+                        expectedUpdatedAt: product.updatedAt,
+                        enabled,
+                    })),
+                },
                 sensitiveActionHeaders(currentPassword),
             ),
         onSuccess: () => {

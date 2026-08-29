@@ -1,4 +1,13 @@
 export {
+    STOREFRONT_CLIENT_PLUGINS_CODE,
+    storefrontClientPluginCatalog,
+    storefrontClientPluginPlacements,
+} from './client-plugin-manifest';
+export type {
+    StorefrontClientPluginDefinition,
+    StorefrontClientPluginPlacement,
+} from './client-plugin-manifest';
+export {
     storefrontContentBlockTypes,
     storefrontContentPermission,
     storefrontContentTargetTypes,

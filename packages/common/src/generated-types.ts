@@ -2971,6 +2971,8 @@ export type Mutation = {
   createProductOption: ProductOption;
   /** Create a new ProductOptionGroup */
   createProductOptionGroup: ProductOptionGroup;
+  /** Create a ProductOptionGroup and assign it to a Product in the same transaction */
+  createProductOptionGroupForProduct: ProductOptionGroup;
   /** Create a set of ProductVariants based on the OptionGroups assigned to the given Product */
   createProductVariants: Array<Maybe<ProductVariant>>;
   createPromotion: CreatePromotionResult;
@@ -3126,6 +3128,8 @@ export type Mutation = {
    * as well as removing any of the group's options from the Product's ProductVariants.
    */
   removeOptionGroupFromProduct: RemoveOptionGroupFromProductResult;
+  /** Remove multiple OptionGroups from a Product as one atomic operation */
+  removeOptionGroupsFromProduct: Product;
   /** Removes PaymentMethods from the specified Channel */
   removePaymentMethodsFromChannel: Array<PaymentMethod>;
   /** Removes ProductOptionGroups from the specified Channel */
@@ -3279,6 +3283,7 @@ export type MutationAddNoteToOrderArgs = {
 
 
 export type MutationAddOptionGroupToProductArgs = {
+  expectedUpdatedAt?: InputMaybe<Scalars['DateTime']['input']>;
   optionGroupId: Scalars['ID']['input'];
   productId: Scalars['ID']['input'];
 };
@@ -3452,6 +3457,21 @@ export type MutationCreateProductOptionArgs = {
 
 export type MutationCreateProductOptionGroupArgs = {
   input: CreateProductOptionGroupInput;
+};
+
+
+export type MutationCreateProductOptionGroupForProductArgs = {
+  expectedUpdatedAt: Scalars['DateTime']['input'];
+  input: CreateProductOptionGroupInput;
+  productId: Scalars['ID']['input'];
+};
+
+
+export type MutationRemoveOptionGroupsFromProductArgs = {
+  expectedUpdatedAt: Scalars['DateTime']['input'];
+  force?: InputMaybe<Scalars['Boolean']['input']>;
+  optionGroupIds: Array<Scalars['ID']['input']>;
+  productId: Scalars['ID']['input'];
 };
 
 
@@ -5008,8 +5028,15 @@ export type ProductOptionGroup = Node & {
   options: Array<ProductOption>;
   /** The number of products that use this option group */
   productCount: Scalars['Int']['output'];
+  /** Products in the current Channel that use this ProductOptionGroup */
+  products: ProductList;
   translations: Array<ProductOptionGroupTranslation>;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+
+export type ProductOptionGroupProductsArgs = {
+  options?: InputMaybe<ProductListOptions>;
 };
 
 export type ProductOptionGroupFilterParameter = {
@@ -7086,6 +7113,7 @@ export type UpdateProductInput = {
   assetIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   customFields?: InputMaybe<Scalars['JSON']['input']>;
   enabled?: InputMaybe<Scalars['Boolean']['input']>;
+  expectedUpdatedAt?: InputMaybe<Scalars['DateTime']['input']>;
   facetValueIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   featuredAssetId?: InputMaybe<Scalars['ID']['input']>;
   id: Scalars['ID']['input'];

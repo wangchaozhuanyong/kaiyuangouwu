@@ -1,6 +1,9 @@
+/* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
 import {
     Alert,
     AlertDescription,
+    Asset,
+    AssetPickerDialog,
     Badge,
     Button,
     DashboardRouteDefinition,
@@ -30,6 +33,7 @@ import {
     TabsList,
     TabsTrigger,
     Textarea,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -37,13 +41,27 @@ import {
     usePermissions,
     useQuery,
 } from '@vendure/dashboard';
-import { Gift, LoaderCircle, RefreshCw, Save, Search, WalletCards } from 'lucide-react';
+import {
+    Gift,
+    ImagePlus,
+    LoaderCircle,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Save,
+    Search,
+    Trash2,
+    WalletCards,
+    X,
+} from 'lucide-react';
 import { ReactNode, useEffect, useState } from 'react';
 
 import {
     ReferralCustomerRecord,
+    ReferralCustomerWalletRecord,
     ReferralInviterSummaryRecord,
     ReferralLedgerRecord,
+    ReferralPosterTemplateRecord,
     ReferralProgramRecord,
     ReferralRelationshipRecord,
     ReferralReportsResult,
@@ -51,16 +69,21 @@ import {
     ReferralTodayMetricsResult,
     ReferralWithdrawalRecord,
     adjustReferralBalanceMutation,
+    createReferralPosterTemplateMutation,
     createReferralWithdrawalMutation,
+    deleteReferralPosterTemplateMutation,
     processReferralWithdrawalMutation,
     referralCustomerLookupQuery,
+    referralCustomerWalletsQuery,
     referralProgramQuery,
     referralReportsQuery,
     referralTodayMetricsQuery,
+    updateReferralPosterTemplateMutation,
     updateReferralProgramMutation,
 } from './referral.graphql';
 
 interface ProgramDraft {
+    expectedUpdatedAt: string;
     enabled: boolean;
     rewardRate: number;
     releaseDelayDays: number;
@@ -166,9 +189,15 @@ function ReferralAdminPage() {
     const refreshAll = async () => {
         await Promise.all([program.refetch(), reports.refetch(), metrics.refetch()]);
     };
+    const isProgramDirty = Boolean(
+        draft &&
+        program.data?.referralProgram &&
+        JSON.stringify(draft) !== JSON.stringify(programDraft(program.data.referralProgram)),
+    );
 
     return (
         <Page pageId="referral-rewards">
+            <UnsavedChangesConfirmation when={isProgramDirty} />
             <PageTitle>邀请返利</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
@@ -201,7 +230,7 @@ function ReferralAdminPage() {
                     column="main"
                     blockId="referral-today"
                     title="今日经营概览"
-                    description="按北京时间统计，访客按匿名设备或登录客户去重。"
+                    description="按北京时间和支付结算日统计；访客按 IP 去重；订单、消费客户和成交额以已结算支付扣除已结算退款后的净实收为准。"
                 >
                     <TodayMetrics query={metrics} />
                 </PageBlock>
@@ -220,12 +249,26 @@ function ReferralAdminPage() {
                             ) : program.isError ? (
                                 <QueryError onRetry={() => void program.refetch()} />
                             ) : (
-                                <ProgramSettings
-                                    draft={draft}
-                                    setDraft={setDraft}
-                                    disabled={!canUpdate}
-                                    templates={program.data?.referralProgram.posterTemplates ?? []}
-                                />
+                                <div className="space-y-8">
+                                    <ProgramSettings
+                                        draft={draft}
+                                        setDraft={setDraft}
+                                        disabled={!canUpdate}
+                                        templates={program.data?.referralProgram.posterTemplates ?? []}
+                                        customTemplates={
+                                            program.data?.referralProgram.posterTemplateConfigs ?? []
+                                        }
+                                    />
+                                    <PosterTemplateManager
+                                        templates={program.data?.referralProgram.posterTemplateConfigs ?? []}
+                                        disabled={!canUpdate}
+                                        defaultTemplate={draft.defaultPosterTemplate}
+                                        onMakeDefault={id =>
+                                            setDraft({ ...draft, defaultPosterTemplate: id })
+                                        }
+                                        onChanged={() => void program.refetch()}
+                                    />
+                                </div>
                             )}
                         </TabsContent>
                         <TabsContent value="relationships">
@@ -334,11 +377,13 @@ function ProgramSettings({
     setDraft,
     disabled,
     templates,
+    customTemplates,
 }: {
     draft: ProgramDraft;
     setDraft: (draft: ProgramDraft) => void;
     disabled: boolean;
     templates: string[];
+    customTemplates: ReferralPosterTemplateRecord[];
 }) {
     const update = <K extends keyof ProgramDraft>(key: K, value: ProgramDraft[K]) =>
         setDraft({ ...draft, [key]: value });
@@ -406,13 +451,13 @@ function ProgramSettings({
                 <Input
                     type="number"
                     min={1}
-                    max={90}
+                    max={365}
                     step={1}
                     value={draft.attributionWindowDays}
                     disabled={disabled}
                     onChange={event => update('attributionWindowDays', Number(event.target.value))}
                 />
-                <Help>客户打开邀请链接后，在该期限内注册会自动带入邀请码。</Help>
+                <Help>客户打开邀请链接后，在该期限内注册会自动带入邀请码，最长 365 天。</Help>
             </Field>
             <Field label="默认分享海报">
                 <Select
@@ -429,9 +474,16 @@ function ProgramSettings({
                                 {posterLabel(template)}
                             </SelectItem>
                         ))}
+                        {customTemplates
+                            .filter(template => template.enabled)
+                            .map(template => (
+                                <SelectItem key={template.id} value={template.id}>
+                                    {template.name}
+                                </SelectItem>
+                            ))}
                     </SelectContent>
                 </Select>
-                <Help>客户端仍可在四套模板之间自由切换。</Help>
+                <Help>新建并启用自定义模板后，客户端只展示当前店铺的自定义模板。</Help>
             </Field>
             {!disabled && (
                 <Alert className="sm:col-span-2">
@@ -441,6 +493,550 @@ function ProgramSettings({
                 </Alert>
             )}
         </div>
+    );
+}
+
+interface PosterTemplateDraft {
+    id?: string;
+    name: string;
+    enabled: boolean;
+    position: number;
+    layoutVariant: 'STANDARD_CENTER';
+    posterBackgroundAsset: Asset | null;
+    shareBackgroundAsset: Asset | null;
+    titleZh: string;
+    titleEn: string;
+    headlineZh: string;
+    headlineEn: string;
+    rewardTextZh: string;
+    rewardTextEn: string;
+    siteIntroZh: string;
+    siteIntroEn: string;
+    serviceTextZh: string;
+    serviceTextEn: string;
+    foregroundColor: string;
+    accentColor: string;
+    overlayOpacity: number;
+}
+
+function PosterTemplateManager({
+    templates,
+    disabled,
+    defaultTemplate,
+    onMakeDefault,
+    onChanged,
+}: {
+    templates: ReferralPosterTemplateRecord[];
+    disabled: boolean;
+    defaultTemplate: string;
+    onMakeDefault: (id: string) => void;
+    onChanged: () => void;
+}) {
+    const [draft, setDraft] = useState<PosterTemplateDraft | null>(null);
+    const [assetTarget, setAssetTarget] = useState<'poster' | 'share' | null>(null);
+    const createTemplate = useMutation({
+        mutationFn: (value: PosterTemplateDraft) =>
+            api.mutate<{ createReferralPosterTemplate: ReferralPosterTemplateRecord }>(
+                createReferralPosterTemplateMutation,
+                { input: posterTemplateInput(value) },
+            ),
+        onSuccess: result => {
+            toast.success('海报模板已创建');
+            setDraft(null);
+            onChanged();
+            if (templates.length === 0) onMakeDefault(result.createReferralPosterTemplate.id);
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const updateTemplate = useMutation({
+        mutationFn: (value: PosterTemplateDraft & { id: string }) =>
+            api.mutate<{ updateReferralPosterTemplate: ReferralPosterTemplateRecord }>(
+                updateReferralPosterTemplateMutation,
+                { input: { id: value.id, ...posterTemplateInput(value) } },
+            ),
+        onSuccess: () => {
+            toast.success('海报模板已保存');
+            setDraft(null);
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const deleteTemplate = useMutation({
+        mutationFn: (id: string) =>
+            api.mutate<{ deleteReferralPosterTemplate: { result: string; message?: string | null } }>(
+                deleteReferralPosterTemplateMutation,
+                { id },
+            ),
+        onSuccess: result => {
+            if (result.deleteReferralPosterTemplate.result !== 'DELETED') {
+                toast.error(result.deleteReferralPosterTemplate.message ?? '模板未删除');
+                return;
+            }
+            toast.success('海报模板已删除');
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const pending = createTemplate.isPending || updateTemplate.isPending;
+    const saveTemplate = () => {
+        if (!draft || !validPosterTemplateDraft(draft)) {
+            toast.error('请检查模板名称、中英文标题、奖励文案和颜色');
+            return;
+        }
+        if (draft.id) updateTemplate.mutate(draft as PosterTemplateDraft & { id: string });
+        else createTemplate.mutate(draft);
+    };
+
+    return (
+        <section className="border-t pt-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 className="m-0 text-base font-semibold">店铺邀请海报模板</h3>
+                    <p className="mb-0 mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+                        店铺可按行业上传任意背景图。平台统一叠加标题、奖励文案、邀请码和二维码，避免图片与动态内容错位。
+                    </p>
+                </div>
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={disabled}
+                    onClick={() => setDraft(emptyPosterTemplateDraft(templates.length))}
+                >
+                    <Plus className="size-4" />
+                    新增模板
+                </Button>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {templates.map(template => (
+                    <article key={template.id} className="overflow-hidden rounded-xl border bg-card">
+                        <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
+                            {template.posterBackgroundAsset ? (
+                                <img
+                                    src={template.posterBackgroundAsset.preview}
+                                    alt=""
+                                    className="size-full object-cover"
+                                />
+                            ) : (
+                                <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#172554,#7c3aed,#db2777)] text-sm font-semibold text-white/80">
+                                    待上传竖版背景
+                                </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/25" />
+                            <div className="absolute inset-x-5 top-5 text-white">
+                                <small className="font-bold">{template.titleZh}</small>
+                                <strong className="mt-3 block text-xl leading-tight">
+                                    {template.headlineZh}
+                                </strong>
+                            </div>
+                            <div className="absolute inset-x-5 top-[43%] rounded-xl bg-white/95 p-3 text-center text-xs font-bold text-slate-800 shadow">
+                                二维码与邀请码安全区
+                            </div>
+                            <div className="absolute inset-x-5 bottom-5 rounded-lg border border-white/25 bg-black/30 px-3 py-2 text-[11px] text-white backdrop-blur">
+                                {template.serviceTextZh || '店铺服务说明'}
+                            </div>
+                        </div>
+                        <div className="space-y-3 p-4">
+                            <div className="flex items-center justify-between gap-2">
+                                <strong className="truncate">{template.name}</strong>
+                                <div className="flex gap-1">
+                                    <Badge variant={template.enabled ? 'secondary' : 'outline'}>
+                                        {template.enabled ? '已启用' : '已停用'}
+                                    </Badge>
+                                    {defaultTemplate === template.id && <Badge>默认</Badge>}
+                                </div>
+                            </div>
+                            <p className="m-0 text-xs text-muted-foreground">
+                                竖版 1080×1620 · 横版 1200×630 · 排序 {template.position}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={disabled}
+                                    onClick={() => setDraft(posterTemplateDraft(template))}
+                                >
+                                    <Pencil className="size-3.5" />
+                                    编辑
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={disabled || !template.enabled}
+                                    onClick={() => onMakeDefault(template.id)}
+                                >
+                                    设为默认
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="col-span-2 text-destructive hover:text-destructive"
+                                    disabled={disabled || deleteTemplate.isPending}
+                                    onClick={() => {
+                                        if (window.confirm(`确定删除模板“${template.name}”？`)) {
+                                            deleteTemplate.mutate(template.id);
+                                        }
+                                    }}
+                                >
+                                    <Trash2 className="size-3.5" />
+                                    删除模板
+                                </Button>
+                            </div>
+                        </div>
+                    </article>
+                ))}
+                {!templates.length && (
+                    <div className="rounded-xl border border-dashed p-6 text-sm leading-6 text-muted-foreground md:col-span-2 xl:col-span-3">
+                        暂无店铺自定义模板。客户端会继续使用内置通用样式；创建并启用第一个模板后，将自动切换为店铺模板。
+                    </div>
+                )}
+            </div>
+
+            <Dialog open={Boolean(draft)} onOpenChange={open => !open && !pending && setDraft(null)}>
+                <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>{draft?.id ? '编辑邀请海报模板' : '新建邀请海报模板'}</DialogTitle>
+                        <DialogDescription>
+                            背景图不要直接写邀请码或二维码。竖版建议 1080×1620，横版分享图建议 1200×630。
+                        </DialogDescription>
+                    </DialogHeader>
+                    {draft && (
+                        <PosterTemplateEditor
+                            draft={draft}
+                            setDraft={setDraft}
+                            disabled={pending}
+                            onPickAsset={setAssetTarget}
+                        />
+                    )}
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={pending}
+                            onClick={() => setDraft(null)}
+                        >
+                            取消
+                        </Button>
+                        <Button type="button" disabled={pending} onClick={saveTemplate}>
+                            {pending ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                            ) : (
+                                <Save className="size-4" />
+                            )}
+                            保存模板
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {draft && (
+                <AssetPickerDialog
+                    open={Boolean(assetTarget)}
+                    onClose={() => setAssetTarget(null)}
+                    onSelect={assets => {
+                        const asset = assets[0] ?? null;
+                        setDraft(current =>
+                            current
+                                ? {
+                                      ...current,
+                                      ...(assetTarget === 'share'
+                                          ? { shareBackgroundAsset: asset }
+                                          : { posterBackgroundAsset: asset }),
+                                  }
+                                : current,
+                        );
+                    }}
+                    initialSelectedAssets={
+                        assetTarget === 'share'
+                            ? draft.shareBackgroundAsset
+                                ? [draft.shareBackgroundAsset]
+                                : []
+                            : draft.posterBackgroundAsset
+                              ? [draft.posterBackgroundAsset]
+                              : []
+                    }
+                    title={assetTarget === 'share' ? '选择横版分享背景' : '选择竖版海报背景'}
+                />
+            )}
+        </section>
+    );
+}
+
+function PosterTemplateEditor({
+    draft,
+    setDraft,
+    disabled,
+    onPickAsset,
+}: {
+    draft: PosterTemplateDraft;
+    setDraft: (draft: PosterTemplateDraft) => void;
+    disabled: boolean;
+    onPickAsset: (target: 'poster' | 'share') => void;
+}) {
+    const update = <K extends keyof PosterTemplateDraft>(key: K, value: PosterTemplateDraft[K]) =>
+        setDraft({ ...draft, [key]: value });
+    return (
+        <div className="grid gap-5 py-2 sm:grid-cols-2">
+            <Field label="模板名称">
+                <Input
+                    value={draft.name}
+                    maxLength={128}
+                    disabled={disabled}
+                    onChange={e => update('name', e.target.value)}
+                />
+            </Field>
+            <Field label="展示排序">
+                <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={draft.position}
+                    disabled={disabled}
+                    onChange={e => update('position', Number(e.target.value))}
+                />
+            </Field>
+            <BooleanField
+                label="启用模板"
+                checked={draft.enabled}
+                disabled={disabled}
+                onChange={value => update('enabled', value)}
+                description="关闭后客户端立即停止展示该模板。"
+            />
+            <Field label="背景遮罩（0–80）">
+                <Input
+                    type="number"
+                    min={0}
+                    max={80}
+                    step={1}
+                    value={draft.overlayOpacity}
+                    disabled={disabled}
+                    onChange={e => update('overlayOpacity', Number(e.target.value))}
+                />
+            </Field>
+            <PosterAssetField
+                label="竖版海报背景"
+                guidance="1080×1620（2:3）"
+                asset={draft.posterBackgroundAsset}
+                disabled={disabled}
+                onPick={() => onPickAsset('poster')}
+                onClear={() => update('posterBackgroundAsset', null)}
+            />
+            <PosterAssetField
+                label="横版分享背景"
+                guidance="1200×630（链接预览）"
+                asset={draft.shareBackgroundAsset}
+                disabled={disabled}
+                onPick={() => onPickAsset('share')}
+                onClear={() => update('shareBackgroundAsset', null)}
+            />
+            <Field label="中文小标题">
+                <Input
+                    value={draft.titleZh}
+                    maxLength={80}
+                    disabled={disabled}
+                    onChange={e => update('titleZh', e.target.value)}
+                />
+            </Field>
+            <Field label="英文小标题">
+                <Input
+                    value={draft.titleEn}
+                    maxLength={80}
+                    disabled={disabled}
+                    onChange={e => update('titleEn', e.target.value)}
+                />
+            </Field>
+            <Field label="中文主标题">
+                <Textarea
+                    value={draft.headlineZh}
+                    maxLength={180}
+                    disabled={disabled}
+                    onChange={e => update('headlineZh', e.target.value)}
+                />
+            </Field>
+            <Field label="英文主标题">
+                <Textarea
+                    value={draft.headlineEn}
+                    maxLength={180}
+                    disabled={disabled}
+                    onChange={e => update('headlineEn', e.target.value)}
+                />
+            </Field>
+            <Field label="中文奖励文案">
+                <Textarea
+                    value={draft.rewardTextZh}
+                    maxLength={220}
+                    disabled={disabled}
+                    onChange={e => update('rewardTextZh', e.target.value)}
+                />
+                <Help>支持 {'{rewardRate}'} 动态奖励比例；只表述消费抵扣，不建议出现提现文字。</Help>
+            </Field>
+            <Field label="英文奖励文案">
+                <Textarea
+                    value={draft.rewardTextEn}
+                    maxLength={220}
+                    disabled={disabled}
+                    onChange={e => update('rewardTextEn', e.target.value)}
+                />
+                <Help>Use {'{rewardRate}'} for the live reward percentage.</Help>
+            </Field>
+            <Field label="中文网站介绍">
+                <Textarea
+                    value={draft.siteIntroZh}
+                    maxLength={260}
+                    disabled={disabled}
+                    onChange={e => update('siteIntroZh', e.target.value)}
+                />
+            </Field>
+            <Field label="英文网站介绍">
+                <Textarea
+                    value={draft.siteIntroEn}
+                    maxLength={260}
+                    disabled={disabled}
+                    onChange={e => update('siteIntroEn', e.target.value)}
+                />
+            </Field>
+            <Field label="中文底部服务文字">
+                <Input
+                    value={draft.serviceTextZh}
+                    maxLength={260}
+                    disabled={disabled}
+                    onChange={e => update('serviceTextZh', e.target.value)}
+                />
+            </Field>
+            <Field label="英文底部服务文字">
+                <Input
+                    value={draft.serviceTextEn}
+                    maxLength={260}
+                    disabled={disabled}
+                    onChange={e => update('serviceTextEn', e.target.value)}
+                />
+            </Field>
+            <Field label="主文字颜色">
+                <Input
+                    type="color"
+                    value={draft.foregroundColor}
+                    disabled={disabled}
+                    onChange={e => update('foregroundColor', e.target.value.toUpperCase())}
+                />
+            </Field>
+            <Field label="强调颜色">
+                <Input
+                    type="color"
+                    value={draft.accentColor}
+                    disabled={disabled}
+                    onChange={e => update('accentColor', e.target.value.toUpperCase())}
+                />
+            </Field>
+        </div>
+    );
+}
+
+function PosterAssetField({
+    label,
+    guidance,
+    asset,
+    disabled,
+    onPick,
+    onClear,
+}: {
+    label: string;
+    guidance: string;
+    asset: Asset | null;
+    disabled: boolean;
+    onPick: () => void;
+    onClear: () => void;
+}) {
+    return (
+        <Field label={label}>
+            <div className="flex items-center gap-3 rounded-lg border p-2">
+                {asset ? (
+                    <img src={asset.preview} alt="" className="size-16 rounded-md object-cover" />
+                ) : (
+                    <div className="grid size-16 place-items-center rounded-md bg-muted">
+                        <ImagePlus className="size-5 text-muted-foreground" />
+                    </div>
+                )}
+                <div className="min-w-0 flex-1">
+                    <strong className="block truncate text-sm">{asset?.name ?? '未选择图片'}</strong>
+                    <small className="text-muted-foreground">{guidance}</small>
+                </div>
+                <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onPick}>
+                    选择
+                </Button>
+                {asset && (
+                    <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        disabled={disabled}
+                        onClick={onClear}
+                        aria-label="移除图片"
+                    >
+                        <X className="size-4" />
+                    </Button>
+                )}
+            </div>
+        </Field>
+    );
+}
+
+function emptyPosterTemplateDraft(position: number): PosterTemplateDraft {
+    return {
+        name: `店铺模板 ${position + 1}`,
+        enabled: true,
+        position,
+        layoutVariant: 'STANDARD_CENTER',
+        posterBackgroundAsset: null,
+        shareBackgroundAsset: null,
+        titleZh: '好友邀请函',
+        titleEn: 'Invitation for friends',
+        headlineZh: '发现好东西，一起分享',
+        headlineEn: 'Discover something worth sharing',
+        rewardTextZh: '好友成功消费，可获得 {rewardRate}% 奖励用于消费抵扣',
+        rewardTextEn: 'Earn {rewardRate}% in rewards when a friend makes a purchase',
+        siteIntroZh: '',
+        siteIntroEn: '',
+        serviceTextZh: '好物严选 · 便捷消费 · 售后服务',
+        serviceTextEn: 'Curated products · Easy shopping · Customer support',
+        foregroundColor: '#FFFFFF',
+        accentColor: '#FF4D4F',
+        overlayOpacity: 28,
+    };
+}
+
+function posterTemplateDraft(template: ReferralPosterTemplateRecord): PosterTemplateDraft {
+    return {
+        ...template,
+        layoutVariant: 'STANDARD_CENTER',
+        posterBackgroundAsset: template.posterBackgroundAsset as Asset | null,
+        shareBackgroundAsset: template.shareBackgroundAsset as Asset | null,
+    };
+}
+
+function posterTemplateInput(draft: PosterTemplateDraft) {
+    const { id: _id, posterBackgroundAsset, shareBackgroundAsset, ...input } = draft;
+    return {
+        ...input,
+        posterBackgroundAssetId: posterBackgroundAsset?.id ?? null,
+        shareBackgroundAssetId: shareBackgroundAsset?.id ?? null,
+    };
+}
+
+function validPosterTemplateDraft(draft: PosterTemplateDraft): boolean {
+    return Boolean(
+        draft.name.trim() &&
+        draft.titleZh.trim() &&
+        draft.titleEn.trim() &&
+        draft.headlineZh.trim() &&
+        draft.headlineEn.trim() &&
+        draft.rewardTextZh.trim() &&
+        draft.rewardTextEn.trim() &&
+        /^#[0-9A-F]{6}$/i.test(draft.foregroundColor) &&
+        /^#[0-9A-F]{6}$/i.test(draft.accentColor) &&
+        Number.isInteger(draft.overlayOpacity) &&
+        draft.overlayOpacity >= 0 &&
+        draft.overlayOpacity <= 80,
     );
 }
 
@@ -765,6 +1361,7 @@ function WithdrawalManagement({
     defaultCurrency: string;
     onChanged: () => void;
 }) {
+    const { activeChannel } = useChannel();
     const [searchEmail, setSearchEmail] = useState('');
     const [draft, setDraft] = useState<WithdrawalDraft>({
         customer: null,
@@ -785,12 +1382,21 @@ function WithdrawalManagement({
         return draft.customer.id;
     };
     const lookup = useQuery({
-        queryKey: ['referral-customer-lookup', searchEmail],
+        queryKey: ['referral-customer-lookup', activeChannel?.id, searchEmail],
         queryFn: () =>
             api.query<CustomerLookupResult>(referralCustomerLookupQuery, {
                 options: { take: 10, filter: { emailAddress: { contains: searchEmail.trim() } } },
             }),
         enabled: false,
+    });
+    const customerWallets = useQuery({
+        queryKey: ['referral-customer-wallets', activeChannel?.id, draft.customer?.id],
+        queryFn: () =>
+            api.query<{ referralCustomerWallets: ReferralCustomerWalletRecord[] }>(
+                referralCustomerWalletsQuery,
+                { customerId: requireSelectedCustomerId() },
+            ),
+        enabled: Boolean(activeChannel?.id && draft.customer?.id),
     });
     const create = useMutation({
         mutationFn: () =>
@@ -835,6 +1441,7 @@ function WithdrawalManagement({
             toast.success('提款状态已更新');
             setPaying(null);
             setExternalReference('');
+            void customerWallets.refetch();
             onChanged();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -851,16 +1458,24 @@ function WithdrawalManagement({
             toast.success('返利余额已调整并写入流水');
             setAdjustAmount('');
             setAdjustReason('');
+            void customerWallets.refetch();
             onChanged();
         },
         onError: error => toast.error(errorMessage(error)),
     });
     const customers = lookup.data?.customers.items ?? [];
-    const validCreate =
+    const wallets = customerWallets.data?.referralCustomerWallets ?? [];
+    const selectedWallet = wallets.find(wallet => wallet.currencyCode === draft.currencyCode);
+    const requestedAmount = toMinorAmount(draft.amount);
+    const availableBalance = selectedWallet?.availableBalance ?? 0;
+    const validCreate = Boolean(
         draft.customer &&
-        Number(draft.amount) > 0 &&
+        requestedAmount > 0 &&
+        requestedAmount <= availableBalance &&
         draft.payoutMethod.trim() &&
-        draft.payoutAccountMasked.trim();
+        draft.payoutAccountMasked.trim() &&
+        !customerWallets.isFetching,
+    );
     return (
         <div className="space-y-6">
             {!canWithdraw && (
@@ -895,7 +1510,7 @@ function WithdrawalManagement({
                                     key={customer.id}
                                     type="button"
                                     className={`rounded-md border p-3 text-left ${draft.customer?.id === customer.id ? 'border-primary bg-primary/5' : ''}`}
-                                    onClick={() => setDraft({ ...draft, customer })}
+                                    onClick={() => setDraft({ ...draft, customer, amount: '' })}
                                 >
                                     <strong>
                                         {`${customer.lastName}${customer.firstName}` || customer.emailAddress}
@@ -907,6 +1522,93 @@ function WithdrawalManagement({
                                     </small>
                                 </button>
                             ))}
+                        </div>
+                    )}
+                    {draft.customer && (
+                        <div className="mt-4 rounded-md border bg-muted/20 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <h4 className="m-0 text-sm font-semibold">返利账户余额</h4>
+                                    <p className="mb-0 mt-1 text-xs text-muted-foreground">
+                                        {draft.customer.emailAddress} · 当前渠道
+                                    </p>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={customerWallets.isFetching}
+                                    onClick={() => void customerWallets.refetch()}
+                                >
+                                    <RefreshCw
+                                        className={`size-4 ${customerWallets.isFetching ? 'animate-spin' : ''}`}
+                                    />
+                                    刷新余额
+                                </Button>
+                            </div>
+                            {customerWallets.isFetching && !customerWallets.data ? (
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                    <Skeleton className="h-24" />
+                                    <Skeleton className="h-24" />
+                                </div>
+                            ) : customerWallets.isError ? (
+                                <Alert variant="destructive" className="mt-3">
+                                    <AlertDescription>
+                                        余额读取失败：{errorMessage(customerWallets.error)}
+                                    </AlertDescription>
+                                </Alert>
+                            ) : wallets.length ? (
+                                <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                                    {wallets.map(wallet => (
+                                        <div key={wallet.id} className="rounded-md border bg-background p-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <strong>{wallet.currencyCode}</strong>
+                                                <span className="text-sm font-semibold text-primary">
+                                                    可用{' '}
+                                                    {formatMoney(
+                                                        wallet.availableBalance,
+                                                        wallet.currencyCode,
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                                                <span>
+                                                    待释放
+                                                    <strong className="mt-1 block text-foreground">
+                                                        {formatMoney(
+                                                            wallet.pendingBalance,
+                                                            wallet.currencyCode,
+                                                        )}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    已冻结
+                                                    <strong className="mt-1 block text-foreground">
+                                                        {formatMoney(
+                                                            wallet.reservedBalance,
+                                                            wallet.currencyCode,
+                                                        )}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    账户合计
+                                                    <strong className="mt-1 block text-foreground">
+                                                        {formatMoney(
+                                                            wallet.availableBalance +
+                                                                wallet.pendingBalance +
+                                                                wallet.reservedBalance,
+                                                            wallet.currencyCode,
+                                                        )}
+                                                    </strong>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="mb-0 mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                                    该客户当前渠道尚无返利账户记录，可用余额为 0。
+                                </p>
+                            )}
                         </div>
                     )}
                 </div>
@@ -948,6 +1650,16 @@ function WithdrawalManagement({
                             value={draft.amount}
                             onChange={event => setDraft({ ...draft, amount: event.target.value })}
                         />
+                        {draft.customer && (
+                            <small className="mt-1 block text-muted-foreground">
+                                当前可用：{formatMoney(availableBalance, draft.currencyCode)}
+                            </small>
+                        )}
+                        {requestedAmount > availableBalance && requestedAmount > 0 && (
+                            <small className="mt-1 block text-destructive">
+                                提款金额不能超过当前可用余额
+                            </small>
+                        )}
                     </Field>
                     <Field label="提款方式">
                         <Input
@@ -1329,6 +2041,7 @@ function SettingsSkeleton() {
 
 function programDraft(program: ReferralProgramRecord): ProgramDraft {
     return {
+        expectedUpdatedAt: program.updatedAt,
         enabled: program.enabled,
         rewardRate: program.rewardRate,
         releaseDelayDays: program.releaseDelayDays,
@@ -1351,7 +2064,7 @@ function validProgramDraft(draft: ProgramDraft): boolean {
         (!draft.maxRewardPerOrder || Number(draft.maxRewardPerOrder) > 0) &&
         Number.isInteger(draft.attributionWindowDays) &&
         draft.attributionWindowDays >= 1 &&
-        draft.attributionWindowDays <= 90
+        draft.attributionWindowDays <= 365
     );
 }
 function toMinorAmount(value: string): number {

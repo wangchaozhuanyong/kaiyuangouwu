@@ -34,6 +34,11 @@ export interface DashboardRouteDefinition {
      */
     navMenuItem?: Partial<NavMenuItem> & { sectionId: string };
     /**
+     * Permissions required when the route is opened directly. When omitted,
+     * the navigation item's permission requirement is reused.
+     */
+    requiresPermission?: string | string[];
+    /**
      * @description
      * Optional loader function to fetch data before the route renders.
      * The value is a TanStack Router

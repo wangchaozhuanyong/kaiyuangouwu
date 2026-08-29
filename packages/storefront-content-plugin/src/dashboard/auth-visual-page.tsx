@@ -25,7 +25,16 @@ import {
     useQuery,
     useQueryClient,
 } from '@vendure/dashboard';
-import { Image as ImageIcon, ImagePlus, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
+import {
+    Image as ImageIcon,
+    ImagePlus,
+    Monitor,
+    RefreshCw,
+    RotateCcw,
+    Save,
+    Smartphone,
+    Sparkles,
+} from 'lucide-react';
 import { CSSProperties, useEffect, useState } from 'react';
 
 import {
@@ -43,6 +52,7 @@ import {
     createStorefrontContentBlockMutation,
     storefrontContentBlocksQuery,
     updateStorefrontContentBlockMutation,
+    versionedContentBlockUpdate,
 } from './storefront-content.graphql';
 
 const copy = {
@@ -61,7 +71,7 @@ const copy = {
         image: '广告图片',
         selectImage: '从素材库选择或上传',
         replaceImage: '更换图片',
-        removeImage: '使用系统默认图',
+        removeImage: '改用系统默认图',
         defaultImage: '当前使用系统默认图',
         color: '文字与遮罩颜色',
         textColor: '主文字',
@@ -79,9 +89,11 @@ const copy = {
         subtitle: '说明文案',
         tags: '卖点标签',
         preview: '实时预览',
+        desktopPreview: '桌面端',
+        mobilePreview: '手机端',
         save: '保存并发布',
         saving: '正在保存',
-        reset: '恢复系统默认',
+        reset: '载入系统默认配置',
         saved: '页面视觉已保存并发布',
         validation: '请填写中文顶部短句、主标题、说明文案和三个卖点标签。',
         loadError: '无法加载登录注册页视觉配置。',
@@ -125,9 +137,11 @@ const copy = {
         subtitle: 'Supporting copy',
         tags: 'Benefit tags',
         preview: 'Live preview',
+        desktopPreview: 'Desktop',
+        mobilePreview: 'Mobile',
         save: 'Save and publish',
         saving: 'Saving',
-        reset: 'Restore built-in defaults',
+        reset: 'Load built-in defaults',
         saved: 'Page visual saved and published',
         validation: 'Enter the Chinese eyebrow, headline, supporting copy and all three benefit tags.',
         loadError: 'Could not load login and registration visual settings.',
@@ -166,6 +180,7 @@ function AuthVisualPage() {
         AUTH_LOGIN: createAuthVisualDraft('AUTH_LOGIN'),
         AUTH_REGISTER: createAuthVisualDraft('AUTH_REGISTER'),
     });
+    const [activeType, setActiveType] = useState<AuthVisualBlockType>('AUTH_LOGIN');
 
     const contentQuery = useQuery({
         queryKey,
@@ -192,7 +207,9 @@ function AuthVisualPage() {
         mutationFn: (block: ContentBlock) => {
             const input = authVisualInput(block);
             return block.id
-                ? api.mutate(updateStorefrontContentBlockMutation, { input: { id: block.id, ...input } })
+                ? api.mutate(updateStorefrontContentBlockMutation, {
+                      input: versionedContentBlockUpdate(block, input),
+                  })
                 : api.mutate(createStorefrontContentBlockMutation, { input });
         },
         onSuccess: async () => {
@@ -261,26 +278,46 @@ function AuthVisualPage() {
                         </Alert>
                     </PageBlock>
                 ) : (
-                    (['AUTH_LOGIN', 'AUTH_REGISTER'] as const).map(type => (
-                        <PageBlock
-                            key={type}
-                            column="full"
-                            blockId={`auth-visual-${type.toLowerCase()}`}
-                            title={type === 'AUTH_LOGIN' ? text.login : text.register}
-                            description={
-                                type === 'AUTH_LOGIN' ? text.loginDescription : text.registerDescription
-                            }
-                        >
-                            <AuthVisualEditor
-                                draft={drafts[type]}
-                                text={text}
-                                saving={saveMutation.isPending && saveMutation.variables?.type === type}
-                                onChange={draft => updateDraft(type, draft)}
-                                onReset={() => resetDraft(type)}
-                                onSave={() => saveMutation.mutate(drafts[type])}
-                            />
-                        </PageBlock>
-                    ))
+                    <PageBlock
+                        column="full"
+                        blockId={`auth-visual-${activeType.toLowerCase()}`}
+                        title={activeType === 'AUTH_LOGIN' ? text.login : text.register}
+                        description={
+                            activeType === 'AUTH_LOGIN' ? text.loginDescription : text.registerDescription
+                        }
+                    >
+                        <div className="mb-6 grid gap-2 rounded-xl bg-muted/35 p-1.5 sm:grid-cols-2">
+                            {(['AUTH_LOGIN', 'AUTH_REGISTER'] as const).map(type => (
+                                <Button
+                                    key={type}
+                                    type="button"
+                                    variant={activeType === type ? 'secondary' : 'ghost'}
+                                    className="h-auto justify-start px-4 py-3 text-left"
+                                    aria-pressed={activeType === type}
+                                    onClick={() => setActiveType(type)}
+                                >
+                                    <span>
+                                        <span className="block font-semibold">
+                                            {type === 'AUTH_LOGIN' ? text.login : text.register}
+                                        </span>
+                                        <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                                            {type === 'AUTH_LOGIN'
+                                                ? text.loginDescription
+                                                : text.registerDescription}
+                                        </span>
+                                    </span>
+                                </Button>
+                            ))}
+                        </div>
+                        <AuthVisualEditor
+                            draft={drafts[activeType]}
+                            text={text}
+                            saving={saveMutation.isPending && saveMutation.variables?.type === activeType}
+                            onChange={draft => updateDraft(activeType, draft)}
+                            onReset={() => resetDraft(activeType)}
+                            onSave={() => saveMutation.mutate(drafts[activeType])}
+                        />
+                    </PageBlock>
                 )}
             </PageLayout>
         </Page>
@@ -303,6 +340,7 @@ function AuthVisualEditor({
     onSave: () => void;
 }>) {
     const [previewLanguage, setPreviewLanguage] = useState<AuthVisualLanguageCode>('zh_Hans');
+    const [previewViewport, setPreviewViewport] = useState<'desktop' | 'mobile'>('desktop');
     const [editEnglish, setEditEnglish] = useState(false);
     const previewTranslation = authVisualTranslation(draft, previewLanguage);
     const previewImage = draft.imageAsset?.preview ?? draft.imageUrl;
@@ -315,6 +353,13 @@ function AuthVisualEditor({
         '--preview-accent': accentColor,
         ...(previewImage ? { backgroundImage: `url("${previewImage.replace(/"/g, '%22')}")` } : {}),
     } as CSSProperties;
+    const previewViewportClassName = [
+        'relative overflow-hidden rounded-2xl border bg-slate-950 bg-cover bg-center shadow-xl',
+        'transition-[max-width,aspect-ratio] duration-300',
+        previewViewport === 'mobile'
+            ? 'mx-auto aspect-[390/230] min-h-[230px] max-w-[390px]'
+            : 'aspect-[16/9] min-h-[280px] max-w-full',
+    ].join(' ');
 
     const updateTranslation = (
         languageCode: AuthVisualLanguageCode,
@@ -503,63 +548,98 @@ function AuthVisualEditor({
             </div>
 
             <div className="xl:sticky xl:top-6 xl:self-start">
-                <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <Label>{text.preview}</Label>
-                    <div className="flex gap-2">
-                        {(['zh_Hans', 'en'] as const).map(languageCode => (
-                            <Button
-                                key={languageCode}
-                                type="button"
-                                size="sm"
-                                variant={previewLanguage === languageCode ? 'default' : 'outline'}
-                                onClick={() => setPreviewLanguage(languageCode)}
-                            >
-                                {languageCode === 'zh_Hans' ? text.chinese : text.english}
-                            </Button>
-                        ))}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div className="flex rounded-md border bg-background p-1">
+                            {(['desktop', 'mobile'] as const).map(viewport => (
+                                <Button
+                                    key={viewport}
+                                    type="button"
+                                    size="sm"
+                                    variant={previewViewport === viewport ? 'secondary' : 'ghost'}
+                                    aria-pressed={previewViewport === viewport}
+                                    onClick={() => setPreviewViewport(viewport)}
+                                >
+                                    {viewport === 'desktop' ? (
+                                        <Monitor className="size-4" aria-hidden="true" />
+                                    ) : (
+                                        <Smartphone className="size-4" aria-hidden="true" />
+                                    )}
+                                    {viewport === 'desktop' ? text.desktopPreview : text.mobilePreview}
+                                </Button>
+                            ))}
+                        </div>
+                        <div className="flex rounded-md border bg-background p-1">
+                            {(['zh_Hans', 'en'] as const).map(languageCode => (
+                                <Button
+                                    key={languageCode}
+                                    type="button"
+                                    size="sm"
+                                    variant={previewLanguage === languageCode ? 'secondary' : 'ghost'}
+                                    aria-pressed={previewLanguage === languageCode}
+                                    onClick={() => setPreviewLanguage(languageCode)}
+                                >
+                                    {languageCode === 'zh_Hans' ? text.chinese : text.english}
+                                </Button>
+                            ))}
+                        </div>
                     </div>
                 </div>
-                <div
-                    className="relative aspect-[16/9] min-h-[280px] overflow-hidden rounded-2xl border bg-slate-950 bg-cover bg-center shadow-xl"
-                    style={previewStyle}
-                >
-                    <div
-                        className="absolute inset-0"
-                        style={{
-                            background: PREVIEW_OVERLAY_BACKGROUND,
-                        }}
-                    />
-                    {!previewImage ? (
-                        <div className="absolute inset-0 grid place-items-center opacity-30">
-                            <Sparkles className="size-28 text-cyan-300" />
-                        </div>
-                    ) : null}
-                    <div className="absolute inset-x-7 bottom-7 z-10 text-[var(--preview-text)]">
-                        <span
-                            className="inline-flex rounded-full border px-3 py-1 text-[10px] font-bold tracking-[0.14em] backdrop-blur"
+                <div className={previewViewport === 'mobile' ? 'rounded-2xl bg-muted/30 p-3' : ''}>
+                    <div className={previewViewportClassName} style={previewStyle}>
+                        <div
+                            className="absolute inset-0"
                             style={{
-                                borderColor: `color-mix(in srgb, var(--preview-accent) 70%, transparent)`,
-                                color: 'var(--preview-accent)',
-                                background: 'color-mix(in srgb, var(--preview-overlay) 58%, transparent)',
+                                background: PREVIEW_OVERLAY_BACKGROUND,
                             }}
+                        />
+                        {!previewImage ? (
+                            <div className="absolute inset-0 grid place-items-center opacity-30">
+                                <Sparkles className="size-28 text-cyan-300" />
+                            </div>
+                        ) : null}
+                        <div
+                            className={`absolute z-10 text-[var(--preview-text)] ${
+                                previewViewport === 'mobile'
+                                    ? 'inset-x-5 bottom-5 text-center'
+                                    : 'inset-x-7 bottom-7'
+                            }`}
                         >
-                            {previewTranslation.ctaLabel}
-                        </span>
-                        <h3 className="mt-3 text-2xl font-extrabold tracking-tight">
-                            {previewTranslation.title}
-                        </h3>
-                        <p className="mt-2 max-w-lg text-sm opacity-85">{previewTranslation.subtitle}</p>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                            {draft.items.map((item, position) => (
-                                <span
-                                    key={item.id ?? position}
-                                    className="rounded-full border border-white/20 bg-black/25 px-3 py-1 text-[11px] backdrop-blur"
-                                >
-                                    {item.translations.find(
-                                        translation => translation.languageCode === previewLanguage,
-                                    )?.label ?? ''}
-                                </span>
-                            ))}
+                            <span
+                                className="inline-flex rounded-full border px-3 py-1 text-[10px] font-bold tracking-[0.14em] backdrop-blur"
+                                style={{
+                                    borderColor: `color-mix(in srgb, var(--preview-accent) 70%, transparent)`,
+                                    color: 'var(--preview-accent)',
+                                    background: 'color-mix(in srgb, var(--preview-overlay) 58%, transparent)',
+                                }}
+                            >
+                                {previewTranslation.ctaLabel}
+                            </span>
+                            <h3
+                                className={`mt-3 font-extrabold tracking-tight ${
+                                    previewViewport === 'mobile' ? 'text-xl' : 'text-2xl'
+                                }`}
+                            >
+                                {previewTranslation.title}
+                            </h3>
+                            <p className="mt-2 max-w-lg text-sm opacity-85">{previewTranslation.subtitle}</p>
+                            <div
+                                className={`mt-4 flex flex-wrap gap-2 ${
+                                    previewViewport === 'mobile' ? 'justify-center' : ''
+                                }`}
+                            >
+                                {draft.items.map((item, position) => (
+                                    <span
+                                        key={item.id ?? position}
+                                        className="rounded-full border border-white/20 bg-black/25 px-3 py-1 text-[11px] backdrop-blur"
+                                    >
+                                        {item.translations.find(
+                                            translation => translation.languageCode === previewLanguage,
+                                        )?.label ?? ''}
+                                    </span>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -584,7 +664,11 @@ function AuthVisualImageField({
             <Label>{text.image}</Label>
             <div className="flex min-w-0 items-center gap-4 rounded-lg border p-4">
                 {preview ? (
-                    <img className="h-20 w-36 shrink-0 rounded-lg border object-cover" src={preview} alt="" />
+                    <img
+                        className="h-20 w-36 shrink-0 rounded-lg border object-cover"
+                        src={preview}
+                        alt={draft.imageAsset?.name ?? text.image}
+                    />
                 ) : (
                     <div className="flex h-20 w-36 shrink-0 items-center justify-center rounded-lg border border-dashed bg-muted/40">
                         <ImageIcon className="size-6 text-muted-foreground" aria-hidden="true" />

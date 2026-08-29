@@ -1,0 +1,7 @@
+interface:
+    display_name: 'Image Prompt Pro'
+    short_description: '安全地优化并路由网站生图提示词'
+    brand_color: '#7C3AED'
+    default_prompt: 'Use $image-prompt-pro to turn my image idea into a safe, model-aware PromptSpec.'
+policy:
+    allow_implicit_invocation: true

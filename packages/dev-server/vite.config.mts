@@ -1,5 +1,5 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
-import { vendureDashboardPlugin } from '@vendure/dashboard/vite';
+import { dashboardManualChunks, vendureDashboardPlugin } from '@vendure/dashboard/vite';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { defineConfig } from 'vite';
@@ -26,6 +26,11 @@ export default defineConfig(({ mode }) => {
         },
         build: {
             outDir: './dist/dashboard',
+            rollupOptions: {
+                output: {
+                    manualChunks: dashboardManualChunks,
+                },
+            },
         },
         plugins: [
             vendureDashboardPlugin({

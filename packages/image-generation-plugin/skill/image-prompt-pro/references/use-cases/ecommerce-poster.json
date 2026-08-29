@@ -1,0 +1,10 @@
+{
+    "code": "ecommerce-poster",
+    "required": ["subject"],
+    "defaults": {
+        "composition": "clear headline, product focus, offer area and call-to-action hierarchy",
+        "lighting": "polished campaign lighting",
+        "style": "conversion-focused ecommerce poster"
+    },
+    "avoid": ["invented price", "invented promotion", "misspelled exact text", "unreadable typography"]
+}

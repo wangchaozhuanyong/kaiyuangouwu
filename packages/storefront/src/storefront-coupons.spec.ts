@@ -7,7 +7,7 @@ import {
     couponCardsFromCampaigns,
     couponScopeLabel,
 } from './storefront-coupons';
-import { StorefrontContentBlock } from './types';
+import { StorefrontContentBlock, StorefrontCouponCampaign } from './types';
 
 function couponBlock(): StorefrontContentBlock {
     return {
@@ -122,6 +122,42 @@ describe('storefront coupons', () => {
                 unit: '折',
                 tag: '分类折扣券',
             }),
+        ]);
+    });
+
+    it('assigns a stable visual theme to each real coupon kind', () => {
+        const baseCampaign: Omit<StorefrontCouponCampaign, 'id' | 'kind'> = {
+            name: '主题测试券',
+            startsAt: null,
+            endsAt: null,
+            claimStartsAt: null,
+            claimEndsAt: null,
+            validityDays: null,
+            minimumSpend: 10_000,
+            discountAmount: null,
+            discountRate: 8.5,
+            remainingIssueCount: null,
+            claimed: false,
+            claimable: true,
+        };
+        const campaigns: StorefrontCouponCampaign[] = [
+            {
+                ...baseCampaign,
+                id: 'fixed',
+                kind: 'ORDER_FIXED',
+                discountAmount: 18_800,
+                discountRate: null,
+            },
+            { ...baseCampaign, id: 'order', kind: 'ORDER_PERCENTAGE' },
+            { ...baseCampaign, id: 'collection', kind: 'COLLECTION_PERCENTAGE' },
+            { ...baseCampaign, id: 'product', kind: 'PRODUCT_PERCENTAGE' },
+        ];
+
+        expect(couponCardsFromCampaigns(campaigns, 'zh', 'MYR').map(card => card.theme)).toEqual([
+            'rose',
+            'gold',
+            'blue',
+            'emerald',
         ]);
     });
 

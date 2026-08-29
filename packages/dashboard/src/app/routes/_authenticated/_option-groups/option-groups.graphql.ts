@@ -9,7 +9,34 @@ export const optionGroupListDocument = graphql(`
                 updatedAt
                 name
                 code
+                options {
+                    id
+                    name
+                }
+                products(options: { take: 3, sort: { updatedAt: DESC } }) {
+                    items {
+                        id
+                        name
+                    }
+                    totalItems
+                }
+            }
+            totalItems
+        }
+    }
+`);
+
+export const optionGroupPickerListDocument = graphql(`
+    query OptionGroupPickerList($options: ProductOptionGroupListOptions) {
+        productOptionGroups(options: $options) {
+            items {
+                id
+                name
                 productCount
+                options {
+                    id
+                    name
+                }
             }
             totalItems
         }

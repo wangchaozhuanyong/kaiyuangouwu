@@ -1,0 +1,15 @@
+{
+    "code": "product-photo",
+    "required": ["subject"],
+    "defaults": {
+        "composition": "clear product hierarchy with intentional negative space",
+        "lighting": "controlled commercial lighting",
+        "style": "credible ecommerce photography"
+    },
+    "avoid": [
+        "invented branding",
+        "invented certification",
+        "incorrect packaging text",
+        "warped product geometry"
+    ]
+}

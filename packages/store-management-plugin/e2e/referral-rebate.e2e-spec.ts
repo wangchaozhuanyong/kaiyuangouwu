@@ -33,7 +33,7 @@ const externalPaymentHandler = new PaymentMethodHandler({
 const passthroughTranslationProvider: ContentTranslationProvider = {
     name: 'referral-e2e-passthrough',
     isConfigured: () => true,
-    translate: async request => ({
+    translate: request => ({
         provider: 'referral-e2e-passthrough',
         translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
     }),
@@ -58,6 +58,7 @@ const { server, adminClient, shopClient } = createTestEnvironment(config);
 const PROGRAM = gql`
     query ReferralProgramE2E {
         referralProgram {
+            updatedAt
             enabled
             rewardRate
             allowBalanceSpend
@@ -341,6 +342,10 @@ const ADMIN_REPORTS = gql`
             orderCount
             todayInvitedCount
             todayInvitedPurchaserCount
+            salesByCurrency {
+                currencyCode
+                sales
+            }
         }
     }
 `;
@@ -417,6 +422,10 @@ describe('referral rebate closed loop', () => {
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        adminClient.setRequestHeader(
+            'x-vendure-sensitive-action-password',
+            config.authOptions.superadminCredentials.password,
+        );
         const productResult = await adminClient.query(CREATE_PRODUCT, {
             input: {
                 enabled: true,
@@ -454,9 +463,14 @@ describe('referral rebate closed loop', () => {
     it('binds an invitation, rewards paid product spend, claws back refunds, spends balance and handles an authorized withdrawal', async () => {
         const disabled = await shopClient.query(PROGRAM);
         expect(disabled.referralProgram.enabled).toBe(false);
+        const adminProgram = await adminClient.query(PROGRAM);
+
+        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0001' });
+        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0002' });
 
         const updated = await adminClient.query(UPDATE_PROGRAM, {
             input: {
+                expectedUpdatedAt: adminProgram.referralProgram.updatedAt,
                 enabled: true,
                 rewardRate: 10,
                 releaseDelayDays: 0,
@@ -621,6 +635,14 @@ describe('referral rebate closed loop', () => {
             todayInvitedCount: 1,
             todayInvitedPurchaserCount: 1,
         });
+        expect(reports.referralTodayMetrics.salesByCurrency).toContainEqual({
+            currencyCode: inviteeOrder.currencyCode,
+            sales:
+                inviteeOrder.totalWithTax +
+                completedInviterOrder.addPaymentToOrder.totalWithTax -
+                productRefund.refundOrder.total -
+                balanceRefund.refundOrder.total,
+        });
 
         const finalOverview = await shopClient.query(OVERVIEW);
         expect(walletFor(finalOverview, inviteeOrder.currencyCode)).toMatchObject({
@@ -630,6 +652,42 @@ describe('referral rebate closed loop', () => {
         });
         expect(inviterOrder.currencyCode).toBe(inviteeOrder.currencyCode);
     }, 30_000);
+
+    it.skipIf(!process.env.DB || process.env.DB === 'sqljs')(
+        'rejects one of two concurrent edits that start from the same referral-program version',
+        async () => {
+            const current = await adminClient.query(PROGRAM);
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const results = await Promise.allSettled(
+                [11, 12].map(rewardRate =>
+                    adminClient.query(UPDATE_PROGRAM, {
+                        input: {
+                            expectedUpdatedAt: current.referralProgram.updatedAt,
+                            enabled: true,
+                            rewardRate,
+                            releaseDelayDays: 0,
+                            minimumOrderAmount: 0,
+                            maxRewardPerOrder: null,
+                            allowBalanceSpend: true,
+                            attributionWindowDays: 30,
+                            defaultPosterTemplate: 'BRAND_MINIMAL',
+                        },
+                    }),
+                ),
+            );
+            const fulfilled = results.filter(
+                (result): result is PromiseFulfilledResult<unknown> => result.status === 'fulfilled',
+            );
+            const rejected = results.filter(
+                (result): result is PromiseRejectedResult => result.status === 'rejected',
+            );
+
+            expect(fulfilled).toHaveLength(1);
+            expect(rejected).toHaveLength(1);
+            expect(String(rejected[0].reason)).toContain('CONCURRENT_MODIFICATION');
+        },
+    );
 });
 
 async function register(emailAddress: string, inviteCode?: string, source?: string): Promise<void> {

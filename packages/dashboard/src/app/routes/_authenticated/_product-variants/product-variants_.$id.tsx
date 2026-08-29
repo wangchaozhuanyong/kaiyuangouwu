@@ -12,7 +12,6 @@ import { Button } from '@/vdb/components/ui/button.js';
 import { Field, FieldLabel } from '@/vdb/components/ui/field.js';
 import { Input } from '@/vdb/components/ui/input.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/vdb/components/ui/select.js';
-import { Separator } from '@/vdb/components/ui/separator.js';
 import { Switch } from '@/vdb/components/ui/switch.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
 import { addCustomFields } from '@/vdb/framework/document-introspection/add-custom-fields.js';
@@ -34,11 +33,10 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { VariablesOf } from 'gql.tada';
-import { Edit2, ExternalLink, Trash, X } from 'lucide-react';
+import { Edit2, ExternalLink, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
-import { AddCurrencyDropdown } from './components/add-currency-dropdown.js';
 import { AddStockLocationDropdown } from './components/add-stock-location-dropdown.js';
 import { VariantPriceDetail } from './components/variant-price-detail.js';
 import {
@@ -47,6 +45,7 @@ import {
     stockLocationsQueryDocument,
     updateProductVariantDocument,
 } from './product-variants.graphql.js';
+import { getEditableDefaultCurrencyPrices } from './utils/product-variant-prices.js';
 import { getChangedStockLevels, StockLevelInput } from './utils/stock-levels.js';
 
 const pageId = 'product-variant-detail';
@@ -120,6 +119,8 @@ export function ProductVariantEditor({
         createDocument: createProductVariantDocument,
         updateDocument: updateProductVariantDocument,
         setValuesForUpdate: entity => {
+            const defaultCurrencyCode = activeChannel?.defaultCurrencyCode ?? entity.currencyCode;
+            const defaultPrice = entity.prices.find(price => price.currencyCode === defaultCurrencyCode);
             return {
                 id: entity.id,
                 enabled: entity.enabled,
@@ -129,7 +130,16 @@ export function ProductVariantEditor({
                 facetValueIds: entity.facetValues.map(facetValue => facetValue.id),
                 taxCategoryId: entity.taxCategory.id,
                 price: entity.price,
-                prices: entity.prices,
+                prices: getEditableDefaultCurrencyPrices(
+                    entity.prices,
+                    defaultCurrencyCode,
+                    defaultPrice ??
+                        ({
+                            currencyCode: defaultCurrencyCode,
+                            price: entity.price,
+                            customFields: {},
+                        } as PriceInput),
+                ),
                 trackInventory: entity.trackInventory,
                 outOfStockThreshold: entity.outOfStockThreshold,
                 useGlobalOutOfStockThreshold: entity.useGlobalOutOfStockThreshold,
@@ -194,63 +204,13 @@ export function ProductVariantEditor({
         onDirtyChange?.(form.formState.isDirty);
     }, [form.formState.isDirty, onDirtyChange]);
 
-    const availableCurrencies = activeChannel?.availableCurrencyCodes ?? [];
     const [prices, taxCategoryId, stockLevels] = form.watch(['prices', 'taxCategoryId', 'stockLevels']);
 
     // Filter out deleted prices for display
     const activePrices = prices?.filter(p => !p.delete) ?? [];
 
-    // Get currencies that are currently active (not deleted)
-    const usedCurrencies = activePrices.map(p => p.currencyCode);
-    const unusedCurrencies = availableCurrencies.filter(c => !usedCurrencies.includes(c));
-
     // Get used stock location IDs
     const usedStockLocationIds = stockLevels?.map(sl => sl.stockLocationId) ?? [];
-
-    const handleAddCurrency = (currencyCode: string) => {
-        const currentPrices = form.getValues('prices') || [];
-
-        // Check if this currency already exists (including deleted ones)
-        const existingPriceIndex = currentPrices.findIndex(p => p.currencyCode === currencyCode);
-
-        if (existingPriceIndex !== -1) {
-            // Currency exists, mark it as not deleted
-            const updatedPrices = [...currentPrices];
-            updatedPrices[existingPriceIndex] = {
-                ...updatedPrices[existingPriceIndex],
-                delete: false,
-            };
-            form.setValue('prices', updatedPrices, {
-                shouldDirty: true,
-                shouldValidate: true,
-            });
-        } else {
-            // Add new currency
-            const newPrice = {
-                currencyCode,
-                price: 0,
-                delete: false,
-                customFields: {},
-            } as PriceInput;
-            form.setValue('prices', [...currentPrices, newPrice], {
-                shouldDirty: true,
-                shouldValidate: true,
-            });
-        }
-    };
-
-    const handleRemoveCurrency = (indexToRemove: number) => {
-        const currentPrices = form.getValues('prices') || [];
-        const updatedPrices = [...currentPrices];
-        updatedPrices[indexToRemove] = {
-            ...updatedPrices[indexToRemove],
-            delete: true,
-        };
-        form.setValue('prices', updatedPrices, {
-            shouldDirty: true,
-            shouldValidate: true,
-        });
-    };
 
     const handleAddStockLocation = (stockLocationId: string, stockLocationName: string) => {
         const currentStockLevels = form.getValues('stockLevels') || [];
@@ -384,6 +344,12 @@ export function ProductVariantEditor({
                             )}
                         />
                     </DetailFormGrid>
+                    <p className="mb-6 text-sm text-muted-foreground">
+                        <Trans>
+                            Only the active store's default-currency price is editable. Other storefront
+                            currencies are calculated from the configured exchange rate in real time.
+                        </Trans>
+                    </p>
                     {activePrices.map((price, displayIndex) => {
                         // Find the actual index in the full prices array
                         const actualIndex = prices?.indexOf(price) ?? displayIndex;
@@ -398,9 +364,8 @@ export function ProductVariantEditor({
                         );
                         return (
                             <div key={price.currencyCode} className="space-y-6">
-                                {displayIndex > 0 && <Separator className="my-4" />}
                                 <DetailFormGrid key={price.currencyCode}>
-                                    <div className="flex gap-1 items-end">
+                                    <div>
                                         <FormFieldWrapper
                                             control={form.control}
                                             name={`prices.${actualIndex}.price`}
@@ -409,17 +374,6 @@ export function ProductVariantEditor({
                                                 <MoneyInput {...field} currency={price.currencyCode} />
                                             )}
                                         />
-                                        {activePrices.length > 1 && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleRemoveCurrency(actualIndex)}
-                                                className="h-6 w-6 p-0 mb-2 hover:text-destructive hover:bg-destructive-100"
-                                            >
-                                                <Trash className="size-4" />
-                                            </Button>
-                                        )}
                                     </div>
                                     <VariantPriceDetail
                                         priceIncludesTax={activeChannel?.pricesIncludeTax ?? false}
@@ -439,12 +393,6 @@ export function ProductVariantEditor({
                             </div>
                         );
                     })}
-                    {unusedCurrencies.length ? (
-                        <AddCurrencyDropdown
-                            onCurrencySelect={handleAddCurrency}
-                            unusedCurrencies={unusedCurrencies}
-                        />
-                    ) : null}
                 </PageBlock>
                 <PageBlock column="main" blockId="stock" title={<Trans>Stock</Trans>}>
                     <DetailFormGrid>

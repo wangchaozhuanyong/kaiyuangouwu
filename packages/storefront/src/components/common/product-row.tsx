@@ -57,9 +57,7 @@ export function ProductRow({
             <div className="product-row-content">
                 <div className="product-row-top">
                     <strong className="product-row-name">{product.name}</strong>
-                    <span className="product-row-desc">
-                        {trimText(product.description, 32) || variant?.sku}
-                    </span>
+                    <span className="product-row-desc">{trimText(product.description, 32)}</span>
                     <span className="product-row-badge">
                         {isAutoCard
                             ? isZh

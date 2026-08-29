@@ -10,16 +10,25 @@ import {
     TranslatorService,
     UserInputError,
 } from '@vendure/core';
+import { LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import {
+    authVisualCodeByType,
     DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
     MAX_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    MAX_STOREFRONT_CLIENT_PLUGINS,
+    MAX_STOREFRONT_NAVIGATION_ITEMS,
     MIN_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    STOREFRONT_CLIENT_PLUGINS_CODE,
+    STOREFRONT_NAVIGATION_CODE,
+    storefrontClientPluginCodes,
+    storefrontClientPluginPlacements,
     StorefrontContentBlockType,
     storefrontContentBlockTypes,
     storefrontContentLayoutVariants,
     StorefrontContentTargetType,
     storefrontContentTargetTypes,
+    storefrontNavigationTargetPaths,
 } from './constants';
 import { StorefrontContentBlockTranslation } from './entities/storefront-content-block-translation.entity';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
@@ -28,6 +37,7 @@ import { StorefrontContentItem } from './entities/storefront-content-item.entity
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
 import {
+    ApplyStorefrontContentChangesInput,
     CreateStorefrontContentBlockInput,
     StorefrontContentBlockTranslationInput,
     StorefrontContentItemInput,
@@ -140,6 +150,13 @@ export class StorefrontContentService {
         input: CreateStorefrontContentBlockInput,
     ): Promise<StorefrontContentBlock> {
         const normalized = this.validateBlockInput(input);
+        if (normalized.type === 'NAVIGATION') {
+            this.validateNavigationItems(input.items ?? []);
+        }
+        if (normalized.type === 'CLIENT_PLUGINS') {
+            this.validateClientPluginItems(input.items ?? []);
+        }
+        this.validateAuthVisual(normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
@@ -164,7 +181,8 @@ export class StorefrontContentService {
         ctx: RequestContext,
         input: UpdateStorefrontContentBlockInput,
     ): Promise<StorefrontContentBlock> {
-        const block = await this.getOwnedBlockOrThrow(ctx, input.id);
+        const block = await this.lockOwnedBlockOrThrow(ctx, input.id);
+        this.assertExpectedUpdatedAt(block.updatedAt, input.expectedUpdatedAt);
         const next = this.validateBlockInput({
             code: input.code ?? block.code,
             internalName: input.internalName ?? block.internalName,
@@ -193,6 +211,50 @@ export class StorefrontContentService {
                 })),
             items: input.items,
         });
+        if (next.type === 'NAVIGATION') {
+            this.validateNavigationItems(
+                input.items ??
+                    block.items.map(item => ({
+                        enabled: item.enabled,
+                        position: item.position,
+                        targetType: item.targetType,
+                        targetValue: item.targetValue,
+                        translations: [],
+                    })),
+            );
+        }
+        if (next.type === 'CLIENT_PLUGINS') {
+            this.validateClientPluginItems(
+                input.items ??
+                    block.items.map(item => ({
+                        enabled: item.enabled,
+                        position: item.position,
+                        targetType: item.targetType,
+                        targetValue: item.targetValue,
+                        settings: item.settings,
+                        translations: [],
+                    })),
+            );
+        }
+        this.validateAuthVisual(
+            next,
+            input.items ??
+                block.items.map(item => ({
+                    id: item.id,
+                    enabled: item.enabled,
+                    position: item.position,
+                    imageAssetId: item.imageAssetId,
+                    imageUrl: item.imageUrl,
+                    targetType: item.targetType,
+                    targetValue: item.targetValue,
+                    settings: item.settings,
+                    translations: item.translations.map(translation => ({
+                        languageCode: translation.languageCode,
+                        label: translation.label,
+                        description: translation.description,
+                    })),
+                })),
+        );
         await this.assertUniqueCode(ctx, next.code, block.id);
         const requestedImageUrl =
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
@@ -226,6 +288,25 @@ export class StorefrontContentService {
         return this.translateBlock(await this.getOwnedBlockOrThrow(ctx, block.id), ctx, false);
     }
 
+    async applyChanges(
+        ctx: RequestContext,
+        input: ApplyStorefrontContentChangesInput,
+    ): Promise<StorefrontContentBlock[]> {
+        await this.lockAndAssertBlockVersions(ctx, input.expectedBlocks);
+        this.assertUniqueBatchTargets(input);
+
+        for (const updateInput of input.updates) {
+            await this.update(ctx, updateInput);
+        }
+        for (const createInput of input.creates) {
+            await this.create(ctx, createInput);
+        }
+        if (input.orderedCodes) {
+            await this.reorderByCodes(ctx, input.orderedCodes);
+        }
+        return this.findAllForAdmin(ctx);
+    }
+
     async reorder(ctx: RequestContext, ids: ID[]): Promise<StorefrontContentBlock[]> {
         const uniqueIds = new Set(ids.map(String));
         if (uniqueIds.size !== ids.length) {
@@ -245,6 +326,78 @@ export class StorefrontContentService {
         return this.findAllForAdmin(ctx);
     }
 
+    private async lockAndAssertBlockVersions(
+        ctx: RequestContext,
+        expectedBlocks: ApplyStorefrontContentChangesInput['expectedBlocks'],
+    ): Promise<void> {
+        const expectedById = new Map(
+            expectedBlocks.map(block => [String(block.id), block.expectedUpdatedAt]),
+        );
+        if (expectedById.size !== expectedBlocks.length) {
+            throw new UserInputError('CONCURRENT_MODIFICATION: 内容版本列表包含重复项，请刷新后重试');
+        }
+
+        try {
+            await this.connection
+                .getRepository(ctx, StorefrontContentBlock)
+                .createQueryBuilder('block')
+                .setLock('pessimistic_write')
+                .where('block.channelId = :channelId', { channelId: ctx.channelId })
+                .orderBy('block.id', 'ASC')
+                .getMany();
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+
+        const currentBlocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
+            where: { channelId: ctx.channelId },
+        });
+        if (
+            currentBlocks.length !== expectedBlocks.length ||
+            currentBlocks.some(block => !expectedById.has(String(block.id)))
+        ) {
+            throw new UserInputError(
+                'CONCURRENT_MODIFICATION: 装修区块列表已被其他管理员更改，请重新载入后操作',
+            );
+        }
+        for (const block of currentBlocks) {
+            this.assertExpectedUpdatedAt(block.updatedAt, expectedById.get(String(block.id)) as Date);
+        }
+    }
+
+    private assertUniqueBatchTargets(input: ApplyStorefrontContentChangesInput): void {
+        const updateIds = input.updates.map(update => String(update.id));
+        const createCodes = input.creates.map(create => create.code.trim().toLowerCase());
+        if (
+            new Set(updateIds).size !== updateIds.length ||
+            new Set(createCodes).size !== createCodes.length
+        ) {
+            throw new UserInputError('批量装修操作包含重复区块');
+        }
+    }
+
+    private async reorderByCodes(ctx: RequestContext, codes: string[]): Promise<void> {
+        const normalizedCodes = codes.map(code => code.trim().toLowerCase());
+        if (new Set(normalizedCodes).size !== normalizedCodes.length) {
+            throw new UserInputError('装修区块排序包含重复编码');
+        }
+        const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
+            where: { channelId: ctx.channelId },
+        });
+        const blocksByCode = new Map(blocks.map(block => [block.code.toLowerCase(), block]));
+        if (
+            blocks.length !== normalizedCodes.length ||
+            normalizedCodes.some(code => !blocksByCode.has(code))
+        ) {
+            throw new UserInputError('排序必须包含当前店铺的全部装修区块');
+        }
+        normalizedCodes.forEach((code, position) => {
+            const block = blocksByCode.get(code);
+            if (block) block.position = position;
+        });
+        await this.connection.getRepository(ctx, StorefrontContentBlock).save(blocks);
+    }
+
     async delete(ctx: RequestContext, id: ID): Promise<{ result: 'DELETED'; message: string }> {
         const block = await this.getOwnedBlockOrThrow(ctx, id);
         await this.connection.getRepository(ctx, StorefrontContentBlock).remove(block);
@@ -256,6 +409,12 @@ export class StorefrontContentService {
         block: StorefrontContentBlock,
         inputs: StorefrontContentItemInput[],
     ): Promise<void> {
+        if (block.type === 'NAVIGATION') {
+            this.validateNavigationItems(inputs);
+        }
+        if (block.type === 'CLIENT_PLUGINS') {
+            this.validateClientPluginItems(inputs);
+        }
         const existing = await this.connection.getRepository(ctx, StorefrontContentItem).find({
             where: { blockId: block.id },
             relations: { imageAsset: true, translations: true },
@@ -539,6 +698,33 @@ export class StorefrontContentService {
         return block;
     }
 
+    private async lockOwnedBlockOrThrow(ctx: RequestContext, id: ID): Promise<StorefrontContentBlock> {
+        const repository = this.connection.getRepository(ctx, StorefrontContentBlock);
+        try {
+            const locked = await repository
+                .createQueryBuilder('block')
+                .setLock('pessimistic_write')
+                .where('block.id = :id', { id })
+                .andWhere('block.channelId = :channelId', { channelId: ctx.channelId })
+                .getOne();
+            if (!locked) {
+                throw new EntityNotFoundError(StorefrontContentBlock.name, id);
+            }
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+        return this.getOwnedBlockOrThrow(ctx, id);
+    }
+
+    private assertExpectedUpdatedAt(current: Date, expected: Date | string): void {
+        const expectedDate = expected instanceof Date ? expected : new Date(expected);
+        if (!Number.isFinite(expectedDate.getTime()) || current.getTime() !== expectedDate.getTime()) {
+            throw new UserInputError(
+                'CONCURRENT_MODIFICATION: 该内容已被其他管理员更新，请重新载入后合并修改',
+            );
+        }
+    }
+
     private findOwnedBlock(
         ctx: RequestContext,
         id: ID,
@@ -575,6 +761,27 @@ export class StorefrontContentService {
         }
         if (!storefrontContentBlockTypes.includes(input.type)) {
             throw new UserInputError('不支持的装修区块类型');
+        }
+        if (
+            (input.type === 'NAVIGATION' && code !== STOREFRONT_NAVIGATION_CODE) ||
+            (input.type !== 'NAVIGATION' && code === STOREFRONT_NAVIGATION_CODE)
+        ) {
+            throw new UserInputError('客户端导航必须使用系统保留编码');
+        }
+        if (
+            (input.type === 'CLIENT_PLUGINS' && code !== STOREFRONT_CLIENT_PLUGINS_CODE) ||
+            (input.type !== 'CLIENT_PLUGINS' && code === STOREFRONT_CLIENT_PLUGINS_CODE)
+        ) {
+            throw new UserInputError('客户端插件配置必须使用系统保留编码');
+        }
+        const authVisualType = input.type as keyof typeof authVisualCodeByType;
+        const requiredAuthVisualCode = authVisualCodeByType[authVisualType];
+        const reservedAuthVisualCodes = Object.values(authVisualCodeByType);
+        if (
+            (requiredAuthVisualCode && code !== requiredAuthVisualCode) ||
+            (!requiredAuthVisualCode && reservedAuthVisualCodes.some(reservedCode => reservedCode === code))
+        ) {
+            throw new UserInputError('登录注册页视觉必须使用对应的系统保留编码');
         }
         const internalName =
             input.internalName?.trim() ||
@@ -643,6 +850,118 @@ export class StorefrontContentService {
         this.normalizeTarget(targetType, input.targetValue);
         if (blockType === 'COUPONS' && targetType !== 'COUPON') {
             throw new UserInputError('优惠券专区的每个条目都必须填写优惠码');
+        }
+    }
+
+    private validateAuthVisual(
+        input: ReturnType<StorefrontContentService['validateBlockInput']>,
+        items: StorefrontContentItemInput[],
+    ): void {
+        if (input.type !== 'AUTH_LOGIN' && input.type !== 'AUTH_REGISTER') return;
+        if (input.layoutVariant !== 'HERO_OVERLAY' || input.targetType !== 'NONE') {
+            throw new UserInputError('登录注册页视觉必须使用主视觉叠加布局且不能配置跳转');
+        }
+        if (input.startsAt || input.endsAt) {
+            throw new UserInputError('登录注册页视觉不能设置定时上下线');
+        }
+        const source = input.translations.find(
+            translation => translation.languageCode === LanguageCode.zh_Hans,
+        );
+        if (!source?.ctaLabel?.trim() || !source.subtitle?.trim()) {
+            throw new UserInputError('登录注册页视觉必须填写中文顶部短句和说明文案');
+        }
+        if (
+            items.length !== 3 ||
+            new Set(items.map(item => item.position)).size !== 3 ||
+            items.some(item => item.position < 0 || item.position > 2)
+        ) {
+            throw new UserInputError('登录注册页视觉必须包含三个顺序固定的卖点标签');
+        }
+        const accentColor = input.settings?.accentColor;
+        if (
+            accentColor != null &&
+            (typeof accentColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(accentColor))
+        ) {
+            throw new UserInputError('登录注册页标签强调色必须使用六位十六进制颜色');
+        }
+    }
+
+    private validateNavigationItems(inputs: StorefrontContentItemInput[]): void {
+        if (!inputs.length || inputs.length > MAX_STOREFRONT_NAVIGATION_ITEMS) {
+            throw new UserInputError(`客户端导航必须包含 1 到 ${MAX_STOREFRONT_NAVIGATION_ITEMS} 个项目`);
+        }
+        if (!inputs.some(item => item.enabled !== false)) {
+            throw new UserInputError('客户端导航至少需要启用一个项目');
+        }
+        for (const input of inputs) {
+            if ((input.targetType ?? 'NONE') !== 'PAGE') {
+                throw new UserInputError('客户端导航只能跳转到站内页面');
+            }
+            const target = input.targetValue?.trim();
+            if (
+                !storefrontNavigationTargetPaths.includes(
+                    target as (typeof storefrontNavigationTargetPaths)[number],
+                )
+            ) {
+                throw new UserInputError('客户端导航包含不支持的站内页面');
+            }
+        }
+    }
+
+    private validateClientPluginItems(inputs: StorefrontContentItemInput[]): void {
+        if (inputs.length > MAX_STOREFRONT_CLIENT_PLUGINS) {
+            throw new UserInputError(`客户端插件最多可以添加 ${MAX_STOREFRONT_CLIENT_PLUGINS} 个`);
+        }
+        const pluginCodes = new Set<string>();
+        for (const input of inputs) {
+            if ((input.targetType ?? 'NONE') !== 'NONE' || input.targetValue?.trim()) {
+                throw new UserInputError('客户端插件不能配置独立跳转目标');
+            }
+            const settings = this.normalizeSettings(input.settings, '客户端插件设置');
+            const pluginCode = settings?.pluginCode;
+            const placement = settings?.placement;
+            const categoryScope = settings?.categoryScope ?? 'ALL';
+            const categoryIds = settings?.categoryIds ?? [];
+            const includeChildren = settings?.includeChildren ?? true;
+            if (typeof pluginCode !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(pluginCode)) {
+                throw new UserInputError('客户端插件编码格式不正确');
+            }
+            if (pluginCodes.has(pluginCode)) {
+                throw new UserInputError('同一个客户端插件不能重复添加');
+            }
+            if (!storefrontClientPluginCodes.includes(pluginCode)) {
+                throw new UserInputError('客户端插件尚未在平台发布');
+            }
+            pluginCodes.add(pluginCode);
+            if (
+                typeof placement !== 'string' ||
+                !storefrontClientPluginPlacements.includes(
+                    placement as (typeof storefrontClientPluginPlacements)[number],
+                )
+            ) {
+                throw new UserInputError('客户端插件包含不支持的分类页位置');
+            }
+            if (categoryScope !== 'ALL' && categoryScope !== 'SELECTED') {
+                throw new UserInputError('客户端插件分类显示范围不正确');
+            }
+            if (
+                !Array.isArray(categoryIds) ||
+                categoryIds.length > 200 ||
+                categoryIds.some(id => typeof id !== 'string' || !id.trim()) ||
+                new Set(categoryIds).size !== categoryIds.length
+            ) {
+                throw new UserInputError('客户端插件分类配置不正确');
+            }
+            if (
+                placement !== 'BUSINESS_SERVICES_MAIN' &&
+                categoryScope === 'SELECTED' &&
+                !categoryIds.length
+            ) {
+                throw new UserInputError('指定分类显示时至少需要选择一个分类');
+            }
+            if (typeof includeChildren !== 'boolean') {
+                throw new UserInputError('客户端插件子分类设置不正确');
+            }
         }
     }
 
@@ -803,4 +1122,13 @@ export class StorefrontContentService {
     private optionalText(value: string | null | undefined): string | null {
         return value?.trim() || null;
     }
+}
+
+function isLockNotSupportedError(error: unknown): boolean {
+    return (
+        error instanceof LockNotSupportedOnGivenDriverError ||
+        (error instanceof Error &&
+            (error.name === 'LockNotSupportedOnGivenDriverError' ||
+                error.message.toLowerCase().includes('locking not supported')))
+    );
 }

@@ -1,7 +1,7 @@
 import { Kind, TypeNode } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { adminApiExtensions } from './api-extensions';
+import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 
 describe('store management API extensions', () => {
     it('uses Node items for every PaginatedList implementation', () => {
@@ -22,6 +22,67 @@ describe('store management API extensions', () => {
             const itemType = items && namedType(items.type);
             expect(itemType, `${list.name.value}.items must resolve to a Node type`).toBeTruthy();
             expect(nodeTypes, `${list.name.value}.items must implement Node`).toContain(itemType);
+        }
+    });
+
+    it('exposes flash-sale names only through the Admin API', () => {
+        const adminFlashSale = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION && definition.name.value === 'StoreFlashSale',
+        );
+        const shopFlashSale = shopApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION && definition.name.value === 'StoreFlashSale',
+        );
+
+        expect(adminFlashSale?.kind).toBe(Kind.OBJECT_TYPE_DEFINITION);
+        expect(shopFlashSale?.kind).toBe(Kind.OBJECT_TYPE_DEFINITION);
+        if (
+            adminFlashSale?.kind !== Kind.OBJECT_TYPE_DEFINITION ||
+            shopFlashSale?.kind !== Kind.OBJECT_TYPE_DEFINITION
+        ) {
+            throw new Error('StoreFlashSale type is missing');
+        }
+        expect(adminFlashSale.fields?.map(field => field.name.value)).toContain('name');
+        expect(shopFlashSale.fields?.map(field => field.name.value)).not.toContain('name');
+    });
+
+    it('exposes an admin query for a selected customer referral wallets', () => {
+        const query = adminApiExtensions.definitions.find(
+            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
+        );
+
+        expect(query?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
+        if (query?.kind !== Kind.OBJECT_TYPE_EXTENSION) {
+            throw new Error('Admin Query extension is missing');
+        }
+        expect(query.fields?.map(field => field.name.value)).toContain('referralCustomerWallets');
+    });
+
+    it('exposes store-scoped referral poster templates and their admin mutations', () => {
+        const referralProgram = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'ReferralProgram',
+        );
+        const mutation = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
+        );
+
+        expect(referralProgram?.kind).toBe(Kind.OBJECT_TYPE_DEFINITION);
+        if (referralProgram?.kind === Kind.OBJECT_TYPE_DEFINITION) {
+            expect(referralProgram.fields?.map(field => field.name.value)).toContain('posterTemplateConfigs');
+        }
+        expect(mutation?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
+        if (mutation?.kind === Kind.OBJECT_TYPE_EXTENSION) {
+            expect(mutation.fields?.map(field => field.name.value)).toEqual(
+                expect.arrayContaining([
+                    'createReferralPosterTemplate',
+                    'updateReferralPosterTemplate',
+                    'deleteReferralPosterTemplate',
+                ]),
+            );
         }
     });
 });

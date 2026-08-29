@@ -18,6 +18,7 @@ import {
     PageTitle,
     Skeleton,
     Textarea,
+    UnsavedChangesConfirmation,
     api,
     toast,
     useChannel,
@@ -48,6 +49,7 @@ import {
 } from './merchant-store.graphql';
 
 interface ProfileDraft {
+    expectedUpdatedAt: string;
     storefrontNameZh: string;
     storefrontNameEn: string;
     originalStorefrontNameZh: string;
@@ -89,6 +91,8 @@ const zhCopy = {
     accessible: '可访问',
     suspended: '已停用',
     invalidName: '店铺名称必须是 1 至 16 个显示单位',
+    conflict:
+        '店铺资料已被其他管理员更新。请刷新页面获取最新数据，再合并并保存你的修改。',
     readiness: '上线检查',
     ready: '已满足全部上线条件',
     notReady: '仍有未完成项目，请完成后联系平台管理员启用店铺',
@@ -126,6 +130,8 @@ const enCopy: typeof zhCopy = {
     accessible: 'Accessible',
     suspended: 'Suspended',
     invalidName: 'The store name must use 1 to 16 display units',
+    conflict:
+        'Another administrator updated this store profile. Reload the latest data, merge your changes, and save again.',
     readiness: 'Launch checks',
     ready: 'All launch requirements are complete',
     notReady: 'Complete the remaining items, then ask the platform administrator to activate the store',
@@ -170,6 +176,7 @@ function MyStoreProfilePage() {
     const mutation = useMutation({
         mutationFn: (input: ProfileDraft) => {
             const updateInput: Record<string, unknown> = {
+                expectedUpdatedAt: input.expectedUpdatedAt,
                 descriptionZh: input.descriptionZh,
                 descriptionEn: input.descriptionEn,
                 logoAssetId: input.logoAsset?.id ?? null,
@@ -188,7 +195,8 @@ function MyStoreProfilePage() {
             setDraft(toDraft(result.updateMyStoreProfile));
             toast.success(text.saved);
         },
-        onError: error => toast.error(errorMessage(error)),
+        onError: error =>
+            toast.error(isConcurrentModification(error) ? text.conflict : errorMessage(error)),
     });
 
     const save = () => {
@@ -207,13 +215,19 @@ function MyStoreProfilePage() {
     const update = <K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) => {
         if (draft) setDraft({ ...draft, [field]: value });
     };
+    const isDirty = Boolean(draft && profile && JSON.stringify(draft) !== JSON.stringify(toDraft(profile)));
 
     return (
         <Page pageId="my-store-profile">
+            <UnsavedChangesConfirmation when={isDirty} />
             <PageTitle>{text.title}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
-                    <Button type="button" onClick={save} disabled={!draft || mutation.isPending}>
+                    <Button
+                        type="button"
+                        onClick={save}
+                        disabled={!draft || !isDirty || mutation.isPending}
+                    >
                         {mutation.isPending ? (
                             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                         ) : (
@@ -355,7 +369,7 @@ function MyStoreProfilePage() {
                                     type="button"
                                     className="w-full"
                                     onClick={save}
-                                    disabled={mutation.isPending}
+                                    disabled={!isDirty || mutation.isPending}
                                 >
                                     {mutation.isPending ? (
                                         <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
@@ -491,6 +505,7 @@ function ProfileSkeleton() {
 
 function toDraft(profile: MyStoreProfileRecord): ProfileDraft {
     return {
+        expectedUpdatedAt: profile.updatedAt,
         storefrontNameZh: profile.channel.customFields.storefrontNameZh,
         storefrontNameEn: profile.channel.customFields.storefrontNameEn,
         originalStorefrontNameZh: profile.channel.customFields.storefrontNameZh,
@@ -511,5 +526,10 @@ function validStorefrontName(value: string): boolean {
 }
 
 function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    return message.replace(/^GraphQL Request Error:\s*/u, '');
+}
+
+function isConcurrentModification(error: unknown): boolean {
+    return errorMessage(error).includes('CONCURRENT_MODIFICATION:');
 }

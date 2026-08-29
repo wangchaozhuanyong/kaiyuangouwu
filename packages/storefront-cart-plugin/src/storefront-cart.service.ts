@@ -460,7 +460,7 @@ export class StorefrontCartService {
             },
             relations: ['lines'],
         });
-        let customerCart = await cartRepository.findOne({
+        const customerCart = await cartRepository.findOne({
             where: {
                 channelId: ctx.channelId,
                 ownerType: 'CUSTOMER',
@@ -484,7 +484,6 @@ export class StorefrontCartService {
                 projectedRevision: null,
                 lastActivityAt: new Date(),
             });
-            customerCart = new StorefrontCart({ ...guestCart, ...customerOwner });
         } else if (guestCart && customerCart) {
             const lineRepository = this.connection.getRepository(ctx, StorefrontCartLine);
             const customerLines = new Map(
@@ -529,14 +528,9 @@ export class StorefrontCartService {
             });
         }
 
-        if (!customerCart) {
-            return;
-        }
-        const mergedCart = await this.loadCart(ctx, customerCart.id, customerOwner);
-        const projected = await this.projectCart(ctx, mergedCart, customerOwner, true);
-        if (isGraphQlErrorResult(projected)) {
-            throw new Error(`${String(projected.errorCode)}: ${String(projected.message)}`);
-        }
+        // Keep authentication independent from checkout reconstruction. The merge operations above
+        // invalidate projectedRevision, so the next cart mutation or checkout attempt will rebuild
+        // the active order in its own request and can surface a cart-specific recovery error there.
     }
 
     private async getOwner(ctx: RequestContext): Promise<CartOwner> {

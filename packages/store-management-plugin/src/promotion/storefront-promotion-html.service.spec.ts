@@ -13,6 +13,9 @@ const bindings: StorefrontPromotionBindings = {
     'store.description': '店铺简介',
     'store.logoUrl': 'https://shop.example.com/assets/preview/logo.png?format=webp',
     'store.heroImageUrl': 'https://shop.example.com/assets/preview/hero.jpg?format=webp',
+    'store.shareImageUrl': 'https://shop.example.com/assets/source/referral-share.jpg',
+    'store.shareTitle': '邀请好友，一起发现好物',
+    'store.shareDescription': '专注数字服务与便捷消费',
     'store.currentYear': '2026',
     'store.language': 'zh-CN',
     'store.featuredProduct1Id': '101',
@@ -84,7 +87,7 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('data-promo-signal-canvas');
         expect(service.defaultTemplate).toContain('data-promo-signal-core-logo');
         expect(service.defaultTemplate).toContain('data-store-entry');
-        expect(service.defaultTemplateVersion).toBe(6);
+        expect(service.defaultTemplateVersion).toBe(7);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
     });
 
@@ -205,6 +208,25 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).toContain(
             '<link rel="apple-touch-icon" href="https://shop.example.com/assets/preview/logo.png?format=webp&amp;preset=storefront-original-preview&amp;q=75">',
         );
+    });
+
+    it('forces the configured referral share image into Open Graph metadata', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: `<!doctype html><html><head>
+                <meta property="og:image" content="https://old.example/hero.jpg">
+            </head><body><form data-store-entry><button type="submit">进入</button></form></body></html>`,
+            bindings,
+            entryTicket: 'signed-ticket',
+        });
+
+        expect(html).not.toContain('old.example/hero.jpg');
+        expect(html).toContain(
+            '<meta property="og:image" content="https://shop.example.com/assets/source/referral-share.jpg?preset=storefront-original-preview&amp;format=webp&amp;q=75">',
+        );
+        expect(html).toContain('name="twitter:image"');
+        expect(html).toContain('<meta property="og:title" content="邀请好友，一起发现好物">');
+        expect(html).toContain('<meta property="og:description" content="专注数字服务与便捷消费">');
     });
 
     it('removes third-party images and rewrites managed assets to WebP', () => {

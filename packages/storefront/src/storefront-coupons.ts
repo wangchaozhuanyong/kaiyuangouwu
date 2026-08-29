@@ -24,6 +24,13 @@ export interface StorefrontCouponCard {
 
 const couponThemes: StorefrontCouponTheme[] = ['gold', 'rose', 'blue', 'emerald'];
 
+const couponThemeByKind: Record<StorefrontCouponCampaign['kind'], StorefrontCouponTheme> = {
+    ORDER_FIXED: 'rose',
+    ORDER_PERCENTAGE: 'gold',
+    COLLECTION_PERCENTAGE: 'blue',
+    PRODUCT_PERCENTAGE: 'emerald',
+};
+
 export function couponCardsFromBlock(
     block: StorefrontContentBlock | undefined,
     language: StorefrontLanguage,
@@ -57,7 +64,7 @@ export function couponCardsFromCampaigns(
 ): StorefrontCouponCard[] {
     const isZh = language === 'zh';
     const currencyUnit = currencySymbol(currencyCode, language);
-    return campaigns.filter(isDisplayableCampaign).map((coupon, index) => {
+    return campaigns.filter(isDisplayableCampaign).map(coupon => {
         const isFixed = coupon.kind === 'ORDER_FIXED';
         const minimum = formatMinorAmount(coupon.minimumSpend, language);
         const value = isFixed
@@ -79,7 +86,7 @@ export function couponCardsFromCampaigns(
             title: coupon.name,
             description: threshold,
             tag: campaignKindLabel(coupon.kind, language),
-            theme: couponThemes[index % couponThemes.length],
+            theme: couponThemeByKind[coupon.kind],
             claimed: coupon.claimed,
             claimable: coupon.claimable && !coupon.claimed,
         };
@@ -90,7 +97,7 @@ export function couponCardFromCustomerCoupon(
     coupon: StoreCustomerCoupon,
     language: StorefrontLanguage,
     currencyCode: string,
-    index = 0,
+    _index = 0,
 ): StorefrontCouponCard {
     const isZh = language === 'zh';
     const currencyUnit = currencySymbol(currencyCode, language);
@@ -113,7 +120,7 @@ export function couponCardFromCustomerCoupon(
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(coupon.campaignKind, language),
-        theme: couponThemes[index % couponThemes.length],
+        theme: couponThemeByKind[coupon.campaignKind],
         claimed: true,
         claimable: false,
     };
@@ -122,7 +129,7 @@ export function couponCardFromCustomerCoupon(
 export function couponCardFromUsageRecord(
     record: StoreCouponUsageRecord,
     language: StorefrontLanguage,
-    index = 0,
+    _index = 0,
 ): StorefrontCouponCard {
     const isZh = language === 'zh';
     const currencyUnit = currencySymbol(record.currencyCode, language);
@@ -145,7 +152,7 @@ export function couponCardFromUsageRecord(
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(record.campaignKind, language),
-        theme: couponThemes[index % couponThemes.length],
+        theme: couponThemeByKind[record.campaignKind],
         claimed: true,
         claimable: false,
     };

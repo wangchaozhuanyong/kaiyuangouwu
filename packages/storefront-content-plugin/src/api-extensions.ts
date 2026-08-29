@@ -18,6 +18,8 @@ const commonTypes = gql`
         SUPPORT
         AUTH_LOGIN
         AUTH_REGISTER
+        NAVIGATION
+        CLIENT_PLUGINS
         CUSTOM
     }
 
@@ -175,6 +177,7 @@ export const adminApiExtensions = gql`
 
     input UpdateStorefrontContentBlockInput {
         id: ID!
+        expectedUpdatedAt: DateTime!
         code: String
         internalName: String
         type: StorefrontContentBlockType
@@ -198,6 +201,18 @@ export const adminApiExtensions = gql`
         heroAutoplayIntervalSeconds: Int!
     }
 
+    input StorefrontContentBlockVersionInput {
+        id: ID!
+        expectedUpdatedAt: DateTime!
+    }
+
+    input ApplyStorefrontContentChangesInput {
+        expectedBlocks: [StorefrontContentBlockVersionInput!]!
+        creates: [CreateStorefrontContentBlockInput!]!
+        updates: [UpdateStorefrontContentBlockInput!]!
+        orderedCodes: [String!]
+    }
+
     extend type Query {
         storefrontContentBlocks: [StorefrontContentBlock!]!
         storefrontContentBlock(id: ID!): StorefrontContentBlock
@@ -207,6 +222,7 @@ export const adminApiExtensions = gql`
     extend type Mutation {
         createStorefrontContentBlock(input: CreateStorefrontContentBlockInput!): StorefrontContentBlock!
         updateStorefrontContentBlock(input: UpdateStorefrontContentBlockInput!): StorefrontContentBlock!
+        applyStorefrontContentChanges(input: ApplyStorefrontContentChangesInput!): [StorefrontContentBlock!]!
         reorderStorefrontContentBlocks(ids: [ID!]!): [StorefrontContentBlock!]!
         deleteStorefrontContentBlock(id: ID!): DeletionResponse!
         updateStorefrontContentSettings(

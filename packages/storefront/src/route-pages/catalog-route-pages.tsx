@@ -78,6 +78,7 @@ export function CategoryRoutePage() {
                 api: runtime.api,
                 products: runtime.products,
                 collections: runtime.collections,
+                contentBlocks: runtime.contentBlocks,
                 loading: runtime.loading,
                 error: runtime.error,
                 market: runtime.market,

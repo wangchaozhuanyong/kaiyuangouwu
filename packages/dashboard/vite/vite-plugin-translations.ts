@@ -5,6 +5,7 @@ import {
     getCatalogs,
 } from '@lingui/cli/api';
 import { getConfig, LinguiConfigNormalized } from '@lingui/conf';
+import type { Messages } from '@lingui/core';
 import glob from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -38,6 +39,10 @@ type PluginTranslation = {
     pluginRootPath: string;
     translations: string[];
 };
+
+interface JsonCompiledCatalog {
+    messages: Messages;
+}
 
 const virtualModuleId = 'virtual:plugin-translations';
 const resolvedVirtualModuleId = `\0${virtualModuleId}`;
@@ -102,7 +107,12 @@ export function translationsPlugin(options: TranslationsPluginOptions): Plugin {
                         ${[...mergedMessageMap.entries()]
                             .map(([locale, messages]) => {
                                 const safeLocale = locale.replace(/-/g, '_');
-                                return `${safeLocale}: ${JSON.stringify(messages)}`;
+                                const compiledMessages = compileMessageCatalog(
+                                    locale,
+                                    messages,
+                                    cachedLinguiConfig.pseudoLocale,
+                                );
+                                return `${JSON.stringify(safeLocale)}: ${JSON.stringify(compiledMessages)}`;
                             })
                             .join(',\n')}
                     };
@@ -196,18 +206,7 @@ async function compileTranslations(
     });
 
     for (const [locale, messages] of mergedMessageMap.entries()) {
-        const { source: code, errors } = createCompiledCatalog(locale, messages, {
-            namespace: 'es',
-            pseudoLocale: linguiConfig.pseudoLocale,
-        });
-
-        if (errors.length) {
-            const message = createCompilationErrorMessage(locale, errors);
-            throw new Error(
-                message +
-                    `These errors fail build because \`failOnCompileError=true\` in Lingui Vite plugin configuration.`,
-            );
-        }
+        const code = compileCatalogSource(locale, messages, 'es', linguiConfig.pseudoLocale);
 
         // Emit the compiled JavaScript file to the build output
         const outputFileName = path.posix.join(outputPath, `${locale}.js`);
@@ -217,6 +216,42 @@ async function compileTranslations(
             source: code,
         });
     }
+}
+
+function compileCatalogSource(
+    locale: string,
+    messages: Record<string, string>,
+    namespace: 'es' | 'json',
+    pseudoLocale?: string,
+): string {
+    const { source, errors } = createCompiledCatalog(locale, messages, {
+        namespace,
+        pseudoLocale,
+    });
+    if (errors.length) {
+        throw new Error(
+            createCompilationErrorMessage(locale, errors) +
+                'Plugin translation catalogs must compile before they can be loaded.',
+        );
+    }
+    return source;
+}
+
+export function compileMessageCatalog(
+    locale: string,
+    messages: Record<string, string>,
+    pseudoLocale?: string,
+): Messages {
+    const source = compileCatalogSource(locale, messages, 'json', pseudoLocale);
+    const compiledCatalog = JSON.parse(source) as Partial<JsonCompiledCatalog>;
+    if (
+        !compiledCatalog.messages ||
+        typeof compiledCatalog.messages !== 'object' ||
+        Array.isArray(compiledCatalog.messages)
+    ) {
+        throw new Error(`Lingui returned an invalid compiled catalog for locale "${locale}".`);
+    }
+    return compiledCatalog.messages;
 }
 
 async function getLinguiCatalogs(

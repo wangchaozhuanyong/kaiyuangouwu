@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
     assertSafeOutputPath,
+    copyStorefrontMediaReleaseInputs,
     ensureRuntimeRootPermissions,
     pruneDeniedRuntimePackages,
     repositoryRoot,
@@ -20,6 +21,7 @@ import {
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
+import { storefrontMediaManifest } from './sync-storefront-media.mjs';
 
 void test('runtime verification rejects missing Vendure workspace packages', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-workspace-link-'));
@@ -51,6 +53,22 @@ void test('runtime artifact root is readable and traversable by the web server',
     try {
         await ensureRuntimeRootPermissions(fixtureRoot);
         assert.equal((await stat(fixtureRoot)).mode % 0o1000, 0o755);
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('runtime artifact includes release publishers and every media manifest image', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-storefront-media-'));
+    try {
+        await copyStorefrontMediaReleaseInputs(fixtureRoot);
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs'));
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
+        for (const entry of storefrontMediaManifest) {
+            const relativePath = path.relative(repositoryRoot, entry.file);
+            const copied = await readFile(path.join(fixtureRoot, relativePath));
+            assert.ok(copied.byteLength > 0, `Missing copied media: ${entry.key}`);
+        }
     } finally {
         await rm(fixtureRoot, { recursive: true, force: true });
     }

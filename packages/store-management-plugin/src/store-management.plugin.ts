@@ -24,9 +24,11 @@ import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { ReferralAccount } from './entities/referral-account.entity';
 import { ReferralBalanceUse } from './entities/referral-balance-use.entity';
 import { ReferralLedgerEntry } from './entities/referral-ledger-entry.entity';
+import { ReferralPosterTemplate } from './entities/referral-poster-template.entity';
 import { ReferralProgramConfig } from './entities/referral-program-config.entity';
 import { ReferralRelationship } from './entities/referral-relationship.entity';
 import { ReferralReward } from './entities/referral-reward.entity';
+import { ReferralWalletUsage } from './entities/referral-wallet-usage.entity';
 import { ReferralWallet } from './entities/referral-wallet.entity';
 import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
@@ -64,6 +66,7 @@ import { StorefrontPromotionService } from './promotion/storefront-promotion.ser
 import { referralBalancePaymentHandler } from './referral/referral-payment-handler';
 import { configureReferralPaymentProofSecret } from './referral/referral-payment-proof';
 import { auditReferralBalancesTask, reconcileReferralRewardsTask } from './referral/referral-tasks';
+import { ReferralWalletSpendService } from './referral/referral-wallet-spend.service';
 import {
     adjustReferralBalancePermission,
     manageReferralWithdrawalPermission,
@@ -98,7 +101,6 @@ import {
 } from './system-announcement.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
 import { StorefrontPromotionPluginOptions } from './types';
-import { UsdtOtcRateService } from './usdt-otc-rate.service';
 import { usdtTrc20PaymentHandler } from './usdt/usdt-payment-handler';
 import {
     configureUsdtPaymentProofSecret,
@@ -111,6 +113,7 @@ import {
     loadUsdtWalletConfiguration,
     UsdtWalletConfigurationService,
 } from './usdt/usdt-wallet-configuration.service';
+import { UsdtOtcRateService } from './usdt-otc-rate.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin],
@@ -124,12 +127,14 @@ import {
         CouponLedgerEntry,
         CouponOrderAllocation,
         ReferralProgramConfig,
+        ReferralPosterTemplate,
         ReferralAccount,
         ReferralWallet,
         ReferralRelationship,
         ReferralReward,
         ReferralLedgerEntry,
         ReferralBalanceUse,
+        ReferralWalletUsage,
         ReferralWithdrawal,
         StorefrontDailyVisitor,
         StorefrontUsdtCheckoutQuote,
@@ -156,6 +161,7 @@ import {
         StorePromotionCampaignService,
         StoreCouponLifecycleService,
         ReferralService,
+        ReferralWalletSpendService,
         SystemAnnouncementService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
@@ -174,6 +180,7 @@ import {
             useClass: StorefrontActivationInterceptor,
         },
     ],
+    exports: [ReferralWalletSpendService],
     configuration: config => {
         config.authOptions.customPermissions.push(
             storeProfilePermission,

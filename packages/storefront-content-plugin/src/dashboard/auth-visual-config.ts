@@ -116,6 +116,7 @@ export function createAuthVisualDraft(type: AuthVisualBlockType, existing?: Cont
     const definition = AUTH_VISUAL_DEFINITIONS[type];
     return {
         id: existing?.id,
+        updatedAt: existing?.updatedAt,
         code: definition.code,
         internalName: definition.internalName,
         type,

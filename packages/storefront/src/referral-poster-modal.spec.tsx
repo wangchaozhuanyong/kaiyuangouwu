@@ -36,6 +36,6 @@ describe('referral poster templates', () => {
         expect(markup).toContain('生活故事');
         expect(markup).toContain('鎏金深色');
         expect(markup).toContain('INVITE88');
-        expect(markup).toContain('好友下单后，我可获得 10% 消费奖励');
+        expect(markup).toContain('好友成功消费，可获得 10% 奖励用于消费抵扣');
     });
 });

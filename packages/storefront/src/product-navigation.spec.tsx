@@ -109,4 +109,80 @@ describe('product image navigation layers', () => {
         expect(stylesheet).toMatch(/\.product-row-detail-link\s*\{[^}]*z-index:\s*10;/);
         expect(stylesheet).toMatch(/\.row-add\s*\{[^}]*z-index:\s*20;/);
     });
+
+    it('keeps list-row prices inline instead of applying copy layout to nested price spans', () => {
+        const markup = renderToStaticMarkup(
+            <ProductRow
+                product={digitalProduct}
+                market={market}
+                locale={market.locale}
+                language="zh"
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('price-lockup');
+        expect(stylesheet).toMatch(/\.price-lockup\s*\{[^}]*display:\s*inline-flex;/);
+        expect(stylesheet).toMatch(/\.product-row-desc,\s*\.product-row-badge\s*\{/);
+        expect(stylesheet).not.toMatch(/\.product-row\s+span\s*,\s*\.product-row\s+small\s*\{/);
+    });
+
+    it('does not use the internal SKU as customer-facing fallback copy', () => {
+        const productWithoutDescription = { ...digitalProduct, description: '' };
+        const cardMarkup = renderToStaticMarkup(
+            <ProductCard
+                product={productWithoutDescription}
+                market={market}
+                locale={market.locale}
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+        const rowMarkup = renderToStaticMarkup(
+            <ProductRow
+                product={productWithoutDescription}
+                market={market}
+                locale={market.locale}
+                language="zh"
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+
+        expect(cardMarkup).not.toContain('CHATGPT-PLUS');
+        expect(rowMarkup).not.toContain('CHATGPT-PLUS');
+    });
+
+    it('does not show tax wording on product cards', () => {
+        const zhMarkup = renderToStaticMarkup(
+            <ProductCard
+                product={digitalProduct}
+                market={market}
+                locale="zh-CN"
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+        const enMarkup = renderToStaticMarkup(
+            <ProductCard
+                product={digitalProduct}
+                market={market}
+                locale="en-US"
+                adding={false}
+                onOpen={vi.fn()}
+                onAdd={vi.fn()}
+            />,
+        );
+
+        expect(zhMarkup).not.toContain('含税');
+        expect(zhMarkup).not.toContain('不含税');
+        expect(enMarkup).not.toContain('incl. tax');
+        expect(enMarkup).not.toContain('excl. tax');
+    });
 });

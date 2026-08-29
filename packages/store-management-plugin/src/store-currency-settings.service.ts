@@ -14,7 +14,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { LessThan, MoreThan } from 'typeorm';
+import { LessThan, LockNotSupportedOnGivenDriverError, MoreThan } from 'typeorm';
 
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
@@ -23,17 +23,25 @@ import {
     StoreCurrencyRateMode,
     StoreCurrencyRoundingMode,
     StorefrontUsdtCheckoutQuoteView,
+    StoreUsdtRateScheduleMode,
     UpdateStoreCurrencyConfigurationInput,
 } from './types';
-import { UsdtOtcRateService } from './usdt-otc-rate.service';
 import { UsdtPaymentService } from './usdt/usdt-payment.service';
+import { UsdtOtcRateService } from './usdt-otc-rate.service';
 
 const SUPPORTED_CURRENCIES = [CurrencyCode.CNY, CurrencyCode.MYR] as const;
 const BNM_EXCHANGE_RATE_URL = 'https://api.bnm.gov.my/public/exchange-rate/CNY?session=1200&quote=rm';
 const BNM_RATE_SOURCE = 'Bank Negara Malaysia';
-const USDT_RATE_MAX_AGE_MS = 15 * 60 * 1000;
 const USDT_CHECKOUT_QUOTE_TTL_MS = 10 * 60 * 1000;
 const USDT_QUOTE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const BEIJING_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+const USDT_INTERVAL_FAILURE_GRACE_MS = 10 * MINUTE_MS;
+const USDT_DAILY_FAILURE_GRACE_MS = 15 * MINUTE_MS;
+
+export const USDT_RATE_INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
+export const DEFAULT_USDT_RATE_DAILY_TIME = '10:00';
 
 interface CurrencyChannelFields {
     currencySelectorEnabled?: boolean | null;
@@ -47,6 +55,9 @@ interface CurrencyChannelFields {
     currencySyncedPriceCount?: number | null;
     usdtDisplayEnabled?: boolean | null;
     usdtRateMarkupBps?: number | null;
+    usdtRateScheduleMode?: string | null;
+    usdtRateIntervalMinutes?: number | null;
+    usdtRateDailyTime?: string | null;
     cnyPerUsdtRate?: number | null;
     usdtRateSource?: string | null;
     usdtRateUpdatedAt?: Date | string | null;
@@ -94,7 +105,11 @@ export class StoreCurrencySettingsService {
         input: UpdateStoreCurrencyConfigurationInput,
     ): Promise<StoreCurrencyConfiguration> {
         const normalized = normalizeInput(input);
-        const channel = await this.getActiveChannel(ctx);
+        const channel = await this.lockActiveChannel(ctx);
+        this.assertExpectedUpdatedAt(channel.updatedAt, normalized.expectedUpdatedAt);
+        if (channel.defaultCurrencyCode !== normalized.defaultCurrencyCode) {
+            await this.materializeNewDefaultCurrencyPrices(ctx, channel.defaultCurrencyCode, normalized);
+        }
         const customFields = channel.customFields as CurrencyChannelFields;
         const updated = await this.channelService.update(ctx, {
             id: channel.id,
@@ -109,6 +124,9 @@ export class StoreCurrencySettingsService {
                 currencyRoundingMode: normalized.roundingMode,
                 usdtDisplayEnabled: normalized.usdtDisplayEnabled,
                 usdtRateMarkupBps: Math.round(normalized.usdtMarkupPercent * 100),
+                usdtRateScheduleMode: normalized.usdtRateScheduleMode,
+                usdtRateIntervalMinutes: normalized.usdtRateIntervalMinutes,
+                usdtRateDailyTime: normalized.usdtRateDailyTime,
             },
         });
         if (isGraphQlErrorResult(updated)) throw new UserInputError(updated.message);
@@ -226,83 +244,11 @@ export class StoreCurrencySettingsService {
     }
 
     async syncPrices(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
-        let configuration = await this.get(ctx);
-        if (configuration.rateMode === 'AUTO') {
-            configuration = await this.refreshRate(ctx);
-        }
-        if (configuration.availableCurrencyCodes.length < 2) {
-            throw new UserInputError('请先同时启用 CNY 和 MYR');
-        }
-
-        const baseCurrency = configuration.defaultCurrencyCode;
-        const targetCurrency = baseCurrency === CurrencyCode.CNY ? CurrencyCode.MYR : CurrencyCode.CNY;
-        const repository = this.connection.getRepository(ctx, ProductVariantPrice);
-        const [basePrices, targetPrices] = await Promise.all([
-            repository.find({
-                where: { channelId: ctx.channelId, currencyCode: baseCurrency },
-                relations: { variant: true },
-            }),
-            repository.find({
-                where: { channelId: ctx.channelId, currencyCode: targetCurrency },
-                relations: { variant: true },
-            }),
-        ]);
-        const targetByVariant = new Map(targetPrices.map(price => [String(price.variant.id), price]));
-        const created: ProductVariantPrice[] = [];
-        const updated: ProductVariantPrice[] = [];
-
-        for (const basePrice of basePrices) {
-            const variantId = String(basePrice.variant.id);
-            const converted = convertMinorPrice(
-                basePrice.price,
-                baseCurrency,
-                configuration.cnyToMyrRate,
-                configuration.markupPercent,
-                configuration.roundingMode,
-            );
-            const existing = targetByVariant.get(variantId);
-            if (existing) {
-                if (existing.price !== converted) {
-                    existing.price = converted;
-                    updated.push(existing);
-                }
-                continue;
-            }
-            created.push(
-                new ProductVariantPrice({
-                    channelId: ctx.channelId,
-                    currencyCode: targetCurrency,
-                    price: converted,
-                    variant: new ProductVariant({ id: basePrice.variant.id }),
-                }),
-            );
-        }
-
-        if (created.length) {
-            const saved = await repository.save(created);
-            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'created'));
-        }
-        if (updated.length) {
-            const saved = await repository.save(updated);
-            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'updated'));
-        }
-
-        const channel = await this.getActiveChannel(ctx);
-        const customFields = channel.customFields as CurrencyChannelFields;
-        const syncedPriceCount = created.length + updated.length;
-        const savedChannel = await this.channelService.update(ctx, {
-            id: channel.id,
-            customFields: {
-                ...customFields,
-                currencyPricesUpdatedAt: new Date(),
-                currencySyncedPriceCount: syncedPriceCount,
-            },
-        });
-        if (isGraphQlErrorResult(savedChannel)) throw new UserInputError(savedChannel.message);
-        return this.toConfiguration(savedChannel);
+        const configuration = await this.get(ctx);
+        return configuration.rateMode === 'AUTO' ? this.refreshRate(ctx) : configuration;
     }
 
-    async syncAllAutomaticPrices(ctx: RequestContext): Promise<StoreCurrencyAutomaticSyncResult[]> {
+    async refreshAllAutomaticRates(ctx: RequestContext): Promise<StoreCurrencyAutomaticSyncResult[]> {
         const pageSize = 100;
         let skip = 0;
         let totalItems = 0;
@@ -330,10 +276,10 @@ export class StoreCurrencySettingsService {
                     apiType: 'admin',
                     channelOrToken: channel,
                 });
-                const updated = await this.syncPrices(channelContext);
+                const updated = await this.refreshRate(channelContext);
                 results.push({
                     channelCode: updated.channelCode,
-                    syncedPriceCount: updated.syncedPriceCount,
+                    syncedPriceCount: 0,
                     rate: updated.cnyToMyrRate,
                 });
             } catch (error) {
@@ -342,7 +288,7 @@ export class StoreCurrencySettingsService {
         }
 
         if (failures.length) {
-            throw new Error(`自动汇率同步失败：${failures.join('；')}`);
+            throw new Error(`自动汇率刷新失败：${failures.join('；')}`);
         }
         return results;
     }
@@ -364,12 +310,19 @@ export class StoreCurrencySettingsService {
             skip += page.items.length;
         } while (skip < totalItems);
 
-        const enabledChannels = channels.filter(channel => this.toConfiguration(channel).usdtDisplayEnabled);
-        if (!enabledChannels.length) return [];
+        const now = new Date();
+        const dueChannels = channels.filter(channel => {
+            const configuration = this.toConfiguration(channel, now);
+            return (
+                configuration.usdtDisplayEnabled &&
+                isUsdtRateRefreshDue(configuration, configuration.usdtRateUpdatedAt, now)
+            );
+        });
+        if (!dueChannels.length) return [];
 
         const snapshot = await this.usdtOtcRateService.fetchCnyRate();
         const results: StoreCurrencyAutomaticSyncResult[] = [];
-        for (const channel of enabledChannels) {
+        for (const channel of dueChannels) {
             const channelContext = await this.requestContextService.create({
                 apiType: 'admin',
                 channelOrToken: channel,
@@ -402,7 +355,89 @@ export class StoreCurrencySettingsService {
         return channel;
     }
 
-    private toConfiguration(channel: Channel): StoreCurrencyConfiguration {
+    private async lockActiveChannel(ctx: RequestContext): Promise<Channel> {
+        const repository = this.connection.getRepository(ctx, Channel);
+        try {
+            const locked = await repository
+                .createQueryBuilder('channel')
+                .setLock('pessimistic_write')
+                .where('channel.id = :channelId', { channelId: ctx.channelId })
+                .getOne();
+            if (!locked) throw new UserInputError('当前店铺不存在');
+        } catch (error) {
+            if (!isLockNotSupportedError(error)) throw error;
+        }
+        return this.getActiveChannel(ctx);
+    }
+
+    private assertExpectedUpdatedAt(current: Date, expected: Date | string): void {
+        const expectedDate = expected instanceof Date ? expected : new Date(expected);
+        if (!Number.isFinite(expectedDate.getTime()) || current.getTime() !== expectedDate.getTime()) {
+            throw new UserInputError(
+                'CONCURRENT_MODIFICATION: 币种配置已被其他管理员更新，请重新载入后合并修改',
+            );
+        }
+    }
+
+    private async materializeNewDefaultCurrencyPrices(
+        ctx: RequestContext,
+        previousDefaultCurrency: CurrencyCode,
+        configuration: UpdateStoreCurrencyConfigurationInput,
+    ): Promise<void> {
+        if (!isSupportedCurrency(previousDefaultCurrency)) return;
+
+        const repository = this.connection.getRepository(ctx, ProductVariantPrice);
+        const [basePrices, targetPrices] = await Promise.all([
+            repository.find({
+                where: { channelId: ctx.channelId, currencyCode: previousDefaultCurrency },
+                relations: { variant: true },
+            }),
+            repository.find({
+                where: { channelId: ctx.channelId, currencyCode: configuration.defaultCurrencyCode },
+                relations: { variant: true },
+            }),
+        ]);
+        const targetByVariant = new Map(targetPrices.map(price => [String(price.variant.id), price]));
+        const created: ProductVariantPrice[] = [];
+        const updated: ProductVariantPrice[] = [];
+
+        for (const basePrice of basePrices) {
+            const converted = convertMinorPrice(
+                basePrice.price,
+                previousDefaultCurrency,
+                configuration.cnyToMyrRate,
+                configuration.markupPercent,
+                configuration.roundingMode,
+            );
+            const existing = targetByVariant.get(String(basePrice.variant.id));
+            if (existing) {
+                if (existing.price !== converted) {
+                    existing.price = converted;
+                    updated.push(existing);
+                }
+            } else {
+                created.push(
+                    new ProductVariantPrice({
+                        channelId: ctx.channelId,
+                        currencyCode: configuration.defaultCurrencyCode,
+                        price: converted,
+                        variant: new ProductVariant({ id: basePrice.variant.id }),
+                    }),
+                );
+            }
+        }
+
+        if (created.length) {
+            const saved = await repository.save(created);
+            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'created'));
+        }
+        if (updated.length) {
+            const saved = await repository.save(updated);
+            await this.eventBus.publish(new ProductVariantPriceEvent(ctx, saved, 'updated'));
+        }
+    }
+
+    private toConfiguration(channel: Channel, now = new Date()): StoreCurrencyConfiguration {
         const customFields = channel.customFields as CurrencyChannelFields;
         const usdtPayment = this.usdtPaymentService.walletStatus();
         const availableCurrencyCodes = channel.availableCurrencyCodes.filter(isSupportedCurrency);
@@ -414,9 +449,16 @@ export class StoreCurrencySettingsService {
         }
         const cnyPerUsdtRate = nullablePositiveNumber(customFields.cnyPerUsdtRate);
         const usdtRateUpdatedAt = nullableDate(customFields.usdtRateUpdatedAt);
+        const usdtRateSchedule = {
+            usdtRateScheduleMode: normalizeUsdtRateScheduleMode(customFields.usdtRateScheduleMode),
+            usdtRateIntervalMinutes: normalizeUsdtRateIntervalMinutes(customFields.usdtRateIntervalMinutes),
+            usdtRateDailyTime: normalizeUsdtRateDailyTime(customFields.usdtRateDailyTime),
+        };
+        const usdtRateExpiresAt = getUsdtRateExpiresAt(usdtRateSchedule, usdtRateUpdatedAt);
         return {
             channelId: channel.id,
             channelCode: channel.code,
+            updatedAt: channel.updatedAt,
             defaultCurrencyCode,
             availableCurrencyCodes,
             selectorEnabled: customFields.currencySelectorEnabled !== false,
@@ -426,21 +468,24 @@ export class StoreCurrencySettingsService {
             roundingMode: normalizeRoundingMode(customFields.currencyRoundingMode),
             rateSource: customFields.currencyRateSource?.trim() || null,
             rateUpdatedAt: nullableDate(customFields.currencyRateUpdatedAt),
-            pricesUpdatedAt: nullableDate(customFields.currencyPricesUpdatedAt),
-            syncedPriceCount: Math.max(0, Math.round(finiteNumber(customFields.currencySyncedPriceCount, 0))),
+            pricesUpdatedAt: null,
+            syncedPriceCount: 0,
             usdtDisplayEnabled: customFields.usdtDisplayEnabled === true,
             usdtMarkupPercent: finiteNumber(customFields.usdtRateMarkupBps, 0) / 100,
+            ...usdtRateSchedule,
             cnyPerUsdtRate,
             myrPerUsdtRate: cnyPerUsdtRate
                 ? cnyPerUsdtRate * positiveNumber(customFields.cnyToMyrRate, 0.6)
                 : null,
             usdtRateSource: customFields.usdtRateSource?.trim() || null,
             usdtRateUpdatedAt,
+            usdtRateNextRunAt: getNextUsdtRateRefreshAt(usdtRateSchedule, usdtRateUpdatedAt, now),
+            usdtRateExpiresAt,
             usdtRateAvailable:
                 customFields.usdtDisplayEnabled === true &&
                 cnyPerUsdtRate !== null &&
-                usdtRateUpdatedAt !== null &&
-                Date.now() - usdtRateUpdatedAt.getTime() <= USDT_RATE_MAX_AGE_MS,
+                usdtRateExpiresAt !== null &&
+                now.getTime() <= usdtRateExpiresAt.getTime(),
             usdtPaymentConfigured: usdtPayment.configured,
             usdtPaymentNetwork: usdtPayment.network,
             usdtReceivingAddressMasked: usdtPayment.receivingAddressMasked,
@@ -484,6 +529,15 @@ export class StoreCurrencySettingsService {
     }
 }
 
+function isLockNotSupportedError(error: unknown): boolean {
+    return (
+        error instanceof LockNotSupportedOnGivenDriverError ||
+        (error instanceof Error &&
+            (error.name === 'LockNotSupportedOnGivenDriverError' ||
+                error.message.toLowerCase().includes('locking not supported')))
+    );
+}
+
 export function convertMinorPrice(
     price: number,
     baseCurrency: CurrencyCode,
@@ -521,6 +575,50 @@ export function publicCurrencySelection(
     };
 }
 
+type UsdtRateSchedule = Pick<
+    StoreCurrencyConfiguration,
+    'usdtRateScheduleMode' | 'usdtRateIntervalMinutes' | 'usdtRateDailyTime'
+>;
+
+export function isUsdtRateRefreshDue(
+    schedule: UsdtRateSchedule,
+    updatedAt: Date | null,
+    now = new Date(),
+): boolean {
+    return getNextUsdtRateRefreshAt(schedule, updatedAt, now).getTime() <= now.getTime();
+}
+
+export function getNextUsdtRateRefreshAt(
+    schedule: UsdtRateSchedule,
+    updatedAt: Date | null,
+    now = new Date(),
+): Date {
+    if (!updatedAt) return now;
+    if (schedule.usdtRateScheduleMode === 'INTERVAL') {
+        const scheduledAt = new Date(updatedAt.getTime() + schedule.usdtRateIntervalMinutes * MINUTE_MS);
+        return scheduledAt.getTime() <= now.getTime() ? now : scheduledAt;
+    }
+
+    const latestScheduledAt = latestBeijingDailyRunAt(now, schedule.usdtRateDailyTime);
+    if (updatedAt.getTime() < latestScheduledAt.getTime()) return now;
+    return nextBeijingDailyRunAfter(now, schedule.usdtRateDailyTime);
+}
+
+export function getUsdtRateExpiresAt(schedule: UsdtRateSchedule, updatedAt: Date | null): Date | null {
+    if (!updatedAt) return null;
+    if (schedule.usdtRateScheduleMode === 'INTERVAL') {
+        return new Date(
+            updatedAt.getTime() +
+                schedule.usdtRateIntervalMinutes * MINUTE_MS +
+                USDT_INTERVAL_FAILURE_GRACE_MS,
+        );
+    }
+    return new Date(
+        nextBeijingDailyRunAfter(updatedAt, schedule.usdtRateDailyTime).getTime() +
+            USDT_DAILY_FAILURE_GRACE_MS,
+    );
+}
+
 function normalizeInput(input: UpdateStoreCurrencyConfigurationInput): UpdateStoreCurrencyConfigurationInput {
     if (!isSupportedCurrency(input.defaultCurrencyCode)) {
         throw new UserInputError('目前仅支持 CNY 和 MYR');
@@ -544,11 +642,24 @@ function normalizeInput(input: UpdateStoreCurrencyConfigurationInput): UpdateSto
     ) {
         throw new UserInputError('USDT 报价加价范围为 0% 至 20%');
     }
+    if (
+        !USDT_RATE_INTERVAL_OPTIONS.includes(
+            input.usdtRateIntervalMinutes as (typeof USDT_RATE_INTERVAL_OPTIONS)[number],
+        )
+    ) {
+        throw new UserInputError('USDT 采集间隔仅支持 5、10、15、30 或 60 分钟');
+    }
+    if (!isValidDailyTime(input.usdtRateDailyTime)) {
+        throw new UserInputError('USDT 每日采集时间必须使用 HH:mm 格式');
+    }
     return {
         ...input,
         availableCurrencyCodes,
         rateMode: normalizeRateMode(input.rateMode),
         roundingMode: normalizeRoundingMode(input.roundingMode),
+        usdtRateScheduleMode: normalizeUsdtRateScheduleMode(input.usdtRateScheduleMode),
+        usdtRateIntervalMinutes: normalizeUsdtRateIntervalMinutes(input.usdtRateIntervalMinutes),
+        usdtRateDailyTime: normalizeUsdtRateDailyTime(input.usdtRateDailyTime),
     };
 }
 
@@ -567,6 +678,46 @@ function normalizeRateMode(value: unknown): StoreCurrencyRateMode {
 
 function normalizeRoundingMode(value: unknown): StoreCurrencyRoundingMode {
     return value === 'TENTH' || value === 'WHOLE' ? value : 'CENT';
+}
+
+function normalizeUsdtRateScheduleMode(value: unknown): StoreUsdtRateScheduleMode {
+    return value === 'DAILY' ? 'DAILY' : 'INTERVAL';
+}
+
+function normalizeUsdtRateIntervalMinutes(value: unknown): number {
+    const interval = Math.round(Number(value));
+    return USDT_RATE_INTERVAL_OPTIONS.includes(interval as (typeof USDT_RATE_INTERVAL_OPTIONS)[number])
+        ? interval
+        : 5;
+}
+
+function normalizeUsdtRateDailyTime(value: unknown): string {
+    return typeof value === 'string' && isValidDailyTime(value.trim())
+        ? value.trim()
+        : DEFAULT_USDT_RATE_DAILY_TIME;
+}
+
+function isValidDailyTime(value: string): boolean {
+    return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function latestBeijingDailyRunAt(now: Date, dailyTime: string): Date {
+    const today = beijingDailyRunAt(now, dailyTime);
+    return today.getTime() <= now.getTime() ? today : new Date(today.getTime() - DAY_MS);
+}
+
+function nextBeijingDailyRunAfter(value: Date, dailyTime: string): Date {
+    const today = beijingDailyRunAt(value, dailyTime);
+    return today.getTime() > value.getTime() ? today : new Date(today.getTime() + DAY_MS);
+}
+
+function beijingDailyRunAt(value: Date, dailyTime: string): Date {
+    const shifted = new Date(value.getTime() + BEIJING_UTC_OFFSET_MS);
+    const [hour, minute] = dailyTime.split(':').map(Number);
+    return new Date(
+        Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), hour, minute) -
+            BEIJING_UTC_OFFSET_MS,
+    );
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
