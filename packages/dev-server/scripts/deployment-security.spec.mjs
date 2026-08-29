@@ -49,6 +49,10 @@ void test('production PM2 config starts compiled runtime entries without the dev
     assert.match(config, /packages\/dev-server\/dist\/index-worker\.js/u);
     assert.match(config, /packages\/dev-server\/dist\/index\.js/u);
     assert.match(config, /VENDURE_DISABLE_TELEMETRY:\s*'true'/u);
+    assert.match(
+        config,
+        /IMAGE_PROMPT_SKILL_AUTO_ACTIVATE:\s*process\.env\.IMAGE_PROMPT_SKILL_AUTO_ACTIVATE\s*\?\?\s*'true'/u,
+    );
     assert.match(config, /max_memory_restart:\s*'768M'/u);
     assert.match(config, /restart_delay:\s*5000/u);
     assert.doesNotMatch(config, /cli\.js/u);

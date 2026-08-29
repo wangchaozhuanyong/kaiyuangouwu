@@ -102,7 +102,7 @@ GitHub OIDC 临时角色通过 AWS SSM 执行只读检查：物理可用内存�
 
 ### 提示词 Skill 自动升级
 
-- 生产 API 和 Worker 的加密 `.env` 必须同时设置 `IMAGE_PROMPT_SKILL_AUTO_ACTIVATE=true`，否则新 bundle 只会自动登记，不会自动激活。
+- 受管生产发布会在 PM2 的 API 和 Worker 进程中把 `IMAGE_PROMPT_SKILL_AUTO_ACTIVATE` 默认设为 `true`；加密 `.env` 可显式设置为 `false` 暂停自动激活。两个进程必须保持一致。
 - 只有首次在数据库中发现的新 SHA-256 bundle 可自动激活；历史进程重启不得重新提升旧 bundle。
 - 自动激活只在完整构建、Skill bundle 校验、固定场景回归测试和生产运行产物验证全部通过后才会进入生产。
 - 每次任务保留原 bundle hash，新版本不改写已经开始的任务。如需回滚，在后台选择历史版本；不删除 bundle 或历史任务。

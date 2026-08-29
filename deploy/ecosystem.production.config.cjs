@@ -17,6 +17,9 @@ const sharedEnvironment = {
     // Vendure's telemetry fallback writes .vendure/.installation-id below cwd,
     // which would mutate the verified immutable runtime directory.
     VENDURE_DISABLE_TELEMETRY: 'true',
+    // Managed production releases activate a newly validated prompt Skill by default.
+    // Operators can still disable this explicitly in the encrypted production .env.
+    IMAGE_PROMPT_SKILL_AUTO_ACTIVATE: process.env.IMAGE_PROMPT_SKILL_AUTO_ACTIVATE ?? 'true',
 };
 
 const sharedProcessOptions = {
