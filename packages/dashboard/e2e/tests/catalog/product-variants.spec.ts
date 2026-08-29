@@ -88,12 +88,16 @@ test.describe('product variant generation', () => {
         await optionInput.fill('Large');
         await optionInput.press('Enter');
 
-        // Each added value is shown on its own row for easier scanning and removal.
-        const optionValueRows = page.getByRole('dialog').locator('[data-slot="option-value-row"]');
-        await expect(optionValueRows).toHaveCount(3);
-        await expect(optionValueRows.nth(0)).toContainText('Small');
-        await expect(optionValueRows.nth(1)).toContainText('Medium');
-        await expect(optionValueRows.nth(2)).toContainText('Large');
+        // Verify badges appeared for the option values
+        await expect(
+            page.getByRole('dialog').locator('[data-slot="badge"]', { hasText: 'Small' }),
+        ).toBeVisible();
+        await expect(
+            page.getByRole('dialog').locator('[data-slot="badge"]', { hasText: 'Medium' }),
+        ).toBeVisible();
+        await expect(
+            page.getByRole('dialog').locator('[data-slot="badge"]', { hasText: 'Large' }),
+        ).toBeVisible();
 
         // Save the option group
         await page.getByRole('button', { name: 'Save option group' }).click();

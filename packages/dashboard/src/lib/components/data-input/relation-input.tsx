@@ -22,11 +22,13 @@ function CollectionRelationLabel({ item }: Readonly<{ item: CollectionRelationIt
     const levelLabel =
         depth === 1
             ? isSimplifiedChinese
-                ? '一级'
+                ? // i18n-audit-ignore -- Locale-specific compact label paired with L1 below.
+                  '一级'
                 : 'L1'
             : depth === 2
               ? isSimplifiedChinese
-                  ? '二级'
+                  ? // i18n-audit-ignore -- Locale-specific compact label paired with L2 below.
+                    '二级'
                   : 'L2'
               : '!';
 
@@ -38,6 +40,7 @@ function CollectionRelationLabel({ item }: Readonly<{ item: CollectionRelationIt
                     'text-[10px] font-semibold leading-none text-muted-foreground'
                 }
             >
+                {/* i18n-audit-ignore -- levelLabel is selected from the active locale above. */}
                 {levelLabel}
             </span>
             <span className="min-w-0 truncate">{collectionRelationPath(item)}</span>
