@@ -514,6 +514,17 @@ export function PriceDisplay({
 }
 
 export function renderColorfulQuickIcon(label: string, index: number, imageUrl?: string | null): ReactNode {
+    const managedImageUrl = imageUrl?.trim();
+
+    // Dashboard-managed imagery is authoritative; generated icons are only the no-image fallback.
+    if (managedImageUrl) {
+        return (
+            <span className="colorful-icon-img-wrap">
+                <SafeImage src={managedImageUrl} alt="" imageKind="thumbnail" />
+            </span>
+        );
+    }
+
     const cleanLabel = (label || '').toLowerCase();
 
     if (cleanLabel.includes('代充') || cleanLabel.includes('充值') || cleanLabel.includes('topup')) {
@@ -594,14 +605,6 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
                 <TicketPercent
                     style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}
                 />
-            </span>
-        );
-    }
-
-    if (imageUrl) {
-        return (
-            <span className="colorful-icon-img-wrap">
-                <SafeImage src={imageUrl} alt="" imageKind="thumbnail" />
             </span>
         );
     }
