@@ -5994,7 +5994,7 @@ img.fatal-error-mark {
     box-shadow: none;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 1024px) {
     .page:not(.subpage) {
         --page-bottom-fixed-height: 0px;
     }
