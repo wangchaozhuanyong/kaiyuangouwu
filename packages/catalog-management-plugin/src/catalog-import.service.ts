@@ -28,6 +28,7 @@ import {
     normalizeIdentity,
 } from './catalog-file-parser.service';
 import { CatalogOperationsService } from './catalog-operations.service';
+import { MAX_CATALOG_IMPORT_BYTES, MAX_CATALOG_IMPORT_ROWS } from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
@@ -35,10 +36,13 @@ import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import {
+    AppendCatalogImportRowsInput,
+    BeginCatalogImportInput,
     CatalogImportAction,
     CatalogImportContextInput,
     NormalizedCatalogRow,
     ResolveCatalogImportRowInput,
+    ResolveCatalogImportRowsInput,
     UploadedCatalogFile,
 } from './types';
 
@@ -77,6 +81,206 @@ export class CatalogImportService {
 
     registerEnqueuer(enqueue: (jobId: ID) => Promise<void>): void {
         this.enqueue = enqueue;
+    }
+
+    async beginImport(ctx: RequestContext, input: BeginCatalogImportInput): Promise<CatalogImportJob> {
+        this.assertContext(ctx, input.context);
+        await this.operations.requireStockLocation(ctx, input.context.stockLocationId);
+        validateImportSource(input);
+
+        const repository = this.connection.getRepository(ctx, CatalogImportJob);
+        const existing = await repository.findOne({
+            where: {
+                channelId: ctx.channelId,
+                stockLocationId: input.context.stockLocationId,
+                currencyCode: input.context.currencyCode,
+                clearBlankFields: Boolean(input.context.clearBlankFields),
+                fileHash: input.source.fileHash.toLowerCase(),
+                state: Not('ROLLED_BACK'),
+            },
+            order: { createdAt: 'DESC' },
+        });
+        if (existing) return this.findJob(ctx, existing.id);
+
+        const job = await repository.save(
+            new CatalogImportJob({
+                channelId: ctx.channelId,
+                stockLocationId: input.context.stockLocationId,
+                currencyCode: input.context.currencyCode,
+                clearBlankFields: Boolean(input.context.clearBlankFields),
+                originalFilename: safeImportFilename(input.source.filename),
+                mimeType: safeImportText(input.source.mimetype, 120) || 'application/octet-stream',
+                byteSize: input.source.byteSize,
+                fileHash: input.source.fileHash.toLowerCase(),
+                sheetName: safeImportText(input.source.sheetName ?? '', 255) || null,
+                detectedHeaders: input.source.detectedHeaders.map(header => safeImportText(header, 255)),
+                fieldMapping: sanitizeFieldMapping(input.source.fieldMapping),
+                state: 'RECEIVING',
+                actorId: ctx.activeUserId ? String(ctx.activeUserId) : null,
+                totalRows: input.totalRows,
+                progress: 0,
+                errorMessage: null,
+            }),
+        );
+        return this.findJob(ctx, job.id);
+    }
+
+    async appendRows(ctx: RequestContext, input: AppendCatalogImportRowsInput): Promise<CatalogImportJob> {
+        const job = await this.findJob(ctx, input.jobId);
+        if (job.state !== 'RECEIVING') {
+            if (job.state === 'PREVIEW_READY') return job;
+            throw new UserInputError('当前导入任务不接收数据行');
+        }
+        if (input.rows.length < 1 || input.rows.length > 500) {
+            throw new UserInputError('每批必须包含 1 至 500 行商品数据');
+        }
+        const rows = input.rows.map(row => sanitizeCatalogRow(row, job.totalRows));
+        if (new Set(rows.map(row => row.rowNumber)).size !== rows.length) {
+            throw new UserInputError('同一批次中存在重复行号');
+        }
+
+        const repository = this.connection.getRepository(ctx, CatalogImportRow);
+        const existing = await repository.find({
+            where: { jobId: job.id, rowNumber: In(rows.map(row => row.rowNumber)) },
+        });
+        const existingByNumber = new Map(existing.map(row => [row.rowNumber, row]));
+        for (const row of rows) {
+            const previous = existingByNumber.get(row.rowNumber);
+            if (previous && previous.rowFingerprint !== catalogRowFingerprint(row)) {
+                throw new UserInputError(
+                    `第 ${row.rowNumber} 行已接收过不同数据，请重新开始导入以避免混用批次`,
+                );
+            }
+        }
+        const entities = rows.map(row => {
+            const entity = existingByNumber.get(row.rowNumber) ?? new CatalogImportRow();
+            entity.jobId = job.id;
+            entity.rowNumber = row.rowNumber;
+            entity.productKey = catalogProductKey(row);
+            entity.sourceKey = catalogSourceKey(row);
+            entity.rowFingerprint = catalogRowFingerprint(row);
+            entity.action = 'PENDING';
+            entity.resolution = null;
+            entity.targetProductId = null;
+            entity.targetVariantId = null;
+            entity.expectedProductUpdatedAt = null;
+            entity.expectedVariantUpdatedAt = null;
+            entity.normalizedData = row;
+            entity.beforeSnapshot = null;
+            entity.plannedChanges = null;
+            entity.appliedSnapshot = null;
+            entity.message = null;
+            entity.appliedAt = null;
+            return entity;
+        });
+        await repository.save(entities);
+        const received = await repository.count({ where: { jobId: job.id } });
+        await this.connection.getRepository(ctx, CatalogImportJob).update(job.id, {
+            progress: Math.min(99, Math.round((received / Math.max(job.totalRows, 1)) * 100)),
+        });
+        return this.findJob(ctx, job.id);
+    }
+
+    async finalizePreview(ctx: RequestContext, id: ID): Promise<CatalogImportJob> {
+        const job = await this.findJob(ctx, id);
+        if (job.state === 'PREVIEW_READY') return job;
+        if (job.state !== 'RECEIVING') throw new UserInputError('当前导入任务不能生成预览');
+
+        const rowRepository = this.connection.getRepository(ctx, CatalogImportRow);
+        const rows = await rowRepository.find({ where: { jobId: job.id }, order: { rowNumber: 'ASC' } });
+        if (rows.length !== job.totalRows) {
+            throw new UserInputError(
+                `导入数据不完整：应接收 ${job.totalRows} 行，实际收到 ${rows.length} 行`,
+            );
+        }
+
+        const [catalogIndex, bindings, stockLocations] = await Promise.all([
+            this.buildCatalogIndex(ctx),
+            this.connection.getRepository(ctx, CatalogSourceBinding).find({
+                where: {
+                    channelId: ctx.channelId,
+                    sourceKey: In([...new Set(rows.map(row => row.sourceKey))]),
+                },
+            }),
+            this.operations.stockLocations(ctx),
+        ]);
+        const bindingMap = new Map(bindings.map(binding => [binding.sourceKey, binding]));
+        const duplicateGroups = groupRows(rows.map(row => row.normalizedData));
+        const productDuplicateGroups = groupProductRows(rows.map(row => row.normalizedData));
+        const defaultContext: CatalogImportContextInput = {
+            channelId: job.channelId,
+            stockLocationId: job.stockLocationId,
+            currencyCode: job.currencyCode,
+            clearBlankFields: job.clearBlankFields,
+        };
+
+        try {
+            for (const entity of rows) {
+                const row = entity.normalizedData;
+                const targetStockLocation = effectiveStockLocation(
+                    row.stockLocationCode,
+                    job.stockLocationId,
+                    stockLocations,
+                );
+                const context = {
+                    ...defaultContext,
+                    stockLocationId: targetStockLocation?.id ?? job.stockLocationId,
+                };
+                const duplicateRows = duplicateGroups.get(entity.sourceKey) ?? [];
+                const fingerprints = new Set(duplicateRows.map(catalogRowFingerprint));
+                const matchingProductRows = productDuplicateGroups.get(variantExecutionKey(row)) ?? [];
+                const productFingerprints = new Set(matchingProductRows.map(productFieldFingerprint));
+                const scopeError = targetStockLocation
+                    ? importScopeError(row, ctx, context, targetStockLocation)
+                    : `文件仓库“${row.stockLocationCode}”不属于当前门店`;
+                let plan: PlannedRow;
+                if (scopeError) {
+                    plan = { ...emptyPlan('ERROR'), message: scopeError };
+                } else if (productFingerprints.size > 1) {
+                    plan = conflictPlan('同一商品标识出现不同价格、成本或规格，请人工确认');
+                } else if (fingerprints.size > 1) {
+                    plan = conflictPlan('同一商品标识在文件中出现不同数值，请人工确认');
+                } else if (duplicateRows[0]?.rowNumber !== row.rowNumber) {
+                    plan = {
+                        ...emptyPlan('SKIP_UNCHANGED'),
+                        message: `与第 ${duplicateRows[0]?.rowNumber ?? row.rowNumber} 行完全重复，已跳过`,
+                    };
+                } else {
+                    plan = await this.planRow(
+                        ctx,
+                        row,
+                        context,
+                        catalogIndex,
+                        bindingMap.get(entity.sourceKey),
+                    );
+                }
+                entity.action = plan.action;
+                entity.resolution = null;
+                entity.targetProductId = plan.targetProductId;
+                entity.targetVariantId = plan.targetVariantId;
+                entity.expectedProductUpdatedAt = plan.expectedProductUpdatedAt;
+                entity.expectedVariantUpdatedAt = plan.expectedVariantUpdatedAt;
+                entity.beforeSnapshot = plan.beforeSnapshot;
+                entity.plannedChanges = plan.plannedChanges;
+                entity.message = plan.message;
+            }
+            for (let index = 0; index < rows.length; index += 250) {
+                await rowRepository.save(rows.slice(index, index + 250));
+            }
+            job.state = 'PREVIEW_READY';
+            job.progress = 0;
+            job.errorMessage = null;
+            await this.connection.getRepository(ctx, CatalogImportJob).save(job);
+            await this.refreshCounts(ctx, job.id);
+            return this.findJob(ctx, job.id);
+        } catch (error) {
+            await this.connection.getRepository(ctx, CatalogImportJob).update(job.id, {
+                state: 'FAILED',
+                errorMessage: safeMessage(error),
+                completedAt: new Date(),
+            });
+            throw error;
+        }
     }
 
     async createPreview(
@@ -308,6 +512,51 @@ export class CatalogImportService {
         return saved;
     }
 
+    async resolveRows(ctx: RequestContext, input: ResolveCatalogImportRowsInput): Promise<CatalogImportJob> {
+        const rowIds = [...new Set(input.rowIds.map(String))];
+        if (rowIds.length < 1 || rowIds.length > 500) {
+            throw new UserInputError('每次批量处理 1 至 500 行');
+        }
+        if (!['APPLY', 'SKIP'].includes(input.resolution)) {
+            throw new UserInputError('批量处理只支持继续应用或跳过');
+        }
+        const repository = this.connection.getRepository(ctx, CatalogImportRow);
+        const rows = await repository.find({ where: { id: In(rowIds) }, relations: ['job'] });
+        if (rows.length !== rowIds.length) throw new UserInputError('部分导入行不存在');
+        const jobIds = new Set(rows.map(row => String(row.jobId)));
+        if (jobIds.size !== 1) throw new UserInputError('不能跨导入任务批量处理');
+
+        for (const row of rows) {
+            if (String(row.job.channelId) !== String(ctx.channelId)) {
+                throw new UserInputError('导入行不属于当前门店');
+            }
+            if (row.job.state !== 'PREVIEW_READY') {
+                throw new UserInputError('只有预览中的任务可以批量处理');
+            }
+            if (!['CONFLICT', 'WARNING', 'ERROR'].includes(row.action)) {
+                throw new UserInputError(`第 ${row.rowNumber} 行不需要人工处理`);
+            }
+            if (input.resolution === 'APPLY') {
+                const safeActionValue = row.plannedChanges?.safeAction;
+                const safeAction = typeof safeActionValue === 'string' ? safeActionValue : '';
+                if (row.action !== 'WARNING' || !['CREATE', 'UPDATE'].includes(safeAction)) {
+                    throw new UserInputError('批量继续只能处理警告行');
+                }
+                row.action = safeAction as CatalogImportAction;
+                row.resolution = 'APPLY';
+                row.message = '管理员已批量确认警告并允许执行';
+            } else {
+                row.action = 'SKIP_UNCHANGED';
+                row.resolution = 'SKIP';
+                row.message = '管理员批量选择跳过';
+            }
+        }
+        await repository.save(rows);
+        const jobId = rows[0].jobId;
+        await this.refreshCounts(ctx, jobId);
+        return this.findJob(ctx, jobId);
+    }
+
     async queueExecution(ctx: RequestContext, id: ID): Promise<CatalogImportJob> {
         const job = await this.findJob(ctx, id);
         if (job.state !== 'PREVIEW_READY' && job.state !== 'FAILED') {
@@ -339,9 +588,14 @@ export class CatalogImportService {
         if (claimed.affected !== 1) return;
         const job = await this.findJob(ctx, id);
         const rows = await this.findRows(ctx, id);
+        const stockLocations = await this.operations.stockLocations(ctx);
         const productByKey = new Map<string, ID>();
+        const variantByKey = new Map<string, ID>();
         for (const applied of rows.filter(row => row.appliedAt && row.targetProductId)) {
             productByKey.set(applied.productKey, applied.targetProductId as ID);
+            if (applied.targetVariantId) {
+                variantByKey.set(variantExecutionKey(applied.normalizedData), applied.targetVariantId);
+            }
         }
         let processed = 0;
         for (const row of rows) {
@@ -354,7 +608,7 @@ export class CatalogImportService {
                     throw new UserInputError('存在未解决的冲突或警告');
                 }
                 await this.connection.withTransaction(ctx, async txCtx => {
-                    await this.applyRow(txCtx, job, row, productByKey);
+                    await this.applyRow(txCtx, job, row, productByKey, variantByKey, stockLocations);
                 });
             } catch (error) {
                 row.action = 'ERROR';
@@ -396,100 +650,6 @@ export class CatalogImportService {
         return this.findJob(ctx, id);
     }
 
-    standardTemplate(): string {
-        return [
-            [
-                '名称（必填）',
-                '分类（必填）',
-                '门店编码',
-                '仓库编码',
-                '币种',
-                'SKU',
-                '条码',
-                '规格',
-                '主单位',
-                '库存量',
-                '进货价（必填）',
-                '销售价（必填）',
-                '库存上限',
-                '库存下限',
-                '品牌',
-                '生产日期',
-                '保质期',
-                '批次号',
-                '商品状态',
-                '商品描述',
-                '标签',
-                '创建日期',
-            ],
-            [
-                '示例商品',
-                '示例分类',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '500ml',
-                '瓶',
-                '10',
-                '3.125',
-                '5.00',
-                '100',
-                '10',
-                '',
-                '',
-                '365',
-                '',
-                '启用',
-                '',
-                '',
-                '',
-            ],
-        ]
-            .map(row => row.map(csvCell).join(','))
-            .join('\r\n');
-    }
-
-    async report(ctx: RequestContext, id: ID): Promise<string> {
-        const job = await this.findJob(ctx, id);
-        const rows = await this.findRows(ctx, id);
-        return [
-            [
-                '行号',
-                '结果',
-                '处理选择',
-                '商品名称',
-                '分类',
-                'SKU',
-                '规格',
-                '单位',
-                '目标商品ID',
-                '目标SKU ID',
-                '说明',
-                '应用时间',
-                '文件摘要',
-            ],
-            ...rows.map(row => [
-                String(row.rowNumber),
-                row.action,
-                row.resolution ?? '',
-                row.normalizedData.name,
-                row.normalizedData.category,
-                row.normalizedData.sku,
-                row.normalizedData.specification,
-                row.normalizedData.primaryUnit,
-                row.targetProductId ? String(row.targetProductId) : '',
-                row.targetVariantId ? String(row.targetVariantId) : '',
-                row.message ?? '',
-                row.appliedAt?.toISOString() ?? '',
-                job.fileHash,
-            ]),
-        ]
-            .map(values => values.map(csvCell).join(','))
-            .join('\r\n');
-    }
-
     private async planRow(
         ctx: RequestContext,
         row: NormalizedCatalogRow,
@@ -505,15 +665,7 @@ export class CatalogImportService {
         const warning = warnings.filter((value): value is string => Boolean(value)).join('；') || null;
         let targetProduct: Product | undefined;
         let targetVariant: ProductVariant | undefined;
-        if (binding) {
-            targetProduct = catalogIndex.find(
-                item => String(item.product.id) === String(binding.productId),
-            )?.product;
-            targetVariant = targetProduct?.variants.find(
-                variant => String(variant.id) === String(binding.variantId),
-            );
-            if (!targetProduct || !targetVariant) return conflictPlan('历史来源绑定指向的商品已经不存在');
-        } else if (row.sku) {
+        if (row.sku) {
             const variants = catalogIndex
                 .flatMap(item => item.product.variants)
                 .filter(variant => variant.sku === row.sku);
@@ -523,6 +675,29 @@ export class CatalogImportService {
                 ? catalogIndex.find(item => String(item.product.id) === String(targetVariant?.productId))
                       ?.product
                 : undefined;
+        } else if (row.barcode) {
+            const variants = catalogIndex
+                .flatMap(item => item.product.variants)
+                .filter(
+                    variant =>
+                        normalizeIdentity(
+                            stringValue(((variant.customFields ?? {}) as Record<string, unknown>).barcode),
+                        ) === normalizeIdentity(row.barcode),
+                );
+            if (variants.length > 1) return conflictPlan('条码匹配到多个商品，请先清理重复条码');
+            targetVariant = variants[0];
+            targetProduct = targetVariant
+                ? catalogIndex.find(item => String(item.product.id) === String(targetVariant?.productId))
+                      ?.product
+                : undefined;
+        } else if (binding) {
+            targetProduct = catalogIndex.find(
+                item => String(item.product.id) === String(binding.productId),
+            )?.product;
+            targetVariant = targetProduct?.variants.find(
+                variant => String(variant.id) === String(binding.variantId),
+            );
+            if (!targetProduct || !targetVariant) return conflictPlan('历史来源绑定指向的商品已经不存在');
         } else {
             const name = normalizeIdentity(row.name);
             const category = normalizeIdentity(row.category);
@@ -563,6 +738,9 @@ export class CatalogImportService {
                               )?.description ?? '',
                           productFacetValueIds:
                               targetProduct.facetValues?.map(value => String(value.id)) ?? [],
+                          productSourceCreatedAt: dateString(
+                              ((targetProduct.customFields ?? {}) as Record<string, unknown>).sourceCreatedAt,
+                          ),
                       }
                     : null,
                 plannedChanges: { safeAction: 'CREATE', ...createChanges(row, input.currencyCode) },
@@ -623,6 +801,7 @@ export class CatalogImportService {
             }),
         ]);
         const customFields = (variant.customFields ?? {}) as Record<string, unknown>;
+        const productCustomFields = (product?.customFields ?? {}) as Record<string, unknown>;
         const price = variant.productVariantPrices?.find(
             item =>
                 String(item.channelId) === String(ctx.channelId) && item.currencyCode === job.currencyCode,
@@ -638,6 +817,7 @@ export class CatalogImportService {
             productFacetValueIds: product?.facetValues?.map(value => String(value.id)) ?? [],
             productBrand: facetNames(product?.facetValues, 'catalog-brand')[0] ?? null,
             productTags: facetNames(product?.facetValues, 'catalog-tag'),
+            productSourceCreatedAt: dateString(productCustomFields.sourceCreatedAt),
             sku: variant.sku,
             variantEnabled: variant.enabled,
             barcode: stringValue(customFields.barcode),
@@ -690,8 +870,11 @@ export class CatalogImportService {
         );
         if (row.primaryUnit || shouldClear(row, 'primaryUnit', clearBlankFields)) {
             changedOptional(changes, 'saleUnit', row.primaryUnit, snapshot.saleUnit, true);
-            changedOptional(changes, 'purchaseUnit', row.primaryUnit, snapshot.purchaseUnit, true);
         }
+        if (row.purchaseUnit || shouldClear(row, 'purchaseUnit', clearBlankFields)) {
+            changedOptional(changes, 'purchaseUnit', row.purchaseUnit, snapshot.purchaseUnit, true);
+        }
+        changed(changes, 'packageQuantity', row.packageQuantity, snapshot.packageQuantity);
         changedOptional(
             changes,
             'shelfLifeDays',
@@ -736,6 +919,13 @@ export class CatalogImportService {
             shouldClear(row, 'tags', clearBlankFields),
             [],
         );
+        changedOptional(
+            changes,
+            'sourceCreatedAt',
+            row.sourceCreatedAt,
+            snapshot.productSourceCreatedAt,
+            shouldClear(row, 'sourceCreatedAt', clearBlankFields),
+        );
         if (row.manufacturedAt || row.lotCode) changes.inventoryLot = { from: null, to: true };
         changes.currencyCode = currencyCode;
         if (Object.keys(changes).length === 1) return {};
@@ -747,7 +937,16 @@ export class CatalogImportService {
         job: CatalogImportJob,
         row: CatalogImportRow,
         productByKey: Map<string, ID>,
+        variantByKey: Map<string, ID>,
+        stockLocations: Array<{ id: string; name: string }>,
     ): Promise<void> {
+        const stockLocation = effectiveStockLocation(
+            row.normalizedData.stockLocationCode,
+            job.stockLocationId,
+            stockLocations,
+        );
+        if (!stockLocation) throw new UserInputError('导入行的仓库已不属于当前门店');
+        const stockLocationId = stockLocation.id as ID;
         let productId = row.targetProductId ?? productByKey.get(row.productKey) ?? null;
         let product: Product | undefined;
         let variant: ProductVariant | undefined;
@@ -774,6 +973,11 @@ export class CatalogImportService {
             const created = await this.productService.create(ctx, {
                 enabled: row.normalizedData.enabled ?? true,
                 facetValueIds: newProductFacetValueIds,
+                customFields: {
+                    sourceCreatedAt: row.normalizedData.sourceCreatedAt
+                        ? new Date(row.normalizedData.sourceCreatedAt)
+                        : null,
+                },
                 translations: [
                     {
                         languageCode: ctx.languageCode,
@@ -793,10 +997,15 @@ export class CatalogImportService {
         }
         if (!product || !productId) throw new UserInputError('无法创建或加载商品');
 
-        if (row.targetVariantId) {
+        const executionVariantKey = variantExecutionKey(row.normalizedData);
+        const executionVariantId = row.targetVariantId ?? variantByKey.get(executionVariantKey);
+        const variantAlreadyHandled =
+            executionVariantId != null &&
+            String(variantByKey.get(executionVariantKey)) === String(executionVariantId);
+        if (executionVariantId) {
             variant =
                 (await this.connection.getRepository(ctx, ProductVariant).findOne({
-                    where: { id: row.targetVariantId, deletedAt: IsNull() },
+                    where: { id: executionVariantId, deletedAt: IsNull() },
                     relations: ['productVariantPrices'],
                 })) ?? undefined;
             if (!variant || String(variant.productId) !== String(product.id)) {
@@ -804,6 +1013,7 @@ export class CatalogImportService {
             }
             if (
                 row.expectedVariantUpdatedAt &&
+                !variantAlreadyHandled &&
                 row.resolution !== 'UPDATE_EXISTING' &&
                 variant.updatedAt.getTime() !== row.expectedVariantUpdatedAt.getTime()
             ) {
@@ -825,6 +1035,9 @@ export class CatalogImportService {
                     product.translations.find(translation => translation.languageCode === ctx.languageCode)
                         ?.description ?? '',
                 productFacetValueIds: product.facetValues?.map(value => String(value.id)) ?? [],
+                productSourceCreatedAt: dateString(
+                    ((product.customFields ?? {}) as Record<string, unknown>).sourceCreatedAt,
+                ),
             }),
             sourceBinding: existingBinding
                 ? {
@@ -855,9 +1068,16 @@ export class CatalogImportService {
         const replaceDescription =
             Boolean(row.normalizedData.description) ||
             shouldClear(row.normalizedData, 'description', job.clearBlankFields);
+        const replaceSourceCreatedAt =
+            Boolean(row.normalizedData.sourceCreatedAt) ||
+            shouldClear(row.normalizedData, 'sourceCreatedAt', job.clearBlankFields);
         if (
             !productCreated &&
-            (replaceDescription || row.normalizedData.enabled != null || replaceBrand || replaceTags)
+            (replaceDescription ||
+                replaceSourceCreatedAt ||
+                row.normalizedData.enabled != null ||
+                replaceBrand ||
+                replaceTags)
         ) {
             const translation =
                 product.translations.find(item => item.languageCode === ctx.languageCode) ??
@@ -867,6 +1087,16 @@ export class CatalogImportService {
                 expectedUpdatedAt: product.updatedAt,
                 ...(row.normalizedData.enabled != null ? { enabled: row.normalizedData.enabled } : {}),
                 facetValueIds: nextFacetValueIds,
+                ...(replaceSourceCreatedAt
+                    ? {
+                          customFields: {
+                              ...((product.customFields ?? {}) as Record<string, unknown>),
+                              sourceCreatedAt: row.normalizedData.sourceCreatedAt
+                                  ? new Date(row.normalizedData.sourceCreatedAt)
+                                  : null,
+                          },
+                      }
+                    : {}),
                 ...(replaceDescription
                     ? {
                           translations: [
@@ -911,7 +1141,7 @@ export class CatalogImportService {
                             ? undefined
                             : [
                                   {
-                                      stockLocationId: job.stockLocationId,
+                                      stockLocationId,
                                       stockOnHand: row.normalizedData.stockOnHand,
                                   },
                               ],
@@ -943,12 +1173,16 @@ export class CatalogImportService {
                 },
             ]);
             if (row.normalizedData.stockOnHand != null) {
-                await this.operations.updateVariant(ctx, {
-                    productVariantId: variant.id,
-                    stockLocationId: job.stockLocationId,
-                    stockOnHand: row.normalizedData.stockOnHand,
-                    currencyCode: job.currencyCode,
-                });
+                await this.operations.updateVariant(
+                    ctx,
+                    {
+                        productVariantId: variant.id,
+                        stockLocationId,
+                        stockOnHand: row.normalizedData.stockOnHand,
+                        currencyCode: job.currencyCode,
+                    },
+                    row.resolution === 'APPLY',
+                );
             }
         }
 
@@ -973,7 +1207,7 @@ export class CatalogImportService {
             await this.operations.savePolicy(
                 ctx,
                 variant.id,
-                job.stockLocationId,
+                stockLocationId,
                 updateMinimumStock ? row.normalizedData.minimumStock : nullableNumber(before.minimumStock),
                 updateMaximumStock ? row.normalizedData.maximumStock : nullableNumber(before.maximumStock),
             );
@@ -991,11 +1225,14 @@ export class CatalogImportService {
                 ctx,
                 {
                     productVariantId: variant.id,
-                    stockLocationId: job.stockLocationId,
+                    stockLocationId,
                     lotCode: row.normalizedData.lotCode || `IMPORT-${String(job.id)}-${row.rowNumber}`,
                     manufacturedAt,
                     expiresAt,
-                    quantityOnHand: Math.max(row.normalizedData.stockOnHand ?? 0, 0),
+                    quantityOnHand: Math.max(
+                        row.normalizedData.lotQuantity ?? row.normalizedData.stockOnHand ?? 0,
+                        0,
+                    ),
                     purchaseCostMicrounits: microunits(row.normalizedData.purchaseCost),
                     currencyCode: job.currencyCode,
                 },
@@ -1023,11 +1260,13 @@ export class CatalogImportService {
             variantId: String(variant.id),
             productCreated,
             variantCreated,
+            stockLocationId: String(stockLocationId),
             lotId: lotId ? String(lotId) : null,
         };
         row.appliedAt = new Date();
         row.message = row.action === 'CREATE' ? '新增成功' : '更新成功';
         productByKey.set(row.productKey, product.id);
+        variantByKey.set(executionVariantKey, variant.id);
         await this.connection.getRepository(ctx, CatalogImportRow).save(row);
     }
 
@@ -1038,6 +1277,7 @@ export class CatalogImportService {
     ): Promise<void> {
         const before = row.beforeSnapshot ?? {};
         const applied = row.appliedSnapshot ?? {};
+        const appliedStockLocationId = stringValue(applied.stockLocationId) || job.stockLocationId;
         const variantId = row.targetVariantId;
         const productId = row.targetProductId;
         if (!variantId || !productId) return;
@@ -1079,7 +1319,7 @@ export class CatalogImportService {
                 ]);
                 await this.operations.updateVariant(ctx, {
                     productVariantId: variant.id,
-                    stockLocationId: job.stockLocationId,
+                    stockLocationId: appliedStockLocationId,
                     stockOnHand: Number(before.stockOnHand ?? 0),
                     minimumStock: nullableNumber(before.minimumStock),
                     maximumStock: nullableNumber(before.maximumStock),
@@ -1121,6 +1361,10 @@ export class CatalogImportService {
                     enabled:
                         typeof before.productEnabled === 'boolean' ? before.productEnabled : product.enabled,
                     facetValueIds: stringArray(before.productFacetValueIds).map(value => value as ID),
+                    customFields: {
+                        ...((product.customFields ?? {}) as Record<string, unknown>),
+                        sourceCreatedAt: dateValue(before.productSourceCreatedAt),
+                    },
                     ...(translation
                         ? {
                               translations: [
@@ -1408,11 +1652,63 @@ function importScopeError(
     return null;
 }
 
+function effectiveStockLocation(
+    reference: string,
+    fallbackId: ID,
+    locations: Array<{ id: string; name: string }>,
+): { id: string; name: string } | undefined {
+    if (!reference.trim()) {
+        return locations.find(location => String(location.id) === String(fallbackId));
+    }
+    const normalized = normalizeIdentity(reference);
+    return locations.find(
+        location =>
+            normalizeIdentity(String(location.id)) === normalized ||
+            normalizeIdentity(location.name) === normalized,
+    );
+}
+
+function variantExecutionKey(row: NormalizedCatalogRow): string {
+    if (row.sku) return `sku\u001f${normalizeIdentity(row.sku)}`;
+    if (row.barcode) return `barcode\u001f${normalizeIdentity(row.barcode)}`;
+    return [row.name, row.category, row.specification, row.primaryUnit].map(normalizeIdentity).join('\u001f');
+}
+
 function groupRows(rows: NormalizedCatalogRow[]): Map<string, NormalizedCatalogRow[]> {
     const groups = new Map<string, NormalizedCatalogRow[]>();
     for (const row of rows)
         groups.set(catalogSourceKey(row), [...(groups.get(catalogSourceKey(row)) ?? []), row]);
     return groups;
+}
+
+function groupProductRows(rows: NormalizedCatalogRow[]): Map<string, NormalizedCatalogRow[]> {
+    const groups = new Map<string, NormalizedCatalogRow[]>();
+    for (const row of rows) {
+        const key = variantExecutionKey(row);
+        groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    return groups;
+}
+
+function productFieldFingerprint(row: NormalizedCatalogRow): string {
+    return JSON.stringify({
+        name: row.name,
+        category: row.category,
+        currencyCode: row.currencyCode,
+        specification: row.specification,
+        primaryUnit: row.primaryUnit,
+        purchaseUnit: row.purchaseUnit,
+        packageQuantity: row.packageQuantity,
+        purchaseCost: row.purchaseCost,
+        sellingPrice: row.sellingPrice,
+        brand: row.brand,
+        enabled: row.enabled,
+        description: row.description,
+        tags: row.tags,
+        sourceCreatedAt: row.sourceCreatedAt,
+        sku: row.sku,
+        barcode: row.barcode,
+    });
 }
 
 function variantMatches(variant: ProductVariant, row: NormalizedCatalogRow): boolean {
@@ -1431,10 +1727,13 @@ function createChanges(row: NormalizedCatalogRow, currencyCode: CurrencyCode): R
         category: row.category,
         specification: row.specification,
         saleUnit: row.primaryUnit,
+        purchaseUnit: row.purchaseUnit || row.primaryUnit,
+        packageQuantity: row.packageQuantity,
         sku: row.sku || '系统自动生成',
         sellingPrice: money(row.sellingPrice),
         purchaseCostMicrounits: microunits(row.purchaseCost),
         stockOnHand: row.stockOnHand,
+        sourceCreatedAt: row.sourceCreatedAt,
         currencyCode,
     };
 }
@@ -1479,8 +1778,8 @@ function variantCustomFields(row: NormalizedCatalogRow): Record<string, unknown>
         barcode: row.barcode || null,
         specification: row.specification || null,
         saleUnit: row.primaryUnit || null,
-        purchaseUnit: row.primaryUnit || null,
-        packageQuantity: 1,
+        purchaseUnit: row.purchaseUnit || row.primaryUnit || null,
+        packageQuantity: row.packageQuantity,
         shelfLifeDays: row.shelfLifeDays,
     };
 }
@@ -1499,7 +1798,13 @@ function variantCustomFieldUpdates(
     );
     const clearUnit = shouldClear(row, 'primaryUnit', clearBlankFields);
     optionalUpdate(updates, 'saleUnit', row.primaryUnit, clearUnit);
-    optionalUpdate(updates, 'purchaseUnit', row.primaryUnit, clearUnit);
+    optionalUpdate(
+        updates,
+        'purchaseUnit',
+        row.purchaseUnit,
+        shouldClear(row, 'purchaseUnit', clearBlankFields),
+    );
+    updates.packageQuantity = row.packageQuantity;
     optionalUpdate(
         updates,
         'shelfLifeDays',
@@ -1519,8 +1824,12 @@ export function shouldClear(
     field: keyof NormalizedCatalogRow,
     clearBlankFields: boolean,
 ): boolean {
-    if (!clearBlankFields || !Object.prototype.hasOwnProperty.call(row.raw, field)) return false;
-    return isBlankValue(row.raw[String(field)]);
+    if (!clearBlankFields) return false;
+    if (row.raw && Object.prototype.hasOwnProperty.call(row.raw, field)) {
+        return isBlankValue(row.raw[String(field)]);
+    }
+    if (!row.providedFields?.includes(String(field))) return false;
+    return isBlankValue(row[field]);
 }
 
 export function clearsVariantIdentity(row: NormalizedCatalogRow, clearBlankFields: boolean): boolean {
@@ -1588,6 +1897,17 @@ function nullableNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function dateString(value: unknown): string | null {
+    return dateValue(value)?.toISOString() ?? null;
+}
+
+function dateValue(value: unknown): Date | null {
+    if (value == null || value === '') return null;
+    if (!(value instanceof Date) && typeof value !== 'string' && typeof value !== 'number') return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+}
+
 function stringArray(value: unknown): string[] {
     return Array.isArray(value) ? value.map(String) : [];
 }
@@ -1602,7 +1922,182 @@ function safeMessage(error: unknown): string {
     return (error instanceof Error ? error.message : String(error)).slice(0, 500);
 }
 
-function csvCell(value: string): string {
-    const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
-    return `"${safe.replace(/"/g, '""')}"`;
+function validateImportSource(input: BeginCatalogImportInput): void {
+    if (
+        !Number.isInteger(input.totalRows) ||
+        input.totalRows < 1 ||
+        input.totalRows > MAX_CATALOG_IMPORT_ROWS
+    ) {
+        throw new UserInputError(`单次最多导入 ${MAX_CATALOG_IMPORT_ROWS} 行商品`);
+    }
+    if (!Number.isInteger(input.source.byteSize) || input.source.byteSize < 1) {
+        throw new UserInputError('文件大小无效');
+    }
+    if (input.source.byteSize > MAX_CATALOG_IMPORT_BYTES) {
+        throw new UserInputError('导入文件不能超过 20MB');
+    }
+    if (!/^[a-f0-9]{64}$/i.test(input.source.fileHash)) {
+        throw new UserInputError('文件摘要格式无效');
+    }
+    if (!/\.(numbers|xlsx|xls|csv)$/i.test(input.source.filename)) {
+        throw new UserInputError('仅支持 .numbers、.xlsx、.xls 或 .csv 文件');
+    }
+    if (!/^catalog-browser-v\d+$/u.test(input.source.parserVersion)) {
+        throw new UserInputError('浏览器解析器版本无效');
+    }
+    if (input.source.detectedHeaders.length < 1 || input.source.detectedHeaders.length > 100) {
+        throw new UserInputError('表头数量无效');
+    }
+}
+
+function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): NormalizedCatalogRow {
+    if (!Number.isInteger(row.rowNumber) || row.rowNumber < 2 || row.rowNumber > expectedRows + 1) {
+        throw new UserInputError('商品行号超出导入范围');
+    }
+    const name = safeRequiredRowText(row.name, 255, row.rowNumber, '名称');
+    const category = safeRequiredRowText(row.category, 255, row.rowNumber, '分类');
+    const purchaseCost = finiteRowNumber(row.purchaseCost, row.rowNumber, '进货价', true);
+    const sellingPrice = finiteRowNumber(row.sellingPrice, row.rowNumber, '销售价', true);
+    if (purchaseCost < 0) throw new UserInputError(`第 ${row.rowNumber} 行：进货价不能为负数`);
+    if (sellingPrice < 0) throw new UserInputError(`第 ${row.rowNumber} 行：销售价不能为负数`);
+    if (row.shelfLifeDays != null && (!Number.isInteger(row.shelfLifeDays) || row.shelfLifeDays < 0)) {
+        throw new UserInputError(`第 ${row.rowNumber} 行：保质期必须是非负整数`);
+    }
+    if (row.lotQuantity != null && row.lotQuantity < 0) {
+        throw new UserInputError(`第 ${row.rowNumber} 行：批次数量不能为负数`);
+    }
+    if (!Number.isFinite(row.packageQuantity) || row.packageQuantity <= 0) {
+        throw new UserInputError(`第 ${row.rowNumber} 行：包装换算必须大于 0`);
+    }
+    for (const [value, label] of [
+        [row.stockOnHand, '库存量'],
+        [row.minimumStock, '库存下限'],
+        [row.maximumStock, '库存上限'],
+        [row.lotQuantity, '批次数量'],
+    ] as const) {
+        if (value != null && !Number.isInteger(value)) {
+            throw new UserInputError(`第 ${row.rowNumber} 行：${label}必须是整数`);
+        }
+    }
+    const normalizedDate = (value: string | null, label: string) => {
+        if (!value) return null;
+        const parsed = new Date(value);
+        if (!Number.isFinite(parsed.getTime())) {
+            throw new UserInputError(`第 ${row.rowNumber} 行：${label}不是有效日期`);
+        }
+        return parsed.toISOString();
+    };
+    const allowedFields = new Set([
+        'name',
+        'category',
+        'channelCode',
+        'stockLocationCode',
+        'currencyCode',
+        'specification',
+        'primaryUnit',
+        'purchaseUnit',
+        'packageQuantity',
+        'stockOnHand',
+        'purchaseCost',
+        'sellingPrice',
+        'reportedMargin',
+        'maximumStock',
+        'minimumStock',
+        'brand',
+        'manufacturedAt',
+        'shelfLifeDays',
+        'enabled',
+        'description',
+        'tags',
+        'sourceCreatedAt',
+        'sku',
+        'barcode',
+        'lotCode',
+        'lotQuantity',
+    ]);
+    const providedFields = [...new Set((row.providedFields ?? []).filter(field => allowedFields.has(field)))];
+    return {
+        rowNumber: row.rowNumber,
+        name,
+        category,
+        channelCode: safeImportText(row.channelCode, 255),
+        stockLocationCode: safeImportText(row.stockLocationCode, 255),
+        currencyCode: safeImportText(row.currencyCode, 3).toUpperCase(),
+        specification: safeImportText(row.specification, 255),
+        primaryUnit: safeImportText(row.primaryUnit, 80),
+        purchaseUnit: safeImportText(row.purchaseUnit, 80),
+        packageQuantity: row.packageQuantity,
+        stockOnHand: row.stockOnHand,
+        purchaseCost,
+        sellingPrice,
+        reportedMargin:
+            row.reportedMargin == null
+                ? null
+                : finiteRowNumber(row.reportedMargin, row.rowNumber, '毛利率', false),
+        maximumStock: row.maximumStock,
+        minimumStock: row.minimumStock,
+        brand: safeImportText(row.brand, 255),
+        manufacturedAt: normalizedDate(row.manufacturedAt, '生产日期'),
+        shelfLifeDays: row.shelfLifeDays,
+        enabled: typeof row.enabled === 'boolean' ? row.enabled : null,
+        description: safeImportText(row.description, 50_000),
+        tags: [...new Set((row.tags ?? []).map(tag => safeImportText(tag, 255)).filter(Boolean))].slice(
+            0,
+            100,
+        ),
+        sourceCreatedAt: normalizedDate(row.sourceCreatedAt, '创建日期'),
+        sku: safeImportText(row.sku, 255),
+        barcode: safeImportText(row.barcode, 255),
+        lotCode: safeImportText(row.lotCode, 80),
+        lotQuantity: row.lotQuantity,
+        providedFields,
+    };
+}
+
+function finiteRowNumber(value: number | null, rowNumber: number, label: string, required: true): number;
+function finiteRowNumber(
+    value: number | null,
+    rowNumber: number,
+    label: string,
+    required: false,
+): number | null;
+function finiteRowNumber(
+    value: number | null,
+    rowNumber: number,
+    label: string,
+    required: boolean,
+): number | null {
+    if (value == null) {
+        if (required) throw new UserInputError(`第 ${rowNumber} 行：${label}不能为空`);
+        return null;
+    }
+    if (!Number.isFinite(value)) throw new UserInputError(`第 ${rowNumber} 行：${label}不是有效数字`);
+    return value;
+}
+
+function safeRequiredRowText(value: string, maxLength: number, rowNumber: number, label: string): string {
+    const normalized = safeImportText(value, maxLength);
+    if (!normalized) throw new UserInputError(`第 ${rowNumber} 行：${label}不能为空`);
+    return normalized;
+}
+
+function safeImportText(value: string, maxLength: number): string {
+    return String(value ?? '')
+        .normalize('NFKC')
+        .replace(/\0/gu, '')
+        .trim()
+        .slice(0, maxLength);
+}
+
+function safeImportFilename(filename: string): string {
+    return safeImportText(filename.replace(/[\\/]/gu, '_'), 255) || 'catalog-import.xlsx';
+}
+
+function sanitizeFieldMapping(value: Record<string, string>): Record<string, string> {
+    return Object.fromEntries(
+        Object.entries(value ?? {})
+            .slice(0, 100)
+            .map(([header, field]) => [safeImportText(header, 255), safeImportText(field, 80)])
+            .filter(([header, field]) => Boolean(header && field)),
+    );
 }

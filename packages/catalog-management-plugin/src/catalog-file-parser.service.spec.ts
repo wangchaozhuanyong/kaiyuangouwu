@@ -72,8 +72,8 @@ describe('CatalogFileParserService', () => {
             tags: ['啤酒', '进口'],
         });
         expect(parsed.rows[0].manufacturedAt).toContain('2026-08-01');
-        expect(parsed.rows[0].raw.description).toBe('');
-        expect(parsed.rows[0].raw.minimumStock).toBe(0);
+        expect(parsed.rows[0].raw?.description).toBe('');
+        expect(parsed.rows[0].raw?.minimumStock).toBe(0);
     });
 
     it('uses specification and unit in stable row identity', () => {

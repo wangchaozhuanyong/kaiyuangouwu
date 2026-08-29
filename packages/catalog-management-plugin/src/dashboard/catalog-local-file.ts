@@ -1,0 +1,625 @@
+import * as XLSX from 'xlsx';
+import type { NormalizedCatalogRow } from '../types';
+
+type CellValue = string | number | boolean | Date | null | undefined;
+
+export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v1';
+export const MAX_LOCAL_CATALOG_BYTES = 20 * 1024 * 1024;
+export const MAX_LOCAL_CATALOG_ROWS = 20_000;
+
+export const CATALOG_FIELD_OPTIONS: Array<{ value: keyof NormalizedCatalogRow; label: string }> = [
+    { value: 'name', label: '商品名称' },
+    { value: 'category', label: '分类' },
+    { value: 'sku', label: 'SKU' },
+    { value: 'barcode', label: '条码' },
+    { value: 'specification', label: '规格' },
+    { value: 'primaryUnit', label: '销售单位' },
+    { value: 'purchaseUnit', label: '采购单位' },
+    { value: 'packageQuantity', label: '包装换算' },
+    { value: 'currencyCode', label: '币种' },
+    { value: 'purchaseCost', label: '进货价' },
+    { value: 'sellingPrice', label: '销售价' },
+    { value: 'reportedMargin', label: '报表毛利率' },
+    { value: 'stockLocationCode', label: '仓库' },
+    { value: 'stockOnHand', label: '库存量' },
+    { value: 'minimumStock', label: '库存下限' },
+    { value: 'maximumStock', label: '库存上限' },
+    { value: 'brand', label: '品牌' },
+    { value: 'tags', label: '标签' },
+    { value: 'enabled', label: '状态' },
+    { value: 'description', label: '描述' },
+    { value: 'manufacturedAt', label: '生产日期' },
+    { value: 'shelfLifeDays', label: '保质期天数' },
+    { value: 'lotCode', label: '批次号' },
+    { value: 'lotQuantity', label: '批次数量' },
+    { value: 'sourceCreatedAt', label: '来源创建日期' },
+    { value: 'channelCode', label: '门店' },
+];
+
+const importableFields = new Set<keyof NormalizedCatalogRow>(
+    CATALOG_FIELD_OPTIONS.map(option => option.value),
+);
+
+const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
+    名称: 'name',
+    商品名称: 'name',
+    分类: 'category',
+    商品分类: 'category',
+    门店: 'channelCode',
+    门店编码: 'channelCode',
+    仓库: 'stockLocationCode',
+    仓库编码: 'stockLocationCode',
+    币种: 'currencyCode',
+    规格: 'specification',
+    主单位: 'primaryUnit',
+    单位: 'primaryUnit',
+    销售单位: 'primaryUnit',
+    采购单位: 'purchaseUnit',
+    包装换算: 'packageQuantity',
+    包装换算数量: 'packageQuantity',
+    库存量: 'stockOnHand',
+    库存: 'stockOnHand',
+    进货价: 'purchaseCost',
+    成本价: 'purchaseCost',
+    销售价: 'sellingPrice',
+    售价: 'sellingPrice',
+    毛利率: 'reportedMargin',
+    库存上限: 'maximumStock',
+    库存下限: 'minimumStock',
+    品牌: 'brand',
+    生产日期: 'manufacturedAt',
+    保质期: 'shelfLifeDays',
+    保质期天数: 'shelfLifeDays',
+    商品状态: 'enabled',
+    状态: 'enabled',
+    商品描述: 'description',
+    描述: 'description',
+    标签: 'tags',
+    创建日期: 'sourceCreatedAt',
+    SKU: 'sku',
+    商品编码: 'sku',
+    条码: 'barcode',
+    批次号: 'lotCode',
+    批次数量: 'lotQuantity',
+};
+
+const requiredFields: Array<keyof NormalizedCatalogRow> = [
+    'name',
+    'category',
+    'purchaseCost',
+    'sellingPrice',
+];
+
+export interface LocalCatalogRowError {
+    rowNumber: number;
+    message: string;
+}
+
+export interface LocalCatalogFile {
+    filename: string;
+    mimetype: string;
+    byteSize: number;
+    fileHash: string;
+    sheetName: string;
+    headers: string[];
+    fieldMapping: Record<string, string>;
+    rows: NormalizedCatalogRow[];
+    errors: LocalCatalogRowError[];
+    duplicateGroups: number;
+    duplicateRows: number;
+    warningRows: number;
+}
+
+export interface CatalogWorkerRequest {
+    filename: string;
+    mimetype: string;
+    buffer: ArrayBuffer;
+    fieldMapping?: Record<string, string>;
+}
+
+export type CatalogWorkerResponse = { ok: true; result: LocalCatalogFile } | { ok: false; message: string };
+
+export async function parseCatalogArrayBuffer(
+    buffer: ArrayBuffer,
+    filename: string,
+    mimetype = 'application/octet-stream',
+    fieldMappingOverrides?: Record<string, string>,
+): Promise<LocalCatalogFile> {
+    assertLocalFile(filename, buffer.byteLength);
+    let workbook: XLSX.WorkBook;
+    try {
+        workbook = XLSX.read(new Uint8Array(buffer), {
+            type: 'array',
+            cellDates: true,
+            cellFormula: false,
+            cellHTML: false,
+            cellStyles: false,
+            dense: true,
+            WTF: false,
+        });
+    } catch {
+        throw new Error('无法解析文件，请确认文件是有效的 Numbers、Excel 或 CSV 文件');
+    }
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) throw new Error('文件中没有可读取的工作表');
+    const sheet = workbook.Sheets[sheetName];
+    const matrix = XLSX.utils.sheet_to_json<CellValue[]>(sheet, {
+        header: 1,
+        raw: true,
+        blankrows: false,
+        defval: null,
+    });
+    if (matrix.length < 2) throw new Error('工作表没有商品数据');
+    if (matrix.length - 1 > MAX_LOCAL_CATALOG_ROWS) {
+        throw new Error(`单次最多导入 ${MAX_LOCAL_CATALOG_ROWS} 行商品`);
+    }
+
+    const headers = matrix[0].map(normalizeHeader);
+    const columnFields = headers.map(header => {
+        if (fieldMappingOverrides && Object.prototype.hasOwnProperty.call(fieldMappingOverrides, header)) {
+            const override = fieldMappingOverrides[header] as keyof NormalizedCatalogRow | undefined;
+            return override && importableFields.has(override) ? override : undefined;
+        }
+        return headerAliases[header];
+    });
+    const missing = requiredFields.filter(field => !columnFields.includes(field));
+    if (missing.length > 0) {
+        throw new Error(`缺少必填列：${missing.map(displayField).join('、')}`);
+    }
+    const duplicates = headers.filter((header, index) => header && headers.indexOf(header) !== index);
+    if (duplicates.length > 0) {
+        throw new Error(`存在重复列：${[...new Set(duplicates)].join('、')}`);
+    }
+    const duplicateFields = columnFields.filter((field, index): field is keyof NormalizedCatalogRow =>
+        Boolean(field && columnFields.indexOf(field) !== index),
+    );
+    if (duplicateFields.length > 0) {
+        throw new Error(
+            `多个列映射到同一字段：${[...new Set(duplicateFields)].map(displayField).join('、')}`,
+        );
+    }
+
+    const productRows: NormalizedCatalogRow[] = [];
+    const errors: LocalCatalogRowError[] = [];
+    matrix.slice(1).forEach((cells, index) => {
+        const rowNumber = index + 2;
+        try {
+            productRows.push(normalizeRow(cells, columnFields, rowNumber));
+        } catch (error) {
+            errors.push({
+                rowNumber,
+                message: error instanceof Error ? error.message : `第 ${rowNumber} 行：无法解析`,
+            });
+        }
+    });
+    const rows = expandStandardWorkbookRows(workbook, productRows);
+    if (rows.length > MAX_LOCAL_CATALOG_ROWS) {
+        throw new Error(`合并库存和批次后最多导入 ${MAX_LOCAL_CATALOG_ROWS} 行商品`);
+    }
+    const duplicateCounts = localDuplicateCounts(rows);
+    return {
+        filename: safeFilename(filename),
+        mimetype: mimetype || 'application/octet-stream',
+        byteSize: buffer.byteLength,
+        fileHash: await sha256(buffer),
+        sheetName,
+        headers,
+        fieldMapping: Object.fromEntries(
+            headers.flatMap((header, index) => (header ? [[header, String(columnFields[index] ?? '')]] : [])),
+        ),
+        rows,
+        errors,
+        ...duplicateCounts,
+        warningRows: rows.filter(hasLocalWarning).length,
+    };
+}
+
+interface StandardStockRow {
+    sku: string;
+    stockLocationCode: string;
+    stockOnHand: number;
+    minimumStock: number | null;
+    maximumStock: number | null;
+}
+
+interface StandardLotRow {
+    sku: string;
+    stockLocationCode: string;
+    lotCode: string;
+    manufacturedAt: string | null;
+    expiresAt: string | null;
+    quantityOnHand: number;
+}
+
+function expandStandardWorkbookRows(
+    workbook: XLSX.WorkBook,
+    productRows: NormalizedCatalogRow[],
+): NormalizedCatalogRow[] {
+    const stockSheet = workbook.Sheets['库存策略'];
+    const lotSheet = workbook.Sheets['批次效期'];
+    if (!stockSheet && !lotSheet) return productRows;
+
+    const stocks = stockSheet ? parseStandardStockRows(stockSheet) : [];
+    const lots = lotSheet ? parseStandardLotRows(lotSheet) : [];
+    const skuCounts = new Map<string, number>();
+    for (const row of productRows) {
+        const sku = normalizeIdentity(row.sku);
+        if (sku) skuCounts.set(sku, (skuCounts.get(sku) ?? 0) + 1);
+    }
+    const expanded = productRows.flatMap(product => {
+        const sku = normalizeIdentity(product.sku);
+        if (!sku || skuCounts.get(sku) !== 1) return [product];
+        const productStocks = stocks.filter(row => normalizeIdentity(row.sku) === sku);
+        const productLots = lots.filter(row => normalizeIdentity(row.sku) === sku);
+        if (productStocks.length === 0 && productLots.length === 0) return [product];
+
+        const rows: NormalizedCatalogRow[] = [];
+        const lotWarehouses = new Set<string>();
+        for (const lot of productLots) {
+            const warehouseKey = normalizeIdentity(lot.stockLocationCode);
+            const stock = productStocks.find(
+                item => normalizeIdentity(item.stockLocationCode) === warehouseKey,
+            );
+            lotWarehouses.add(warehouseKey);
+            rows.push(
+                mergeStandardInventory(product, stock, lot, [
+                    'stockLocationCode',
+                    'stockOnHand',
+                    'minimumStock',
+                    'maximumStock',
+                    'lotCode',
+                    'lotQuantity',
+                    'manufacturedAt',
+                    'shelfLifeDays',
+                ]),
+            );
+        }
+        for (const stock of productStocks) {
+            if (lotWarehouses.has(normalizeIdentity(stock.stockLocationCode))) continue;
+            rows.push(
+                mergeStandardInventory(product, stock, undefined, [
+                    'stockLocationCode',
+                    'stockOnHand',
+                    'minimumStock',
+                    'maximumStock',
+                ]),
+            );
+        }
+        return rows.length > 0 ? rows : [product];
+    });
+    return expanded.map((row, index) => ({ ...row, rowNumber: index + 2 }));
+}
+
+function parseStandardStockRows(sheet: XLSX.WorkSheet): StandardStockRow[] {
+    return standardSheetRecords(sheet).flatMap((record, index) => {
+        const sku = textValue(record.get('SKU'));
+        if (!sku) return [];
+        const stockOnHand = integerValue(record.get('库存量'), index + 2, '库存量');
+        if (stockOnHand == null) throw new Error(`库存策略第 ${index + 2} 行：库存量不能为空`);
+        return [
+            {
+                sku,
+                stockLocationCode: textValue(record.get('仓库')),
+                stockOnHand,
+                minimumStock: integerValue(record.get('库存下限'), index + 2, '库存下限'),
+                maximumStock: integerValue(record.get('库存上限'), index + 2, '库存上限'),
+            },
+        ];
+    });
+}
+
+function parseStandardLotRows(sheet: XLSX.WorkSheet): StandardLotRow[] {
+    return standardSheetRecords(sheet).flatMap((record, index) => {
+        const sku = textValue(record.get('SKU'));
+        if (!sku) return [];
+        const quantity = integerValue(record.get('批次数量'), index + 2, '批次数量');
+        if (quantity == null) throw new Error(`批次效期第 ${index + 2} 行：批次数量不能为空`);
+        return [
+            {
+                sku,
+                stockLocationCode: textValue(record.get('仓库')),
+                lotCode: textValue(record.get('批次号')),
+                manufacturedAt: dateValue(record.get('生产日期'), index + 2, '生产日期'),
+                expiresAt: dateValue(record.get('到期日期'), index + 2, '到期日期'),
+                quantityOnHand: quantity,
+            },
+        ];
+    });
+}
+
+function standardSheetRecords(sheet: XLSX.WorkSheet): Array<Map<string, CellValue>> {
+    const matrix = XLSX.utils.sheet_to_json<CellValue[]>(sheet, {
+        header: 1,
+        raw: true,
+        blankrows: false,
+        defval: null,
+    });
+    if (matrix.length === 0) return [];
+    const headers = matrix[0].map(normalizeHeader);
+    return matrix.slice(1).map(cells => new Map(headers.map((header, index) => [header, cells[index]])));
+}
+
+function mergeStandardInventory(
+    product: NormalizedCatalogRow,
+    stock: StandardStockRow | undefined,
+    lot: StandardLotRow | undefined,
+    providedFields: string[],
+): NormalizedCatalogRow {
+    const shelfLifeDays =
+        lot?.manufacturedAt && lot.expiresAt
+            ? Math.max(
+                  0,
+                  Math.round(
+                      (new Date(lot.expiresAt).getTime() - new Date(lot.manufacturedAt).getTime()) /
+                          86_400_000,
+                  ),
+              )
+            : product.shelfLifeDays;
+    return {
+        ...product,
+        stockLocationCode: lot?.stockLocationCode || stock?.stockLocationCode || product.stockLocationCode,
+        stockOnHand: stock?.stockOnHand ?? lot?.quantityOnHand ?? product.stockOnHand,
+        minimumStock: stock?.minimumStock ?? product.minimumStock,
+        maximumStock: stock?.maximumStock ?? product.maximumStock,
+        lotCode: lot?.lotCode ?? product.lotCode,
+        lotQuantity: lot?.quantityOnHand ?? product.lotQuantity,
+        manufacturedAt: lot?.manufacturedAt ?? product.manufacturedAt,
+        shelfLifeDays,
+        providedFields: [...new Set([...product.providedFields, ...providedFields])],
+    };
+}
+
+export function rowsForCatalogTransport(rows: NormalizedCatalogRow[]): NormalizedCatalogRow[] {
+    return rows.map(({ raw: _raw, ...row }) => row);
+}
+
+function normalizeRow(
+    cells: CellValue[],
+    fields: Array<keyof NormalizedCatalogRow | undefined>,
+    rowNumber: number,
+): NormalizedCatalogRow {
+    const values = new Map<keyof NormalizedCatalogRow, CellValue>();
+    fields.forEach((field, index) => {
+        if (field) values.set(field, cells[index]);
+    });
+    const name = textValue(values.get('name'));
+    const category = textValue(values.get('category'));
+    if (!name) throw new Error(`第 ${rowNumber} 行：名称不能为空`);
+    if (!category) throw new Error(`第 ${rowNumber} 行：分类不能为空`);
+    const purchaseCost = decimalValue(values.get('purchaseCost'), rowNumber, '进货价', true);
+    const sellingPrice = decimalValue(values.get('sellingPrice'), rowNumber, '销售价', true);
+    const shelfLifeDays = integerValue(values.get('shelfLifeDays'), rowNumber, '保质期');
+    const lotQuantity = integerValue(values.get('lotQuantity'), rowNumber, '批次数量');
+    const packageQuantity = decimalValue(values.get('packageQuantity'), rowNumber, '包装换算') ?? 1;
+    if (purchaseCost < 0) throw new Error(`第 ${rowNumber} 行：进货价不能为负数`);
+    if (sellingPrice < 0) throw new Error(`第 ${rowNumber} 行：销售价不能为负数`);
+    if (shelfLifeDays != null && shelfLifeDays < 0) {
+        throw new Error(`第 ${rowNumber} 行：保质期不能为负数`);
+    }
+    if (lotQuantity != null && lotQuantity < 0) {
+        throw new Error(`第 ${rowNumber} 行：批次数量不能为负数`);
+    }
+    if (packageQuantity <= 0) throw new Error(`第 ${rowNumber} 行：包装换算必须大于 0`);
+    const raw: Record<string, string | number | boolean | null> = {};
+    fields.forEach((field, index) => {
+        if (!field) return;
+        const value = cells[index];
+        raw[String(field)] = value instanceof Date ? value.toISOString() : (value ?? null);
+    });
+    return {
+        rowNumber,
+        name,
+        category,
+        channelCode: textValue(values.get('channelCode')),
+        stockLocationCode: textValue(values.get('stockLocationCode')),
+        currencyCode: textValue(values.get('currencyCode')).toUpperCase(),
+        specification: textValue(values.get('specification')),
+        primaryUnit: textValue(values.get('primaryUnit')),
+        purchaseUnit: textValue(values.get('purchaseUnit')),
+        packageQuantity,
+        stockOnHand: integerValue(values.get('stockOnHand'), rowNumber, '库存量'),
+        purchaseCost,
+        sellingPrice,
+        reportedMargin: marginValue(values.get('reportedMargin'), rowNumber),
+        maximumStock: integerValue(values.get('maximumStock'), rowNumber, '库存上限'),
+        minimumStock: integerValue(values.get('minimumStock'), rowNumber, '库存下限'),
+        brand: textValue(values.get('brand')),
+        manufacturedAt: dateValue(values.get('manufacturedAt'), rowNumber, '生产日期'),
+        shelfLifeDays,
+        enabled: statusValue(values.get('enabled'), rowNumber),
+        description: textValue(values.get('description')),
+        tags: textValue(values.get('tags'))
+            .split(/[，,；;、]/u)
+            .map(value => value.trim())
+            .filter(Boolean),
+        sourceCreatedAt: dateValue(values.get('sourceCreatedAt'), rowNumber, '创建日期'),
+        sku: textValue(values.get('sku')),
+        barcode: textValue(values.get('barcode')),
+        lotCode: textValue(values.get('lotCode')),
+        lotQuantity,
+        providedFields: [...values.keys()].map(String),
+        raw,
+    };
+}
+
+function localDuplicateCounts(rows: NormalizedCatalogRow[]) {
+    const productGroups = new Map<string, NormalizedCatalogRow[]>();
+    for (const row of rows) {
+        const key = localProductIdentity(row);
+        productGroups.set(key, [...(productGroups.get(key) ?? []), row]);
+    }
+    const duplicateGroups: NormalizedCatalogRow[][] = [];
+    for (const productGroup of productGroups.values()) {
+        if (productGroup.length < 2) continue;
+        if (new Set(productGroup.map(stableProductRow)).size > 1) {
+            duplicateGroups.push(productGroup);
+            continue;
+        }
+        const inventoryGroups = new Map<string, NormalizedCatalogRow[]>();
+        for (const row of productGroup) {
+            const key = localIdentity(row);
+            inventoryGroups.set(key, [...(inventoryGroups.get(key) ?? []), row]);
+        }
+        duplicateGroups.push(
+            ...[...inventoryGroups.values()].filter(
+                group => group.length > 1 && new Set(group.map(stableRow)).size > 1,
+            ),
+        );
+    }
+    return {
+        duplicateGroups: duplicateGroups.length,
+        duplicateRows: duplicateGroups.reduce((total, group) => total + group.length, 0),
+    };
+}
+
+function localIdentity(row: NormalizedCatalogRow): string {
+    const base = localProductIdentity(row);
+    const inventoryScope = [row.stockLocationCode, row.lotCode]
+        .map(normalizeIdentity)
+        .filter(Boolean)
+        .join('\u001f');
+    return inventoryScope ? `${base}\u001finventory\u001f${inventoryScope}` : base;
+}
+
+function localProductIdentity(row: NormalizedCatalogRow): string {
+    return row.sku
+        ? `sku\u001f${normalizeIdentity(row.sku)}`
+        : row.barcode
+          ? `barcode\u001f${normalizeIdentity(row.barcode)}`
+          : [row.name, row.category, row.specification, row.primaryUnit]
+                .map(normalizeIdentity)
+                .join('\u001f');
+}
+
+function stableRow(row: NormalizedCatalogRow): string {
+    const { rowNumber: _rowNumber, raw: _raw, reportedMargin: _margin, ...stable } = row;
+    return JSON.stringify(stable);
+}
+
+function stableProductRow(row: NormalizedCatalogRow): string {
+    return JSON.stringify({
+        name: row.name,
+        category: row.category,
+        currencyCode: row.currencyCode,
+        specification: row.specification,
+        primaryUnit: row.primaryUnit,
+        purchaseUnit: row.purchaseUnit,
+        packageQuantity: row.packageQuantity,
+        purchaseCost: row.purchaseCost,
+        sellingPrice: row.sellingPrice,
+        brand: row.brand,
+        enabled: row.enabled,
+        description: row.description,
+        tags: row.tags,
+        sourceCreatedAt: row.sourceCreatedAt,
+        sku: row.sku,
+        barcode: row.barcode,
+    });
+}
+
+function hasLocalWarning(row: NormalizedCatalogRow): boolean {
+    return Boolean(
+        (row.stockOnHand != null && row.stockOnHand < 0) ||
+        (row.purchaseCost != null && row.sellingPrice != null && row.sellingPrice < row.purchaseCost) ||
+        (row.minimumStock != null && row.maximumStock != null && row.maximumStock < row.minimumStock),
+    );
+}
+
+function normalizeHeader(value: CellValue): string {
+    return textValue(value)
+        .replace(/[（(]必填[）)]/gu, '')
+        .replace(/\s+/gu, '');
+}
+
+function normalizeIdentity(value: string): string {
+    return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-Hans');
+}
+
+function textValue(value: CellValue): string {
+    if (value == null) return '';
+    if (value instanceof Date) return value.toISOString();
+    return String(value).normalize('NFKC').trim();
+}
+
+function decimalValue(value: CellValue, rowNumber: number, label: string, required: true): number;
+function decimalValue(value: CellValue, rowNumber: number, label: string, required?: false): number | null;
+function decimalValue(value: CellValue, rowNumber: number, label: string, required = false): number | null {
+    const text = textValue(value).replace(/[￥¥,$\s]/gu, '');
+    if (!text) {
+        if (required) throw new Error(`第 ${rowNumber} 行：${label}不能为空`);
+        return null;
+    }
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) throw new Error(`第 ${rowNumber} 行：${label}不是有效数字`);
+    return parsed;
+}
+
+function integerValue(value: CellValue, rowNumber: number, label: string): number | null {
+    const number = decimalValue(value, rowNumber, label);
+    if (number == null) return null;
+    if (!Number.isInteger(number)) throw new Error(`第 ${rowNumber} 行：${label}必须是整数`);
+    return number;
+}
+
+function marginValue(value: CellValue, rowNumber: number): number | null {
+    const text = textValue(value);
+    if (!text) return null;
+    const percent = text.endsWith('%');
+    const parsed = Number(text.replace('%', ''));
+    if (!Number.isFinite(parsed)) throw new Error(`第 ${rowNumber} 行：毛利率不是有效数字`);
+    return percent ? parsed / 100 : Math.abs(parsed) <= 1 ? parsed : parsed / 100;
+}
+
+function dateValue(value: CellValue, rowNumber: number, label: string): string | null {
+    if (value == null || textValue(value) === '') return null;
+    if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString();
+    if (typeof value === 'number') {
+        const parsed = XLSX.SSF.parse_date_code(value);
+        if (parsed) {
+            return new Date(
+                Date.UTC(parsed.y, parsed.m - 1, parsed.d, parsed.H, parsed.M, parsed.S),
+            ).toISOString();
+        }
+    }
+    const date = new Date(textValue(value).replace(/\./gu, '-').replace(/\//gu, '-'));
+    if (!Number.isFinite(date.getTime())) throw new Error(`第 ${rowNumber} 行：${label}不是有效日期`);
+    return date.toISOString();
+}
+
+function statusValue(value: CellValue, rowNumber: number): boolean | null {
+    const status = normalizeIdentity(textValue(value));
+    if (!status) return null;
+    if (['启用', '上架', '是', 'true', '1', 'enabled'].includes(status)) return true;
+    if (['禁用', '停用', '下架', '否', 'false', '0', 'disabled'].includes(status)) return false;
+    throw new Error(`第 ${rowNumber} 行：商品状态只支持启用或禁用`);
+}
+
+function displayField(field: keyof NormalizedCatalogRow): string {
+    return (
+        (
+            {
+                name: '名称',
+                category: '分类',
+                purchaseCost: '进货价',
+                sellingPrice: '销售价',
+            } as Partial<Record<keyof NormalizedCatalogRow, string>>
+        )[field] ?? String(field)
+    );
+}
+
+function assertLocalFile(filename: string, byteSize: number): void {
+    if (!/\.(numbers|xlsx|xls|csv)$/i.test(filename)) {
+        throw new Error('仅支持 .numbers、.xlsx、.xls 或 .csv 文件');
+    }
+    if (byteSize < 1) throw new Error('导入文件为空');
+    if (byteSize > MAX_LOCAL_CATALOG_BYTES) throw new Error('导入文件不能超过 20MB');
+}
+
+function safeFilename(filename: string): string {
+    return filename.replace(/[\\/\0]/gu, '_').slice(0, 255) || 'catalog-import.xlsx';
+}
+
+async function sha256(buffer: ArrayBuffer): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', buffer);
+    return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}

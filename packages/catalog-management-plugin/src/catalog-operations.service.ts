@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { CurrencyCode } from '@vendure/common/lib/generated-types';
+import { CurrencyCode, Permission } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    ForbiddenError,
+    Product,
+    ProductService,
     ProductVariant,
     ProductVariantService,
     RequestContext,
@@ -13,18 +16,57 @@ import {
 } from '@vendure/core';
 import { In } from 'typeorm';
 
+import { manageCatalogImportPermission, manageCatalogOperationsPermission } from './constants';
 import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
-import { SaveInventoryLotInput, UpdateCatalogVariantOperationsInput } from './types';
+import {
+    CatalogProductSummaryFilterInput,
+    SaveCatalogProductInput,
+    SaveInventoryLotInput,
+    UpdateCatalogVariantOperationsInput,
+} from './types';
 
 @Injectable()
 export class CatalogOperationsService {
     constructor(
         private readonly connection: TransactionalConnection,
+        private readonly productService: ProductService,
         private readonly productVariantService: ProductVariantService,
         private readonly stockMovementService: StockMovementService,
     ) {}
+
+    async saveProduct(ctx: RequestContext, input: SaveCatalogProductInput) {
+        const canMaintainProduct = ctx.userHasPermissions([
+            Permission.UpdateProduct,
+            Permission.UpdateCatalog,
+        ]);
+        const canMaintainOperations =
+            input.variants.length === 0 ||
+            ctx.userHasPermissions([
+                manageCatalogOperationsPermission.Update,
+                manageCatalogImportPermission.Update,
+            ]);
+        if (!canMaintainProduct || !canMaintainOperations) throw new ForbiddenError();
+        if (input.variants.length > 1_000) throw new UserInputError('单次最多保存 1,000 个 SKU');
+
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const product = await this.productService.update(txCtx, input.product);
+            const productVariants = await this.productVariantService.getVariantsByProductId(
+                txCtx,
+                product.id,
+                { take: 1_000 },
+            );
+            const productVariantIds = new Set(productVariants.items.map(variant => String(variant.id)));
+            for (const variant of input.variants) {
+                if (!productVariantIds.has(String(variant.productVariantId))) {
+                    throw new UserInputError('SKU 不属于当前商品');
+                }
+                await this.updateVariant(txCtx, variant, false, false);
+            }
+            return product;
+        });
+    }
 
     async workspace(ctx: RequestContext, productId: ID) {
         const variants = await this.productVariantService.getVariantsByProductId(
@@ -34,6 +76,7 @@ export class CatalogOperationsService {
             ['stockLevels', 'stockLevels.stockLocation', 'productVariantPrices', 'options'],
         );
         const stockLocations = await this.stockLocations(ctx);
+        const allowedStockLocationIds = new Set(stockLocations.map(location => location.id));
         const variantIds = variants.items.map(variant => variant.id);
         const [costs, policies, lots] = variantIds.length
             ? await Promise.all([
@@ -83,35 +126,205 @@ export class CatalogOperationsService {
                     grossProfitMicrounits:
                         costMicrounits == null ? null : variant.price * 10 - costMicrounits,
                     margin,
-                    stockLevels: variant.stockLevels.map(level => ({
-                        stockLocationId: String(level.stockLocationId),
-                        stockLocationName: level.stockLocation.name,
-                        stockOnHand: level.stockOnHand,
-                        stockAllocated: level.stockAllocated,
-                        stockAvailable: level.stockOnHand - level.stockAllocated,
-                        minimumStock:
-                            policies.find(
-                                policy =>
-                                    String(policy.variantId) === String(variant.id) &&
-                                    String(policy.stockLocationId) === String(level.stockLocationId),
-                            )?.minimumStock ?? null,
-                        maximumStock:
-                            policies.find(
-                                policy =>
-                                    String(policy.variantId) === String(variant.id) &&
-                                    String(policy.stockLocationId) === String(level.stockLocationId),
-                            )?.maximumStock ?? null,
-                    })),
-                    lots: lots.filter(lot => String(lot.variantId) === String(variant.id)).map(toLotView),
+                    stockLevels: variant.stockLevels
+                        .filter(level => allowedStockLocationIds.has(String(level.stockLocationId)))
+                        .map(level => ({
+                            stockLocationId: String(level.stockLocationId),
+                            stockLocationName: level.stockLocation.name,
+                            stockOnHand: level.stockOnHand,
+                            stockAllocated: level.stockAllocated,
+                            stockAvailable: level.stockOnHand - level.stockAllocated,
+                            minimumStock:
+                                policies.find(
+                                    policy =>
+                                        String(policy.variantId) === String(variant.id) &&
+                                        String(policy.stockLocationId) === String(level.stockLocationId),
+                                )?.minimumStock ?? null,
+                            maximumStock:
+                                policies.find(
+                                    policy =>
+                                        String(policy.variantId) === String(variant.id) &&
+                                        String(policy.stockLocationId) === String(level.stockLocationId),
+                                )?.maximumStock ?? null,
+                        })),
+                    lots: lots
+                        .filter(
+                            lot =>
+                                String(lot.variantId) === String(variant.id) &&
+                                allowedStockLocationIds.has(String(lot.stockLocationId)),
+                        )
+                        .map(toLotView),
                 };
             }),
         };
     }
 
-    async updateVariant(ctx: RequestContext, input: UpdateCatalogVariantOperationsInput) {
+    async exportRows(ctx: RequestContext, skip = 0, take = 500) {
+        const safeTake = Math.min(Math.max(take, 1), 500);
+        const allowedStockLocationIds = new Set(
+            (await this.stockLocations(ctx)).map(location => location.id),
+        );
+        const page = await this.productVariantService.findAll(ctx, {
+            skip: Math.max(skip, 0),
+            take: safeTake,
+            sort: { updatedAt: 'DESC' },
+        });
+        const variantIds = page.items.map(variant => variant.id);
+        if (variantIds.length === 0) return { items: [], totalItems: page.totalItems };
+
+        const [hydrated, costs, policies, lots] = await Promise.all([
+            this.connection.getRepository(ctx, ProductVariant).find({
+                where: { id: In(variantIds) },
+                relations: [
+                    'product',
+                    'product.translations',
+                    'product.facetValues',
+                    'product.facetValues.facet',
+                    'product.facetValues.translations',
+                    'collections',
+                    'collections.translations',
+                    'stockLevels',
+                    'stockLevels.stockLocation',
+                ],
+            }),
+            this.connection.getRepository(ctx, VariantCostRecord).find({
+                where: { variantId: In(variantIds), channelId: ctx.channelId },
+                order: { effectiveAt: 'DESC', id: 'DESC' },
+            }),
+            this.connection.getRepository(ctx, InventoryPolicy).find({
+                where: { variantId: In(variantIds) },
+            }),
+            this.connection.getRepository(ctx, InventoryLot).find({
+                where: { variantId: In(variantIds) },
+                relations: ['stockLocation'],
+                order: { expiresAt: 'ASC', manufacturedAt: 'ASC', createdAt: 'ASC' },
+            }),
+        ]);
+        const hydratedById = new Map(hydrated.map(variant => [String(variant.id), variant]));
+        const latestCost = new Map<string, VariantCostRecord>();
+        for (const cost of costs) {
+            const key = `${String(cost.variantId)}:${cost.currencyCode}`;
+            if (!latestCost.has(key)) latestCost.set(key, cost);
+        }
+        return {
+            totalItems: page.totalItems,
+            items: page.items.flatMap(variant => {
+                const data = hydratedById.get(String(variant.id));
+                if (!data?.product) return [];
+                const product = data.product;
+                const translation =
+                    product.translations.find(item => item.languageCode === ctx.languageCode) ??
+                    product.translations[0];
+                const fields = (data.customFields ?? {}) as Record<string, unknown>;
+                const productFields = (product.customFields ?? {}) as Record<string, unknown>;
+                const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
+                const costMicrounits = cost ? Number(cost.costMicrounits) : null;
+                return [
+                    {
+                        productId: String(product.id),
+                        variantId: String(variant.id),
+                        productName: translation?.name ?? variant.name,
+                        description: translation?.description ?? '',
+                        categories: uniqueNames(
+                            data.collections.flatMap(collection =>
+                                collection.translations.map(item => item.name),
+                            ),
+                        ),
+                        brand: facetValueNames(product, 'catalog-brand')[0] ?? null,
+                        tags: facetValueNames(product, 'catalog-tag'),
+                        productEnabled: product.enabled,
+                        variantEnabled: variant.enabled,
+                        systemCreatedAt: product.createdAt,
+                        sourceCreatedAt: nullableDateValue(productFields.sourceCreatedAt),
+                        sku: variant.sku,
+                        barcode: stringOrEmpty(fields.barcode),
+                        specification: stringOrEmpty(fields.specification),
+                        saleUnit: stringOrEmpty(fields.saleUnit),
+                        purchaseUnit: stringOrEmpty(fields.purchaseUnit),
+                        packageQuantity: numberOrDefault(fields.packageQuantity, 1),
+                        shelfLifeDays: nullableNumber(fields.shelfLifeDays),
+                        sellingPrice: variant.price,
+                        purchaseCostMicrounits: costMicrounits,
+                        margin: calculateMargin(variant.price, costMicrounits),
+                        currencyCode: variant.currencyCode,
+                        stockLevels: data.stockLevels
+                            .filter(level => allowedStockLocationIds.has(String(level.stockLocationId)))
+                            .map(level => ({
+                                stockLocationId: String(level.stockLocationId),
+                                stockLocationName: level.stockLocation.name,
+                                stockOnHand: level.stockOnHand,
+                                stockAllocated: level.stockAllocated,
+                                stockAvailable: level.stockOnHand - level.stockAllocated,
+                                minimumStock:
+                                    policies.find(
+                                        policy =>
+                                            String(policy.variantId) === String(variant.id) &&
+                                            String(policy.stockLocationId) === String(level.stockLocationId),
+                                    )?.minimumStock ?? null,
+                                maximumStock:
+                                    policies.find(
+                                        policy =>
+                                            String(policy.variantId) === String(variant.id) &&
+                                            String(policy.stockLocationId) === String(level.stockLocationId),
+                                    )?.maximumStock ?? null,
+                            })),
+                        lots: lots
+                            .filter(
+                                lot =>
+                                    String(lot.variantId) === String(variant.id) &&
+                                    allowedStockLocationIds.has(String(lot.stockLocationId)),
+                            )
+                            .map(lot => ({
+                                id: String(lot.id),
+                                stockLocationId: String(lot.stockLocationId),
+                                stockLocationName: lot.stockLocation.name,
+                                lotCode: lot.lotCode,
+                                manufacturedAt: lot.manufacturedAt,
+                                expiresAt: lot.expiresAt,
+                                quantityOnHand: lot.quantityOnHand,
+                                purchaseCostMicrounits:
+                                    lot.purchaseCostMicrounits == null
+                                        ? null
+                                        : Number(lot.purchaseCostMicrounits),
+                                currencyCode: lot.currencyCode,
+                                state: lot.state,
+                            })),
+                    },
+                ];
+            }),
+        };
+    }
+
+    async productSummaries(ctx: RequestContext, filter: CatalogProductSummaryFilterInput) {
+        validateSummaryFilter(filter);
+        const matchingProductIds = new Set<string>();
+        let skip = 0;
+        let totalItems = 0;
+        do {
+            const page = await this.exportRows(ctx, skip, 500);
+            totalItems = page.totalItems;
+            if (totalItems > 20_000) {
+                throw new UserInputError('高级筛选最多处理 20,000 个 SKU，请先收窄门店范围');
+            }
+            for (const row of page.items) {
+                if (matchesSummaryFilter(row, filter)) matchingProductIds.add(row.productId);
+            }
+            skip += page.items.length;
+            if (page.items.length === 0) break;
+        } while (skip < totalItems);
+        const items = [...matchingProductIds].map(productId => ({ productId }));
+        return { items, totalItems: items.length };
+    }
+
+    async updateVariant(
+        ctx: RequestContext,
+        input: UpdateCatalogVariantOperationsInput,
+        allowConfirmedNegativeStock = false,
+        returnWorkspace = true,
+    ) {
         await this.requireStockLocation(ctx, input.stockLocationId);
         validatePolicy(input.minimumStock, input.maximumStock);
-        if (input.stockOnHand != null && input.stockOnHand < 0) {
+        if (!allowConfirmedNegativeStock && input.stockOnHand != null && input.stockOnHand < 0) {
             throw new UserInputError('库存不能为负数');
         }
         if (input.purchaseCostMicrounits != null && input.purchaseCostMicrounits < 0) {
@@ -182,7 +395,7 @@ export class CatalogOperationsService {
                 null,
             );
         }
-        return this.workspace(ctx, variant.productId);
+        return returnWorkspace ? this.workspace(ctx, variant.productId) : null;
     }
 
     async saveLot(ctx: RequestContext, input: SaveInventoryLotInput, adjustStock = true) {
@@ -329,6 +542,124 @@ function validatePolicy(minimumStock?: number | null, maximumStock?: number | nu
     }
 }
 
+interface CatalogSummarySourceRow {
+    productId: string;
+    productName: string;
+    categories: string[];
+    brand: string | null;
+    productEnabled: boolean;
+    sku: string;
+    barcode: string;
+    sellingPrice: number;
+    purchaseCostMicrounits: number | null;
+    margin: number | null;
+    stockLevels: Array<{
+        stockAvailable: number;
+        minimumStock: number | null;
+    }>;
+    lots: Array<{
+        expiresAt: Date | string | null;
+        quantityOnHand: number;
+    }>;
+}
+
+function validateSummaryFilter(filter: CatalogProductSummaryFilterInput): void {
+    for (const [value, label] of [
+        [filter.minimumSellingPrice, '最低售价'],
+        [filter.maximumSellingPrice, '最高售价'],
+        [filter.minimumPurchaseCostMicrounits, '最低成本'],
+        [filter.maximumPurchaseCostMicrounits, '最高成本'],
+    ] as const) {
+        if (value != null && (!Number.isFinite(value) || value < 0)) {
+            throw new UserInputError(`${label}必须是非负数`);
+        }
+    }
+    for (const [minimum, maximum, label] of [
+        [filter.minimumSellingPrice, filter.maximumSellingPrice, '售价'],
+        [filter.minimumPurchaseCostMicrounits, filter.maximumPurchaseCostMicrounits, '成本'],
+        [filter.minimumMargin, filter.maximumMargin, '毛利率'],
+        [filter.minimumAvailableStock, filter.maximumAvailableStock, '可用库存'],
+    ] as const) {
+        if (minimum != null && maximum != null && minimum > maximum) {
+            throw new UserInputError(`${label}上限不能小于下限`);
+        }
+    }
+    if (
+        filter.expiringWithinDays != null &&
+        (!Number.isInteger(filter.expiringWithinDays) ||
+            filter.expiringWithinDays < 0 ||
+            filter.expiringWithinDays > 3_650)
+    ) {
+        throw new UserInputError('临期天数必须是 0 至 3650 的整数');
+    }
+}
+
+function matchesSummaryFilter(
+    row: CatalogSummarySourceRow,
+    filter: CatalogProductSummaryFilterInput,
+): boolean {
+    const text = normalizedSearch(filter.text);
+    if (
+        text &&
+        ![row.productName, row.sku, row.barcode].some(value => normalizedSearch(value).includes(text))
+    ) {
+        return false;
+    }
+    const category = normalizedSearch(filter.category);
+    if (category && !row.categories.some(value => normalizedSearch(value).includes(category))) return false;
+    const brand = normalizedSearch(filter.brand);
+    if (brand && !normalizedSearch(row.brand).includes(brand)) return false;
+    if (filter.enabled != null && row.productEnabled !== filter.enabled) return false;
+    if (filter.minimumSellingPrice != null && row.sellingPrice < filter.minimumSellingPrice) return false;
+    if (filter.maximumSellingPrice != null && row.sellingPrice > filter.maximumSellingPrice) return false;
+    if (
+        filter.minimumPurchaseCostMicrounits != null &&
+        (row.purchaseCostMicrounits == null ||
+            row.purchaseCostMicrounits < filter.minimumPurchaseCostMicrounits)
+    ) {
+        return false;
+    }
+    if (
+        filter.maximumPurchaseCostMicrounits != null &&
+        (row.purchaseCostMicrounits == null ||
+            row.purchaseCostMicrounits > filter.maximumPurchaseCostMicrounits)
+    ) {
+        return false;
+    }
+    if (filter.minimumMargin != null && (row.margin == null || row.margin < filter.minimumMargin))
+        return false;
+    if (filter.maximumMargin != null && (row.margin == null || row.margin > filter.maximumMargin))
+        return false;
+    const availableStock = row.stockLevels.reduce((total, level) => total + level.stockAvailable, 0);
+    if (filter.minimumAvailableStock != null && availableStock < filter.minimumAvailableStock) return false;
+    if (filter.maximumAvailableStock != null && availableStock > filter.maximumAvailableStock) return false;
+    if (filter.lowStock != null) {
+        const lowStock = row.stockLevels.some(
+            level => level.minimumStock != null && level.stockAvailable <= level.minimumStock,
+        );
+        if (lowStock !== filter.lowStock) return false;
+    }
+    if (filter.expiringWithinDays != null) {
+        const now = Date.now();
+        const threshold = now + filter.expiringWithinDays * 86_400_000;
+        const expiring = row.lots.some(lot => {
+            if (!lot.expiresAt || lot.quantityOnHand <= 0) return false;
+            const expiry = new Date(lot.expiresAt).getTime();
+            return Number.isFinite(expiry) && expiry >= now && expiry <= threshold;
+        });
+        if (!expiring) return false;
+    }
+    return true;
+}
+
+function normalizedSearch(value: unknown): string {
+    const searchable =
+        typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+            ? String(value)
+            : '';
+    return searchable.normalize('NFKC').trim().toLocaleLowerCase('zh-Hans');
+}
+
 function calculateMargin(sellingPrice: number, costMicrounits: number | null): number | null {
     if (costMicrounits == null || sellingPrice <= 0) return null;
     return (sellingPrice * 10 - costMicrounits) / (sellingPrice * 10);
@@ -375,4 +706,25 @@ function nullableNumber(value: unknown): number | null {
 
 function numberOrDefault(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function facetValueNames(product: Product, facetCode: string): string[] {
+    return uniqueNames(
+        (product.facetValues ?? [])
+            .filter(value => value.facet?.code === facetCode)
+            .map(value => value.translations[0]?.name ?? value.code),
+    );
+}
+
+function uniqueNames(values: string[]): string[] {
+    return [...new Set(values.map(value => value.trim()).filter(Boolean))].sort((left, right) =>
+        left.localeCompare(right, 'zh-Hans'),
+    );
+}
+
+function nullableDateValue(value: unknown): Date | null {
+    if (value == null || value === '') return null;
+    if (!(value instanceof Date) && typeof value !== 'string' && typeof value !== 'number') return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
 }

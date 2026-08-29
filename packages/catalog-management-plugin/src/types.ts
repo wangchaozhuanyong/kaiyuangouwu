@@ -1,11 +1,22 @@
-import { CurrencyCode } from '@vendure/common/lib/generated-types';
-import { ID } from '@vendure/common/lib/shared-types';
-import { CustomProductVariantFields } from '@vendure/core/dist/entity/custom-entity-fields';
+import type { CurrencyCode, UpdateProductInput } from '@vendure/common/lib/generated-types';
+import type { ID } from '@vendure/common/lib/shared-types';
+import type {
+    CustomProductFields,
+    CustomProductVariantFields,
+} from '@vendure/core/dist/entity/custom-entity-fields';
 
 export type CatalogImportState =
-    'PREVIEW_READY' | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'COMPLETED_WITH_ERRORS' | 'FAILED' | 'ROLLED_BACK';
+    | 'RECEIVING'
+    | 'PREVIEW_READY'
+    | 'QUEUED'
+    | 'RUNNING'
+    | 'COMPLETED'
+    | 'COMPLETED_WITH_ERRORS'
+    | 'FAILED'
+    | 'ROLLED_BACK';
 
-export type CatalogImportAction = 'CREATE' | 'UPDATE' | 'SKIP_UNCHANGED' | 'CONFLICT' | 'WARNING' | 'ERROR';
+export type CatalogImportAction =
+    'PENDING' | 'CREATE' | 'UPDATE' | 'SKIP_UNCHANGED' | 'CONFLICT' | 'WARNING' | 'ERROR';
 
 export type CatalogImportResolution = 'APPLY' | 'CREATE_NEW' | 'UPDATE_EXISTING' | 'SKIP';
 
@@ -23,10 +34,37 @@ export interface CatalogImportContextInput {
     clearBlankFields?: boolean;
 }
 
+export interface CatalogImportSourceInput {
+    filename: string;
+    mimetype: string;
+    byteSize: number;
+    fileHash: string;
+    sheetName?: string | null;
+    detectedHeaders: string[];
+    fieldMapping: Record<string, string>;
+    parserVersion: string;
+}
+
+export interface BeginCatalogImportInput {
+    context: CatalogImportContextInput;
+    source: CatalogImportSourceInput;
+    totalRows: number;
+}
+
+export interface AppendCatalogImportRowsInput {
+    jobId: ID;
+    rows: NormalizedCatalogRow[];
+}
+
 export interface ResolveCatalogImportRowInput {
     rowId: ID;
     resolution: CatalogImportResolution;
     targetVariantId?: ID | null;
+}
+
+export interface ResolveCatalogImportRowsInput {
+    rowIds: ID[];
+    resolution: 'APPLY' | 'SKIP';
 }
 
 export interface UpdateCatalogVariantOperationsInput {
@@ -46,6 +84,28 @@ export interface UpdateCatalogVariantOperationsInput {
     stockOnHand?: number | null;
     minimumStock?: number | null;
     maximumStock?: number | null;
+}
+
+export interface SaveCatalogProductInput {
+    product: UpdateProductInput;
+    variants: UpdateCatalogVariantOperationsInput[];
+}
+
+export interface CatalogProductSummaryFilterInput {
+    text?: string | null;
+    category?: string | null;
+    brand?: string | null;
+    enabled?: boolean | null;
+    minimumSellingPrice?: number | null;
+    maximumSellingPrice?: number | null;
+    minimumPurchaseCostMicrounits?: number | null;
+    maximumPurchaseCostMicrounits?: number | null;
+    minimumMargin?: number | null;
+    maximumMargin?: number | null;
+    minimumAvailableStock?: number | null;
+    maximumAvailableStock?: number | null;
+    lowStock?: boolean | null;
+    expiringWithinDays?: number | null;
 }
 
 export interface SaveInventoryLotInput {
@@ -69,6 +129,8 @@ export interface NormalizedCatalogRow {
     currencyCode: string;
     specification: string;
     primaryUnit: string;
+    purchaseUnit: string;
+    packageQuantity: number;
     stockOnHand: number | null;
     purchaseCost: number | null;
     sellingPrice: number | null;
@@ -85,10 +147,21 @@ export interface NormalizedCatalogRow {
     sku: string;
     barcode: string;
     lotCode: string;
-    raw: Record<string, string | number | boolean | null>;
+    lotQuantity: number | null;
+    /** Names of mapped source columns. Raw source cell values are intentionally not sent. */
+    providedFields: string[];
+    /**
+     * Kept only for the legacy server-side parser tests and historical import rows.
+     * The browser client strips this object before any network request.
+     */
+    raw?: Record<string, string | number | boolean | null>;
 }
 
 declare module '@vendure/core/dist/entity/custom-entity-fields' {
+    interface CustomProductFields {
+        sourceCreatedAt?: Date | null;
+    }
+
     interface CustomProductVariantFields {
         barcode?: string | null;
         specification?: string | null;

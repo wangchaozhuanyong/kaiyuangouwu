@@ -49,23 +49,31 @@ import {
     XCircle,
 } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import type { LocalCatalogFile } from './catalog-local-file';
 
+import {
+    CATALOG_BROWSER_PARSER_VERSION,
+    CATALOG_FIELD_OPTIONS,
+    rowsForCatalogTransport,
+} from './catalog-local-file';
+import { parseCatalogFileLocally } from './catalog-local-file-client';
 import {
     CatalogImportJobRecord,
     CatalogImportRowRecord,
+    appendCatalogImportRowsMutation,
+    beginCatalogImportMutation,
     catalogImportJobQuery,
     catalogImportJobsQuery,
-    catalogImportReportQuery,
     catalogImportRowsQuery,
-    catalogStandardImportTemplateQuery,
-    createCatalogImportPreviewMutation,
     executeCatalogImportMutation,
+    finalizeCatalogImportPreviewMutation,
     resolveCatalogImportRowMutation,
+    resolveCatalogImportRowsMutation,
     rollbackCatalogImportMutation,
     stockLocationsQuery,
 } from './catalog-management.graphql';
 
-type ActionFilter = 'ALL' | CatalogImportRowRecord['action'];
+type ActionFilter = 'ALL' | Exclude<CatalogImportRowRecord['action'], 'PENDING'>;
 
 export function CatalogImportAction() {
     const [open, setOpen] = useState(false);
@@ -88,6 +96,10 @@ function CatalogImportWorkbench({
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [file, setFile] = useState<File | null>(null);
+    const [localPreview, setLocalPreview] = useState<LocalCatalogFile | null>(null);
+    const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+    const [mappingDirty, setMappingDirty] = useState(false);
+    const [transferProgress, setTransferProgress] = useState(0);
     const [stockLocationId, setStockLocationId] = useState('');
     const [currencyCode, setCurrencyCode] = useState('');
     const [clearBlankFields, setClearBlankFields] = useState(false);
@@ -145,26 +157,71 @@ function CatalogImportWorkbench({
     });
     const rows = rowsQuery.data?.catalogImportRows ?? [];
 
-    const previewMutation = useMutation({
+    const localParseMutation = useMutation({
         mutationFn: () => {
-            if (!file || !activeChannel || !stockLocationId) throw new Error('请选择文件和目标仓库');
-            return api.mutate<{ createCatalogImportPreview: CatalogImportJobRecord }>(
-                createCatalogImportPreviewMutation,
+            if (!file) throw new Error('请选择商品资料文件');
+            return parseCatalogFileLocally(file, Object.keys(fieldMapping).length ? fieldMapping : undefined);
+        },
+        onSuccess: result => {
+            setLocalPreview(result);
+            setFieldMapping(result.fieldMapping);
+            setMappingDirty(false);
+            toast.success('文件已在浏览器本地解析，尚未发送任何商品数据');
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const previewMutation = useMutation({
+        mutationFn: async () => {
+            if (!localPreview || !activeChannel || !stockLocationId) {
+                throw new Error('请先完成浏览器本地预检并选择目标仓库');
+            }
+            if (localPreview.errors.length > 0) throw new Error('请先修正本地解析错误');
+            setTransferProgress(0);
+            const started = await api.mutate<{ beginCatalogImport: CatalogImportJobRecord }>(
+                beginCatalogImportMutation,
                 {
-                    file,
                     input: {
-                        channelId: activeChannel.id,
-                        stockLocationId,
-                        currencyCode,
-                        clearBlankFields,
+                        context: {
+                            channelId: activeChannel.id,
+                            stockLocationId,
+                            currencyCode,
+                            clearBlankFields,
+                        },
+                        source: {
+                            filename: localPreview.filename,
+                            mimetype: localPreview.mimetype,
+                            byteSize: localPreview.byteSize,
+                            fileHash: localPreview.fileHash,
+                            sheetName: localPreview.sheetName,
+                            detectedHeaders: localPreview.headers,
+                            fieldMapping: localPreview.fieldMapping,
+                            parserVersion: CATALOG_BROWSER_PARSER_VERSION,
+                        },
+                        totalRows: localPreview.rows.length,
                     },
                 },
             );
+            let receivingJob = started.beginCatalogImport;
+            if (receivingJob.state !== 'RECEIVING') return receivingJob;
+            const transportRows = rowsForCatalogTransport(localPreview.rows);
+            for (let index = 0; index < transportRows.length; index += 500) {
+                const batch = transportRows.slice(index, index + 500);
+                const appended = await api.mutate<{ appendCatalogImportRows: CatalogImportJobRecord }>(
+                    appendCatalogImportRowsMutation,
+                    { input: { jobId: receivingJob.id, rows: batch } },
+                );
+                receivingJob = appended.appendCatalogImportRows;
+                setTransferProgress(Math.round(((index + batch.length) / transportRows.length) * 100));
+            }
+            const finalized = await api.mutate<{
+                finalizeCatalogImportPreview: CatalogImportJobRecord;
+            }>(finalizeCatalogImportPreviewMutation, { id: receivingJob.id });
+            return finalized.finalizeCatalogImportPreview;
         },
         onSuccess: async result => {
-            setJobId(result.createCatalogImportPreview.id);
+            setJobId(result.id);
             setActionFilter('ALL');
-            toast.success('文件解析完成，尚未写入商品');
+            toast.success('数据库差异预览已生成，尚未写入商品');
             await queryClient.invalidateQueries({ queryKey: ['catalog-import-history'] });
         },
         onError: error => toast.error(errorMessage(error)),
@@ -173,6 +230,26 @@ function CatalogImportWorkbench({
         mutationFn: (input: { rowId: string; resolution: string; targetVariantId?: string }) =>
             api.mutate(resolveCatalogImportRowMutation, { input }),
         onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['catalog-import-rows', jobId] }),
+                queryClient.invalidateQueries({ queryKey: ['catalog-import-job', jobId] }),
+            ]);
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const batchResolveMutation = useMutation({
+        mutationFn: async (input: { rowIds: string[]; resolution: 'APPLY' | 'SKIP' }) => {
+            for (let index = 0; index < input.rowIds.length; index += 500) {
+                await api.mutate(resolveCatalogImportRowsMutation, {
+                    input: {
+                        rowIds: input.rowIds.slice(index, index + 500),
+                        resolution: input.resolution,
+                    },
+                });
+            }
+        },
+        onSuccess: async () => {
+            toast.success('批量处理已完成');
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['catalog-import-rows', jobId] }),
                 queryClient.invalidateQueries({ queryKey: ['catalog-import-job', jobId] }),
@@ -206,6 +283,10 @@ function CatalogImportWorkbench({
 
     const reset = () => {
         setFile(null);
+        setLocalPreview(null);
+        setFieldMapping({});
+        setMappingDirty(false);
+        setTransferProgress(0);
         setJobId(null);
         setActionFilter('ALL');
         setTargetVariantByRow({});
@@ -215,7 +296,10 @@ function CatalogImportWorkbench({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[96vw] sm:max-w-[1600px]">
+            <SheetContent
+                className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[96vw] sm:max-w-[1600px]"
+                data-catalog-management-version="v2-browser-local"
+            >
                 <SheetHeader className="border-b px-6 py-4">
                     <SheetTitle className="flex items-center gap-2">
                         <FileSpreadsheet className="size-5" />
@@ -245,13 +329,29 @@ function CatalogImportWorkbench({
                                 currencyCode={currencyCode}
                                 clearBlankFields={clearBlankFields}
                                 availableCurrencyCodes={activeChannel?.availableCurrencyCodes ?? []}
-                                isPending={previewMutation.isPending}
+                                localPreview={localPreview}
+                                fieldMapping={fieldMapping}
+                                mappingDirty={mappingDirty}
+                                localPending={localParseMutation.isPending}
+                                submitPending={previewMutation.isPending}
+                                transferProgress={transferProgress}
                                 fileInputRef={fileInputRef}
-                                onFileChange={event => setFile(event.target.files?.[0] ?? null)}
+                                onFileChange={event => {
+                                    setFile(event.target.files?.[0] ?? null);
+                                    setLocalPreview(null);
+                                    setFieldMapping({});
+                                    setMappingDirty(false);
+                                    setTransferProgress(0);
+                                }}
                                 onStockLocationChange={setStockLocationId}
                                 onCurrencyCodeChange={setCurrencyCode}
                                 onClearBlankFieldsChange={setClearBlankFields}
-                                onPreview={() => {
+                                onFieldMappingChange={(header, field) => {
+                                    setFieldMapping(current => ({ ...current, [header]: field }));
+                                    setMappingDirty(true);
+                                }}
+                                onLocalPreview={() => localParseMutation.mutate()}
+                                onSubmitPreview={() => {
                                     if (
                                         clearBlankFields &&
                                         !window.confirm(
@@ -371,6 +471,58 @@ function CatalogImportWorkbench({
                                             {actionLabel(action)}
                                         </Button>
                                     ))}
+                                    {rows.some(row => row.action === 'WARNING') && (
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            disabled={batchResolveMutation.isPending}
+                                            onClick={() => {
+                                                const warningIds = rows
+                                                    .filter(row => row.action === 'WARNING')
+                                                    .map(row => row.id);
+                                                if (
+                                                    window.confirm(
+                                                        `确认继续应用当前列表中的 ${warningIds.length} 条警告吗？`,
+                                                    )
+                                                ) {
+                                                    batchResolveMutation.mutate({
+                                                        rowIds: warningIds,
+                                                        resolution: 'APPLY',
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            批量确认警告
+                                        </Button>
+                                    )}
+                                    {rows.some(row =>
+                                        ['CONFLICT', 'WARNING', 'ERROR'].includes(row.action),
+                                    ) && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={batchResolveMutation.isPending}
+                                            onClick={() => {
+                                                const unresolvedIds = rows
+                                                    .filter(row =>
+                                                        ['CONFLICT', 'WARNING', 'ERROR'].includes(row.action),
+                                                    )
+                                                    .map(row => row.id);
+                                                if (
+                                                    window.confirm(
+                                                        `确认跳过当前列表中的 ${unresolvedIds.length} 条待处理记录吗？`,
+                                                    )
+                                                ) {
+                                                    batchResolveMutation.mutate({
+                                                        rowIds: unresolvedIds,
+                                                        resolution: 'SKIP',
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            批量跳过待处理行
+                                        </Button>
+                                    )}
                                 </div>
 
                                 <div className="overflow-x-auto rounded-lg border">
@@ -447,13 +599,20 @@ function UploadPanel({
     currencyCode,
     clearBlankFields,
     availableCurrencyCodes,
-    isPending,
+    localPreview,
+    fieldMapping,
+    mappingDirty,
+    localPending,
+    submitPending,
+    transferProgress,
     fileInputRef,
     onFileChange,
     onStockLocationChange,
     onCurrencyCodeChange,
     onClearBlankFieldsChange,
-    onPreview,
+    onFieldMappingChange,
+    onLocalPreview,
+    onSubmitPreview,
     onDownloadTemplate,
 }: Readonly<{
     file: File | null;
@@ -463,13 +622,20 @@ function UploadPanel({
     currencyCode: string;
     clearBlankFields: boolean;
     availableCurrencyCodes: string[];
-    isPending: boolean;
+    localPreview: LocalCatalogFile | null;
+    fieldMapping: Record<string, string>;
+    mappingDirty: boolean;
+    localPending: boolean;
+    submitPending: boolean;
+    transferProgress: number;
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onStockLocationChange: (value: string) => void;
     onCurrencyCodeChange: (value: string) => void;
     onClearBlankFieldsChange: (value: boolean) => void;
-    onPreview: () => void;
+    onFieldMappingChange: (header: string, field: string) => void;
+    onLocalPreview: () => void;
+    onSubmitPreview: () => void;
     onDownloadTemplate: () => void;
 }>) {
     return (
@@ -477,7 +643,8 @@ function UploadPanel({
             <Alert>
                 <CheckCircle2 className="size-4" />
                 <AlertDescription>
-                    支持 Numbers、Excel 和 CSV。上传只创建预览，不会自动新增或修改商品。
+                    支持 Numbers、Excel 和
+                    CSV。文件只在当前浏览器中解析，原文件不会上传到服务器；确认后仅提交标准化商品字段。
                 </AlertDescription>
             </Alert>
             <div className="grid gap-5 rounded-xl border p-6 md:grid-cols-3">
@@ -553,18 +720,180 @@ function UploadPanel({
                         已选择：{file.name} · {formatBytes(file.size)}
                     </div>
                 )}
+                {localPreview && <LocalPreviewSummary preview={localPreview} />}
+                {localPreview && (
+                    <FieldMappingEditor
+                        headers={localPreview.headers}
+                        mapping={fieldMapping}
+                        dirty={mappingDirty}
+                        onChange={onFieldMappingChange}
+                    />
+                )}
+                {submitPending && transferProgress > 0 && (
+                    <div className="space-y-2 md:col-span-3" role="status">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>正在分批提交标准化商品字段</span>
+                            <span>{transferProgress}%</span>
+                        </div>
+                        <Progress value={transferProgress} />
+                    </div>
+                )}
                 <div className="flex flex-wrap justify-end gap-2 md:col-span-3">
                     <Button variant="outline" onClick={onDownloadTemplate}>
                         <Download className="mr-2 size-4" /> 下载标准模板
                     </Button>
                     <Button
-                        disabled={!file || !stockLocationId || !currencyCode || isPending}
-                        onClick={onPreview}
+                        variant={localPreview ? 'outline' : 'default'}
+                        disabled={!file || localPending || submitPending}
+                        onClick={onLocalPreview}
                     >
-                        {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                        解析并预览
+                        {localPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                        {mappingDirty
+                            ? '应用字段映射并重新预检'
+                            : localPreview
+                              ? '重新本地预检'
+                              : '浏览器本地预检'}
                     </Button>
+                    {localPreview && (
+                        <Button
+                            disabled={
+                                localPreview.errors.length > 0 ||
+                                mappingDirty ||
+                                !stockLocationId ||
+                                !currencyCode ||
+                                submitPending
+                            }
+                            onClick={onSubmitPreview}
+                        >
+                            {submitPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            生成数据库差异预览
+                        </Button>
+                    )}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function FieldMappingEditor({
+    headers,
+    mapping,
+    dirty,
+    onChange,
+}: Readonly<{
+    headers: string[];
+    mapping: Record<string, string>;
+    dirty: boolean;
+    onChange: (header: string, field: string) => void;
+}>) {
+    return (
+        <div className="space-y-3 rounded-lg border p-4 md:col-span-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h3 className="text-sm font-medium">字段映射</h3>
+                    <p className="text-xs text-muted-foreground">
+                        可修正自动识别结果；同一系统字段只能映射一次。
+                    </p>
+                </div>
+                {dirty && <Badge variant="secondary">需重新本地预检</Badge>}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {headers.filter(Boolean).map(header => (
+                    <div key={header} className="space-y-1">
+                        <Label className="text-xs">{header}</Label>
+                        <Select
+                            value={mapping[header] || '__ignore__'}
+                            onValueChange={value => {
+                                if (value) onChange(header, value === '__ignore__' ? '' : value);
+                            }}
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__ignore__">忽略此列</SelectItem>
+                                {CATALOG_FIELD_OPTIONS.map(option => {
+                                    const usedByAnotherHeader = Object.entries(mapping).some(
+                                        ([mappedHeader, field]) =>
+                                            mappedHeader !== header && field === option.value,
+                                    );
+                                    return (
+                                        <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                            disabled={usedByAnotherHeader}
+                                        >
+                                            {option.label}
+                                        </SelectItem>
+                                    );
+                                })}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function LocalPreviewSummary({ preview }: Readonly<{ preview: LocalCatalogFile }>) {
+    return (
+        <div
+            className="grid gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 md:col-span-3 sm:grid-cols-2 lg:grid-cols-5"
+            data-catalog-local-preview="ready"
+        >
+            <LocalMetric label="有效行" value={preview.rows.length} />
+            <LocalMetric
+                label="解析错误"
+                value={preview.errors.length}
+                destructive={preview.errors.length > 0}
+            />
+            <LocalMetric
+                label="重复冲突组"
+                value={preview.duplicateGroups}
+                destructive={preview.duplicateGroups > 0}
+            />
+            <LocalMetric
+                label="冲突行"
+                value={preview.duplicateRows}
+                destructive={preview.duplicateRows > 0}
+            />
+            <LocalMetric label="风险警告" value={preview.warningRows} destructive={preview.warningRows > 0} />
+            <div className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-5">
+                {preview.sheetName} · {preview.headers.length} 个已识别表头 · 文件摘要{' '}
+                {preview.fileHash.slice(0, 12)}…
+            </div>
+            {preview.errors.length > 0 && (
+                <Alert variant="destructive" className="sm:col-span-2 lg:col-span-5">
+                    <XCircle className="size-4" />
+                    <AlertDescription>
+                        {preview.errors.slice(0, 5).map(error => (
+                            <div key={`${error.rowNumber}-${error.message}`}>{error.message}</div>
+                        ))}
+                        {preview.errors.length > 5 && (
+                            <div>其余 {preview.errors.length - 5} 条错误未显示</div>
+                        )}
+                    </AlertDescription>
+                </Alert>
+            )}
+        </div>
+    );
+}
+
+function LocalMetric({
+    label,
+    value,
+    destructive = false,
+}: Readonly<{ label: string; value: number; destructive?: boolean }>) {
+    return (
+        <div className="rounded-md bg-background p-3 shadow-sm">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div
+                className={
+                    destructive ? 'mt-1 text-xl font-semibold text-destructive' : 'mt-1 text-xl font-semibold'
+                }
+            >
+                {value}
             </div>
         </div>
     );
@@ -733,27 +1062,95 @@ function LoadingPreview() {
     );
 }
 
-async function downloadTemplate(): Promise<void> {
+function downloadTemplate(): void {
+    const rows = [
+        [
+            '名称（必填）',
+            '分类（必填）',
+            '门店编码',
+            '仓库编码',
+            '币种',
+            'SKU',
+            '条码',
+            '规格',
+            '销售单位',
+            '采购单位',
+            '包装换算',
+            '库存量',
+            '进货价（必填）',
+            '销售价（必填）',
+            '库存上限',
+            '库存下限',
+            '品牌',
+            '生产日期',
+            '保质期',
+            '批次号',
+            '商品状态',
+            '商品描述',
+            '标签',
+            '创建日期',
+        ],
+        [
+            '示例商品',
+            '示例分类',
+            '',
+            '',
+            '',
+            'SKU-001',
+            '',
+            '500ml',
+            '瓶',
+            '箱',
+            '12',
+            '10',
+            '3.125',
+            '5.00',
+            '100',
+            '10',
+            '',
+            '',
+            '365',
+            '',
+            '启用',
+            '',
+            '',
+            '',
+        ],
+    ];
+    downloadCsv(rows.map(row => row.map(csvCell).join(',')).join('\r\n'), '商品导入标准模板.csv');
+}
+
+async function downloadReport(jobId: string, originalFilename: string): Promise<void> {
     try {
-        const result = await api.query<{ catalogStandardImportTemplate: string }>(
-            catalogStandardImportTemplateQuery,
+        const result = await api.query<{ catalogImportRows: CatalogImportRowRecord[] }>(
+            catalogImportRowsQuery,
+            { jobId, action: null },
         );
-        downloadCsv(result.catalogStandardImportTemplate, '商品导入标准模板.csv');
+        const content = [
+            ['行号', '结果', '处理选择', '商品名称', '分类', 'SKU', '说明', '应用时间'],
+            ...result.catalogImportRows.map(row => [
+                String(row.rowNumber),
+                row.action,
+                row.resolution ?? '',
+                displayValue(row.normalizedData.name),
+                displayValue(row.normalizedData.category),
+                displayValue(row.normalizedData.sku),
+                row.message ?? '',
+                row.appliedAt ?? '',
+            ]),
+        ]
+            .map(row => row.map(csvCell).join(','))
+            .join('\r\n');
+        const safeName = originalFilename.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_');
+        downloadCsv(content, `${safeName || '商品导入'}-导入报告.csv`);
     } catch (error) {
         toast.error(errorMessage(error));
     }
 }
 
-async function downloadReport(jobId: string, originalFilename: string): Promise<void> {
-    try {
-        const result = await api.query<{ catalogImportReport: string }>(catalogImportReportQuery, {
-            id: jobId,
-        });
-        const safeName = originalFilename.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_');
-        downloadCsv(result.catalogImportReport, `${safeName || '商品导入'}-导入报告.csv`);
-    } catch (error) {
-        toast.error(errorMessage(error));
-    }
+function csvCell(value: string): string {
+    const safe = /^[=+\-@]/u.test(value) ? `'${value}` : value;
+    return `"${safe.replace(/"/gu, '""')}"`;
 }
 
 function downloadCsv(content: string, filename: string): void {
@@ -766,9 +1163,10 @@ function downloadCsv(content: string, filename: string): void {
     URL.revokeObjectURL(url);
 }
 
-function actionLabel(action: ActionFilter): string {
+function actionLabel(action: ActionFilter | 'PENDING'): string {
     return {
         ALL: '全部',
+        PENDING: '接收中',
         CREATE: '新增',
         UPDATE: '修改',
         SKIP_UNCHANGED: '跳过',
@@ -789,6 +1187,7 @@ function actionVariant(
 
 function stateLabel(state: CatalogImportJobRecord['state']): string {
     return {
+        RECEIVING: '接收数据中',
         PREVIEW_READY: '待确认',
         QUEUED: '排队中',
         RUNNING: '执行中',

@@ -1,5 +1,6 @@
 import { defineDashboardExtension } from '@vendure/dashboard';
 
+import { CatalogExportAction } from './catalog-export-action';
 import { CatalogImportAction } from './catalog-import-workbench';
 import { CatalogProductWorkspace } from './catalog-product-workspace';
 
@@ -11,6 +12,13 @@ defineDashboardExtension({
             component: CatalogImportAction,
             requiresPermission: ['CreateCatalogImport'],
             position: { itemId: 'create-button', order: 'before' },
+        },
+        {
+            id: 'catalog-browser-export',
+            pageId: 'product-list',
+            component: CatalogExportAction,
+            requiresPermission: ['ReadCatalogExport', 'ReadCatalogImport'],
+            position: { itemId: 'catalog-safe-import', order: 'before' },
         },
     ],
     pageBlocks: [
@@ -24,7 +32,7 @@ defineDashboardExtension({
             },
             component: CatalogProductWorkspace,
             shouldRender: context => Boolean(context.entity?.id && context.entity?.variantList?.totalItems),
-            requiresPermission: ['ReadCatalogImport'],
+            requiresPermission: ['ReadCatalogOperations', 'ReadCatalogImport'],
         },
     ],
 });

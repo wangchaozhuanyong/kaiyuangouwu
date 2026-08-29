@@ -7,5 +7,15 @@ export const MAX_CATALOG_IMPORT_ROWS = 20_000;
 
 export const manageCatalogImportPermission = new CrudPermissionDefinition(
     'CatalogImport',
-    operation => `${operation} catalog imports, costs, warehouse policies, and inventory lots`,
+    operation => `${operation} catalog report imports and rollback audit records`,
+);
+
+export const manageCatalogOperationsPermission = new CrudPermissionDefinition(
+    'CatalogOperations',
+    operation => `${operation} catalog costs, warehouse policies, and inventory lots`,
+);
+
+export const manageCatalogExportPermission = new CrudPermissionDefinition(
+    'CatalogExport',
+    operation => `${operation} structured catalog export data`,
 );

@@ -104,6 +104,13 @@ export interface DetailPageOptions<
     transformCreateInput?: (input: VariablesOf<C>[VarNameCreate]) => VariablesOf<C>[VarNameCreate];
     transformUpdateInput?: (input: VariablesOf<U>[VarNameUpdate]) => VariablesOf<U>[VarNameUpdate];
     /**
+     * Runs a page-specific update while retaining the generated form and validation schema.
+     * The callback must resolve to the same entity shape returned by the configured update mutation.
+     */
+    customUpdateMutationFn?: (
+        input: VariablesOf<U>[VarNameUpdate],
+    ) => Promise<ResultOf<U>[keyof ResultOf<U>]>;
+    /**
      * Optional request headers added only to update mutations.
      */
     getUpdateRequestHeaders?: () => HeadersInit | undefined;
@@ -290,6 +297,7 @@ export function useDetailPage<
         setValuesForUpdate,
         transformCreateInput,
         transformUpdateInput,
+        customUpdateMutationFn,
         getUpdateRequestHeaders,
         extendSchema,
         params,
@@ -334,13 +342,25 @@ export function useDetailPage<
 
     const updateMutation = useMutation({
         mutationFn: updateDocument
-            ? (variables: VariablesOf<U>) =>
-                  api.mutate(updateDocument, variables, getUpdateRequestHeaders?.())
+            ? async (variables: VariablesOf<U>) => {
+                  if (customUpdateMutationFn) {
+                      return {
+                          customEntity: await customUpdateMutationFn(
+                              (variables as Record<string, any>).input,
+                          ),
+                      };
+                  }
+                  return api.mutate(updateDocument, variables, getUpdateRequestHeaders?.());
+              }
             : undefined,
         onSuccess: async data => {
             if (updateDocument) {
                 const updateMutationName = getMutationName(updateDocument);
-                onSuccess?.((data as any)[updateMutationName]);
+                onSuccess?.(
+                    customUpdateMutationFn
+                        ? (data as { customEntity: ResultOf<U>[keyof ResultOf<U>] }).customEntity
+                        : (data as any)[updateMutationName],
+                );
                 await queryClient.invalidateQueries({ queryKey: detailQueryOptions.queryKey });
                 void router.invalidate();
             }

@@ -22,16 +22,16 @@ import {
     PageLayout,
     PageTitle,
 } from '@/vdb/framework/layout-engine/page-layout.js';
-import { detailPageRouteLoader } from '@/vdb/framework/page/detail-page-route-loader.js';
 import { useDetailPage } from '@/vdb/framework/page/use-detail-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { hasMeaningfulRichText } from '@/vdb/utils/rich-text-content.js';
 import { contentSourceLanguageCode } from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Layers, LibraryBig, Package, PlusIcon } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
+import { Layers, LibraryBig, Package, PlusIcon, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
@@ -46,11 +46,15 @@ import {
     productDetailDocument,
     removeOptionGroupsFromProductDocument,
     removeProductsFromChannelDocument,
+    saveCatalogProductDocument,
     updateProductDocument,
     withProductVariantCustomFields,
 } from './products.graphql.js';
 
 const pageId = 'product-detail';
+const WORKSPACE_DIRTY_EVENT = 'catalog-product-workspace-dirty';
+const WORKSPACE_COLLECT_EVENT = 'catalog-product-workspace-collect';
+const WORKSPACE_COMMITTED_EVENT = 'catalog-product-workspace-committed';
 
 type ProductTranslationFormValue = {
     languageCode?: string | null;
@@ -86,17 +90,10 @@ function productSourceTranslationIndex(
 }
 
 export const Route = createFileRoute('/_authenticated/_products/products_/$id')({
+    beforeLoad: ({ params }) => {
+        throw redirect({ to: '/products', search: { editor: params.id } });
+    },
     component: ProductDetailPage,
-    loader: detailPageRouteLoader({
-        pageId,
-        queryDocument: () => withProductVariantCustomFields(productDetailDocument),
-        breadcrumb(isNew, entity) {
-            return [
-                { path: '/products', label: <Trans>Products</Trans> },
-                isNew ? <Trans>New product</Trans> : entity?.name,
-            ];
-        },
-    }),
     errorComponent: ({ error }) => <ErrorPage message={error.message} />,
 });
 
@@ -178,12 +175,32 @@ function NoVariantsPrompt({
 
 function ProductDetailPage() {
     const params = Route.useParams();
+    return <ProductEditor productId={params.id} />;
+}
+
+export interface ProductEditorProps {
+    productId: string;
+    presentation?: 'page' | 'sheet';
+    onDirtyChange?: (isDirty: boolean) => void;
+    onRequestClose?: () => void;
+    onSaved?: (behavior: 'close' | 'keep-open', productId: string) => void;
+}
+
+export function ProductEditor({
+    productId,
+    presentation = 'page',
+    onDirtyChange,
+    onRequestClose,
+    onSaved,
+}: Readonly<ProductEditorProps>) {
     const navigate = useNavigate();
-    const creatingNewEntity = params.id === NEW_ENTITY_PATH;
+    const queryClient = useQueryClient();
+    const creatingNewEntity = productId === NEW_ENTITY_PATH;
     const { t } = useLingui();
     const refreshRef = useRef<() => void>(() => undefined);
     const { channels } = useChannel();
     const { priceFactor, priceFactorField } = usePriceFactor();
+    const [catalogWorkspaceDirty, setCatalogWorkspaceDirty] = useState(false);
 
     const { form, submitHandler, entity, isPending, refreshEntity, resetForm } = useDetailPage({
         pageId,
@@ -191,6 +208,25 @@ function ProductDetailPage() {
         queryDocument: withProductVariantCustomFields(productDetailDocument),
         createDocument: createProductDocument,
         updateDocument: updateProductDocument,
+        customUpdateMutationFn: async product => {
+            const variants: Record<string, unknown>[] = [];
+            const failures: unknown[] = [];
+            window.dispatchEvent(
+                new CustomEvent(WORKSPACE_COLLECT_EVENT, {
+                    detail: {
+                        productId,
+                        register: (variant: Record<string, unknown>) => variants.push(variant),
+                        fail: (error: unknown) => failures.push(error),
+                    },
+                }),
+            );
+            if (failures.length > 0) throw failures[0];
+            const result = await api.mutate<{ saveCatalogProduct: { id: string } }>(
+                saveCatalogProductDocument,
+                { input: { product, variants } },
+            );
+            return result.saveCatalogProduct as any;
+        },
         extendSchema: schema =>
             schema.superRefine((values, ctx) => {
                 const translations = values.translations ?? [];
@@ -232,13 +268,19 @@ function ProductDetailPage() {
                 customFields: currentEntity.customFields,
             };
         },
-        params: { id: params.id },
-        onSuccess: data => {
+        params: { id: productId },
+        onSuccess: async data => {
             toast.success(
                 creatingNewEntity ? t`Successfully created product` : t`Successfully updated product`,
             );
+            void queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
+            if (!creatingNewEntity) {
+                window.dispatchEvent(new CustomEvent(WORKSPACE_COMMITTED_EVENT, { detail: { productId } }));
+            }
             resetForm();
-            if (creatingNewEntity) {
+            if (presentation === 'sheet') {
+                onSaved?.('keep-open', data.id);
+            } else if (creatingNewEntity) {
                 void navigate({ to: `../$id`, params: { id: data.id } });
             }
         },
@@ -255,6 +297,19 @@ function ProductDetailPage() {
         form.formState.isDirty && !hasMeaningfulRichText(watchedSourceTranslation?.description)
             ? { type: 'required', message: t`This field is required` }
             : undefined;
+
+    useEffect(() => {
+        const handleWorkspaceDirty = (event: Event) => {
+            const detail = (event as CustomEvent<{ productId: string; isDirty: boolean }>).detail;
+            if (detail?.productId === productId) setCatalogWorkspaceDirty(detail.isDirty);
+        };
+        window.addEventListener(WORKSPACE_DIRTY_EVENT, handleWorkspaceDirty);
+        return () => window.removeEventListener(WORKSPACE_DIRTY_EVENT, handleWorkspaceDirty);
+    }, [productId]);
+
+    useEffect(() => {
+        onDirtyChange?.(form.formState.isDirty || catalogWorkspaceDirty);
+    }, [catalogWorkspaceDirty, form.formState.isDirty, onDirtyChange]);
 
     const removeAllOptionGroups = async (
         product: { id: string; updatedAt: string },
@@ -276,17 +331,45 @@ function ProductDetailPage() {
     };
 
     return (
-        <Page pageId={pageId} form={form} submitHandler={submitHandler} entity={entity}>
+        <Page
+            pageId={pageId}
+            form={form}
+            submitHandler={submitHandler}
+            entity={entity}
+            className={presentation === 'sheet' ? 'm-0 min-w-0 p-4' : undefined}
+        >
             <PageTitle>{creatingNewEntity ? <Trans>New product</Trans> : (entity?.name ?? '')}</PageTitle>
             <PageActionBar>
-                <ActionBarItem itemId="save-button" requiresPermission={['UpdateProduct', 'UpdateCatalog']}>
+                <ActionBarItem
+                    itemId="save-button"
+                    requiresPermission={
+                        creatingNewEntity
+                            ? ['CreateProduct', 'CreateCatalog']
+                            : ['UpdateProduct', 'UpdateCatalog']
+                    }
+                >
                     <Button
                         type="submit"
-                        disabled={!form.formState.isDirty || !form.formState.isValid || isPending}
+                        disabled={
+                            (!form.formState.isDirty && !catalogWorkspaceDirty) ||
+                            !form.formState.isValid ||
+                            isPending
+                        }
                     >
                         {creatingNewEntity ? <Trans>Create</Trans> : <Trans>Update</Trans>}
                     </Button>
                 </ActionBarItem>
+                {presentation === 'sheet' && onRequestClose && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={onRequestClose}
+                        aria-label={t`Close`}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                )}
             </PageActionBar>
             <PageLayout>
                 <PageBlock column="side" blockId="enabled-toggle">
@@ -423,7 +506,7 @@ function ProductDetailPage() {
                 {entity && entity.variantList.totalItems > 0 && (
                     <PageBlock column="main" blockId="product-variants-table">
                         <ProductVariantsTable
-                            productId={params.id}
+                            productId={productId}
                             registerRefresher={refresher => {
                                 refreshRef.current = refresher;
                             }}
