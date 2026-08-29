@@ -11,6 +11,7 @@ export class AddCatalogProductSourceCreatedAt1787857200000 implements MigrationI
             new TableColumn({
                 name: columnName,
                 type: datetimeType(queryRunner),
+                ...(isMysql(queryRunner) ? { precision: 6 } : {}),
                 isNullable: true,
             }),
         );
@@ -26,4 +27,8 @@ export class AddCatalogProductSourceCreatedAt1787857200000 implements MigrationI
 
 function datetimeType(queryRunner: QueryRunner): string {
     return queryRunner.connection.options.type === 'postgres' ? 'timestamp without time zone' : 'datetime';
+}
+
+function isMysql(queryRunner: QueryRunner): boolean {
+    return ['mysql', 'mariadb'].includes(queryRunner.connection.options.type);
 }
