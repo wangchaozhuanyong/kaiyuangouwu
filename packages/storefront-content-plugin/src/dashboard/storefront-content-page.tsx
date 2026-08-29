@@ -1951,7 +1951,9 @@ function BlockEditor({
         );
 
     return (
-        <Sheet open onOpenChange={open => !open && requestClose()}>
+        <>
+            <UnsavedChangesConfirmation when={isDirty} />
+            <Sheet open onOpenChange={open => !open && requestClose()}>
             <SheetContent
                 className={
                     '@container/editor flex max-w-none flex-col gap-0 overflow-hidden p-0 ' +
@@ -1985,23 +1987,16 @@ function BlockEditor({
                                     variant={advancedMode ? 'ghost' : 'secondary'}
                                     onClick={() => setAdvancedMode(false)}
                                 >
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={advancedMode ? 'ghost' : 'secondary'}
-                                        onClick={() => setAdvancedMode(false)}
-                                    >
-                                        {text.simpleMode}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={advancedMode ? 'secondary' : 'ghost'}
-                                        onClick={() => setAdvancedMode(true)}
-                                    >
-                                        {text.advancedMode}
-                                    </Button>
-                                </div>
+                                    {text.simpleMode}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={advancedMode ? 'secondary' : 'ghost'}
+                                    onClick={() => setAdvancedMode(true)}
+                                >
+                                    {text.advancedMode}
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -2029,11 +2024,51 @@ function BlockEditor({
                                                 const type = value;
                                                 const nextDraft = {
                                                     ...draft,
-                                                    imageAsset: asset,
-                                                    imageAssetId: asset?.id ?? null,
-                                                    imageUrl: asset?.preview ?? null,
-                                                })
-                                            }
+                                                    type,
+                                                    layoutVariant: defaultLayoutForType(type),
+                                                };
+                                                onChange(
+                                                    type === 'CORE_CATEGORIES'
+                                                        ? applyCoreCategoryDefaults(nextDraft)
+                                                        : nextDraft,
+                                                );
+                                                if (type === 'CUSTOM') setAdvancedMode(true);
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {blockTypes
+                                                    .filter(type => type !== 'HERO')
+                                                    .map(type => (
+                                                        <SelectItem key={type} value={type}>
+                                                            {isZh
+                                                                ? blockTypeLabels[type].zh
+                                                                : blockTypeLabels[type].en}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                ) : null}
+                                {advancedMode ? (
+                                    <Field label={text.code} hint={text.codeHint}>
+                                        <Input
+                                            value={draft.code}
+                                            autoCapitalize="none"
+                                            spellCheck={false}
+                                            onChange={event => update('code', event.target.value)}
+                                        />
+                                    </Field>
+                                ) : null}
+                                {advancedMode ? (
+                                    <Field label={text.position}>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            value={draft.position}
+                                            onChange={event => update('position', Number(event.target.value) || 0)}
                                         />
                                     </Field>
                                 ) : null}
@@ -2575,7 +2610,8 @@ function BlockEditor({
                     </Button>
                 </SheetFooter>
             </SheetContent>
-        </Sheet>
+            </Sheet>
+        </>
     );
 }
 
