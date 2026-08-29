@@ -1,6 +1,6 @@
-import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 
 import {
     CategoryClientPluginSlot,
@@ -167,5 +167,25 @@ describe('category client plugin registry', () => {
         expect(markup).toContain('开始创作');
         item.enabled = false;
         expect(resolveClientPlugins(block, 'BUSINESS_SERVICES_MAIN')).toEqual([]);
+    });
+
+    it('renders the registered 2FA client plugin', () => {
+        const markup = renderToStaticMarkup(
+            <ClientPluginSlot
+                block={pluginBlock([pluginItem('two-factor-code-tool', 'BUSINESS_SERVICES_MAIN', 0)])}
+                placement="BUSINESS_SERVICES_MAIN"
+                language="zh"
+                onNavigate={() => undefined}
+            />,
+        );
+
+        expect(markup).toContain('2FA 动态码');
+        expect(markup).toContain('立即使用');
+        expect(
+            resolveClientPlugins(
+                pluginBlock([pluginItem('two-factor-code-tool', 'BUSINESS_SERVICES_MAIN', 0)]),
+                'BUSINESS_SERVICES_MAIN',
+            ).map(plugin => plugin.code),
+        ).toEqual(['two-factor-code-tool']);
     });
 });

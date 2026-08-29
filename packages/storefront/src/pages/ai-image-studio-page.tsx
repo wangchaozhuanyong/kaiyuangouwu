@@ -70,6 +70,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [quantity, setQuantity] = useState(1);
     const [referenceMode, setReferenceMode] = useState<ImageReferenceMode>('NONE');
     const [reference, setReference] = useState<ImagePrivateAssetView | null>(null);
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [busy, setBusy] = useState<'OPTIMIZE' | 'UPLOAD' | 'GENERATE' | ''>('');
     const [actionError, setActionError] = useState('');
     const pollStartedAt = useRef(Date.now());
@@ -129,6 +130,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         selectedModel &&
         selectedResolutionOption &&
         prompt.trim() &&
+        termsAccepted &&
         balance >= estimatedPrice &&
         !busy,
     );
@@ -177,6 +179,14 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         const file = event.target.files?.[0];
         event.target.value = '';
         if (!file) return;
+        if (!termsAccepted) {
+            setActionError(
+                isZh
+                    ? '请先阅读并勾选服务条款，再上传参考图'
+                    : 'Accept the terms before uploading a reference',
+            );
+            return;
+        }
         if (config && file.size > config.maxReferenceBytes) {
             setActionError(isZh ? '参考图不能超过 10MB' : 'Reference images must be 10MB or smaller');
             return;
@@ -211,7 +221,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 expectedUnitPrice: selectedResolutionOption.unitPrice,
                 currencyCode: selectedModel.currencyCode,
                 idempotencyKey: requestId(),
-                termsAccepted: true,
+                termsAccepted,
             });
             pollStartedAt.current = Date.now();
             setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
@@ -370,7 +380,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             </div>
                         ) : null}
                         <div className="ai-studio-reference">
-                            <label>
+                            <label className={termsAccepted ? '' : 'is-disabled'}>
                                 <ImagePlus />
                                 {busy === 'UPLOAD'
                                     ? isZh
@@ -386,7 +396,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 <input
                                     type="file"
                                     accept="image/jpeg,image/png,image/webp"
-                                    disabled={Boolean(busy)}
+                                    disabled={!termsAccepted || Boolean(busy)}
                                     onChange={event => void uploadReference(event)}
                                 />
                             </label>
@@ -534,6 +544,22 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     </section>
 
                     <section className="ai-studio-checkout">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={termsAccepted}
+                                onChange={event => setTermsAccepted(event.target.checked)}
+                            />
+                            <span>
+                                {isZh
+                                    ? `我已阅读并同意 AI 图片服务条款（${config.termsVersion}）`
+                                    : `I accept the AI image terms (${config.termsVersion})`}
+                            </span>
+                        </label>
+                        <details>
+                            <summary>{isZh ? '查看数据与使用说明' : 'View data and usage terms'}</summary>
+                            <p>{isZh ? config.termsZh : config.termsEn}</p>
+                        </details>
                         {actionError ? (
                             <div className="ai-studio-error">
                                 <CircleAlert />

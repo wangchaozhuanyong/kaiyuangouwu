@@ -43,6 +43,7 @@ import { Route as ReviewsRouteImport } from './routes/reviews'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SupportRouteImport } from './routes/support'
+import { Route as TwoFactorRouteImport } from './routes/two-factor'
 import { Route as VerifyAccountRouteImport } from './routes/verify-account'
 
 const IndexRoute = IndexRouteImport.update({
@@ -215,6 +216,11 @@ const SupportRoute = SupportRouteImport.update({
   path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TwoFactorRoute = TwoFactorRouteImport.update({
+  id: '/two-factor',
+  path: '/two-factor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VerifyAccountRoute = VerifyAccountRouteImport.update({
   id: '/verify-account',
   path: '/verify-account',
@@ -256,6 +262,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/services': typeof ServicesRoute
   '/support': typeof SupportRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify-account': typeof VerifyAccountRoute
 }
 export interface FileRoutesByTo {
@@ -293,6 +300,7 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/services': typeof ServicesRoute
   '/support': typeof SupportRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify-account': typeof VerifyAccountRoute
 }
 export interface FileRoutesById {
@@ -331,6 +339,7 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/services': typeof ServicesRoute
   '/support': typeof SupportRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify-account': typeof VerifyAccountRoute
 }
 export interface FileRouteTypes {
@@ -370,6 +379,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/services'
     | '/support'
+    | '/two-factor'
     | '/verify-account'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -407,6 +417,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/services'
     | '/support'
+    | '/two-factor'
     | '/verify-account'
   id:
     | '__root__'
@@ -444,6 +455,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/services'
     | '/support'
+    | '/two-factor'
     | '/verify-account'
   fileRoutesById: FileRoutesById
 }
@@ -482,6 +494,7 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   ServicesRoute: typeof ServicesRoute
   SupportRoute: typeof SupportRoute
+  TwoFactorRoute: typeof TwoFactorRoute
   VerifyAccountRoute: typeof VerifyAccountRoute
 }
 
@@ -725,6 +738,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/two-factor': {
+      id: '/two-factor'
+      path: '/two-factor'
+      fullPath: '/two-factor'
+      preLoaderRoute: typeof TwoFactorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/verify-account': {
       id: '/verify-account'
       path: '/verify-account'
@@ -770,6 +790,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   ServicesRoute: ServicesRoute,
   SupportRoute: SupportRoute,
+  TwoFactorRoute: TwoFactorRoute,
   VerifyAccountRoute: VerifyAccountRoute,
 }
 export const routeTree = rootRouteImport

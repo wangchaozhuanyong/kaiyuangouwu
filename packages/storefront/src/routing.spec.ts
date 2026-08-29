@@ -110,6 +110,7 @@ describe('storefront routing', () => {
         expect(routeFromHash('#/reviews').name).toBe('reviews');
         expect(routeFromHash('#/flash-sale').name).toBe('flash-sale');
         expect(routeFromHash('#/recommendations').name).toBe('recommendations');
+        expect(routeFromHash('#/two-factor').name).toBe('two-factor');
     });
 
     it('preserves email verification and password reset tokens', () => {

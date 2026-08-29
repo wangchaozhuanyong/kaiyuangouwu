@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
+import { type ImageProviderCipherService } from '../security/image-provider-cipher.service';
 
 import {
     AmbiguousImageProviderError,

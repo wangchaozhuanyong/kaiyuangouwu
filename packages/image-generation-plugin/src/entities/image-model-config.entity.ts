@@ -2,9 +2,9 @@ import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Channel, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
-import type { ImageProviderProtocol } from '../types';
 
 import { resolutionOptionsForModel } from '../image-resolution';
+import { type ImageProviderProtocol } from '../types';
 
 @Entity({ name: 'image_model_config' })
 @Index('IDX_image_model_config_channel_code', ['channelId', 'code'], { unique: true })

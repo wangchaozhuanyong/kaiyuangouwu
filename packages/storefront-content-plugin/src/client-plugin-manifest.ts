@@ -50,6 +50,15 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
+    {
+        code: 'two-factor-code-tool',
+        name: '2FA 动态码工具',
+        englishName: '2FA code tool',
+        description: '在商业服务页提供本地动态码查询、账号管理和批量导入。',
+        englishDescription: 'Adds local 2FA code lookup, account management, and bulk import.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
 ] as const;
 
 export const storefrontClientPluginCodes = storefrontClientPluginCatalog.map(plugin => plugin.code);

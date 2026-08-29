@@ -25,6 +25,7 @@ export type RouteName =
     | 'support'
     | 'reviews'
     | 'image-studio'
+    | 'two-factor'
     | 'login'
     | 'register'
     | 'verify-account'
@@ -68,6 +69,7 @@ export const customerResolvedRoutes: RouteName[] = [
     'notifications',
     'reviews',
     'image-studio',
+    'two-factor',
 ];
 export const cartResolvedRoutes: RouteName[] = ['cart', 'purchase', 'checkout', 'payment', 'coupons'];
 
@@ -99,6 +101,7 @@ const routePaths: Record<RouteName, string> = {
     support: '/support',
     reviews: '/reviews',
     'image-studio': '/image-studio',
+    'two-factor': '/two-factor',
     login: '/login',
     register: '/register',
     'verify-account': '/verify-account',
