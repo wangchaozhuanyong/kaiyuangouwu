@@ -53,6 +53,7 @@ import { AddUsdtRateSchedule1787788800000 } from './1787788800000-add-usdt-rate-
 import { AddImageGeneration1787792400000 } from './1787792400000-add-image-generation';
 import { AddFixedMoneySourceCurrency1787796000000 } from './1787796000000-add-fixed-money-source-currency';
 import { AlignImageGenerationSchema1787803200000 } from './1787803200000-align-image-generation-schema';
+import { AddMobileReferralPosterCopy1787806800000 } from './1787806800000-add-mobile-referral-poster-copy';
 import { RepairFixedMoneyJson1787806800000 } from './1787806800000-repair-fixed-money-json';
 import { ConfigureGeminiImageProvider1787810400000 } from './1787810400000-configure-gemini-image-provider';
 import { EnforceGeminiImageProvider1787814000000 } from './1787814000000-enforce-gemini-image-provider';
@@ -126,6 +127,7 @@ export const devServerMigrations = [
     AddImageGeneration1787792400000,
     AddFixedMoneySourceCurrency1787796000000,
     AlignImageGenerationSchema1787803200000,
+    AddMobileReferralPosterCopy1787806800000,
     RepairFixedMoneyJson1787806800000,
     ConfigureGeminiImageProvider1787810400000,
     EnforceGeminiImageProvider1787814000000,

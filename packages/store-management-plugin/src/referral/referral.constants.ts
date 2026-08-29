@@ -23,6 +23,7 @@ export const referralPosterTemplates = [
     'BENEFIT_RED_GOLD',
     'PRODUCT_STORY',
     'PREMIUM_DARK',
+    'CLOUD_BRIDGE_ORBIT',
 ] as const;
 
 export type ReferralPosterTemplate = (typeof referralPosterTemplates)[number];

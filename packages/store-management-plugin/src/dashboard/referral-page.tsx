@@ -225,106 +225,125 @@ function ReferralAdminPage() {
                     )}
                 </PageActionBarRight>
             </PageActionBar>
-            <PageLayout>
-                <PageBlock
-                    column="main"
-                    blockId="referral-today"
-                    title="今日经营概览"
-                    description="按北京时间和支付结算日统计；访客按 IP 去重；订单、消费客户和成交额以已结算支付扣除已结算退款后的净实收为准。"
-                >
-                    <TodayMetrics query={metrics} />
-                </PageBlock>
-                <PageBlock column="main" blockId="referral-management" title="功能设置与全链路报表">
-                    <Tabs defaultValue="settings">
-                        <TabsList className="mb-4 flex h-auto flex-wrap">
-                            <TabsTrigger value="settings">功能设置</TabsTrigger>
-                            <TabsTrigger value="relationships">邀请报表</TabsTrigger>
-                            <TabsTrigger value="rewards">返利与退款</TabsTrigger>
-                            <TabsTrigger value="ledger">详细流水</TabsTrigger>
-                            <TabsTrigger value="withdrawals">人工提款</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="settings">
-                            {program.isPending || !draft ? (
-                                <SettingsSkeleton />
-                            ) : program.isError ? (
-                                <QueryError onRetry={() => void program.refetch()} />
-                            ) : (
-                                <div className="space-y-8">
-                                    <ProgramSettings
-                                        draft={draft}
-                                        setDraft={setDraft}
-                                        disabled={!canUpdate}
-                                        templates={program.data?.referralProgram.posterTemplates ?? []}
-                                        customTemplates={
-                                            program.data?.referralProgram.posterTemplateConfigs ?? []
-                                        }
-                                    />
-                                    <PosterTemplateManager
-                                        templates={program.data?.referralProgram.posterTemplateConfigs ?? []}
-                                        disabled={!canUpdate}
-                                        defaultTemplate={draft.defaultPosterTemplate}
-                                        onMakeDefault={id =>
-                                            setDraft({ ...draft, defaultPosterTemplate: id })
-                                        }
-                                        onChanged={() => void program.refetch()}
-                                    />
-                                </div>
-                            )}
-                        </TabsContent>
-                        <TabsContent value="relationships">
-                            <RelationshipReport
-                                summaries={reports.data?.referralInviterSummaries.items ?? []}
-                                summaryTotal={reports.data?.referralInviterSummaries.totalItems ?? 0}
-                                summarySkip={reportSkips.summaries}
-                                onSummarySkipChange={skip =>
-                                    setReportSkips(value => ({ ...value, summaries: skip }))
-                                }
-                                items={reports.data?.referralRelationships.items ?? []}
-                                loading={reports.isPending}
-                                total={reports.data?.referralRelationships.totalItems ?? 0}
-                                skip={reportSkips.relationships}
-                                onSkipChange={skip =>
-                                    setReportSkips(value => ({ ...value, relationships: skip }))
-                                }
-                            />
-                        </TabsContent>
-                        <TabsContent value="rewards">
-                            <RewardReport
-                                items={reports.data?.referralRewards.items ?? []}
-                                loading={reports.isPending}
-                                total={reports.data?.referralRewards.totalItems ?? 0}
-                                skip={reportSkips.rewards}
-                                onSkipChange={skip => setReportSkips(value => ({ ...value, rewards: skip }))}
-                            />
-                        </TabsContent>
-                        <TabsContent value="ledger">
-                            <LedgerReport
-                                audit={reports.data?.referralBalanceAudit}
-                                items={reports.data?.referralLedger.items ?? []}
-                                loading={reports.isPending}
-                                total={reports.data?.referralLedger.totalItems ?? 0}
-                                skip={reportSkips.ledger}
-                                onSkipChange={skip => setReportSkips(value => ({ ...value, ledger: skip }))}
-                            />
-                        </TabsContent>
-                        <TabsContent value="withdrawals">
-                            <WithdrawalManagement
-                                items={reports.data?.referralWithdrawals.items ?? []}
-                                loading={reports.isPending}
-                                total={reports.data?.referralWithdrawals.totalItems ?? 0}
-                                skip={reportSkips.withdrawals}
-                                onSkipChange={skip =>
-                                    setReportSkips(value => ({ ...value, withdrawals: skip }))
-                                }
-                                canWithdraw={canWithdraw}
-                                canAdjust={canAdjust}
-                                defaultCurrency={activeChannel?.defaultCurrencyCode ?? 'CNY'}
-                                onChanged={() => void Promise.all([reports.refetch(), metrics.refetch()])}
-                            />
-                        </TabsContent>
-                    </Tabs>
-                </PageBlock>
-            </PageLayout>
+            <Tabs defaultValue="settings" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="border-b px-4 py-2 md:px-6">
+                    <TabsList className="flex h-auto flex-wrap bg-transparent">
+                        <TabsTrigger value="settings" className="data-[state=active]:bg-muted/50">
+                            功能设置
+                        </TabsTrigger>
+                        <TabsTrigger value="relationships" className="data-[state=active]:bg-muted/50">
+                            邀请报表
+                        </TabsTrigger>
+                        <TabsTrigger value="rewards" className="data-[state=active]:bg-muted/50">
+                            返利与退款
+                        </TabsTrigger>
+                        <TabsTrigger value="ledger" className="data-[state=active]:bg-muted/50">
+                            详细流水
+                        </TabsTrigger>
+                        <TabsTrigger value="withdrawals" className="data-[state=active]:bg-muted/50">
+                            人工提款
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                    <TabsContent value="settings" className="m-0 p-0 outline-none">
+                        <PageLayout>
+                            <PageBlock
+                                column="main"
+                                blockId="referral-today"
+                                title="今日经营概览"
+                                description="按北京时间和支付结算日统计；访客按 IP 去重；订单、消费客户和成交额以已结算支付扣除已结算退款后的净实收为准。"
+                            >
+                                <TodayMetrics query={metrics} />
+                            </PageBlock>
+                            <PageBlock column="main" blockId="referral-management" title="功能设置">
+                                {program.isPending || !draft ? (
+                                    <SettingsSkeleton />
+                                ) : program.isError ? (
+                                    <QueryError onRetry={() => void program.refetch()} />
+                                ) : (
+                                    <div className="space-y-8">
+                                        <ProgramSettings
+                                            draft={draft}
+                                            setDraft={setDraft}
+                                            disabled={!canUpdate}
+                                            templates={program.data?.referralProgram.posterTemplates ?? []}
+                                            customTemplates={
+                                                program.data?.referralProgram.posterTemplateConfigs ?? []
+                                            }
+                                        />
+                                        <PosterTemplateManager
+                                            templates={
+                                                program.data?.referralProgram.posterTemplateConfigs ?? []
+                                            }
+                                            disabled={!canUpdate}
+                                            defaultTemplate={draft.defaultPosterTemplate}
+                                            onMakeDefault={id =>
+                                                setDraft({ ...draft, defaultPosterTemplate: id })
+                                            }
+                                            onChanged={() => void program.refetch()}
+                                        />
+                                    </div>
+                                )}
+                            </PageBlock>
+                        </PageLayout>
+                    </TabsContent>
+
+                    <TabsContent value="relationships" className="m-0 p-4 md:p-6 outline-none">
+                        <RelationshipReport
+                            summaries={reports.data?.referralInviterSummaries.items ?? []}
+                            summaryTotal={reports.data?.referralInviterSummaries.totalItems ?? 0}
+                            summarySkip={reportSkips.summaries}
+                            onSummarySkipChange={skip =>
+                                setReportSkips(value => ({ ...value, summaries: skip }))
+                            }
+                            items={reports.data?.referralRelationships.items ?? []}
+                            loading={reports.isPending}
+                            total={reports.data?.referralRelationships.totalItems ?? 0}
+                            skip={reportSkips.relationships}
+                            onSkipChange={skip =>
+                                setReportSkips(value => ({ ...value, relationships: skip }))
+                            }
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="rewards" className="m-0 p-4 md:p-6 outline-none">
+                        <RewardReport
+                            items={reports.data?.referralRewards.items ?? []}
+                            loading={reports.isPending}
+                            total={reports.data?.referralRewards.totalItems ?? 0}
+                            skip={reportSkips.rewards}
+                            onSkipChange={skip => setReportSkips(value => ({ ...value, rewards: skip }))}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="ledger" className="m-0 p-4 md:p-6 outline-none">
+                        <LedgerReport
+                            audit={reports.data?.referralBalanceAudit}
+                            items={reports.data?.referralLedger.items ?? []}
+                            loading={reports.isPending}
+                            total={reports.data?.referralLedger.totalItems ?? 0}
+                            skip={reportSkips.ledger}
+                            onSkipChange={skip => setReportSkips(value => ({ ...value, ledger: skip }))}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="withdrawals" className="m-0 p-4 md:p-6 outline-none">
+                        <WithdrawalManagement
+                            items={reports.data?.referralWithdrawals.items ?? []}
+                            loading={reports.isPending}
+                            total={reports.data?.referralWithdrawals.totalItems ?? 0}
+                            skip={reportSkips.withdrawals}
+                            onSkipChange={skip => setReportSkips(value => ({ ...value, withdrawals: skip }))}
+                            canWithdraw={canWithdraw}
+                            canAdjust={canAdjust}
+                            defaultCurrency={activeChannel?.defaultCurrencyCode ?? 'CNY'}
+                            onChanged={() => void Promise.all([reports.refetch(), metrics.refetch()])}
+                        />
+                    </TabsContent>
+                </div>
+            </Tabs>
         </Page>
     );
 }
@@ -514,6 +533,38 @@ interface PosterTemplateDraft {
     siteIntroEn: string;
     serviceTextZh: string;
     serviceTextEn: string;
+    featureOneTitleZh: string;
+    featureOneTitleEn: string;
+    featureOneTextZh: string;
+    featureOneTextEn: string;
+    featureTwoTitleZh: string;
+    featureTwoTitleEn: string;
+    featureTwoTextZh: string;
+    featureTwoTextEn: string;
+    featureThreeTitleZh: string;
+    featureThreeTitleEn: string;
+    featureThreeTextZh: string;
+    featureThreeTextEn: string;
+    qrEyebrowZh: string;
+    qrEyebrowEn: string;
+    qrTitleZh: string;
+    qrTitleEn: string;
+    qrDescriptionZh: string;
+    qrDescriptionEn: string;
+    sceneOneZh: string;
+    sceneOneEn: string;
+    sceneTwoZh: string;
+    sceneTwoEn: string;
+    sceneThreeZh: string;
+    sceneThreeEn: string;
+    sceneFourZh: string;
+    sceneFourEn: string;
+    ctaTextZh: string;
+    ctaTextEn: string;
+    footerTitleZh: string;
+    footerTitleEn: string;
+    footerTextZh: string;
+    footerTextEn: string;
     foregroundColor: string;
     accentColor: string;
     overlayOpacity: number;
@@ -593,7 +644,7 @@ function PosterTemplateManager({
                 <div>
                     <h3 className="m-0 text-base font-semibold">店铺邀请海报模板</h3>
                     <p className="mb-0 mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-                        店铺可按行业上传任意背景图。平台统一叠加标题、奖励文案、邀请码和二维码，避免图片与动态内容错位。
+                        按移动端分享图的六个区块编辑内容，保存后会同时用于前台海报、邀请落地页和链接预览；二维码、邀请码、网址由系统自动生成。
                     </p>
                 </div>
                 <Button
@@ -609,7 +660,7 @@ function PosterTemplateManager({
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {templates.map(template => (
                     <article key={template.id} className="overflow-hidden rounded-xl border bg-card">
-                        <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
+                        <div className="relative aspect-[9/16] overflow-hidden bg-slate-900">
                             {template.posterBackgroundAsset ? (
                                 <img
                                     src={template.posterBackgroundAsset.preview}
@@ -628,8 +679,22 @@ function PosterTemplateManager({
                                     {template.headlineZh}
                                 </strong>
                             </div>
-                            <div className="absolute inset-x-5 top-[43%] rounded-xl bg-white/95 p-3 text-center text-xs font-bold text-slate-800 shadow">
-                                二维码与邀请码安全区
+                            <div className="absolute inset-x-5 top-[38%] space-y-2">
+                                {[
+                                    template.featureOneTitleZh,
+                                    template.featureTwoTitleZh,
+                                    template.featureThreeTitleZh,
+                                ].map(title => (
+                                    <div
+                                        key={title}
+                                        className="rounded-lg bg-white/95 px-3 py-2 text-xs font-bold text-slate-800 shadow"
+                                    >
+                                        {title}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="absolute inset-x-5 bottom-[15%] rounded-lg bg-white/95 p-3 text-center text-xs font-bold text-slate-800 shadow">
+                                {template.qrTitleZh || '二维码信息区'}
                             </div>
                             <div className="absolute inset-x-5 bottom-5 rounded-lg border border-white/25 bg-black/30 px-3 py-2 text-[11px] text-white backdrop-blur">
                                 {template.serviceTextZh || '店铺服务说明'}
@@ -646,7 +711,7 @@ function PosterTemplateManager({
                                 </div>
                             </div>
                             <p className="m-0 text-xs text-muted-foreground">
-                                竖版 1080×1620 · 横版 1200×630 · 排序 {template.position}
+                                移动端 1080×1920 · 横版 1200×630 · 排序 {template.position}
                             </p>
                             <div className="grid grid-cols-2 gap-2">
                                 <Button
@@ -699,7 +764,8 @@ function PosterTemplateManager({
                     <DialogHeader>
                         <DialogTitle>{draft?.id ? '编辑邀请海报模板' : '新建邀请海报模板'}</DialogTitle>
                         <DialogDescription>
-                            背景图不要直接写邀请码或二维码。竖版建议 1080×1620，横版分享图建议 1200×630。
+                            参照云桥 AI 移动端分享图规范：推荐 1080×1920，左右安全边距 64px。中文和 English
+                            使用同一版式，前台根据用户语言自动切换。
                         </DialogDescription>
                     </DialogHeader>
                     {draft && (
@@ -756,7 +822,7 @@ function PosterTemplateManager({
                               ? [draft.posterBackgroundAsset]
                               : []
                     }
-                    title={assetTarget === 'share' ? '选择横版分享背景' : '选择竖版海报背景'}
+                    title={assetTarget === 'share' ? '选择横版分享背景' : '选择移动端海报背景'}
                 />
             )}
         </section>
@@ -777,159 +843,370 @@ function PosterTemplateEditor({
     const update = <K extends keyof PosterTemplateDraft>(key: K, value: PosterTemplateDraft[K]) =>
         setDraft({ ...draft, [key]: value });
     return (
-        <div className="grid gap-5 py-2 sm:grid-cols-2">
-            <Field label="模板名称">
-                <Input
-                    value={draft.name}
-                    maxLength={128}
+        <div className="space-y-7 py-2">
+            <EditorSection
+                number="01"
+                title="品牌与核心标题"
+                description="对应海报顶部品牌区、主标题和标题下的介绍文字。"
+            >
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="模板名称">
+                        <Input
+                            value={draft.name}
+                            maxLength={128}
+                            disabled={disabled}
+                            onChange={e => update('name', e.target.value)}
+                        />
+                    </Field>
+                    <Field label="展示排序">
+                        <Input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={draft.position}
+                            disabled={disabled}
+                            onChange={e => update('position', Number(e.target.value))}
+                        />
+                    </Field>
+                    <BooleanField
+                        label="启用模板"
+                        checked={draft.enabled}
+                        disabled={disabled}
+                        onChange={value => update('enabled', value)}
+                        description="关闭后客户端立即停止展示该模板。"
+                    />
+                    <Field label="背景遮罩（0–80）">
+                        <Input
+                            type="number"
+                            min={0}
+                            max={80}
+                            step={1}
+                            value={draft.overlayOpacity}
+                            disabled={disabled}
+                            onChange={e => update('overlayOpacity', Number(e.target.value))}
+                        />
+                    </Field>
+                    <PosterAssetField
+                        label="移动端海报背景"
+                        guidance="1080×1920（9:16），建议留出文字安全区"
+                        asset={draft.posterBackgroundAsset}
+                        disabled={disabled}
+                        onPick={() => onPickAsset('poster')}
+                        onClear={() => update('posterBackgroundAsset', null)}
+                    />
+                    <PosterAssetField
+                        label="横版分享背景（可选）"
+                        guidance="1200×630，用于链接预览 OG 图片"
+                        asset={draft.shareBackgroundAsset}
+                        disabled={disabled}
+                        onPick={() => onPickAsset('share')}
+                        onClear={() => update('shareBackgroundAsset', null)}
+                    />
+                </div>
+                <BilingualField
+                    label="品牌标签"
+                    zh={draft.titleZh}
+                    en={draft.titleEn}
                     disabled={disabled}
-                    onChange={e => update('name', e.target.value)}
+                    onZh={value => update('titleZh', value)}
+                    onEn={value => update('titleEn', value)}
                 />
-            </Field>
-            <Field label="展示排序">
-                <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={draft.position}
+                <BilingualField
+                    label="核心标题"
+                    multiline
+                    zh={draft.headlineZh}
+                    en={draft.headlineEn}
                     disabled={disabled}
-                    onChange={e => update('position', Number(e.target.value))}
+                    onZh={value => update('headlineZh', value)}
+                    onEn={value => update('headlineEn', value)}
                 />
-            </Field>
-            <BooleanField
-                label="启用模板"
-                checked={draft.enabled}
+                <BilingualField
+                    label="标题下说明"
+                    multiline
+                    zh={draft.siteIntroZh}
+                    en={draft.siteIntroEn}
+                    disabled={disabled}
+                    onZh={value => update('siteIntroZh', value)}
+                    onEn={value => update('siteIntroEn', value)}
+                />
+                <BilingualField
+                    label="邀请奖励说明"
+                    multiline
+                    zh={draft.rewardTextZh}
+                    en={draft.rewardTextEn}
+                    disabled={disabled}
+                    onZh={value => update('rewardTextZh', value)}
+                    onEn={value => update('rewardTextEn', value)}
+                    help="支持 {rewardRate} 动态奖励比例；这段文字会显示在二维码区下方。"
+                />
+            </EditorSection>
+
+            <EditorSection
+                number="02"
+                title="三大卖点模块"
+                description="对应海报中间的三张卖点卡片，后台每张卡片独立编辑。"
+            >
+                <FeatureCardEditor
+                    index="1"
+                    titleZh={draft.featureOneTitleZh}
+                    titleEn={draft.featureOneTitleEn}
+                    textZh={draft.featureOneTextZh}
+                    textEn={draft.featureOneTextEn}
+                    disabled={disabled}
+                    onChange={(key, value) => update(key, value)}
+                />
+                <FeatureCardEditor
+                    index="2"
+                    titleZh={draft.featureTwoTitleZh}
+                    titleEn={draft.featureTwoTitleEn}
+                    textZh={draft.featureTwoTextZh}
+                    textEn={draft.featureTwoTextEn}
+                    disabled={disabled}
+                    onChange={(key, value) => update(key, value)}
+                />
+                <FeatureCardEditor
+                    index="3"
+                    titleZh={draft.featureThreeTitleZh}
+                    titleEn={draft.featureThreeTitleEn}
+                    textZh={draft.featureThreeTextZh}
+                    textEn={draft.featureThreeTextEn}
+                    disabled={disabled}
+                    onChange={(key, value) => update(key, value)}
+                />
+            </EditorSection>
+
+            <EditorSection
+                number="03"
+                title="二维码信息区"
+                description="对应二维码右侧的引导标题、价值说明和四个使用场景标签。"
+            >
+                <BilingualField
+                    label="二维码引导语"
+                    zh={draft.qrEyebrowZh}
+                    en={draft.qrEyebrowEn}
+                    disabled={disabled}
+                    onZh={value => update('qrEyebrowZh', value)}
+                    onEn={value => update('qrEyebrowEn', value)}
+                />
+                <BilingualField
+                    label="二维码区标题"
+                    multiline
+                    zh={draft.qrTitleZh}
+                    en={draft.qrTitleEn}
+                    disabled={disabled}
+                    onZh={value => update('qrTitleZh', value)}
+                    onEn={value => update('qrTitleEn', value)}
+                />
+                <BilingualField
+                    label="二维码区说明"
+                    zh={draft.qrDescriptionZh}
+                    en={draft.qrDescriptionEn}
+                    disabled={disabled}
+                    onZh={value => update('qrDescriptionZh', value)}
+                    onEn={value => update('qrDescriptionEn', value)}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <BilingualField
+                        label="场景 1"
+                        zh={draft.sceneOneZh}
+                        en={draft.sceneOneEn}
+                        disabled={disabled}
+                        onZh={value => update('sceneOneZh', value)}
+                        onEn={value => update('sceneOneEn', value)}
+                    />
+                    <BilingualField
+                        label="场景 2"
+                        zh={draft.sceneTwoZh}
+                        en={draft.sceneTwoEn}
+                        disabled={disabled}
+                        onZh={value => update('sceneTwoZh', value)}
+                        onEn={value => update('sceneTwoEn', value)}
+                    />
+                    <BilingualField
+                        label="场景 3"
+                        zh={draft.sceneThreeZh}
+                        en={draft.sceneThreeEn}
+                        disabled={disabled}
+                        onZh={value => update('sceneThreeZh', value)}
+                        onEn={value => update('sceneThreeEn', value)}
+                    />
+                    <BilingualField
+                        label="场景 4"
+                        zh={draft.sceneFourZh}
+                        en={draft.sceneFourEn}
+                        disabled={disabled}
+                        onZh={value => update('sceneFourZh', value)}
+                        onEn={value => update('sceneFourEn', value)}
+                    />
+                </div>
+            </EditorSection>
+
+            <EditorSection
+                number="04"
+                title="CTA 与页尾品牌区"
+                description="对应底部蓝色行动按钮和最后的品牌口号。"
+            >
+                <BilingualField
+                    label="CTA 行动按钮"
+                    zh={draft.ctaTextZh}
+                    en={draft.ctaTextEn}
+                    disabled={disabled}
+                    onZh={value => update('ctaTextZh', value)}
+                    onEn={value => update('ctaTextEn', value)}
+                />
+                <BilingualField
+                    label="页尾主标题"
+                    zh={draft.footerTitleZh}
+                    en={draft.footerTitleEn}
+                    disabled={disabled}
+                    onZh={value => update('footerTitleZh', value)}
+                    onEn={value => update('footerTitleEn', value)}
+                />
+                <BilingualField
+                    label="页尾说明"
+                    zh={draft.footerTextZh}
+                    en={draft.footerTextEn}
+                    disabled={disabled}
+                    onZh={value => update('footerTextZh', value)}
+                    onEn={value => update('footerTextEn', value)}
+                />
+            </EditorSection>
+
+            <EditorSection
+                number="05"
+                title="颜色微调"
+                description="默认值已按参考图配置，只有需要换品牌色时再修改。"
+            >
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="主文字颜色">
+                        <Input
+                            type="color"
+                            value={draft.foregroundColor}
+                            disabled={disabled}
+                            onChange={e => update('foregroundColor', e.target.value.toUpperCase())}
+                        />
+                    </Field>
+                    <Field label="强调颜色">
+                        <Input
+                            type="color"
+                            value={draft.accentColor}
+                            disabled={disabled}
+                            onChange={e => update('accentColor', e.target.value.toUpperCase())}
+                        />
+                    </Field>
+                </div>
+            </EditorSection>
+        </div>
+    );
+}
+
+function EditorSection({
+    number,
+    title,
+    description,
+    children,
+}: {
+    number: string;
+    title: string;
+    description: string;
+    children: ReactNode;
+}) {
+    return (
+        <section className="rounded-xl border bg-muted/10 p-4 sm:p-5">
+            <div className="mb-4 flex items-start gap-3">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {number}
+                </span>
+                <div>
+                    <h4 className="m-0 text-sm font-semibold">{title}</h4>
+                    <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+                </div>
+            </div>
+            <div className="space-y-4">{children}</div>
+        </section>
+    );
+}
+
+function BilingualField({
+    label,
+    zh,
+    en,
+    disabled,
+    multiline = false,
+    help,
+    onZh,
+    onEn,
+}: {
+    label: string;
+    zh: string;
+    en: string;
+    disabled: boolean;
+    multiline?: boolean;
+    help?: string;
+    onZh: (value: string) => void;
+    onEn: (value: string) => void;
+}) {
+    const Control = multiline ? Textarea : Input;
+    return (
+        <div>
+            <Label className="mb-2 block">{label}</Label>
+            <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <small className="mb-1 block text-muted-foreground">中文</small>
+                    <Control value={zh} disabled={disabled} onChange={event => onZh(event.target.value)} />
+                </div>
+                <div>
+                    <small className="mb-1 block text-muted-foreground">English</small>
+                    <Control value={en} disabled={disabled} onChange={event => onEn(event.target.value)} />
+                </div>
+            </div>
+            {help && <Help>{help}</Help>}
+        </div>
+    );
+}
+
+function FeatureCardEditor({
+    index,
+    titleZh,
+    titleEn,
+    textZh,
+    textEn,
+    disabled,
+    onChange,
+}: {
+    index: string;
+    titleZh: string;
+    titleEn: string;
+    textZh: string;
+    textEn: string;
+    disabled: boolean;
+    onChange: (key: keyof PosterTemplateDraft, value: string) => void;
+}) {
+    const keyPrefix = index === '1' ? 'featureOne' : index === '2' ? 'featureTwo' : 'featureThree';
+    return (
+        <div className="rounded-lg border bg-background p-3">
+            <div className="mb-3 flex items-center gap-2">
+                <Badge variant="outline">卖点 {index}</Badge>
+                <span className="text-xs text-muted-foreground">图标由移动端版式统一呈现</span>
+            </div>
+            <BilingualField
+                label="标题"
+                zh={titleZh}
+                en={titleEn}
                 disabled={disabled}
-                onChange={value => update('enabled', value)}
-                description="关闭后客户端立即停止展示该模板。"
+                onZh={value => onChange(`${keyPrefix}TitleZh` as keyof PosterTemplateDraft, value)}
+                onEn={value => onChange(`${keyPrefix}TitleEn` as keyof PosterTemplateDraft, value)}
             />
-            <Field label="背景遮罩（0–80）">
-                <Input
-                    type="number"
-                    min={0}
-                    max={80}
-                    step={1}
-                    value={draft.overlayOpacity}
+            <div className="mt-3">
+                <BilingualField
+                    label="说明"
+                    zh={textZh}
+                    en={textEn}
                     disabled={disabled}
-                    onChange={e => update('overlayOpacity', Number(e.target.value))}
+                    onZh={value => onChange(`${keyPrefix}TextZh` as keyof PosterTemplateDraft, value)}
+                    onEn={value => onChange(`${keyPrefix}TextEn` as keyof PosterTemplateDraft, value)}
                 />
-            </Field>
-            <PosterAssetField
-                label="竖版海报背景"
-                guidance="1080×1620（2:3）"
-                asset={draft.posterBackgroundAsset}
-                disabled={disabled}
-                onPick={() => onPickAsset('poster')}
-                onClear={() => update('posterBackgroundAsset', null)}
-            />
-            <PosterAssetField
-                label="横版分享背景"
-                guidance="1200×630（链接预览）"
-                asset={draft.shareBackgroundAsset}
-                disabled={disabled}
-                onPick={() => onPickAsset('share')}
-                onClear={() => update('shareBackgroundAsset', null)}
-            />
-            <Field label="中文小标题">
-                <Input
-                    value={draft.titleZh}
-                    maxLength={80}
-                    disabled={disabled}
-                    onChange={e => update('titleZh', e.target.value)}
-                />
-            </Field>
-            <Field label="英文小标题">
-                <Input
-                    value={draft.titleEn}
-                    maxLength={80}
-                    disabled={disabled}
-                    onChange={e => update('titleEn', e.target.value)}
-                />
-            </Field>
-            <Field label="中文主标题">
-                <Textarea
-                    value={draft.headlineZh}
-                    maxLength={180}
-                    disabled={disabled}
-                    onChange={e => update('headlineZh', e.target.value)}
-                />
-            </Field>
-            <Field label="英文主标题">
-                <Textarea
-                    value={draft.headlineEn}
-                    maxLength={180}
-                    disabled={disabled}
-                    onChange={e => update('headlineEn', e.target.value)}
-                />
-            </Field>
-            <Field label="中文奖励文案">
-                <Textarea
-                    value={draft.rewardTextZh}
-                    maxLength={220}
-                    disabled={disabled}
-                    onChange={e => update('rewardTextZh', e.target.value)}
-                />
-                {/* i18n-audit-ignore -- Literal template token documented for the Chinese copy field. */}
-                <Help>支持 {'{rewardRate}'} 动态奖励比例；只表述消费抵扣，不建议出现提现文字。</Help>
-            </Field>
-            <Field label="英文奖励文案">
-                <Textarea
-                    value={draft.rewardTextEn}
-                    maxLength={220}
-                    disabled={disabled}
-                    onChange={e => update('rewardTextEn', e.target.value)}
-                />
-                {/* i18n-audit-ignore -- English guidance belongs to the English copy field. */}
-                <Help>Use {'{rewardRate}'} for the live reward percentage.</Help>
-            </Field>
-            <Field label="中文网站介绍">
-                <Textarea
-                    value={draft.siteIntroZh}
-                    maxLength={260}
-                    disabled={disabled}
-                    onChange={e => update('siteIntroZh', e.target.value)}
-                />
-            </Field>
-            <Field label="英文网站介绍">
-                <Textarea
-                    value={draft.siteIntroEn}
-                    maxLength={260}
-                    disabled={disabled}
-                    onChange={e => update('siteIntroEn', e.target.value)}
-                />
-            </Field>
-            <Field label="中文底部服务文字">
-                <Input
-                    value={draft.serviceTextZh}
-                    maxLength={260}
-                    disabled={disabled}
-                    onChange={e => update('serviceTextZh', e.target.value)}
-                />
-            </Field>
-            <Field label="英文底部服务文字">
-                <Input
-                    value={draft.serviceTextEn}
-                    maxLength={260}
-                    disabled={disabled}
-                    onChange={e => update('serviceTextEn', e.target.value)}
-                />
-            </Field>
-            <Field label="主文字颜色">
-                <Input
-                    type="color"
-                    value={draft.foregroundColor}
-                    disabled={disabled}
-                    onChange={e => update('foregroundColor', e.target.value.toUpperCase())}
-                />
-            </Field>
-            <Field label="强调颜色">
-                <Input
-                    type="color"
-                    value={draft.accentColor}
-                    disabled={disabled}
-                    onChange={e => update('accentColor', e.target.value.toUpperCase())}
-                />
-            </Field>
+            </div>
         </div>
     );
 }
@@ -991,24 +1268,57 @@ function emptyPosterTemplateDraft(position: number): PosterTemplateDraft {
         layoutVariant: 'STANDARD_CENTER',
         posterBackgroundAsset: null,
         shareBackgroundAsset: null,
-        titleZh: '好友邀请函',
-        titleEn: 'Invitation for friends',
-        headlineZh: '发现好东西，一起分享',
-        headlineEn: 'Discover something worth sharing',
+        titleZh: 'AI 工具一站式服务',
+        titleEn: 'One-stop AI service',
+        headlineZh: '热门 AI 工具\n一站轻松获取',
+        headlineEn: 'Popular AI tools\nmade easy',
         rewardTextZh: '好友成功消费，可获得 {rewardRate}% 奖励用于消费抵扣',
         rewardTextEn: 'Earn {rewardRate}% in rewards when a friend makes a purchase',
-        siteIntroZh: '',
-        siteIntroEn: '',
+        siteIntroZh: 'ChatGPT、Claude、Gemini、Codex 等\n热门 AI 服务，一个网站轻松了解与选择',
+        siteIntroEn: 'ChatGPT, Claude, Gemini, Codex and more\nExplore practical AI services in one place',
         serviceTextZh: '好物严选 · 便捷消费 · 售后服务',
         serviceTextEn: 'Curated products · Easy shopping · Customer support',
-        foregroundColor: '#FFFFFF',
-        accentColor: '#FF4D4F',
-        overlayOpacity: 28,
+        featureOneTitleZh: '热门工具汇集',
+        featureOneTitleEn: '精选 AI tools',
+        featureOneTextZh: '多种 AI 工具任你选',
+        featureOneTextEn: 'A curated set of AI tools',
+        featureTwoTitleZh: '便捷开通服务',
+        featureTwoTitleEn: 'Fast activation',
+        featureTwoTextZh: '快速开通 省时省心',
+        featureTwoTextEn: 'Get started in a few clicks',
+        featureThreeTitleZh: '专属售后支持',
+        featureThreeTitleEn: 'Dedicated support',
+        featureThreeTextZh: '专业客服 贴心服务',
+        featureThreeTextEn: 'Friendly help when you need it',
+        qrEyebrowZh: '扫码访问云桥 AI',
+        qrEyebrowEn: 'Scan CloudBridge AI',
+        qrTitleZh: '发现更多实用 AI 服务',
+        qrTitleEn: 'Discover practical AI services',
+        qrDescriptionZh: '满足多种 AI 使用场景',
+        qrDescriptionEn: 'Tools for work, creativity, learning and code',
+        sceneOneZh: '办公提效',
+        sceneOneEn: 'Work',
+        sceneTwoZh: '内容创作',
+        sceneTwoEn: 'Create',
+        sceneThreeZh: '学习辅助',
+        sceneThreeEn: 'Learn',
+        sceneFourZh: '智能编程',
+        sceneFourEn: 'Code',
+        ctaTextZh: '长按识别二维码，立即进入云桥 AI',
+        ctaTextEn: 'Press and hold to enter CloudBridge AI',
+        footerTitleZh: '让好用的 AI，真正为你所用',
+        footerTitleEn: 'AI that works for you',
+        footerTextZh: '热门 AI 工具与数字服务一站式平台',
+        footerTextEn: 'One-stop platform for AI tools and digital services',
+        foregroundColor: '#0E2A63',
+        accentColor: '#1269E8',
+        overlayOpacity: 0,
     };
 }
 
 function posterTemplateDraft(template: ReferralPosterTemplateRecord): PosterTemplateDraft {
     return {
+        ...emptyPosterTemplateDraft(template.position),
         ...template,
         layoutVariant: 'STANDARD_CENTER',
         posterBackgroundAsset: template.posterBackgroundAsset as Asset | null,
@@ -2096,10 +2406,11 @@ function posterLabel(value: string): string {
     return (
         (
             {
-                BRAND_MINIMAL: '品牌简约',
-                BENEFIT_RED_GOLD: '红金礼遇',
-                PRODUCT_STORY: '生活故事',
-                PREMIUM_DARK: '鎏金深色',
+                BRAND_MINIMAL: '云桥简约',
+                BENEFIT_RED_GOLD: '冰川蓝光',
+                PRODUCT_STORY: '青空流线',
+                PREMIUM_DARK: '深海科技',
+                CLOUD_BRIDGE_ORBIT: '云桥轨道',
             } as Record<string, string>
         )[value] ?? value
     );

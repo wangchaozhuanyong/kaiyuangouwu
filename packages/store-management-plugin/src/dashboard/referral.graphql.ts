@@ -50,6 +50,38 @@ const referralProgramFields = gql`
             siteIntroEn
             serviceTextZh
             serviceTextEn
+            featureOneTitleZh
+            featureOneTitleEn
+            featureOneTextZh
+            featureOneTextEn
+            featureTwoTitleZh
+            featureTwoTitleEn
+            featureTwoTextZh
+            featureTwoTextEn
+            featureThreeTitleZh
+            featureThreeTitleEn
+            featureThreeTextZh
+            featureThreeTextEn
+            qrEyebrowZh
+            qrEyebrowEn
+            qrTitleZh
+            qrTitleEn
+            qrDescriptionZh
+            qrDescriptionEn
+            sceneOneZh
+            sceneOneEn
+            sceneTwoZh
+            sceneTwoEn
+            sceneThreeZh
+            sceneThreeEn
+            sceneFourZh
+            sceneFourEn
+            ctaTextZh
+            ctaTextEn
+            footerTitleZh
+            footerTitleEn
+            footerTextZh
+            footerTextEn
             foregroundColor
             accentColor
             overlayOpacity
@@ -112,6 +144,38 @@ const referralPosterTemplateFields = gql`
         siteIntroEn
         serviceTextZh
         serviceTextEn
+        featureOneTitleZh
+        featureOneTitleEn
+        featureOneTextZh
+        featureOneTextEn
+        featureTwoTitleZh
+        featureTwoTitleEn
+        featureTwoTextZh
+        featureTwoTextEn
+        featureThreeTitleZh
+        featureThreeTitleEn
+        featureThreeTextZh
+        featureThreeTextEn
+        qrEyebrowZh
+        qrEyebrowEn
+        qrTitleZh
+        qrTitleEn
+        qrDescriptionZh
+        qrDescriptionEn
+        sceneOneZh
+        sceneOneEn
+        sceneTwoZh
+        sceneTwoEn
+        sceneThreeZh
+        sceneThreeEn
+        sceneFourZh
+        sceneFourEn
+        ctaTextZh
+        ctaTextEn
+        footerTitleZh
+        footerTitleEn
+        footerTextZh
+        footerTextEn
         foregroundColor
         accentColor
         overlayOpacity
@@ -436,6 +500,38 @@ export interface ReferralPosterTemplateRecord {
     siteIntroEn: string;
     serviceTextZh: string;
     serviceTextEn: string;
+    featureOneTitleZh: string;
+    featureOneTitleEn: string;
+    featureOneTextZh: string;
+    featureOneTextEn: string;
+    featureTwoTitleZh: string;
+    featureTwoTitleEn: string;
+    featureTwoTextZh: string;
+    featureTwoTextEn: string;
+    featureThreeTitleZh: string;
+    featureThreeTitleEn: string;
+    featureThreeTextZh: string;
+    featureThreeTextEn: string;
+    qrEyebrowZh: string;
+    qrEyebrowEn: string;
+    qrTitleZh: string;
+    qrTitleEn: string;
+    qrDescriptionZh: string;
+    qrDescriptionEn: string;
+    sceneOneZh: string;
+    sceneOneEn: string;
+    sceneTwoZh: string;
+    sceneTwoEn: string;
+    sceneThreeZh: string;
+    sceneThreeEn: string;
+    sceneFourZh: string;
+    sceneFourEn: string;
+    ctaTextZh: string;
+    ctaTextEn: string;
+    footerTitleZh: string;
+    footerTitleEn: string;
+    footerTextZh: string;
+    footerTextEn: string;
     foregroundColor: string;
     accentColor: string;
     overlayOpacity: number;

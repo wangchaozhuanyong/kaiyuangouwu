@@ -18,39 +18,48 @@ export interface ReferralPosterStyle {
 export const referralPosterStyles: ReferralPosterStyle[] = [
     {
         id: 'BRAND_MINIMAL',
-        nameZh: '品牌简约',
-        nameEn: 'Brand minimal',
-        colors: ['#fff7ed', '#ffffff', '#fef2f2'],
-        background: 'linear-gradient(145deg,#fff7ed,#ffffff 48%,#fef2f2)',
-        foreground: '#172033',
-        accent: '#dc2626',
+        nameZh: '云桥简约',
+        nameEn: 'CloudBridge minimal',
+        colors: ['#eef7ff', '#ffffff', '#eaf4ff'],
+        background: 'linear-gradient(145deg,#eef7ff,#ffffff 48%,#eaf4ff)',
+        foreground: '#0e2a63',
+        accent: '#1269e8',
     },
     {
         id: 'BENEFIT_RED_GOLD',
-        nameZh: '红金礼遇',
-        nameEn: 'Red & gold',
-        colors: ['#7f1d1d', '#dc2626', '#991b1b'],
-        background: 'linear-gradient(145deg,#7f1d1d,#dc2626 55%,#991b1b)',
-        foreground: '#ffffff',
-        accent: '#fde68a',
+        nameZh: '冰川蓝光',
+        nameEn: 'Glacier blue',
+        colors: ['#e8f3ff', '#ffffff', '#dcecff'],
+        background: 'linear-gradient(145deg,#e8f3ff,#ffffff 55%,#dcecff)',
+        foreground: '#0e2a63',
+        accent: '#0b75e5',
     },
     {
         id: 'PRODUCT_STORY',
-        nameZh: '生活故事',
-        nameEn: 'Lifestyle story',
-        colors: ['#ecfdf5', '#f0fdfa', '#dbeafe'],
-        background: 'linear-gradient(155deg,#ecfdf5,#f0fdfa 48%,#dbeafe)',
-        foreground: '#134e4a',
-        accent: '#0f766e',
+        nameZh: '青空流线',
+        nameEn: 'Skyline flow',
+        colors: ['#e9fbff', '#ffffff', '#e5f3ff'],
+        background: 'linear-gradient(155deg,#e9fbff,#ffffff 48%,#e5f3ff)',
+        foreground: '#0e2a63',
+        accent: '#0ba9d5',
     },
     {
         id: 'PREMIUM_DARK',
-        nameZh: '鎏金深色',
-        nameEn: 'Premium dark',
-        colors: ['#020617', '#172554', '#0f172a'],
-        background: 'linear-gradient(145deg,#020617,#172554,#0f172a)',
-        foreground: '#f8fafc',
-        accent: '#fbbf24',
+        nameZh: '深海科技',
+        nameEn: 'Deep-sea tech',
+        colors: ['#e7f0ff', '#f7fbff', '#dfeeff'],
+        background: 'linear-gradient(145deg,#e7f0ff,#f7fbff 55%,#dfeeff)',
+        foreground: '#0e2a63',
+        accent: '#2257c7',
+    },
+    {
+        id: 'CLOUD_BRIDGE_ORBIT',
+        nameZh: '云桥轨道',
+        nameEn: 'CloudBridge orbit',
+        colors: ['#e8f6ff', '#ffffff', '#dff8ff'],
+        background: 'linear-gradient(145deg,#e8f6ff,#ffffff 48%,#dff8ff)',
+        foreground: '#0b2d63',
+        accent: '#0b75e5',
     },
 ];
 
@@ -82,6 +91,7 @@ export function ReferralPosterModal({
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
+    const effectiveLogoUrl = logoUrl || '/storefront/cloudbridge-logo.png';
     const styles = useMemo(() => {
         const custom = templateConfigs.filter(template => template.enabled);
         if (custom.length) return custom;
@@ -123,9 +133,10 @@ export function ReferralPosterModal({
             isZh,
             inviteCode,
             storefrontName,
-            logoUrl,
+            logoUrl: effectiveLogoUrl,
             rewardRate,
             qrCodeUrl,
+            shareUrl,
         })
             .then(value => {
                 if (!cancelled) setPosterDataUrl(value);
@@ -204,7 +215,7 @@ export function ReferralPosterModal({
                     )}{' '}
                     {isZh ? '我的邀请码' : 'My invitation code'} {inviteCode}
                 </p>
-                <div className="aspect-[2/3] overflow-hidden rounded-[24px] bg-slate-100 shadow-inner">
+                <div className="aspect-[9/16] overflow-hidden rounded-[24px] bg-slate-100 shadow-inner">
                     {posterDataUrl && !generating ? (
                         <img
                             className="size-full object-cover"
@@ -229,7 +240,7 @@ export function ReferralPosterModal({
                                 type="button"
                                 className={`shrink-0 rounded-xl border px-3 py-2 text-xs font-bold ${
                                     selectedId === item.id
-                                        ? 'border-red-500 bg-red-50 text-red-700'
+                                        ? 'border-blue-500 bg-blue-50 text-blue-700'
                                         : 'border-slate-200 text-slate-600'
                                 }`}
                                 onClick={() => setSelectedId(item.id)}
@@ -242,7 +253,7 @@ export function ReferralPosterModal({
                 <div className="mt-4 grid grid-cols-2 gap-3">
                     <button
                         type="button"
-                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-3 font-bold text-white disabled:opacity-60"
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 font-bold text-white disabled:opacity-60"
                         disabled={generating || !posterDataUrl}
                         onClick={download}
                     >
@@ -272,16 +283,48 @@ function legacyPosterTemplate(style: ReferralPosterStyle, isZh: boolean): Poster
         layoutVariant: 'STANDARD_CENTER',
         posterBackgroundAsset: null,
         shareBackgroundAsset: null,
-        titleZh: '好友邀请函',
-        titleEn: 'Invitation for friends',
-        headlineZh: '好东西，值得和朋友一起分享',
-        headlineEn: 'Good things are better shared',
+        titleZh: 'AI 工具一站式服务',
+        titleEn: 'One-stop AI service',
+        headlineZh: '热门 AI 工具\n一站轻松获取',
+        headlineEn: 'Popular AI tools\nmade easy',
         rewardTextZh: '好友成功消费，可获得 {rewardRate}% 奖励用于消费抵扣',
         rewardTextEn: 'Earn {rewardRate}% in rewards when a friend makes a purchase',
-        siteIntroZh: '',
-        siteIntroEn: '',
+        siteIntroZh: 'ChatGPT、Claude、Gemini、Codex 等\n热门 AI 服务，一个网站轻松了解与选择',
+        siteIntroEn: 'ChatGPT, Claude, Gemini, Codex and more\nExplore practical AI services in one place',
         serviceTextZh: '好物严选 · 便捷消费 · 售后服务',
         serviceTextEn: 'Curated products · Easy shopping · Customer support',
+        featureOneTitleZh: '热门工具汇集',
+        featureOneTitleEn: '精选 AI tools',
+        featureOneTextZh: '多种 AI 工具任你选',
+        featureOneTextEn: 'A curated set of AI tools',
+        featureTwoTitleZh: '便捷开通服务',
+        featureTwoTitleEn: 'Fast activation',
+        featureTwoTextZh: '快速开通 省时省心',
+        featureTwoTextEn: 'Get started in a few clicks',
+        featureThreeTitleZh: '专属售后支持',
+        featureThreeTitleEn: 'Dedicated support',
+        featureThreeTextZh: '专业客服 贴心服务',
+        featureThreeTextEn: 'Friendly help when you need it',
+        qrEyebrowZh: '扫码访问云桥 AI',
+        qrEyebrowEn: 'Scan CloudBridge AI',
+        qrTitleZh: '发现更多实用 AI 服务',
+        qrTitleEn: 'Discover practical AI services',
+        qrDescriptionZh: '满足多种 AI 使用场景',
+        qrDescriptionEn: 'Tools for work, creativity, learning and code',
+        sceneOneZh: '办公提效',
+        sceneOneEn: 'Work',
+        sceneTwoZh: '内容创作',
+        sceneTwoEn: 'Create',
+        sceneThreeZh: '学习辅助',
+        sceneThreeEn: 'Learn',
+        sceneFourZh: '智能编程',
+        sceneFourEn: 'Code',
+        ctaTextZh: '长按识别二维码，立即进入云桥 AI',
+        ctaTextEn: 'Press and hold to enter CloudBridge AI',
+        footerTitleZh: '让好用的 AI，真正为你所用',
+        footerTitleEn: 'AI that works for you',
+        footerTextZh: '热门 AI 工具与数字服务一站式平台',
+        footerTextEn: 'One-stop platform for AI tools and digital services',
         foregroundColor: style.foreground,
         accentColor: style.accent,
         overlayOpacity: style.id === 'BRAND_MINIMAL' || style.id === 'PRODUCT_STORY' ? 0 : 20,
@@ -297,6 +340,7 @@ async function renderReferralPoster({
     logoUrl,
     rewardRate,
     qrCodeUrl,
+    shareUrl,
 }: {
     template: PosterView;
     isZh: boolean;
@@ -305,136 +349,548 @@ async function renderReferralPoster({
     logoUrl: string | null;
     rewardRate: number;
     qrCodeUrl: string;
+    shareUrl: string;
 }): Promise<string> {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
-    canvas.height = 1620;
+    canvas.height = 1920;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas unavailable');
 
     const backgroundUrl = template.posterBackgroundAsset?.source || template.posterBackgroundAsset?.preview;
+    paintMobileCloudBridgeBackground(context, template);
+    drawMobileHeroOrnament(context, accentColorForTemplate(template), template);
     if (backgroundUrl) {
         try {
             const background = await loadImage(backgroundUrl, true);
-            drawImageCover(context, background, 0, 0, canvas.width, canvas.height);
+            context.save();
+            context.globalAlpha = Math.max(0.06, Math.min(0.18, (100 - template.overlayOpacity) / 700));
+            drawImageCover(context, background, 700, 760, 340, 520);
+            context.restore();
         } catch {
-            paintFallbackBackground(context, template);
+            // A custom background is optional; the built-in CloudBridge treatment remains usable.
         }
-    } else {
-        paintFallbackBackground(context, template);
-    }
-    if (template.overlayOpacity > 0) {
-        context.fillStyle = `rgba(3,7,18,${template.overlayOpacity / 100})`;
-        context.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    const foreground = template.foregroundColor;
-    const accent = template.accentColor;
+    const foreground = readableForeground(template.foregroundColor);
+    const accent = /^#[0-9A-F]{6}$/i.test(template.accentColor) ? template.accentColor : '#1269E8';
     const font = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
     context.textBaseline = 'alphabetic';
-    context.fillStyle = accent;
-    context.font = `800 31px ${font}`;
-    context.fillText(localized(template.titleZh, template.titleEn, isZh), 88, 118);
+    const domain = getShareDomain(shareUrl);
+    const brand = localized(template.titleZh, template.titleEn, isZh) || storefrontName;
 
+    // 01. Brand block
+    try {
+        const logo = await loadImage(logoUrl || '/storefront/cloudbridge-logo.png', true);
+        context.save();
+        roundedRect(context, 74, 72, 106, 106, 28);
+        context.clip();
+        context.fillStyle = '#ffffff';
+        context.fill();
+        drawImageContain(context, logo, 86, 84, 82, 82);
+        context.restore();
+    } catch {
+        drawCloudBridgeMark(context, 127, 125, 44, accent);
+    }
     context.fillStyle = foreground;
-    context.font = `900 76px ${font}`;
+    context.font = `900 42px ${font}`;
+    context.fillText(storefrontName.slice(0, 20), 204, 119);
+    context.fillStyle = accent;
+    context.font = `600 24px ${font}`;
+    context.fillText(domain, 206, 154);
+    roundedRect(context, 744, 90, 270, 62, 31);
+    context.strokeStyle = accent;
+    context.lineWidth = 3;
+    context.stroke();
+    context.fillStyle = accent;
+    context.font = `700 23px ${font}`;
+    context.textAlign = 'center';
+    context.fillText(brand || (isZh ? 'AI 工具一站式服务' : 'One-stop AI services'), 879, 130);
+    context.textAlign = 'start';
+
+    // 02. Hero block
+    context.fillStyle = foreground;
+    context.font = `950 86px ${font}`;
     const headlineBottom = drawWrappedText(
         context,
         localized(template.headlineZh, template.headlineEn, isZh),
-        88,
-        220,
-        904,
-        91,
+        74,
+        300,
+        930,
+        102,
         3,
     );
-    context.globalAlpha = 0.92;
-    context.font = `600 30px ${font}`;
-    const rewardBottom = drawWrappedText(
+    context.fillStyle = accent;
+    context.globalAlpha = 0.95;
+    context.font = `700 28px ${font}`;
+    const siteIntro = replacePosterTokens(
+        localized(template.siteIntroZh, template.siteIntroEn, isZh),
+        rewardRate,
+        storefrontName,
+    );
+    drawWrappedText(context, siteIntro, 78, headlineBottom + 66, 900, 42, 3);
+    context.globalAlpha = 1;
+
+    // 03. Three feature cards
+    const features = [
+        [
+            template.featureOneTitleZh,
+            template.featureOneTitleEn,
+            template.featureOneTextZh,
+            template.featureOneTextEn,
+            'grid',
+        ],
+        [
+            template.featureTwoTitleZh,
+            template.featureTwoTitleEn,
+            template.featureTwoTextZh,
+            template.featureTwoTextEn,
+            'bolt',
+        ],
+        [
+            template.featureThreeTitleZh,
+            template.featureThreeTitleEn,
+            template.featureThreeTextZh,
+            template.featureThreeTextEn,
+            'headset',
+        ],
+    ] as const;
+    features.forEach(([titleZh, titleEn, textZh, textEn, icon], index) => {
+        const y = 610 + index * 156;
+        roundedRect(context, 70, y, 940, 132, 28);
+        context.fillStyle = 'rgba(255,255,255,0.9)';
+        context.fill();
+        context.strokeStyle = 'rgba(126, 180, 247, 0.45)';
+        context.lineWidth = 2;
+        context.stroke();
+        drawFeatureIcon(context, icon, 130, y + 66, accent);
+        context.fillStyle = foreground;
+        context.font = `850 32px ${font}`;
+        context.fillText(localized(titleZh, titleEn, isZh), 220, y + 57);
+        context.fillStyle = '#38558a';
+        context.font = `600 24px ${font}`;
+        context.fillText(localized(textZh, textEn, isZh), 220, y + 96);
+    });
+
+    // 04. QR information block
+    roundedRect(context, 70, 1110, 940, 360, 30);
+    context.fillStyle = 'rgba(255,255,255,0.92)';
+    context.fill();
+    context.strokeStyle = 'rgba(126, 180, 247, 0.55)';
+    context.lineWidth = 2;
+    context.stroke();
+    const qrImage = await loadImage(qrCodeUrl);
+    context.drawImage(qrImage, 108, 1150, 270, 270);
+    context.fillStyle = foreground;
+    context.font = `650 24px ${font}`;
+    context.fillText(localized(template.qrEyebrowZh, template.qrEyebrowEn, isZh), 438, 1188);
+    context.fillStyle = accent;
+    context.font = `900 40px ${font}`;
+    const qrTitleBottom = drawWrappedText(
+        context,
+        localized(template.qrTitleZh, template.qrTitleEn, isZh),
+        438,
+        1245,
+        510,
+        48,
+        2,
+    );
+    context.fillStyle = foreground;
+    context.font = `650 24px ${font}`;
+    drawWrappedText(
+        context,
+        localized(template.qrDescriptionZh, template.qrDescriptionEn, isZh),
+        438,
+        qrTitleBottom + 46,
+        510,
+        34,
+        2,
+    );
+    context.fillStyle = '#38558a';
+    context.font = `550 20px ${font}`;
+    drawWrappedText(
         context,
         replacePosterTokens(
             localized(template.rewardTextZh, template.rewardTextEn, isZh),
             rewardRate,
             storefrontName,
         ),
-        88,
-        headlineBottom + 48,
-        904,
-        43,
-        2,
+        438,
+        1338,
+        510,
+        28,
+        1,
     );
-    const siteIntro = replacePosterTokens(
-        localized(template.siteIntroZh, template.siteIntroEn, isZh),
-        rewardRate,
-        storefrontName,
-    );
-    if (siteIntro) {
-        context.globalAlpha = 0.75;
-        context.font = `500 24px ${font}`;
-        drawWrappedText(context, siteIntro, 88, rewardBottom + 30, 904, 36, 2);
-    }
-    context.globalAlpha = 1;
-
-    roundedRect(context, 80, 670, 920, 520, 44);
-    context.fillStyle = 'rgba(255,255,255,0.96)';
-    context.fill();
-    context.fillStyle = '#64748b';
-    context.font = `700 23px ${font}`;
-    context.fillText(isZh ? '扫码注册或输入邀请码' : 'Scan or enter the invitation code', 130, 750);
-    context.font = `500 20px ${font}`;
-    context.fillText(
-        isZh ? '注册时填写，系统会自动绑定邀请关系' : 'Enter it during registration to link the referral',
-        130,
-        792,
-    );
-    const qrImage = await loadImage(qrCodeUrl);
-    context.drawImage(qrImage, 130, 842, 292, 292);
-    context.fillStyle = '#64748b';
-    context.font = `700 21px ${font}`;
-    context.fillText(isZh ? '我的邀请码' : 'MY INVITATION CODE', 490, 896);
-    context.fillStyle = '#0f172a';
-    context.font = '900 48px ui-monospace, SFMono-Regular, Menlo, monospace';
-    context.fillText(inviteCode, 490, 968);
     context.fillStyle = accent;
-    context.font = `800 23px ${font}`;
-    context.fillText(isZh ? '长按识别二维码' : 'Press and hold to scan', 490, 1030);
-
-    const serviceText = localized(template.serviceTextZh, template.serviceTextEn, isZh);
-    if (serviceText) {
-        roundedRect(context, 80, 1378, 920, 92, 24);
-        context.fillStyle = 'rgba(255,255,255,0.14)';
-        context.fill();
-        context.strokeStyle = 'rgba(255,255,255,0.28)';
-        context.lineWidth = 2;
-        context.stroke();
+    context.font = `800 27px ${font}`;
+    context.fillText(domain, 438, 1382);
+    const scenes = [
+        [template.sceneOneZh, template.sceneOneEn],
+        [template.sceneTwoZh, template.sceneTwoEn],
+        [template.sceneThreeZh, template.sceneThreeEn],
+        [template.sceneFourZh, template.sceneFourEn],
+    ] as const;
+    scenes.forEach(([zh, en], index) => {
+        const x = 438 + index * 135;
+        drawSceneIcon(context, x + 28, 1420, index, accent);
         context.fillStyle = foreground;
-        context.globalAlpha = 0.92;
+        context.font = `650 18px ${font}`;
         context.textAlign = 'center';
-        context.font = `700 24px ${font}`;
-        context.fillText(serviceText.slice(0, 52), 540, 1435);
-        context.textAlign = 'start';
-        context.globalAlpha = 1;
-    }
+        context.fillText(localized(zh, en, isZh), x + 28, 1462);
+    });
+    context.textAlign = 'start';
 
-    let brandX = 88;
-    if (logoUrl) {
-        try {
-            const logo = await loadImage(logoUrl, true);
-            context.save();
-            roundedRect(context, 88, 1500, 56, 56, 15);
-            context.clip();
-            drawImageCover(context, logo, 88, 1500, 56, 56);
-            context.restore();
-            brandX = 162;
-        } catch {
-            // The store name still provides a stable brand signature.
+    // 05. CTA and footer
+    roundedRect(context, 70, 1520, 940, 122, 61);
+    const ctaGradient = context.createLinearGradient(70, 1520, 1010, 1642);
+    ctaGradient.addColorStop(0, '#1257d6');
+    ctaGradient.addColorStop(1, '#18b7df');
+    context.fillStyle = ctaGradient;
+    context.fill();
+    context.fillStyle = '#ffffff';
+    context.font = `850 32px ${font}`;
+    context.textAlign = 'center';
+    context.fillText(localized(template.ctaTextZh, template.ctaTextEn, isZh), 540, 1597);
+    context.textAlign = 'start';
+    drawCloudBridgeMark(context, 540, 1740, 42, accent);
+    context.fillStyle = foreground;
+    context.font = `900 34px ${font}`;
+    context.textAlign = 'center';
+    context.fillText(localized(template.footerTitleZh, template.footerTitleEn, isZh), 540, 1810);
+    context.fillStyle = accent;
+    context.font = `700 28px ${font}`;
+    context.fillText(domain, 540, 1858);
+    context.fillStyle = '#38558a';
+    context.font = `600 21px ${font}`;
+    context.fillText(localized(template.footerTextZh, template.footerTextEn, isZh), 540, 1897);
+    context.textAlign = 'start';
+    return canvas.toDataURL('image/png');
+}
+
+function paintMobileCloudBridgeBackground(context: CanvasRenderingContext2D, template: PosterView): void {
+    const palette = mobilePalette(template);
+    const gradient = context.createLinearGradient(0, 0, 1080, 1920);
+    gradient.addColorStop(0, palette.background[0]);
+    gradient.addColorStop(0.48, palette.background[1]);
+    gradient.addColorStop(1, palette.background[2]);
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 1080, 1920);
+    context.globalAlpha = 0.2;
+    context.fillStyle = palette.accent;
+    for (const [x, y, radius] of [
+        [960, 220, 230],
+        [120, 1660, 280],
+        [930, 1820, 220],
+    ] as const) {
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+    }
+    context.globalAlpha = 0.18;
+    context.fillStyle = palette.accent;
+    for (let x = 44; x < 1080; x += 42) {
+        for (let y = 30; y < 1920; y += 42) {
+            context.beginPath();
+            context.arc(x, y, 2, 0, Math.PI * 2);
+            context.fill();
         }
     }
-    context.fillStyle = foreground;
-    context.globalAlpha = 0.9;
-    context.font = `800 25px ${font}`;
-    context.fillText(storefrontName.slice(0, 32), brandX, 1538);
+    drawCornerNetwork(context, 82, 1635, palette.accent, 0.3);
+    drawCornerNetwork(context, 934, 1785, palette.accent, 0.22);
     context.globalAlpha = 1;
-    return canvas.toDataURL('image/png');
+}
+
+function mobilePalette(template: PosterView): {
+    background: [string, string, string];
+    accent: string;
+} {
+    const colors = template.legacyColors;
+    const accent = accentColorForTemplate(template);
+    if (colors?.length === 3 && colors.every(color => /^#[0-9A-F]{6}$/i.test(color))) {
+        return { background: colors, accent };
+    }
+    return { background: ['#eef7ff', '#ffffff', '#eaf4ff'], accent };
+}
+
+function accentColorForTemplate(template: PosterView): string {
+    return /^#[0-9A-F]{6}$/i.test(template.accentColor) ? template.accentColor : '#1269E8';
+}
+
+function drawMobileHeroOrnament(
+    context: CanvasRenderingContext2D,
+    accent: string,
+    template: PosterView,
+): void {
+    const centerX = 875;
+    const centerY = 282;
+    const secondary = template.legacyColors?.[1] ?? '#56b9ef';
+    context.save();
+    context.globalAlpha = 0.22;
+    const glow = context.createRadialGradient(centerX, centerY, 12, centerX, centerY, 244);
+    glow.addColorStop(0, '#ffffff');
+    glow.addColorStop(0.42, secondary);
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(centerX, centerY, 244, 0, Math.PI * 2);
+    context.fill();
+
+    context.globalAlpha = 0.4;
+    context.strokeStyle = accent;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.ellipse(centerX, centerY, 190, 68, -0.28, 0, Math.PI * 2);
+    context.ellipse(centerX, centerY, 154, 102, 0.48, 0, Math.PI * 2);
+    context.stroke();
+
+    context.globalAlpha = 0.58;
+    context.strokeStyle = secondary;
+    context.lineWidth = 12;
+    context.lineCap = 'round';
+    context.beginPath();
+    context.moveTo(centerX - 154, centerY + 74);
+    context.bezierCurveTo(
+        centerX - 62,
+        centerY - 8,
+        centerX + 14,
+        centerY + 120,
+        centerX + 158,
+        centerY + 34,
+    );
+    context.stroke();
+
+    context.globalAlpha = 0.86;
+    context.fillStyle = '#ffffff';
+    context.strokeStyle = accent;
+    context.lineWidth = 5;
+    roundedRect(context, centerX - 48, centerY - 44, 96, 88, 24);
+    context.fill();
+    context.stroke();
+    context.globalAlpha = 0.85;
+    context.strokeStyle = accent;
+    context.lineWidth = 6;
+    context.beginPath();
+    context.moveTo(centerX - 22, centerY + 8);
+    context.lineTo(centerX - 4, centerY - 12);
+    context.lineTo(centerX + 8, centerY + 2);
+    context.lineTo(centerX + 26, centerY - 18);
+    context.moveTo(centerX - 27, centerY + 22);
+    context.lineTo(centerX + 27, centerY + 22);
+    context.stroke();
+
+    for (const [x, y, radius] of [
+        [centerX - 176, centerY + 72, 11],
+        [centerX + 164, centerY + 32, 13],
+        [centerX + 118, centerY - 102, 9],
+    ] as const) {
+        context.globalAlpha = 0.92;
+        context.fillStyle = '#ffffff';
+        context.strokeStyle = accent;
+        context.lineWidth = 4;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+    }
+    context.restore();
+}
+
+function drawCornerNetwork(
+    context: CanvasRenderingContext2D,
+    originX: number,
+    originY: number,
+    color: string,
+    alpha: number,
+): void {
+    context.save();
+    context.globalAlpha = alpha;
+    context.strokeStyle = color;
+    context.lineWidth = 2;
+    context.setLineDash([5, 7]);
+    const points = [
+        [originX, originY],
+        [originX + 108, originY - 52],
+        [originX + 198, originY - 16],
+        [originX + 256, originY - 98],
+        [originX + 320, originY - 42],
+    ] as const;
+    context.beginPath();
+    points.slice(1).forEach(([x, y]) => {
+        context.moveTo(originX, originY);
+        context.lineTo(x, y);
+    });
+    context.stroke();
+    context.setLineDash([]);
+    points.forEach(([x, y], index) => {
+        context.fillStyle = index === 0 ? '#ffffff' : color;
+        context.beginPath();
+        context.arc(x, y, index === 0 ? 8 : 5, 0, Math.PI * 2);
+        context.fill();
+    });
+    context.restore();
+}
+
+function getShareDomain(shareUrl: string): string {
+    try {
+        if (typeof window !== 'undefined' && window.location.host) return window.location.host;
+        return new URL(shareUrl).host || 'damatong.net';
+    } catch {
+        return 'damatong.net';
+    }
+}
+
+function readableForeground(value: string): string {
+    if (!/^#[0-9A-F]{6}$/i.test(value)) return '#0E2A63';
+    const normalized = value.slice(1);
+    const red = Number.parseInt(normalized.slice(0, 2), 16);
+    const green = Number.parseInt(normalized.slice(2, 4), 16);
+    const blue = Number.parseInt(normalized.slice(4, 6), 16);
+    return red + green + blue > 630 ? '#0E2A63' : value;
+}
+
+function drawImageContain(
+    context: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+): void {
+    const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    context.drawImage(
+        image,
+        x + (width - drawWidth) / 2,
+        y + (height - drawHeight) / 2,
+        drawWidth,
+        drawHeight,
+    );
+}
+
+function drawCloudBridgeMark(
+    context: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    size: number,
+    color: string,
+): void {
+    context.save();
+    context.strokeStyle = color;
+    context.fillStyle = 'rgba(255,255,255,0.8)';
+    context.lineWidth = Math.max(4, size / 9);
+    context.lineCap = 'round';
+    context.beginPath();
+    context.arc(centerX - size * 0.22, centerY, size * 0.34, Math.PI * 0.9, Math.PI * 1.92);
+    context.arc(centerX + size * 0.14, centerY - size * 0.1, size * 0.42, Math.PI * 1.04, Math.PI * 1.96);
+    context.arc(centerX + size * 0.4, centerY + size * 0.02, size * 0.25, Math.PI * 1.12, Math.PI * 1.92);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(centerX - size * 0.45, centerY + size * 0.1);
+    context.lineTo(centerX - size * 0.12, centerY + size * 0.1);
+    context.lineTo(centerX - size * 0.12, centerY + size * 0.42);
+    context.moveTo(centerX + size * 0.15, centerY + size * 0.08);
+    context.lineTo(centerX + size * 0.15, centerY + size * 0.42);
+    context.stroke();
+    context.restore();
+}
+
+function drawFeatureIcon(
+    context: CanvasRenderingContext2D,
+    icon: 'grid' | 'bolt' | 'headset',
+    centerX: number,
+    centerY: number,
+    color: string,
+): void {
+    context.save();
+    context.strokeStyle = color;
+    context.fillStyle = color;
+    context.lineWidth = 8;
+    context.lineCap = 'round';
+    if (icon === 'grid') {
+        for (const [x, y] of [
+            [-24, -24],
+            [8, -24],
+            [-24, 8],
+            [8, 8],
+        ] as const) {
+            roundedRect(context, centerX + x, centerY + y, 26, 26, 6);
+            context.fill();
+        }
+    } else if (icon === 'bolt') {
+        context.beginPath();
+        context.moveTo(centerX + 12, centerY - 40);
+        context.lineTo(centerX - 25, centerY + 4);
+        context.lineTo(centerX - 3, centerY + 4);
+        context.lineTo(centerX - 14, centerY + 42);
+        context.lineTo(centerX + 28, centerY - 10);
+        context.lineTo(centerX + 7, centerY - 10);
+        context.closePath();
+        context.fill();
+    } else {
+        context.beginPath();
+        context.arc(centerX, centerY + 2, 33, Math.PI, Math.PI * 2);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(centerX - 33, centerY + 2);
+        context.lineTo(centerX - 33, centerY + 25);
+        context.lineTo(centerX - 18, centerY + 25);
+        context.moveTo(centerX + 33, centerY + 2);
+        context.lineTo(centerX + 33, centerY + 25);
+        context.lineTo(centerX + 18, centerY + 25);
+        context.stroke();
+        context.beginPath();
+        context.arc(centerX + 8, centerY + 34, 6, 0, Math.PI * 2);
+        context.fill();
+    }
+    context.restore();
+}
+
+function drawSceneIcon(
+    context: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    index: number,
+    color: string,
+): void {
+    context.save();
+    context.strokeStyle = color;
+    context.lineWidth = 5;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    if (index === 0) {
+        context.rect(centerX - 16, centerY - 18, 32, 36);
+        context.moveTo(centerX - 9, centerY - 10);
+        context.lineTo(centerX + 9, centerY - 10);
+        context.moveTo(centerX - 9, centerY);
+        context.lineTo(centerX + 9, centerY);
+    } else if (index === 1) {
+        context.moveTo(centerX - 18, centerY + 14);
+        context.lineTo(centerX + 18, centerY - 18);
+        context.moveTo(centerX - 12, centerY - 17);
+        context.lineTo(centerX - 20, centerY - 17);
+        context.lineTo(centerX - 20, centerY - 9);
+        context.moveTo(centerX + 12, centerY + 8);
+        context.lineTo(centerX + 20, centerY + 8);
+        context.lineTo(centerX + 20, centerY);
+    } else if (index === 2) {
+        context.moveTo(centerX - 20, centerY - 15);
+        context.lineTo(centerX + 20, centerY - 15);
+        context.lineTo(centerX + 20, centerY + 15);
+        context.lineTo(centerX - 20, centerY + 15);
+        context.closePath();
+        context.moveTo(centerX - 12, centerY - 24);
+        context.lineTo(centerX + 12, centerY - 24);
+    } else {
+        context.moveTo(centerX - 18, centerY - 8);
+        context.lineTo(centerX - 5, centerY + 4);
+        context.lineTo(centerX + 18, centerY - 20);
+        context.moveTo(centerX - 18, centerY + 20);
+        context.lineTo(centerX + 18, centerY + 20);
+    }
+    context.stroke();
+    context.restore();
 }
 
 function paintFallbackBackground(context: CanvasRenderingContext2D, template: PosterView): void {
@@ -496,22 +952,25 @@ function drawWrappedText(
     lineHeight: number,
     maxLines: number,
 ): number {
-    const units = /\s/.test(text) ? text.split(/(\s+)/).filter(Boolean) : Array.from(text);
     const lines: string[] = [];
-    let line = '';
-    for (const unit of units) {
-        const candidate = line + unit;
-        if (line && context.measureText(candidate).width > maxWidth) {
-            lines.push(line.trimEnd());
-            line = unit.trimStart();
-            if (lines.length === maxLines) break;
-        } else {
-            line = candidate;
+    for (const paragraph of text.split(/\r?\n/)) {
+        if (lines.length >= maxLines) break;
+        const units = /\s/.test(paragraph) ? paragraph.split(/(\s+)/).filter(Boolean) : Array.from(paragraph);
+        let line = '';
+        for (const unit of units) {
+            const candidate = line + unit;
+            if (line && context.measureText(candidate).width > maxWidth) {
+                lines.push(line.trimEnd());
+                line = unit.trimStart();
+                if (lines.length === maxLines) break;
+            } else {
+                line = candidate;
+            }
         }
+        if (lines.length < maxLines && line) lines.push(line.trim());
     }
-    if (lines.length < maxLines && line) lines.push(line.trim());
     lines.slice(0, maxLines).forEach((value, index) => context.fillText(value, x, y + index * lineHeight));
-    return y + (Math.min(lines.length, maxLines) - 1) * lineHeight;
+    return lines.length ? y + (Math.min(lines.length, maxLines) - 1) * lineHeight : y;
 }
 
 function localized(zh: string, en: string, isZh: boolean): string {

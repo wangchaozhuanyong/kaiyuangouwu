@@ -192,6 +192,38 @@ const commonTypes = gql`
         siteIntroEn: String!
         serviceTextZh: String!
         serviceTextEn: String!
+        featureOneTitleZh: String!
+        featureOneTitleEn: String!
+        featureOneTextZh: String!
+        featureOneTextEn: String!
+        featureTwoTitleZh: String!
+        featureTwoTitleEn: String!
+        featureTwoTextZh: String!
+        featureTwoTextEn: String!
+        featureThreeTitleZh: String!
+        featureThreeTitleEn: String!
+        featureThreeTextZh: String!
+        featureThreeTextEn: String!
+        qrEyebrowZh: String!
+        qrEyebrowEn: String!
+        qrTitleZh: String!
+        qrTitleEn: String!
+        qrDescriptionZh: String!
+        qrDescriptionEn: String!
+        sceneOneZh: String!
+        sceneOneEn: String!
+        sceneTwoZh: String!
+        sceneTwoEn: String!
+        sceneThreeZh: String!
+        sceneThreeEn: String!
+        sceneFourZh: String!
+        sceneFourEn: String!
+        ctaTextZh: String!
+        ctaTextEn: String!
+        footerTitleZh: String!
+        footerTitleEn: String!
+        footerTextZh: String!
+        footerTextEn: String!
         foregroundColor: String!
         accentColor: String!
         overlayOpacity: Int!
@@ -648,6 +680,38 @@ export const adminApiExtensions = gql`
         siteIntroEn: String!
         serviceTextZh: String!
         serviceTextEn: String!
+        featureOneTitleZh: String
+        featureOneTitleEn: String
+        featureOneTextZh: String
+        featureOneTextEn: String
+        featureTwoTitleZh: String
+        featureTwoTitleEn: String
+        featureTwoTextZh: String
+        featureTwoTextEn: String
+        featureThreeTitleZh: String
+        featureThreeTitleEn: String
+        featureThreeTextZh: String
+        featureThreeTextEn: String
+        qrEyebrowZh: String
+        qrEyebrowEn: String
+        qrTitleZh: String
+        qrTitleEn: String
+        qrDescriptionZh: String
+        qrDescriptionEn: String
+        sceneOneZh: String
+        sceneOneEn: String
+        sceneTwoZh: String
+        sceneTwoEn: String
+        sceneThreeZh: String
+        sceneThreeEn: String
+        sceneFourZh: String
+        sceneFourEn: String
+        ctaTextZh: String
+        ctaTextEn: String
+        footerTitleZh: String
+        footerTitleEn: String
+        footerTextZh: String
+        footerTextEn: String
         foregroundColor: String!
         accentColor: String!
         overlayOpacity: Int!
@@ -671,6 +735,38 @@ export const adminApiExtensions = gql`
         siteIntroEn: String!
         serviceTextZh: String!
         serviceTextEn: String!
+        featureOneTitleZh: String
+        featureOneTitleEn: String
+        featureOneTextZh: String
+        featureOneTextEn: String
+        featureTwoTitleZh: String
+        featureTwoTitleEn: String
+        featureTwoTextZh: String
+        featureTwoTextEn: String
+        featureThreeTitleZh: String
+        featureThreeTitleEn: String
+        featureThreeTextZh: String
+        featureThreeTextEn: String
+        qrEyebrowZh: String
+        qrEyebrowEn: String
+        qrTitleZh: String
+        qrTitleEn: String
+        qrDescriptionZh: String
+        qrDescriptionEn: String
+        sceneOneZh: String
+        sceneOneEn: String
+        sceneTwoZh: String
+        sceneTwoEn: String
+        sceneThreeZh: String
+        sceneThreeEn: String
+        sceneFourZh: String
+        sceneFourEn: String
+        ctaTextZh: String
+        ctaTextEn: String
+        footerTitleZh: String
+        footerTitleEn: String
+        footerTextZh: String
+        footerTextEn: String
         foregroundColor: String!
         accentColor: String!
         overlayOpacity: Int!

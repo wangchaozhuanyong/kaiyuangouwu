@@ -1252,6 +1252,38 @@ export class ShopApi {
                             siteIntroEn
                             serviceTextZh
                             serviceTextEn
+                            featureOneTitleZh
+                            featureOneTitleEn
+                            featureOneTextZh
+                            featureOneTextEn
+                            featureTwoTitleZh
+                            featureTwoTitleEn
+                            featureTwoTextZh
+                            featureTwoTextEn
+                            featureThreeTitleZh
+                            featureThreeTitleEn
+                            featureThreeTextZh
+                            featureThreeTextEn
+                            qrEyebrowZh
+                            qrEyebrowEn
+                            qrTitleZh
+                            qrTitleEn
+                            qrDescriptionZh
+                            qrDescriptionEn
+                            sceneOneZh
+                            sceneOneEn
+                            sceneTwoZh
+                            sceneTwoEn
+                            sceneThreeZh
+                            sceneThreeEn
+                            sceneFourZh
+                            sceneFourEn
+                            ctaTextZh
+                            ctaTextEn
+                            footerTitleZh
+                            footerTitleEn
+                            footerTextZh
+                            footerTextEn
                             foregroundColor
                             accentColor
                             overlayOpacity
