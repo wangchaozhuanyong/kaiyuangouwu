@@ -4,20 +4,39 @@ import { describe, expect, it } from 'vitest';
 const pageSource = readFileSync(new URL('./pages/ai-image-studio-page.tsx', import.meta.url), 'utf8');
 const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
-describe('AI Image Studio terms consent', () => {
-    it('requires explicit consent before reference uploads and generation', () => {
-        expect(pageSource).toContain('const [termsAccepted, setTermsAccepted] = useState(false)');
+describe('AI Image Studio compact generation flow', () => {
+    it('starts with consent enabled and creates text-only generations', () => {
+        expect(pageSource).toContain('const [termsAccepted, setTermsAccepted] = useState(true)');
         expect(pageSource).toContain('termsAccepted &&');
-        expect(pageSource).toContain('disabled={!termsAccepted || Boolean(busy)}');
         expect(pageSource).toContain('termsAccepted,');
-        expect(pageSource).not.toContain('termsAccepted: true');
+        expect(pageSource).toContain('referenceAssetId: null');
+        expect(pageSource).toContain("referenceMode: 'NONE'");
+        expect(pageSource).not.toContain('type="file"');
     });
 
-    it('renders the configured terms and a visible disabled upload state', () => {
+    it('opens configured terms from the compact consent row', () => {
         expect(pageSource).toContain('config.termsVersion');
         expect(pageSource).toContain('config.termsZh');
         expect(pageSource).toContain('config.termsEn');
-        expect(stylesheet).toContain('.ai-studio-reference > label.is-disabled');
-        expect(stylesheet).toContain('.ai-studio-checkout details p');
+        expect(pageSource).toContain('setTermsInfoOpen(true)');
+        expect(stylesheet).toContain('.ai-studio-terms-row');
+        expect(stylesheet).toContain('.ai-studio-info-sheet');
+    });
+
+    it('uses bottom sheets for settings and keeps generation fixed to the viewport', () => {
+        expect(pageSource).toContain("setActiveSetting('ASPECT_RATIO')");
+        expect(pageSource).toContain("setActiveSetting('QUANTITY')");
+        expect(pageSource).toContain("setActiveSetting('RESOLUTION')");
+        expect(pageSource).toContain('className="ai-studio-bottom-sheet"');
+        expect(stylesheet).toContain('.ai-studio-fixed-generate');
+        expect(stylesheet).toContain('position: fixed');
+    });
+
+    it('renders filterable compact history with an information sheet', () => {
+        expect(pageSource).toContain("type HistoryFilter = 'ALL' | 'SUCCESS' | 'PROCESSING' | 'FAILED'");
+        expect(pageSource).toContain('setHistoryInfoOpen(true)');
+        expect(pageSource).toContain('setSelectedJobId(job.id)');
+        expect(stylesheet).toContain('.ai-studio-history-filters');
+        expect(stylesheet).toContain('.ai-generation-card-preview');
     });
 });

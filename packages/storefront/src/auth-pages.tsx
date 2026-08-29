@@ -6,10 +6,13 @@ import {
     Eye,
     EyeOff,
     Fingerprint,
-    Gift,
+    Headphones,
     LockKeyhole,
     Mail,
-    UserRound,
+    ShieldCheck,
+    ShoppingBag,
+    Sparkles,
+    Zap,
 } from 'lucide-react';
 import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
@@ -277,32 +280,34 @@ export function LoginPage({
             heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
-            <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
-            <p>{isZh ? '登录后查看订单、地址与售后进度' : 'Sign in to view orders, addresses and support'}</p>
-            <form onSubmit={event => void submit(event)}>
+            <header className={`auth-form-heading auth-form-heading-${language}`}>
+                <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
+                <p>{isZh ? '查看订单与售后进度' : 'View orders and support status'}</p>
+            </header>
+            <form aria-label={isZh ? '登录表单' : 'Sign-in form'} onSubmit={event => void submit(event)}>
                 <Field
                     name="emailAddress"
                     label={isZh ? '电子邮箱' : 'Email address'}
                     type="email"
                     autoComplete="email"
-                    icon={<Mail />}
                 />
                 <Field
                     name="password"
                     label={isZh ? '密码' : 'Password'}
                     type="password"
                     autoComplete="current-password"
-                    icon={<LockKeyhole />}
                     revealPassword
                     language={language}
+                    labelAction={
+                        <button
+                            className="auth-inline-link"
+                            type="button"
+                            onClick={() => navigateTo({ name: 'forgot-password' })}
+                        >
+                            {isZh ? '忘记密码？' : 'Forgot password?'}
+                        </button>
+                    }
                 />
-                <button
-                    className="auth-inline-link"
-                    type="button"
-                    onClick={() => navigateTo({ name: 'forgot-password' })}
-                >
-                    {isZh ? '忘记密码？' : 'Forgot password?'}
-                </button>
                 {error && (
                     <small className="form-error" role="alert">
                         {error}
@@ -509,25 +514,20 @@ export function RegisterPage({
                 </AuthResult>
             ) : (
                 <>
-                    <h1>{isZh ? '注册' : 'Create your account'}</h1>
-                    <p>
-                        {isZh
-                            ? '验证邮箱后即可完成注册'
-                            : 'Verify your email to finish creating your account'}
-                    </p>
-                    <form onSubmit={event => void submit(event)}>
-                        <Field
-                            name="fullName"
-                            label={isZh ? '姓名' : 'Full name'}
-                            autoComplete="name"
-                            icon={<UserRound />}
-                        />
+                    <header className={`auth-form-heading auth-form-heading-${language}`}>
+                        <h1>{isZh ? '创建账户' : 'Create your account'}</h1>
+                        <p>{isZh ? '验证邮箱后完成注册' : 'Verify email to finish registration'}</p>
+                    </header>
+                    <form
+                        aria-label={isZh ? '注册表单' : 'Registration form'}
+                        onSubmit={event => void submit(event)}
+                    >
+                        <Field name="fullName" label={isZh ? '姓名' : 'Full name'} autoComplete="name" />
                         <Field
                             name="emailAddress"
                             label={isZh ? '电子邮箱' : 'Email address'}
                             type="email"
                             autoComplete="email"
-                            icon={<Mail />}
                         />
                         <Field
                             name="password"
@@ -536,10 +536,24 @@ export function RegisterPage({
                             autoComplete="new-password"
                             minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
                             maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
-                            icon={<LockKeyhole />}
                             revealPassword
                             language={language}
                         />
+                        <Field
+                            name="confirmPassword"
+                            label={isZh ? '确认密码' : 'Confirm password'}
+                            type="password"
+                            autoComplete="new-password"
+                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
+                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
+                            revealPassword
+                            language={language}
+                        />
+                        <small className="auth-password-hint">
+                            {isZh
+                                ? `密码需为 ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} 个字符`
+                                : `Use ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} characters`}
+                        </small>
                         {referralEnabled && (
                             <>
                                 <Field
@@ -547,7 +561,6 @@ export function RegisterPage({
                                     label={isZh ? '邀请码（选填）' : 'Invitation code (optional)'}
                                     autoComplete="off"
                                     maxLength={12}
-                                    icon={<Gift />}
                                     required={false}
                                     value={inviteCode}
                                     onChange={value => {
@@ -590,17 +603,6 @@ export function RegisterPage({
                                 )}
                             </>
                         )}
-                        <Field
-                            name="confirmPassword"
-                            label={isZh ? '确认密码' : 'Confirm password'}
-                            type="password"
-                            autoComplete="new-password"
-                            minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
-                            maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
-                            icon={<LockKeyhole />}
-                            revealPassword
-                            language={language}
-                        />
                         {error && (
                             <small className="form-error" role="alert">
                                 {error}
@@ -1077,16 +1079,6 @@ function AuthLayout({
                     decoding="async"
                     fetchPriority="high"
                 />
-                <header className="auth-hero-header">
-                    <button
-                        className="auth-back-button"
-                        type="button"
-                        onClick={onBack}
-                        aria-label={language === 'zh' ? '返回' : 'Back'}
-                    >
-                        <ArrowLeft aria-hidden="true" />
-                    </button>
-                </header>
                 <div className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}`}>
                     <div className="auth-hero-kicker">
                         <div className="auth-brand-lockup">
@@ -1118,17 +1110,61 @@ function AuthLayout({
                                 <h2>{heroMessage.title}</h2>
                                 <p>{heroMessage.description}</p>
                             </div>
-                            <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
-                                {heroMessage.tags.map(tag => (
-                                    <span key={tag}>{tag}</span>
-                                ))}
+                            <div className="auth-hero-footer">
+                                <div
+                                    className={`auth-hero-benefits auth-hero-benefits-${heroVariant}`}
+                                    aria-label={heroMessage.tags.join('、')}
+                                >
+                                    {heroMessage.benefits.map((benefit, index) => {
+                                        const Icon =
+                                            heroVariant === 'register'
+                                                ? ([ShieldCheck, Zap, Headphones][index] ?? ShieldCheck)
+                                                : ([Sparkles, ShoppingBag, Headphones][index] ?? Sparkles);
+                                        return (
+                                            <div className="auth-hero-benefit" key={benefit.title}>
+                                                <span className="auth-hero-benefit-icon">
+                                                    <Icon aria-hidden="true" />
+                                                </span>
+                                                <span className="auth-hero-benefit-copy">
+                                                    <strong>{benefit.title}</strong>
+                                                    <small>{benefit.description}</small>
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {heroMessage.serviceTypes.length ? (
+                                    <div className="auth-hero-services">
+                                        <span className="auth-hero-services-label">
+                                            {language === 'zh' ? '支持服务类型' : 'Services available'}
+                                        </span>
+                                        <div className="auth-hero-service-list">
+                                            {heroMessage.serviceTypes.map(serviceType => (
+                                                <span key={serviceType}>{serviceType}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : null}
                             </div>
                         </>
                     )}
                 </div>
             </section>
             <section className="login-content">
-                <div className="auth-card-content">{children}</div>
+                <div className="auth-form-column">
+                    <div className="auth-back-row">
+                        <button
+                            className="auth-back-button"
+                            type="button"
+                            onClick={onBack}
+                            aria-label={language === 'zh' ? '返回' : 'Back'}
+                        >
+                            <ArrowLeft aria-hidden="true" />
+                            <span>{language === 'zh' ? '返回' : 'Back'}</span>
+                        </button>
+                    </div>
+                    <div className="auth-card-content">{children}</div>
+                </div>
             </section>
         </main>
     );
@@ -1142,6 +1178,7 @@ function Field({
     minLength,
     maxLength,
     icon,
+    labelAction,
     revealPassword = false,
     language = 'en',
     wide = true,
@@ -1157,6 +1194,7 @@ function Field({
     minLength?: number;
     maxLength?: number;
     icon?: ReactNode;
+    labelAction?: ReactNode;
     revealPassword?: boolean;
     language?: StorefrontLanguage;
     wide?: boolean;
@@ -1194,9 +1232,12 @@ function Field({
 
     return (
         <div className={`auth-field${wide ? ' field-wide' : ''}`}>
-            <label className="visually-hidden" htmlFor={inputId}>
-                {label}
-            </label>
+            <div className="auth-field-label-row">
+                <label className="auth-field-label" htmlFor={inputId}>
+                    {label}
+                </label>
+                {labelAction}
+            </div>
             <div className={`auth-input-shell${hasPasswordToggle ? ' auth-password-input' : ''}`}>
                 {icon && (
                     <span className="auth-field-icon" aria-hidden="true">
@@ -1247,7 +1288,8 @@ function SubmitButton({
             aria-busy={submitting}
             onClick={onClick}
         >
-            {submitting ? busy : idle}
+            {submitting && <span className="auth-button-spinner" aria-hidden="true" />}
+            <span>{submitting ? busy : idle}</span>
         </button>
     );
 }

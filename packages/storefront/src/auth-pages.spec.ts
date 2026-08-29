@@ -137,7 +137,16 @@ describe('auth password visibility controls', () => {
 
         expect(markup).toContain('auth-login-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-register-ai-campaign-v2');
-        expect(markup).toContain('登录你的 AI 新世界');
+        expect(markup).toContain('你的 AI 工具，一处购买与管理');
+        expect(markup).toContain('购买记录与状态清晰可查');
+        expect(markup).toContain('支持服务类型');
+        expect(markup).toContain('人工服务');
+        expect(markup).toContain('class="auth-form-heading auth-form-heading-zh"');
+        expect(markup).not.toContain('账户登录');
+        expect(markup).toContain('auth-back-row');
+        expect(markup).toContain('>返回</span>');
+        expect(markup).toContain('aria-label="登录表单"');
+        expect(markup).toMatch(/<label class="auth-field-label"[^>]*>电子邮箱<\/label>/);
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(1);
         expect(markup).toMatch(/type="password"[^>]*name="password"/);
     });
@@ -147,8 +156,14 @@ describe('auth password visibility controls', () => {
 
         expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-login-ai-campaign-v2');
-        expect(markup).toContain('创建专属 AI 效率中心');
+        expect(markup).toContain('创建达码通账号');
+        expect(markup).toContain('验证邮箱即可开始使用');
+        expect(markup).toContain('订单与售后状态清晰可查');
+        expect(markup).not.toContain('新账户');
+        expect(markup).toContain('auth-back-row');
         expect(markup).toContain('智联云端 · 桥接未来');
+        expect(markup).toContain('aria-label="注册表单"');
+        expect(markup).toContain('密码需为 8–72 个字符');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
         expect(markup).toMatch(/name="fullName"/);
         expect(markup).not.toMatch(/name="firstName"|name="lastName"/);
