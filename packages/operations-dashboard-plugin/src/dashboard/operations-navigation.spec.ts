@@ -56,12 +56,22 @@ const systemItemIds = [
     'system-announcements',
 ];
 
+const storefrontDesignItemIds = [
+    'storefront-content',
+    'storefront-carousel',
+    'storefront-site-content',
+    'storefront-navigation',
+    'auth-visuals',
+    'storefront-client-plugins',
+    'storefront-promotion',
+];
+
 function createConfig(): NavMenuConfig {
     return {
         sections: [
             { ...navItem('insights'), placement: 'top' },
             navSection('catalog', ['products'], 'top'),
-            navSection('marketing', ['promotions', 'storefront-content'], 'top'),
+            navSection('marketing', ['promotions', ...storefrontDesignItemIds], 'top'),
             navSection('settings', settingsItemIds, 'bottom'),
             navSection('system', systemItemIds, 'bottom'),
         ],
@@ -115,8 +125,19 @@ describe('organizeOperationsNavigation', () => {
 
         expect(sectionItems(result, 'catalog')).toEqual(['products', 'stock-locations', 'shipping-methods']);
         expect(sectionItems(result, 'system-operations')).toContain('future-system-tool');
-        expect(result.sections).toContainEqual(
-            expect.objectContaining({ id: 'storefront-content', placement: 'top' }),
+        expect(sectionItems(result, 'storefront-design')).toEqual(storefrontDesignItemIds);
+        expect(sectionItems(result, 'marketing')).toEqual(['promotions']);
+        expect(result.sections.some(section => section.id === 'storefront-content')).toBe(false);
+    });
+
+    it('does not duplicate generated sections when navigation is rebuilt', () => {
+        const first = organizeOperationsNavigation(createConfig(), navigationTitles);
+        const second = organizeOperationsNavigation(first, navigationTitles);
+
+        expect(second.sections.map(section => section.id)).toEqual(first.sections.map(section => section.id));
+        expect(sectionItems(second, 'storefront-design')).toEqual(storefrontDesignItemIds);
+        expect(sectionItems(second, 'store-and-merchants')).toEqual(
+            sectionItems(first, 'store-and-merchants'),
         );
     });
 });

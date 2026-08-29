@@ -23,7 +23,18 @@ export interface OperationsNavigationTitles {
     storefrontDesign: string;
 }
 
-const relocatedItemIds = new Set(['stock-locations', 'shipping-methods', 'storefront-content']);
+const storefrontDesignSectionId = 'storefront-design';
+const storefrontDesignItemIds = [
+    'storefront-content',
+    'storefront-carousel',
+    'storefront-site-content',
+    'storefront-navigation',
+    'auth-visuals',
+    'storefront-client-plugins',
+    'storefront-promotion',
+] as const;
+
+const relocatedItemIds = new Set(['stock-locations', 'shipping-methods', ...storefrontDesignItemIds]);
 
 const settingsGroups = [
     {
@@ -85,6 +96,7 @@ const settingsGroups = [
 ] as const;
 
 const groupedItemIds = new Set<string>(settingsGroups.flatMap(group => group.itemIds));
+const settingsGroupIds = new Set<string>(settingsGroups.map(group => group.id));
 
 function isSection(item: NavMenuItem | NavMenuSection): item is NavMenuSection {
     return 'items' in item;
@@ -105,7 +117,7 @@ function updateItemTitle(item: NavMenuItem, titles: OperationsNavigationTitles):
 }
 
 function allItems(config: NavMenuConfig): NavMenuItem[] {
-    return config.sections.flatMap(section => (isSection(section) ? (section.items ?? []) : []));
+    return config.sections.flatMap(section => (isSection(section) ? (section.items ?? []) : [section]));
 }
 
 function takeItems(
@@ -126,7 +138,11 @@ function withSectionOrder(items: NavMenuItem[]): NavMenuItem[] {
 
 function ungroupedSettingsItems(config: NavMenuConfig, titles: OperationsNavigationTitles): NavMenuItem[] {
     return config.sections
-        .filter(section => (section.id === 'settings' || section.id === 'system') && isSection(section))
+        .filter(
+            section =>
+                (section.id === 'settings' || section.id === 'system' || settingsGroupIds.has(section.id)) &&
+                isSection(section),
+        )
         .flatMap(section => (isSection(section) ? (section.items ?? []) : []))
         .filter(item => !groupedItemIds.has(item.id) && !relocatedItemIds.has(item.id))
         .map(item => updateItemTitle(item, titles));
@@ -144,11 +160,17 @@ export function organizeOperationsNavigation(
         marketing: titles.marketingCenter,
     };
     const stockAndShippingItems = takeItems(config, ['stock-locations', 'shipping-methods'], titles);
-    const storefrontContentItem = takeItems(config, ['storefront-content'], titles)[0];
+    const storefrontDesignItems = withSectionOrder(takeItems(config, storefrontDesignItemIds, titles));
     const sections: Array<NavMenuItem | NavMenuSection> = [];
 
     for (const section of config.sections) {
-        if (section.id === 'settings' || section.id === 'system') {
+        if (
+            section.id === 'settings' ||
+            section.id === 'system' ||
+            section.id === storefrontDesignSectionId ||
+            settingsGroupIds.has(section.id) ||
+            relocatedItemIds.has(section.id)
+        ) {
             continue;
         }
         const title = titleBySectionId[section.id];
@@ -166,13 +188,14 @@ export function organizeOperationsNavigation(
         });
     }
 
-    if (storefrontContentItem) {
+    if (storefrontDesignItems.length) {
         sections.push({
-            ...storefrontContentItem,
+            id: storefrontDesignSectionId,
             title: titles.storefrontDesign,
             icon: PanelsTopLeft,
             order: 900,
             placement: 'top',
+            items: storefrontDesignItems,
         });
     }
 

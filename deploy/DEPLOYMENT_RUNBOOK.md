@@ -58,6 +58,7 @@ bun install --frozen-lockfile --linker=hoisted
 bun run lint:check
 bun run build
 bun run test
+bun run --cwd packages/operations-dashboard-plugin test
 READINESS_PROCESS_ROLE=server bun run --cwd packages/dev-server audit:production-env
 READINESS_PROCESS_ROLE=worker bun run --cwd packages/dev-server audit:production-env
 RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 READINESS_PROCESS_ROLE=migration \
@@ -293,7 +294,7 @@ sudo -n systemctl reload nginx
 ## 标准发布流程
 
 1. 确认本地只包含本次发布代码；设计验收截图、测试报告和其他未跟踪资料不进入发布提交。
-2. 从目标提交创建隔离的干净工作树，运行测试和生产构建。
+2. 从目标提交创建隔离的干净工作树，运行测试和生产构建；必须显式执行 `@vendure/operations-dashboard-plugin` 菜单回归测试，禁止仅依赖根命令的工作区自动发现。
 3. 将目标提交推送到 `origin/main`，记录完整 Git SHA。
 4. 对该 SHA 手动运行 `Production Runtime Artifact` 工作流；成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成第 5 至 12 步。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
 5. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。

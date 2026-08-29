@@ -156,6 +156,7 @@ jobs:
             - name: Run release checks
               run: |
                   bun run test
+                  bun run --cwd packages/operations-dashboard-plugin test
                   bun run --cwd packages/dev-server test:dev-workflow
                   bun run check-imports
                   bun run check-core-type-defs

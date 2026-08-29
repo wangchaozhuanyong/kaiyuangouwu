@@ -6,7 +6,8 @@
     "types": "./dist/index.d.ts",
     "scripts": {
         "build": "tsc --project tsconfig.build.json",
-        "check-types": "tsc --project tsconfig.json --noEmit"
+        "check-types": "tsc --project tsconfig.json --noEmit",
+        "test": "vitest run"
     },
     "dependencies": {
         "@lingui/core": "^5.9.3",
