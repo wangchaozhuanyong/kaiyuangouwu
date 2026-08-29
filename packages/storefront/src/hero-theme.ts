@@ -1,4 +1,3 @@
-import type { StorefrontContentBlock } from './types';
 import type { CSSProperties } from 'react';
 import type { StorefrontContentBlock } from './types';
 

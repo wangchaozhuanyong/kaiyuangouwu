@@ -6,7 +6,6 @@ export { ReferralRelationship } from './entities/referral-relationship.entity.js
 export { ReferralReward } from './entities/referral-reward.entity.js';
 export { ReferralWalletUsage } from './entities/referral-wallet-usage.entity.js';
 export { ReferralWallet } from './entities/referral-wallet.entity.js';
-export { ReferralWalletUsage } from './entities/referral-wallet-usage.entity.js';
 export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
@@ -38,14 +37,8 @@ export {
     referralPermission,
 } from './referral/referral.constants.js';
 export { ReferralService } from './referral/referral.service.js';
-export {
-    ReferralWalletSpendService,
-    type ReserveReferralWalletInput,
-    type SettleReferralWalletInput,
-} from './referral/referral-wallet-spend.service.js';
 export { StoreActivationReadinessService } from './store-activation-readiness.service.js';
 export { StoreCommerceSettingsService } from './store-commerce-settings.service.js';
-export { StoreDefaultCurrencyPriceSelectionStrategy } from './store-currency-price-selection-strategy.js';
 export {
     StoreDefaultCurrencyPriceSelectionStrategy,
     convertChannelAmount,

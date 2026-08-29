@@ -1,3 +1,4 @@
+import { productAvailability } from './product-availability';
 import {
     ActiveCustomer,
     AfterSalesRequest,
@@ -48,7 +49,6 @@ import {
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
-import { productAvailability } from './product-availability';
 
 const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';

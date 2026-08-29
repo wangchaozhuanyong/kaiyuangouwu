@@ -13,8 +13,8 @@ export function productAvailability(variant?: ProductVariant | null): ProductAva
         variant.customFields.fulfillmentType === 'digital' &&
         variant.customFields.digitalDeliveryMode === 'auto_card';
     if (autoCard) {
-        const stock = normalizeStock(variant.autoCardAvailableStock, 0);
-        return { stock, soldOut: stock < 1, unlimited: false };
+        const autoCardStock = normalizeStock(variant.autoCardAvailableStock, 0);
+        return { stock: autoCardStock, soldOut: autoCardStock < 1, unlimited: false };
     }
 
     if (variant.saleableStockLevel == null) {

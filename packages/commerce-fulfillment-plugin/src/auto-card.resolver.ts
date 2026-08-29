@@ -127,8 +127,8 @@ export class AutoCardProductVariantResolver {
             variant.customFields.fulfillmentType === 'digital' &&
             variant.customFields.digitalDeliveryMode === 'auto_card';
         if (isAutoCard) {
-            const stockLevel = await this.autoCardService.availableStockForVariant(ctx, variant.id);
-            return normalizePublicSaleableStockLevel(stockLevel ?? 0);
+            const autoCardStockLevel = await this.autoCardService.availableStockForVariant(ctx, variant.id);
+            return normalizePublicSaleableStockLevel(autoCardStockLevel ?? 0);
         }
         const stockLevel = await this.productVariantService.getSaleableStockLevel(ctx, variant);
         return normalizePublicSaleableStockLevel(stockLevel);

@@ -28,8 +28,7 @@ export function BrowsingHistoryPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { api, productIds, market, locale, language, onClear } =
-        useStorefront<BrowsingHistoryPageProps>();
+    const { api, productIds, market, locale, language, onClear } = useStorefront<BrowsingHistoryPageProps>();
     const isZh = language === 'zh';
     const historyQuery = useProductsByIdsQuery({ api, productIds, market, language });
     const historyProducts = productIds.length ? (historyQuery.data ?? []) : [];

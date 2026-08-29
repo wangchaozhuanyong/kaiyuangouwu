@@ -30,6 +30,7 @@ import {
     MarketConfig,
     StorefrontLanguage,
 } from '../types';
+
 import { customerImageResolutions, imageResolutionAvailability } from './ai-image-studio-resolution';
 
 interface AiImageStudioPageProps {
