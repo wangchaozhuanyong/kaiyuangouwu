@@ -323,6 +323,11 @@ describe('AI image generation full flow', () => {
         });
         await adminClient.asSuperAdmin();
 
+        expect((await adminClient.query(PROVIDER_CONFIGS)).imageProviderAdminConfigs).toEqual([
+            { scope: 'OPENAI', apiKeyLast4: '', providerHealthStatus: 'UNCONFIGURED' },
+            { scope: 'GEMINI', apiKeyLast4: '', providerHealthStatus: 'UNCONFIGURED' },
+        ]);
+
         const credential = await adminClient.query(SAVE_CREDENTIAL, {
             input: {
                 scope: 'OPENAI',
