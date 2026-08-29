@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { providerScopeForModel } from './image-generation-config.service';
+import { modelReady, providerScopeForModel } from './image-generation-config.service';
 
 describe('providerScopeForModel', () => {
     it('routes native Gemini models to the Gemini credential', () => {
@@ -17,5 +17,22 @@ describe('providerScopeForModel', () => {
     it('routes OpenAI image models to the OpenAI credential', () => {
         expect(providerScopeForModel('OPENAI_IMAGES', 'gpt-image-2')).toBe('OPENAI');
         expect(providerScopeForModel('OPENAI_RESPONSES_IMAGE', 'gpt-image-1')).toBe('OPENAI');
+    });
+});
+
+describe('modelReady', () => {
+    it('keeps a healthy model ready without expiring its last test timestamp', () => {
+        expect(
+            modelReady({
+                healthStatus: 'HEALTHY',
+                lastTestedAt: new Date('2020-01-01T00:00:00.000Z'),
+            } as any),
+        ).toBe(true);
+        expect(modelReady({ healthStatus: 'HEALTHY', lastTestedAt: null } as any)).toBe(true);
+    });
+
+    it('still blocks untested and unhealthy models', () => {
+        expect(modelReady({ healthStatus: 'UNTESTED', lastTestedAt: new Date() } as any)).toBe(false);
+        expect(modelReady({ healthStatus: 'UNHEALTHY', lastTestedAt: new Date() } as any)).toBe(false);
     });
 });

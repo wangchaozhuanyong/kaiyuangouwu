@@ -3,7 +3,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
 
-import { IMAGE_HEALTH_MAX_AGE_MS, launchModelDefinitions, retiredLaunchModelCodes } from './constants';
+import { launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
@@ -386,9 +386,6 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         if (!model) throw new UserInputError('找不到生图模型');
         const scope = providerScopeForModel(model.protocol, model.providerModelId);
         const credential = await this.requireCredential(ctx, scope, model.id, 'IMAGE');
-        if (!credential.enabled || !healthIsFresh(credential.lastTestedAt)) {
-            throw new UserInputError('请先完成中转站连接测试');
-        }
         const startedAt = Date.now();
         try {
             const result = await this.providerClient.generate(credential, model.protocol, {
@@ -865,20 +862,8 @@ export function providerScopeForModel(
         : 'OPENAI';
 }
 
-function credentialReady(credential: ImageProviderCredential | null | undefined): boolean {
-    return Boolean(
-        credential?.enabled &&
-        credential.healthStatus === 'HEALTHY' &&
-        healthIsFresh(credential.lastTestedAt),
-    );
-}
-
 export function modelReady(model: ImageModelConfig): boolean {
-    return model.healthStatus === 'HEALTHY' && healthIsFresh(model.lastTestedAt);
-}
-
-function healthIsFresh(lastTestedAt: Date | null | undefined): boolean {
-    return Boolean(lastTestedAt && lastTestedAt.getTime() >= Date.now() - IMAGE_HEALTH_MAX_AGE_MS);
+    return model.healthStatus === 'HEALTHY';
 }
 
 function safeMessage(error: unknown): string {

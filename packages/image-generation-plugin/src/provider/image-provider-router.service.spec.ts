@@ -1,6 +1,35 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { selectSmoothWeightedCredential } from './image-provider-router.service';
+import { ImageProviderRouterService, selectSmoothWeightedCredential } from './image-provider-router.service';
+
+describe('ImageProviderRouterService', () => {
+    it('does not expire a healthy credential based on its last test timestamp', async () => {
+        const queryBuilder = {
+            where: vi.fn(),
+            andWhere: vi.fn(),
+            getCount: vi.fn().mockResolvedValue(1),
+        };
+        for (const method of ['where', 'andWhere'] as const) {
+            queryBuilder[method].mockReturnValue(queryBuilder);
+        }
+        const connection = {
+            getRepository: vi.fn(() => ({
+                createQueryBuilder: vi.fn(() => queryBuilder),
+            })),
+        };
+        const service = new ImageProviderRouterService(connection as any);
+
+        await expect(service.hasAvailable({} as any, { scope: 'OPENAI', purpose: 'PROMPT' })).resolves.toBe(
+            true,
+        );
+
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith('credential.healthStatus = :health', {
+            health: 'HEALTHY',
+        });
+        expect(queryBuilder.andWhere.mock.calls.flat().join(' ')).not.toContain('lastTestedAt');
+        expect(queryBuilder.andWhere.mock.calls.flat().join(' ')).not.toContain('freshAfter');
+    });
+});
 
 describe('image provider smooth weighted routing', () => {
     it('distributes same-priority keys by weight without starving backups', () => {

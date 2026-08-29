@@ -3,7 +3,6 @@ import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { IsNull } from 'typeorm';
 
-import { IMAGE_HEALTH_MAX_AGE_MS } from '../constants';
 import { ImageProviderCredentialModel } from '../entities/image-provider-credential-model.entity';
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { ImageProviderScope } from '../types';
@@ -29,9 +28,6 @@ export class ImageProviderRouterService {
                 .andWhere('credential.enabled = :enabled', { enabled: true })
                 .andWhere('credential.archivedAt IS NULL')
                 .andWhere('credential.healthStatus = :health', { health: 'HEALTHY' })
-                .andWhere('credential.lastTestedAt >= :freshAfter', {
-                    freshAfter: new Date(Date.now() - IMAGE_HEALTH_MAX_AGE_MS),
-                })
                 .andWhere('(credential.cooldownUntil IS NULL OR credential.cooldownUntil <= :now)', {
                     now: new Date(),
                 })
@@ -84,9 +80,6 @@ export class ImageProviderRouterService {
             .andWhere('credential.enabled = :enabled', { enabled: true })
             .andWhere('credential.archivedAt IS NULL')
             .andWhere('credential.healthStatus = :health', { health: 'HEALTHY' })
-            .andWhere('credential.lastTestedAt >= :freshAfter', {
-                freshAfter: new Date(Date.now() - IMAGE_HEALTH_MAX_AGE_MS),
-            })
             .andWhere('(credential.cooldownUntil IS NULL OR credential.cooldownUntil <= :now)', {
                 now: new Date(),
             })

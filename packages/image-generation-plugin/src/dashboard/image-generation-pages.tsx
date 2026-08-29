@@ -381,7 +381,7 @@ function ImageGenerationSettingsPage() {
                         column="full"
                         blockId="image-models"
                         title="模型与单张价格"
-                        description="友好名称、用途说明和官方模型 ID 会展示给客户。只读测试不生图；真实生图测试可能产生上游费用。健康结果 24 小时后过期。"
+                        description="友好名称、用途说明和官方模型 ID 会展示给客户。只读测试不生图；真实生图测试可能产生上游费用。健康状态会持续有效，直到修改连接配置或检测到真实故障。"
                     >
                         <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
                             {draft.models.map(model => (
@@ -1616,6 +1616,7 @@ function ProviderCredentialCard({
                     生产环境只允许 HTTPS，且拒绝 localhost、内网、云元数据地址和重定向。当前状态：
                     {statusZh(config.providerHealthStatus)}
                     {config.providerHealthMessage ? ` · ${config.providerHealthMessage}` : ''}
+                    。健康状态不会按时间过期；修改 Key、基础地址或模型 ID 后需要重新测试。
                 </AlertDescription>
             </Alert>
             <div className="mt-5 grid max-w-3xl gap-5">
