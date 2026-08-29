@@ -12,6 +12,8 @@ if (
 
 const sharedEnvironment = {
     NODE_ENV: 'production',
+    // Keep the business-time guard deterministic regardless of the PM2 daemon environment.
+    TZ: 'Asia/Shanghai',
     RUN_JOB_QUEUE: '0',
     RUN_MIGRATIONS: 'false',
     // Vendure's telemetry fallback writes .vendure/.installation-id below cwd,

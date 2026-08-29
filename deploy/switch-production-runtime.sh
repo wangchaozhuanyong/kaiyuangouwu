@@ -103,7 +103,21 @@ for attempt in $(seq 1 30); do
     fi
     if [[ "${attempt}" == "30" ]]; then
         printf '%s\n' 'Candidate API health check failed; PM2 diagnostics follow:' >&2
-        pm2 jlist >&2 || true
+        pm2 jlist | node -e '
+let input = "";
+process.stdin.on("data", chunk => (input += chunk)).on("end", () => {
+    const processes = JSON.parse(input);
+    const summary = processes.map(({ name, pm2_env: env }) => ({
+        name,
+        status: env?.status,
+        restartTime: env?.restart_time,
+        exitCode: env?.exit_code,
+        cwd: env?.pm_cwd,
+        entry: env?.pm_exec_path,
+    }));
+    process.stdout.write(`${JSON.stringify(summary)}\\n`);
+});
+' >&2 || true
         pm2 logs vendure-api --nostream --lines 120 --raw >&2 || true
         fail_switch 'candidate API health check did not pass before worker start'
     fi
