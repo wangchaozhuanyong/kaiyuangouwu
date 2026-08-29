@@ -4,7 +4,46 @@ import {
 } from '@/vdb/framework/form-engine/form-engine-types.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react';
+
+import {
+    collectionRelationDepth,
+    CollectionRelationItem,
+    collectionRelationPath,
+    compareCollectionRelationItems,
+    isSelectableCollectionRelationItem,
+} from './collection-relation-items.js';
 import { createRelationSelectorConfig, RelationSelector } from './relation-selector.js';
+
+function CollectionRelationLabel({ item }: Readonly<{ item: CollectionRelationItem }>) {
+    const { i18n } = useLingui();
+    const depth = collectionRelationDepth(item);
+    const isSimplifiedChinese = i18n.locale.toLowerCase().startsWith('zh');
+    const levelLabel =
+        depth === 1
+            ? isSimplifiedChinese
+                ? '一级'
+                : 'L1'
+            : depth === 2
+              ? isSimplifiedChinese
+                  ? '二级'
+                  : 'L2'
+              : '!';
+
+    return (
+        <span className="flex min-w-0 items-center gap-2">
+            <span
+                className={
+                    'inline-flex min-w-7 shrink-0 items-center justify-center rounded border px-1 py-0.5 ' +
+                    'text-[10px] font-semibold leading-none text-muted-foreground'
+                }
+            >
+                {levelLabel}
+            </span>
+            <span className="min-w-0 truncate">{collectionRelationPath(item)}</span>
+        </span>
+    );
+}
 
 /**
  * Single relation input component
@@ -143,7 +182,7 @@ export const customerRelationConfig = createRelationSelectorConfig({
 /**
  * Collection relation selector configuration
  */
-export const collectionRelationConfig = createRelationSelectorConfig({
+export const collectionRelationConfig = createRelationSelectorConfig<CollectionRelationItem>({
     listQuery: graphql(`
         query GetCollectionsForRelationSelector($options: CollectionListOptions) {
             collections(options: $options) {
@@ -151,6 +190,17 @@ export const collectionRelationConfig = createRelationSelectorConfig({
                     id
                     name
                     slug
+                    parentId
+                    position
+                    parent {
+                        id
+                        name
+                        position
+                    }
+                    breadcrumbs {
+                        id
+                        name
+                    }
                     featuredAsset {
                         id
                         preview
@@ -162,8 +212,12 @@ export const collectionRelationConfig = createRelationSelectorConfig({
     `),
     idKey: 'id' as const,
     labelKey: 'name' as const,
+    pageSize: 200,
     placeholder: msg`Search collections...`,
     buildSearchFilter: (term: string) => ({
         name: { contains: term },
     }),
+    sortItems: compareCollectionRelationItems,
+    isItemDisabled: item => !isSelectableCollectionRelationItem(item),
+    label: item => <CollectionRelationLabel item={item} />,
 });

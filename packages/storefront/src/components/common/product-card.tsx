@@ -125,9 +125,6 @@ export function ProductCard({
                         currency={variant ? variant.currencyCode : market.currencyCode}
                         locale={locale}
                     />
-                    <small className="text-[10.5px] font-medium text-[var(--muted)]">
-                        {isZh ? '含税' : 'incl. tax'}
-                    </small>
                 </div>
                 <button
                     type="button"

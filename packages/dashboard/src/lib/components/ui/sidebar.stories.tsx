@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Home, Package, Settings } from 'lucide-react';
+
 import {
     Sidebar,
     SidebarContent,

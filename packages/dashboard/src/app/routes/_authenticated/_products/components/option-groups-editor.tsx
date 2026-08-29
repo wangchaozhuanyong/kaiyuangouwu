@@ -56,17 +56,23 @@ export function SingleOptionGroupEditor({
     });
 
     return (
-        <div className="space-y-4">
-            <div className="grid gap-4 items-start lg:grid-cols-[1fr_2fr]">
-                <div>
+        <div className="min-w-0 flex-1 rounded-xl border bg-muted/20 p-4 sm:p-5">
+            <div className="grid items-start gap-5 md:grid-cols-[minmax(11rem,0.75fr)_minmax(18rem,1.4fr)]">
+                <div className="min-w-0">
                     <FormFieldWrapper
                         control={control}
                         name={fieldArrayPath ? `${fieldArrayPath}.nameZh` : 'nameZh'}
                         label={<Trans>Option group name (Simplified Chinese)</Trans>}
-                        render={({ field }) => <Input placeholder={t`For example: Size`} {...field} />}
+                        render={({ field }) => (
+                            <Input
+                                className="h-10 bg-background"
+                                placeholder={t`For example: Size`}
+                                {...field}
+                            />
+                        )}
                     />
                 </div>
-                <div>
+                <div className="min-w-0">
                     <FormFieldWrapper
                         control={control}
                         name={fieldArrayPath ? `${fieldArrayPath}.values` : 'values'}

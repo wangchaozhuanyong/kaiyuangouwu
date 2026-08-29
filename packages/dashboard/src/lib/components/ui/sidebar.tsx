@@ -3,6 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { SidebarRail as BaseSidebarRail, useSidebar } from '@vendure-io/ui/components/ui/sidebar';
 import { PanelLeftIcon, PanelLeftOpenIcon } from 'lucide-react';
 import { ComponentProps } from 'react';
+
 import { Button } from './button.js';
 
 export {
