@@ -194,7 +194,7 @@ export const adminApiExtensions = gql`
         lots: [CatalogExportLotRow!]!
     }
 
-    type CatalogExportPage implements PaginatedList {
+    type CatalogExportPage {
         items: [CatalogExportRow!]!
         totalItems: Int!
     }

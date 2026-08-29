@@ -19,4 +19,11 @@ describe('catalog import privacy contract', () => {
         expect(schema).not.toContain('catalogStandardImportTemplate');
         expect(schema).not.toContain('catalogImportReport');
     });
+
+    it('keeps export pagination compatible with the Vendure Node contract', () => {
+        const schema = print(adminApiExtensions);
+
+        expect(schema).not.toContain('type CatalogExportPage implements PaginatedList');
+        expect(schema).toContain('type CatalogExportPage {');
+    });
 });
