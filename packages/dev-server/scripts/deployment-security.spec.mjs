@@ -72,6 +72,10 @@ void test('production runtime switch rebuilds PM2 definitions for an immutable r
     assert.match(script, /RUNTIME-METADATA\.json/u);
     assert.match(script, /pm2 delete/u);
     assert.match(script, /pm2 start/u);
+    assert.match(script, /--only vendure-api/u);
+    assert.match(script, /127\.0\.0\.1:3002\/health/u);
+    assert.match(script, /--only vendure-worker/u);
+    assert.ok(script.indexOf('--only vendure-api') < script.indexOf('--only vendure-worker'));
     assert.match(script, /pm_cwd/u);
     assert.match(script, /pm_exec_path/u);
     assert.doesNotMatch(script, /startOrReload/u);
@@ -128,6 +132,13 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
     assert.match(script, /managed storefront data changed/u);
+    assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
+    assert.match(script, /node "\$\{memory_guard\}" --stage pre-download --check/u);
+    assert.match(script, /node "\$\{memory_guard\}" --stage pre-migration --check/u);
+    assert.match(script, /node "\$\{memory_guard\}" --stage pre-switch --check/u);
+    assert.match(script, /node "\$\{memory_guard\}" --stage post-switch --report/u);
+    assert.match(script, /retain_release_file/u);
+    assert.match(script, /mv -- "\$\{source_path\}" "\$\{destination_path\}"/u);
 
     assert.match(workflow, /workflow_run:/u);
     assert.match(workflow, /id-token: write/u);

@@ -94,7 +94,17 @@ for process_name in vendure-api vendure-worker; do
     fi
 done
 
-VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --update-env
+# Start the API and worker sequentially so their cold-start allocation does not
+# overlap on the single-host production instance.
+VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-api --update-env
+for attempt in $(seq 1 30); do
+    if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null; then
+        break
+    fi
+    [[ "${attempt}" != "30" ]] || fail_switch 'candidate API health check did not pass before worker start'
+    sleep 2
+done
+VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-worker --update-env
 
 CANDIDATE="${candidate}" node <<'NODE'
 const { execFileSync } = require('node:child_process');

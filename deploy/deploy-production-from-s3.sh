@@ -88,6 +88,7 @@ readonly staging_dir="$(mktemp -d "${releases_dir}/.incoming-${artifact_name}.XX
 readonly archive_path="${staging_dir}/${archive_name}"
 readonly checksum_path="${staging_dir}/${checksum_name}"
 readonly nginx_backup="${nginx_target}.pre-${deployment_id}"
+readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
 
 rollback_needed=0
 nginx_changed=0
@@ -127,6 +128,7 @@ rollback() {
 trap cleanup EXIT
 trap rollback ERR
 
+node "${memory_guard}" --stage pre-download --check
 printf 'DEPLOY_DOWNLOAD_BEGIN\n'
 aws s3 cp "${artifact_s3_prefix}/${archive_name}" "${archive_path}" --only-show-errors
 aws s3 cp "${artifact_s3_prefix}/${checksum_name}" "${checksum_path}" --only-show-errors
@@ -149,9 +151,27 @@ fi
 
 [[ "$(stat --format='%a' "${candidate}")" == "755" ]] || fail 'runtime directory mode is not 755'
 node "${candidate}/verify-runtime.mjs" --expected-sha "${target_sha}"
-install -m 0644 "${archive_path}" "${releases_dir}/${archive_name}"
-install -m 0644 "${checksum_path}" "${releases_dir}/${checksum_name}"
 
+retain_release_file() {
+    local source_path="${1}"
+    local destination_path="${2}"
+
+    if [[ -e "${destination_path}" ]]; then
+        cmp --silent "${source_path}" "${destination_path}" ||
+            fail "retained release file differs from the verified download: ${destination_path}"
+        rm -- "${source_path}"
+    else
+        mv -- "${source_path}" "${destination_path}"
+    fi
+    chmod 0644 "${destination_path}"
+}
+
+# The staging directory is below releases_dir, so these are same-filesystem renames.
+# Avoiding a second full archive copy prevents avoidable disk I/O and page-cache pressure.
+retain_release_file "${archive_path}" "${releases_dir}/${archive_name}"
+retain_release_file "${checksum_path}" "${releases_dir}/${checksum_name}"
+
+node "${memory_guard}" --stage pre-migration --check
 printf 'DEPLOY_MIGRATION_BEGIN\n'
 sudo -n systemctl start vendure-mysql-backup.service
 [[ "$(sudo -n systemctl show vendure-mysql-backup.service -p Result --value)" == "success" ]] ||
@@ -174,6 +194,7 @@ NODE_ENV=production READINESS_PROCESS_ROLE=server RUN_MIGRATIONS=false RUN_JOB_Q
 NODE_ENV=production READINESS_PROCESS_ROLE=worker RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
 
+node "${memory_guard}" --stage pre-switch --check
 rollback_needed=1
 VENDURE_DEPLOYMENT_ID="${deployment_id}" \
     "${repository}/deploy/switch-production-runtime.sh" "${candidate}" 9>&-
@@ -185,6 +206,7 @@ for attempt in $(seq 1 30); do
     [[ "${attempt}" != "30" ]] || fail 'candidate API health check did not pass'
     sleep 2
 done
+node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
 
 sudo -n cp -p "${nginx_target}" "${nginx_backup}"

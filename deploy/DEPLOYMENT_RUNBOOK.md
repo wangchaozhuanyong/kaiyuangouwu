@@ -82,6 +82,10 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，无�
 `deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
 数据库备份和迁移、PM2 切换、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了店铺媒体、
 登录视觉或库存修复发布器以及受管店铺素材目录，自动发布会主动停止，必须回到下文的人工预演和发布流程。
+单机发布还会在下载前、迁移前和运行时切换前读取 Linux `MemAvailable`；可用内存低于 384 MiB 或物理内存的
+12.5%（取较高值）时会在破坏性切换前停止。PM2 显示的宿主机 RAM 使用率包含可回收页缓存，发布判断以
+`PRODUCTION_MEMORY` 记录的 `MemAvailable` 为准。归档在同一发布文件系统内使用原子移动保留，API 通过健康
+检查后才启动 Worker，避免重复复制归档和两个 Node 进程并发冷启动造成额外内存峰值。
 
 若候选 API 未通过健康检查且自动回滚本身失败，可手动运行 `Recover Current Production Runtime` 工作流。
 它只会读取 `kaiyuangouwu-current` 与 `current-sha` 指向的最后一个已验证运行包，要求两者 SHA 一致，
