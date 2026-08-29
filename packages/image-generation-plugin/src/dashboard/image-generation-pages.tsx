@@ -260,6 +260,7 @@ function ImageGenerationSettingsPage() {
         return <ErrorPage title="AI 生图服务" retry={() => void query.refetch()} error={query.error} />;
     if (!draft || !query.data) return <LoadingPage title="AI 生图服务" />;
     const data = query.data;
+    const activeSkillRelease = data.imagePromptSkillReleases.find(release => release.status === 'ACTIVE');
     const filteredJobs = data.imageGenerationJobs.items.filter(job => {
         const search = jobSearch.trim().toLowerCase();
         const matchesSearch =
@@ -714,14 +715,78 @@ function ImageGenerationSettingsPage() {
                     <PageBlock
                         column="full"
                         blockId="image-skills"
-                        title="提示词 Skill 版本"
-                        description={`当前规则哈希：${draft.activeSkillHash}`}
+                        title="提示词规划 Skill"
+                        description="把客户的简短想法整理成可执行的生图方案，并自动推荐更合适的模型。"
                     >
                         <Alert className="mb-4">
                             <AlertDescription>
-                                “设为当前版本”只影响后续提示词优化规则，不会切换 Key、模型或代码版本。
+                                当前运行的是本站维护的 <strong>image-prompt-pro</strong>
+                                ，不会在线下载或直接执行某个 GitHub
+                                Skill；公开项目只作为设计与许可来源参考，实际版本以本地发布哈希为准，GitHub
+                                Star 数不参与自动选用或升级。
+                                <strong>全站同时只能启用 1 个规则包。</strong>
+                                当前版本会自动用于后续的“智能优化”和模型推荐；切换历史版本时，系统会自动停用旧版本。已经完成或正在执行的任务仍保留原规则哈希，不会被改写。
+                                当前升级方式：
+                                <strong>
+                                    {draft.skillAutoActivateEnabled
+                                        ? '新规则包随代码部署后自动启用'
+                                        : '新规则包登记后由管理员手动启用'}
+                                </strong>
+                                。
                             </AlertDescription>
                         </Alert>
+                        <div className="mb-6 grid gap-4 lg:grid-cols-3">
+                            <div className="rounded-lg border p-4">
+                                <strong>结构化提示词规划</strong>
+                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                    自动补齐主体、场景、构图、光线、风格、颜色、材质、精确文字、保留项和避免项，客户仍可在生成前继续修改。
+                                </p>
+                            </div>
+                            <div className="rounded-lg border p-4">
+                                <strong>按任务自动选模型</strong>
+                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                    复杂文字与版式优先 Codex 图片 2，精细编辑与抠图优先 1.5，日常商品图优先
+                                    1，快速试稿和插画优先 Gemini。
+                                </p>
+                            </div>
+                            <div className="rounded-lg border p-4">
+                                <strong>忠实与安全约束</strong>
+                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                    保留客户指定的文字、人物、商品和参考图要求；不凭空编造品牌、价格、促销、认证、Logo、功效或商品声明。
+                                </p>
+                            </div>
+                        </div>
+                        {activeSkillRelease ? (
+                            <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <strong>当前发布：{skillReleaseName(activeSkillRelease)}</strong>
+                                    <Badge variant="success">全站唯一启用</Badge>
+                                    <Badge variant="secondary">
+                                        规则格式 v{activeSkillRelease.bundleVersion}
+                                    </Badge>
+                                    <Badge variant="outline">
+                                        {routingStrategyZh(activeSkillRelease.routingStrategy)}路由
+                                    </Badge>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {activeSkillRelease.supportedUseCases.map(useCase => (
+                                        <Badge key={useCase} variant="secondary">
+                                            {skillUseCaseZh(useCase)}
+                                        </Badge>
+                                    ))}
+                                </div>
+                                <p className="mt-3 text-xs text-muted-foreground">
+                                    当前规则哈希：
+                                    <span className="font-mono">{draft.activeSkillHash}</span>
+                                </p>
+                            </div>
+                        ) : null}
+                        <div className="mb-3">
+                            <strong>调用额度与收费</strong>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                这些设置控制客户每天可以使用多少次提示词优化，不影响生图次数和模型单价。
+                            </p>
+                        </div>
                         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                             <Field label="每分钟最多优化次数">
                                 <Input
@@ -791,31 +856,75 @@ function ImageGenerationSettingsPage() {
                                 />
                             </Field>
                         </div>
-                        <div className="space-y-2">
+                        <div className="mb-3">
+                            <strong>规则包历史</strong>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                新任务只使用标记为“当前使用”的版本。历史备用版本不会参与运行，除非手动切换。
+                            </p>
+                        </div>
+                        <div className="space-y-3">
                             {data.imagePromptSkillReleases.map(release => (
-                                <div
-                                    key={release.id}
-                                    className="flex items-center justify-between rounded border p-3"
-                                >
-                                    <div>
-                                        {/* i18n-audit-ignore -- Technical bundle version prefix. */}
-                                        <strong>提示词规则版本 {release.bundleVersion}</strong>
-                                        <div className="font-mono text-xs text-muted-foreground">
-                                            {release.sourceHash}
+                                <div key={release.id} className="rounded-lg border p-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <strong>{skillReleaseName(release)}</strong>
+                                                <Badge
+                                                    variant={
+                                                        release.status === 'ACTIVE' ? 'success' : 'secondary'
+                                                    }
+                                                >
+                                                    {release.status === 'ACTIVE' ? '当前使用' : '历史备用'}
+                                                </Badge>
+                                                <Badge variant="outline">
+                                                    规则格式 v{release.bundleVersion}
+                                                </Badge>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                创建于 {new Date(release.createdAt).toLocaleString()}
+                                                {release.activatedAt
+                                                    ? ` · 最近启用于 ${new Date(release.activatedAt).toLocaleString()}`
+                                                    : ''}
+                                            </p>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge>{statusZh(release.status)}</Badge>
                                         {release.status !== 'ACTIVE' ? (
                                             <Button
                                                 size="sm"
                                                 variant="outline"
+                                                disabled={activateSkill.isPending}
                                                 onClick={() => activateSkill.mutate(release.id)}
                                             >
                                                 设为当前版本
                                             </Button>
                                         ) : null}
                                     </div>
+                                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">支持场景</div>
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                                {release.supportedUseCases.map(useCase => (
+                                                    <Badge key={useCase} variant="outline">
+                                                        {skillUseCaseZh(useCase)}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">可推荐模型</div>
+                                            <p className="mt-2 text-sm">
+                                                {release.supportedModels.join('、') || '未记录'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">路由策略</div>
+                                            <p className="mt-2 text-sm">
+                                                {routingStrategyZh(release.routingStrategy)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p className="mt-4 break-all font-mono text-xs text-muted-foreground">
+                                        SHA-256：{release.sourceHash}
+                                    </p>
                                 </div>
                             ))}
                         </div>
@@ -1427,7 +1536,7 @@ function ImageGenerationSettingsPage() {
     );
 }
 
-function ImageGenerationAccessPage() {
+export function ImageGenerationAccessPage() {
     const [newKeys, setNewKeys] = useState<ImageProviderAdminConfigRecord[]>([]);
     const query = useQuery({
         queryKey: ['image-provider-admin'],
@@ -1438,6 +1547,29 @@ function ImageGenerationAccessPage() {
     if (query.error)
         return <ErrorPage title="AI 服务接入" retry={() => void query.refetch()} error={query.error} />;
     if (!configs) return <LoadingPage title="AI 服务接入" />;
+    const providerSummaries = (['OPENAI', 'GEMINI'] as const).map(scope => {
+        const scoped = configs.filter(config => config.scope === scope);
+        return {
+            scope,
+            configured: scoped.filter(config => config.credentialConfigured).length,
+            enabled: scoped.filter(config => config.credentialEnabled).length,
+            healthy: scoped.filter(
+                config => config.credentialEnabled && config.providerHealthStatus === 'HEALTHY',
+            ).length,
+            prompt: scoped.filter(
+                config =>
+                    config.credentialEnabled &&
+                    config.providerHealthStatus === 'HEALTHY' &&
+                    ['PROMPT', 'BOTH'].includes(config.purpose),
+            ).length,
+            image: scoped.filter(
+                config =>
+                    config.credentialEnabled &&
+                    config.providerHealthStatus === 'HEALTHY' &&
+                    ['IMAGE', 'BOTH'].includes(config.purpose),
+            ).length,
+        };
+    });
     return (
         <Page pageId="image-generation-access">
             <PageTitle>AI 服务接入</PageTitle>
@@ -1454,6 +1586,32 @@ function ImageGenerationAccessPage() {
                 </PageActionBarRight>
             </PageActionBar>
             <PageLayout>
+                <PageBlock
+                    column="full"
+                    blockId="image-access-summary"
+                    title="GPT / Gemini Key 池状态"
+                    description="系统不内置或硬编码默认 Key；只使用下方由 SuperAdmin 配置、加密保存且健康检查通过的 Key。"
+                >
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {providerSummaries.map(summary => (
+                            <div key={summary.scope} className="rounded-lg border p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <strong>{providerName(summary.scope)}</strong>
+                                    <Badge variant={summary.healthy ? 'success' : 'secondary'}>
+                                        {summary.healthy ? '有可用 Key' : '暂无健康 Key'}
+                                    </Badge>
+                                </div>
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                    已配置 {summary.configured} 个 · 已启用 {summary.enabled} 个 · 健康{' '}
+                                    {summary.healthy} 个
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    提示词候选 {summary.prompt} 个 · 生图候选 {summary.image} 个
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </PageBlock>
                 {!configs.length && !newKeys.length ? (
                     <PageBlock column="full" blockId="image-access-empty" title="尚未配置 AI Key">
                         <Alert>
@@ -1471,6 +1629,8 @@ function ImageGenerationAccessPage() {
                 {[...configs, ...newKeys].map(config => (
                     <ProviderCredentialCard
                         key={config.id || config.code}
+                        column="full"
+                        blockId={`image-access-${config.id || config.code}`}
                         config={config}
                         models={query.data?.imageGenerationAdminConfig.models ?? []}
                         onChanged={() => void query.refetch()}
@@ -1483,11 +1643,15 @@ function ImageGenerationAccessPage() {
 }
 
 function ProviderCredentialCard({
+    column,
+    blockId,
     config,
     models,
     onChanged,
     onDiscard,
 }: Readonly<{
+    column: 'full';
+    blockId: string;
     config: ImageProviderAdminConfigRecord;
     models: Array<{ code: string; displayNameZh: string }>;
     onChanged: () => void;
@@ -1569,13 +1733,13 @@ function ProviderCredentialCard({
     });
     return (
         <PageBlock
-            column="full"
-            blockId={`image-access-${config.id || config.code}`}
+            column={column}
+            blockId={blockId}
             title={config.id ? `${config.name}（尾号 ${config.apiKeyLast4 || '未配置'}）` : '新增 Key'}
             description={
                 scope === 'OPENAI'
-                    ? '用于 OpenAI 生图模型及免费提示词优化。'
-                    : '用于 Gemini 生图模型；与 OpenAI Key 独立保存。'
+                    ? '用于 OpenAI 生图和提示词智能优化；同优先级可按权重轮询。'
+                    : '用于 Gemini 生图，也可在 GPT/OpenAI 提示词服务不可用时自动容灾。'
             }
         >
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1668,10 +1832,16 @@ function ProviderCredentialCard({
                     />
                 </Field>
                 <Field
-                    label={scope === 'OPENAI' ? '提示词优化 / Responses 编排模型 ID' : '连接测试文本模型 ID'}
+                    label={
+                        scope === 'OPENAI' ? '提示词优化 / Responses 编排模型 ID' : 'Gemini 提示词优化模型 ID'
+                    }
                 >
                     <Input
-                        placeholder={scope === 'OPENAI' ? '例如 gpt-5.4-mini' : '例如 gemini-3.7-flash'}
+                        placeholder={
+                            scope === 'OPENAI'
+                                ? '例如中转站可用的 GPT 文本模型'
+                                : '例如中转站可用的 Gemini 文本模型'
+                        }
                         value={textModelId}
                         onChange={event => setTextModelId(event.target.value)}
                     />
@@ -1746,6 +1916,40 @@ function emptyCredential(code: string): ImageProviderAdminConfigRecord {
         lastUsedAt: null,
         modelCodes: [],
     };
+}
+
+function skillUseCaseZh(useCase: string): string {
+    return (
+        (
+            {
+                'product-photo': '商品摄影',
+                'ecommerce-poster': '电商海报',
+                portrait: '成人商业人像',
+                'interior-design': '室内设计',
+                illustration: '插画',
+                'reference-edit': '参考图编辑',
+            } as Record<string, string>
+        )[useCase] ?? useCase
+    );
+}
+
+function routingStrategyZh(strategy: string): string {
+    return (
+        (
+            {
+                BALANCED: '质量、速度与成本均衡',
+                QUALITY: '质量优先',
+                SPEED: '速度优先',
+                COST: '成本优先',
+                UNKNOWN: '未记录',
+            } as Record<string, string>
+        )[strategy] ?? strategy
+    );
+}
+
+function skillReleaseName(release: { createdAt: string; sourceHash: string }): string {
+    const date = release.createdAt.slice(0, 10) || '日期未知';
+    return `${date} · ${release.sourceHash.slice(0, 8)}`;
 }
 
 function statusZh(status: string): string {

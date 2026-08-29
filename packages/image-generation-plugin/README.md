@@ -28,7 +28,7 @@
 
 ## 中转站接入
 
-超级管理员在“系统 → AI 生图接入”分别设置 OpenAI 与 Gemini 的 HTTPS 基础地址、API Key 和文本模型 ID。OpenAI 的文本模型同时用于免费提示词优化和 Responses 图片工具编排，实测可用 `gpt-5.4-mini`；图片工具内的模型仍是 `gpt-image-1`。两套凭证按模型协议自动路由。API Key 使用 AES-256-GCM 加密后入库，后台只回显末四位。
+超级管理员在“系统 → AI 生图接入”分别设置 OpenAI 与 Gemini 的 HTTPS 基础地址、API Key 和文本模型 ID。OpenAI 的文本模型同时用于提示词优化和 Responses 图片工具编排，实测可用 `gpt-5.4-mini`；图片工具内的模型仍是各模型卡配置的图片模型。提示词优化优先使用健康的 OpenAI Key，OpenAI 不可用时自动尝试健康的 Gemini 提示词 Key，两者都不可用时使用本地规则兜底。生图凭证按模型协议自动路由。API Key 使用 AES-256-GCM 加密后入库，后台只回显末四位。
 
 适配器支持：
 
@@ -49,7 +49,9 @@
 
 运行时不会执行 `SKILL.md` 或网上下载的代码。构建步骤把已审核的 JSON 规则编译成带 SHA-256 的纯 JSON bundle，并同步生成内容完全相同的静态 TypeScript 数据模块，以兼容 Vendure Dashboard 的临时编译目录。服务端只读取这份已编译数据。每个生图任务都会保存 Skill hash，方便追溯。
 
-后台可在已发布 bundle 之间回滚。激活状态保存在数据库中，每个 API 实例在处理图片工坊请求前会同步当前版本，多实例部署无需依赖单机内存状态。
+后台可在已发布 bundle 之间回滚。激活状态保存在数据库中，每个 API 实例在处理图片工坊请求前会同步当前版本，多实例部署无需依赖单机内存状态。`bundleVersion` 是规则数据格式版本，不是发布序号；后台用创建日期和短 SHA-256 区分每次发布。
+
+默认使用手动激活。设置 `IMAGE_PROMPT_SKILL_AUTO_ACTIVATE=true` 后，只有当前进程首次发现的新哈希会自动成为当前版本；旧进程重启不会把历史 bundle 重新激活。历史版本始终保留，可在后台手动回滚。生产建议只在 CI 已执行 Skill 编译、校验和回归测试时打开此开关。
 
 智能优化流程：
 
@@ -91,6 +93,8 @@ IMAGE_GENERATION_DOWNLOAD_SECRET=<at-least-32-random-characters>
 IMAGE_GENERATION_MASTER_KEY=<at-least-32-random-characters>
 # 可选：仅当中转站返回远程图片 URL 时配置精确域名，多个用逗号分隔
 IMAGE_GENERATION_REMOTE_IMAGE_HOSTS=
+# 可选：新 Skill bundle 随代码部署后自动激活；默认 false
+IMAGE_PROMPT_SKILL_AUTO_ACTIVATE=false
 ```
 
 生产的存储路径必须是持久化绝对路径。API 和 worker 分开部署时，两者必须使用同一份持久化挂载和相同密钥。密钥轮换前必须先制定已有 API Key 重加密方案，直接更换主密钥会导致旧密文无法解密。
@@ -121,6 +125,7 @@ IMAGE_GENERATION_REMOTE_IMAGE_HOSTS=
 ## 本地检查
 
 ```bash
+bun run --cwd packages/image-generation-plugin test:skill
 bun run --cwd packages/image-generation-plugin test
 bun run --cwd packages/image-generation-plugin test:e2e
 bun run --cwd packages/image-generation-plugin check-types

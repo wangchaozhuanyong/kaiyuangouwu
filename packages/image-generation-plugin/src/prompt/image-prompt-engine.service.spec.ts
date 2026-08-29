@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { ImagePromptEngineService, startOfBeijingDay } from './image-prompt-engine.service';
+import {
+    firstSuccessfulPromptProvider,
+    ImagePromptEngineService,
+    startOfBeijingDay,
+} from './image-prompt-engine.service';
 
 describe('ImagePromptEngineService safety gate', () => {
     const engine = Object.create(ImagePromptEngineService.prototype) as ImagePromptEngineService;
@@ -27,5 +31,26 @@ describe('prompt optimization daily quota boundary', () => {
         expect(startOfBeijingDay(Date.parse('2026-08-27T16:00:00.000Z'))).toEqual(
             new Date('2026-08-27T16:00:00.000Z'),
         );
+    });
+});
+
+describe('prompt provider failover', () => {
+    it('tries GPT/OpenAI first and falls back to Gemini', async () => {
+        const attempts: string[] = [];
+
+        const result = await firstSuccessfulPromptProvider(scope => {
+            attempts.push(scope);
+            if (scope === 'OPENAI') return Promise.reject(new Error('OpenAI unavailable'));
+            return Promise.resolve('gemini-result');
+        });
+
+        expect(result).toBe('gemini-result');
+        expect(attempts).toEqual(['OPENAI', 'GEMINI']);
+    });
+
+    it('returns the final provider error when no prompt provider works', async () => {
+        await expect(
+            firstSuccessfulPromptProvider(scope => Promise.reject(new Error(`${scope} unavailable`))),
+        ).rejects.toThrow('GEMINI unavailable');
     });
 });

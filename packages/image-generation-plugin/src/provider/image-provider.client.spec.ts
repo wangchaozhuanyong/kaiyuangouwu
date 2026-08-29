@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
+import { type ImageProviderCipherService } from '../security/image-provider-cipher.service';
 
 import {
     AmbiguousImageProviderError,
@@ -27,11 +27,64 @@ describe('ImageProviderClient', () => {
         encrypt: vi.fn(() => 'encrypted'),
     } as unknown as ImageProviderCipherService;
     const credential = new ImageProviderCredential({
+        scope: 'OPENAI',
         enabled: true,
         baseUrl: 'https://relay.example.com/v1',
         encryptedApiKey: 'encrypted',
         textModelId: 'text-model',
         healthStatus: 'HEALTHY',
+    });
+
+    it('optimizes prompts through the Gemini native JSON endpoint', async () => {
+        const geminiCredential = new ImageProviderCredential({
+            ...credential,
+            scope: 'GEMINI',
+            textModelId: 'models/gemini-3.1-flash-lite',
+        });
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    responseId: 'gemini-prompt-1',
+                    candidates: [
+                        {
+                            content: {
+                                parts: [
+                                    { text: '{"useCase":"product-photo",' },
+                                    { text: '"subject":"coffee maker"}' },
+                                ],
+                            },
+                        },
+                    ],
+                    usageMetadata: { totalTokenCount: 42 },
+                }),
+                { status: 200 },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        const result = await client.optimizePrompt(
+            geminiCredential,
+            'Return strict JSON',
+            'Make a product photo',
+        );
+
+        expect(result.text).toBe('{"useCase":"product-photo",\n"subject":"coffee maker"}');
+        expect(result.telemetry).toEqual(
+            expect.objectContaining({
+                providerRequestId: 'gemini-prompt-1',
+                usage: { totalTokenCount: 42 },
+            }),
+        );
+        const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+        expect(url.pathname).toBe('/v1/models/gemini-3.1-flash-lite:generateContent');
+        expect(init.headers).toEqual(expect.objectContaining({ 'x-goog-api-key': 'relay-key' }));
+        expect(parseJsonRequestBody(init)).toEqual(
+            expect.objectContaining({
+                systemInstruction: { parts: [{ text: 'Return strict JSON' }] },
+                generationConfig: expect.objectContaining({ responseMimeType: 'application/json' }),
+            }),
+        );
     });
 
     it('uses the Responses image tool with separate orchestration and image models', async () => {

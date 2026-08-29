@@ -12,6 +12,7 @@
     },
     "scripts": {
         "compile-skill": "node skill/image-prompt-pro/scripts/compile.mjs && node skill/image-prompt-pro/scripts/validate.mjs",
+        "test:skill": "bun run compile-skill && vitest run src/prompt/prompt-rules.service.spec.ts src/prompt/image-prompt-engine.service.spec.ts src/image-generation-config.service.spec.ts src/provider/image-provider.client.spec.ts src/provider/image-provider.integration.spec.ts",
         "build": "bun run compile-skill && tsc --project tsconfig.build.json",
         "check-types": "tsc --project tsconfig.json --noEmit",
         "test": "vitest run",
