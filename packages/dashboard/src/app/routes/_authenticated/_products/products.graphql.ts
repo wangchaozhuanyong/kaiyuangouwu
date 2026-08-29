@@ -2,9 +2,19 @@ import { addCustomFields } from '@/vdb/framework/document-introspection/add-cust
 import { assetFragment } from '@/vdb/graphql/fragments.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { parse } from 'graphql';
 
 const productVariantFulfillmentFragment = graphql(`
     fragment ProductVariantFulfillment on ProductVariant {
+        id
+        sku
+        enabled
+        price
+        currencyCode
+        stockLevels {
+            stockOnHand
+            stockAllocated
+        }
         customFields
     }
 `);
@@ -231,6 +241,25 @@ export const updateProductDocument = graphql(`
     mutation UpdateProduct($input: UpdateProductInput!) {
         updateProduct(input: $input) {
             id
+        }
+    }
+`);
+
+export const saveCatalogProductDocument = parse(`
+    mutation SaveCatalogProduct($input: SaveCatalogProductInput!) {
+        saveCatalogProduct(input: $input) {
+            id
+        }
+    }
+`);
+
+export const catalogProductSummariesDocument = parse(`
+    query CatalogProductSummaries($filter: CatalogProductSummaryFilterInput) {
+        catalogProductSummaries(filter: $filter) {
+            items {
+                productId
+            }
+            totalItems
         }
     }
 `);

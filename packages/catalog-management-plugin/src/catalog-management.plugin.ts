@@ -6,7 +6,11 @@ import { CatalogImportQueueService } from './catalog-import-queue.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogManagementAdminResolver } from './catalog-management.resolver';
 import { CatalogOperationsService } from './catalog-operations.service';
-import { manageCatalogImportPermission } from './constants';
+import {
+    manageCatalogExportPermission,
+    manageCatalogImportPermission,
+    manageCatalogOperationsPermission,
+} from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
@@ -36,7 +40,29 @@ import './types';
         InventoryLotLifecycleService,
     ],
     configuration: config => {
-        config.authOptions.customPermissions.push(manageCatalogImportPermission);
+        config.authOptions.customPermissions.push(
+            manageCatalogImportPermission,
+            manageCatalogOperationsPermission,
+            manageCatalogExportPermission,
+        );
+        config.customFields.Product.push({
+            name: 'sourceCreatedAt',
+            type: 'datetime',
+            nullable: true,
+            public: false,
+            ui: { component: 'date-form-input' },
+            label: [
+                { languageCode: LanguageCode.zh_Hans, value: '来源创建日期' },
+                { languageCode: LanguageCode.en, value: 'Source created at' },
+            ],
+            description: [
+                { languageCode: LanguageCode.zh_Hans, value: '来源报表中的创建日期，不覆盖系统创建时间' },
+                {
+                    languageCode: LanguageCode.en,
+                    value: 'Source document date; system createdAt remains unchanged',
+                },
+            ],
+        });
         config.customFields.ProductVariant.push(
             {
                 name: 'barcode',

@@ -21,6 +21,10 @@ const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
     规格: 'specification',
     主单位: 'primaryUnit',
     单位: 'primaryUnit',
+    销售单位: 'primaryUnit',
+    采购单位: 'purchaseUnit',
+    包装换算: 'packageQuantity',
+    包装换算数量: 'packageQuantity',
     库存量: 'stockOnHand',
     库存: 'stockOnHand',
     进货价: 'purchaseCost',
@@ -44,6 +48,7 @@ const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
     商品编码: 'sku',
     条码: 'barcode',
     批次号: 'lotCode',
+    批次数量: 'lotQuantity',
 };
 
 const requiredFields: Array<keyof NormalizedCatalogRow> = [
@@ -164,12 +169,30 @@ export function catalogProductKey(row: Pick<NormalizedCatalogRow, 'name' | 'cate
 }
 
 export function catalogSourceKey(
-    row: Pick<NormalizedCatalogRow, 'name' | 'category' | 'specification' | 'primaryUnit' | 'sku'>,
+    row: Pick<
+        NormalizedCatalogRow,
+        | 'name'
+        | 'category'
+        | 'specification'
+        | 'primaryUnit'
+        | 'sku'
+        | 'barcode'
+        | 'stockLocationCode'
+        | 'lotCode'
+    >,
 ): string {
-    if (row.sku) return sha256(`sku\u001f${normalizeIdentity(row.sku)}`);
-    return sha256(
-        [row.name, row.category, row.specification, row.primaryUnit].map(normalizeIdentity).join('\u001f'),
-    );
+    const base = row.sku
+        ? `sku\u001f${normalizeIdentity(row.sku)}`
+        : row.barcode
+          ? `barcode\u001f${normalizeIdentity(row.barcode)}`
+          : [row.name, row.category, row.specification, row.primaryUnit]
+                .map(normalizeIdentity)
+                .join('\u001f');
+    const inventoryScope = [row.stockLocationCode, row.lotCode]
+        .map(normalizeIdentity)
+        .filter(Boolean)
+        .join('\u001f');
+    return sha256(inventoryScope ? `${base}\u001finventory\u001f${inventoryScope}` : base);
 }
 
 export function catalogRowFingerprint(row: NormalizedCatalogRow): string {
@@ -201,6 +224,8 @@ function normalizeRow(
     const maximumStock = integerValue(values.get('maximumStock'), rowNumber, '库存上限');
     const minimumStock = integerValue(values.get('minimumStock'), rowNumber, '库存下限');
     const shelfLifeDays = integerValue(values.get('shelfLifeDays'), rowNumber, '保质期');
+    const lotQuantity = integerValue(values.get('lotQuantity'), rowNumber, '批次数量');
+    const packageQuantity = decimalValue(values.get('packageQuantity'), rowNumber, '包装换算') ?? 1;
     if (purchaseCost != null && purchaseCost < 0) {
         throw new UserInputError(`第 ${rowNumber} 行：进货价不能为负数`);
     }
@@ -210,6 +235,10 @@ function normalizeRow(
     if (shelfLifeDays != null && shelfLifeDays < 0) {
         throw new UserInputError(`第 ${rowNumber} 行：保质期不能为负数`);
     }
+    if (lotQuantity != null && lotQuantity < 0) {
+        throw new UserInputError(`第 ${rowNumber} 行：批次数量不能为负数`);
+    }
+    if (packageQuantity <= 0) throw new UserInputError(`第 ${rowNumber} 行：包装换算必须大于 0`);
 
     const raw: Record<string, string | number | boolean | null> = {};
     fields.forEach((field, index) => {
@@ -226,6 +255,8 @@ function normalizeRow(
         currencyCode: textValue(values.get('currencyCode')).toUpperCase(),
         specification: textValue(values.get('specification')),
         primaryUnit: textValue(values.get('primaryUnit')),
+        purchaseUnit: textValue(values.get('purchaseUnit')),
+        packageQuantity,
         stockOnHand,
         purchaseCost,
         sellingPrice,
@@ -245,6 +276,8 @@ function normalizeRow(
         sku: textValue(values.get('sku')),
         barcode: textValue(values.get('barcode')),
         lotCode: textValue(values.get('lotCode')),
+        lotQuantity,
+        providedFields: [...values.keys()].map(String),
         raw,
     };
 }
@@ -269,6 +302,8 @@ function invalidRow(
         currencyCode: textValue(cells[fields.indexOf('currencyCode')]).toUpperCase(),
         specification: textValue(cells[fields.indexOf('specification')]),
         primaryUnit: textValue(cells[fields.indexOf('primaryUnit')]),
+        purchaseUnit: textValue(cells[fields.indexOf('purchaseUnit')]),
+        packageQuantity: 1,
         stockOnHand: null,
         purchaseCost: null,
         sellingPrice: null,
@@ -285,6 +320,10 @@ function invalidRow(
         sku: textValue(cells[fields.indexOf('sku')]),
         barcode: textValue(cells[fields.indexOf('barcode')]),
         lotCode: textValue(cells[fields.indexOf('lotCode')]),
+        lotQuantity: null,
+        providedFields: fields
+            .filter((field): field is keyof NormalizedCatalogRow => Boolean(field))
+            .map(String),
         raw,
     };
 }

@@ -45,10 +45,28 @@ export const stockLocationsQuery = gql`
     }
 `;
 
-export const createCatalogImportPreviewMutation = gql`
+export const beginCatalogImportMutation = gql`
     ${importJobFields}
-    mutation CreateCatalogImportPreview($file: Upload!, $input: CatalogImportContextInput!) {
-        createCatalogImportPreview(file: $file, input: $input) {
+    mutation BeginCatalogImport($input: BeginCatalogImportInput!) {
+        beginCatalogImport(input: $input) {
+            ...CatalogImportJobFields
+        }
+    }
+`;
+
+export const appendCatalogImportRowsMutation = gql`
+    ${importJobFields}
+    mutation AppendCatalogImportRows($input: AppendCatalogImportRowsInput!) {
+        appendCatalogImportRows(input: $input) {
+            ...CatalogImportJobFields
+        }
+    }
+`;
+
+export const finalizeCatalogImportPreviewMutation = gql`
+    ${importJobFields}
+    mutation FinalizeCatalogImportPreview($id: ID!) {
+        finalizeCatalogImportPreview(id: $id) {
             ...CatalogImportJobFields
         }
     }
@@ -105,6 +123,15 @@ export const resolveCatalogImportRowMutation = gql`
     }
 `;
 
+export const resolveCatalogImportRowsMutation = gql`
+    ${importJobFields}
+    mutation ResolveCatalogImportRows($input: ResolveCatalogImportRowsInput!) {
+        resolveCatalogImportRows(input: $input) {
+            ...CatalogImportJobFields
+        }
+    }
+`;
+
 export const executeCatalogImportMutation = gql`
     ${importJobFields}
     mutation ExecuteCatalogImport($id: ID!) {
@@ -120,18 +147,6 @@ export const rollbackCatalogImportMutation = gql`
         rollbackCatalogImport(id: $id) {
             ...CatalogImportJobFields
         }
-    }
-`;
-
-export const catalogStandardImportTemplateQuery = gql`
-    query CatalogStandardImportTemplate {
-        catalogStandardImportTemplate
-    }
-`;
-
-export const catalogImportReportQuery = gql`
-    query CatalogImportReport($id: ID!) {
-        catalogImportReport(id: $id)
     }
 `;
 
@@ -188,6 +203,59 @@ export const catalogProductWorkspaceQuery = gql`
     }
 `;
 
+export const catalogExportRowsQuery = gql`
+    query CatalogExportRows($skip: Int, $take: Int) {
+        catalogExportRows(skip: $skip, take: $take) {
+            totalItems
+            items {
+                productId
+                variantId
+                productName
+                description
+                categories
+                brand
+                tags
+                productEnabled
+                variantEnabled
+                systemCreatedAt
+                sourceCreatedAt
+                sku
+                barcode
+                specification
+                saleUnit
+                purchaseUnit
+                packageQuantity
+                shelfLifeDays
+                sellingPrice
+                purchaseCostMicrounits
+                margin
+                currencyCode
+                stockLevels {
+                    stockLocationId
+                    stockLocationName
+                    stockOnHand
+                    stockAllocated
+                    stockAvailable
+                    minimumStock
+                    maximumStock
+                }
+                lots {
+                    id
+                    stockLocationId
+                    stockLocationName
+                    lotCode
+                    manufacturedAt
+                    expiresAt
+                    quantityOnHand
+                    purchaseCostMicrounits
+                    currencyCode
+                    state
+                }
+            }
+        }
+    }
+`;
+
 export const updateCatalogVariantOperationsMutation = gql`
     mutation UpdateCatalogVariantOperations($input: UpdateCatalogVariantOperationsInput!) {
         updateCatalogVariantOperations(input: $input) {
@@ -224,6 +292,7 @@ export interface CatalogImportJobRecord {
     detectedHeaders: string[] | null;
     fieldMapping: Record<string, string> | null;
     state:
+        | 'RECEIVING'
         | 'PREVIEW_READY'
         | 'QUEUED'
         | 'RUNNING'
@@ -247,7 +316,7 @@ export interface CatalogImportJobRecord {
 export interface CatalogImportRowRecord {
     id: string;
     rowNumber: number;
-    action: 'CREATE' | 'UPDATE' | 'SKIP_UNCHANGED' | 'CONFLICT' | 'WARNING' | 'ERROR';
+    action: 'PENDING' | 'CREATE' | 'UPDATE' | 'SKIP_UNCHANGED' | 'CONFLICT' | 'WARNING' | 'ERROR';
     resolution: string | null;
     targetProductId: string | null;
     targetVariantId: string | null;
@@ -255,6 +324,52 @@ export interface CatalogImportRowRecord {
     plannedChanges: Record<string, unknown> | null;
     message: string | null;
     appliedAt: string | null;
+}
+
+export interface CatalogExportRowRecord {
+    productId: string;
+    variantId: string;
+    productName: string;
+    description: string;
+    categories: string[];
+    brand: string | null;
+    tags: string[];
+    productEnabled: boolean;
+    variantEnabled: boolean;
+    systemCreatedAt: string;
+    sourceCreatedAt: string | null;
+    sku: string;
+    barcode: string;
+    specification: string;
+    saleUnit: string;
+    purchaseUnit: string;
+    packageQuantity: number;
+    shelfLifeDays: number | null;
+    sellingPrice: number;
+    purchaseCostMicrounits: number | null;
+    margin: number | null;
+    currencyCode: string;
+    stockLevels: Array<{
+        stockLocationId: string;
+        stockLocationName: string;
+        stockOnHand: number;
+        stockAllocated: number;
+        stockAvailable: number;
+        minimumStock: number | null;
+        maximumStock: number | null;
+    }>;
+    lots: Array<{
+        id: string;
+        stockLocationId: string;
+        stockLocationName: string;
+        lotCode: string;
+        manufacturedAt: string | null;
+        expiresAt: string | null;
+        quantityOnHand: number;
+        purchaseCostMicrounits: number | null;
+        currencyCode: string;
+        state: string;
+    }>;
 }
 
 export interface CatalogWorkspaceRecord {

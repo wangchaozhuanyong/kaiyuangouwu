@@ -2,6 +2,7 @@ import { gql } from 'graphql-tag';
 
 export const adminApiExtensions = gql`
     enum CatalogImportState {
+        RECEIVING
         PREVIEW_READY
         QUEUED
         RUNNING
@@ -12,6 +13,7 @@ export const adminApiExtensions = gql`
     }
 
     enum CatalogImportAction {
+        PENDING
         CREATE
         UPDATE
         SKIP_UNCHANGED
@@ -142,6 +144,70 @@ export const adminApiExtensions = gql`
         variants: [CatalogWorkspaceVariant!]!
     }
 
+    type CatalogExportStockRow {
+        stockLocationId: ID!
+        stockLocationName: String!
+        stockOnHand: Int!
+        stockAllocated: Int!
+        stockAvailable: Int!
+        minimumStock: Int
+        maximumStock: Int
+    }
+
+    type CatalogExportLotRow {
+        id: ID!
+        stockLocationId: ID!
+        stockLocationName: String!
+        lotCode: String!
+        manufacturedAt: DateTime
+        expiresAt: DateTime
+        quantityOnHand: Int!
+        purchaseCostMicrounits: Float
+        currencyCode: CurrencyCode!
+        state: String!
+    }
+
+    type CatalogExportRow {
+        productId: ID!
+        variantId: ID!
+        productName: String!
+        description: String!
+        categories: [String!]!
+        brand: String
+        tags: [String!]!
+        productEnabled: Boolean!
+        variantEnabled: Boolean!
+        systemCreatedAt: DateTime!
+        sourceCreatedAt: DateTime
+        sku: String!
+        barcode: String!
+        specification: String!
+        saleUnit: String!
+        purchaseUnit: String!
+        packageQuantity: Float!
+        shelfLifeDays: Int
+        sellingPrice: Money!
+        purchaseCostMicrounits: Float
+        margin: Float
+        currencyCode: CurrencyCode!
+        stockLevels: [CatalogExportStockRow!]!
+        lots: [CatalogExportLotRow!]!
+    }
+
+    type CatalogExportPage implements PaginatedList {
+        items: [CatalogExportRow!]!
+        totalItems: Int!
+    }
+
+    type CatalogProductSummary {
+        productId: ID!
+    }
+
+    type CatalogProductSummaryList {
+        items: [CatalogProductSummary!]!
+        totalItems: Int!
+    }
+
     input CatalogImportContextInput {
         channelId: ID!
         stockLocationId: ID!
@@ -149,10 +215,68 @@ export const adminApiExtensions = gql`
         clearBlankFields: Boolean = false
     }
 
+    input CatalogImportSourceInput {
+        filename: String!
+        mimetype: String!
+        byteSize: Int!
+        fileHash: String!
+        sheetName: String
+        detectedHeaders: [String!]!
+        fieldMapping: JSON!
+        parserVersion: String!
+    }
+
+    input BeginCatalogImportInput {
+        context: CatalogImportContextInput!
+        source: CatalogImportSourceInput!
+        totalRows: Int!
+    }
+
+    input CatalogNormalizedRowInput {
+        rowNumber: Int!
+        name: String!
+        category: String!
+        channelCode: String!
+        stockLocationCode: String!
+        currencyCode: String!
+        specification: String!
+        primaryUnit: String!
+        purchaseUnit: String!
+        packageQuantity: Float!
+        stockOnHand: Int
+        purchaseCost: Float!
+        sellingPrice: Float!
+        reportedMargin: Float
+        maximumStock: Int
+        minimumStock: Int
+        brand: String!
+        manufacturedAt: String
+        shelfLifeDays: Int
+        enabled: Boolean
+        description: String!
+        tags: [String!]!
+        sourceCreatedAt: String
+        sku: String!
+        barcode: String!
+        lotCode: String!
+        lotQuantity: Int
+        providedFields: [String!]!
+    }
+
+    input AppendCatalogImportRowsInput {
+        jobId: ID!
+        rows: [CatalogNormalizedRowInput!]!
+    }
+
     input ResolveCatalogImportRowInput {
         rowId: ID!
         resolution: CatalogImportResolution!
         targetVariantId: ID
+    }
+
+    input ResolveCatalogImportRowsInput {
+        rowIds: [ID!]!
+        resolution: CatalogImportResolution!
     }
 
     input UpdateCatalogVariantOperationsInput {
@@ -174,6 +298,28 @@ export const adminApiExtensions = gql`
         maximumStock: Int
     }
 
+    input SaveCatalogProductInput {
+        product: UpdateProductInput!
+        variants: [UpdateCatalogVariantOperationsInput!]!
+    }
+
+    input CatalogProductSummaryFilterInput {
+        text: String
+        category: String
+        brand: String
+        enabled: Boolean
+        minimumSellingPrice: Money
+        maximumSellingPrice: Money
+        minimumPurchaseCostMicrounits: Float
+        maximumPurchaseCostMicrounits: Float
+        minimumMargin: Float
+        maximumMargin: Float
+        minimumAvailableStock: Int
+        maximumAvailableStock: Int
+        lowStock: Boolean
+        expiringWithinDays: Int
+    }
+
     input SaveCatalogInventoryLotInput {
         id: ID
         productVariantId: ID!
@@ -191,16 +337,20 @@ export const adminApiExtensions = gql`
         catalogImportJobs(skip: Int, take: Int): CatalogImportJobList!
         catalogImportRows(jobId: ID!, action: CatalogImportAction): [CatalogImportRow!]!
         catalogProductWorkspace(productId: ID!): CatalogProductWorkspace!
-        catalogStandardImportTemplate: String!
-        catalogImportReport(id: ID!): String!
+        catalogProductSummaries(filter: CatalogProductSummaryFilterInput): CatalogProductSummaryList!
+        catalogExportRows(skip: Int, take: Int): CatalogExportPage!
     }
 
     extend type Mutation {
-        createCatalogImportPreview(file: Upload!, input: CatalogImportContextInput!): CatalogImportJob!
+        beginCatalogImport(input: BeginCatalogImportInput!): CatalogImportJob!
+        appendCatalogImportRows(input: AppendCatalogImportRowsInput!): CatalogImportJob!
+        finalizeCatalogImportPreview(id: ID!): CatalogImportJob!
         resolveCatalogImportRow(input: ResolveCatalogImportRowInput!): CatalogImportRow!
+        resolveCatalogImportRows(input: ResolveCatalogImportRowsInput!): CatalogImportJob!
         executeCatalogImport(id: ID!): CatalogImportJob!
         rollbackCatalogImport(id: ID!): CatalogImportJob!
         updateCatalogVariantOperations(input: UpdateCatalogVariantOperationsInput!): CatalogProductWorkspace!
+        saveCatalogProduct(input: SaveCatalogProductInput!): Product!
         saveCatalogInventoryLot(input: SaveCatalogInventoryLotInput!): CatalogInventoryLot!
     }
 `;

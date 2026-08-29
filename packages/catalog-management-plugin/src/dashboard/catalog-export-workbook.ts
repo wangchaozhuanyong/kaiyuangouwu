@@ -1,0 +1,163 @@
+import * as XLSX from 'xlsx';
+import type { CatalogExportFormat } from './catalog-export-file';
+import type { CatalogExportRowRecord } from './catalog-management.graphql';
+
+export function buildCatalogExport(rows: CatalogExportRowRecord[], format: CatalogExportFormat) {
+    if (format === 'csv') {
+        const sheet = productSheet(rows);
+        const csv = `\uFEFF${XLSX.utils.sheet_to_csv(sheet)}`;
+        return {
+            buffer: new TextEncoder().encode(csv).buffer,
+            mimeType: 'text/csv;charset=utf-8',
+            extension: 'csv' as const,
+        };
+    }
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, productSheet(rows), '商品与SKU');
+    XLSX.utils.book_append_sheet(workbook, stockSheet(rows), '库存策略');
+    XLSX.utils.book_append_sheet(workbook, lotSheet(rows), '批次效期');
+    XLSX.utils.book_append_sheet(workbook, guideSheet(), '字段说明');
+    const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx', compression: true });
+    return {
+        buffer: output instanceof ArrayBuffer ? output : new Uint8Array(output).buffer,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        extension: 'xlsx' as const,
+    };
+}
+
+function productSheet(rows: CatalogExportRowRecord[]): XLSX.WorkSheet {
+    const values = [
+        [
+            '名称（必填）',
+            '分类（必填）',
+            'SKU',
+            '条码',
+            '规格',
+            '销售单位',
+            '采购单位',
+            '包装换算',
+            '币种',
+            '进货价（必填）',
+            '销售价（必填）',
+            '毛利率',
+            '品牌',
+            '商品状态',
+            'SKU状态',
+            '商品描述',
+            '标签',
+            '保质期',
+            '创建日期',
+            '系统创建时间',
+        ],
+        ...rows.map(row => [
+            row.productName,
+            row.categories[0] ?? '',
+            safeText(row.sku),
+            safeText(row.barcode),
+            row.specification,
+            row.saleUnit,
+            row.purchaseUnit,
+            row.packageQuantity,
+            row.currencyCode,
+            row.purchaseCostMicrounits == null ? null : row.purchaseCostMicrounits / 1_000,
+            row.sellingPrice / 100,
+            row.margin,
+            row.brand ?? '',
+            row.productEnabled ? '启用' : '禁用',
+            row.variantEnabled ? '启用' : '禁用',
+            row.description,
+            row.tags.join('，'),
+            row.shelfLifeDays,
+            dateCell(row.sourceCreatedAt),
+            dateCell(row.systemCreatedAt),
+        ]),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(values, { cellDates: true });
+    sheet['!cols'] = [24, 18, 18, 18, 16, 12, 12, 10, 8, 12, 12, 10, 16, 10, 10, 36, 22, 10, 18, 20].map(
+        wch => ({ wch }),
+    );
+    applyNumberFormat(sheet, rows.length, 'J', '#,##0.000');
+    applyNumberFormat(sheet, rows.length, 'K', '#,##0.00');
+    applyNumberFormat(sheet, rows.length, 'L', '0.0%');
+    applyNumberFormat(sheet, rows.length, 'S', 'yyyy-mm-dd');
+    applyNumberFormat(sheet, rows.length, 'T', 'yyyy-mm-dd hh:mm');
+    return sheet;
+}
+
+function stockSheet(rows: CatalogExportRowRecord[]): XLSX.WorkSheet {
+    const values = [
+        ['SKU', '仓库', '库存量', '已分配', '可用库存', '库存下限', '库存上限'],
+        ...rows.flatMap(row =>
+            row.stockLevels.map(stock => [
+                safeText(row.sku),
+                stock.stockLocationName,
+                stock.stockOnHand,
+                stock.stockAllocated,
+                stock.stockAvailable,
+                stock.minimumStock,
+                stock.maximumStock,
+            ]),
+        ),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(values);
+    sheet['!cols'] = [18, 20, 12, 12, 12, 12, 12].map(wch => ({ wch }));
+    return sheet;
+}
+
+function lotSheet(rows: CatalogExportRowRecord[]): XLSX.WorkSheet {
+    const values = [
+        ['SKU', '仓库', '批次号', '生产日期', '到期日期', '批次数量', '批次进货价', '币种', '状态'],
+        ...rows.flatMap(row =>
+            row.lots.map(lot => [
+                safeText(row.sku),
+                lot.stockLocationName,
+                safeText(lot.lotCode),
+                dateCell(lot.manufacturedAt),
+                dateCell(lot.expiresAt),
+                lot.quantityOnHand,
+                lot.purchaseCostMicrounits == null ? null : lot.purchaseCostMicrounits / 1_000,
+                lot.currencyCode,
+                lot.state,
+            ]),
+        ),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(values, { cellDates: true });
+    sheet['!cols'] = [18, 20, 18, 14, 14, 12, 14, 8, 12].map(wch => ({ wch }));
+    const rowCount = values.length - 1;
+    applyNumberFormat(sheet, rowCount, 'D', 'yyyy-mm-dd');
+    applyNumberFormat(sheet, rowCount, 'E', 'yyyy-mm-dd');
+    applyNumberFormat(sheet, rowCount, 'G', '#,##0.000');
+    return sheet;
+}
+
+function guideSheet(): XLSX.WorkSheet {
+    const values = [
+        ['工作表', '字段', '规则'],
+        ['商品与SKU', '名称、分类、进货价、销售价', '必填；SKU 建议填写并保持唯一'],
+        ['商品与SKU', '毛利率', '系统根据售价和最新进货价计算，不作为导入权威值'],
+        ['商品与SKU', '创建日期', '保存来源报表日期，不覆盖系统创建时间'],
+        ['库存策略', '库存量、上下限', '按 SKU 与仓库记录；数量必须为整数'],
+        ['批次效期', '批次号、生产日期、到期日期', '同一 SKU、仓库、批次号必须唯一'],
+        ['隐私', '原始文件', '文件在浏览器本地解析，服务器只接收用户确认后的标准化字段'],
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(values);
+    sheet['!cols'] = [{ wch: 16 }, { wch: 30 }, { wch: 72 }];
+    return sheet;
+}
+
+function dateCell(value: string | null): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function safeText(value: string): string {
+    return /^[=+\-@]/u.test(value) ? `'${value}` : value;
+}
+
+function applyNumberFormat(sheet: XLSX.WorkSheet, rowCount: number, column: string, format: string): void {
+    for (let row = 2; row <= rowCount + 1; row++) {
+        const cell = sheet[`${column}${row}`];
+        if (cell) cell.z = format;
+    }
+}

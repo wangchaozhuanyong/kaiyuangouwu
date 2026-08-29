@@ -6,6 +6,7 @@
         "jsx": "react-jsx",
         "paths": {
             "@vendure/admin-ui/*": ["../admin-ui/package/*"],
+            "@vendure/catalog-management-plugin": ["../catalog-management-plugin/src/index.ts"],
             "@vendure/commerce-fulfillment-plugin": ["../commerce-fulfillment-plugin/src/index.ts"],
             "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"],
             "@vendure/image-generation-plugin": ["../image-generation-plugin/src/index.ts"],

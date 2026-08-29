@@ -3,12 +3,6 @@ import {
     AlertDescription,
     Badge,
     Button,
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
     Input,
     Label,
     Select,
@@ -16,6 +10,12 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
     Skeleton,
     Switch,
     Table,
@@ -38,7 +38,6 @@ import {
     CatalogWorkspaceVariantRecord,
     catalogProductWorkspaceQuery,
     saveCatalogInventoryLotMutation,
-    updateCatalogVariantOperationsMutation,
 } from './catalog-management.graphql';
 
 interface VariantDraft {
@@ -67,6 +66,16 @@ interface LotDraft {
     expiresAt: string;
     quantityOnHand: string;
     purchaseCost: string;
+}
+
+const WORKSPACE_DIRTY_EVENT = 'catalog-product-workspace-dirty';
+const WORKSPACE_COLLECT_EVENT = 'catalog-product-workspace-collect';
+const WORKSPACE_COMMITTED_EVENT = 'catalog-product-workspace-committed';
+
+interface WorkspaceCollectRequest {
+    productId: string;
+    register: (operation: Record<string, unknown>) => void;
+    fail: (error: unknown) => void;
 }
 
 export function CatalogProductWorkspace({ context }: Readonly<{ context: { entity?: { id?: string } } }>) {
@@ -100,49 +109,6 @@ export function CatalogProductWorkspace({ context }: Readonly<{ context: { entit
         return () => window.removeEventListener('beforeunload', warn);
     }, [dirtyIds.size]);
 
-    const saveMutation = useMutation({
-        mutationFn: async (ids: string[]) => {
-            if (!workspace || !stockLocationId) throw new Error('请选择仓库');
-            for (const id of ids) {
-                const draft = drafts[id];
-                if (!draft) continue;
-                validateDraft(draft);
-                await api.mutate(updateCatalogVariantOperationsMutation, {
-                    input: {
-                        productVariantId: id,
-                        stockLocationId,
-                        sku: draft.sku.trim(),
-                        enabled: draft.enabled,
-                        barcode: draft.barcode,
-                        specification: draft.specification,
-                        saleUnit: draft.saleUnit,
-                        purchaseUnit: draft.purchaseUnit,
-                        packageQuantity: requiredNumber(draft.packageQuantity, '包装换算'),
-                        shelfLifeDays: optionalInteger(draft.shelfLifeDays, '保质期'),
-                        sellingPrice: Math.round(requiredNumber(draft.sellingPrice, '销售价') * 100),
-                        ...(draft.purchaseCost.trim()
-                            ? {
-                                  purchaseCostMicrounits: Math.round(
-                                      requiredNumber(draft.purchaseCost, '进货价') * 1_000,
-                                  ),
-                              }
-                            : {}),
-                        currencyCode: workspace.currencyCode,
-                        stockOnHand: requiredInteger(draft.stockOnHand, '库存'),
-                        minimumStock: optionalInteger(draft.minimumStock, '库存下限'),
-                        maximumStock: optionalInteger(draft.maximumStock, '库存上限'),
-                    },
-                });
-            }
-        },
-        onSuccess: async () => {
-            setDirtyIds(new Set());
-            toast.success('SKU、价格和库存设置已保存');
-            await queryClient.invalidateQueries({ queryKey });
-        },
-        onError: error => toast.error(errorMessage(error)),
-    });
-
     const lotMutation = useMutation({
         mutationFn: (draft: LotDraft) => {
             if (!workspace) throw new Error('商品数据尚未加载');
@@ -171,6 +137,60 @@ export function CatalogProductWorkspace({ context }: Readonly<{ context: { entit
         },
         onError: error => toast.error(errorMessage(error)),
     });
+
+    useEffect(() => {
+        if (!productId) return;
+        window.dispatchEvent(
+            new CustomEvent(WORKSPACE_DIRTY_EVENT, {
+                detail: { productId, isDirty: dirtyIds.size > 0 },
+            }),
+        );
+    }, [dirtyIds.size, productId]);
+
+    useEffect(() => {
+        if (!productId) return;
+        const handleCollectRequest = (event: Event) => {
+            const detail = (event as CustomEvent<WorkspaceCollectRequest>).detail;
+            if (detail?.productId !== productId || dirtyIds.size === 0) return;
+            try {
+                if (!workspace || !stockLocationId) throw new Error('请选择仓库');
+                for (const id of dirtyIds) {
+                    const draft = drafts[id];
+                    if (draft) {
+                        detail.register(
+                            variantOperationInput(draft, stockLocationId, workspace.currencyCode),
+                        );
+                    }
+                }
+            } catch (error) {
+                detail.fail(error);
+            }
+        };
+        window.addEventListener(WORKSPACE_COLLECT_EVENT, handleCollectRequest);
+        return () => window.removeEventListener(WORKSPACE_COLLECT_EVENT, handleCollectRequest);
+    }, [dirtyIds, drafts, productId, stockLocationId, workspace]);
+
+    useEffect(() => {
+        const handleCommitted = (event: Event) => {
+            const detail = (event as CustomEvent<{ productId: string }>).detail;
+            if (detail?.productId !== productId) return;
+            setDirtyIds(new Set());
+            void queryClient.invalidateQueries({ queryKey });
+        };
+        window.addEventListener(WORKSPACE_COMMITTED_EVENT, handleCommitted);
+        return () => window.removeEventListener(WORKSPACE_COMMITTED_EVENT, handleCommitted);
+    }, [productId, queryClient, queryKey]);
+
+    useEffect(() => {
+        return () => {
+            if (!productId) return;
+            window.dispatchEvent(
+                new CustomEvent(WORKSPACE_DIRTY_EVENT, {
+                    detail: { productId, isDirty: false },
+                }),
+            );
+        };
+    }, [productId]);
 
     const selectedLots = useMemo(
         () =>
@@ -249,16 +269,9 @@ export function CatalogProductWorkspace({ context }: Readonly<{ context: { entit
                         成本显示三位小数；毛利自动计算；仓库切换只影响库存和预警列。
                     </p>
                 </div>
-                <Button
-                    disabled={dirtyIds.size === 0 || saveMutation.isPending}
-                    onClick={() => saveMutation.mutate([...dirtyIds])}
-                >
-                    {saveMutation.isPending ? (
-                        <Loader2 className="mr-2 size-4 animate-spin" />
-                    ) : (
-                        <Save className="mr-2 size-4" />
-                    )}
-                    保存全部{dirtyIds.size ? `（${dirtyIds.size}）` : ''}
+                <Button type="submit" disabled={dirtyIds.size === 0}>
+                    <Save className="mr-2 size-4" />
+                    统一保存{dirtyIds.size ? `（${dirtyIds.size}）` : ''}
                 </Button>
             </div>
 
@@ -564,15 +577,13 @@ function LotEditor({
     if (!draft) return null;
     const update = (values: Partial<LotDraft>) => onChange({ ...draft, ...values });
     return (
-        <Dialog open onOpenChange={open => !open && onClose()}>
-            <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>{draft.id ? '编辑库存批次' : '新增库存批次'}</DialogTitle>
-                    <DialogDescription>
-                        保存数量变化时会生成库存调整流水，不会静默覆盖库存。
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 sm:grid-cols-2">
+        <Sheet open onOpenChange={open => !open && onClose()}>
+            <SheetContent className="flex w-full flex-col overflow-y-auto sm:max-w-[640px]">
+                <SheetHeader>
+                    <SheetTitle>{draft.id ? '编辑库存批次' : '新增库存批次'}</SheetTitle>
+                    <SheetDescription>保存数量变化时会生成库存调整流水，不会静默覆盖库存。</SheetDescription>
+                </SheetHeader>
+                <div className="grid flex-1 content-start gap-4 py-6 sm:grid-cols-2">
                     <Field label="SKU">
                         <Select
                             value={draft.productVariantId}
@@ -641,16 +652,16 @@ function LotEditor({
                         />
                     </Field>
                 </div>
-                <DialogFooter>
+                <SheetFooter className="border-t pt-4">
                     <Button variant="outline" onClick={onClose}>
                         取消
                     </Button>
                     <Button disabled={pending || !draft.lotCode.trim()} onClick={onSave}>
                         {pending && <Loader2 className="mr-2 size-4 animate-spin" />}保存批次
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
     );
 }
 
@@ -718,6 +729,36 @@ function validateDraft(draft: VariantDraft): void {
     const max = optionalInteger(draft.maximumStock, '库存上限');
     if (min != null && max != null && max < min) throw new Error('库存上限不能小于库存下限');
     if (requiredNumber(draft.packageQuantity, '包装换算') <= 0) throw new Error('包装换算必须大于 0');
+}
+
+function variantOperationInput(
+    draft: VariantDraft,
+    stockLocationId: string,
+    currencyCode: string,
+): Record<string, unknown> {
+    validateDraft(draft);
+    return {
+        productVariantId: draft.id,
+        stockLocationId,
+        sku: draft.sku.trim(),
+        enabled: draft.enabled,
+        barcode: draft.barcode,
+        specification: draft.specification,
+        saleUnit: draft.saleUnit,
+        purchaseUnit: draft.purchaseUnit,
+        packageQuantity: requiredNumber(draft.packageQuantity, '包装换算'),
+        shelfLifeDays: optionalInteger(draft.shelfLifeDays, '保质期'),
+        sellingPrice: Math.round(requiredNumber(draft.sellingPrice, '销售价') * 100),
+        ...(draft.purchaseCost.trim()
+            ? {
+                  purchaseCostMicrounits: Math.round(requiredNumber(draft.purchaseCost, '进货价') * 1_000),
+              }
+            : {}),
+        currencyCode,
+        stockOnHand: requiredInteger(draft.stockOnHand, '库存'),
+        minimumStock: optionalInteger(draft.minimumStock, '库存下限'),
+        maximumStock: optionalInteger(draft.maximumStock, '库存上限'),
+    };
 }
 
 function draftMargin(draft: VariantDraft): number | null {
