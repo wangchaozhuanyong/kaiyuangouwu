@@ -1,9 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { ImageProviderCipherService } from '../security/image-provider-cipher.service';
-import type { SafeProviderUrlService } from '../security/safe-provider-url.service';
 
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
+import { type ImageProviderCipherService } from '../security/image-provider-cipher.service';
+import { type SafeProviderUrlService } from '../security/safe-provider-url.service';
 
 import { ImageProviderClient } from './image-provider.client';
 
@@ -50,6 +50,7 @@ describe('ImageProviderClient mock relay integration', () => {
             Promise.resolve({ url: new URL(value), address: '127.0.0.1', family: 4 }),
     };
     const credential = new ImageProviderCredential({
+        scope: 'OPENAI',
         enabled: true,
         encryptedApiKey: 'encrypted',
         textModelId: 'prompt-model',
@@ -189,6 +190,25 @@ describe('ImageProviderClient mock relay integration', () => {
         expect(payload.model).toBe('prompt-model');
         expect(requests[0].headers['idempotency-key']).toMatch(/^prompt-/u);
     });
+
+    it('optimizes prompts through a Gemini credential when selected', async () => {
+        const geminiCredential = new ImageProviderCredential({
+            ...credential,
+            scope: 'GEMINI',
+            textModelId: 'gemini-text-model',
+        });
+        geminiCredential.baseUrl = baseUrl;
+
+        const result = await client().optimizePrompt(
+            geminiCredential,
+            'Return JSON',
+            'make this prompt better',
+        );
+
+        expect(result.text).toBe('{"subject":"gemini-product"}');
+        expect(requests[0].path).toBe('/v1/models/gemini-text-model:generateContent');
+        expect(requests[0].headers['x-goog-api-key']).toBe('mock-relay-key');
+    });
 });
 
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -233,6 +253,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
             candidates: [
                 { content: { parts: [{ inlineData: { mimeType: 'image/png', data: imageBase64 } }] } },
             ],
+        });
+    }
+    if (path === '/v1/models/gemini-text-model:generateContent') {
+        return sendJson(response, {
+            responseId: 'gemini-prompt-request',
+            candidates: [{ content: { parts: [{ text: '{"subject":"gemini-product"}' }] } }],
         });
     }
     if (path === '/v1/interactions') {

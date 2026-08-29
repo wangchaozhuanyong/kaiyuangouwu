@@ -75,9 +75,31 @@ export class ImageProviderClient {
             throw new DefinitiveImageProviderError('提示词优化模型尚未配置');
         }
         const baseUrl = await this.safeUrls.validate(credential.baseUrl);
-        const { payload: response, telemetry } = await this.requestJson(
+        const apiKey = this.cipher.decrypt(credential.encryptedApiKey);
+        if (credential.scope === 'GEMINI') {
+            const modelId = credential.textModelId.trim().replace(/^models\//iu, '');
+            const { payload: geminiResponse, telemetry: geminiTelemetry } = await this.requestJson(
+                this.safeUrls.endpoint(baseUrl, `models/${encodeURIComponent(modelId)}:generateContent`),
+                apiKey,
+                {
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                    generationConfig: {
+                        temperature: 0.2,
+                        responseMimeType: 'application/json',
+                    },
+                },
+                `prompt-${randomUUID()}`,
+                { 'x-goog-api-key': apiKey },
+                MAX_PROMPT_RESPONSE_BYTES,
+            );
+            const geminiContent = geminiResponseText(geminiResponse);
+            if (!geminiContent) throw new DefinitiveImageProviderError('Gemini 提示词模型未返回文本');
+            return { text: geminiContent, telemetry: geminiTelemetry };
+        }
+        const { payload: openAiResponse, telemetry: openAiTelemetry } = await this.requestJson(
             this.safeUrls.endpoint(baseUrl, 'chat/completions'),
-            this.cipher.decrypt(credential.encryptedApiKey),
+            apiKey,
             {
                 model: credential.textModelId,
                 temperature: 0.2,
@@ -91,11 +113,11 @@ export class ImageProviderClient {
             {},
             MAX_PROMPT_RESPONSE_BYTES,
         );
-        const content = objectAt(response, ['choices', 0, 'message', 'content']);
-        if (typeof content !== 'string' || !content.trim()) {
+        const openAiContent = objectAt(openAiResponse, ['choices', 0, 'message', 'content']);
+        if (typeof openAiContent !== 'string' || !openAiContent.trim()) {
             throw new DefinitiveImageProviderError('提示词优化模型未返回文本');
         }
-        return { text: content, telemetry };
+        return { text: openAiContent, telemetry: openAiTelemetry };
     }
 
     async testConnection(credential: ImageProviderCredential): Promise<{ ok: boolean; message: string }> {
@@ -715,6 +737,17 @@ function objectAt(value: unknown, path: Array<string | number>): unknown {
 function stringAt(value: unknown, path: Array<string | number>): string | undefined {
     const found = objectAt(value, path);
     return typeof found === 'string' && found.trim() ? found : undefined;
+}
+
+function geminiResponseText(value: unknown): string | undefined {
+    const parts = objectAt(value, ['candidates', 0, 'content', 'parts']);
+    if (!Array.isArray(parts)) return;
+    const text = parts
+        .map(part => stringAt(part, ['text']))
+        .filter((part): part is string => Boolean(part))
+        .join('\n')
+        .trim();
+    return text || undefined;
 }
 
 function imageGenerationResult(value: unknown): string | undefined {

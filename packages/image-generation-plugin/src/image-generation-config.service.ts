@@ -1,9 +1,9 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
 
-import { launchModelDefinitions, retiredLaunchModelCodes } from './constants';
+import { IMAGE_GENERATION_OPTIONS, launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
@@ -16,6 +16,7 @@ import { ImageProviderClient } from './provider/image-provider.client';
 import { ImageProviderCipherService } from './security/image-provider-cipher.service';
 import { SafeProviderUrlService } from './security/safe-provider-url.service';
 import {
+    ImageGenerationPluginOptions,
     ImageProviderProtocol,
     ImageProviderScope,
     SaveImageGenerationConfigInput,
@@ -38,6 +39,7 @@ const PROVIDER_SCOPES = ['OPENAI', 'GEMINI'] as const satisfies readonly ImagePr
 @Injectable()
 export class ImageGenerationConfigService implements OnApplicationBootstrap {
     constructor(
+        @Inject(IMAGE_GENERATION_OPTIONS) private readonly options: ImageGenerationPluginOptions,
         private readonly connection: TransactionalConnection,
         private readonly cipher: ImageProviderCipherService,
         private readonly safeUrls: SafeProviderUrlService,
@@ -49,22 +51,41 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     async onApplicationBootstrap(): Promise<void> {
         const repository = this.connection.rawConnection.getRepository(ImagePromptSkillRelease);
         let release = await repository.findOne({ where: { sourceHash: this.rules.sourceHash } });
+        const discoveredDuringThisBoot = !release;
         const active = await repository.findOne({
             where: { status: 'ACTIVE' },
             order: { activatedAt: 'DESC' },
         });
         if (!release) {
-            release = await repository.save(
-                new ImagePromptSkillRelease({
-                    bundleVersion: Number(this.rules.serializableBundle.bundleVersion ?? 1),
-                    sourceHash: this.rules.sourceHash,
-                    status: active ? 'INACTIVE' : 'ACTIVE',
-                    bundle: this.rules.serializableBundle,
-                    activatedAt: active ? null : new Date(),
-                }),
-            );
+            try {
+                release = await repository.save(
+                    new ImagePromptSkillRelease({
+                        bundleVersion: Number(this.rules.serializableBundle.bundleVersion ?? 1),
+                        sourceHash: this.rules.sourceHash,
+                        status: 'INACTIVE',
+                        bundle: this.rules.serializableBundle,
+                        activatedAt: null,
+                    }),
+                );
+            } catch (error) {
+                // A second API instance may have registered the same unique source hash first.
+                release = await repository.findOne({ where: { sourceHash: this.rules.sourceHash } });
+                if (!release) throw error;
+            }
         }
-        const selected = active ?? release;
+        const promoteRelease =
+            !active || (discoveredDuringThisBoot && this.options.autoActivateSkillReleases === true);
+        if (promoteRelease) {
+            const activatedAt = new Date();
+            await this.connection.rawConnection.transaction(async manager => {
+                const transactionRepository = manager.getRepository(ImagePromptSkillRelease);
+                await transactionRepository.update({ status: 'ACTIVE' }, { status: 'INACTIVE' });
+                await transactionRepository.update({ id: release.id }, { status: 'ACTIVE', activatedAt });
+            });
+            release.status = 'ACTIVE';
+            release.activatedAt = activatedAt;
+        }
+        const selected = promoteRelease ? release : (active ?? release);
         this.rules.activateBundle(selected.bundle);
     }
 
@@ -82,6 +103,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             models,
             credentialEnabled: credentials.some(credential => credential?.enabled),
             activeSkillHash: this.rules.sourceHash,
+            skillAutoActivateEnabled: this.options.autoActivateSkillReleases === true,
         };
     }
 
@@ -172,10 +194,16 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             })),
         );
         const availableModels = readiness.filter(item => item.available).map(item => item.model);
-        const optimizerAvailable = await this.providerRouter.hasAvailable(ctx, {
-            scope: 'OPENAI',
-            purpose: 'PROMPT',
-        });
+        const optimizerAvailable = (
+            await Promise.all(
+                PROVIDER_SCOPES.map(scope =>
+                    this.providerRouter.hasAvailable(ctx, {
+                        scope,
+                        purpose: 'PROMPT',
+                    }),
+                ),
+            )
+        ).some(Boolean);
         return {
             enabled: config.enabled && availableModels.length > 0,
             promptOptimizationEnabled: config.promptOptimizationEnabled && optimizerAvailable,
@@ -559,6 +587,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 sourceHash: true,
                 status: true,
                 activatedAt: true,
+                bundle: true,
             },
         });
     }

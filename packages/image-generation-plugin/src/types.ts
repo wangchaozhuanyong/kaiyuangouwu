@@ -19,6 +19,11 @@ export interface ImageGenerationPluginOptions {
     storageRoot?: string;
     downloadSigningSecret?: string;
     production?: boolean;
+    /**
+     * Automatically promotes a newly discovered, build-validated prompt Skill bundle.
+     * Existing releases are never promoted merely because an older process restarts.
+     */
+    autoActivateSkillReleases?: boolean;
 }
 
 export interface SaveImageGenerationConfigInput {

@@ -8,16 +8,20 @@ import {
 } from '@vendure/core';
 import { ReferralWalletSpendService } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
-import type { ImagePromptSpec, ImageReferenceMode, OptimizeImagePromptInput } from '../types';
 
 import { MAX_PROMPT_LENGTH } from '../constants';
 import { ImageGenerationConfig } from '../entities/image-generation-config.entity';
 import { ImageModelConfig } from '../entities/image-model-config.entity';
 import { ImagePromptOptimization } from '../entities/image-prompt-optimization.entity';
-import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { ImageGenerationConfigService } from '../image-generation-config.service';
 import { ImageUsageQuotaService } from '../image-usage-quota.service';
 import { ImageProviderClient } from '../provider/image-provider.client';
+import {
+    type ImagePromptSpec,
+    type ImageProviderScope,
+    type ImageReferenceMode,
+    type OptimizeImagePromptInput,
+} from '../types';
 
 import { PromptRulesService } from './prompt-rules.service';
 
@@ -31,6 +35,7 @@ const OPTIMIZER_SYSTEM_PROMPT = [
     'String arrays must contain strings only. Preserve any exact requested text verbatim. Never invent ',
     'a brand, logo, price, promotion, certification, medical claim, product claim, or identity.',
 ].join('\n');
+const PROMPT_PROVIDER_SCOPES = ['OPENAI', 'GEMINI'] as const satisfies readonly ImageProviderScope[];
 
 @Injectable()
 export class ImagePromptEngineService {
@@ -78,46 +83,51 @@ export class ImagePromptEngineService {
         let providerError: string | null = null;
         const providerStartedAt = Date.now();
         try {
-            let credential: ImageProviderCredential | null = null;
-            let result: Awaited<ReturnType<ImageProviderClient['optimizePrompt']>> | null = null;
-            for (let routeAttempt = 0; routeAttempt < 2; routeAttempt += 1) {
-                const route = await this.configService.routeCredential(ctx, 'OPENAI', undefined, 'PROMPT');
-                credential = route.credential;
-                optimizerModelId = credential.textModelId;
-                credentialCode = credential.code;
-                credentialName = credential.name;
-                credentialLast4 = credential.apiKeyLast4;
-                credentialSelectionReason = route.selectionReason;
-                upstreamCallCount += 1;
-                try {
-                    result = await this.providerClient.optimizePrompt(
-                        credential,
-                        OPTIMIZER_SYSTEM_PROMPT,
-                        JSON.stringify({ prompt, referenceMode }),
-                    );
-                    await this.configService
-                        .recordCredentialRuntimeSuccess(ctx, credential)
-                        .catch(() => undefined);
-                    break;
-                } catch (error) {
-                    const details = providerFailureDetails(error);
-                    await this.configService
-                        .recordCredentialRuntimeFailure(ctx, credential, {
-                            httpStatus: details.httpStatus,
-                            retryAfterSeconds: details.retryAfterSeconds,
-                            message: error instanceof Error ? error.message : String(error),
-                        })
-                        .catch(() => undefined);
-                    const safelyRejected = [401, 403, 429].includes(details.httpStatus ?? 0);
-                    if (!safelyRejected || routeAttempt === 1) throw error;
+            const selected = await firstSuccessfulPromptProvider(async scope => {
+                let lastScopeError: unknown;
+                for (let routeAttempt = 0; routeAttempt < 2; routeAttempt += 1) {
+                    const route = await this.configService.routeCredential(ctx, scope, undefined, 'PROMPT');
+                    const routedCredential = route.credential;
+                    optimizerModelId = routedCredential.textModelId;
+                    credentialCode = routedCredential.code;
+                    credentialName = routedCredential.name;
+                    credentialLast4 = routedCredential.apiKeyLast4;
+                    credentialSelectionReason = `${providerScopeName(scope)}；${route.selectionReason}`;
+                    upstreamCallCount += 1;
+                    try {
+                        const promptResult = await this.providerClient.optimizePrompt(
+                            routedCredential,
+                            OPTIMIZER_SYSTEM_PROMPT,
+                            JSON.stringify({ prompt, referenceMode }),
+                        );
+                        await this.configService
+                            .recordCredentialRuntimeSuccess(ctx, routedCredential)
+                            .catch(() => undefined);
+                        return { credential: routedCredential, result: promptResult };
+                    } catch (error) {
+                        lastScopeError = error;
+                        const details = providerFailureDetails(error);
+                        await this.configService
+                            .recordCredentialRuntimeFailure(ctx, routedCredential, {
+                                httpStatus: details.httpStatus,
+                                retryAfterSeconds: details.retryAfterSeconds,
+                                message: error instanceof Error ? error.message : String(error),
+                            })
+                            .catch(() => undefined);
+                        const safelyRejected = [401, 403, 429].includes(details.httpStatus ?? 0);
+                        if (!safelyRejected || routeAttempt === 1) break;
+                    }
                 }
-            }
-            if (!credential || !result) throw new UserInputError('没有可用的提示词优化 Key');
-            telemetry = result.telemetry as Record<string, any> | undefined;
-            const parsed = this.parseSpec(result.text);
+                throw errorFromUnknown(lastScopeError, `${providerScopeName(scope)} 没有可用的提示词 Key`);
+            });
+            const { credential: selectedCredential, result: selectedResult } = selected;
+            telemetry = selectedResult.telemetry as Record<string, any> | undefined;
+            const parsed = this.parseSpec(selectedResult.text);
             if (!parsed) upstreamCallCount += 1;
             spec =
-                parsed ?? (await this.repairSpec(credential, result.text, prompt, referenceMode)) ?? fallback;
+                parsed ??
+                (await this.repairSpec(selectedCredential, selectedResult.text, prompt, referenceMode)) ??
+                fallback;
             source = spec === fallback ? 'FALLBACK' : 'MODEL';
             providerSucceeded = source === 'MODEL';
         } catch (error) {
@@ -459,6 +469,29 @@ export class ImagePromptEngineService {
         if (!customer) throw new UserInputError('找不到当前客户');
         return customer;
     }
+}
+
+export async function firstSuccessfulPromptProvider<T>(
+    attempt: (scope: ImageProviderScope) => Promise<T>,
+): Promise<T> {
+    let lastError: unknown;
+    for (const scope of PROMPT_PROVIDER_SCOPES) {
+        try {
+            return await attempt(scope);
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw errorFromUnknown(lastError, '没有可用的提示词优化 Key');
+}
+
+function providerScopeName(scope: ImageProviderScope): string {
+    return scope === 'OPENAI' ? 'GPT/OpenAI' : 'Gemini';
+}
+
+function errorFromUnknown(error: unknown, fallbackMessage: string): Error {
+    if (error instanceof Error) return error;
+    return new UserInputError(typeof error === 'string' && error.trim() ? error : fallbackMessage);
 }
 
 function normalizePrompt(value: string): string {

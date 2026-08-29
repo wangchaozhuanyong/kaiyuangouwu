@@ -917,6 +917,7 @@ export const devConfig: VendureConfig = {
                       storageRoot: process.env.IMAGE_GENERATION_STORAGE_ROOT,
                       downloadSigningSecret: process.env.IMAGE_GENERATION_DOWNLOAD_SECRET,
                       production: IS_PRODUCTION,
+                      autoActivateSkillReleases: process.env.IMAGE_PROMPT_SKILL_AUTO_ACTIVATE === 'true',
                   }),
                   StorefrontCatalogPlugin,
                   StorefrontCartPlugin,

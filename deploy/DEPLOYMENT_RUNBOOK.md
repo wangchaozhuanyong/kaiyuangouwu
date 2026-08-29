@@ -70,13 +70,13 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 最后一条命令只能在与 EC2 匹配的 `linux/x64` 干净构建机上执行。产物目录会包含平台、完整 Git SHA、`bun.lock` SHA-256、运行包清单、`RUNTIME-AUDIT.json` 和文件校验清单，并拒绝 `esbuild`、`less`、`tar`、`typescript`、`vite`、`webpack` 或达到指定审计阈值的包进入运行目录。使用 `--allow-dirty` 生成的产物只允许本地演练，不得部署。
 
-正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 手动工作流生成。输入必须是 `origin/main` 当前完整的 40 位小写 SHA；工作流固定使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64，并重复执行冻结安装、全仓审计、发布变更只读 lint、构建、测试、运行产物 High+ 门禁和自验证。分支未推送到 `main`、SHA 不一致、源码被修改、平台不符或任一门禁失败时都不会上传制品。
+正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 工作流生成。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。工作流固定使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64，并重复执行冻结安装、全仓审计、发布变更只读 lint、Skill 编译与回归测试、构建、运行产物 High+ 门禁和自验证。分支未推送到 `main`、SHA 不一致、源码被修改、平台不符或任一门禁失败时都不会上传制品。
 
-制品工作流成功后，`Deploy Production Runtime` 会自动接管发布。它使用 GitHub OIDC 临时凭证承担
+制品工作流成功后，`Deploy Production Runtime` 会自动接管手动制品任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
 `arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入
 `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/<sha>/`，再只向
-`i-041a146558e432cbf` 发送 `AWS-RunShellScript`。仓库和 GitHub 均不保存长期 AWS Access Key；日常发布只需在
-GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，无需登录 AWS 控制台。
+`i-041a146558e432cbf` 发送 `AWS-RunShellScript`。仓库和 GitHub 均不保存长期 AWS Access Key；常规发布在
+GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，Skill 规则路径变更则自动触发，两者都无需登录 AWS 控制台。
 
 自动发布入口为 `/usr/local/sbin/vendure-production-deploy-from-s3`，来源必须是已提交的
 `deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
@@ -99,6 +99,13 @@ GitHub OIDC 临时角色通过 AWS SSM 执行只读检查：物理可用内存�
 并通过 `deploy/recover-current-production-runtime.sh` 在同一生产锁内重建 PM2 进程；不会回退 Git、数据库或版本标记。
 
 若仓库根命令与当次改动范围不匹配，以 `package.json` 的现有脚本和本次实际测试清单为准，并在发布记录中写明。构建 Dashboard 前必须使用干净的 `packages/dev-server/dist`，避免旧 Vite 哈希文件混入。
+
+### 提示词 Skill 自动升级
+
+- 生产 API 和 Worker 的加密 `.env` 必须同时设置 `IMAGE_PROMPT_SKILL_AUTO_ACTIVATE=true`，否则新 bundle 只会自动登记，不会自动激活。
+- 只有首次在数据库中发现的新 SHA-256 bundle 可自动激活；历史进程重启不得重新提升旧 bundle。
+- 自动激活只在完整构建、Skill bundle 校验、固定场景回归测试和生产运行产物验证全部通过后才会进入生产。
+- 每次任务保留原 bundle hash，新版本不改写已经开始的任务。如需回滚，在后台选择历史版本；不删除 bundle 或历史任务。
 
 ## 防止旧代码覆盖新代码的强制协议
 

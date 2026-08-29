@@ -53,6 +53,7 @@ const configFields = gql`
         termsEn
         credentialEnabled
         activeSkillHash
+        skillAutoActivateEnabled
         models {
             ...ImageStudioAdminModelFields
         }
@@ -172,6 +173,9 @@ export const imageGenerationAdminQuery = gql`
             sourceHash
             status
             activatedAt
+            supportedUseCases
+            supportedModels
+            routingStrategy
         }
         imagePromptOptimizationAudit(take: 30) {
             totalItems
@@ -437,6 +441,7 @@ export interface ImageAdminConfigRecord {
     termsEn: string;
     credentialEnabled: boolean;
     activeSkillHash: string;
+    skillAutoActivateEnabled: boolean;
     models: ImageAdminModelRecord[];
 }
 
@@ -583,6 +588,9 @@ export interface ImageAdminQueryResult {
         sourceHash: string;
         status: string;
         activatedAt?: string | null;
+        supportedUseCases: string[];
+        supportedModels: string[];
+        routingStrategy: string;
     }>;
     imagePromptOptimizationAudit: {
         totalItems: number;

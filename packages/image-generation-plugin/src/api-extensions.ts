@@ -288,6 +288,7 @@ export const adminApiExtensions = gql`
         models: [ImageStudioModel!]!
         credentialEnabled: Boolean!
         activeSkillHash: String!
+        skillAutoActivateEnabled: Boolean!
     }
 
     extend type ImageStudioModel {
@@ -371,6 +372,9 @@ export const adminApiExtensions = gql`
         sourceHash: String!
         status: String!
         activatedAt: DateTime
+        supportedUseCases: [String!]!
+        supportedModels: [String!]!
+        routingStrategy: String!
     }
 
     type ImagePromptOptimizationAudit implements Node {

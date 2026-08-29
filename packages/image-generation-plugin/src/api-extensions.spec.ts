@@ -32,5 +32,9 @@ describe('image generation GraphQL surface', () => {
         expect(schema).toContain('supportsIdempotency');
         expect(schema).toContain('smokeTestImageModel');
         expect(schema).toContain('imageGenerationCostSummary');
+        expect(schema).toContain('supportedUseCases');
+        expect(schema).toContain('supportedModels');
+        expect(schema).toContain('routingStrategy');
+        expect(schema).toContain('skillAutoActivateEnabled');
     });
 });
