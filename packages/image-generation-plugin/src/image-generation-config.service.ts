@@ -133,9 +133,29 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     async saveConfig(ctx: RequestContext, input: SaveImageGenerationConfigInput) {
         await this.connection.withTransaction(ctx, async txCtx => {
             const config = await this.getOrCreateConfig(txCtx);
-            const models = await this.getOrCreateModels(txCtx);
-            if (input.enabled && !models.some(model => model.enabled))
+            const modelRepository = this.connection.getRepository(txCtx, ImageModelConfig);
+            let models = await this.getOrCreateModels(txCtx);
+            if (input.models) {
+                const submittedCodes = new Set<string>();
+                for (const modelInput of input.models) {
+                    if (submittedCodes.has(modelInput.code)) throw new UserInputError('模型配置不能重复提交');
+                    submittedCodes.add(modelInput.code);
+                    const definition = validateModelInput(modelInput);
+                    const existingModel = models.find(model => model.code === modelInput.code);
+                    const savedModel = await this.saveModelRecord(
+                        txCtx,
+                        modelInput,
+                        definition,
+                        existingModel,
+                    );
+                    models = models.map(model => (model.code === savedModel.code ? savedModel : model));
+                }
+            }
+            const enabledModels = models.filter(model => model.enabled);
+            if (input.enabled && enabledModels.length === 0)
                 throw new UserInputError('请至少启用一个生图模型');
+            if (input.enabled && new Set(enabledModels.map(model => model.currencyCode)).size > 1)
+                throw new UserInputError('同一店铺已启用的生图模型必须使用同一币种');
             if (
                 !models.some(
                     model => model.code === input.defaultModelCode && (!input.enabled || model.enabled),
@@ -150,16 +170,16 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             config.termsZh = requiredText(input.termsZh, 8_000, '中文条款');
             config.termsEn = requiredText(input.termsEn, 8_000, '英文条款');
             await this.connection.getRepository(txCtx, ImageGenerationConfig).save(config, { reload: false });
-            await this.connection
-                .getRepository(txCtx, ImageModelConfig)
+            await modelRepository
                 .createQueryBuilder()
                 .update(ImageModelConfig)
                 .set({ isDefault: false })
                 .where('channelId = :channelId', { channelId: txCtx.channelId })
                 .execute();
-            await this.connection
-                .getRepository(txCtx, ImageModelConfig)
-                .update({ channelId: txCtx.channelId, code: input.defaultModelCode }, { isDefault: true });
+            await modelRepository.update(
+                { channelId: txCtx.channelId, code: input.defaultModelCode },
+                { isDefault: true },
+            );
         });
         return this.adminConfig(ctx);
     }
@@ -224,24 +244,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     }
 
     async saveModel(ctx: RequestContext, input: SaveImageModelInput) {
-        const definition = launchModelDefinitions.find(model => model.code === input.code);
-        if (!definition) throw new UserInputError('首期只支持三个已审核模型');
-        if (!Number.isSafeInteger(input.unitPrice) || input.unitPrice < 0)
-            throw new UserInputError('单价必须是非负整数');
-        if (input.enabled && input.unitPrice <= 0)
-            throw new UserInputError('启用模型前必须设置大于 0 的单张价格');
-        if (!Number.isInteger(input.position) || input.position < 0 || input.position > 1_000)
-            throw new UserInputError('排序无效');
-        if (
-            ![
-                'OPENAI_RESPONSES_IMAGE',
-                'OPENAI_IMAGES',
-                'OPENAI_COMPATIBLE_CHAT',
-                'GEMINI_INTERACTIONS',
-                'GEMINI_NATIVE',
-            ].includes(input.protocol)
-        )
-            throw new UserInputError('协议类型无效');
+        const definition = validateModelInput(input);
         return this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ImageModelConfig);
             const [existingModels, config] = await Promise.all([
@@ -264,32 +267,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             if (config.enabled && input.isDefault && !input.enabled) {
                 throw new UserInputError('已开启图片工坊时，默认模型必须启用');
             }
-            let model = existingModels.find(item => item.code === input.code) ?? null;
-            const mappingChanged =
-                !model ||
-                model.providerModelId !== input.providerModelId.trim() ||
-                model.protocol !== input.protocol;
-            const values = {
-                channelId: txCtx.channelId,
-                code: definition.code,
-                enabled: input.enabled,
-                displayNameZh: requiredText(input.displayNameZh, 120, '中文名称'),
-                displayNameEn: requiredText(input.displayNameEn, 120, '英文名称'),
-                descriptionZh: requiredText(input.descriptionZh, 500, '中文模型说明'),
-                descriptionEn: requiredText(input.descriptionEn, 500, '英文模型说明'),
-                officialModelId: definition.officialModelId,
-                providerModelId: requiredText(input.providerModelId, 160, '中转站模型 ID'),
-                protocol: input.protocol,
-                unitPrice: input.unitPrice,
-                currencyCode: input.currencyCode,
-                position: input.position,
-                isDefault: input.isDefault,
-                healthStatus: mappingChanged ? 'UNTESTED' : (model?.healthStatus ?? 'UNTESTED'),
-                healthMessage: mappingChanged ? null : (model?.healthMessage ?? null),
-                lastTestedAt: mappingChanged ? null : (model?.lastTestedAt ?? null),
-            };
-            model = await repository.save(
-                model ? Object.assign(model, values) : new ImageModelConfig(values),
+            const model = await this.saveModelRecord(
+                txCtx,
+                input,
+                definition,
+                existingModels.find(item => item.code === input.code),
             );
             if (model.isDefault) {
                 await repository
@@ -308,6 +290,41 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             }
             return model;
         });
+    }
+
+    private async saveModelRecord(
+        txCtx: RequestContext,
+        input: SaveImageModelInput,
+        definition: (typeof launchModelDefinitions)[number],
+        existingModel: ImageModelConfig | undefined,
+    ): Promise<ImageModelConfig> {
+        const repository = this.connection.getRepository(txCtx, ImageModelConfig);
+        const mappingChanged =
+            !existingModel ||
+            existingModel.providerModelId !== input.providerModelId.trim() ||
+            existingModel.protocol !== input.protocol;
+        const values = {
+            channelId: txCtx.channelId,
+            code: definition.code,
+            enabled: input.enabled,
+            displayNameZh: requiredText(input.displayNameZh, 120, '中文名称'),
+            displayNameEn: requiredText(input.displayNameEn, 120, '英文名称'),
+            descriptionZh: requiredText(input.descriptionZh, 500, '中文模型说明'),
+            descriptionEn: requiredText(input.descriptionEn, 500, '英文模型说明'),
+            officialModelId: definition.officialModelId,
+            providerModelId: requiredText(input.providerModelId, 160, '中转站模型 ID'),
+            protocol: input.protocol,
+            unitPrice: input.unitPrice,
+            currencyCode: input.currencyCode,
+            position: input.position,
+            isDefault: input.isDefault,
+            healthStatus: mappingChanged ? 'UNTESTED' : (existingModel?.healthStatus ?? 'UNTESTED'),
+            healthMessage: mappingChanged ? null : (existingModel?.healthMessage ?? null),
+            lastTestedAt: mappingChanged ? null : (existingModel?.lastTestedAt ?? null),
+        };
+        return repository.save(
+            existingModel ? Object.assign(existingModel, values) : new ImageModelConfig(values),
+        );
     }
 
     skillReleases(ctx: RequestContext): Promise<ImagePromptSkillRelease[]> {
@@ -453,6 +470,28 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         }
         return existing.sort((left, right) => left.position - right.position);
     }
+}
+
+function validateModelInput(input: SaveImageModelInput): (typeof launchModelDefinitions)[number] {
+    const definition = launchModelDefinitions.find(model => model.code === input.code);
+    if (!definition) throw new UserInputError('首期只支持三个已审核模型');
+    if (!Number.isSafeInteger(input.unitPrice) || input.unitPrice < 0)
+        throw new UserInputError('单价必须是非负整数');
+    if (input.enabled && input.unitPrice <= 0)
+        throw new UserInputError('启用模型前必须设置大于 0 的单张价格');
+    if (!Number.isInteger(input.position) || input.position < 0 || input.position > 1_000)
+        throw new UserInputError('排序无效');
+    if (
+        ![
+            'OPENAI_RESPONSES_IMAGE',
+            'OPENAI_IMAGES',
+            'OPENAI_COMPATIBLE_CHAT',
+            'GEMINI_INTERACTIONS',
+            'GEMINI_NATIVE',
+        ].includes(input.protocol)
+    )
+        throw new UserInputError('协议类型无效');
+    return definition;
 }
 
 function requiredText(value: string, maxLength: number, label: string): string {

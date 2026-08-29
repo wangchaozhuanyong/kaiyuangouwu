@@ -31,10 +31,11 @@ process.env.IMAGE_GENERATION_MASTER_KEY = 'image-generation-e2e-master-key-over-
 const translationProvider: ContentTranslationProvider = {
     name: 'image-generation-e2e-translation',
     isConfigured: () => true,
-    translate: request => Promise.resolve({
-        provider: 'image-generation-e2e-translation',
-        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-    }),
+    translate: request =>
+        Promise.resolve({
+            provider: 'image-generation-e2e-translation',
+            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+        }),
 };
 
 const config = mergeConfig(testConfig(), {
@@ -117,6 +118,10 @@ const SAVE_CONFIG = gql`
         saveImageGenerationConfig(input: $input) {
             enabled
             defaultModelCode
+            models {
+                code
+                unitPrice
+            }
         }
     }
 `;
@@ -344,10 +349,30 @@ describe('AI image generation full flow', () => {
                         termsVersion: 'e2e-2026-08-27',
                         termsZh: '生图 E2E 测试条款，包含参考图与第三方模型数据说明。',
                         termsEn: 'Image E2E terms covering references and third-party model processing.',
+                        models: [
+                            {
+                                code: 'OPENAI_HIGH_QUALITY',
+                                enabled: true,
+                                displayNameZh: 'OpenAI 高质量',
+                                displayNameEn: 'OpenAI High Quality',
+                                descriptionZh: '适合高质量商品图和广告图',
+                                descriptionEn: 'For high-quality product images and ads',
+                                providerModelId: 'gpt-image-1',
+                                protocol: 'OPENAI_RESPONSES_IMAGE',
+                                unitPrice: 125,
+                                currencyCode: 'USD',
+                                position: 0,
+                                isDefault: true,
+                            },
+                        ],
                     },
                 })
             ).saveImageGenerationConfig,
-        ).toEqual({ enabled: true, defaultModelCode: 'OPENAI_HIGH_QUALITY' });
+        ).toMatchObject({
+            enabled: true,
+            defaultModelCode: 'OPENAI_HIGH_QUALITY',
+            models: expect.arrayContaining([{ code: 'OPENAI_HIGH_QUALITY', unitPrice: 125 }]),
+        });
 
         const registration = await shopClient.query(REGISTER, {
             input: {
@@ -385,7 +410,7 @@ describe('AI image generation full flow', () => {
                     code: 'OPENAI_HIGH_QUALITY',
                     descriptionZh: '适合高质量商品图和广告图',
                     officialModelId: 'gpt-image-1',
-                    unitPrice: 100,
+                    unitPrice: 125,
                 }),
             ],
         });
@@ -412,22 +437,22 @@ describe('AI image generation full flow', () => {
                     referenceMode: 'NONE',
                     aspectRatio: '1:1',
                     quantity: 2,
-                    expectedUnitPrice: 100,
+                    expectedUnitPrice: 125,
                     currencyCode: 'USD',
                     idempotencyKey: 'e2e-success-0001',
                     termsAccepted: true,
                 },
             })
         ).createImageGeneration;
-        expect(created).toMatchObject({ quantity: 2, reservedAmount: 200 });
+        expect(created).toMatchObject({ quantity: 2, reservedAmount: 250 });
 
         const succeeded = await waitForJob(created.id, ['SUCCEEDED']);
         expect(succeeded.myImageGenerationJob).toMatchObject({
             state: 'SUCCEEDED',
-            capturedAmount: 200,
+            capturedAmount: 250,
             releasedAmount: 0,
         });
-        expect(succeeded.imageStudioBalance).toBe(300);
+        expect(succeeded.imageStudioBalance).toBe(250);
         expect(succeeded.myImageGenerationJob.outputs).toHaveLength(2);
         for (const output of succeeded.myImageGenerationJob.outputs) {
             expect(output).toMatchObject({ state: 'SUCCEEDED', attemptCount: 1 });
@@ -448,10 +473,10 @@ describe('AI image generation full flow', () => {
         const afterRefund = await shopClient.query(MY_JOB, { id: created.id });
         expect(afterRefund.myImageGenerationJob).toMatchObject({
             state: 'SUCCEEDED',
-            capturedAmount: 100,
-            releasedAmount: 100,
+            capturedAmount: 125,
+            releasedAmount: 125,
         });
-        expect(afterRefund.imageStudioBalance).toBe(400);
+        expect(afterRefund.imageStudioBalance).toBe(375);
 
         providerFailure = true;
         const failedCreated = (
@@ -462,7 +487,7 @@ describe('AI image generation full flow', () => {
                     referenceMode: 'NONE',
                     aspectRatio: '1:1',
                     quantity: 1,
-                    expectedUnitPrice: 100,
+                    expectedUnitPrice: 125,
                     currencyCode: 'USD',
                     idempotencyKey: 'e2e-failure-0001',
                     termsAccepted: true,
@@ -473,9 +498,9 @@ describe('AI image generation full flow', () => {
         expect(failed.myImageGenerationJob).toMatchObject({
             state: 'FAILED',
             capturedAmount: 0,
-            releasedAmount: 100,
+            releasedAmount: 125,
         });
-        expect(failed.imageStudioBalance).toBe(400);
+        expect(failed.imageStudioBalance).toBe(375);
 
         const connection = server.app.get(TransactionalConnection);
         const customer = await connection.rawConnection
@@ -484,22 +509,22 @@ describe('AI image generation full flow', () => {
         const wallet = await connection.rawConnection
             .getRepository(ReferralWallet)
             .findOneByOrFail({ customerId: customer.id, currencyCode: CurrencyCode.USD });
-        expect(wallet).toMatchObject({ availableBalance: 400, reservedBalance: 0 });
+        expect(wallet).toMatchObject({ availableBalance: 375, reservedBalance: 0 });
         const usages = await connection.rawConnection.getRepository(ReferralWalletUsage).find({
             where: { customerId: customer.id, resourceType: 'IMAGE_GENERATION_JOB' },
             order: { createdAt: 'ASC' },
         });
         expect(usages).toHaveLength(2);
         expect(usages[0]).toMatchObject({
-            amount: 200,
-            capturedAmount: 100,
-            releasedAmount: 100,
+            amount: 250,
+            capturedAmount: 125,
+            releasedAmount: 125,
             status: 'PARTIAL',
         });
         expect(usages[1]).toMatchObject({
-            amount: 100,
+            amount: 125,
             capturedAmount: 0,
-            releasedAmount: 100,
+            releasedAmount: 125,
             status: 'RELEASED',
         });
 
@@ -528,7 +553,7 @@ describe('AI image generation full flow', () => {
                     referenceMode: 'PRODUCT',
                     aspectRatio: '1:1',
                     quantity: 1,
-                    expectedUnitPrice: 100,
+                    expectedUnitPrice: 125,
                     currencyCode: 'USD',
                     idempotencyKey: 'e2e-reference-0001',
                     termsAccepted: true,
@@ -538,10 +563,10 @@ describe('AI image generation full flow', () => {
         const referenceSucceeded = await waitForJob(referenceCreated.id, ['SUCCEEDED']);
         expect(referenceSucceeded.myImageGenerationJob).toMatchObject({
             state: 'SUCCEEDED',
-            capturedAmount: 100,
+            capturedAmount: 125,
             releasedAmount: 0,
         });
-        expect(referenceSucceeded.imageStudioBalance).toBe(300);
+        expect(referenceSucceeded.imageStudioBalance).toBe(250);
         expect(providerSawReference).toBe(true);
 
         const retainedReference = await connection.rawConnection
