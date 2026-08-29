@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { AddImageGeneration1787792400000 } from './1787792400000-add-image-generation';
 import { HardenImageGeneration1787817600000 } from './1787817600000-harden-image-generation';
-import { AddImageUsageBillingAndKeyPool1787832000000 } from './1787832000000-add-image-usage-billing-and-key-pool';
+import { AddImageUsageBillingAndKeyPool1787850000000 } from './1787850000000-add-image-usage-billing-and-key-pool';
 
 describe('image usage billing and key pool migration', () => {
     it('adds quota, billing, audit and multi-key schema while preserving legacy bindings', async () => {
@@ -41,7 +41,7 @@ describe('image usage billing and key pool migration', () => {
                          'gpt-image', 'OPENAI_IMAGES', 100, 'CNY', 0, 1, 'HEALTHY', 0, 0)`,
             );
 
-            await new AddImageUsageBillingAndKeyPool1787832000000().up(queryRunner);
+            await new AddImageUsageBillingAndKeyPool1787850000000().up(queryRunner);
 
             for (const tableName of [
                 'image_usage_quota_bucket',

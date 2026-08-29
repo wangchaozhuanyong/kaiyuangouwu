@@ -13,7 +13,7 @@ const AUDIT_TERMS_EN = [
     'is completed.',
 ].join(' ');
 
-export class AddImageUsageBillingAndKeyPool1787832000000 implements MigrationInterface {
+export class AddImageUsageBillingAndKeyPool1787850000000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         const databaseType = queryRunner.connection.options.type;
         const isMysql = ['mysql', 'mariadb'].includes(databaseType);
