@@ -235,6 +235,26 @@ export const updateProductDocument = graphql(`
     }
 `);
 
+export const productCollectionHierarchyDocument = graphql(`
+    query ProductCollectionHierarchy($options: CollectionListOptions) {
+        collections(options: $options) {
+            items {
+                id
+                name
+                slug
+                position
+                children {
+                    id
+                    name
+                    slug
+                    position
+                }
+            }
+            totalItems
+        }
+    }
+`);
+
 export const productCollectionAssignmentDetailDocument = graphql(`
     query ProductCollectionAssignmentDetail($id: ID!) {
         collection(id: $id) {

@@ -1,5 +1,3 @@
-import { collectionRelationConfig } from '@/vdb/components/data-input/relation-input.js';
-import { RelationSelector } from '@/vdb/components/data-input/relation-selector.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useJobQueuePolling } from '@/vdb/hooks/use-job-queue-polling.js';
@@ -18,6 +16,7 @@ import {
     setDirectProductAssignment,
     type CollectionFilterValue,
 } from './product-collection-assignment.js';
+import { ProductCollectionSelector } from './product-collection-selector.js';
 
 interface ProductCollection {
     id: string;
@@ -35,11 +34,6 @@ interface ProductCollectionsPanelProps {
 type AssignmentChange = {
     collectionId: string;
     assigned: boolean;
-};
-
-const directCollectionRelationConfig = {
-    ...collectionRelationConfig,
-    multiple: true,
 };
 
 export function ProductCollectionsPanel({
@@ -155,12 +149,11 @@ export function ProductCollectionsPanel({
                         <Trans>Choose product groups here. Changes are saved immediately.</Trans>
                     </p>
                 </div>
-                <RelationSelector
-                    config={directCollectionRelationConfig}
+                <ProductCollectionSelector
                     value={directCollectionIds}
+                    selectedCollections={collections}
                     onChange={value => void handleAssignmentsChange(value)}
                     disabled={isUpdating}
-                    selectorLabel={<Trans>Add product group</Trans>}
                 />
                 {(isUpdating || isPolling) && (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">

@@ -198,7 +198,13 @@ export function PageContentWithOptionalForm({
             <NavigationConfirmation form={form} />
             <form
                 ref={formElementRef}
-                onSubmit={submitHandler}
+                onSubmit={event => {
+                    // Detail editors can be rendered in a portal-based sheet from inside another
+                    // detail page. React events still bubble through the component tree across a
+                    // portal, so an inner submit must not also submit the parent page's form.
+                    event.stopPropagation();
+                    submitHandler?.(event);
+                }}
                 className="space-y-4"
                 aria-keyshortcuts="Control+S Meta+S Control+Enter Meta+Enter"
             >
