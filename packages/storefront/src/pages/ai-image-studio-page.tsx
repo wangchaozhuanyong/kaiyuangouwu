@@ -1,9 +1,13 @@
 /* eslint-disable max-len -- compact bilingual UI copy and class lists are intentional. */
 import {
     ArrowDownToLine,
+    Check,
     CheckCircle2,
+    ChevronDown,
     CircleAlert,
+    Eye,
     ImagePlus,
+    Info,
     LoaderCircle,
     RefreshCw,
     RotateCcw,
@@ -12,19 +16,17 @@ import {
     WandSparkles,
     X,
 } from 'lucide-react';
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { PageSkeleton } from '../route-loading';
-import { EmptyState, Subpage } from '../storefront-ui/page-shell';
+import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import { SafeImage } from '../storefront-ui/product-display';
 import {
     ActiveCustomer,
     ImageGenerationJob,
     ImageModelQuotaStatus,
-    ImagePrivateAssetView,
     ImagePromptQuotaStatus,
-    ImageReferenceMode,
     ImageResolution,
     ImageStudioConfig,
     MarketConfig,
@@ -55,6 +57,11 @@ function formatBillingMoney(value: number, currencyCode: string, locale: string)
 const aspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
 const activeStates = new Set(['QUEUED', 'RUNNING', 'UNKNOWN']);
 const terminalStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']);
+const successStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED']);
+const failedStates = new Set(['FAILED', 'CANCELLED']);
+
+type AiStudioSetting = 'ASPECT_RATIO' | 'QUANTITY' | 'RESOLUTION';
+type HistoryFilter = 'ALL' | 'SUCCESS' | 'PROCESSING' | 'FAILED';
 
 export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const { api, customer, market, language, onBack, onSignIn, onNotify } = props;
@@ -74,10 +81,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [aspectRatio, setAspectRatio] = useState('1:1');
     const [resolution, setResolution] = useState<ImageResolution>('1K');
     const [quantity, setQuantity] = useState(1);
-    const [referenceMode, setReferenceMode] = useState<ImageReferenceMode>('NONE');
-    const [reference, setReference] = useState<ImagePrivateAssetView | null>(null);
-    const [termsAccepted, setTermsAccepted] = useState(false);
-    const [busy, setBusy] = useState<'OPTIMIZE' | 'UPLOAD' | 'GENERATE' | ''>('');
+    const [termsAccepted, setTermsAccepted] = useState(true);
+    const [activeSetting, setActiveSetting] = useState<AiStudioSetting | null>(null);
+    const [termsInfoOpen, setTermsInfoOpen] = useState(false);
+    const [historyInfoOpen, setHistoryInfoOpen] = useState(false);
+    const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('ALL');
+    const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+    const [busy, setBusy] = useState<'OPTIMIZE' | 'GENERATE' | ''>('');
     const [actionError, setActionError] = useState('');
     const pollStartedAt = useRef(Date.now());
 
@@ -165,14 +175,17 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             ) ?? priced.find(option => option.supportedAspectRatios.includes(aspectRatio));
         if (next) setResolution(next.resolution);
     };
-    const statusSummary = useMemo(
+    const filteredJobs = useMemo(
         () =>
-            jobs.reduce(
-                (total, job) => total + job.outputs.filter(output => output.state === 'SUCCEEDED').length,
-                0,
-            ),
-        [jobs],
+            jobs.filter(job => {
+                if (historyFilter === 'SUCCESS') return successStates.has(job.state);
+                if (historyFilter === 'PROCESSING') return activeStates.has(job.state);
+                if (historyFilter === 'FAILED') return failedStates.has(job.state);
+                return true;
+            }),
+        [historyFilter, jobs],
     );
+    const selectedJob = jobs.find(job => job.id === selectedJobId) ?? null;
 
     const optimizePrompt = async () => {
         if (!prompt.trim() || busy) return;
@@ -182,7 +195,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             const paidPrompt = Boolean(
                 promptQuota && !promptQuota.daily.unlimited && promptQuota.daily.remaining <= 0,
             );
-            const result = await api.optimizeImagePrompt(prompt, referenceMode, {
+            const result = await api.optimizeImagePrompt(prompt, 'NONE', {
                 expectedPrice: paidPrompt ? promptQuota?.paidPrice : null,
                 currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
                 idempotencyKey: requestId(),
@@ -207,35 +220,6 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         }
     };
 
-    const uploadReference = async (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        event.target.value = '';
-        if (!file) return;
-        if (!termsAccepted) {
-            setActionError(
-                isZh
-                    ? '请先阅读并勾选服务条款，再上传参考图'
-                    : 'Accept the terms before uploading a reference',
-            );
-            return;
-        }
-        if (config && file.size > config.maxReferenceBytes) {
-            setActionError(isZh ? '参考图不能超过 10MB' : 'Reference images must be 10MB or smaller');
-            return;
-        }
-        setBusy('UPLOAD');
-        setActionError('');
-        try {
-            const uploaded = await api.uploadImageReference(file, true);
-            setReference(uploaded);
-            setReferenceMode('EDIT');
-        } catch (error) {
-            setActionError(errorMessage(error));
-        } finally {
-            setBusy('');
-        }
-    };
-
     const generate = async () => {
         if (!canGenerate || !selectedModel || !selectedResolutionOption || !config) return;
         setBusy('GENERATE');
@@ -245,8 +229,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 modelCode: selectedModel.code,
                 prompt: optimized ? originalPrompt || prompt : prompt,
                 optimizedPrompt: optimized ? prompt : null,
-                referenceAssetId: reference?.id ?? null,
-                referenceMode: reference ? referenceMode : 'NONE',
+                referenceAssetId: null,
+                referenceMode: 'NONE',
                 aspectRatio,
                 resolution: selectedResolutionOption.resolution,
                 quantity,
@@ -312,10 +296,55 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         setAspectRatio(job.aspectRatio);
         setResolution(job.resolution);
         setQuantity(job.quantity);
-        setReference(null);
-        setReferenceMode('NONE');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
+    const selectAspectRatio = (nextAspectRatio: string) => {
+        setAspectRatio(nextAspectRatio);
+        const current = pricedResolutionOptions.find(option => option.resolution === resolution);
+        if (!current?.supportedAspectRatios.includes(nextAspectRatio)) {
+            const fallback = pricedResolutionOptions.find(option =>
+                option.supportedAspectRatios.includes(nextAspectRatio),
+            );
+            if (fallback) setResolution(fallback.resolution);
+        }
+        setActiveSetting(null);
+    };
+
+    const selectResolution = (value: ImageResolution) => {
+        const availability = imageResolutionAvailability(selectedModel, value, aspectRatio);
+        if (availability.status !== 'AVAILABLE') {
+            onNotify(
+                isZh
+                    ? availability.status === 'ASPECT_RATIO_UNSUPPORTED'
+                        ? `当前模型的 ${value} 不支持 ${aspectRatio} 比例`
+                        : `当前模型不支持 ${value}`
+                    : `${value} is not available for the current model and aspect ratio`,
+            );
+            return;
+        }
+        setResolution(value);
+        setActiveSetting(null);
+    };
+
+    const billingCurrencyCode = selectedModel?.currencyCode ?? market.currencyCode;
+    const selectedResolutionLabel = `${selectedResolutionOption?.resolution ?? resolution} · ${formatBillingMoney(
+        selectedResolutionOption?.unitPrice ?? 0,
+        billingCurrencyCode,
+        market.locale,
+    )}`;
+    const settingSheetTitle =
+        activeSetting === 'ASPECT_RATIO'
+            ? isZh
+                ? '选择图片比例'
+                : 'Choose aspect ratio'
+            : activeSetting === 'QUANTITY'
+              ? isZh
+                  ? '选择生成张数'
+                  : 'Choose quantity'
+              : isZh
+                ? '选择清晰度'
+                : 'Choose resolution';
 
     return (
         <Subpage title={isZh ? 'AI 图片工坊' : 'AI Image Studio'} language={language} onBack={onBack}>
@@ -354,28 +383,10 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             ) : (
                 <div className="ai-studio-shell">
                     <section className="ai-studio-composer">
-                        <div className="ai-studio-heading">
-                            <div>
-                                <span>{isZh ? '描述你的画面' : 'Describe your image'}</span>
-                                <h2>
-                                    {isZh ? '一句话也可以，AI 会帮你完善' : 'Start simple — AI can refine it'}
-                                </h2>
-                            </div>
-                            <div className="ai-studio-balance">
-                                <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
-                                <strong>
-                                    {formatBillingMoney(
-                                        balance,
-                                        selectedModel?.currencyCode ?? market.currencyCode,
-                                        market.locale,
-                                    )}
-                                </strong>
-                            </div>
-                        </div>
                         <div className="ai-studio-prompt-wrap">
                             <textarea
                                 maxLength={optimized ? 8000 : 2000}
-                                rows={6}
+                                rows={4}
                                 value={prompt}
                                 onChange={event => {
                                     setPrompt(event.target.value);
@@ -408,28 +419,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 >
                                     {busy === 'OPTIMIZE' ? <LoaderCircle className="spin" /> : <Sparkles />}
                                     {isZh ? '智能优化' : 'Improve prompt'}
-                                    {promptQuota ? (
-                                        <small>
-                                            {promptQuota.daily.unlimited || promptQuota.daily.remaining > 0
-                                                ? isZh
-                                                    ? `今日免费剩余 ${quotaRemainingLabel(promptQuota.daily)} 次`
-                                                    : `${quotaRemainingLabel(promptQuota.daily)} free today`
-                                                : formatBillingMoney(
-                                                      promptQuota.paidPrice,
-                                                      promptQuota.currencyCode,
-                                                      market.locale,
-                                                  ) + (isZh ? '/次' : '/use')}
-                                        </small>
-                                    ) : null}
                                 </button>
                             </div>
                         </div>
-                        {actionError && busy !== 'GENERATE' ? (
-                            <div className="ai-studio-error">
-                                <CircleAlert />
-                                {actionError}
-                            </div>
-                        ) : null}
                         {optimized ? (
                             <div className="ai-studio-optimized">
                                 <CheckCircle2 />
@@ -445,239 +437,87 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 </button>
                             </div>
                         ) : null}
-                        <div className="ai-studio-reference">
-                            <label className={termsAccepted ? '' : 'is-disabled'}>
-                                <ImagePlus />
-                                {busy === 'UPLOAD'
-                                    ? isZh
-                                        ? '上传中…'
-                                        : 'Uploading…'
-                                    : reference
-                                      ? isZh
-                                          ? '更换参考图'
-                                          : 'Replace reference'
-                                      : isZh
-                                        ? '添加一张参考图'
-                                        : 'Add one reference'}
-                                <input
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp"
-                                    disabled={!termsAccepted || Boolean(busy)}
-                                    onChange={event => void uploadReference(event)}
-                                />
-                            </label>
-                            {reference ? (
-                                <div className="ai-studio-reference-preview">
-                                    <SafeImage
-                                        src={reference.previewUrl ?? ''}
-                                        alt={reference.originalName}
-                                    />
-                                    <span>
-                                        {reference.width} × {reference.height}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        aria-label={isZh ? '移除参考图' : 'Remove reference'}
-                                        onClick={() => {
-                                            setReference(null);
-                                            setReferenceMode('NONE');
-                                        }}
-                                    >
-                                        <X />
-                                    </button>
-                                </div>
-                            ) : null}
-                            {reference ? (
-                                <select
-                                    value={referenceMode}
-                                    onChange={event =>
-                                        setReferenceMode(event.target.value as ImageReferenceMode)
-                                    }
-                                >
-                                    <option value="EDIT">{isZh ? '按描述编辑' : 'Edit'}</option>
-                                    <option value="PRODUCT">{isZh ? '保持商品' : 'Preserve product'}</option>
-                                    <option value="IDENTITY">
-                                        {isZh ? '保持人物身份' : 'Preserve identity'}
-                                    </option>
-                                    <option value="STYLE">{isZh ? '参考风格' : 'Use style'}</option>
-                                    <option value="COMPOSITION">
-                                        {isZh ? '参考构图' : 'Use composition'}
-                                    </option>
-                                </select>
-                            ) : null}
-                        </div>
                     </section>
 
                     <section className="ai-studio-options">
-                        <h3>{isZh ? '选择模型' : 'Choose a model'}</h3>
-                        <p className="ai-studio-billing-note">
-                            {isZh
-                                ? 'AI 工坊按模型标注的币种计费，不随商城展示币种切换。'
-                                : 'AI Studio bills in each model’s listed currency, independently of the store display currency.'}
-                        </p>
-                        <div className="ai-studio-model-grid">
-                            {config.models.map(model => (
-                                <button
-                                    type="button"
-                                    key={model.code}
-                                    className={model.code === selectedModel?.code ? 'is-selected' : ''}
-                                    onClick={() => selectModel(model.code)}
-                                >
-                                    <span>{isZh ? model.displayNameZh : model.displayNameEn}</span>
-                                    <small>{isZh ? model.descriptionZh : model.descriptionEn}</small>
-                                    <small>
-                                        {model.dailyFreeImageUnlimited
-                                            ? isZh
-                                                ? '每日免费不限张数'
-                                                : 'Unlimited daily free images'
-                                            : model.freeImageEnabled
-                                              ? isZh
-                                                  ? `每日免费 ${model.dailyFreeImageLimit} 张，今日剩余 ${modelQuotaRemaining(modelQuotas, model.code)} 张`
-                                                  : `${modelQuotaRemaining(modelQuotas, model.code)} free images left today`
-                                              : isZh
-                                                ? '无免费张数'
-                                                : 'No free images'}
-                                    </small>
-                                </button>
-                            ))}
+                        <h3>{isZh ? '选择生成方案' : 'Choose a generation option'}</h3>
+                        <div
+                            className="ai-studio-model-grid"
+                            role="radiogroup"
+                            aria-label={isZh ? '生成方案' : 'Generation option'}
+                        >
+                            {config.models.map(model => {
+                                const selected = model.code === selectedModel?.code;
+                                const option =
+                                    model.resolutionOptions.find(
+                                        item =>
+                                            item.resolution === resolution &&
+                                            item.supportedAspectRatios.includes(aspectRatio),
+                                    ) ??
+                                    model.resolutionOptions.find(item =>
+                                        item.supportedAspectRatios.includes(aspectRatio),
+                                    );
+                                const description = isZh ? model.descriptionZh : model.descriptionEn;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={model.code}
+                                        className={selected ? 'is-selected' : ''}
+                                        role="radio"
+                                        aria-checked={selected}
+                                        aria-label={`${description}，${formatBillingMoney(option?.unitPrice ?? 0, model.currencyCode, market.locale)}${isZh ? '每张' : ' per image'}`}
+                                        onClick={() => selectModel(model.code)}
+                                    >
+                                        <span className="ai-studio-radio-mark" aria-hidden="true">
+                                            {selected ? <Check /> : null}
+                                        </span>
+                                        <span className="ai-studio-model-description">{description}</span>
+                                        <strong>
+                                            {formatBillingMoney(
+                                                option?.unitPrice ?? 0,
+                                                model.currencyCode,
+                                                market.locale,
+                                            )}
+                                            {isZh ? ' / 张' : ' / image'}
+                                        </strong>
+                                    </button>
+                                );
+                            })}
                         </div>
                         <div className="ai-studio-option-row">
-                            <label>
-                                <span>{isZh ? '图片比例' : 'Aspect ratio'}</span>
-                                <select
-                                    value={aspectRatio}
-                                    onChange={event => {
-                                        const nextAspectRatio = event.target.value;
-                                        setAspectRatio(nextAspectRatio);
-                                        const current = pricedResolutionOptions.find(
-                                            option => option.resolution === resolution,
-                                        );
-                                        if (!current?.supportedAspectRatios.includes(nextAspectRatio)) {
-                                            const fallback = pricedResolutionOptions.find(option =>
-                                                option.supportedAspectRatios.includes(nextAspectRatio),
-                                            );
-                                            if (fallback) setResolution(fallback.resolution);
-                                        }
-                                    }}
-                                >
-                                    {aspectRatios.map(value => (
-                                        <option key={value}>{value}</option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label>
-                                <span>{isZh ? '生成张数' : 'Quantity'}</span>
-                                <select
-                                    value={quantity}
-                                    onChange={event => setQuantity(Number(event.target.value))}
-                                >
-                                    {Array.from({ length: config.maxQuantity }, (_, index) => index + 1).map(
-                                        value => (
-                                            <option key={value}>{value}</option>
-                                        ),
-                                    )}
-                                </select>
-                            </label>
-                            <div className="ai-studio-resolution-field">
-                                <span>{isZh ? '清晰度' : 'Resolution'}</span>
-                                <div
-                                    className="ai-studio-resolution-picker"
-                                    role="group"
-                                    aria-label={isZh ? '选择清晰度' : 'Choose resolution'}
-                                >
-                                    {customerImageResolutions.map(value => {
-                                        const availability = imageResolutionAvailability(
-                                            selectedModel,
-                                            value,
-                                            aspectRatio,
-                                        );
-                                        const selected =
-                                            availability.status === 'AVAILABLE' &&
-                                            selectedResolutionOption?.resolution === value;
-                                        return (
-                                            <button
-                                                type="button"
-                                                key={value}
-                                                className={`${selected ? 'is-selected' : ''} ${availability.status !== 'AVAILABLE' ? 'is-unavailable' : ''}`.trim()}
-                                                aria-pressed={selected}
-                                                aria-disabled={availability.status !== 'AVAILABLE'}
-                                                onClick={() => {
-                                                    if (availability.status === 'UNSUPPORTED') {
-                                                        onNotify(
-                                                            isZh
-                                                                ? `当前模型不支持 ${value}`
-                                                                : `This model does not support ${value}`,
-                                                        );
-                                                        return;
-                                                    }
-                                                    if (availability.status === 'ASPECT_RATIO_UNSUPPORTED') {
-                                                        onNotify(
-                                                            isZh
-                                                                ? `当前模型的 ${value} 不支持 ${aspectRatio} 比例`
-                                                                : `${value} is not available for the ${aspectRatio} aspect ratio on this model`,
-                                                        );
-                                                        return;
-                                                    }
-                                                    setResolution(value);
-                                                }}
-                                            >
-                                                <strong>{value}</strong>
-                                                <small>
-                                                    {availability.status === 'AVAILABLE'
-                                                        ? formatBillingMoney(
-                                                              availability.option.unitPrice,
-                                                              selectedModel?.currencyCode ??
-                                                                  market.currencyCode,
-                                                              market.locale,
-                                                          ) + (isZh ? '/张' : '/image')
-                                                        : isZh
-                                                          ? '当前模型不支持'
-                                                          : 'Not supported'}
-                                                </small>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                <small>
-                                    {isZh
-                                        ? '由模型原生生成；不使用后期放大'
-                                        : 'Generated natively by the model; no upscaling'}
-                                </small>
-                            </div>
+                            <SettingTrigger
+                                label={isZh ? '图片比例' : 'Aspect ratio'}
+                                value={aspectRatio}
+                                onClick={() => setActiveSetting('ASPECT_RATIO')}
+                            />
+                            <SettingTrigger
+                                label={isZh ? '生成张数' : 'Quantity'}
+                                value={String(quantity)}
+                                onClick={() => setActiveSetting('QUANTITY')}
+                            />
+                            <SettingTrigger
+                                label={isZh ? '清晰度' : 'Resolution'}
+                                value={selectedResolutionLabel}
+                                onClick={() => setActiveSetting('RESOLUTION')}
+                            />
                         </div>
                     </section>
 
                     <section className="ai-studio-checkout">
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={termsAccepted}
-                                onChange={event => setTermsAccepted(event.target.checked)}
-                            />
-                            <span>
-                                {isZh
-                                    ? `我已阅读并同意 AI 图片服务条款（${config.termsVersion}）`
-                                    : `I accept the AI image terms (${config.termsVersion})`}
-                            </span>
-                        </label>
-                        <details>
-                            <summary>{isZh ? '查看数据与使用说明' : 'View data and usage terms'}</summary>
-                            <p>{isZh ? config.termsZh : config.termsEn}</p>
-                        </details>
-                        {actionError ? (
-                            <div className="ai-studio-error">
-                                <CircleAlert />
-                                {actionError}
-                            </div>
-                        ) : null}
                         <div className="ai-studio-settlement">
                             <div className="ai-studio-settlement-summary">
+                                <div className="ai-studio-settlement-amount">
+                                    <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
+                                    <strong className="is-balance">
+                                        {formatBillingMoney(balance, billingCurrencyCode, market.locale)}
+                                    </strong>
+                                </div>
                                 <div className="ai-studio-settlement-amount" aria-live="polite">
                                     <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
                                     <strong>
                                         {formatBillingMoney(
                                             estimatedPrice,
-                                            selectedModel?.currencyCode ?? market.currencyCode,
+                                            billingCurrencyCode,
                                             market.locale,
                                         )}
                                     </strong>
@@ -696,16 +536,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     </div>
                                 </div>
                             </div>
-                            <button
-                                className="ai-studio-generate-button"
-                                type="button"
-                                disabled={!canGenerate}
-                                onClick={() => void generate()}
-                            >
-                                {busy === 'GENERATE' ? <LoaderCircle className="spin" /> : <WandSparkles />}
-                                {isZh ? '开始生成' : 'Generate'}
-                            </button>
                         </div>
+                        {actionError ? (
+                            <div className="ai-studio-error">
+                                <CircleAlert />
+                                {actionError}
+                            </div>
+                        ) : null}
                         {balance < estimatedPrice ? (
                             <div className="ai-studio-low-balance" role="alert">
                                 <CircleAlert aria-hidden="true" />
@@ -723,44 +560,245 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     : 'Daily safety limit reached.'}
                             </p>
                         ) : null}
+                        <label className="ai-studio-terms-row">
+                            <input
+                                type="checkbox"
+                                checked={termsAccepted}
+                                onChange={event => setTermsAccepted(event.target.checked)}
+                            />
+                            <span>
+                                {isZh ? '我已阅读并同意' : 'I have read and accept'}{' '}
+                                <button
+                                    type="button"
+                                    onClick={event => {
+                                        event.preventDefault();
+                                        setTermsInfoOpen(true);
+                                    }}
+                                >
+                                    {isZh ? 'AI 图片服务条款' : 'AI image terms'}
+                                </button>{' '}
+                                <small>({config.termsVersion})</small>
+                            </span>
+                        </label>
                     </section>
 
                     <section className="ai-studio-history">
                         <div className="ai-studio-history-heading">
                             <div>
                                 <h3>{isZh ? '我的生成记录' : 'My generations'}</h3>
-                                <p>
-                                    {isZh
-                                        ? `已成功生成 ${statusSummary} 张；生成图保留 ${config.outputRetentionDays} 天。`
-                                        : `${statusSummary} images created; outputs are kept for ${config.outputRetentionDays} days.`}
-                                </p>
+                                <button
+                                    type="button"
+                                    className="ai-studio-history-info"
+                                    aria-label={isZh ? '查看生成记录说明' : 'View generation history details'}
+                                    onClick={() => setHistoryInfoOpen(true)}
+                                >
+                                    <Info />
+                                </button>
                             </div>
                             <button type="button" onClick={() => void load()}>
                                 <RefreshCw />
                                 {isZh ? '刷新' : 'Refresh'}
                             </button>
                         </div>
-                        {jobs.length ? (
-                            jobs.map(job => (
+                        <div className="ai-studio-history-filters" role="tablist">
+                            {(
+                                [
+                                    ['ALL', isZh ? '全部' : 'All'],
+                                    ['SUCCESS', isZh ? '已完成' : 'Completed'],
+                                    ['PROCESSING', isZh ? '生成中' : 'Processing'],
+                                    ['FAILED', isZh ? '失败' : 'Failed'],
+                                ] as Array<[HistoryFilter, string]>
+                            ).map(([value, label]) => (
+                                <button
+                                    type="button"
+                                    key={value}
+                                    role="tab"
+                                    aria-selected={historyFilter === value}
+                                    className={historyFilter === value ? 'is-active' : ''}
+                                    onClick={() => setHistoryFilter(value)}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        {filteredJobs.length ? (
+                            filteredJobs.map(job => (
                                 <GenerationCard
                                     key={job.id}
                                     job={job}
                                     language={language}
                                     locale={market.locale}
                                     onCancel={() => void cancel(job.id)}
-                                    onDelete={outputId => void deleteOutput(outputId)}
                                     onDeleteJob={() => void deleteJob(job.id)}
                                     onRegenerate={() => regenerate(job)}
+                                    onView={() => setSelectedJobId(job.id)}
                                 />
                             ))
                         ) : (
                             <div className="ai-studio-empty">
-                                {isZh
-                                    ? '还没有生成记录，从上方输入一句描述开始。'
-                                    : 'No generations yet. Start with a prompt above.'}
+                                {jobs.length
+                                    ? isZh
+                                        ? '当前筛选下暂无记录。'
+                                        : 'No records match this filter.'
+                                    : isZh
+                                      ? '还没有生成记录，从上方输入一句描述开始。'
+                                      : 'No generations yet. Start with a prompt above.'}
                             </div>
                         )}
                     </section>
+
+                    <div className="ai-studio-fixed-generate">
+                        <button
+                            className="ai-studio-generate-button"
+                            type="button"
+                            disabled={!canGenerate}
+                            onClick={() => void generate()}
+                        >
+                            {busy === 'GENERATE' ? <LoaderCircle className="spin" /> : <WandSparkles />}
+                            {isZh ? '开始生成' : 'Generate'}
+                        </button>
+                    </div>
+
+                    {activeSetting ? (
+                        <Sheet
+                            title={settingSheetTitle}
+                            language={language}
+                            onClose={() => setActiveSetting(null)}
+                            className="ai-studio-bottom-sheet"
+                        >
+                            <div
+                                className="ai-studio-setting-sheet"
+                                role="radiogroup"
+                                aria-label={settingSheetTitle}
+                            >
+                                {activeSetting === 'ASPECT_RATIO'
+                                    ? aspectRatios.map(value => (
+                                          <SheetOption
+                                              key={value}
+                                              selected={value === aspectRatio}
+                                              label={value}
+                                              onClick={() => selectAspectRatio(value)}
+                                          />
+                                      ))
+                                    : null}
+                                {activeSetting === 'QUANTITY'
+                                    ? Array.from({ length: config.maxQuantity }, (_, index) => index + 1).map(
+                                          value => (
+                                              <SheetOption
+                                                  key={value}
+                                                  selected={value === quantity}
+                                                  label={
+                                                      isZh
+                                                          ? `${value} 张`
+                                                          : `${value} image${value > 1 ? 's' : ''}`
+                                                  }
+                                                  onClick={() => {
+                                                      setQuantity(value);
+                                                      setActiveSetting(null);
+                                                  }}
+                                              />
+                                          ),
+                                      )
+                                    : null}
+                                {activeSetting === 'RESOLUTION'
+                                    ? customerImageResolutions.map(value => {
+                                          const availability = imageResolutionAvailability(
+                                              selectedModel,
+                                              value,
+                                              aspectRatio,
+                                          );
+                                          return (
+                                              <SheetOption
+                                                  key={value}
+                                                  selected={
+                                                      availability.status === 'AVAILABLE' &&
+                                                      selectedResolutionOption?.resolution === value
+                                                  }
+                                                  disabled={availability.status !== 'AVAILABLE'}
+                                                  label={
+                                                      availability.status === 'AVAILABLE'
+                                                          ? `${value} · ${formatBillingMoney(
+                                                                availability.option.unitPrice,
+                                                                billingCurrencyCode,
+                                                                market.locale,
+                                                            )}`
+                                                          : value
+                                                  }
+                                                  description={
+                                                      availability.status === 'AVAILABLE'
+                                                          ? isZh
+                                                              ? value === '1K'
+                                                                  ? '适合社交媒体与日常使用'
+                                                                  : '适合商品展示与精细查看'
+                                                              : value === '1K'
+                                                                ? 'Best for social and everyday use'
+                                                                : 'Best for products and detailed viewing'
+                                                          : isZh
+                                                            ? '当前模型或比例不支持'
+                                                            : 'Not supported for this model or ratio'
+                                                  }
+                                                  onClick={() => selectResolution(value)}
+                                              />
+                                          );
+                                      })
+                                    : null}
+                            </div>
+                        </Sheet>
+                    ) : null}
+
+                    {termsInfoOpen ? (
+                        <Sheet
+                            title={isZh ? 'AI 图片服务条款' : 'AI image terms'}
+                            language={language}
+                            onClose={() => setTermsInfoOpen(false)}
+                            className="ai-studio-bottom-sheet"
+                        >
+                            <div className="ai-studio-info-sheet">
+                                <p>{isZh ? config.termsZh : config.termsEn}</p>
+                                <small>
+                                    {isZh ? '条款版本' : 'Terms version'}：{config.termsVersion}
+                                </small>
+                            </div>
+                        </Sheet>
+                    ) : null}
+
+                    {historyInfoOpen ? (
+                        <Sheet
+                            title={isZh ? '生成记录说明' : 'Generation history'}
+                            language={language}
+                            onClose={() => setHistoryInfoOpen(false)}
+                            className="ai-studio-bottom-sheet"
+                        >
+                            <div className="ai-studio-info-sheet">
+                                <strong>
+                                    {isZh
+                                        ? `生成图片保留 ${config.outputRetentionDays} 天`
+                                        : `Generated images are kept for ${config.outputRetentionDays} days`}
+                                </strong>
+                                <p>
+                                    {isZh
+                                        ? '请在保留期内下载需要的图片。删除记录不会退回已结算费用。'
+                                        : 'Download images before they expire. Deleting a record does not refund settled charges.'}
+                                </p>
+                            </div>
+                        </Sheet>
+                    ) : null}
+
+                    {selectedJob ? (
+                        <Sheet
+                            title={isZh ? '生成详情' : 'Generation details'}
+                            language={language}
+                            onClose={() => setSelectedJobId(null)}
+                            className="ai-studio-bottom-sheet ai-studio-history-detail-sheet"
+                        >
+                            <GenerationDetail
+                                job={selectedJob}
+                                language={language}
+                                locale={market.locale}
+                                onDelete={outputId => void deleteOutput(outputId)}
+                            />
+                        </Sheet>
+                    ) : null}
                 </div>
             )}
         </Subpage>
@@ -772,33 +810,131 @@ function GenerationCard({
     language,
     locale,
     onCancel,
-    onDelete,
     onDeleteJob,
     onRegenerate,
+    onView,
 }: Readonly<{
     job: ImageGenerationJob;
     language: StorefrontLanguage;
     locale: string;
     onCancel(): void;
-    onDelete(outputId: string): void;
     onDeleteJob(): void;
     onRegenerate(): void;
+    onView(): void;
+}>) {
+    const isZh = language === 'zh';
+    const preview = job.outputs.find(output => output.imageUrl) ?? job.outputs[0];
+    const statusClass = job.state.toLowerCase();
+    const amountLabel = activeStates.has(job.state)
+        ? isZh
+            ? `已冻结 ${formatBillingMoney(job.reservedAmount, job.currencyCode, locale)}`
+            : `Held ${formatBillingMoney(job.reservedAmount, job.currencyCode, locale)}`
+        : failedStates.has(job.state)
+          ? isZh
+              ? `已释放 ${formatBillingMoney(job.releasedAmount, job.currencyCode, locale)}`
+              : `Released ${formatBillingMoney(job.releasedAmount, job.currencyCode, locale)}`
+          : isZh
+            ? `实付 ${formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}`
+            : `Paid ${formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}`;
+    return (
+        <article className={`ai-generation-card is-${statusClass}`}>
+            <div className="ai-generation-card-preview">
+                {preview?.imageUrl ? (
+                    <SafeImage src={preview.imageUrl} alt={job.originalPrompt} />
+                ) : (
+                    <span aria-hidden="true">
+                        {activeStates.has(job.state) ? <LoaderCircle className="spin" /> : <CircleAlert />}
+                    </span>
+                )}
+                {job.outputs.length > 1 ? <small>+{job.outputs.length - 1}</small> : null}
+            </div>
+            <div className="ai-generation-card-content">
+                <header>
+                    <span className={`ai-generation-status is-${statusClass}`}>
+                        {successStates.has(job.state) ? <CheckCircle2 /> : null}
+                        {activeStates.has(job.state) ? <LoaderCircle /> : null}
+                        {failedStates.has(job.state) ? <CircleAlert /> : null}
+                        {stateLabel(job.state, isZh)}
+                    </span>
+                    <time dateTime={job.createdAt}>{formatGenerationTime(job.createdAt, locale, isZh)}</time>
+                </header>
+                <p>{job.originalPrompt}</p>
+                {activeStates.has(job.state) ? (
+                    <span className="ai-generation-progress-copy">
+                        {isZh ? '任务正在处理中，请稍候…' : 'Your generation is in progress…'}
+                    </span>
+                ) : job.errorMessage ? (
+                    <span className="ai-generation-error-copy">{job.errorMessage}</span>
+                ) : null}
+                <div className="ai-generation-meta">
+                    <span>{job.aspectRatio}</span>
+                    <span>{job.resolution}</span>
+                    <span>{isZh ? `${job.quantity} 张` : `${job.quantity} images`}</span>
+                </div>
+                <footer>
+                    <strong>{amountLabel}</strong>
+                    <div>
+                        <button type="button" onClick={onView}>
+                            <Eye />
+                            {isZh ? '查看' : 'View'}
+                        </button>
+                        {job.outputs.some(output => output.state === 'QUEUED') ? (
+                            <button type="button" onClick={onCancel}>
+                                <X />
+                                {isZh ? '取消' : 'Cancel'}
+                            </button>
+                        ) : terminalStates.has(job.state) ? (
+                            <button type="button" onClick={onRegenerate}>
+                                <RotateCcw />
+                                {isZh ? '再次创作' : 'Use again'}
+                            </button>
+                        ) : null}
+                        {terminalStates.has(job.state) ? (
+                            <button
+                                type="button"
+                                className="ai-generation-delete-button"
+                                aria-label={isZh ? '删除记录' : 'Delete record'}
+                                onClick={onDeleteJob}
+                            >
+                                <Trash2 />
+                            </button>
+                        ) : null}
+                    </div>
+                </footer>
+            </div>
+        </article>
+    );
+}
+
+function GenerationDetail({
+    job,
+    language,
+    locale,
+    onDelete,
+}: Readonly<{
+    job: ImageGenerationJob;
+    language: StorefrontLanguage;
+    locale: string;
+    onDelete(outputId: string): void;
 }>) {
     const isZh = language === 'zh';
     return (
-        <article className="ai-generation-card">
-            <header>
-                <div>
-                    <strong>{job.modelNameSnapshot}</strong>
-                    <code>
-                        {job.officialModelIdSnapshot} · {job.resolution}
-                    </code>
-                </div>
+        <div className="ai-generation-detail">
+            <div className="ai-generation-detail-summary">
                 <span className={`ai-generation-status is-${job.state.toLowerCase()}`}>
                     {stateLabel(job.state, isZh)}
                 </span>
-            </header>
+                <strong>
+                    {formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}{' '}
+                    {isZh ? '已结算' : 'charged'}
+                </strong>
+            </div>
             <p>{job.originalPrompt}</p>
+            <div className="ai-generation-meta">
+                <span>{job.aspectRatio}</span>
+                <span>{job.resolution}</span>
+                <span>{isZh ? `${job.quantity} 张` : `${job.quantity} images`}</span>
+            </div>
             <div className="ai-generation-grid">
                 {job.outputs.map(output => (
                     <div key={output.id} className={`ai-generation-output is-${output.state.toLowerCase()}`}>
@@ -819,6 +955,12 @@ function GenerationCard({
                             </div>
                         )}
                         <div className="ai-generation-output-actions">
+                            {output.imageUrl ? (
+                                <a href={output.imageUrl} target="_blank" rel="noreferrer">
+                                    <Eye />
+                                    {isZh ? '查看' : 'View'}
+                                </a>
+                            ) : null}
                             {output.downloadUrl ? (
                                 <a href={output.downloadUrl}>
                                     <ArrowDownToLine />
@@ -835,36 +977,53 @@ function GenerationCard({
                     </div>
                 ))}
             </div>
-            <footer>
-                <span>
-                    {isZh
-                        ? `免费成功 ${job.freeQuantityCaptured} 张 · 付费预留 ${job.paidQuantityReserved} 张 · `
-                        : `${job.freeQuantityCaptured} free · ${job.paidQuantityReserved} paid reserved · `}
-                    {formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}{' '}
-                    {isZh ? '已结算' : 'charged'} ·{' '}
-                    {formatBillingMoney(job.releasedAmount, job.currencyCode, locale)}{' '}
-                    {isZh ? '已退回' : 'released'}
-                </span>
-                <div>
-                    {job.outputs.some(output => output.state === 'QUEUED') ? (
-                        <button type="button" onClick={onCancel}>
-                            <X />
-                            {isZh ? '取消排队' : 'Cancel queued'}
-                        </button>
-                    ) : null}
-                    <button type="button" onClick={onRegenerate}>
-                        <RotateCcw />
-                        {isZh ? '再次创作' : 'Use again'}
-                    </button>
-                    {terminalStates.has(job.state) ? (
-                        <button type="button" onClick={onDeleteJob}>
-                            <Trash2 />
-                            {isZh ? '删除记录' : 'Delete job'}
-                        </button>
-                    ) : null}
-                </div>
-            </footer>
-        </article>
+        </div>
+    );
+}
+
+function SettingTrigger({
+    label,
+    value,
+    onClick,
+}: Readonly<{ label: string; value: string; onClick(): void }>) {
+    return (
+        <button type="button" className="ai-studio-setting-trigger" onClick={onClick}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <ChevronDown aria-hidden="true" />
+        </button>
+    );
+}
+
+function SheetOption({
+    label,
+    description,
+    selected,
+    disabled = false,
+    onClick,
+}: Readonly<{
+    label: string;
+    description?: string;
+    selected: boolean;
+    disabled?: boolean;
+    onClick(): void;
+}>) {
+    return (
+        <button
+            type="button"
+            className={selected ? 'is-selected' : ''}
+            role="radio"
+            aria-checked={selected}
+            aria-disabled={disabled}
+            disabled={disabled}
+            onClick={onClick}
+        >
+            <span>
+                <strong>{label}</strong>
+                {description ? <small>{description}</small> : null}
+            </span>
+            <i aria-hidden="true">{selected ? <Check /> : null}</i>
+        </button>
     );
 }
 
@@ -892,9 +1051,16 @@ function stateLabel(state: string, isZh: boolean): string {
 function quotaRemainingLabel(quota: ImagePromptQuotaStatus['daily']): string {
     return quota.unlimited ? '不限' : `${quota.remaining}/${quota.limit}`;
 }
-function modelQuotaRemaining(quotas: ImageModelQuotaStatus[], modelCode: string): string {
-    const quota = quotas.find(item => item.modelCode === modelCode)?.free;
-    return quota?.unlimited ? '不限' : String(quota?.remaining ?? 0);
+function formatGenerationTime(value: string, locale: string, isZh: boolean): string {
+    const createdAt = new Date(value);
+    const now = new Date();
+    const sameDay = createdAt.toDateString() === now.toDateString();
+    const time = new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(createdAt);
+    return sameDay ? `${isZh ? '今天' : 'Today'} ${time}` : new Intl.DateTimeFormat(locale).format(createdAt);
 }
 function requestId(): string {
     return globalThis.crypto?.randomUUID?.() ?? `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;

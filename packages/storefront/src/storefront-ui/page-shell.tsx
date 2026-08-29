@@ -418,11 +418,13 @@ export function Sheet({
     language,
     onClose,
     children,
+    className,
 }: {
     title: string;
     language: StorefrontLanguage;
     onClose: () => void;
     children: ReactNode;
+    className?: string;
 }) {
     const dialogRef = useRef<HTMLElement>(null);
     const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -504,7 +506,7 @@ export function Sheet({
             />
             <section
                 ref={dialogRef}
-                className="sheet"
+                className={className ? `sheet ${className}` : 'sheet'}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}

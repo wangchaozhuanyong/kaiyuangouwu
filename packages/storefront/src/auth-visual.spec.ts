@@ -57,15 +57,21 @@ describe('managed auth visuals', () => {
             title: '后台主标题',
             description: '后台说明',
             tags: ['卖点1', '卖点2', '卖点3'],
+            benefits: [
+                { title: '卖点1', description: '覆盖常用 AI 软件与服务' },
+                { title: '卖点2', description: '购买记录与状态清晰可查' },
+                { title: '卖点3', description: '售后入口与处理进度可查' },
+            ],
+            serviceTypes: ['AI 软件', '数字商品', '人工服务', '售后支持'],
         });
         expect(authVisualAccentColor(content, 'login')).toBe('#abcdef');
     });
 
     it('falls back safely when no managed content has been published', () => {
         expect(resolveAuthVisualMessage(undefined, 'register', 'zh')).toMatchObject({
-            title: '创建专属 AI 效率中心',
+            title: '创建达码通账号',
         });
-        expect(authVisualAccentColor(undefined, 'register')).toBe('#fdba74');
+        expect(authVisualAccentColor(undefined, 'register')).toBe('#60a5fa');
         expect(authVisualOverlayColor(undefined)).toBe('#0B1E2D');
     });
 
