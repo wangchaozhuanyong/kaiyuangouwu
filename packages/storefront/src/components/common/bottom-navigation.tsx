@@ -168,7 +168,7 @@ export function BottomNavigation({
 
     return (
         <nav
-            className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md sm:top-0 sm:bottom-auto sm:h-[72px] sm:max-w-[420px] sm:border-t-0 sm:bg-transparent sm:shadow-none sm:backdrop-blur-none"
+            className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[420px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
             style={{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }}
             aria-label={isZh ? '主导航' : 'Main navigation'}
         >
@@ -179,8 +179,8 @@ export function BottomNavigation({
                     <Link
                         key={item.key}
                         className={cn(
-                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-slate-500 transition-transform active:scale-95 sm:gap-[3px] sm:hover:bg-slate-100 sm:hover:text-slate-900',
-                            isActive && 'font-bold text-slate-900 sm:hover:bg-transparent',
+                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-slate-500 transition-transform active:scale-95 lg:gap-[3px] lg:hover:bg-slate-100 lg:hover:text-slate-900',
+                            isActive && 'font-bold text-slate-900 lg:hover:bg-transparent',
                         )}
                         aria-current={isActive ? 'page' : undefined}
                         to={item.target}
@@ -211,7 +211,7 @@ export function BottomNavigation({
                             )}
                         </span>
                         <span
-                            className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight sm:text-[13px]"
+                            className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight lg:text-[13px]"
                             style={{
                                 color: isActive ? item.activeColor : '#64748B',
                                 fontWeight: isActive ? 700 : 500,

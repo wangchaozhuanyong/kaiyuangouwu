@@ -24,4 +24,11 @@ describe('fixed bottom layout clearance', () => {
         expect(checkoutPageStyles['purchase-page']).not.toContain('padding-bottom:128px');
         expect(orderPageStyles['order-detail-summary']).not.toContain('margin-bottom:82px');
     });
+
+    it('reserves bottom navigation clearance until the desktop layout starts', () => {
+        expect(stylesheet).toMatch(
+            /@media \(min-width: 1024px\) \{\s*\.page:not\(\.subpage\) \{\s*--page-bottom-fixed-height: 0px;/,
+        );
+        expect(stylesheet).not.toContain('@media (min-width: 640px)');
+    });
 });

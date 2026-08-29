@@ -85,12 +85,14 @@ describe('bottom navigation configuration', () => {
         expect(shouldShowBottomNavigation('orders', block)).toBe(false);
     });
 
-    it('disables the mobile glass layer when navigation moves into the desktop header', () => {
+    it('keeps tablet navigation at the bottom and moves it into the desktop header at 1024px', () => {
         const source = readFileSync(
             new URL('./components/common/bottom-navigation.tsx', import.meta.url),
             'utf8',
         );
 
-        expect(source).toContain('sm:shadow-none sm:backdrop-blur-none');
+        expect(source).toContain('lg:top-0 lg:bottom-auto');
+        expect(source).toContain('lg:shadow-none lg:backdrop-blur-none');
+        expect(source).not.toContain('sm:top-0');
     });
 });
