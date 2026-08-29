@@ -41,6 +41,7 @@ import {
     testImageModelMutation,
     testImageProviderMutation,
 } from './image-generation.graphql';
+import { normalizeProviderAdminConfigs } from './provider-admin-configs';
 
 export const imageGenerationSettingsRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -624,16 +625,26 @@ function ImageGenerationAccessPage() {
         queryKey: ['image-provider-admin'],
         queryFn: () => api.query<ImageProviderAdminQueryResult>(imageProviderAdminQuery),
     });
-    const configs = query.data?.imageProviderAdminConfigs;
+    const providerConfigs = normalizeProviderAdminConfigs(query.data?.imageProviderAdminConfigs);
     if (query.isLoading) return <LoadingPage title="AI 服务接入" />;
     if (query.error)
         return <ErrorPage title="AI 服务接入" retry={() => void query.refetch()} error={query.error} />;
-    if (!configs) return <LoadingPage title="AI 服务接入" />;
+    if (!providerConfigs) return <LoadingPage title="AI 服务接入" />;
     return (
         <Page pageId="image-generation-access">
             <PageTitle>AI 服务接入</PageTitle>
             <PageLayout>
-                {configs.map(config => (
+                {providerConfigs.usedFallback ? (
+                    <PageBlock column="full" blockId="image-access-fallback" title="接入配置需要补全">
+                        <Alert>
+                            <AlertDescription>
+                                后端未返回完整的中转站配置，页面已补全安全默认项。可继续填写并保存；如果保存失败，请确认
+                                Vendure API 与 Dashboard 使用同一发布版本。
+                            </AlertDescription>
+                        </Alert>
+                    </PageBlock>
+                ) : null}
+                {providerConfigs.configs.map(config => (
                     <ProviderCredentialCard
                         key={config.scope}
                         config={config}
