@@ -1,4 +1,3 @@
-import type { ImagePromptSpec, ImageReferenceMode, OptimizeImagePromptInput } from '../types';
 import { Injectable } from '@nestjs/common';
 import {
     Customer,
@@ -7,12 +6,17 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { MoreThanOrEqual } from 'typeorm';
+import { ReferralWalletSpendService } from '@vendure/store-management-plugin';
+import { randomUUID } from 'node:crypto';
+import type { ImagePromptSpec, ImageReferenceMode, OptimizeImagePromptInput } from '../types';
 
 import { MAX_PROMPT_LENGTH } from '../constants';
+import { ImageGenerationConfig } from '../entities/image-generation-config.entity';
 import { ImageModelConfig } from '../entities/image-model-config.entity';
 import { ImagePromptOptimization } from '../entities/image-prompt-optimization.entity';
+import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { ImageGenerationConfigService } from '../image-generation-config.service';
+import { ImageUsageQuotaService } from '../image-usage-quota.service';
 import { ImageProviderClient } from '../provider/image-provider.client';
 
 import { PromptRulesService } from './prompt-rules.service';
@@ -34,6 +38,8 @@ export class ImagePromptEngineService {
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
         private readonly configService: ImageGenerationConfigService,
+        private readonly quota: ImageUsageQuotaService,
+        private readonly walletSpend: ReferralWalletSpendService,
         private readonly providerClient: ImageProviderClient,
         private readonly rules: PromptRulesService,
     ) {}
@@ -44,32 +50,82 @@ export class ImagePromptEngineService {
         const customer = await this.activeCustomer(ctx);
         const shopConfig = await this.configService.shopConfig(ctx);
         if (!shopConfig.enabled || !shopConfig.promptOptimizationEnabled) {
-            throw new UserInputError('当前店铺尚未开启免费提示词优化');
+            throw new UserInputError('当前店铺尚未开启提示词优化');
         }
         const referenceMode = normalizeReferenceMode(input.referenceMode);
         const fallback = this.rules.fallbackSpec(prompt, referenceMode);
-        const reserved = await this.reserveRateLimitSlot(ctx, customer, prompt, fallback);
+        const requestKey = normalizeIdempotencyKey(input.idempotencyKey);
+        const existing = await this.connection.getRepository(ctx, ImagePromptOptimization).findOne({
+            where: { channelId: ctx.channelId, customerId: customer.id, idempotencyKey: requestKey },
+        });
+        if (existing) {
+            if (existing.source === 'PENDING') throw new UserInputError('该提示词优化请求正在处理中');
+            return this.optimizationResult(ctx, customer, existing);
+        }
+        await this.consumeMinuteLimit(ctx, customer, requestKey);
+        const reserved = await this.reserveOptimization(ctx, customer, prompt, fallback, input, requestKey);
 
         let spec = fallback;
         let source = 'FALLBACK';
         let optimizerModelId: string | null = null;
+        let providerSucceeded = false;
+        let telemetry: Record<string, any> | undefined;
+        let credentialCode = '';
+        let credentialName = '';
+        let credentialLast4 = '';
+        let credentialSelectionReason: string | null = null;
+        let upstreamCallCount = 0;
+        let providerError: string | null = null;
+        const providerStartedAt = Date.now();
         try {
-            const credential = await this.configService.requireCredential(ctx);
-            optimizerModelId = credential.textModelId;
-            const raw = await this.providerClient.optimizePrompt(
-                credential,
-                OPTIMIZER_SYSTEM_PROMPT,
-                JSON.stringify({ prompt, referenceMode }),
-            );
+            let credential: ImageProviderCredential | null = null;
+            let result: Awaited<ReturnType<ImageProviderClient['optimizePrompt']>> | null = null;
+            for (let routeAttempt = 0; routeAttempt < 2; routeAttempt += 1) {
+                const route = await this.configService.routeCredential(ctx, 'OPENAI', undefined, 'PROMPT');
+                credential = route.credential;
+                optimizerModelId = credential.textModelId;
+                credentialCode = credential.code;
+                credentialName = credential.name;
+                credentialLast4 = credential.apiKeyLast4;
+                credentialSelectionReason = route.selectionReason;
+                upstreamCallCount += 1;
+                try {
+                    result = await this.providerClient.optimizePrompt(
+                        credential,
+                        OPTIMIZER_SYSTEM_PROMPT,
+                        JSON.stringify({ prompt, referenceMode }),
+                    );
+                    await this.configService
+                        .recordCredentialRuntimeSuccess(ctx, credential)
+                        .catch(() => undefined);
+                    break;
+                } catch (error) {
+                    const details = providerFailureDetails(error);
+                    await this.configService
+                        .recordCredentialRuntimeFailure(ctx, credential, {
+                            httpStatus: details.httpStatus,
+                            retryAfterSeconds: details.retryAfterSeconds,
+                            message: error instanceof Error ? error.message : String(error),
+                        })
+                        .catch(() => undefined);
+                    const safelyRejected = [401, 403, 429].includes(details.httpStatus ?? 0);
+                    if (!safelyRejected || routeAttempt === 1) throw error;
+                }
+            }
+            if (!credential || !result) throw new UserInputError('没有可用的提示词优化 Key');
+            telemetry = result.telemetry as Record<string, any> | undefined;
+            const parsed = this.parseSpec(result.text);
+            if (!parsed) upstreamCallCount += 1;
             spec =
-                this.parseSpec(raw) ??
-                (await this.repairSpec(credential, raw, prompt, referenceMode)) ??
-                fallback;
+                parsed ?? (await this.repairSpec(credential, result.text, prompt, referenceMode)) ?? fallback;
             source = spec === fallback ? 'FALLBACK' : 'MODEL';
-        } catch {
+            providerSucceeded = source === 'MODEL';
+        } catch (error) {
             spec = fallback;
             source = 'FALLBACK';
+            providerError = (error instanceof Error ? error.message : String(error)).slice(0, 500);
         }
+        if (!providerSucceeded && !providerError) providerError = '上游结果无法解析，已使用本地规则结果';
         const recommendation = await this.recommendEnabledModel(ctx, spec);
         const optimizedPrompt = this.rules.render(spec);
         Object.assign(reserved, {
@@ -77,18 +133,98 @@ export class ImagePromptEngineService {
             promptSpec: spec,
             source,
             optimizerModelId,
+            credentialCodeSnapshot: credentialCode,
+            credentialNameSnapshot: credentialName,
+            credentialLast4Snapshot: credentialLast4,
+            credentialSelectionReason,
+            upstreamCallCount,
+            latencyMs: Math.min(2_147_483_647, Date.now() - providerStartedAt),
+            errorMessage: providerError,
+            ...promptTelemetryValues(telemetry),
             recommendedModelCode: recommendation.model.code,
             recommendationReason: recommendation.reason,
         });
-        await this.connection.getRepository(ctx, ImagePromptOptimization).save(reserved, { reload: false });
+        await this.connection.withTransaction(ctx, async txCtx => {
+            if (providerSucceeded) {
+                if (reserved.billingMode === 'FREE' && reserved.quotaEventId) {
+                    await this.quota.capture(txCtx, reserved.quotaEventId, 1);
+                } else if (reserved.billingMode === 'PAID' && reserved.walletUsageId) {
+                    await this.walletSpend.capture(txCtx, {
+                        usageId: reserved.walletUsageId,
+                        amount: reserved.chargedAmount,
+                        operationKey: `PROMPT_CAPTURE:${String(reserved.id)}`,
+                        actorId: txCtx.activeUserId,
+                        actorType: 'CUSTOMER',
+                        metadata: { promptOptimizationId: String(reserved.id) },
+                    });
+                }
+            } else {
+                if (reserved.billingMode === 'FREE' && reserved.quotaEventId) {
+                    await this.quota.release(txCtx, reserved.quotaEventId, 1);
+                    reserved.billingMode = 'RELEASED';
+                } else if (reserved.billingMode === 'PAID' && reserved.walletUsageId) {
+                    await this.walletSpend.release(txCtx, {
+                        usageId: reserved.walletUsageId,
+                        amount: reserved.chargedAmount,
+                        operationKey: `PROMPT_RELEASE:${String(reserved.id)}`,
+                        actorId: txCtx.activeUserId,
+                        actorType: 'CUSTOMER',
+                        metadata: { reason: '提示词优化上游失败或结果无效' },
+                    });
+                    reserved.chargedAmount = 0;
+                    reserved.billingMode = 'REFUNDED';
+                }
+            }
+            await this.connection.getRepository(txCtx, ImagePromptOptimization).save(reserved, {
+                reload: false,
+            });
+        });
+        return this.optimizationResult(ctx, customer, reserved);
+    }
+
+    async quotaStatus(ctx: RequestContext, currentCustomer?: Customer) {
+        const customer = currentCustomer ?? (await this.activeCustomer(ctx));
+        const config = await this.connection.getRepository(ctx, ImageGenerationConfig).findOne({
+            where: { channelId: ctx.channelId },
+        });
+        const minuteLimit = config?.promptRateLimitPerMinute ?? 3;
+        const dailyLimit = config?.promptDailyFreeLimit ?? 20;
+        const dailyUnlimited = config?.promptDailyFreeUnlimited ?? false;
+        const [minute, daily] = await Promise.all([
+            this.quota.status(ctx, customer.id, 'PROMPT_MINUTE', minuteLimit),
+            this.quota.status(ctx, customer.id, 'PROMPT_DAILY_FREE', dailyLimit, dailyUnlimited),
+        ]);
         return {
-            originalPrompt: prompt,
-            optimizedPrompt,
-            promptSpec: spec,
-            source,
-            recommendedModelCode: recommendation.model.code,
-            recommendationReason: recommendation.reason,
-            promptSkillHash: this.rules.sourceHash,
+            minute,
+            daily,
+            paidEnabled: config?.paidPromptOptimizationEnabled ?? false,
+            paidPrice: config?.paidPromptOptimizationPrice ?? 0,
+            currencyCode: config?.paidPromptOptimizationCurrencyCode ?? ctx.channel.defaultCurrencyCode,
+        };
+    }
+
+    private async optimizationResult(
+        ctx: RequestContext,
+        customer: Customer,
+        record: ImagePromptOptimization,
+    ) {
+        return {
+            originalPrompt: record.inputPrompt,
+            optimizedPrompt: record.optimizedPrompt,
+            promptSpec: record.promptSpec,
+            source: record.source,
+            recommendedModelCode: record.recommendedModelCode,
+            recommendationReason: record.recommendationReason,
+            promptSkillHash: record.promptSkillHash,
+            billingMode: record.billingMode,
+            chargedAmount: record.chargedAmount,
+            currencyCode: record.currencyCode,
+            inputTokens: record.inputTokens,
+            outputTokens: record.outputTokens,
+            totalTokens: record.totalTokens,
+            actualCostMicrounits: record.actualCostMicrounits,
+            costCurrency: record.costCurrency,
+            promptQuota: await this.quotaStatus(ctx, customer),
         };
     }
 
@@ -111,6 +247,19 @@ export class ImagePromptEngineService {
         };
     }
 
+    async adminAudit(ctx: RequestContext, skip = 0, take = 50) {
+        const [items, totalItems] = await this.connection
+            .getRepository(ctx, ImagePromptOptimization)
+            .findAndCount({
+                where: { channelId: ctx.channelId },
+                relations: { customer: true },
+                order: { createdAt: 'DESC' },
+                skip: Math.max(0, Math.floor(skip || 0)),
+                take: Math.min(100, Math.max(1, Math.floor(take || 50))),
+            });
+        return { items, totalItems };
+    }
+
     assertSafe(prompt: string): void {
         const blocked = [
             /(?:未成年|儿童|小学生|幼女|幼男|child|minor).{0,24}(?:色情|裸体|裸露|性|sexy|nude|sexual)/iu,
@@ -126,11 +275,13 @@ export class ImagePromptEngineService {
         }
     }
 
-    private async reserveRateLimitSlot(
+    private async reserveOptimization(
         ctx: RequestContext,
         customer: Customer,
         prompt: string,
         fallback: ImagePromptSpec,
+        input: OptimizeImagePromptInput,
+        requestKey: string,
     ): Promise<ImagePromptOptimization> {
         return this.connection.withTransaction(ctx, async txCtx => {
             if (supportsRateLimitLock(this.connection.rawConnection.options.type)) {
@@ -142,26 +293,15 @@ export class ImagePromptEngineService {
                     .getOne();
             }
             const repository = this.connection.getRepository(txCtx, ImagePromptOptimization);
-            const now = Date.now();
-            const [minuteCount, dayCount] = await Promise.all([
-                repository.count({
-                    where: {
-                        channelId: txCtx.channelId,
-                        customerId: customer.id,
-                        createdAt: MoreThanOrEqual(new Date(now - 60_000)),
-                    },
-                }),
-                repository.count({
-                    where: {
-                        channelId: txCtx.channelId,
-                        customerId: customer.id,
-                        createdAt: MoreThanOrEqual(startOfBeijingDay(now)),
-                    },
-                }),
-            ]);
-            if (minuteCount >= 3) throw new UserInputError('提示词优化每分钟最多使用 3 次，请稍后再试');
-            if (dayCount >= 20) throw new UserInputError('今天的 20 次免费提示词优化额度已用完');
-            return repository.save(
+            const config = await this.connection.getRepository(txCtx, ImageGenerationConfig).findOne({
+                where: { channelId: txCtx.channelId },
+            });
+            if (!config) throw new UserInputError('找不到图片工坊配置');
+            const existing = await repository.findOne({
+                where: { channelId: txCtx.channelId, customerId: customer.id, idempotencyKey: requestKey },
+            });
+            if (existing) return existing;
+            const record = await repository.save(
                 new ImagePromptOptimization({
                     channelId: txCtx.channelId,
                     customerId: customer.id,
@@ -173,8 +313,92 @@ export class ImagePromptEngineService {
                     promptSkillHash: this.rules.sourceHash,
                     recommendedModelCode: 'GEMINI_FLASH',
                     recommendationReason: '正在生成推荐',
+                    idempotencyKey: requestKey,
+                    billingMode: 'PENDING',
+                    chargedAmount: 0,
+                    currencyCode: config.paidPromptOptimizationCurrencyCode,
+                    walletUsageId: null,
+                    quotaEventId: null,
+                    inputTokens: null,
+                    outputTokens: null,
+                    totalTokens: null,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                    providerRequestId: null,
+                    credentialCodeSnapshot: '',
+                    credentialNameSnapshot: '',
+                    credentialLast4Snapshot: '',
+                    credentialSelectionReason: null,
+                    upstreamCallCount: 0,
+                    latencyMs: 0,
+                    errorMessage: null,
                 }),
             );
+            const free = await this.quota.reserve(txCtx, {
+                customerId: customer.id,
+                quotaType: 'PROMPT_DAILY_FREE',
+                limit: config.promptDailyFreeLimit,
+                unlimited: config.promptDailyFreeUnlimited,
+                requestedAmount: 1,
+                allowPartial: true,
+                idempotencyKey: `PROMPT_DAILY:${String(txCtx.channelId)}:${String(customer.id)}:${requestKey}`,
+                resourceType: 'PROMPT_OPTIMIZATION',
+                resourceId: String(record.id),
+            });
+            if (free) {
+                record.billingMode = 'FREE';
+                record.quotaEventId = free.id;
+            } else {
+                if (!config.paidPromptOptimizationEnabled || config.paidPromptOptimizationPrice <= 0) {
+                    throw new UserInputError('今天的免费提示词优化额度已用完，管理员尚未开启付费优化');
+                }
+                if (
+                    input.expectedPrice !== config.paidPromptOptimizationPrice ||
+                    input.currencyCode !== config.paidPromptOptimizationCurrencyCode
+                ) {
+                    throw new UserInputError('PRICE_CHANGED：提示词优化价格已更新，请刷新后重试');
+                }
+                const usage = await this.walletSpend.reserve(txCtx, {
+                    customerId: customer.id,
+                    currencyCode: config.paidPromptOptimizationCurrencyCode,
+                    amount: config.paidPromptOptimizationPrice,
+                    resourceType: 'IMAGE_PROMPT_OPTIMIZATION',
+                    resourceId: String(record.id),
+                    idempotencyKey: `PROMPT_PAID:${String(txCtx.channelId)}:${String(customer.id)}:${requestKey}`,
+                    actorId: txCtx.activeUserId,
+                    actorType: 'CUSTOMER',
+                    metadata: { priceSnapshot: config.paidPromptOptimizationPrice },
+                });
+                record.billingMode = 'PAID';
+                record.chargedAmount = config.paidPromptOptimizationPrice;
+                record.walletUsageId = usage.id;
+            }
+            return repository.save(record);
+        });
+    }
+
+    private async consumeMinuteLimit(ctx: RequestContext, customer: Customer, requestKey: string) {
+        await this.connection.withTransaction(ctx, async txCtx => {
+            if (supportsRateLimitLock(this.connection.rawConnection.options.type)) {
+                await this.connection
+                    .getRepository(txCtx, Customer)
+                    .createQueryBuilder('customer')
+                    .setLock('pessimistic_write')
+                    .where('customer.id = :id', { id: customer.id })
+                    .getOne();
+            }
+            const config = await this.connection.getRepository(txCtx, ImageGenerationConfig).findOne({
+                where: { channelId: txCtx.channelId },
+            });
+            if (!config) throw new UserInputError('找不到图片工坊配置');
+            await this.quota.consumeAttempt(txCtx, {
+                customerId: customer.id,
+                quotaType: 'PROMPT_MINUTE',
+                limit: config.promptRateLimitPerMinute,
+                idempotencyKey: `PROMPT_MINUTE:${String(txCtx.channelId)}:${String(customer.id)}:${requestKey}`,
+                resourceType: 'PROMPT_OPTIMIZATION_ATTEMPT',
+                resourceId: requestKey,
+            });
         });
     }
 
@@ -190,7 +414,7 @@ export class ImagePromptEngineService {
                 `${OPTIMIZER_SYSTEM_PROMPT}\nThe previous output was invalid. Repair it and output valid JSON only.`,
                 JSON.stringify({ prompt, referenceMode, invalidOutput: invalidJson.slice(0, 4_000) }),
             );
-            return this.parseSpec(repaired);
+            return this.parseSpec(repaired.text);
         } catch {
             return;
         }
@@ -247,6 +471,44 @@ function normalizePrompt(value: string): string {
 
 function normalizeReferenceMode(value?: ImageReferenceMode | null): ImageReferenceMode {
     return value && ['STYLE', 'COMPOSITION', 'IDENTITY', 'PRODUCT', 'EDIT'].includes(value) ? value : 'NONE';
+}
+
+function normalizeIdempotencyKey(value?: string | null): string {
+    const normalized = value?.trim() || randomUUID();
+    if (!/^[a-zA-Z0-9:_-]{8,64}$/u.test(normalized)) {
+        throw new UserInputError('请求幂等键格式无效');
+    }
+    return normalized;
+}
+
+function promptTelemetryValues(telemetry?: Record<string, any>) {
+    const usage = telemetry?.usage && typeof telemetry.usage === 'object' ? telemetry.usage : {};
+    const inputTokens = integerOrNull(usage.input_tokens ?? usage.prompt_tokens);
+    const outputTokens = integerOrNull(usage.output_tokens ?? usage.completion_tokens);
+    return {
+        inputTokens,
+        outputTokens,
+        totalTokens:
+            integerOrNull(usage.total_tokens) ??
+            (inputTokens != null && outputTokens != null ? inputTokens + outputTokens : null),
+        actualCostMicrounits: integerOrNull(telemetry?.actualCostMicrounits),
+        costCurrency: typeof telemetry?.costCurrency === 'string' ? telemetry.costCurrency.slice(0, 3) : null,
+        providerRequestId:
+            typeof telemetry?.providerRequestId === 'string'
+                ? telemetry.providerRequestId.slice(0, 200)
+                : null,
+    };
+}
+
+function integerOrNull(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function providerFailureDetails(error: unknown): { httpStatus?: number; retryAfterSeconds?: number } {
+    if (!error || typeof error !== 'object' || !('details' in error)) return {};
+    const details = (error as { details?: unknown }).details;
+    return details && typeof details === 'object' ? details : {};
 }
 
 export function startOfBeijingDay(now: number): Date {

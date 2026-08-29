@@ -21,7 +21,9 @@ import { SafeImage } from '../storefront-ui/product-display';
 import {
     ActiveCustomer,
     ImageGenerationJob,
+    ImageModelQuotaStatus,
     ImagePrivateAssetView,
+    ImagePromptQuotaStatus,
     ImageReferenceMode,
     ImageResolution,
     ImageStudioConfig,
@@ -57,6 +59,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const isZh = language === 'zh';
     const [config, setConfig] = useState<ImageStudioConfig | null>(null);
     const [balance, setBalance] = useState(0);
+    const [promptQuota, setPromptQuota] = useState<ImagePromptQuotaStatus | null>(null);
+    const [modelQuotas, setModelQuotas] = useState<ImageModelQuotaStatus[]>([]);
     const [jobs, setJobs] = useState<ImageGenerationJob[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -83,12 +87,18 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 current => current || studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
             );
             if (customer) {
-                const [availableBalance, history] = await Promise.all([
-                    api.imageStudioBalance(),
-                    api.myImageGenerationJobs(0, 20),
-                ]);
+                const [availableBalance, history, currentPromptQuota, currentModelQuotas] = await Promise.all(
+                    [
+                        api.imageStudioBalance(),
+                        api.myImageGenerationJobs(0, 20),
+                        api.imagePromptQuotaStatus(),
+                        api.imageModelQuotaStatus(),
+                    ],
+                );
                 setBalance(availableBalance);
                 setJobs(history.items);
+                setPromptQuota(currentPromptQuota);
+                setModelQuotas(currentModelQuotas);
             }
         } catch (error) {
             setLoadError(errorMessage(error));
@@ -112,17 +122,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     }, [jobs, load]);
 
     const selectedModel = config?.models.find(model => model.code === modelCode) ?? config?.models[0];
-    const pricedResolutionOptions =
-        selectedModel?.resolutionOptions.filter(option => option.unitPrice > 0) ?? [];
-    const selectedResolutionOption =
-        pricedResolutionOptions.find(
-            option => option.resolution === resolution && option.supportedAspectRatios.includes(aspectRatio),
-        ) ?? pricedResolutionOptions.find(option => option.supportedAspectRatios.includes(aspectRatio));
-    const effectiveResolution = selectedResolutionOption?.resolution;
-    useEffect(() => {
-        if (effectiveResolution && effectiveResolution !== resolution) setResolution(effectiveResolution);
-    }, [effectiveResolution, resolution]);
-    const estimatedPrice = (selectedResolutionOption?.unitPrice ?? 0) * quantity;
+    const selectedQuota = modelQuotas.find(item => item.modelCode === selectedModel?.code);
+    const freeRemaining = selectedQuota?.free.unlimited
+        ? quantity
+        : Math.min(quantity, selectedQuota?.free.remaining ?? 0);
+    const paidQuantity = Math.max(0, quantity - freeRemaining);
+    const estimatedPrice = (selectedModel?.unitPrice ?? 0) * paidQuantity;
     const canGenerate = Boolean(
         customer &&
         config?.enabled &&
@@ -130,6 +135,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         selectedResolutionOption &&
         prompt.trim() &&
         balance >= estimatedPrice &&
+        (selectedQuota?.safety.remaining ?? 0) >= quantity &&
+        (paidQuantity === 0 || Boolean(selectedQuota?.paidAfterFreeEnabled)) &&
         !busy,
     );
     const selectModel = (code: string) => {
@@ -158,11 +165,24 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         setBusy('OPTIMIZE');
         setActionError('');
         try {
-            const result = await api.optimizeImagePrompt(prompt, referenceMode);
+            const paidPrompt = Boolean(
+                promptQuota && !promptQuota.daily.unlimited && promptQuota.daily.remaining <= 0,
+            );
+            const result = await api.optimizeImagePrompt(prompt, referenceMode, {
+                expectedPrice: paidPrompt ? promptQuota?.paidPrice : null,
+                currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
+                idempotencyKey: requestId(),
+            });
             setOriginalPrompt(prompt);
             setPrompt(result.optimizedPrompt);
             setOptimized(true);
             setOptimizationReason(result.recommendationReason);
+            setPromptQuota(result.promptQuota);
+            onNotify(
+                isZh
+                    ? `优化完成，今日免费剩余 ${quotaRemainingLabel(result.promptQuota.daily)} 次，本分钟剩余 ${result.promptQuota.minute.remaining}/${result.promptQuota.minute.limit} 次`
+                    : 'Prompt optimized',
+            );
             if (config?.models.some(model => model.code === result.recommendedModelCode)) {
                 selectModel(result.recommendedModelCode);
             }
@@ -208,7 +228,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 aspectRatio,
                 resolution: selectedResolutionOption.resolution,
                 quantity,
-                expectedUnitPrice: selectedResolutionOption.unitPrice,
+                expectedUnitPrice: selectedModel.unitPrice,
+                expectedChargeAmount: estimatedPrice,
                 currencyCode: selectedModel.currencyCode,
                 idempotencyKey: requestId(),
                 termsAccepted: true,
@@ -216,6 +237,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             pollStartedAt.current = Date.now();
             setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
             setBalance(value => Math.max(0, value - job.reservedAmount));
+            const [nextPromptQuota, nextModelQuotas] = await Promise.all([
+                api.imagePromptQuotaStatus(),
+                api.imageModelQuotaStatus(),
+            ]);
+            setPromptQuota(nextPromptQuota);
+            setModelQuotas(nextModelQuotas);
             onNotify(isZh ? '任务已提交，正在逐张生成' : 'Generation queued');
         } catch (error) {
             setActionError(errorMessage(error));
@@ -243,8 +270,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const deleteJob = async (id: string) => {
         const confirmed = window.confirm(
             isZh
-                ? '删除后将立即清理该任务的生成图、提示词和历史记录，且无法恢复。是否继续？'
-                : 'This permanently deletes the generated images, prompt, and history for this job. Continue?',
+                ? '删除后将立即清理生成图并在前台隐藏任务；提示词、调用和计费审计记录仍按合规要求保留。是否继续？'
+                : 'This removes generated images and hides the task. Audit records remain for compliance. Continue?',
         );
         if (!confirmed) return;
         try {
@@ -345,15 +372,42 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 <button
                                     type="button"
                                     disabled={
-                                        !config.promptOptimizationEnabled || !prompt.trim() || Boolean(busy)
+                                        !config.promptOptimizationEnabled ||
+                                        !prompt.trim() ||
+                                        Boolean(busy) ||
+                                        Boolean(
+                                            promptQuota &&
+                                            !promptQuota.daily.unlimited &&
+                                            promptQuota.daily.remaining <= 0 &&
+                                            !promptQuota.paidEnabled,
+                                        )
                                     }
                                     onClick={() => void optimizePrompt()}
                                 >
                                     {busy === 'OPTIMIZE' ? <LoaderCircle className="spin" /> : <Sparkles />}
                                     {isZh ? '智能优化' : 'Improve prompt'}
+                                    {promptQuota ? (
+                                        <small>
+                                            {promptQuota.daily.unlimited || promptQuota.daily.remaining > 0
+                                                ? isZh
+                                                    ? `今日免费剩余 ${quotaRemainingLabel(promptQuota.daily)} 次`
+                                                    : `${quotaRemainingLabel(promptQuota.daily)} free today`
+                                                : formatBillingMoney(
+                                                      promptQuota.paidPrice,
+                                                      promptQuota.currencyCode,
+                                                      market.locale,
+                                                  ) + (isZh ? '/次' : '/use')}
+                                        </small>
+                                    ) : null}
                                 </button>
                             </div>
                         </div>
+                        {actionError && busy !== 'GENERATE' ? (
+                            <div className="ai-studio-error">
+                                <CircleAlert />
+                                {actionError}
+                            </div>
+                        ) : null}
                         {optimized ? (
                             <div className="ai-studio-optimized">
                                 <CheckCircle2 />
@@ -458,6 +512,19 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         )}{' '}
                                         / {isZh ? '张（1K 起）' : 'image (from 1K)'}
                                     </strong>
+                                    <small>
+                                        {model.dailyFreeImageUnlimited
+                                            ? isZh
+                                                ? '每日免费不限张数'
+                                                : 'Unlimited daily free images'
+                                            : model.freeImageEnabled
+                                              ? isZh
+                                                  ? `每日免费 ${model.dailyFreeImageLimit} 张，今日剩余 ${modelQuotaRemaining(modelQuotas, model.code)} 张`
+                                                  : `${modelQuotaRemaining(modelQuotas, model.code)} free images left today`
+                                              : isZh
+                                                ? '无免费张数'
+                                                : 'No free images'}
+                                    </small>
                                 </button>
                             ))}
                         </div>
@@ -534,37 +601,41 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     </section>
 
                     <section className="ai-studio-checkout">
-                        {actionError ? (
-                            <div className="ai-studio-error">
-                                <CircleAlert />
-                                {actionError}
-                            </div>
-                        ) : null}
-                        <div className="ai-studio-settlement">
-                            <div className="ai-studio-settlement-summary">
-                                <div className="ai-studio-settlement-amount" aria-live="polite">
-                                    <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
-                                    <strong>
-                                        {formatBillingMoney(
-                                            estimatedPrice,
-                                            selectedModel?.currencyCode ?? market.currencyCode,
-                                            market.locale,
-                                        )}
-                                    </strong>
-                                </div>
-                                <div className="ai-studio-settlement-refund">
-                                    <RotateCcw aria-hidden="true" />
-                                    <div>
-                                        <strong>
-                                            {isZh ? '按成功图片结算' : 'Charged for successful images'}
-                                        </strong>
-                                        <span>
-                                            {isZh
-                                                ? '生成失败的图片金额将自动退回'
-                                                : 'Holds for failed images are returned automatically'}
-                                        </span>
-                                    </div>
-                                </div>
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={termsAccepted}
+                                onChange={event => setTermsAccepted(event.target.checked)}
+                            />
+                            <span>
+                                {isZh
+                                    ? `我已阅读并同意 AI 图片服务条款（${config.termsVersion}）`
+                                    : `I accept the AI image terms (${config.termsVersion})`}
+                            </span>
+                        </label>
+                        <details>
+                            <summary>{isZh ? '查看数据与使用说明' : 'View data and usage terms'}</summary>
+                            <p>{isZh ? config.termsZh : config.termsEn}</p>
+                        </details>
+                        <div className="ai-studio-submit">
+                            <div>
+                                <small>{isZh ? '预计冻结' : 'Estimated hold'}</small>
+                                <strong>
+                                    {formatBillingMoney(
+                                        estimatedPrice,
+                                        selectedModel?.currencyCode ?? market.currencyCode,
+                                        market.locale,
+                                    )}
+                                </strong>
+                                <span>
+                                    {isZh
+                                        ? `免费 ${freeRemaining} 张 + 付费 ${paidQuantity} 张 = 预计 ${formatBillingMoney(
+                                              estimatedPrice,
+                                              selectedModel?.currencyCode ?? market.currencyCode,
+                                              market.locale,
+                                          )}；仅成功图片结算，失败自动释放`
+                                        : 'Only successful images are charged'}
+                                </span>
                             </div>
                             <button
                                 className="ai-studio-generate-button"
@@ -585,6 +656,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         : 'Not enough referral balance.'}
                                 </span>
                             </div>
+                        ) : null}
+                        {selectedQuota && selectedQuota.safety.remaining < quantity ? (
+                            <p className="ai-studio-low-balance">
+                                {isZh
+                                    ? '今天的生图安全额度不足，请降低张数或明天再试。'
+                                    : 'Daily safety limit reached.'}
+                            </p>
                         ) : null}
                     </section>
 
@@ -700,6 +778,9 @@ function GenerationCard({
             </div>
             <footer>
                 <span>
+                    {isZh
+                        ? `免费成功 ${job.freeQuantityCaptured} 张 · 付费预留 ${job.paidQuantityReserved} 张 · `
+                        : `${job.freeQuantityCaptured} free · ${job.paidQuantityReserved} paid reserved · `}
                     {formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}{' '}
                     {isZh ? '已结算' : 'charged'} ·{' '}
                     {formatBillingMoney(job.releasedAmount, job.currencyCode, locale)}{' '}
@@ -735,7 +816,7 @@ function stateLabel(state: string, isZh: boolean): string {
         SUCCEEDED: '成功',
         PARTIAL_SUCCESS: '部分成功',
         FAILED: '失败已退回',
-        UNKNOWN: '结果确认中',
+        UNKNOWN: '结果待确认',
         CANCELLED: '已取消',
     };
     const en: Record<string, string> = {
@@ -748,6 +829,13 @@ function stateLabel(state: string, isZh: boolean): string {
         CANCELLED: 'Cancelled',
     };
     return (isZh ? zh : en)[state] ?? state;
+}
+function quotaRemainingLabel(quota: ImagePromptQuotaStatus['daily']): string {
+    return quota.unlimited ? '不限' : `${quota.remaining}/${quota.limit}`;
+}
+function modelQuotaRemaining(quotas: ImageModelQuotaStatus[], modelCode: string): string {
+    const quota = quotas.find(item => item.modelCode === modelCode)?.free;
+    return quota?.unlimited ? '不限' : String(quota?.remaining ?? 0);
 }
 function requestId(): string {
     return globalThis.crypto?.randomUUID?.() ?? `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;

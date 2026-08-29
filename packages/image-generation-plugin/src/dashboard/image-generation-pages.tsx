@@ -14,22 +14,30 @@ import {
     PageTitle,
     Skeleton,
     Switch,
+    Tabs,
+    TabsList,
+    TabsTrigger,
     Textarea,
     api,
     toast,
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import { Image, KeyRound, RefreshCw, RotateCcw, Save } from 'lucide-react';
+import { Archive, Image, KeyRound, Plus, RefreshCw, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
     ImageAdminConfigRecord,
     ImageAdminModelRecord,
     ImageAdminQueryResult,
+    ImageAiUsageRecordDetailQueryResult,
+    ImageAiUsageRecordsQueryResult,
     ImageProviderAdminConfigRecord,
     ImageProviderAdminQueryResult,
     activateImageSkillMutation,
+    archiveImageProviderMutation,
+    imageAiUsageRecordDetailQuery,
+    imageAiUsageRecordsQuery,
     imageGenerationAdminQuery,
     imageProviderAdminQuery,
     refundImageOutputMutation,
@@ -83,6 +91,76 @@ function ImageGenerationSettingsPage() {
     const query = useImageAdminQuery();
     const config = query.data?.imageGenerationAdminConfig;
     const [draft, setDraft] = useState<ImageAdminConfigRecord | null>(null);
+    const [activeTab, setActiveTab] = useState('base');
+    const [jobSearch, setJobSearch] = useState('');
+    const [jobState, setJobState] = useState('');
+    const [jobBilling, setJobBilling] = useState('');
+    const [jobFrom, setJobFrom] = useState('');
+    const [jobTo, setJobTo] = useState('');
+    const [jobModel, setJobModel] = useState('');
+    const [jobKey, setJobKey] = useState('');
+    const [jobType, setJobType] = useState('');
+    const [jobFailuresOnly, setJobFailuresOnly] = useState(false);
+    const [jobMissingCostOnly, setJobMissingCostOnly] = useState(false);
+    const [usagePage, setUsagePage] = useState(0);
+    const [selectedUsage, setSelectedUsage] = useState<{ recordType: string; id: string } | null>(null);
+    useEffect(() => {
+        setUsagePage(0);
+    }, [
+        jobSearch,
+        jobState,
+        jobBilling,
+        jobFrom,
+        jobTo,
+        jobModel,
+        jobKey,
+        jobType,
+        jobFailuresOnly,
+        jobMissingCostOnly,
+    ]);
+    const usageQuery = useQuery({
+        queryKey: [
+            'image-ai-usage-records',
+            jobSearch,
+            jobState,
+            jobBilling,
+            jobFrom,
+            jobTo,
+            jobModel,
+            jobKey,
+            jobType,
+            jobFailuresOnly,
+            jobMissingCostOnly,
+            usagePage,
+        ],
+        enabled: activeTab === 'jobs',
+        queryFn: () =>
+            api.query<ImageAiUsageRecordsQueryResult>(imageAiUsageRecordsQuery, {
+                input: {
+                    skip: usagePage * 50,
+                    take: 50,
+                    customer: jobSearch || null,
+                    state: jobState || null,
+                    billingMode: jobBilling || null,
+                    from: jobFrom ? `${jobFrom}T00:00:00.000Z` : null,
+                    to: jobTo ? `${jobTo}T23:59:59.999Z` : null,
+                    modelCode: jobModel || null,
+                    credentialCode: jobKey || null,
+                    recordType: jobType || null,
+                    failuresOnly: jobFailuresOnly,
+                    missingCostOnly: jobMissingCostOnly,
+                },
+            }),
+    });
+    const usageDetailQuery = useQuery({
+        queryKey: ['image-ai-usage-record', selectedUsage?.recordType, selectedUsage?.id],
+        enabled: activeTab === 'jobs' && selectedUsage != null,
+        queryFn: () =>
+            api.query<ImageAiUsageRecordDetailQueryResult>(imageAiUsageRecordDetailQuery, {
+                recordType: selectedUsage?.recordType,
+                id: selectedUsage?.id,
+            }),
+    });
     useEffect(() => setDraft(config ? structuredClone(config) : null), [config]);
 
     const saveConfig = useMutation({
@@ -91,6 +169,12 @@ function ImageGenerationSettingsPage() {
                 input: {
                     enabled: value.enabled,
                     promptOptimizationEnabled: value.promptOptimizationEnabled,
+                    promptRateLimitPerMinute: value.promptRateLimitPerMinute,
+                    promptDailyFreeLimit: value.promptDailyFreeLimit,
+                    promptDailyFreeUnlimited: value.promptDailyFreeUnlimited,
+                    paidPromptOptimizationEnabled: value.paidPromptOptimizationEnabled,
+                    paidPromptOptimizationPrice: value.paidPromptOptimizationPrice,
+                    paidPromptOptimizationCurrencyCode: value.paidPromptOptimizationCurrencyCode,
                     defaultModelCode: value.defaultModelCode,
                     termsVersion: value.termsVersion,
                     termsZh: value.termsZh,
@@ -151,7 +235,7 @@ function ImageGenerationSettingsPage() {
     const activateSkill = useMutation({
         mutationFn: (id: string) => api.mutate(activateImageSkillMutation, { id }),
         onSuccess: () => {
-            toast.success('提示词 Skill 版本已启用');
+            toast.success('已设为当前提示词规则版本');
             void query.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -176,6 +260,26 @@ function ImageGenerationSettingsPage() {
         return <ErrorPage title="AI 生图服务" retry={() => void query.refetch()} error={query.error} />;
     if (!draft || !query.data) return <LoadingPage title="AI 生图服务" />;
     const data = query.data;
+    const filteredJobs = data.imageGenerationJobs.items.filter(job => {
+        const search = jobSearch.trim().toLowerCase();
+        const matchesSearch =
+            !search ||
+            [
+                job.customer.firstName,
+                job.customer.lastName,
+                job.customer.emailAddress,
+                job.customer.id,
+                job.modelNameSnapshot,
+                job.providerCredentialNameSnapshot,
+                job.providerCredentialCodeSnapshot,
+            ].some(value => String(value).toLowerCase().includes(search));
+        const matchesState = !jobState || job.state === jobState;
+        const matchesBilling =
+            !jobBilling ||
+            (jobBilling === 'FREE' ? job.freeQuantityCaptured > 0 : job.paidQuantityReserved > 0);
+        const matchesFrom = !jobFrom || new Date(job.createdAt).getTime() >= new Date(jobFrom).getTime();
+        return matchesSearch && matchesState && matchesBilling && matchesFrom;
+    });
 
     const updateModel = (code: string, values: Partial<ImageAdminModelRecord>) => {
         setDraft({
@@ -195,463 +299,1107 @@ function ImageGenerationSettingsPage() {
                 </PageActionBarRight>
             </PageActionBar>
             <PageLayout>
-                <PageBlock
-                    column="full"
-                    blockId="image-base"
-                    title="基础设置"
-                    description="客户从返利余额按实际选择的模型和原生清晰度付费，支持 1–4 张和一张参考图。"
-                >
-                    {!draft.credentialEnabled ? (
-                        <Alert>
-                            <AlertDescription>平台中转站尚未启用，客户端不会开放生图。</AlertDescription>
-                        </Alert>
-                    ) : null}
-                    <div className="grid gap-5 md:grid-cols-2">
-                        <Toggle
-                            label="启用 AI 图片工坊"
-                            checked={draft.enabled}
-                            onChange={enabled => setDraft({ ...draft, enabled })}
-                        />
-                        <div className="space-y-1">
+                <PageBlock column="full" blockId="image-navigation">
+                    <Tabs value={activeTab} onValueChange={setActiveTab}>
+                        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-5">
+                            <TabsTrigger value="base">基础设置</TabsTrigger>
+                            <TabsTrigger value="models">模型与价格</TabsTrigger>
+                            <TabsTrigger value="prompts">提示词规则</TabsTrigger>
+                            <TabsTrigger value="jobs">任务记录</TabsTrigger>
+                            <TabsTrigger value="costs">成本与用量</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                </PageBlock>
+                {activeTab === 'base' ? (
+                    <PageBlock
+                        column="full"
+                        blockId="image-base"
+                        title="基础设置"
+                        description="客户从返利余额按成功生成的图片数量付费。首期固定 1K，支持 1–4 张和一张参考图。"
+                    >
+                        {!draft.credentialEnabled ? (
+                            <Alert>
+                                <AlertDescription>平台中转站尚未启用，客户端不会开放生图。</AlertDescription>
+                            </Alert>
+                        ) : null}
+                        <div className="grid gap-5 md:grid-cols-2">
                             <Toggle
-                                label="免费提示词优化"
+                                label="启用 AI 图片工坊"
+                                checked={draft.enabled}
+                                onChange={enabled => setDraft({ ...draft, enabled })}
+                            />
+                            <Toggle
+                                label="启用提示词优化"
                                 checked={draft.promptOptimizationEnabled}
                                 onChange={promptOptimizationEnabled =>
                                     setDraft({ ...draft, promptOptimizationEnabled })
                                 }
                             />
-                            <p className="text-xs text-muted-foreground">
-                                “免费”仅指不向客户端用户扣费；每次优化仍会调用已配置的文本模型，消耗中转站
-                                Token 或额度。
-                            </p>
-                        </div>
-                        <Field label="默认模型">
-                            <select
-                                className="h-9 w-full rounded-md border bg-background px-3"
-                                value={draft.defaultModelCode}
-                                onChange={event =>
-                                    setDraft({ ...draft, defaultModelCode: event.target.value })
-                                }
-                            >
-                                {draft.models.map(model => (
-                                    <option key={model.code} value={model.code}>
-                                        {model.displayNameZh} · {model.officialModelId}
-                                    </option>
-                                ))}
-                            </select>
-                        </Field>
-                        <Field label="条款版本">
-                            <Input
-                                value={draft.termsVersion}
-                                onChange={event => setDraft({ ...draft, termsVersion: event.target.value })}
-                            />
-                        </Field>
-                        <Field label="中文服务条款">
-                            <Textarea
-                                rows={5}
-                                value={draft.termsZh}
-                                onChange={event => setDraft({ ...draft, termsZh: event.target.value })}
-                            />
-                        </Field>
-                        <Field label="英文服务条款">
-                            <Textarea
-                                rows={5}
-                                value={draft.termsEn}
-                                onChange={event => setDraft({ ...draft, termsEn: event.target.value })}
-                            />
-                        </Field>
-                    </div>
-                </PageBlock>
-
-                <PageBlock
-                    column="full"
-                    blockId="image-models"
-                    title="模型与单张价格"
-                    description="友好名称、用途说明和官方模型 ID 会展示给客户。只读测试不生图；真实生图测试可能产生上游费用。健康结果 24 小时后过期。"
-                >
-                    <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-                        {draft.models.map(model => (
-                            <div key={model.code} className="space-y-3 rounded-lg border p-4">
-                                <div className="flex items-center justify-between">
-                                    <strong>{model.displayNameZh}</strong>
-                                    <Badge>{model.healthStatus}</Badge>
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                    官方 ID：{model.officialModelId}
-                                </div>
-                                {model.healthMessage ? (
-                                    <div className="text-xs text-muted-foreground">
-                                        {model.healthMessage}
-                                        {model.lastTestedAt
-                                            ? ` · ${new Date(model.lastTestedAt).toLocaleString()}`
-                                            : ''}
-                                    </div>
-                                ) : null}
-                                <Toggle
-                                    label="启用模型"
-                                    checked={model.enabled}
-                                    onChange={enabled => updateModel(model.code, { enabled })}
-                                />
-                                <Field label="中文名称">
-                                    <Input
-                                        value={model.displayNameZh}
-                                        onChange={event =>
-                                            updateModel(model.code, { displayNameZh: event.target.value })
-                                        }
-                                    />
-                                </Field>
-                                <Field label="英文名称">
-                                    <Input
-                                        value={model.displayNameEn}
-                                        onChange={event =>
-                                            updateModel(model.code, { displayNameEn: event.target.value })
-                                        }
-                                    />
-                                </Field>
-                                <Field label="中文用途说明">
-                                    <Textarea
-                                        rows={3}
-                                        value={model.descriptionZh}
-                                        onChange={event =>
-                                            updateModel(model.code, { descriptionZh: event.target.value })
-                                        }
-                                    />
-                                </Field>
-                                <Field label="英文用途说明">
-                                    <Textarea
-                                        rows={3}
-                                        value={model.descriptionEn}
-                                        onChange={event =>
-                                            updateModel(model.code, { descriptionEn: event.target.value })
-                                        }
-                                    />
-                                </Field>
-                                <Field label="中转站模型 ID">
-                                    <Input
-                                        value={model.providerModelId}
-                                        onChange={event =>
-                                            updateModel(model.code, { providerModelId: event.target.value })
-                                        }
-                                    />
-                                </Field>
-                                <Field label="协议">
-                                    <select
-                                        className="h-9 w-full rounded-md border bg-background px-3"
-                                        value={model.protocol}
-                                        onChange={event =>
-                                            updateModel(model.code, protocolChange(model, event.target.value))
-                                        }
-                                    >
-                                        <option value="OPENAI_RESPONSES_IMAGE">
-                                            OpenAI Responses Image（当前中转站推荐）
+                            <Field label="默认模型">
+                                <select
+                                    className="h-9 w-full rounded-md border bg-background px-3"
+                                    value={draft.defaultModelCode}
+                                    onChange={event =>
+                                        setDraft({ ...draft, defaultModelCode: event.target.value })
+                                    }
+                                >
+                                    {draft.models.map(model => (
+                                        <option key={model.code} value={model.code}>
+                                            {model.displayNameZh} · {model.officialModelId}
                                         </option>
-                                        {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
-                                        <option value="OPENAI_IMAGES">OpenAI Images</option>
-                                        {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
-                                        <option value="OPENAI_COMPATIBLE_CHAT">OpenAI Compatible Chat</option>
-                                        <option value="GEMINI_INTERACTIONS">
-                                            Gemini Interactions（推荐）
-                                        </option>
-                                        <option value="GEMINI_NATIVE">Gemini GenerateContent（兼容）</option>
-                                        <option value="GEMINI_NATIVE_STREAM">
-                                            Gemini StreamGenerateContent（当前中转站推荐）
-                                        </option>
-                                    </select>
-                                </Field>
-                                <div className="grid gap-3 sm:grid-cols-3">
-                                    {(
-                                        [
-                                            ['1K', 'unitPrice'],
-                                            ['2K', 'unitPrice2K'],
-                                            ['4K', 'unitPrice4K'],
-                                        ] as const
-                                    ).map(([resolution, priceField]) => {
-                                        const supported = modelSupportsResolution(model, resolution);
-                                        return (
-                                            <Field
-                                                key={resolution}
-                                                label={`${resolution} 单张价格（${model.currencyCode}）`}
-                                            >
-                                                <Input
-                                                    type="number"
-                                                    min="0"
-                                                    step="0.01"
-                                                    disabled={!supported}
-                                                    value={minorToMajor(
-                                                        model[priceField],
-                                                        model.currencyCode,
-                                                    )}
-                                                    onChange={event =>
-                                                        updateModel(model.code, {
-                                                            [priceField]: majorToMinor(
-                                                                event.target.value,
-                                                                model.currencyCode,
-                                                            ),
-                                                        })
-                                                    }
-                                                />
-                                                {!supported ? (
-                                                    <span className="text-xs text-muted-foreground">
-                                                        当前模型/协议不支持原生 {resolution}
-                                                    </span>
-                                                ) : resolution !== '1K' ? (
-                                                    <span className="text-xs text-muted-foreground">
-                                                        价格设为 0 时客户端不开放该档
-                                                    </span>
-                                                ) : null}
-                                            </Field>
-                                        );
-                                    })}
-                                </div>
-                                <Toggle
-                                    label="设为默认"
-                                    checked={model.isDefault}
-                                    onChange={isDefault => updateModel(model.code, { isDefault })}
-                                />
-                                <Toggle
-                                    label="中转站保证幂等"
-                                    checked={model.supportsIdempotency}
-                                    onChange={supportsIdempotency =>
-                                        updateModel(model.code, { supportsIdempotency })
+                                    ))}
+                                </select>
+                            </Field>
+                            <Field label="条款版本">
+                                <Input
+                                    value={draft.termsVersion}
+                                    onChange={event =>
+                                        setDraft({ ...draft, termsVersion: event.target.value })
                                     }
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    只有确认中转站对相同幂等键不会重复生图、不会重复计费时才能开启。开启后系统才可对结果未知任务使用原幂等键安全重试；若中转站不保证，重试可能产生重复图片和重复费用。
-                                </p>
-                                <div className="grid gap-2 sm:grid-cols-3">
-                                    <Button
-                                        variant="outline"
-                                        disabled={
-                                            saveModel.isPending ||
-                                            testModel.isPending ||
-                                            smokeTestModel.isPending
+                            </Field>
+                            <Field label="中文服务条款">
+                                <Textarea
+                                    rows={5}
+                                    value={draft.termsZh}
+                                    onChange={event => setDraft({ ...draft, termsZh: event.target.value })}
+                                />
+                            </Field>
+                            <Field label="英文服务条款">
+                                <Textarea
+                                    rows={5}
+                                    value={draft.termsEn}
+                                    onChange={event => setDraft({ ...draft, termsEn: event.target.value })}
+                                />
+                            </Field>
+                        </div>
+                    </PageBlock>
+                ) : null}
+
+                {activeTab === 'models' ? (
+                    <PageBlock
+                        column="full"
+                        blockId="image-models"
+                        title="模型与单张价格"
+                        description="友好名称、用途说明和官方模型 ID 会展示给客户。只读测试不生图；真实生图测试可能产生上游费用。健康结果 24 小时后过期。"
+                    >
+                        <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
+                            {draft.models.map(model => (
+                                <div key={model.code} className="space-y-3 rounded-lg border p-4">
+                                    <div className="flex items-center justify-between">
+                                        <strong>{model.displayNameZh}</strong>
+                                        <Badge>{statusZh(model.healthStatus)}</Badge>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        官方 ID：{model.officialModelId}
+                                    </div>
+                                    {model.healthMessage ? (
+                                        <div className="text-xs text-muted-foreground">
+                                            {model.healthMessage}
+                                            {model.lastTestedAt
+                                                ? ` · ${new Date(model.lastTestedAt).toLocaleString()}`
+                                                : ''}
+                                        </div>
+                                    ) : null}
+                                    <Toggle
+                                        label="启用模型"
+                                        checked={model.enabled}
+                                        onChange={enabled => updateModel(model.code, { enabled })}
+                                    />
+                                    <Field label="中文名称">
+                                        <Input
+                                            value={model.displayNameZh}
+                                            onChange={event =>
+                                                updateModel(model.code, { displayNameZh: event.target.value })
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="英文名称">
+                                        <Input
+                                            value={model.displayNameEn}
+                                            onChange={event =>
+                                                updateModel(model.code, { displayNameEn: event.target.value })
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="中文用途说明">
+                                        <Textarea
+                                            rows={3}
+                                            value={model.descriptionZh}
+                                            onChange={event =>
+                                                updateModel(model.code, { descriptionZh: event.target.value })
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="英文用途说明">
+                                        <Textarea
+                                            rows={3}
+                                            value={model.descriptionEn}
+                                            onChange={event =>
+                                                updateModel(model.code, { descriptionEn: event.target.value })
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="中转站模型 ID">
+                                        <Input
+                                            value={model.providerModelId}
+                                            onChange={event =>
+                                                updateModel(model.code, {
+                                                    providerModelId: event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="协议">
+                                        <select
+                                            className="h-9 w-full rounded-md border bg-background px-3"
+                                            value={model.protocol}
+                                            onChange={event =>
+                                                updateModel(model.code, {
+                                                    protocol: event.target
+                                                        .value as ImageAdminModelRecord['protocol'],
+                                                })
+                                            }
+                                        >
+                                            <option value="OPENAI_RESPONSES_IMAGE">
+                                                OpenAI Responses Image（当前中转站推荐）
+                                            </option>
+                                            {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
+                                            <option value="OPENAI_IMAGES">OpenAI Images</option>
+                                            {/* i18n-audit-ignore -- Vendor-defined protocol name. */}
+                                            <option value="OPENAI_COMPATIBLE_CHAT">
+                                                OpenAI Compatible Chat
+                                            </option>
+                                            <option value="GEMINI_INTERACTIONS">
+                                                Gemini Interactions（推荐）
+                                            </option>
+                                            <option value="GEMINI_NATIVE">
+                                                Gemini GenerateContent（兼容）
+                                            </option>
+                                            <option value="GEMINI_NATIVE_STREAM">
+                                                Gemini StreamGenerateContent（当前中转站推荐）
+                                            </option>
+                                        </select>
+                                    </Field>
+                                    <Field label={`单张价格（${model.currencyCode}）`}>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={minorToMajor(model.unitPrice, model.currencyCode)}
+                                            onChange={event =>
+                                                updateModel(model.code, {
+                                                    unitPrice: majorToMinor(
+                                                        event.target.value,
+                                                        model.currencyCode,
+                                                    ),
+                                                })
+                                            }
+                                        />
+                                    </Field>
+                                    <Toggle
+                                        label="设为默认"
+                                        checked={model.isDefault}
+                                        onChange={isDefault => updateModel(model.code, { isDefault })}
+                                    />
+                                    <Toggle
+                                        label="中转站保证幂等"
+                                        checked={model.supportsIdempotency}
+                                        onChange={supportsIdempotency =>
+                                            updateModel(model.code, { supportsIdempotency })
                                         }
-                                        onClick={() => saveModel.mutate(model)}
-                                    >
-                                        保存模型
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        disabled={
-                                            saveModel.isPending ||
-                                            testModel.isPending ||
-                                            smokeTestModel.isPending
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        仅在中转站明确保证同一幂等键不会重复生图时开启。
+                                    </p>
+                                    <Toggle
+                                        label="启用每日免费生图"
+                                        checked={model.freeImageEnabled}
+                                        onChange={freeImageEnabled =>
+                                            updateModel(model.code, { freeImageEnabled })
                                         }
-                                        onClick={() => testModel.mutate(model)}
-                                    >
-                                        <RefreshCw className="mr-2 h-4 w-4" />
-                                        只读测试
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        disabled={
-                                            saveModel.isPending ||
-                                            testModel.isPending ||
-                                            smokeTestModel.isPending
+                                    />
+                                    <Field label="每位客户每天免费张数">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            value={model.dailyFreeImageLimit}
+                                            disabled={model.dailyFreeImageUnlimited}
+                                            onChange={event =>
+                                                updateModel(model.code, {
+                                                    dailyFreeImageLimit: Number(event.target.value) || 0,
+                                                })
+                                            }
+                                        />
+                                    </Field>
+                                    <Toggle
+                                        label="免费生图不限次数"
+                                        checked={model.dailyFreeImageUnlimited}
+                                        onChange={dailyFreeImageUnlimited =>
+                                            updateModel(model.code, {
+                                                dailyFreeImageUnlimited,
+                                                dailyFreeImageLimit: dailyFreeImageUnlimited
+                                                    ? 0
+                                                    : model.dailyFreeImageLimit,
+                                            })
                                         }
-                                        onClick={() => {
-                                            if (
-                                                window.confirm(
-                                                    '将真实生成 1 张简单测试图，中转站可能收费。是否继续？',
+                                    />
+                                    <Toggle
+                                        label="免费用完后允许付费"
+                                        checked={model.paidAfterFreeEnabled}
+                                        onChange={paidAfterFreeEnabled =>
+                                            updateModel(model.code, { paidAfterFreeEnabled })
+                                        }
+                                    />
+                                    <Field label="每位客户每日生图安全上限">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            value={model.dailyGenerationSafetyLimit}
+                                            onChange={event =>
+                                                updateModel(model.code, {
+                                                    dailyGenerationSafetyLimit:
+                                                        Number(event.target.value) || 1,
+                                                })
+                                            }
+                                        />
+                                    </Field>
+                                    <div className="grid gap-2 sm:grid-cols-3">
+                                        <Button
+                                            variant="outline"
+                                            disabled={
+                                                saveModel.isPending ||
+                                                testModel.isPending ||
+                                                smokeTestModel.isPending
+                                            }
+                                            onClick={() => saveModel.mutate(model)}
+                                        >
+                                            保存模型
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            disabled={
+                                                saveModel.isPending ||
+                                                testModel.isPending ||
+                                                smokeTestModel.isPending
+                                            }
+                                            onClick={() => testModel.mutate(model)}
+                                        >
+                                            <RefreshCw className="mr-2 h-4 w-4" />
+                                            只读测试
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            disabled={
+                                                saveModel.isPending ||
+                                                testModel.isPending ||
+                                                smokeTestModel.isPending
+                                            }
+                                            onClick={() => {
+                                                if (
+                                                    window.confirm(
+                                                        '将真实生成 1 张简单测试图，中转站可能收费。是否继续？',
+                                                    )
                                                 )
-                                            )
-                                                smokeTestModel.mutate(model);
-                                        }}
-                                    >
-                                        付费生图测试
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </PageBlock>
-
-                <PageBlock
-                    column="full"
-                    blockId="image-cost-audit"
-                    title="近 30 天成本对账"
-                    description="销售额是成功图的原始售价合计（未减人工退款）；上游成本仅在中转站返回费用字段时可对账，不同币种不自动换算。"
-                >
-                    {data.imageGenerationCostSummary.truncated ? (
-                        <Alert className="mb-3">
-                            <AlertDescription>记录超过 20,000 条，当前仅展示截断统计。</AlertDescription>
-                        </Alert>
-                    ) : null}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b text-left">
-                                    <th className="p-2">模型</th>
-                                    <th>请求/成功</th>
-                                    <th>重试/未知/失败</th>
-                                    <th>原始销售额</th>
-                                    <th>上游成本</th>
-                                    <th>缺失成本</th>
-                                    <th>平均耗时</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.imageGenerationCostSummary.items.map(item => (
-                                    <tr
-                                        key={`${item.modelCode}:${item.saleCurrencyCode}:${item.costCurrency}`}
-                                        className="border-b"
-                                    >
-                                        <td className="p-2">
-                                            {item.modelCode}
-                                            <div className="text-xs text-muted-foreground">
-                                                {item.providerScope}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            {item.attempts} / {item.successes}
-                                        </td>
-                                        <td>
-                                            {item.retries} / {item.unknowns} / {item.failures}
-                                        </td>
-                                        <td>
-                                            {minorToMajor(item.grossRevenue, item.saleCurrencyCode)}{' '}
-                                            {item.saleCurrencyCode}
-                                        </td>
-                                        <td>
-                                            {item.actualCost.toFixed(6)} {item.costCurrency}
-                                        </td>
-                                        <td>{item.missingCostCount}</td>
-                                        {/* i18n-audit-ignore -- Fixed latency unit. */}
-                                        <td>{item.averageLatencyMs}ms</td>
-                                    </tr>
-                                ))}
-                                {!data.imageGenerationCostSummary.items.length ? (
-                                    <tr>
-                                        <td className="p-4 text-muted-foreground" colSpan={7}>
-                                            暂无真实生图成本记录。
-                                        </td>
-                                    </tr>
-                                ) : null}
-                            </tbody>
-                        </table>
-                    </div>
-                </PageBlock>
-
-                <PageBlock
-                    column="full"
-                    blockId="image-skills"
-                    title="提示词 Skill 版本"
-                    description={`当前规则哈希：${draft.activeSkillHash}`}
-                >
-                    <div className="space-y-2">
-                        {data.imagePromptSkillReleases.map(release => (
-                            <div
-                                key={release.id}
-                                className="flex items-center justify-between rounded border p-3"
-                            >
-                                <div>
-                                    {/* i18n-audit-ignore -- Technical bundle version prefix. */}
-                                    <strong>Bundle v{release.bundleVersion}</strong>
-                                    <div className="font-mono text-xs text-muted-foreground">
-                                        {release.sourceHash}
+                                                    smokeTestModel.mutate(model);
+                                            }}
+                                        >
+                                            付费生图测试
+                                        </Button>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Badge>{release.status}</Badge>
-                                    {release.status !== 'ACTIVE' ? (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => activateSkill.mutate(release.id)}
-                                        >
-                                            <RotateCcw className="mr-2 h-4 w-4" />
-                                            回滚/启用
-                                        </Button>
-                                    ) : null}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </PageBlock>
+                            ))}
+                        </div>
+                    </PageBlock>
+                ) : null}
 
-                <PageBlock
-                    column="full"
-                    blockId="image-jobs"
-                    title={`最近任务（共 ${data.imageGenerationJobs.totalItems}）`}
-                    description="UNKNOWN 不会自动重复生成；15 分钟后自动退回，或由管理员确认后使用同一幂等键重试。"
-                >
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b text-left">
-                                    <th className="p-2">时间</th>
-                                    <th>模型</th>
-                                    <th>状态</th>
-                                    <th>扣费/退回</th>
-                                    <th>每张结果</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.imageGenerationJobs.items.map(job => (
-                                    <tr key={job.id} className="border-b align-top">
-                                        <td className="p-2">{new Date(job.createdAt).toLocaleString()}</td>
-                                        <td>
-                                            {job.modelNameSnapshot}
-                                            <div className="text-xs text-muted-foreground">
-                                                {job.officialModelIdSnapshot} · {job.resolution}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <Badge>{job.state}</Badge>
-                                        </td>
-                                        <td>
-                                            {minorToMajor(job.capturedAmount, job.currencyCode)} /{' '}
-                                            {minorToMajor(job.releasedAmount, job.currencyCode)}{' '}
-                                            {job.currencyCode}
-                                        </td>
-                                        <td className="space-y-1 py-2">
-                                            {job.outputs.map(output => (
-                                                <div key={output.id} className="flex items-center gap-2">
-                                                    <span>
-                                                        #{output.outputIndex + 1} {output.state}
-                                                        {output.refundedAt ? ' · 已退款' : ''}
-                                                    </span>
-                                                    {output.state === 'UNKNOWN' ? (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => retryOutput.mutate(output.id)}
-                                                        >
-                                                            确认重试
-                                                        </Button>
-                                                    ) : null}
-                                                    {output.state === 'SUCCEEDED' && !output.refundedAt ? (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => {
-                                                                const reason =
-                                                                    window.prompt('请输入退款原因');
-                                                                if (reason?.trim())
-                                                                    refundOutput.mutate({
-                                                                        outputId: output.id,
-                                                                        reason,
-                                                                    });
-                                                            }}
-                                                        >
-                                                            退款
-                                                        </Button>
-                                                    ) : null}
-                                                </div>
-                                            ))}
-                                        </td>
+                {activeTab === 'costs' ? (
+                    <PageBlock
+                        column="full"
+                        blockId="image-cost-audit"
+                        title="近 30 天成本对账"
+                        description="销售额是成功图的原始售价合计（未减人工退款）；上游成本仅在中转站返回费用字段时可对账，不同币种不自动换算。"
+                    >
+                        {data.imageGenerationCostSummary.truncated ? (
+                            <Alert className="mb-3">
+                                <AlertDescription>记录超过 20,000 条，当前仅展示截断统计。</AlertDescription>
+                            </Alert>
+                        ) : null}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b text-left">
+                                        <th className="p-2">模型</th>
+                                        <th>请求/成功</th>
+                                        <th>重试/未知/失败</th>
+                                        <th>原始销售额</th>
+                                        <th>上游成本</th>
+                                        <th>缺失成本</th>
+                                        <th>平均耗时</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </PageBlock>
+                                </thead>
+                                <tbody>
+                                    {data.imageGenerationCostSummary.items.map(item => (
+                                        <tr
+                                            key={`${item.modelCode}:${item.saleCurrencyCode}:${item.costCurrency}`}
+                                            className="border-b"
+                                        >
+                                            <td className="p-2">
+                                                {item.modelCode}
+                                                <div className="text-xs text-muted-foreground">
+                                                    {item.providerScope}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {item.attempts} / {item.successes}
+                                            </td>
+                                            <td>
+                                                {item.retries} / {item.unknowns} / {item.failures}
+                                            </td>
+                                            <td>
+                                                {minorToMajor(item.grossRevenue, item.saleCurrencyCode)}{' '}
+                                                {item.saleCurrencyCode}
+                                            </td>
+                                            <td>
+                                                {item.actualCost.toFixed(6)} {item.costCurrency}
+                                            </td>
+                                            <td>{item.missingCostCount}</td>
+                                            {/* i18n-audit-ignore -- Fixed latency unit. */}
+                                            <td>{item.averageLatencyMs}ms</td>
+                                        </tr>
+                                    ))}
+                                    {!data.imageGenerationCostSummary.items.length ? (
+                                        <tr>
+                                            <td className="p-4 text-muted-foreground" colSpan={7}>
+                                                暂无真实生图成本记录。
+                                            </td>
+                                        </tr>
+                                    ) : null}
+                                </tbody>
+                            </table>
+                        </div>
+                    </PageBlock>
+                ) : null}
+
+                {activeTab === 'prompts' ? (
+                    <PageBlock
+                        column="full"
+                        blockId="image-skills"
+                        title="提示词 Skill 版本"
+                        description={`当前规则哈希：${draft.activeSkillHash}`}
+                    >
+                        <Alert className="mb-4">
+                            <AlertDescription>
+                                “设为当前版本”只影响后续提示词优化规则，不会切换 Key、模型或代码版本。
+                            </AlertDescription>
+                        </Alert>
+                        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            <Field label="每分钟最多优化次数">
+                                <Input
+                                    type="number"
+                                    min="1"
+                                    value={draft.promptRateLimitPerMinute}
+                                    onChange={event =>
+                                        setDraft({
+                                            ...draft,
+                                            promptRateLimitPerMinute: Number(event.target.value) || 1,
+                                        })
+                                    }
+                                />
+                            </Field>
+                            <Field label="每天免费优化次数">
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    disabled={draft.promptDailyFreeUnlimited}
+                                    value={draft.promptDailyFreeLimit}
+                                    onChange={event =>
+                                        setDraft({
+                                            ...draft,
+                                            promptDailyFreeLimit: Number(event.target.value) || 0,
+                                        })
+                                    }
+                                />
+                            </Field>
+                            <Toggle
+                                label="免费优化不限次数"
+                                checked={draft.promptDailyFreeUnlimited}
+                                onChange={promptDailyFreeUnlimited =>
+                                    setDraft({
+                                        ...draft,
+                                        promptDailyFreeUnlimited,
+                                        promptDailyFreeLimit: promptDailyFreeUnlimited
+                                            ? 0
+                                            : draft.promptDailyFreeLimit,
+                                    })
+                                }
+                            />
+                            <Toggle
+                                label="免费用完后允许付费优化"
+                                checked={draft.paidPromptOptimizationEnabled}
+                                onChange={paidPromptOptimizationEnabled =>
+                                    setDraft({ ...draft, paidPromptOptimizationEnabled })
+                                }
+                            />
+                            <Field label={`付费优化单次价格（${draft.paidPromptOptimizationCurrencyCode}）`}>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={minorToMajor(
+                                        draft.paidPromptOptimizationPrice,
+                                        draft.paidPromptOptimizationCurrencyCode,
+                                    )}
+                                    onChange={event =>
+                                        setDraft({
+                                            ...draft,
+                                            paidPromptOptimizationPrice: majorToMinor(
+                                                event.target.value,
+                                                draft.paidPromptOptimizationCurrencyCode,
+                                            ),
+                                        })
+                                    }
+                                />
+                            </Field>
+                        </div>
+                        <div className="space-y-2">
+                            {data.imagePromptSkillReleases.map(release => (
+                                <div
+                                    key={release.id}
+                                    className="flex items-center justify-between rounded border p-3"
+                                >
+                                    <div>
+                                        {/* i18n-audit-ignore -- Technical bundle version prefix. */}
+                                        <strong>提示词规则版本 {release.bundleVersion}</strong>
+                                        <div className="font-mono text-xs text-muted-foreground">
+                                            {release.sourceHash}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge>{statusZh(release.status)}</Badge>
+                                        {release.status !== 'ACTIVE' ? (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => activateSkill.mutate(release.id)}
+                                            >
+                                                设为当前版本
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </PageBlock>
+                ) : null}
+
+                {activeTab === 'jobs' ? (
+                    <>
+                        <PageBlock
+                            column="full"
+                            blockId="unified-ai-usage"
+                            title={`AI 使用记录（共 ${usageQuery.data?.imageAiUsageRecords.totalItems ?? 0}）`}
+                            description="统一记录提示词优化和图片生成；筛选在服务端执行，不受当前页面已加载数量影响。"
+                        >
+                            <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                <Field label="客户">
+                                    <Input
+                                        placeholder="姓名、邮箱或客户 ID"
+                                        value={jobSearch}
+                                        onChange={event => setJobSearch(event.target.value)}
+                                    />
+                                </Field>
+                                <Field label="记录类型">
+                                    <select
+                                        className="h-9 rounded-md border bg-background px-3"
+                                        value={jobType}
+                                        onChange={event => setJobType(event.target.value)}
+                                    >
+                                        <option value="">提示词和生图</option>
+                                        <option value="PROMPT_OPTIMIZATION">提示词优化</option>
+                                        <option value="IMAGE_GENERATION">图片生成</option>
+                                    </select>
+                                </Field>
+                                <Field label="模型编码">
+                                    <Input
+                                        placeholder="精确模型编码"
+                                        value={jobModel}
+                                        onChange={event => setJobModel(event.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Key 编码">
+                                    <Input
+                                        placeholder="稳定 Key 编码"
+                                        value={jobKey}
+                                        onChange={event => setJobKey(event.target.value)}
+                                    />
+                                </Field>
+                                <Field label="状态">
+                                    <select
+                                        className="h-9 rounded-md border bg-background px-3"
+                                        value={jobState}
+                                        onChange={event => setJobState(event.target.value)}
+                                    >
+                                        <option value="">全部状态</option>
+                                        {[
+                                            'PENDING',
+                                            'QUEUED',
+                                            'RUNNING',
+                                            'PARTIAL_SUCCESS',
+                                            'SUCCEEDED',
+                                            'FAILED',
+                                            'UNKNOWN',
+                                            'CANCELLED',
+                                        ].map(value => (
+                                            <option key={value} value={value}>
+                                                {statusZh(value)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <Field label="计费类型">
+                                    <select
+                                        className="h-9 rounded-md border bg-background px-3"
+                                        value={jobBilling}
+                                        onChange={event => setJobBilling(event.target.value)}
+                                    >
+                                        <option value="">全部计费</option>
+                                        <option value="FREE">免费</option>
+                                        <option value="PAID">付费</option>
+                                        <option value="MIXED">免费+付费</option>
+                                        <option value="REFUNDED">已退款</option>
+                                    </select>
+                                </Field>
+                                <Field label="开始日期">
+                                    <Input
+                                        type="date"
+                                        value={jobFrom}
+                                        onChange={event => setJobFrom(event.target.value)}
+                                    />
+                                </Field>
+                                <Field label="结束日期">
+                                    <Input
+                                        type="date"
+                                        value={jobTo}
+                                        onChange={event => setJobTo(event.target.value)}
+                                    />
+                                </Field>
+                                <Toggle
+                                    label="仅失败/待确认记录"
+                                    checked={jobFailuresOnly}
+                                    onChange={setJobFailuresOnly}
+                                />
+                                <Toggle
+                                    label="仅上游成本缺失"
+                                    checked={jobMissingCostOnly}
+                                    onChange={setJobMissingCostOnly}
+                                />
+                            </div>
+                            {usageQuery.isLoading ? <Skeleton className="h-40 w-full" /> : null}
+                            {usageQuery.error ? (
+                                <Alert>
+                                    <AlertDescription>{errorMessage(usageQuery.error)}</AlertDescription>
+                                </Alert>
+                            ) : null}
+                            {usageQuery.data ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b text-left">
+                                                <th className="p-2">时间/类型</th>
+                                                <th>客户/Channel</th>
+                                                <th>模型/Key</th>
+                                                <th>状态</th>
+                                                <th>免费/付费</th>
+                                                <th>客户收入/退回</th>
+                                                <th>上游成本</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {usageQuery.data.imageAiUsageRecords.items.map(item => (
+                                                <tr
+                                                    key={`${item.recordType}:${item.id}`}
+                                                    className="border-b align-top"
+                                                >
+                                                    <td className="p-2">
+                                                        {new Date(item.createdAt).toLocaleString()}
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {item.recordType === 'PROMPT_OPTIMIZATION'
+                                                                ? '提示词优化'
+                                                                : '图片生成'}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        {item.customer.firstName} {item.customer.lastName}
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {item.customer.emailAddress}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            ID {item.customer.id} · Channel {item.channelId}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        {item.modelCode}
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {item.credentialName || '无上游 Key'}
+                                                            {item.credentialLast4
+                                                                ? ` · 尾号 ${item.credentialLast4}`
+                                                                : ''}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <Badge>{statusZh(item.state)}</Badge>
+                                                        {item.errorMessage ? (
+                                                            <div className="max-w-48 text-xs text-destructive">
+                                                                {item.errorMessage}
+                                                            </div>
+                                                        ) : null}
+                                                    </td>
+                                                    <td>
+                                                        {billingModeZh(item.billingMode)}
+                                                        <div className="text-xs text-muted-foreground">
+                                                            免费 {item.freeQuantity} · 付费{' '}
+                                                            {item.paidQuantity}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        {minorToMajor(item.chargedAmount, item.currencyCode)}{' '}
+                                                        /{' '}
+                                                        {minorToMajor(item.refundedAmount, item.currencyCode)}{' '}
+                                                        {item.currencyCode}
+                                                    </td>
+                                                    <td>
+                                                        {item.actualCostMicrounits == null
+                                                            ? '缺失'
+                                                            : `${(item.actualCostMicrounits / 1_000_000).toFixed(6)} ${item.costCurrency ?? ''}`}
+                                                        {item.missingCost ? (
+                                                            <div className="text-xs text-destructive">
+                                                                存在缺失成本
+                                                            </div>
+                                                        ) : null}
+                                                    </td>
+                                                    <td>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() =>
+                                                                setSelectedUsage({
+                                                                    recordType: item.recordType,
+                                                                    id: item.id,
+                                                                })
+                                                            }
+                                                        >
+                                                            查看详情
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {!usageQuery.data.imageAiUsageRecords.items.length ? (
+                                                <tr>
+                                                    <td className="p-4 text-muted-foreground" colSpan={8}>
+                                                        没有符合筛选条件的 AI 使用记录。
+                                                    </td>
+                                                </tr>
+                                            ) : null}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : null}
+                            {usageQuery.data && usageQuery.data.imageAiUsageRecords.totalItems > 50 ? (
+                                <div className="mt-4 flex items-center justify-between gap-3">
+                                    <Button
+                                        variant="outline"
+                                        disabled={usagePage === 0}
+                                        onClick={() => setUsagePage(page => Math.max(0, page - 1))}
+                                    >
+                                        上一页
+                                    </Button>
+                                    <span className="text-sm text-muted-foreground">
+                                        第 {usagePage + 1} /{' '}
+                                        {Math.ceil(usageQuery.data.imageAiUsageRecords.totalItems / 50)} 页
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        disabled={
+                                            (usagePage + 1) * 50 >=
+                                            usageQuery.data.imageAiUsageRecords.totalItems
+                                        }
+                                        onClick={() => setUsagePage(page => page + 1)}
+                                    >
+                                        下一页
+                                    </Button>
+                                </div>
+                            ) : null}
+                        </PageBlock>
+                        {selectedUsage ? (
+                            <PageBlock
+                                column="full"
+                                blockId="ai-usage-detail"
+                                title="AI 使用记录详情"
+                                description="完整提示词与计费时间线只对具备 AI 审计权限的管理员开放。"
+                            >
+                                {usageDetailQuery.isLoading ? <Skeleton className="h-48 w-full" /> : null}
+                                {usageDetailQuery.error ? (
+                                    <Alert>
+                                        <AlertDescription>
+                                            {errorMessage(usageDetailQuery.error)}
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : null}
+                                {usageDetailQuery.data ? (
+                                    <div className="space-y-5">
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            <div className="rounded border p-3">
+                                                <strong>原始提示词</strong>
+                                                <div className="mt-2 whitespace-pre-wrap break-words">
+                                                    {usageDetailQuery.data.imageAiUsageRecord.inputPrompt}
+                                                </div>
+                                            </div>
+                                            <div className="rounded border p-3">
+                                                <strong>优化/最终提示词</strong>
+                                                <div className="mt-2 whitespace-pre-wrap break-words">
+                                                    {usageDetailQuery.data.imageAiUsageRecord.outputPrompt ||
+                                                        '—'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                            Token：
+                                            {usageDetailQuery.data.imageAiUsageRecord.totalTokens ?? '—'} ·
+                                            上游请求 ID：
+                                            {usageDetailQuery.data.imageAiUsageRecord.providerRequestIds.join(
+                                                '、',
+                                            ) || '—'}
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b text-left">
+                                                        <th className="p-2">时间</th>
+                                                        <th>阶段</th>
+                                                        <th>状态</th>
+                                                        <th>额度/金额</th>
+                                                        <th>Key</th>
+                                                        <th>说明</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {usageDetailQuery.data.imageAiUsageRecord.timeline.map(
+                                                        (event, index) => (
+                                                            <tr
+                                                                key={`${event.at}:${event.stage}:${index}`}
+                                                                className="border-b align-top"
+                                                            >
+                                                                <td className="p-2">
+                                                                    {new Date(event.at).toLocaleString()}
+                                                                </td>
+                                                                <td>{event.stage}</td>
+                                                                <td>{event.status}</td>
+                                                                <td>
+                                                                    {event.amount == null
+                                                                        ? '—'
+                                                                        : `${event.amount}${event.currencyCode ? ` ${event.currencyCode}` : ''}`}
+                                                                    {event.costMicrounits == null ? null : (
+                                                                        <div className="text-xs text-muted-foreground">
+                                                                            上游成本{' '}
+                                                                            {(
+                                                                                event.costMicrounits /
+                                                                                1_000_000
+                                                                            ).toFixed(6)}
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                                <td>
+                                                                    {event.keyName || '—'}
+                                                                    {event.keyLast4
+                                                                        ? ` · 尾号 ${event.keyLast4}`
+                                                                        : ''}
+                                                                </td>
+                                                                <td className="max-w-md break-words">
+                                                                    {event.message}
+                                                                </td>
+                                                            </tr>
+                                                        ),
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <Button variant="outline" onClick={() => setSelectedUsage(null)}>
+                                            关闭详情
+                                        </Button>
+                                    </div>
+                                ) : null}
+                            </PageBlock>
+                        ) : null}
+                        <PageBlock
+                            column="full"
+                            blockId="prompt-audit"
+                            title={`提示词优化记录（共 ${data.imagePromptOptimizationAudit.totalItems}）`}
+                            description="完整提示词仅具备 AI 审计权限的管理员可见；客户前台删除任务不会删除该审计记录。"
+                        >
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b text-left">
+                                            <th className="p-2">时间/客户</th>
+                                            <th>输入与结果</th>
+                                            <th>模型/Key</th>
+                                            <th>免费/付费</th>
+                                            <th>Token/成本</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {data.imagePromptOptimizationAudit.items.map(item => (
+                                            <tr key={item.id} className="border-b align-top">
+                                                <td className="p-2">
+                                                    {new Date(item.createdAt).toLocaleString()}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {item.customer.firstName} {item.customer.lastName} ·{' '}
+                                                        {item.customer.emailAddress}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        客户 ID {item.customer.id} · Channel {item.channelId}
+                                                    </div>
+                                                </td>
+                                                <td className="max-w-md p-2">
+                                                    <details>
+                                                        <summary className="cursor-pointer">
+                                                            查看完整提示词
+                                                        </summary>
+                                                        <div className="mt-2 whitespace-pre-wrap break-words">
+                                                            <strong>原文：</strong>
+                                                            {item.inputPrompt}
+                                                            <br />
+                                                            <strong>优化：</strong>
+                                                            {item.optimizedPrompt}
+                                                        </div>
+                                                    </details>
+                                                </td>
+                                                <td>
+                                                    {item.optimizerModelId || '本地规则'}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {item.credentialNameSnapshot || '无上游 Key'}
+                                                        {item.credentialLast4Snapshot
+                                                            ? ` · 尾号 ${item.credentialLast4Snapshot}`
+                                                            : ''}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        调用 {item.upstreamCallCount} 次 · {item.latencyMs}ms
+                                                    </div>
+                                                    {item.errorMessage ? (
+                                                        <div className="text-xs text-destructive">
+                                                            {item.errorMessage}
+                                                        </div>
+                                                    ) : null}
+                                                </td>
+                                                <td>
+                                                    {billingModeZh(item.billingMode)}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {minorToMajor(item.chargedAmount, item.currencyCode)}{' '}
+                                                        {item.currencyCode}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {item.inputTokens ?? '—'} / {item.outputTokens ?? '—'} /{' '}
+                                                    {item.totalTokens ?? '—'}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {item.actualCostMicrounits == null
+                                                            ? '上游成本缺失'
+                                                            : `${(item.actualCostMicrounits / 1_000_000).toFixed(6)} ${item.costCurrency ?? ''}`}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {!data.imagePromptOptimizationAudit.items.length ? (
+                                            <tr>
+                                                <td className="p-4 text-muted-foreground" colSpan={5}>
+                                                    暂无提示词优化记录。
+                                                </td>
+                                            </tr>
+                                        ) : null}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </PageBlock>
+                        <PageBlock
+                            column="full"
+                            blockId="image-jobs"
+                            title={`任务记录（共 ${data.imageGenerationJobs.totalItems}）`}
+                            description="UNKNOWN 不会自动重复生成；15 分钟后自动退回，或由管理员确认后使用同一幂等键重试。"
+                        >
+                            <div className="mb-4 grid gap-3 md:grid-cols-4">
+                                <Field label="客户/模型/Key">
+                                    <Input
+                                        placeholder="姓名、邮箱、ID、模型或 Key"
+                                        value={jobSearch}
+                                        onChange={event => setJobSearch(event.target.value)}
+                                    />
+                                </Field>
+                                <Field label="任务状态">
+                                    <select
+                                        className="h-9 rounded-md border bg-background px-3"
+                                        value={jobState}
+                                        onChange={event => setJobState(event.target.value)}
+                                    >
+                                        <option value="">全部状态</option>
+                                        {[
+                                            'QUEUED',
+                                            'RUNNING',
+                                            'PARTIAL_SUCCESS',
+                                            'SUCCEEDED',
+                                            'FAILED',
+                                            'UNKNOWN',
+                                            'CANCELLED',
+                                        ].map(value => (
+                                            <option key={value} value={value}>
+                                                {statusZh(value)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <Field label="计费类型">
+                                    <select
+                                        className="h-9 rounded-md border bg-background px-3"
+                                        value={jobBilling}
+                                        onChange={event => setJobBilling(event.target.value)}
+                                    >
+                                        <option value="">免费与付费</option>
+                                        <option value="FREE">含免费额度</option>
+                                        <option value="PAID">含付费结算</option>
+                                    </select>
+                                </Field>
+                                <Field label="开始日期">
+                                    <Input
+                                        type="date"
+                                        value={jobFrom}
+                                        onChange={event => setJobFrom(event.target.value)}
+                                    />
+                                </Field>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b text-left">
+                                            <th className="p-2">时间</th>
+                                            <th>客户</th>
+                                            <th>模型</th>
+                                            <th>Key</th>
+                                            <th>状态</th>
+                                            <th>免费/付费</th>
+                                            <th>扣费/退回</th>
+                                            <th>每张结果</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredJobs.map(job => (
+                                            <tr key={job.id} className="border-b align-top">
+                                                <td className="p-2">
+                                                    {new Date(job.createdAt).toLocaleString()}
+                                                </td>
+                                                <td>
+                                                    {job.customer.firstName} {job.customer.lastName}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {job.customer.emailAddress} · ID {job.customer.id}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {job.modelNameSnapshot}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {job.officialModelIdSnapshot}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {job.providerCredentialNameSnapshot || '历史主 Key'}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {job.providerCredentialCodeSnapshot ||
+                                                            job.providerScopeSnapshot}
+                                                        {job.providerCredentialLast4Snapshot
+                                                            ? ` · 尾号 ${job.providerCredentialLast4Snapshot}`
+                                                            : ''}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <Badge>{statusZh(job.state)}</Badge>
+                                                </td>
+                                                <td>
+                                                    免费 {job.freeQuantityCaptured}/{job.freeQuantityReserved}{' '}
+                                                    张
+                                                    <div className="text-xs text-muted-foreground">
+                                                        付费预留 {job.paidQuantityReserved} 张
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {minorToMajor(job.capturedAmount, job.currencyCode)} /{' '}
+                                                    {minorToMajor(job.releasedAmount, job.currencyCode)}{' '}
+                                                    {job.currencyCode}
+                                                </td>
+                                                <td className="space-y-1 py-2">
+                                                    {job.outputs.map(output => (
+                                                        <div
+                                                            key={output.id}
+                                                            className="flex items-center gap-2"
+                                                        >
+                                                            <span>
+                                                                #{output.outputIndex + 1}{' '}
+                                                                {statusZh(output.state)} ·{' '}
+                                                                {billingModeZh(output.billingMode)}
+                                                                {output.refundedAt ? ' · 已退款' : ''}
+                                                            </span>
+                                                            {output.state === 'UNKNOWN' ? (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() =>
+                                                                        retryOutput.mutate(output.id)
+                                                                    }
+                                                                >
+                                                                    确认重试
+                                                                </Button>
+                                                            ) : null}
+                                                            {output.state === 'SUCCEEDED' &&
+                                                            !output.refundedAt ? (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => {
+                                                                        const reason =
+                                                                            window.prompt('请输入退款原因');
+                                                                        if (reason?.trim())
+                                                                            refundOutput.mutate({
+                                                                                outputId: output.id,
+                                                                                reason,
+                                                                            });
+                                                                    }}
+                                                                >
+                                                                    退款
+                                                                </Button>
+                                                            ) : null}
+                                                        </div>
+                                                    ))}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {!filteredJobs.length ? (
+                                            <tr>
+                                                <td className="p-4 text-muted-foreground" colSpan={8}>
+                                                    没有符合筛选条件的任务。
+                                                </td>
+                                            </tr>
+                                        ) : null}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </PageBlock>
+                    </>
+                ) : null}
             </PageLayout>
         </Page>
     );
 }
 
 function ImageGenerationAccessPage() {
+    const [newKeys, setNewKeys] = useState<ImageProviderAdminConfigRecord[]>([]);
     const query = useQuery({
         queryKey: ['image-provider-admin'],
         queryFn: () => api.query<ImageProviderAdminQueryResult>(imageProviderAdminQuery),
@@ -664,12 +1412,40 @@ function ImageGenerationAccessPage() {
     return (
         <Page pageId="image-generation-access">
             <PageTitle>AI 服务接入</PageTitle>
+            <PageActionBar>
+                <PageActionBarRight>
+                    <Button
+                        onClick={() =>
+                            setNewKeys(items => [...items, emptyCredential(`new-key-${Date.now()}`)])
+                        }
+                    >
+                        <Plus className="mr-2 h-4 w-4" />
+                        添加备用 Key
+                    </Button>
+                </PageActionBarRight>
+            </PageActionBar>
             <PageLayout>
-                {configs.map(config => (
+                {!configs.length && !newKeys.length ? (
+                    <PageBlock column="full" blockId="image-access-empty" title="尚未配置 AI Key">
+                        <Alert>
+                            <AlertDescription>
+                                接口已正常返回，但当前 Key 池为空。请点击“添加备用
+                                Key”完成首个接入；保存并测试正常后，模型才能对客户开放。
+                            </AlertDescription>
+                        </Alert>
+                        <Button className="mt-4" variant="outline" onClick={() => void query.refetch()}>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            重新加载
+                        </Button>
+                    </PageBlock>
+                ) : null}
+                {[...configs, ...newKeys].map(config => (
                     <ProviderCredentialCard
-                        key={config.scope}
+                        key={config.id || config.code}
                         config={config}
+                        models={query.data?.imageGenerationAdminConfig.models ?? []}
                         onChanged={() => void query.refetch()}
+                        onDiscard={() => setNewKeys(items => items.filter(item => item !== config))}
                     />
                 ))}
             </PageLayout>
@@ -679,42 +1455,85 @@ function ImageGenerationAccessPage() {
 
 function ProviderCredentialCard({
     config,
+    models,
     onChanged,
-}: Readonly<{ config: ImageProviderAdminConfigRecord; onChanged: () => void }>) {
+    onDiscard,
+}: Readonly<{
+    config: ImageProviderAdminConfigRecord;
+    models: Array<{ code: string; displayNameZh: string }>;
+    onChanged: () => void;
+    onDiscard: () => void;
+}>) {
+    const [code, setCode] = useState('');
+    const [name, setName] = useState('');
+    const [scope, setScope] = useState<ImageProviderAdminConfigRecord['scope']>('OPENAI');
+    const [purpose, setPurpose] = useState<ImageProviderAdminConfigRecord['purpose']>('BOTH');
     const [baseUrl, setBaseUrl] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [textModelId, setTextModelId] = useState('');
     const [enabled, setEnabled] = useState(false);
+    const [priority, setPriority] = useState(100);
+    const [weight, setWeight] = useState(1);
+    const [modelCodes, setModelCodes] = useState<string[]>([]);
     useEffect(() => {
         if (config) {
+            setCode(config.code);
+            setName(config.name);
+            setScope(config.scope);
+            setPurpose(config.purpose);
             setBaseUrl(config.baseUrl);
             setTextModelId(config.textModelId);
             setEnabled(config.credentialEnabled);
             setApiKey('');
+            setPriority(config.priority);
+            setWeight(config.weight);
+            setModelCodes(config.modelCodes);
         }
     }, [config]);
     const save = useMutation({
         mutationFn: () =>
             api.mutate(saveImageCredentialMutation, {
-                input: { scope: config.scope, baseUrl, apiKey: apiKey || null, textModelId, enabled },
+                input: {
+                    id: config.id || null,
+                    scope,
+                    code,
+                    name,
+                    purpose,
+                    baseUrl,
+                    apiKey: apiKey || null,
+                    textModelId,
+                    enabled,
+                    priority,
+                    weight,
+                    modelCodes,
+                },
             }),
         onSuccess: () => {
-            toast.success(`${providerName(config.scope)} 中转站接入已保存`);
+            toast.success(`${name || providerName(scope)} 已保存`);
             setApiKey('');
+            if (!config.id) onDiscard();
             onChanged();
         },
         onError: error => toast.error(errorMessage(error)),
     });
     const test = useMutation({
         mutationFn: () =>
-            api.mutate<{ testImageProviderConnection: { ok: boolean; message: string } }>(
+            api.mutate<{ testImageProviderCredential: { ok: boolean; message: string } }>(
                 testImageProviderMutation,
-                { scope: config.scope },
+                { id: config.id },
             ),
         onSuccess: result => {
-            (result.testImageProviderConnection.ok ? toast.success : toast.error)(
-                result.testImageProviderConnection.message,
+            (result.testImageProviderCredential.ok ? toast.success : toast.error)(
+                result.testImageProviderCredential.message,
             );
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const archive = useMutation({
+        mutationFn: () => api.mutate(archiveImageProviderMutation, { id: config.id }),
+        onSuccess: () => {
+            toast.success('Key 已归档，历史任务仍保留快照');
             onChanged();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -722,10 +1541,10 @@ function ProviderCredentialCard({
     return (
         <PageBlock
             column="full"
-            blockId={`image-access-${config.scope.toLowerCase()}`}
-            title={`${providerName(config.scope)} 中转站凭证`}
+            blockId={`image-access-${config.id || config.code}`}
+            title={config.id ? `${config.name}（尾号 ${config.apiKeyLast4 || '未配置'}）` : '新增 Key'}
             description={
-                config.scope === 'OPENAI'
+                scope === 'OPENAI'
                     ? '用于 OpenAI 生图模型及免费提示词优化。'
                     : '用于 Gemini 生图模型；与 OpenAI Key 独立保存。'
             }
@@ -737,7 +1556,7 @@ function ProviderCredentialCard({
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
-                        disabled={test.isPending || !config.credentialConfigured}
+                        disabled={test.isPending || !config.id || !config.credentialConfigured}
                         onClick={() => test.mutate()}
                     >
                         <RefreshCw className="mr-2 h-4 w-4" />
@@ -747,21 +1566,62 @@ function ProviderCredentialCard({
                         <Save className="mr-2 h-4 w-4" />
                         保存接入
                     </Button>
+                    {config.id ? (
+                        <Button
+                            variant="outline"
+                            disabled={archive.isPending}
+                            onClick={() => archive.mutate()}
+                        >
+                            <Archive className="mr-2 h-4 w-4" />
+                            归档
+                        </Button>
+                    ) : (
+                        <Button variant="outline" onClick={onDiscard}>
+                            取消新增
+                        </Button>
+                    )}
                 </div>
             </div>
             <Alert className="mt-4">
                 <AlertDescription>
                     生产环境只允许 HTTPS，且拒绝 localhost、内网、云元数据地址和重定向。当前状态：
-                    {config.providerHealthStatus}
+                    {statusZh(config.providerHealthStatus)}
                     {config.providerHealthMessage ? ` · ${config.providerHealthMessage}` : ''}
                 </AlertDescription>
             </Alert>
             <div className="mt-5 grid max-w-3xl gap-5">
-                <Toggle
-                    label={`启用 ${providerName(config.scope)} 中转站`}
-                    checked={enabled}
-                    onChange={setEnabled}
-                />
+                <Field label="Key 名称">
+                    <Input value={name} onChange={event => setName(event.target.value)} />
+                </Field>
+                <Field label="稳定编码（保存后用于审计）">
+                    <Input value={code} onChange={event => setCode(event.target.value)} />
+                </Field>
+                <Field label="供应商">
+                    <select
+                        className="h-9 w-full rounded-md border bg-background px-3"
+                        value={scope}
+                        onChange={event =>
+                            setScope(event.target.value as ImageProviderAdminConfigRecord['scope'])
+                        }
+                    >
+                        <option value="OPENAI">Codex / GPT</option>
+                        <option value="GEMINI">Gemini</option>
+                    </select>
+                </Field>
+                <Field label="用途">
+                    <select
+                        className="h-9 w-full rounded-md border bg-background px-3"
+                        value={purpose}
+                        onChange={event =>
+                            setPurpose(event.target.value as ImageProviderAdminConfigRecord['purpose'])
+                        }
+                    >
+                        <option value="BOTH">提示词优化和生图</option>
+                        <option value="PROMPT">仅提示词优化</option>
+                        <option value="IMAGE">仅生图</option>
+                    </select>
+                </Field>
+                <Toggle label="启用此 Key" checked={enabled} onChange={setEnabled} />
                 <Field label="API Base URL">
                     <Input
                         placeholder="https://relay.example.com/v1"
@@ -779,19 +1639,54 @@ function ProviderCredentialCard({
                     />
                 </Field>
                 <Field
-                    label={
-                        config.scope === 'OPENAI'
-                            ? '提示词优化 / Responses 编排模型 ID'
-                            : '连接测试文本模型 ID'
-                    }
+                    label={scope === 'OPENAI' ? '提示词优化 / Responses 编排模型 ID' : '连接测试文本模型 ID'}
                 >
                     <Input
-                        placeholder={
-                            config.scope === 'OPENAI' ? '例如 gpt-5.4-mini' : '例如 gemini-3.7-flash'
-                        }
+                        placeholder={scope === 'OPENAI' ? '例如 gpt-5.4-mini' : '例如 gemini-3.7-flash'}
                         value={textModelId}
                         onChange={event => setTextModelId(event.target.value)}
                     />
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="优先级（数字越小越优先）">
+                        <Input
+                            type="number"
+                            min="0"
+                            value={priority}
+                            onChange={event => setPriority(Number(event.target.value) || 0)}
+                        />
+                    </Field>
+                    <Field label="同级轮询权重">
+                        <Input
+                            type="number"
+                            min="1"
+                            value={weight}
+                            onChange={event => setWeight(Number(event.target.value) || 1)}
+                        />
+                    </Field>
+                </div>
+                <Field label="明确绑定的生图模型">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        {models.map(model => (
+                            <label
+                                key={model.code}
+                                className="flex items-center gap-2 rounded border p-2 text-sm"
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={modelCodes.includes(model.code)}
+                                    onChange={event =>
+                                        setModelCodes(values =>
+                                            event.target.checked
+                                                ? [...values, model.code]
+                                                : values.filter(value => value !== model.code),
+                                        )
+                                    }
+                                />
+                                {model.displayNameZh}（{model.code}）
+                            </label>
+                        ))}
+                    </div>
                 </Field>
             </div>
         </PageBlock>
@@ -800,6 +1695,66 @@ function ProviderCredentialCard({
 
 function providerName(scope: ImageProviderAdminConfigRecord['scope']): string {
     return scope === 'OPENAI' ? 'Codex / GPT' : 'Gemini';
+}
+
+function emptyCredential(code: string): ImageProviderAdminConfigRecord {
+    return {
+        id: '',
+        code,
+        name: '备用 Key',
+        purpose: 'BOTH',
+        scope: 'OPENAI',
+        credentialConfigured: false,
+        credentialEnabled: false,
+        baseUrl: '',
+        apiKeyLast4: '',
+        textModelId: '',
+        providerHealthStatus: 'UNCONFIGURED',
+        providerHealthMessage: null,
+        priority: 100,
+        weight: 1,
+        cooldownUntil: null,
+        lastUsedAt: null,
+        modelCodes: [],
+    };
+}
+
+function statusZh(status: string): string {
+    return (
+        (
+            {
+                HEALTHY: '正常',
+                UNHEALTHY: '异常',
+                UNTESTED: '未测试',
+                UNCONFIGURED: '未配置',
+                ACTIVE: '当前使用',
+                INACTIVE: '未启用',
+                PENDING: '待处理',
+                UNKNOWN: '结果待确认',
+                QUEUED: '排队中',
+                RUNNING: '生成中',
+                PARTIAL_SUCCESS: '部分成功',
+                SUCCEEDED: '成功',
+                FAILED: '失败',
+                CANCELLED: '已取消',
+            } as Record<string, string>
+        )[status] ?? status
+    );
+}
+
+function billingModeZh(mode: string): string {
+    return (
+        (
+            {
+                FREE: '免费',
+                PAID: '付费',
+                MIXED: '免费+付费',
+                PENDING: '待结算',
+                RELEASED: '已释放',
+                REFUNDED: '已退款',
+            } as Record<string, string>
+        )[mode] ?? mode
+    );
 }
 
 function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {

@@ -8,6 +8,7 @@ import { ImagePromptEngineService } from './prompt/image-prompt-engine.service';
 import { UploadedImageFile } from './storage/image-private-storage.service';
 import {
     CreateImageGenerationInput,
+    ImageAiUsageRecordListInput,
     ImageProviderScope,
     OptimizeImagePromptInput,
     SaveImageGenerationConfigInput,
@@ -33,6 +34,18 @@ export class ImageGenerationShopResolver {
     @Allow(Permission.Authenticated)
     imageStudioBalance(@Ctx() ctx: RequestContext) {
         return this.generations.walletBalance(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
+    imagePromptQuotaStatus(@Ctx() ctx: RequestContext) {
+        return this.promptEngine.quotaStatus(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
+    imageModelQuotaStatus(@Ctx() ctx: RequestContext) {
+        return this.generations.modelQuotaStatus(ctx);
     }
 
     @Query()
@@ -103,6 +116,7 @@ export class ImageGenerationAdminResolver {
     constructor(
         private readonly configService: ImageGenerationConfigService,
         private readonly generations: ImageGenerationService,
+        private readonly promptEngine: ImagePromptEngineService,
     ) {}
 
     @Query()
@@ -136,6 +150,32 @@ export class ImageGenerationAdminResolver {
 
     @Query()
     @Allow(manageImageGenerationPermission.Read)
+    imagePromptOptimizationAudit(
+        @Ctx() ctx: RequestContext,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+    ) {
+        return this.promptEngine.adminAudit(ctx, skip, take);
+    }
+
+    @Query()
+    @Allow(manageImageGenerationPermission.Read)
+    imageAiUsageRecords(@Ctx() ctx: RequestContext, @Args('input') input?: ImageAiUsageRecordListInput) {
+        return this.generations.adminUsageRecords(ctx, input);
+    }
+
+    @Query()
+    @Allow(manageImageGenerationPermission.Read)
+    imageAiUsageRecord(
+        @Ctx() ctx: RequestContext,
+        @Args('recordType') recordType: string,
+        @Args('id') id: ID,
+    ) {
+        return this.generations.adminUsageRecordDetail(ctx, recordType, id);
+    }
+
+    @Query()
+    @Allow(manageImageGenerationPermission.Read)
     imageGenerationCostSummary(@Ctx() ctx: RequestContext, @Args('days') days?: number) {
         return this.generations.adminCostSummary(ctx, days);
     }
@@ -162,6 +202,28 @@ export class ImageGenerationAdminResolver {
     @Allow(Permission.SuperAdmin)
     testImageProviderConnection(@Ctx() ctx: RequestContext, @Args('scope') scope: ImageProviderScope) {
         return this.configService.testConnection(ctx, scope);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    testImageProviderCredential(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.configService.testCredential(ctx, id);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    archiveImageProviderCredential(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.configService.archiveCredential(ctx, id);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    anonymizeImageGenerationCustomerData(
+        @Ctx() ctx: RequestContext,
+        @Args('customerId') customerId: ID,
+        @Args('reason') reason: string,
+    ) {
+        return this.generations.complianceAnonymizeCustomer(ctx, customerId, reason);
     }
 
     @Mutation()

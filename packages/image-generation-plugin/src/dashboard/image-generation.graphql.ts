@@ -27,6 +27,11 @@ const modelFields = gql`
         healthMessage
         lastTestedAt
         supportsIdempotency
+        freeImageEnabled
+        dailyFreeImageLimit
+        dailyFreeImageUnlimited
+        paidAfterFreeEnabled
+        dailyGenerationSafetyLimit
     }
 `;
 
@@ -36,6 +41,12 @@ const configFields = gql`
         id
         enabled
         promptOptimizationEnabled
+        promptRateLimitPerMinute
+        promptDailyFreeLimit
+        promptDailyFreeUnlimited
+        paidPromptOptimizationEnabled
+        paidPromptOptimizationPrice
+        paidPromptOptimizationCurrencyCode
         defaultModelCode
         termsVersion
         termsZh
@@ -50,6 +61,10 @@ const configFields = gql`
 
 const providerConfigFields = gql`
     fragment ImageProviderAdminConfigFields on ImageProviderAdminConfig {
+        id
+        code
+        name
+        purpose
         scope
         credentialConfigured
         credentialEnabled
@@ -58,6 +73,11 @@ const providerConfigFields = gql`
         textModelId
         providerHealthStatus
         providerHealthMessage
+        priority
+        weight
+        cooldownUntil
+        lastUsedAt
+        modelCodes
     }
 `;
 
@@ -66,6 +86,12 @@ export const imageProviderAdminQuery = gql`
     query ImageProviderAdmin {
         imageProviderAdminConfigs {
             ...ImageProviderAdminConfigFields
+        }
+        imageGenerationAdminConfig {
+            models {
+                code
+                displayNameZh
+            }
         }
     }
 `;
@@ -84,7 +110,23 @@ export const imageGenerationAdminQuery = gql`
                 state
                 modelNameSnapshot
                 officialModelIdSnapshot
-                resolution
+                providerScopeSnapshot
+                providerCredentialCodeSnapshot
+                providerCredentialNameSnapshot
+                providerCredentialLast4Snapshot
+                providerSelectionReason
+                originalPrompt
+                finalPrompt
+                expectedChargeAmount
+                freeQuantityReserved
+                freeQuantityCaptured
+                paidQuantityReserved
+                customer {
+                    id
+                    firstName
+                    lastName
+                    emailAddress
+                }
                 quantity
                 unitPriceSnapshot
                 capturedAmount
@@ -94,6 +136,9 @@ export const imageGenerationAdminQuery = gql`
                     id
                     outputIndex
                     state
+                    billingMode
+                    chargeAmount
+                    providerRequestId
                     refundedAt
                     errorMessage
                 }
@@ -127,6 +172,118 @@ export const imageGenerationAdminQuery = gql`
             status
             activatedAt
         }
+        imagePromptOptimizationAudit(take: 30) {
+            totalItems
+            items {
+                id
+                createdAt
+                channelId
+                inputPrompt
+                optimizedPrompt
+                source
+                optimizerModelId
+                recommendedModelCode
+                billingMode
+                chargedAmount
+                currencyCode
+                inputTokens
+                outputTokens
+                totalTokens
+                actualCostMicrounits
+                costCurrency
+                providerRequestId
+                credentialCodeSnapshot
+                credentialNameSnapshot
+                credentialLast4Snapshot
+                credentialSelectionReason
+                upstreamCallCount
+                latencyMs
+                errorMessage
+                customer {
+                    id
+                    firstName
+                    lastName
+                    emailAddress
+                }
+            }
+        }
+    }
+`;
+
+const usageRecordFields = gql`
+    fragment ImageAiUsageRecordFields on ImageAiUsageRecord {
+        id
+        recordType
+        createdAt
+        channelId
+        modelCode
+        credentialCode
+        credentialName
+        credentialLast4
+        state
+        billingMode
+        freeQuantity
+        paidQuantity
+        chargedAmount
+        refundedAmount
+        currencyCode
+        actualCostMicrounits
+        costCurrency
+        missingCost
+        errorMessage
+        customer {
+            id
+            firstName
+            lastName
+            emailAddress
+        }
+    }
+`;
+
+export const imageAiUsageRecordsQuery = gql`
+    ${usageRecordFields}
+    query ImageAiUsageRecords($input: ImageAiUsageRecordListInput) {
+        imageAiUsageRecords(input: $input) {
+            totalItems
+            items {
+                ...ImageAiUsageRecordFields
+            }
+        }
+    }
+`;
+
+export const imageAiUsageRecordDetailQuery = gql`
+    ${usageRecordFields}
+    query ImageAiUsageRecordDetail($recordType: String!, $id: ID!) {
+        imageAiUsageRecord(recordType: $recordType, id: $id) {
+            record {
+                ...ImageAiUsageRecordFields
+            }
+            inputPrompt
+            outputPrompt
+            totalTokens
+            providerRequestIds
+            outputs {
+                id
+                state
+                billingMode
+                chargeAmount
+                providerRequestId
+                errorMessage
+                refundedAt
+            }
+            timeline {
+                at
+                stage
+                status
+                amount
+                currencyCode
+                costMicrounits
+                message
+                keyName
+                keyLast4
+            }
+        }
     }
 `;
 
@@ -158,12 +315,18 @@ export const saveImageCredentialMutation = gql`
 `;
 
 export const testImageProviderMutation = gql`
-    mutation TestImageProvider($scope: ImageProviderScope!) {
-        testImageProviderConnection(scope: $scope) {
+    mutation TestImageProvider($id: ID!) {
+        testImageProviderCredential(id: $id) {
             ok
             message
             testedAt
         }
+    }
+`;
+
+export const archiveImageProviderMutation = gql`
+    mutation ArchiveImageProvider($id: ID!) {
+        archiveImageProviderCredential(id: $id)
     }
 `;
 
@@ -250,12 +413,23 @@ export interface ImageAdminModelRecord {
     healthMessage?: string | null;
     lastTestedAt?: string | null;
     supportsIdempotency: boolean;
+    freeImageEnabled: boolean;
+    dailyFreeImageLimit: number;
+    dailyFreeImageUnlimited: boolean;
+    paidAfterFreeEnabled: boolean;
+    dailyGenerationSafetyLimit: number;
 }
 
 export interface ImageAdminConfigRecord {
     id: string;
     enabled: boolean;
     promptOptimizationEnabled: boolean;
+    promptRateLimitPerMinute: number;
+    promptDailyFreeLimit: number;
+    promptDailyFreeUnlimited: boolean;
+    paidPromptOptimizationEnabled: boolean;
+    paidPromptOptimizationPrice: number;
+    paidPromptOptimizationCurrencyCode: string;
     defaultModelCode: string;
     termsVersion: string;
     termsZh: string;
@@ -266,6 +440,10 @@ export interface ImageAdminConfigRecord {
 }
 
 export interface ImageProviderAdminConfigRecord {
+    id: string;
+    code: string;
+    name: string;
+    purpose: 'PROMPT' | 'IMAGE' | 'BOTH';
     scope: 'OPENAI' | 'GEMINI';
     credentialConfigured: boolean;
     credentialEnabled: boolean;
@@ -274,6 +452,11 @@ export interface ImageProviderAdminConfigRecord {
     textModelId: string;
     providerHealthStatus: string;
     providerHealthMessage?: string | null;
+    priority: number;
+    weight: number;
+    cooldownUntil?: string | null;
+    lastUsedAt?: string | null;
+    modelCodes: string[];
 }
 
 export interface ImageAdminJobRecord {
@@ -282,7 +465,18 @@ export interface ImageAdminJobRecord {
     state: string;
     modelNameSnapshot: string;
     officialModelIdSnapshot: string;
-    resolution: '1K' | '2K' | '4K';
+    providerScopeSnapshot: string;
+    providerCredentialCodeSnapshot: string;
+    providerCredentialNameSnapshot: string;
+    providerCredentialLast4Snapshot: string;
+    providerSelectionReason?: string | null;
+    originalPrompt: string;
+    finalPrompt: string;
+    expectedChargeAmount: number;
+    freeQuantityReserved: number;
+    freeQuantityCaptured: number;
+    paidQuantityReserved: number;
+    customer: { id: string; firstName: string; lastName: string; emailAddress: string };
     quantity: number;
     unitPriceSnapshot: number;
     capturedAmount: number;
@@ -292,9 +486,69 @@ export interface ImageAdminJobRecord {
         id: string;
         outputIndex: number;
         state: string;
+        billingMode: string;
+        chargeAmount: number;
+        providerRequestId?: string | null;
         refundedAt?: string | null;
         errorMessage?: string | null;
     }>;
+}
+
+export interface ImageAiUsageRecord {
+    id: string;
+    recordType: 'PROMPT_OPTIMIZATION' | 'IMAGE_GENERATION';
+    createdAt: string;
+    channelId: string;
+    modelCode: string;
+    credentialCode: string;
+    credentialName: string;
+    credentialLast4: string;
+    state: string;
+    billingMode: string;
+    freeQuantity: number;
+    paidQuantity: number;
+    chargedAmount: number;
+    refundedAmount: number;
+    currencyCode: string;
+    actualCostMicrounits?: number | null;
+    costCurrency?: string | null;
+    missingCost: boolean;
+    errorMessage?: string | null;
+    customer: { id: string; firstName: string; lastName: string; emailAddress: string };
+}
+
+export interface ImageAiUsageRecordsQueryResult {
+    imageAiUsageRecords: { items: ImageAiUsageRecord[]; totalItems: number };
+}
+
+export interface ImageAiUsageRecordDetailQueryResult {
+    imageAiUsageRecord: {
+        record: ImageAiUsageRecord;
+        inputPrompt: string;
+        outputPrompt?: string | null;
+        totalTokens?: number | null;
+        providerRequestIds: string[];
+        outputs: Array<{
+            id: string;
+            state: string;
+            billingMode: string;
+            chargeAmount: number;
+            providerRequestId?: string | null;
+            errorMessage?: string | null;
+            refundedAt?: string | null;
+        }>;
+        timeline: Array<{
+            at: string;
+            stage: string;
+            status: string;
+            amount?: number | null;
+            currencyCode?: string | null;
+            costMicrounits?: number | null;
+            message: string;
+            keyName?: string | null;
+            keyLast4?: string | null;
+        }>;
+    };
 }
 
 export interface ImageAdminQueryResult {
@@ -328,8 +582,39 @@ export interface ImageAdminQueryResult {
         status: string;
         activatedAt?: string | null;
     }>;
+    imagePromptOptimizationAudit: {
+        totalItems: number;
+        items: Array<{
+            id: string;
+            createdAt: string;
+            channelId: string;
+            inputPrompt: string;
+            optimizedPrompt: string;
+            source: string;
+            optimizerModelId?: string | null;
+            recommendedModelCode: string;
+            billingMode: string;
+            chargedAmount: number;
+            currencyCode: string;
+            inputTokens?: number | null;
+            outputTokens?: number | null;
+            totalTokens?: number | null;
+            actualCostMicrounits?: number | null;
+            costCurrency?: string | null;
+            providerRequestId?: string | null;
+            credentialCodeSnapshot: string;
+            credentialNameSnapshot: string;
+            credentialLast4Snapshot: string;
+            credentialSelectionReason?: string | null;
+            upstreamCallCount: number;
+            latencyMs: number;
+            errorMessage?: string | null;
+            customer: { id: string; firstName: string; lastName: string; emailAddress: string };
+        }>;
+    };
 }
 
 export interface ImageProviderAdminQueryResult {
     imageProviderAdminConfigs: ImageProviderAdminConfigRecord[];
+    imageGenerationAdminConfig: { models: Array<{ code: string; displayNameZh: string }> };
 }

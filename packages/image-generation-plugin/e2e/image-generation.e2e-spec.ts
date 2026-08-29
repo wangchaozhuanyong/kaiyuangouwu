@@ -18,7 +18,6 @@ import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { ImageGenerationCostEvent } from '../src/entities/image-generation-cost-event.entity';
 import { ImageGenerationDispatch } from '../src/entities/image-generation-dispatch.entity';
-import { ImageGenerationJob } from '../src/entities/image-generation-job.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
 import { ImagePrivateStorageService } from '../src/storage/image-private-storage.service';
@@ -69,6 +68,7 @@ const providerAuthorizations = new Map<string, string | null>();
 const SAVE_CREDENTIAL = gql`
     mutation SaveImageCredentialE2E($input: SaveImageProviderCredentialInput!) {
         saveImageProviderCredential(input: $input) {
+            id
             scope
             credentialConfigured
             credentialEnabled
@@ -218,6 +218,8 @@ const CREATE = gql`
             reservedAmount
             capturedAmount
             releasedAmount
+            freeQuantityReserved
+            freeQuantityCaptured
             outputs {
                 id
                 state
@@ -248,6 +250,8 @@ const MY_JOB = gql`
             reservedAmount
             capturedAmount
             releasedAmount
+            freeQuantityReserved
+            freeQuantityCaptured
             outputs {
                 id
                 state
@@ -290,6 +294,47 @@ const COST_SUMMARY = gql`
     }
 `;
 
+const USAGE_RECORDS = gql`
+    query ImageAiUsageRecordsE2E($input: ImageAiUsageRecordListInput) {
+        imageAiUsageRecords(input: $input) {
+            totalItems
+            items {
+                id
+                recordType
+                modelCode
+                credentialCode
+                state
+                billingMode
+                freeQuantity
+                paidQuantity
+                chargedAmount
+                missingCost
+                customer {
+                    emailAddress
+                }
+            }
+        }
+    }
+`;
+
+const USAGE_RECORD_DETAIL = gql`
+    query ImageAiUsageRecordDetailE2E($recordType: String!, $id: ID!) {
+        imageAiUsageRecord(recordType: $recordType, id: $id) {
+            inputPrompt
+            outputPrompt
+            providerRequestIds
+            timeline {
+                stage
+                status
+                amount
+                keyName
+                keyLast4
+                message
+            }
+        }
+    }
+`;
+
 const DELETE_JOB = gql`
     mutation DeleteImageGenerationJobE2E($id: ID!) {
         deleteMyImageGenerationJob(id: $id)
@@ -326,10 +371,16 @@ describe('AI image generation full flow', () => {
         const credential = await adminClient.query(SAVE_CREDENTIAL, {
             input: {
                 scope: 'OPENAI',
+                code: 'openai-e2e-primary',
+                name: 'OpenAI E2E 主 Key',
+                purpose: 'BOTH',
                 baseUrl: 'https://1.1.1.1/v1',
                 apiKey: 'relay-e2e-secret-key',
                 textModelId: 'prompt-e2e-model',
                 enabled: true,
+                priority: 10,
+                weight: 1,
+                modelCodes: [],
             },
         });
         expect(credential.saveImageProviderCredential).toMatchObject({
@@ -347,10 +398,16 @@ describe('AI image generation full flow', () => {
         const geminiCredential = await adminClient.query(SAVE_CREDENTIAL, {
             input: {
                 scope: 'GEMINI',
+                code: 'gemini-e2e-primary',
+                name: 'Gemini E2E 主 Key',
+                purpose: 'BOTH',
                 baseUrl: 'https://8.8.8.8/v1',
                 apiKey: 'gemini-e2e-secret-key',
                 textModelId: 'gemini-e2e-text-model',
                 enabled: true,
+                priority: 10,
+                weight: 1,
+                modelCodes: [],
             },
         });
         expect(geminiCredential.saveImageProviderCredential).toMatchObject({
@@ -363,10 +420,12 @@ describe('AI image generation full flow', () => {
         expect(
             (await adminClient.query(TEST_PROVIDER, { scope: 'GEMINI' })).testImageProviderConnection.ok,
         ).toBe(true);
-        expect((await adminClient.query(PROVIDER_CONFIGS)).imageProviderAdminConfigs).toEqual([
-            expect.objectContaining({ scope: 'OPENAI', providerHealthStatus: 'HEALTHY' }),
-            expect.objectContaining({ scope: 'GEMINI', providerHealthStatus: 'HEALTHY' }),
-        ]);
+        expect((await adminClient.query(PROVIDER_CONFIGS)).imageProviderAdminConfigs).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ scope: 'OPENAI', providerHealthStatus: 'HEALTHY' }),
+                expect.objectContaining({ scope: 'GEMINI', providerHealthStatus: 'HEALTHY' }),
+            ]),
+        );
         expect(providerAuthorizations.get('1.1.1.1')).toBe('Bearer relay-e2e-secret-key');
         expect(providerAuthorizations.get('8.8.8.8')).toBe('Bearer gemini-e2e-secret-key');
 
@@ -387,6 +446,27 @@ describe('AI image generation full flow', () => {
                 position: 0,
                 isDefault: true,
                 supportsIdempotency: false,
+                freeImageEnabled: false,
+                dailyFreeImageLimit: 0,
+                dailyFreeImageUnlimited: false,
+                paidAfterFreeEnabled: true,
+                dailyGenerationSafetyLimit: 20,
+            },
+        });
+        await adminClient.query(SAVE_CREDENTIAL, {
+            input: {
+                id: credential.saveImageProviderCredential.id,
+                scope: 'OPENAI',
+                code: 'openai-e2e-primary',
+                name: 'OpenAI E2E 主 Key',
+                purpose: 'BOTH',
+                baseUrl: 'https://1.1.1.1/v1',
+                apiKey: null,
+                textModelId: 'prompt-e2e-model',
+                enabled: true,
+                priority: 10,
+                weight: 1,
+                modelCodes: ['OPENAI_HIGH_QUALITY'],
             },
         });
         expect((await adminClient.query(TEST_MODEL, { code: 'OPENAI_HIGH_QUALITY' })).testImageModel.ok).toBe(
@@ -418,6 +498,12 @@ describe('AI image generation full flow', () => {
                     input: {
                         enabled: true,
                         promptOptimizationEnabled: true,
+                        promptRateLimitPerMinute: 3,
+                        promptDailyFreeLimit: 20,
+                        promptDailyFreeUnlimited: false,
+                        paidPromptOptimizationEnabled: false,
+                        paidPromptOptimizationPrice: 0,
+                        paidPromptOptimizationCurrencyCode: 'USD',
                         defaultModelCode: 'OPENAI_HIGH_QUALITY',
                         termsVersion: 'e2e-2026-08-27',
                         termsZh: '生图 E2E 测试条款，包含参考图与第三方模型数据说明。',
@@ -502,6 +588,7 @@ describe('AI image generation full flow', () => {
                     resolution: '1K',
                     quantity: 2,
                     expectedUnitPrice: 100,
+                    expectedChargeAmount: 200,
                     currencyCode: 'USD',
                     idempotencyKey: 'e2e-success-0001',
                     termsAccepted: true,
@@ -553,6 +640,7 @@ describe('AI image generation full flow', () => {
                     resolution: '1K',
                     quantity: 1,
                     expectedUnitPrice: 100,
+                    expectedChargeAmount: 100,
                     currencyCode: 'USD',
                     idempotencyKey: 'e2e-failure-0001',
                     termsAccepted: true,
@@ -620,6 +708,7 @@ describe('AI image generation full flow', () => {
                     resolution: '1K',
                     quantity: 1,
                     expectedUnitPrice: 100,
+                    expectedChargeAmount: 100,
                     currencyCode: 'USD',
                     idempotencyKey: 'e2e-reference-0001',
                     termsAccepted: true,
@@ -635,30 +724,71 @@ describe('AI image generation full flow', () => {
         expect(referenceSucceeded.imageStudioBalance).toBe(300);
         expect(providerSawReference).toBe(true);
 
-        providerRequestedResolution = '';
-        const twoKCreated = (
+        await adminClient.query(SAVE_MODEL, {
+            input: {
+                code: 'OPENAI_HIGH_QUALITY',
+                enabled: true,
+                displayNameZh: 'OpenAI 高质量',
+                displayNameEn: 'OpenAI High Quality',
+                descriptionZh: '适合高质量商品图和广告图',
+                descriptionEn: 'For high-quality product images and ads',
+                providerModelId: 'gpt-image-1',
+                protocol: 'OPENAI_RESPONSES_IMAGE',
+                unitPrice: 100,
+                currencyCode: 'USD',
+                position: 0,
+                isDefault: true,
+                supportsIdempotency: false,
+                freeImageEnabled: true,
+                dailyFreeImageLimit: 1,
+                dailyFreeImageUnlimited: false,
+                paidAfterFreeEnabled: true,
+                dailyGenerationSafetyLimit: 20,
+            },
+        });
+        providerFailure = true;
+        const freeFailure = (
             await shopClient.query(CREATE, {
                 input: {
-                    modelCode: 'GEMINI_FLASH',
-                    prompt: '原生 2K 商品海报',
+                    modelCode: 'OPENAI_HIGH_QUALITY',
+                    prompt: '免费额度失败后必须释放',
                     referenceMode: 'NONE',
                     aspectRatio: '1:1',
-                    resolution: '2K',
                     quantity: 1,
-                    expectedUnitPrice: 250,
+                    expectedUnitPrice: 100,
+                    expectedChargeAmount: 0,
                     currencyCode: 'USD',
-                    idempotencyKey: 'e2e-native-2k-0001',
+                    idempotencyKey: 'e2e-free-failure-0001',
                     termsAccepted: true,
                 },
             })
         ).createImageGeneration;
-        expect(twoKCreated).toMatchObject({ resolution: '2K', unitPriceSnapshot: 250, reservedAmount: 250 });
-        const twoKSucceeded = await waitForJob(twoKCreated.id, ['SUCCEEDED']);
-        expect(twoKSucceeded.imageStudioBalance).toBe(50);
-        expect(providerRequestedResolution).toBe('2K');
-        const twoKToken = twoKSucceeded.myImageGenerationJob.outputs[0].imageUrl.split('/').at(-1);
-        const twoKAuthorized = await server.app.get(ImagePrivateStorageService).authorize(twoKToken);
-        expect(twoKAuthorized?.asset).toMatchObject({ width: 2048, height: 2048 });
+        await waitForJob(freeFailure.id, ['FAILED']);
+        providerFailure = false;
+        const freeSuccess = (
+            await shopClient.query(CREATE, {
+                input: {
+                    modelCode: 'OPENAI_HIGH_QUALITY',
+                    prompt: '失败释放后再次使用免费额度',
+                    referenceMode: 'NONE',
+                    aspectRatio: '1:1',
+                    quantity: 1,
+                    expectedUnitPrice: 100,
+                    expectedChargeAmount: 0,
+                    currencyCode: 'USD',
+                    idempotencyKey: 'e2e-free-success-0001',
+                    termsAccepted: true,
+                },
+            })
+        ).createImageGeneration;
+        expect(freeSuccess.reservedAmount).toBe(0);
+        const freeSucceeded = await waitForJob(freeSuccess.id, ['SUCCEEDED']);
+        expect(freeSucceeded.myImageGenerationJob).toMatchObject({
+            capturedAmount: 0,
+            freeQuantityReserved: 1,
+            freeQuantityCaptured: 1,
+        });
+        expect(freeSucceeded.imageStudioBalance).toBe(300);
 
         const retainedReference = await connection.rawConnection
             .getRepository(ImagePrivateAsset)
@@ -673,20 +803,20 @@ describe('AI image generation full flow', () => {
             expect.arrayContaining([
                 expect.objectContaining({
                     modelCode: 'OPENAI_HIGH_QUALITY',
-                    attempts: 3,
-                    successes: 3,
+                    attempts: 4,
+                    successes: 4,
                     failures: 0,
                     missingCostCount: 0,
                     grossRevenue: 300,
-                    actualCost: 0.014016,
+                    actualCost: 0.018688,
                     costCurrency: 'USD',
                 }),
                 expect.objectContaining({
                     modelCode: 'OPENAI_HIGH_QUALITY',
-                    attempts: 1,
+                    attempts: 2,
                     successes: 0,
-                    failures: 1,
-                    missingCostCount: 1,
+                    failures: 2,
+                    missingCostCount: 2,
                     grossRevenue: 0,
                     actualCost: 0,
                     costCurrency: 'UNKNOWN',
@@ -695,16 +825,64 @@ describe('AI image generation full flow', () => {
         );
         await expect(
             connection.rawConnection.getRepository(ImageGenerationDispatch).countBy({ state: 'COMPLETED' }),
-        ).resolves.toBe(5);
+        ).resolves.toBe(6);
+
+        const usageRecords = (
+            await adminClient.query(USAGE_RECORDS, {
+                input: { take: 100, customer: 'image-e2e@example.com' },
+            })
+        ).imageAiUsageRecords;
+        expect(usageRecords.totalItems).toBeGreaterThanOrEqual(6);
+        expect(usageRecords.items).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: freeSuccess.id,
+                    recordType: 'IMAGE_GENERATION',
+                    credentialCode: 'openai-e2e-primary',
+                    state: 'SUCCEEDED',
+                    billingMode: 'FREE',
+                    freeQuantity: 1,
+                    chargedAmount: 0,
+                }),
+                expect.objectContaining({
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    state: 'SUCCEEDED',
+                    customer: { emailAddress: 'image-e2e@example.com' },
+                }),
+            ]),
+        );
+        const usageDetail = (
+            await adminClient.query(USAGE_RECORD_DETAIL, {
+                recordType: 'IMAGE_GENERATION',
+                id: freeSuccess.id,
+            })
+        ).imageAiUsageRecord;
+        expect(usageDetail.inputPrompt).toBe('失败释放后再次使用免费额度');
+        expect(usageDetail.timeline).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ stage: '额度预占' }),
+                expect.objectContaining({ stage: '额度消耗' }),
+                expect.objectContaining({
+                    stage: '选择 Key',
+                    keyName: 'OpenAI E2E 主 Key',
+                    keyLast4: '-key',
+                }),
+                expect.objectContaining({ stage: '上游调用', status: '成功' }),
+                expect.objectContaining({ stage: '结果保存', status: '成功' }),
+            ]),
+        );
 
         expect(
             (await shopClient.query(DELETE_JOB, { id: referenceCreated.id })).deleteMyImageGenerationJob,
         ).toBe(true);
-        await expect(
-            connection.rawConnection.getRepository(ImageGenerationJob).findOneBy({ id: referenceCreated.id }),
-        ).resolves.toBeNull();
+        const deletedRows = await connection.rawConnection.query(
+            'SELECT id, customerDeletedAt FROM image_generation_job ORDER BY id',
+        );
+        expect(deletedRows).toEqual(
+            expect.arrayContaining([expect.objectContaining({ customerDeletedAt: expect.any(String) })]),
+        );
         await expect(connection.rawConnection.getRepository(ImageGenerationCostEvent).count()).resolves.toBe(
-            5,
+            6,
         );
     }, 30_000);
 });

@@ -3,6 +3,7 @@ import { ImageGenerationState } from './types';
 export interface ImageOutputSettlementSnapshot {
     state: string;
     refundedAt?: Date | null;
+    chargeAmount?: number;
 }
 
 export interface ImageJobSettlementSummary {
@@ -34,16 +35,16 @@ export function deriveImageJobSettlement(
     quantity: number,
     unitPrice: number,
     outputs: readonly ImageOutputSettlementSnapshot[],
+    expectedChargeAmount = quantity * unitPrice,
 ): ImageJobSettlementSummary {
     const states = outputs.map(output => output.state);
     const successCount = outputs.filter(output => output.state === 'SUCCEEDED').length;
-    const refundedSuccessCount = outputs.filter(
-        output => output.state === 'SUCCEEDED' && Boolean(output.refundedAt),
-    ).length;
-    const billableSuccessCount = successCount - refundedSuccessCount;
-    const unsuccessfulCount = states.filter(outputState =>
-        ['FAILED', 'CANCELLED'].includes(outputState),
-    ).length;
+    const capturedAmount = outputs.reduce(
+        (sum, output) =>
+            sum +
+            (output.state === 'SUCCEEDED' && !output.refundedAt ? (output.chargeAmount ?? unitPrice) : 0),
+        0,
+    );
 
     let state: ImageGenerationState;
     if (states.some(value => value === 'RUNNING')) state = 'RUNNING';
@@ -61,8 +62,10 @@ export function deriveImageJobSettlement(
 
     return {
         state,
-        capturedAmount: billableSuccessCount * unitPrice,
-        releasedAmount: (unsuccessfulCount + refundedSuccessCount) * unitPrice,
+        capturedAmount,
+        releasedAmount: ['SUCCEEDED', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED'].includes(state)
+            ? Math.max(0, expectedChargeAmount - capturedAmount)
+            : 0,
         terminal: ['SUCCEEDED', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED'].includes(state),
     };
 }

@@ -69,6 +69,11 @@ const commonTypes = gql`
         position: Int!
         isDefault: Boolean!
         healthStatus: String!
+        freeImageEnabled: Boolean!
+        dailyFreeImageLimit: Int!
+        dailyFreeImageUnlimited: Boolean!
+        paidAfterFreeEnabled: Boolean!
+        dailyGenerationSafetyLimit: Int!
     }
 
     type ImagePrivateAssetView implements Node {
@@ -95,6 +100,8 @@ const commonTypes = gql`
         errorMessage: String
         completedAt: DateTime
         refundedAt: DateTime
+        billingMode: String!
+        chargeAmount: Money!
         imageUrl: String
         downloadUrl: String
     }
@@ -118,6 +125,10 @@ const commonTypes = gql`
         quantity: Int!
         unitPriceSnapshot: Money!
         reservedAmount: Money!
+        expectedChargeAmount: Money!
+        freeQuantityReserved: Int!
+        freeQuantityCaptured: Int!
+        paidQuantityReserved: Int!
         capturedAmount: Money!
         releasedAmount: Money!
         currencyCode: CurrencyCode!
@@ -140,6 +151,15 @@ const commonTypes = gql`
         recommendedModelCode: String!
         recommendationReason: String!
         promptSkillHash: String!
+        billingMode: String!
+        chargedAmount: Money!
+        currencyCode: CurrencyCode!
+        inputTokens: Int
+        outputTokens: Int
+        totalTokens: Int
+        actualCostMicrounits: Int
+        costCurrency: String
+        promptQuota: ImagePromptQuotaStatus!
     }
 
     type ImageModelRecommendation {
@@ -155,6 +175,9 @@ const commonTypes = gql`
     input OptimizeImagePromptInput {
         prompt: String!
         referenceMode: ImageReferenceMode
+        expectedPrice: Money
+        currencyCode: CurrencyCode
+        idempotencyKey: String
     }
 
     input CreateImageGenerationInput {
@@ -167,9 +190,37 @@ const commonTypes = gql`
         resolution: String!
         quantity: Int!
         expectedUnitPrice: Money!
+        expectedChargeAmount: Money!
         currencyCode: CurrencyCode!
         idempotencyKey: String!
         termsAccepted: Boolean!
+    }
+
+    type ImageQuotaWindowStatus {
+        limit: Int!
+        unlimited: Boolean!
+        reserved: Int!
+        consumed: Int!
+        remaining: Int!
+        windowEndsAt: DateTime!
+    }
+
+    type ImagePromptQuotaStatus {
+        minute: ImageQuotaWindowStatus!
+        daily: ImageQuotaWindowStatus!
+        paidEnabled: Boolean!
+        paidPrice: Money!
+        currencyCode: CurrencyCode!
+    }
+
+    type ImageModelQuotaStatus {
+        modelCode: String!
+        freeImageEnabled: Boolean!
+        paidAfterFreeEnabled: Boolean!
+        unitPrice: Money!
+        currencyCode: CurrencyCode!
+        free: ImageQuotaWindowStatus!
+        safety: ImageQuotaWindowStatus!
     }
 `;
 
@@ -179,6 +230,12 @@ export const shopApiExtensions = gql`
     type ImageStudioConfig {
         enabled: Boolean!
         promptOptimizationEnabled: Boolean!
+        promptRateLimitPerMinute: Int!
+        promptDailyFreeLimit: Int!
+        promptDailyFreeUnlimited: Boolean!
+        paidPromptOptimizationEnabled: Boolean!
+        paidPromptOptimizationPrice: Money!
+        paidPromptOptimizationCurrencyCode: CurrencyCode!
         defaultModelCode: String!
         termsVersion: String!
         termsZh: String!
@@ -194,6 +251,8 @@ export const shopApiExtensions = gql`
     extend type Query {
         imageStudioConfig: ImageStudioConfig!
         imageStudioBalance: Money!
+        imagePromptQuotaStatus: ImagePromptQuotaStatus!
+        imageModelQuotaStatus: [ImageModelQuotaStatus!]!
         recommendImageModel(input: OptimizeImagePromptInput!): ImageModelRecommendation!
         myImageGenerationJob(id: ID!): ImageGenerationJob!
         myImageGenerationJobs(skip: Int, take: Int): ImageGenerationJobList!
@@ -216,6 +275,12 @@ export const adminApiExtensions = gql`
         id: ID!
         enabled: Boolean!
         promptOptimizationEnabled: Boolean!
+        promptRateLimitPerMinute: Int!
+        promptDailyFreeLimit: Int!
+        promptDailyFreeUnlimited: Boolean!
+        paidPromptOptimizationEnabled: Boolean!
+        paidPromptOptimizationPrice: Money!
+        paidPromptOptimizationCurrencyCode: CurrencyCode!
         defaultModelCode: String!
         termsVersion: String!
         termsZh: String!
@@ -232,7 +297,20 @@ export const adminApiExtensions = gql`
         supportsIdempotency: Boolean!
     }
 
+    extend type ImageGenerationJob {
+        customer: Customer!
+        providerScopeSnapshot: String!
+        providerCredentialCodeSnapshot: String!
+        providerCredentialNameSnapshot: String!
+        providerCredentialLast4Snapshot: String!
+        providerSelectionReason: String
+    }
+
     type ImageProviderAdminConfig {
+        id: ID!
+        code: String!
+        name: String!
+        purpose: String!
         scope: ImageProviderScope!
         credentialConfigured: Boolean!
         credentialEnabled: Boolean!
@@ -241,6 +319,11 @@ export const adminApiExtensions = gql`
         textModelId: String!
         providerHealthStatus: String!
         providerHealthMessage: String
+        priority: Int!
+        weight: Int!
+        cooldownUntil: DateTime
+        lastUsedAt: DateTime
+        modelCodes: [String!]!
     }
 
     type ImageProviderConnectionResult {
@@ -249,6 +332,12 @@ export const adminApiExtensions = gql`
         testedAt: DateTime!
         actualCostMicrounits: Int
         costCurrency: String
+    }
+
+    type ImageComplianceActionResult {
+        auditEventId: ID!
+        affectedPromptRecords: Int!
+        affectedJobs: Int!
     }
 
     type ImageGenerationCostSummaryItem {
@@ -284,9 +373,125 @@ export const adminApiExtensions = gql`
         activatedAt: DateTime
     }
 
+    type ImagePromptOptimizationAudit implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        customer: Customer!
+        channelId: ID!
+        inputPrompt: String!
+        optimizedPrompt: String!
+        source: String!
+        optimizerModelId: String
+        promptSkillHash: String!
+        recommendedModelCode: String!
+        billingMode: String!
+        chargedAmount: Money!
+        currencyCode: CurrencyCode!
+        inputTokens: Int
+        outputTokens: Int
+        totalTokens: Int
+        actualCostMicrounits: Int
+        costCurrency: String
+        providerRequestId: String
+        credentialCodeSnapshot: String!
+        credentialNameSnapshot: String!
+        credentialLast4Snapshot: String!
+        credentialSelectionReason: String
+        upstreamCallCount: Int!
+        latencyMs: Int!
+        errorMessage: String
+    }
+
+    type ImagePromptOptimizationAuditList implements PaginatedList {
+        items: [ImagePromptOptimizationAudit!]!
+        totalItems: Int!
+    }
+
+    input ImageAiUsageRecordListInput {
+        skip: Int
+        take: Int
+        recordType: String
+        from: DateTime
+        to: DateTime
+        customer: String
+        modelCode: String
+        credentialCode: String
+        state: String
+        billingMode: String
+        failuresOnly: Boolean
+        missingCostOnly: Boolean
+    }
+
+    type ImageAiUsageRecord implements Node {
+        id: ID!
+        recordType: String!
+        createdAt: DateTime!
+        customer: Customer!
+        channelId: ID!
+        modelCode: String!
+        credentialCode: String!
+        credentialName: String!
+        credentialLast4: String!
+        state: String!
+        billingMode: String!
+        freeQuantity: Int!
+        paidQuantity: Int!
+        chargedAmount: Money!
+        refundedAmount: Money!
+        currencyCode: CurrencyCode!
+        actualCostMicrounits: Int
+        costCurrency: String
+        missingCost: Boolean!
+        errorMessage: String
+    }
+
+    type ImageAiUsageRecordList implements PaginatedList {
+        items: [ImageAiUsageRecord!]!
+        totalItems: Int!
+    }
+
+    type ImageAiUsageOutputDetail {
+        id: ID!
+        state: String!
+        billingMode: String!
+        chargeAmount: Money!
+        providerRequestId: String
+        errorMessage: String
+        refundedAt: DateTime
+    }
+
+    type ImageAiUsageTimelineItem {
+        at: DateTime!
+        stage: String!
+        status: String!
+        amount: Int
+        currencyCode: String
+        costMicrounits: Int
+        message: String!
+        keyName: String
+        keyLast4: String
+    }
+
+    type ImageAiUsageRecordDetail {
+        record: ImageAiUsageRecord!
+        inputPrompt: String!
+        outputPrompt: String
+        totalTokens: Int
+        providerRequestIds: [String!]!
+        outputs: [ImageAiUsageOutputDetail!]!
+        timeline: [ImageAiUsageTimelineItem!]!
+    }
+
     input SaveImageGenerationConfigInput {
         enabled: Boolean!
         promptOptimizationEnabled: Boolean!
+        promptRateLimitPerMinute: Int!
+        promptDailyFreeLimit: Int!
+        promptDailyFreeUnlimited: Boolean!
+        paidPromptOptimizationEnabled: Boolean!
+        paidPromptOptimizationPrice: Money!
+        paidPromptOptimizationCurrencyCode: CurrencyCode!
         defaultModelCode: String!
         termsVersion: String!
         termsZh: String!
@@ -294,11 +499,18 @@ export const adminApiExtensions = gql`
     }
 
     input SaveImageProviderCredentialInput {
+        id: ID
         scope: ImageProviderScope!
+        code: String!
+        name: String!
+        purpose: String!
         baseUrl: String!
         apiKey: String
         textModelId: String!
         enabled: Boolean!
+        priority: Int!
+        weight: Int!
+        modelCodes: [String!]!
     }
 
     input SaveImageModelInput {
@@ -317,6 +529,11 @@ export const adminApiExtensions = gql`
         position: Int!
         isDefault: Boolean!
         supportsIdempotency: Boolean!
+        freeImageEnabled: Boolean!
+        dailyFreeImageLimit: Int!
+        dailyFreeImageUnlimited: Boolean!
+        paidAfterFreeEnabled: Boolean!
+        dailyGenerationSafetyLimit: Int!
     }
 
     extend type Query {
@@ -324,6 +541,9 @@ export const adminApiExtensions = gql`
         imageProviderAdminConfigs: [ImageProviderAdminConfig!]!
         imageGenerationJobs(skip: Int, take: Int, state: ImageGenerationState): ImageGenerationJobList!
         imagePromptSkillReleases: [ImagePromptSkillRelease!]!
+        imagePromptOptimizationAudit(skip: Int, take: Int): ImagePromptOptimizationAuditList!
+        imageAiUsageRecords(input: ImageAiUsageRecordListInput): ImageAiUsageRecordList!
+        imageAiUsageRecord(recordType: String!, id: ID!): ImageAiUsageRecordDetail!
         imageGenerationCostSummary(days: Int): ImageGenerationCostSummary!
     }
 
@@ -331,6 +551,9 @@ export const adminApiExtensions = gql`
         saveImageGenerationConfig(input: SaveImageGenerationConfigInput!): ImageGenerationAdminConfig!
         saveImageProviderCredential(input: SaveImageProviderCredentialInput!): ImageProviderAdminConfig!
         testImageProviderConnection(scope: ImageProviderScope!): ImageProviderConnectionResult!
+        testImageProviderCredential(id: ID!): ImageProviderConnectionResult!
+        archiveImageProviderCredential(id: ID!): Boolean!
+        anonymizeImageGenerationCustomerData(customerId: ID!, reason: String!): ImageComplianceActionResult!
         testImageModel(code: String!): ImageProviderConnectionResult!
         smokeTestImageModel(code: String!): ImageProviderConnectionResult!
         saveImageModel(input: SaveImageModelInput!): ImageStudioModel!
