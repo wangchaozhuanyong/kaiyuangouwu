@@ -19,6 +19,11 @@ const sharedEnvironment = {
     VENDURE_DISABLE_TELEMETRY: 'true',
 };
 
+const sharedProcessOptions = {
+    max_memory_restart: '768M',
+    restart_delay: 5000,
+};
+
 module.exports = {
     apps: [
         {
@@ -27,6 +32,7 @@ module.exports = {
             script: 'packages/dev-server/dist/index-worker.js',
             interpreter: process.execPath,
             env: sharedEnvironment,
+            ...sharedProcessOptions,
         },
         {
             name: 'vendure-api',
@@ -34,6 +40,7 @@ module.exports = {
             script: 'packages/dev-server/dist/index.js',
             interpreter: process.execPath,
             env: sharedEnvironment,
+            ...sharedProcessOptions,
         },
     ],
 };

@@ -6,6 +6,7 @@ const fs = require('node:fs');
 
 const DEFAULT_MINIMUM_AVAILABLE_MIB = 384;
 const DEFAULT_MINIMUM_AVAILABLE_PERCENT = 12.5;
+const DEFAULT_MINIMUM_PHYSICAL_AVAILABLE_MIB = 192;
 
 function parseMeminfo(contents) {
     const values = new Map();
@@ -31,16 +32,23 @@ function evaluateMemory(
     memory,
     minimumAvailableMib = DEFAULT_MINIMUM_AVAILABLE_MIB,
     minimumAvailablePercent = DEFAULT_MINIMUM_AVAILABLE_PERCENT,
+    minimumPhysicalAvailableMib = DEFAULT_MINIMUM_PHYSICAL_AVAILABLE_MIB,
 ) {
     const absoluteMinimumKib = minimumAvailableMib * 1024;
     const proportionalMinimumKib = Math.ceil(memory.totalKib * (minimumAvailablePercent / 100));
     const requiredAvailableKib = Math.max(absoluteMinimumKib, proportionalMinimumKib);
+    const minimumPhysicalAvailableKib = minimumPhysicalAvailableMib * 1024;
+    const effectiveHeadroomKib = memory.availableKib + memory.swapFreeKib;
 
     return {
         ...memory,
+        effectiveHeadroomKib,
+        minimumPhysicalAvailableKib,
         requiredAvailableKib,
         availablePercent: (memory.availableKib / memory.totalKib) * 100,
-        safe: memory.availableKib >= requiredAvailableKib,
+        safe:
+            memory.availableKib >= minimumPhysicalAvailableKib &&
+            effectiveHeadroomKib >= requiredAvailableKib,
     };
 }
 
@@ -79,6 +87,8 @@ function main(arguments_ = process.argv.slice(2), meminfoPath = '/proc/meminfo')
         `available_mib=${formatMib(memory.availableKib)}`,
         `available_percent=${memory.availablePercent.toFixed(1)}`,
         `swap_free_mib=${formatMib(memory.swapFreeKib)}`,
+        `effective_headroom_mib=${formatMib(memory.effectiveHeadroomKib)}`,
+        `minimum_physical_available_mib=${formatMib(memory.minimumPhysicalAvailableKib)}`,
         `required_available_mib=${formatMib(memory.requiredAvailableKib)}`,
         `status=${memory.safe ? 'safe' : 'low'}`,
     ].join(' ');
@@ -87,8 +97,9 @@ function main(arguments_ = process.argv.slice(2), meminfoPath = '/proc/meminfo')
     if (options.check && !memory.safe) {
         throw new Error(
             `Insufficient available memory before ${options.stage}: ` +
-                `${formatMib(memory.availableKib)} MiB available, ` +
-                `${formatMib(memory.requiredAvailableKib)} MiB required`,
+                `${formatMib(memory.availableKib)} MiB physical available, ` +
+                `${formatMib(memory.swapFreeKib)} MiB swap free, ` +
+                `${formatMib(memory.requiredAvailableKib)} MiB effective headroom required`,
         );
     }
     return memory;
@@ -97,6 +108,7 @@ function main(arguments_ = process.argv.slice(2), meminfoPath = '/proc/meminfo')
 module.exports = {
     DEFAULT_MINIMUM_AVAILABLE_MIB,
     DEFAULT_MINIMUM_AVAILABLE_PERCENT,
+    DEFAULT_MINIMUM_PHYSICAL_AVAILABLE_MIB,
     evaluateMemory,
     main,
     parseArguments,

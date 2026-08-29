@@ -82,10 +82,12 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，无�
 `deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
 数据库备份和迁移、PM2 切换、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了店铺媒体、
 登录视觉或库存修复发布器以及受管店铺素材目录，自动发布会主动停止，必须回到下文的人工预演和发布流程。
-单机发布还会在下载前、迁移前和运行时切换前读取 Linux `MemAvailable`；可用内存低于 384 MiB 或物理内存的
-12.5%（取较高值）时会在破坏性切换前停止。PM2 显示的宿主机 RAM 使用率包含可回收页缓存，发布判断以
-`PRODUCTION_MEMORY` 记录的 `MemAvailable` 为准。归档在同一发布文件系统内使用原子移动保留，API 通过健康
-检查后才启动 Worker，避免重复复制归档和两个 Node 进程并发冷启动造成额外内存峰值。
+单机发布会确保 `/var/lib/vendure-memory/production.swap` 提供 2 GiB 持久 Swap，并把 `vm.swappiness` 固定为
+10；创建前必须至少保留额外 1 GiB 磁盘空间，已有合规 Swap 时保持幂等。随后在下载前、迁移前和运行时切换
+前读取 Linux `MemAvailable` 与可用 Swap；物理可用内存不得低于 192 MiB，总有效余量不得低于 384 MiB 或
+物理内存的 12.5%（取较高值），否则会在破坏性切换前停止。PM2 显示的宿主机 RAM 使用率包含可回收页缓存，
+发布判断以 `PRODUCTION_MEMORY` 记录为准。归档在同一发布文件系统内使用原子移动保留，API 通过健康检查后
+才启动 Worker，两个 Node 进程均设 768 MiB 自动重启上限，避免重复复制归档、并发冷启动和失控增长造成峰值。
 
 若候选 API 未通过健康检查且自动回滚本身失败，可手动运行 `Recover Current Production Runtime` 工作流。
 它只会读取 `kaiyuangouwu-current` 与 `current-sha` 指向的最后一个已验证运行包，要求两者 SHA 一致，

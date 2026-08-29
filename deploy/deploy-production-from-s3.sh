@@ -89,6 +89,8 @@ readonly archive_path="${staging_dir}/${archive_name}"
 readonly checksum_path="${staging_dir}/${checksum_name}"
 readonly nginx_backup="${nginx_target}.pre-${deployment_id}"
 readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
+readonly swap_controller_source="${repository}/deploy/ensure-production-swap.sh"
+readonly swap_controller="/usr/local/sbin/vendure-production-swap"
 
 rollback_needed=0
 nginx_changed=0
@@ -128,6 +130,8 @@ rollback() {
 trap cleanup EXIT
 trap rollback ERR
 
+sudo -n install -o root -g root -m 0755 "${swap_controller_source}" "${swap_controller}"
+sudo -n "${swap_controller}"
 node "${memory_guard}" --stage pre-download --check
 printf 'DEPLOY_DOWNLOAD_BEGIN\n'
 aws s3 cp "${artifact_s3_prefix}/${archive_name}" "${archive_path}" --only-show-errors

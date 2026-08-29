@@ -35,6 +35,28 @@ void test('production memory guard rejects a host below the absolute safety floo
     assert.equal(result.safe, false);
 });
 
+void test('production memory guard accepts swap as emergency headroom', () => {
+    const result = evaluateMemory({
+        totalKib: 3_925_000,
+        availableKib: 250_000,
+        swapFreeKib: 2_097_152,
+    });
+
+    assert.equal(result.minimumPhysicalAvailableKib, 192 * 1024);
+    assert.equal(result.effectiveHeadroomKib, 2_347_152);
+    assert.equal(result.safe, true);
+});
+
+void test('production memory guard keeps a physical availability floor even with swap', () => {
+    const result = evaluateMemory({
+        totalKib: 3_925_000,
+        availableKib: 180_000,
+        swapFreeKib: 2_097_152,
+    });
+
+    assert.equal(result.safe, false);
+});
+
 void test('production memory guard scales the safety floor on larger hosts', () => {
     const result = evaluateMemory({ totalKib: 8_388_608, availableKib: 900_000, swapFreeKib: 0 });
 

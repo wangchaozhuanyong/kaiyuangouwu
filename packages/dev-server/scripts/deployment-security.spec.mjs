@@ -49,6 +49,8 @@ void test('production PM2 config starts compiled runtime entries without the dev
     assert.match(config, /packages\/dev-server\/dist\/index-worker\.js/u);
     assert.match(config, /packages\/dev-server\/dist\/index\.js/u);
     assert.match(config, /VENDURE_DISABLE_TELEMETRY:\s*'true'/u);
+    assert.match(config, /max_memory_restart:\s*'768M'/u);
+    assert.match(config, /restart_delay:\s*5000/u);
     assert.doesNotMatch(config, /cli\.js/u);
 });
 
@@ -133,6 +135,9 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
     assert.match(script, /managed storefront data changed/u);
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
+    assert.match(script, /ensure-production-swap\.sh/u);
+    assert.match(script, /vendure-production-swap/u);
+    assert.match(script, /sudo -n "\$\{swap_controller\}"/u);
     assert.match(script, /node "\$\{memory_guard\}" --stage pre-download --check/u);
     assert.match(script, /node "\$\{memory_guard\}" --stage pre-migration --check/u);
     assert.match(script, /node "\$\{memory_guard\}" --stage pre-switch --check/u);
@@ -149,6 +154,20 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /AWS-RunShellScript/u);
     assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
+});
+
+void test('production swap setup is fixed-size, persistent, and low-swappiness', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/ensure-production-swap.sh'), 'utf8');
+
+    assert.match(script, /swap_file="\$\{swap_directory\}\/production\.swap"/u);
+    assert.match(script, /swap_size_mib=2048/u);
+    assert.match(script, /disk_reserve_bytes/u);
+    assert.match(script, /mkswap/u);
+    assert.match(script, /swapon/u);
+    assert.match(script, /\/etc\/fstab/u);
+    assert.match(script, /vm\.swappiness = 10/u);
+    assert.match(script, /PRODUCTION_SWAP_OK/u);
+    assert.doesNotMatch(script, /swapoff/u);
 });
 
 void test('OIDC production recovery restarts only the last verified immutable runtime', async () => {
