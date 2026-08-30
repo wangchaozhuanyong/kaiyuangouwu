@@ -1,6 +1,6 @@
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { RequestContext, UserInputError } from '@vendure/core';
-import { convertChannelAmount } from '@vendure/store-management-plugin';
+import { convertChannelAmount } from '@vendure/store-management-plugin/currency-conversion';
 
 type QuoteContext = Pick<RequestContext, 'channel' | 'currencyCode'>;
 
