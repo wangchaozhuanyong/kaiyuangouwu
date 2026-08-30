@@ -779,8 +779,12 @@ export class ShopApi {
                 },
                 signal,
             );
+            const page = result.storefrontCatalog;
+            if (!page || !Array.isArray(page.items) || !Number.isFinite(page.totalItems)) {
+                throw new Error('Shop API returned an invalid storefront catalog response');
+            }
             this.storefrontCatalogAvailable = true;
-            return result.storefrontCatalog;
+            return page;
         } catch (error) {
             if (!isMissingStorefrontCatalogSchema(error)) throw error;
             this.storefrontCatalogAvailable = false;

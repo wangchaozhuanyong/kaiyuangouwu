@@ -1,5 +1,6 @@
 import { createBrowserHistory, createRouter } from '@tanstack/react-router';
 
+import { PageSkeleton } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import { getStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
 
@@ -29,6 +30,7 @@ export const router = createRouter({
     parseSearch: parseStorefrontSearch,
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
+    defaultPendingComponent: PageSkeleton,
     scrollRestoration: true,
     getScrollRestorationKey: getStorefrontScrollRestorationKey,
 });

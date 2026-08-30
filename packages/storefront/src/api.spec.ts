@@ -758,6 +758,15 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
+    it('rejects an incomplete catalog response instead of resolving undefined query data', async () => {
+        const fetchMock = mockGraphQlResponse({});
+
+        await expect(new ShopApi(market).catalog({ take: 12 })).rejects.toThrow(
+            'Shop API returned an invalid storefront catalog response',
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('falls back to native search when the custom catalog schema is unavailable', async () => {
         const fallbackProducts = [
             {
