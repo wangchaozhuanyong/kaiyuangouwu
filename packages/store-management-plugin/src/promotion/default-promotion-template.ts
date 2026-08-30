@@ -1,6 +1,6 @@
 /* eslint-disable max-len -- Keep the embedded Silver Mist promotion HTML and CSS readable as source. */
 
-export const DEFAULT_PROMOTION_TEMPLATE_VERSION = 25;
+export const DEFAULT_PROMOTION_TEMPLATE_VERSION = 26;
 
 export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
 <html lang="{{store.language}}">
@@ -46,30 +46,35 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-hero { position:relative; min-height:680px; overflow:hidden; border-bottom:1px solid var(--line); background:#0a0c0e; }
         .promo-hero-art { position:absolute; z-index:0; inset:0; display:block; pointer-events:none; }
         .promo-hero-art img { width:100%; height:100%; display:block; object-fit:cover; object-position:center; }
-        .promo-hero-inner { position:relative; z-index:2; min-height:680px; display:grid; align-items:center; padding:64px 0 30px; }
-        .promo-hero-content { width:min(100%,780px); margin-inline:auto; text-align:center; }
-        .promo-brand-line { display:flex; align-items:center; justify-content:center; gap:14px; margin:0 0 22px; color:var(--white-soft); font-size:11px; font-weight:620; letter-spacing:.15em; }
+        .promo-hero-inner { position:relative; z-index:2; min-height:680px; display:grid; align-items:center; padding:56px 0 42px; }
+        .promo-hero-content { width:100%; display:grid; grid-template-columns:minmax(0,1.06fr) minmax(400px,.82fr); align-items:center; gap:clamp(56px,7vw,112px); text-align:left; }
+        .promo-hero-intro { align-self:center; }
+        .promo-hero-panel { min-width:0; padding:30px 0 26px clamp(28px,4vw,52px); border-left:1px solid var(--line-strong); }
+        .promo-brand-line { display:flex; align-items:center; justify-content:flex-start; gap:14px; margin:0 0 24px; color:var(--white-soft); font-size:11px; font-weight:620; letter-spacing:.15em; }
         .promo-brand-line::before,.promo-brand-line::after { width:26px; height:1px; background:var(--amber); content:""; }
-        .promo-title { max-width:12ch; margin:0 auto; color:var(--white); font-size:clamp(56px,5.5vw,72px); font-weight:520; letter-spacing:-.038em; line-height:1.04; text-wrap:balance; }
+        .promo-brand-line::after { display:none; }
+        .promo-title { max-width:9ch; margin:0; color:var(--white); font-size:clamp(60px,5.7vw,76px); font-weight:520; letter-spacing:-.038em; line-height:1.04; text-wrap:balance; }
         .promo-title-line { display:block; }
         .promo-title-highlight { color:var(--white); font-weight:590; }
         .promo-title-line:empty { display:none; }
-        html[lang="en"] .promo-title { max-width:13ch; font-size:clamp(50px,4.9vw,66px); }
-        .promo-hero-stage { display:grid; min-height:154px; align-items:center; margin-top:26px; }
+        html[lang="en"] .promo-title { max-width:14ch; font-size:clamp(48px,4.5vw,62px); }
+        html[lang="en"] .promo-title-line:nth-child(2),html[lang="en"] .promo-title-line:nth-child(3) { display:inline; }
+        html[lang="en"] .promo-title-line:nth-child(3)::before { content:" "; }
+        .promo-hero-stage { display:grid; min-height:154px; align-items:center; margin-top:0; }
         .promo-slide { grid-area:1/1; visibility:hidden; opacity:0; pointer-events:none; transform:translateY(10px) scale(.985); transition:opacity 360ms ease,transform 460ms var(--ease),visibility 0s linear 460ms; }
         .promo-slide.is-active { visibility:visible; opacity:1; pointer-events:auto; transform:none; transition-delay:0s; }
-        .promo-slide-title { display:table; margin:0 auto; padding:0 0 8px; border-bottom:2px solid var(--amber-bright); color:var(--amber-bright); font-size:clamp(19px,1.8vw,24px); font-weight:650; letter-spacing:.02em; }
+        .promo-slide-title { display:table; margin:0; padding:0 0 8px; border-bottom:2px solid var(--amber-bright); color:var(--amber-bright); font-size:clamp(19px,1.8vw,24px); font-weight:650; letter-spacing:.02em; }
         .promo-slide-accent { margin:16px 0 0; color:var(--white-soft); font-size:clamp(20px,2vw,28px); font-weight:560; letter-spacing:-.02em; }
-        .promo-description { max-width:48ch; margin:14px auto 0; color:var(--muted); font-size:clamp(14px,1.12vw,16px); line-height:1.72; text-wrap:pretty; }
-        .promo-actions { display:flex; flex-direction:column; align-items:center; gap:12px; margin-top:22px; }
-        .promo-actions .promo-entry-form { width:min(100%,360px); }
+        .promo-description { max-width:40ch; margin:14px 0 0; color:var(--muted); font-size:clamp(14px,1.12vw,16px); line-height:1.72; text-wrap:pretty; }
+        .promo-actions { display:flex; align-items:center; gap:24px; margin-top:24px; }
+        .promo-actions .promo-entry-form { width:min(100%,250px); }
         .promo-actions .promo-entry-button { width:100%; min-height:56px; color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); box-shadow:0 18px 52px rgba(239,168,63,.16),inset 0 1px rgba(255,255,255,.42); font-size:14px; }
         .promo-actions .promo-entry-button:hover { color:var(--amber-ink); background:#ffd47d; }
         .promo-secondary-button { min-height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0 2px; border:0; border-bottom:1px solid rgba(239,168,63,.72); border-radius:0; color:var(--white-soft); background:transparent; font-size:14px; font-weight:600; text-decoration:none; transition:color 200ms ease,border-color 200ms ease,transform 220ms var(--ease); }
         .promo-secondary-button::after { margin-left:14px; color:var(--amber-bright); content:"→"; }
         .promo-secondary-button:hover { color:var(--white); border-color:var(--amber-bright); transform:translateX(3px); }
-        .promo-entry-note { max-width:48ch; margin:0; color:var(--faint); font-size:11px; line-height:1.55; }
-        .promo-carousel-controls { width:min(100%,760px); margin:40px auto 0; }
+        .promo-entry-note { display:none; max-width:48ch; margin:0; color:var(--faint); font-size:11px; line-height:1.55; }
+        .promo-carousel-controls { width:100%; margin:30px 0 0; }
         .promo-carousel-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:hidden; border:1px solid rgba(214,216,216,.16); border-radius:5px; background:rgba(12,14,16,.82); box-shadow:inset 0 1px rgba(255,255,255,.025); }
         .promo-slide-button { min-height:58px; display:grid; place-items:center; padding:0 18px; border:0; color:var(--faint); background:transparent; text-align:center; cursor:pointer; transition:color 220ms ease,background 220ms ease,box-shadow 300ms var(--ease); }
         .promo-slide-button+.promo-slide-button { border-left:1px solid var(--line); }
@@ -167,6 +172,8 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         @media (max-width:980px) {
             :root { --shell:min(100% - 40px,900px); --section-top:64px; --section-bottom:44px; }
             .promo-nav { gap:20px; } .promo-nav a { font-size:12px; }
+            .promo-hero-content { grid-template-columns:minmax(0,.88fr) minmax(380px,1fr); gap:42px; }
+            .promo-hero-panel { padding-left:30px; }
             .promo-title { font-size:clamp(50px,6vw,62px); }
             .promo-services-layout { grid-template-columns:.72fr 1.28fr; gap:54px; }
             .promo-capability { grid-template-columns:44px minmax(150px,.5fr) minmax(0,.5fr); gap:20px; }
@@ -184,21 +191,26 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             .promo-hero { min-height:auto; }
             .promo-hero-art img { object-position:center top; }
             .promo-hero-inner { min-height:0; padding:68px 0 18px; }
-            .promo-hero-content { width:100%; text-align:center; }
+            .promo-hero-content { width:100%; display:block; text-align:center; }
+            .promo-hero-panel { padding:0; border-left:0; }
             .promo-brand-line { margin-bottom:20px; font-size:10px; }
+            .promo-brand-line { justify-content:center; }
             .promo-brand-line::before,.promo-brand-line::after { width:18px; }
+            .promo-brand-line::after { display:block; }
             .promo-title { max-width:10ch; margin-inline:auto; font-size:clamp(38px,10.6vw,44px); line-height:1.08; }
             html[lang="en"] .promo-title { max-width:12ch; font-size:clamp(35px,9.2vw,40px); }
+            html[lang="en"] .promo-title-line:nth-child(2),html[lang="en"] .promo-title-line:nth-child(3) { display:block; }
+            html[lang="en"] .promo-title-line:nth-child(3)::before { content:none; }
             .promo-hero-stage { min-height:154px; margin-top:22px; }
             .promo-slide { width:100%; }
-            .promo-slide-title { font-size:19px; }
+            .promo-slide-title { margin-inline:auto; font-size:19px; }
             .promo-slide-accent { margin-top:14px; font-size:20px; }
             .promo-description { max-width:34ch; margin-top:11px; font-size:13px; line-height:1.62; }
-            .promo-actions { width:min(100%,360px); gap:8px; margin:18px auto 0; }
+            .promo-actions { width:min(100%,360px); flex-direction:column; align-items:center; gap:8px; margin:18px auto 0; }
             .promo-actions .promo-entry-form,.promo-actions .promo-entry-button { width:100%; }
             .promo-actions .promo-entry-button { min-width:0; min-height:50px; }
             .promo-secondary-button { min-height:44px; }
-            .promo-entry-note { max-width:34ch; font-size:10.5px; }
+            .promo-entry-note { display:block; max-width:34ch; font-size:10.5px; }
             .promo-carousel-controls { width:100%; margin:28px 0 0; }
             .promo-slide-button { min-height:52px; padding:0 10px; }
             .promo-slide-control-label { overflow:hidden; font-size:10px; text-overflow:ellipsis; }
@@ -266,7 +278,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         </div></header></div>
         <main id="promo-main">
             <section class="promo-hero" data-promo-hero data-promo-carousel role="region" aria-roledescription="{{promo.carouselRole}}" aria-label="{{promo.heroCarouselAria}}"><picture class="promo-hero-art" aria-hidden="true"><source media="(max-width:760px)" srcset="/storefront/promo/damatong-silver-stage-mobile-v23.webp"><img src="/storefront/promo/damatong-silver-stage-v23.webp" alt="" width="1536" height="1024" fetchpriority="high"></picture><div class="promo-hero-inner promo-shell">
-                <div class="promo-hero-content" data-promo-reveal><p class="promo-brand-line">{{promo.heroEyebrow}}</p><h1 class="promo-title"><span class="promo-title-line">{{promo.heroLead}}</span><span class="promo-title-line promo-title-highlight">{{promo.heroHighlight}}</span><span class="promo-title-line">{{promo.heroTail}}</span></h1><div class="promo-hero-stage" aria-live="off">
+                <div class="promo-hero-content" data-promo-reveal><div class="promo-hero-intro"><p class="promo-brand-line">{{promo.heroEyebrow}}</p><h1 class="promo-title"><span class="promo-title-line">{{promo.heroLead}}</span><span class="promo-title-line promo-title-highlight">{{promo.heroHighlight}}</span><span class="promo-title-line">{{promo.heroTail}}</span></h1></div><div class="promo-hero-panel"><div class="promo-hero-stage" aria-live="off">
                     <article class="promo-slide is-active" id="promo-slide-1" data-promo-slide role="group" aria-roledescription="{{promo.slideRole}}" aria-label="{{promo.heroSlideOneAria}}" aria-hidden="false"><h2 class="promo-slide-title">{{promo.heroSlideOneTitleLead}}</h2><p class="promo-slide-accent">{{promo.heroSlideOneTitleAccent}}</p><p class="promo-description">{{promo.heroSlideOneDescription}}</p></article>
                     <article class="promo-slide" id="promo-slide-2" data-promo-slide role="group" aria-roledescription="{{promo.slideRole}}" aria-label="{{promo.heroSlideTwoAria}}" aria-hidden="true"><h2 class="promo-slide-title">{{promo.heroSlideTwoTitleLead}}</h2><p class="promo-slide-accent">{{promo.heroSlideTwoTitleAccent}}</p><p class="promo-description">{{promo.heroSlideTwoDescription}}</p></article>
                     <article class="promo-slide" id="promo-slide-3" data-promo-slide role="group" aria-roledescription="{{promo.slideRole}}" aria-label="{{promo.heroSlideThreeAria}}" aria-hidden="true"><h2 class="promo-slide-title">{{promo.heroSlideThreeTitleLead}}</h2><p class="promo-slide-accent">{{promo.heroSlideThreeTitleAccent}}</p><p class="promo-description">{{promo.heroSlideThreeDescription}}</p></article>
@@ -274,7 +286,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
                     <button class="promo-slide-button is-active" type="button" data-promo-slide-button="0" aria-controls="promo-slide-1" aria-current="true"><span class="promo-slide-control-label">{{promo.heroSlideOneControl}}</span></button>
                     <button class="promo-slide-button" type="button" data-promo-slide-button="1" aria-controls="promo-slide-2"><span class="promo-slide-control-label">{{promo.heroSlideTwoControl}}</span></button>
                     <button class="promo-slide-button" type="button" data-promo-slide-button="2" aria-controls="promo-slide-3"><span class="promo-slide-control-label">{{promo.heroSlideThreeControl}}</span></button>
-                </div><p class="promo-sr-only" aria-live="polite" aria-atomic="true" data-promo-carousel-status></p></div></div>
+                </div><p class="promo-sr-only" aria-live="polite" aria-atomic="true" data-promo-carousel-status></p></div></div></div>
             </div></section>
             <section class="promo-section promo-services" id="services"><div class="promo-shell promo-services-layout"><div class="promo-services-copy" data-promo-reveal><p class="promo-kicker">{{promo.navServices}}</p><h2 class="promo-section-title">{{promo.servicesTitle}}</h2><p class="promo-section-intro">{{promo.servicesIntro}}</p></div><div class="promo-capability-channels">
                 <article class="promo-capability" data-promo-reveal><span class="promo-capability-number">01</span><h3>{{promo.capabilitySubscriptionTitle}}</h3><p>{{promo.capabilitySubscriptionDescription}}</p></article>

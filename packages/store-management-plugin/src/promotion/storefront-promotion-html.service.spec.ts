@@ -99,6 +99,14 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('prefers-reduced-motion:reduce');
         expect(service.defaultTemplate).toContain('.promo-hero { min-height:auto; }');
         expect(service.defaultTemplate).toContain('.promo-hero-inner { min-height:0; padding:68px 0 18px; }');
+        expect(service.defaultTemplate).toContain(
+            '.promo-hero-content { width:100%; display:grid; grid-template-columns:',
+        );
+        expect(service.defaultTemplate).toContain('.promo-hero-intro');
+        expect(service.defaultTemplate).toContain('.promo-hero-panel');
+        expect(service.defaultTemplate).toContain(
+            '.promo-hero-content { width:100%; display:block; text-align:center; }',
+        );
         expect(service.defaultTemplate).not.toContain('min-height:max(720px,calc(100svh - 64px))');
         expect(service.defaultTemplate).not.toContain('min-width:320px');
         expect(service.defaultTemplate).not.toContain('.promo-value-rail');
@@ -125,7 +133,7 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).not.toContain('promo-step-number');
         expect(service.defaultTemplate).not.toContain('promo-trust-number');
         expect(service.defaultTemplate).toContain('promo-trust-mark');
-        expect(service.defaultTemplateVersion).toBe(25);
+        expect(service.defaultTemplateVersion).toBe(26);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThanOrEqual(58 * 1024);
     });
