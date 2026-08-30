@@ -62,6 +62,22 @@ describe('category navigation scrolling', () => {
 describe('category navigation responsive spacing', () => {
     const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
+    it('keeps client plugin spacing symmetric at every insertion point', () => {
+        expect(stylesheet).toMatch(
+            new RegExp(
+                '\\.category-client-plugin-slot\\s*\\{[^}]*--client-plugin-slot-block-space:\\s*8px;' +
+                    '[^}]*padding-block:\\s*var\\(--client-plugin-slot-block-space\\);' +
+                    '[^}]*padding-inline:\\s*var\\(--client-plugin-slot-inline-space\\);',
+            ),
+        );
+        expect(stylesheet).not.toMatch(
+            /\.category-client-plugin-slot\.is-[^{]+\{[^}]*(?:padding-top|padding-bottom):/,
+        );
+        expect(stylesheet).toMatch(
+            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*--client-plugin-slot-block-space:\s*10px;[^}]*--client-plugin-slot-inline-space:\s*12px;/,
+        );
+    });
+
     it('uses one compact row for the desktop category header', () => {
         expect(stylesheet).toMatch(/\.category-topbar\s*\{[^}]*height:\s*72px;[^}]*padding:\s*0 32px;/);
         expect(stylesheet).toMatch(

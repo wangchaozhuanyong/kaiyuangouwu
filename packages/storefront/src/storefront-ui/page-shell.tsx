@@ -497,7 +497,7 @@ export function Sheet({
     }, []);
 
     const content = (
-        <div className="sheet-layer" role="presentation">
+        <div className={`sheet-layer${className ? ` ${className}-layer` : ''}`} role="presentation">
             <button
                 className="sheet-mask"
                 type="button"
