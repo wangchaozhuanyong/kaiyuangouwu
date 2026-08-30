@@ -30,11 +30,12 @@ import { contentSourceLanguageCode } from '@/vdb/utils/supported-storefront-lang
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
-import { Layers, LibraryBig, Package, PlusIcon, X } from 'lucide-react';
+import { Layers, LibraryBig, Package, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
+import { AddProductVariantDialog } from './components/add-product-variant-dialog.js';
 import { GenerateVariantsPanel } from './components/generate-variants-panel.js';
 import { ProductCollectionsPanel } from './components/product-collections-panel.js';
 import { ProductFulfillmentTypePanel } from './components/product-fulfillment-type-panel.js';
@@ -513,10 +514,13 @@ export function ProductEditor({
                             fromProductDetailPage={true}
                         />
                         <div className="mt-4 flex gap-2">
-                            <Button render={<Link to="./variants" />} variant="outline">
-                                <PlusIcon className="mr-2 h-4 w-4" />
-                                <Trans>Manage variants</Trans>
-                            </Button>
+                            <AddProductVariantDialog
+                                productId={productId}
+                                onSuccess={() => {
+                                    refreshEntity();
+                                    refreshRef.current();
+                                }}
+                            />
                         </div>
                     </PageBlock>
                 )}

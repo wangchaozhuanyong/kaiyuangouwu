@@ -18,7 +18,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { In, IsNull, Not } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 
 import {
     CatalogFileParserService,
@@ -96,7 +96,9 @@ export class CatalogImportService {
                 currencyCode: input.context.currencyCode,
                 clearBlankFields: Boolean(input.context.clearBlankFields),
                 fileHash: input.source.fileHash.toLowerCase(),
-                state: Not('ROLLED_BACK'),
+                // Reuse only an in-flight/retryable task. A completed task
+                // must not block a deliberate re-import of the same file.
+                state: In(['RECEIVING', 'PREVIEW_READY', 'QUEUED', 'RUNNING', 'FAILED']),
             },
             order: { createdAt: 'DESC' },
         });
@@ -300,7 +302,7 @@ export class CatalogImportService {
                 currencyCode: input.currencyCode,
                 clearBlankFields: Boolean(input.clearBlankFields),
                 fileHash: parsed.fileHash,
-                state: Not('ROLLED_BACK'),
+                state: In(['RECEIVING', 'PREVIEW_READY', 'QUEUED', 'RUNNING', 'FAILED']),
             },
             order: { createdAt: 'DESC' },
         });
@@ -455,7 +457,9 @@ export class CatalogImportService {
         if (!row || String(row.job.channelId) !== String(ctx.channelId)) {
             throw new UserInputError('导入行不存在或不属于当前门店');
         }
-        if (row.job.state !== 'PREVIEW_READY') throw new UserInputError('只有预览中的任务可以处理冲突');
+        if (!['PREVIEW_READY', 'FAILED'].includes(row.job.state)) {
+            throw new UserInputError('只有预览中或失败待重试的任务可以处理冲突');
+        }
         if (!['CONFLICT', 'WARNING', 'ERROR'].includes(row.action)) {
             throw new UserInputError('这一行不需要人工处理');
         }
@@ -466,8 +470,8 @@ export class CatalogImportService {
         } else if (input.resolution === 'APPLY') {
             const safeActionValue = row.plannedChanges?.safeAction;
             const safeAction = typeof safeActionValue === 'string' ? safeActionValue : '';
-            if (row.action !== 'WARNING' || !['CREATE', 'UPDATE'].includes(safeAction)) {
-                throw new UserInputError('只有警告行可以选择继续应用');
+            if (!['WARNING', 'ERROR'].includes(row.action) || !['CREATE', 'UPDATE'].includes(safeAction)) {
+                throw new UserInputError('只有警告或可重试错误行可以继续应用');
             }
             row.action = safeAction as CatalogImportAction;
             row.resolution = 'APPLY';
@@ -530,8 +534,8 @@ export class CatalogImportService {
             if (String(row.job.channelId) !== String(ctx.channelId)) {
                 throw new UserInputError('导入行不属于当前门店');
             }
-            if (row.job.state !== 'PREVIEW_READY') {
-                throw new UserInputError('只有预览中的任务可以批量处理');
+            if (!['PREVIEW_READY', 'FAILED'].includes(row.job.state)) {
+                throw new UserInputError('只有预览中或失败待重试的任务可以批量处理');
             }
             if (!['CONFLICT', 'WARNING', 'ERROR'].includes(row.action)) {
                 throw new UserInputError(`第 ${row.rowNumber} 行不需要人工处理`);
@@ -539,8 +543,11 @@ export class CatalogImportService {
             if (input.resolution === 'APPLY') {
                 const safeActionValue = row.plannedChanges?.safeAction;
                 const safeAction = typeof safeActionValue === 'string' ? safeActionValue : '';
-                if (row.action !== 'WARNING' || !['CREATE', 'UPDATE'].includes(safeAction)) {
-                    throw new UserInputError('批量继续只能处理警告行');
+                if (
+                    !['WARNING', 'ERROR'].includes(row.action) ||
+                    !['CREATE', 'UPDATE'].includes(safeAction)
+                ) {
+                    throw new UserInputError('批量继续只能处理警告或可重试错误行');
                 }
                 row.action = safeAction as CatalogImportAction;
                 row.resolution = 'APPLY';
@@ -563,9 +570,9 @@ export class CatalogImportService {
             throw new UserInputError('当前任务状态不能执行');
         }
         const unresolved = await this.connection.getRepository(ctx, CatalogImportRow).count({
-            where: { jobId: id, action: In(['CONFLICT', 'WARNING']) },
+            where: { jobId: id, action: In(['CONFLICT', 'WARNING', 'ERROR']) },
         });
-        if (unresolved > 0) throw new UserInputError(`还有 ${unresolved} 行冲突或警告未处理`);
+        if (unresolved > 0) throw new UserInputError(`还有 ${unresolved} 行冲突、警告或错误未处理`);
         job.state = 'QUEUED';
         job.errorMessage = null;
         job.progress = 0;
@@ -1221,12 +1228,39 @@ export class CatalogImportService {
                 manufacturedAt && row.normalizedData.shelfLifeDays != null
                     ? new Date(manufacturedAt.getTime() + row.normalizedData.shelfLifeDays * 86_400_000)
                     : null;
+            const lotCode = row.normalizedData.lotCode || `IMPORT-${String(job.id)}-${row.rowNumber}`;
+            if (
+                row.normalizedData.lotQuantity != null &&
+                row.normalizedData.stockOnHand != null &&
+                row.normalizedData.lotQuantity !== row.normalizedData.stockOnHand
+            ) {
+                throw new UserInputError('批次数量必须与库存数量一致，请拆分批次后再导入');
+            }
+            const existingLot = await this.connection.getRepository(ctx, InventoryLot).findOne({
+                where: {
+                    variantId: variant.id,
+                    stockLocationId,
+                    lotCode,
+                },
+            });
+            before.inventoryLot = existingLot
+                ? {
+                      id: String(existingLot.id),
+                      lotCode: existingLot.lotCode,
+                      manufacturedAt: dateString(existingLot.manufacturedAt),
+                      expiresAt: dateString(existingLot.expiresAt),
+                      quantityOnHand: existingLot.quantityOnHand,
+                      purchaseCostMicrounits: existingLot.purchaseCostMicrounits,
+                      currencyCode: existingLot.currencyCode,
+                      state: existingLot.state,
+                  }
+                : null;
             const lot = await this.operations.saveLot(
                 ctx,
                 {
                     productVariantId: variant.id,
                     stockLocationId,
-                    lotCode: row.normalizedData.lotCode || `IMPORT-${String(job.id)}-${row.rowNumber}`,
+                    lotCode,
                     manufacturedAt,
                     expiresAt,
                     quantityOnHand: Math.max(
@@ -1236,7 +1270,7 @@ export class CatalogImportService {
                     purchaseCostMicrounits: microunits(row.normalizedData.purchaseCost),
                     currencyCode: job.currencyCode,
                 },
-                false,
+                row.normalizedData.lotQuantity != null && row.normalizedData.stockOnHand == null,
             );
             lotId = lot.id;
         }
@@ -1290,6 +1324,12 @@ export class CatalogImportService {
         });
         if (variant) {
             if (Boolean(applied.variantCreated) || Boolean(before.variantCreated)) {
+                await this.operations.updateVariant(ctx, {
+                    productVariantId: variant.id,
+                    stockLocationId: appliedStockLocationId,
+                    stockOnHand: Number(before.stockOnHand ?? 0),
+                    currencyCode: job.currencyCode,
+                });
                 await this.productVariantService.update(ctx, [{ id: variant.id, enabled: false }]);
             } else {
                 await this.productVariantService.update(ctx, [
@@ -1385,10 +1425,26 @@ export class CatalogImportService {
             }
         }
         if (applied.lotId) {
-            await this.connection.getRepository(ctx, InventoryLot).update(applied.lotId, {
-                quantityOnHand: 0,
-                state: 'VOID',
-            });
+            const previousLot = recordValue(before.inventoryLot);
+            if (previousLot) {
+                await this.connection.getRepository(ctx, InventoryLot).update(applied.lotId, {
+                    lotCode: stringValue(previousLot.lotCode),
+                    manufacturedAt: dateValue(previousLot.manufacturedAt),
+                    expiresAt: dateValue(previousLot.expiresAt),
+                    quantityOnHand: numberValue(previousLot.quantityOnHand) ?? 0,
+                    purchaseCostMicrounits:
+                        previousLot.purchaseCostMicrounits == null
+                            ? null
+                            : stringOrNumberValue(previousLot.purchaseCostMicrounits) || null,
+                    currencyCode: (stringValue(previousLot.currencyCode) || job.currencyCode) as CurrencyCode,
+                    state: stringValue(previousLot.state) || 'ACTIVE',
+                });
+            } else {
+                await this.connection.getRepository(ctx, InventoryLot).update(applied.lotId, {
+                    quantityOnHand: 0,
+                    state: 'VOID',
+                });
+            }
         }
         const priorBinding = recordValue(before.sourceBinding);
         if (priorBinding) {
@@ -1887,6 +1943,11 @@ function shortCode(value: string): string {
 
 function stringValue(value: unknown): string {
     return typeof value === 'string' ? value : '';
+}
+
+function stringOrNumberValue(value: unknown): string {
+    if (typeof value === 'string') return value;
+    return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
 }
 
 function numberValue(value: unknown): number | null {

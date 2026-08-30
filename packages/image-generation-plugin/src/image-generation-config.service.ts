@@ -300,17 +300,20 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             credential.textModelId !== textModelId;
         const encryptedApiKey = apiKey ? this.cipher.encrypt(apiKey) : credential?.encryptedApiKey;
         if (!encryptedApiKey) throw new UserInputError('首次配置必须填写 API Key');
+        const healthStatus = connectionChanged ? 'UNTESTED' : (credential?.healthStatus ?? 'UNTESTED');
         const values = {
             scope,
             code,
             name: requiredText(input.name, 120, 'Key 名称'),
             purpose,
-            enabled: input.enabled,
+            // A credential with changed or unverified connection details must
+            // stay out of the router until an explicit health check succeeds.
+            enabled: Boolean(input.enabled && healthStatus === 'HEALTHY'),
             baseUrl: normalizedBaseUrl,
             textModelId,
             encryptedApiKey,
             apiKeyLast4: apiKey ? apiKey.slice(-4) : (credential?.apiKeyLast4 ?? ''),
-            healthStatus: connectionChanged ? 'UNTESTED' : (credential?.healthStatus ?? 'UNTESTED'),
+            healthStatus,
             healthMessage: connectionChanged ? null : (credential?.healthMessage ?? null),
             lastTestedAt: connectionChanged ? null : (credential?.lastTestedAt ?? null),
             priority: input.priority,

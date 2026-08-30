@@ -12,7 +12,16 @@ import {
     ReferralWalletSpendService,
     ReferralWalletUsage,
 } from '@vendure/store-management-plugin';
-import { Brackets, In, IsNull, MoreThan, MoreThanOrEqual, ObjectLiteral, SelectQueryBuilder } from 'typeorm';
+import {
+    Brackets,
+    In,
+    IsNull,
+    MoreThan,
+    MoreThanOrEqual,
+    Not,
+    ObjectLiteral,
+    SelectQueryBuilder,
+} from 'typeorm';
 
 import {
     MAX_ACTIVE_GENERATION_JOBS,
@@ -556,6 +565,10 @@ export class ImageGenerationService {
             if (options.billingMode === 'MIXED') {
                 query.andWhere('job.freeQuantityReserved > 0').andWhere('job.paidQuantityReserved > 0');
             }
+            if (options.billingMode === 'REFUNDED') {
+                query.innerJoin('job.outputs', 'refundedOutput', 'refundedOutput.refundedAt IS NOT NULL');
+                query.distinct(true);
+            }
             if (options.failuresOnly)
                 query.andWhere('job.state IN (:...failureStates)', {
                     failureStates: ['FAILED', 'UNKNOWN', 'CANCELLED', 'PARTIAL_SUCCESS'],
@@ -616,9 +629,28 @@ export class ImageGenerationService {
                   where: { channelId: ctx.channelId, jobIdSnapshot: In(jobIds) },
               })
             : [];
+        const refundedOutputs = jobIds.length
+            ? await this.connection.getRepository(ctx, ImageGenerationOutput).find({
+                  where: { jobId: In(jobIds), refundedAt: Not(IsNull()) },
+              })
+            : [];
         const costsByJob = groupBy(costEvents, event => event.jobIdSnapshot);
+        const refundsByJob = new Map<string, { amount: number; count: number }>();
+        for (const output of refundedOutputs) {
+            const key = String(output.jobId);
+            const current = refundsByJob.get(key) ?? { amount: 0, count: 0 };
+            current.amount += output.chargeAmount || 0;
+            current.count += 1;
+            refundsByJob.set(key, current);
+        }
         const items = [
-            ...imageItems.map(job => this.imageUsageRecord(job, costsByJob.get(String(job.id)) ?? [])),
+            ...imageItems.map(job =>
+                this.imageUsageRecord(
+                    job,
+                    costsByJob.get(String(job.id)) ?? [],
+                    refundsByJob.get(String(job.id)),
+                ),
+            ),
             ...promptItems.map(prompt => this.promptUsageRecord(prompt)),
         ]
             .sort((left, right) => {
@@ -1229,15 +1261,20 @@ export class ImageGenerationService {
         return { ...asset, previewUrl: this.storage.signedUrl(asset, customerId) };
     }
 
-    private imageUsageRecord(job: ImageGenerationJob, costs: ImageGenerationCostEvent[]) {
+    private imageUsageRecord(
+        job: ImageGenerationJob,
+        costs: ImageGenerationCostEvent[],
+        refundInfo?: { amount: number; count: number },
+    ) {
         const knownCost = costs.reduce((sum, event) => sum + (event.actualCostMicrounits ?? 0), 0);
         const costCurrencies = [...new Set(costs.map(event => event.costCurrency).filter(Boolean))];
-        const billingMode =
-            job.freeQuantityReserved > 0 && job.paidQuantityReserved > 0
-                ? 'MIXED'
-                : job.paidQuantityReserved > 0
-                  ? 'PAID'
-                  : 'FREE';
+        const billingMode = refundInfo
+            ? 'REFUNDED'
+            : job.freeQuantityReserved > 0 && job.paidQuantityReserved > 0
+              ? 'MIXED'
+              : job.paidQuantityReserved > 0
+                ? 'PAID'
+                : 'FREE';
         return {
             id: job.id,
             recordType: 'IMAGE_GENERATION',
@@ -1253,7 +1290,7 @@ export class ImageGenerationService {
             freeQuantity: job.freeQuantityReserved,
             paidQuantity: job.paidQuantityReserved,
             chargedAmount: job.capturedAmount,
-            refundedAmount: job.releasedAmount,
+            refundedAmount: refundInfo?.amount ?? 0,
             currencyCode: job.currencyCode,
             actualCostMicrounits: costs.some(event => event.actualCostMicrounits != null) ? knownCost : null,
             costCurrency: costCurrencies.length === 1 ? costCurrencies[0] : null,

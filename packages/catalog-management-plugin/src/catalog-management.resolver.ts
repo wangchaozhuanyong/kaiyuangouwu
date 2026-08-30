@@ -13,7 +13,9 @@ import {
     AppendCatalogImportRowsInput,
     BeginCatalogImportInput,
     CatalogImportAction,
+    CatalogProductListOptions,
     CatalogProductSummaryFilterInput,
+    CreateCatalogProductVariantInput,
     ResolveCatalogImportRowInput,
     ResolveCatalogImportRowsInput,
     SaveCatalogProductInput,
@@ -61,8 +63,20 @@ export class CatalogManagementAdminResolver {
     catalogProductSummaries(
         @Ctx() ctx: RequestContext,
         @Args('filter') filter?: CatalogProductSummaryFilterInput,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
     ) {
-        return this.operations.productSummaries(ctx, filter ?? {});
+        return this.operations.productSummaries(ctx, filter ?? {}, skip, take);
+    }
+
+    @Query()
+    @Allow(manageCatalogOperationsPermission.Read, manageCatalogImportPermission.Read)
+    catalogProducts(
+        @Ctx() ctx: RequestContext,
+        @Args('filter') filter?: CatalogProductSummaryFilterInput,
+        @Args('options') options?: CatalogProductListOptions,
+    ) {
+        return this.operations.filteredProducts(ctx, filter ?? {}, options ?? {});
     }
 
     @Query()
@@ -123,6 +137,20 @@ export class CatalogManagementAdminResolver {
         @Args('input') input: UpdateCatalogVariantOperationsInput,
     ) {
         return this.operations.updateVariant(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(
+        Permission.CreateProduct,
+        Permission.CreateCatalog,
+        manageCatalogOperationsPermission.Update,
+        manageCatalogImportPermission.Update,
+    )
+    createCatalogProductVariant(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: CreateCatalogProductVariantInput,
+    ) {
+        return this.operations.createVariant(ctx, input);
     }
 
     @Mutation()

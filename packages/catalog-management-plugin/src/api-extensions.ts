@@ -303,6 +303,27 @@ export const adminApiExtensions = gql`
         variants: [UpdateCatalogVariantOperationsInput!]!
     }
 
+    input CreateCatalogProductVariantInput {
+        productId: ID!
+        stockLocationId: ID!
+        name: String!
+        sku: String!
+        optionIds: [ID!]!
+        enabled: Boolean = true
+        barcode: String
+        specification: String
+        saleUnit: String
+        purchaseUnit: String
+        packageQuantity: Float!
+        shelfLifeDays: Int
+        sellingPrice: Money!
+        purchaseCostMicrounits: Float
+        currencyCode: CurrencyCode!
+        stockOnHand: Int!
+        minimumStock: Int
+        maximumStock: Int
+    }
+
     input CatalogProductSummaryFilterInput {
         text: String
         category: String
@@ -337,7 +358,12 @@ export const adminApiExtensions = gql`
         catalogImportJobs(skip: Int, take: Int): CatalogImportJobList!
         catalogImportRows(jobId: ID!, action: CatalogImportAction): [CatalogImportRow!]!
         catalogProductWorkspace(productId: ID!): CatalogProductWorkspace!
-        catalogProductSummaries(filter: CatalogProductSummaryFilterInput): CatalogProductSummaryList!
+        catalogProductSummaries(
+            filter: CatalogProductSummaryFilterInput
+            skip: Int
+            take: Int
+        ): CatalogProductSummaryList!
+        catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!
     }
 
@@ -350,6 +376,7 @@ export const adminApiExtensions = gql`
         executeCatalogImport(id: ID!): CatalogImportJob!
         rollbackCatalogImport(id: ID!): CatalogImportJob!
         updateCatalogVariantOperations(input: UpdateCatalogVariantOperationsInput!): CatalogProductWorkspace!
+        createCatalogProductVariant(input: CreateCatalogProductVariantInput!): CatalogProductWorkspace!
         saveCatalogProduct(input: SaveCatalogProductInput!): Product!
         saveCatalogInventoryLot(input: SaveCatalogInventoryLotInput!): CatalogInventoryLot!
     }

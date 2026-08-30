@@ -264,6 +264,51 @@ export const catalogProductSummariesDocument = parse(`
     }
 `);
 
+export const catalogFilteredProductListDocument = parse(`
+    query CatalogFilteredProductList(
+        $options: ProductListOptions
+        $catalogFilter: CatalogProductSummaryFilterInput
+    ) {
+        products: catalogProducts(filter: $catalogFilter, options: $options) {
+            items {
+                id
+                createdAt
+                updatedAt
+                featuredAsset {
+                    id
+                    preview
+                }
+                name
+                slug
+                enabled
+                description
+                channels {
+                    id
+                    code
+                    token
+                }
+                variants {
+                    ...ProductVariantFulfillment
+                }
+            }
+            totalItems
+        }
+    }
+
+    fragment ProductVariantFulfillment on ProductVariant {
+        id
+        sku
+        enabled
+        price
+        currencyCode
+        stockLevels {
+            stockOnHand
+            stockAllocated
+        }
+        customFields
+    }
+`) as typeof productListDocument;
+
 export const productCollectionHierarchyDocument = graphql(`
     query ProductCollectionHierarchy($options: CollectionListOptions) {
         collections(options: $options) {
