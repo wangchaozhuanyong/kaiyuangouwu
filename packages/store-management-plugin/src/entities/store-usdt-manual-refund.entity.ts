@@ -6,34 +6,35 @@ import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 @Index('IDX_store_usdt_manual_refund_transaction', ['network', 'transactionId'], { unique: true })
 @Index('IDX_store_usdt_manual_refund_refund', ['refundId'], { unique: true })
 @Index('IDX_store_usdt_manual_refund_channel_created', ['channelId', 'createdAt'])
+@Index('IDX_store_usdt_manual_refund_payment', ['paymentId'])
 export class StoreUsdtManualRefund extends VendureEntity {
     constructor(input?: DeepPartial<StoreUsdtManualRefund>) {
         super(input);
     }
 
     @ManyToOne(() => Channel)
-    @JoinColumn({ name: 'channelId' })
+    @JoinColumn({ name: 'channelId', foreignKeyConstraintName: 'FK_store_usdt_manual_refund_channel' })
     channel: Channel;
 
     @EntityId()
     channelId: ID;
 
     @ManyToOne(() => Payment)
-    @JoinColumn({ name: 'paymentId' })
+    @JoinColumn({ name: 'paymentId', foreignKeyConstraintName: 'FK_store_usdt_manual_refund_payment' })
     payment: Payment;
 
     @EntityId()
     paymentId: ID;
 
     @ManyToOne(() => Order)
-    @JoinColumn({ name: 'orderId' })
+    @JoinColumn({ name: 'orderId', foreignKeyConstraintName: 'FK_store_usdt_manual_refund_order' })
     order: Order;
 
     @EntityId()
     orderId: ID;
 
     @ManyToOne(() => Refund)
-    @JoinColumn({ name: 'refundId' })
+    @JoinColumn({ name: 'refundId', foreignKeyConstraintName: 'FK_store_usdt_manual_refund_refund' })
     refund: Refund;
 
     @EntityId()

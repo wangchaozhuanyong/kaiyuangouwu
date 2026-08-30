@@ -12,7 +12,7 @@ export class StoreUsdtWalletAudit extends VendureEntity {
     }
 
     @ManyToOne(() => Channel, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'channelId' })
+    @JoinColumn({ name: 'channelId', foreignKeyConstraintName: 'FK_store_usdt_wallet_audit_channel' })
     channel: Channel;
 
     @EntityId()

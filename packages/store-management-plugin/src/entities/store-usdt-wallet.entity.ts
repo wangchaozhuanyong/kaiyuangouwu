@@ -6,13 +6,14 @@ export type StoreUsdtWalletReviewStatus = 'UNCONFIGURED' | 'PENDING' | 'ACTIVE' 
 
 @Entity('store_usdt_wallet')
 @Index('IDX_store_usdt_wallet_channel', ['channelId'], { unique: true })
+@Index('IDX_store_usdt_wallet_review_status', ['reviewStatus'])
 export class StoreUsdtWallet extends VendureEntity {
     constructor(input?: DeepPartial<StoreUsdtWallet>) {
         super(input);
     }
 
     @ManyToOne(() => Channel, { onDelete: 'CASCADE' })
-    @JoinColumn({ name: 'channelId' })
+    @JoinColumn({ name: 'channelId', foreignKeyConstraintName: 'FK_store_usdt_wallet_channel' })
     channel: Channel;
 
     @EntityId()

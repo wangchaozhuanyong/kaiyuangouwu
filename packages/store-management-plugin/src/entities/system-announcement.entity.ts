@@ -1,7 +1,6 @@
-import type { SystemAnnouncementTargetMode } from '../types';
-
 import { Channel, DeepPartial, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinTable, ManyToMany } from 'typeorm';
+import type { SystemAnnouncementTargetMode } from '../types';
 
 @Entity({ name: 'system_announcement' })
 @Index('IDX_system_announcement_schedule', ['enabled', 'startsAt', 'endsAt', 'priority'])
@@ -22,8 +21,16 @@ export class SystemAnnouncement extends VendureEntity {
     @ManyToMany(() => Channel)
     @JoinTable({
         name: 'system_announcement_channels_channel',
-        joinColumn: { name: 'systemAnnouncementId', referencedColumnName: 'id' },
-        inverseJoinColumn: { name: 'channelId', referencedColumnName: 'id' },
+        joinColumn: {
+            name: 'systemAnnouncementId',
+            referencedColumnName: 'id',
+            foreignKeyConstraintName: 'FK_system_announcement_channels_announcement',
+        },
+        inverseJoinColumn: {
+            name: 'channelId',
+            referencedColumnName: 'id',
+            foreignKeyConstraintName: 'FK_system_announcement_channels_channel',
+        },
     })
     channels: Channel[];
 

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ScopeSystemAnnouncements1787878800000 } from './1787878800000-scope-system-announcements';
 import { AddChannelUsdtWallets1787882400000 } from './1787882400000-add-channel-usdt-wallets';
 import { AddUsdtManualRefunds1787886000000 } from './1787886000000-add-usdt-manual-refunds';
+import { AlignChannelUsdtSchema1787889600000 } from './1787889600000-align-channel-usdt-schema';
 
 const mysqlTestSocket = process.env.TEST_MYSQL_SOCKET ?? '';
 
@@ -97,10 +98,23 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
             const announcementMigration = new ScopeSystemAnnouncements1787878800000();
             const walletMigration = new AddChannelUsdtWallets1787882400000();
             const refundMigration = new AddUsdtManualRefunds1787886000000();
+            const alignmentMigration = new AlignChannelUsdtSchema1787889600000();
 
             await announcementMigration.up(queryRunner);
             await walletMigration.up(queryRunner);
             await refundMigration.up(queryRunner);
+            await alignmentMigration.up(queryRunner);
+
+            const joinTable = await queryRunner.getTable('system_announcement_channels_channel');
+            expect(joinTable?.indices.map(index => index.name)).toEqual(
+                expect.arrayContaining(['IDX_aa074cb9061687d3e3b2bc7fc8', 'IDX_adcdad637ed68b4349d68d6a6c']),
+            );
+            expect(joinTable?.indices.map(index => index.name)).not.toEqual(
+                expect.arrayContaining([
+                    'IDX_system_announcement_channels_announcement',
+                    'IDX_system_announcement_channels_channel',
+                ]),
+            );
 
             expect(
                 (await queryRunner.getTable('system_announcement'))?.findColumnByName('targetMode'),
@@ -142,6 +156,14 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
             await insertRefund();
             await expect(insertRefund()).rejects.toThrow();
 
+            await alignmentMigration.down(queryRunner);
+            const rolledBackJoinTable = await queryRunner.getTable('system_announcement_channels_channel');
+            expect(rolledBackJoinTable?.indices.map(index => index.name)).toEqual(
+                expect.arrayContaining([
+                    'IDX_system_announcement_channels_announcement',
+                    'IDX_system_announcement_channels_channel',
+                ]),
+            );
             await refundMigration.down(queryRunner);
             await walletMigration.down(queryRunner);
             await announcementMigration.down(queryRunner);
@@ -176,10 +198,20 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
                 const announcementMigration = new ScopeSystemAnnouncements1787878800000();
                 const walletMigration = new AddChannelUsdtWallets1787882400000();
                 const refundMigration = new AddUsdtManualRefunds1787886000000();
+                const alignmentMigration = new AlignChannelUsdtSchema1787889600000();
 
                 await announcementMigration.up(queryRunner);
                 await walletMigration.up(queryRunner);
                 await refundMigration.up(queryRunner);
+                await alignmentMigration.up(queryRunner);
+
+                const joinTable = await queryRunner.getTable('system_announcement_channels_channel');
+                expect(joinTable?.indices.map(index => index.name)).toEqual(
+                    expect.arrayContaining([
+                        'IDX_aa074cb9061687d3e3b2bc7fc8',
+                        'IDX_adcdad637ed68b4349d68d6a6c',
+                    ]),
+                );
 
                 await queryRunner.query('INSERT INTO `channel` VALUES ()');
                 await queryRunner.query('INSERT INTO `user` VALUES ()');
@@ -217,6 +249,16 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
                 await insertRefund();
                 await expect(insertRefund()).rejects.toThrow();
 
+                await alignmentMigration.down(queryRunner);
+                const rolledBackJoinTable = await queryRunner.getTable(
+                    'system_announcement_channels_channel',
+                );
+                expect(rolledBackJoinTable?.indices.map(index => index.name)).toEqual(
+                    expect.arrayContaining([
+                        'IDX_system_announcement_channels_announcement',
+                        'IDX_system_announcement_channels_channel',
+                    ]),
+                );
                 await refundMigration.down(queryRunner);
                 await walletMigration.down(queryRunner);
                 await announcementMigration.down(queryRunner);

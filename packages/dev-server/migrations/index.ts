@@ -77,6 +77,7 @@ import { AlignCatalogSupplierSchema1787875200000 } from './1787875200000-align-c
 import { ScopeSystemAnnouncements1787878800000 } from './1787878800000-scope-system-announcements';
 import { AddChannelUsdtWallets1787882400000 } from './1787882400000-add-channel-usdt-wallets';
 import { AddUsdtManualRefunds1787886000000 } from './1787886000000-add-usdt-manual-refunds';
+import { AlignChannelUsdtSchema1787889600000 } from './1787889600000-align-channel-usdt-schema';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -158,4 +159,5 @@ export const devServerMigrations = [
     ScopeSystemAnnouncements1787878800000,
     AddChannelUsdtWallets1787882400000,
     AddUsdtManualRefunds1787886000000,
+    AlignChannelUsdtSchema1787889600000,
 ];
