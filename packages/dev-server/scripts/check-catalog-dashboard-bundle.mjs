@@ -12,7 +12,7 @@ const requiredMarkers = [
     'catalog-product-workspace',
     'createCatalogProductVariant',
     'products: catalogProducts',
-    'Select one value for every product option',
+    'catalog-product-option-validation',
 ];
 const found = new Set();
 

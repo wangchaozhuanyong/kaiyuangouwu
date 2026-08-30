@@ -12,6 +12,7 @@ describe('catalog product workspace', () => {
         expect(source).toContain('createCatalogProductVariantMutation');
         expect(source).toContain('<NewVariantEditor');
         expect(source).toContain('sm:max-w-[640px]');
+        expect(source).toContain('catalog-product-option-validation');
         expect(source).not.toContain('to="./variants"');
     });
 });

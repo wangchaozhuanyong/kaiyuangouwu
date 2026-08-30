@@ -733,7 +733,10 @@ function NewVariantEditor({
     const margin = calculateDraftMargin(draft.sellingPrice, draft.purchaseCost);
     return (
         <Sheet open onOpenChange={open => !open && onClose()}>
-            <SheetContent className="flex w-full flex-col overflow-y-auto sm:max-w-[640px]">
+            <SheetContent
+                className="flex w-full flex-col overflow-y-auto sm:max-w-[640px]"
+                data-catalog-option-validation="catalog-product-option-validation"
+            >
                 <SheetHeader>
                     <SheetTitle>新增 SKU</SheetTitle>
                     <SheetDescription>
