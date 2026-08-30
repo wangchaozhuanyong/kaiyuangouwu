@@ -1,4 +1,4 @@
-# Damatong Promo: Silver Mist Stage
+# Damatong Promo v24: Silver Mist Stage
 
 ## Direction
 
@@ -18,14 +18,16 @@ The promotion surface is a premium AI service gateway, not a catalog or transact
 - Shell: maximum 1200px.
 - Hero: one shared title and action area, one active service description, and one integrated three-part chapter rail.
 - No duplicated value rail beneath the Hero.
-- Following forms: asymmetric capability channels, 2×2 workflow theater, continuous four-step path, one support panel, dual-column FAQ, and a closing gateway CTA.
-- Mobile: centered hierarchy, full-width primary action, compact text link, content-adaptive Hero height, and a fixed service-center entry after the Hero that hides at the final CTA and footer.
+- Following forms: asymmetric capability channels, an offset 7/5 then 5/7 workflow theater, a continuous four-node path, one support panel without repeated numbering, a dual-column FAQ, and a closing gateway CTA.
+- Mobile: the Hero, support panel, FAQ introduction, and final CTA are centered; service, scenario, and process headings are left aligned to avoid a repeated poster layout. The fixed service-center entry appears after the Hero and hides at the final CTA and footer.
+- Surface rhythm: the complete silver artwork belongs to the Hero and closing CTA. Service capability uses a narrow right-edge silver fold, scenarios use warm graphite, process uses a clean path surface, support uses a silver-black panel, and FAQ uses a low-detail reading field.
 
 ## Motion
 
 - The Hero background is a static raster asset; no Canvas, WebGL, particles, light sweeps, or continuous ambient animation is used.
 - The three service chapters crossfade every three seconds and support direct selection, keyboard arrows, Home/End, and touch swipe.
-- Autoplay pauses when the Hero is outside the viewport or the page is hidden.
+- Autoplay pauses when the Hero is outside the viewport, the page is hidden, the pointer is over the Hero, the Hero contains keyboard focus, or a touch interaction is active.
+- A manual chapter selection holds for ten seconds before autoplay resumes. No visible playback bar or pause control is shown.
 - The page fades in once; lower sections reveal with a short upward movement and clipped edge as they enter the viewport.
 - FAQ disclosure uses a measured height and opacity transition rather than the native hard jump.
 - `prefers-reduced-motion` removes reveal movement and disables carousel autoplay while retaining all content and controls.
@@ -50,5 +52,6 @@ The promotion surface is a premium AI service gateway, not a catalog or transact
 ## Accessibility
 
 - Semantic headings, landmarks, native FAQ details, visible keyboard focus, and a skip link are required.
-- Primary touch targets are at least 44px and body text targets 4.5:1 contrast.
+- Primary touch targets are at least 44px, including the compact-height mobile layout, and body text targets 4.5:1 contrast.
+- The inactive chapter labels use the readable `--faint` token rather than the previous low-contrast gray.
 - Anchors `#services`, `#scenarios`, `#process`, and `#faq` remain stable.

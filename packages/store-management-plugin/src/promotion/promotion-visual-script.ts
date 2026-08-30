@@ -7,9 +7,9 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
     if(!page)return;
     const root=document.documentElement,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
     const header=document.querySelector('[data-promo-header]'),hero=document.querySelector('[data-promo-hero]'),finalArea=document.querySelector('[data-promo-final]'),footer=document.querySelector('[data-promo-footer]'),mobileEntry=document.querySelector('[data-promo-mobile-entry]');
-    const carousel=document.querySelector('[data-promo-carousel]'),carouselNav=document.querySelector('.promo-carousel-nav'),slides=Array.from(document.querySelectorAll('[data-promo-slide]')),slideButtons=Array.from(document.querySelectorAll('[data-promo-slide-button]'));
-    const slideInterval=3000;
-    let heroVisible=true,endVisible=false,scene=0,carouselTimer=0,touchStartX=0;
+    const carousel=document.querySelector('[data-promo-carousel]'),carouselNav=document.querySelector('.promo-carousel-nav'),carouselStatus=document.querySelector('[data-promo-carousel-status]'),slides=Array.from(document.querySelectorAll('[data-promo-slide]')),slideButtons=Array.from(document.querySelectorAll('[data-promo-slide-button]'));
+    const slideInterval=3000,manualHold=10000;
+    let heroVisible=true,endVisible=false,scene=0,carouselTimer=0,touchStartX=0,manualHoldUntil=0,interactionPaused=false;
     root.classList.add('promo-motion-ready');
 
     const revealNodes=Array.from(document.querySelectorAll('[data-promo-reveal]'));
@@ -30,13 +30,15 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
     const stopCarousel=()=>{if(carouselTimer)clearTimeout(carouselTimer);carouselTimer=0;};
     const scheduleCarousel=()=>{
         stopCarousel();
-        if(reduced||!heroVisible||document.hidden||slides.length<2)return;
-        carouselTimer=setTimeout(()=>setScene(scene+1,false),slideInterval);
+        if(reduced||interactionPaused||!heroVisible||document.hidden||slides.length<2)return;
+        const holdRemaining=Math.max(0,manualHoldUntil-Date.now());
+        carouselTimer=setTimeout(()=>setScene(scene+1,false),holdRemaining||slideInterval);
     };
     function setScene(next,manual){
         if(!slides.length)return;
         const normalized=(next+slides.length)%slides.length;
         scene=normalized;updateSlides();
+        if(manual){manualHoldUntil=Date.now()+manualHold;if(carouselStatus)carouselStatus.textContent=slides[scene].getAttribute('aria-label')||'';}
         if(carousel)carousel.setAttribute('data-last-change',manual?'manual':'automatic');
         scheduleCarousel();
     }
@@ -45,7 +47,10 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
     slideButtons.forEach((button,index)=>button.addEventListener('click',()=>setScene(index,true)));
     const handleCarouselKeys=event=>{if(event.key==='ArrowLeft'){event.preventDefault();setScene(scene-1,true);}else if(event.key==='ArrowRight'){event.preventDefault();setScene(scene+1,true);}else if(event.key==='Home'){event.preventDefault();setScene(0,true);}else if(event.key==='End'){event.preventDefault();setScene(slides.length-1,true);}};
     if(carousel){
-        carousel.addEventListener('touchstart',event=>{touchStartX=event.changedTouches[0].clientX;},{passive:true});carousel.addEventListener('touchend',event=>{const distance=event.changedTouches[0].clientX-touchStartX;if(Math.abs(distance)>48)setScene(scene+(distance<0?1:-1),true);},{passive:true});
+        carousel.addEventListener('mouseenter',()=>{interactionPaused=true;stopCarousel();});carousel.addEventListener('mouseleave',()=>{interactionPaused=false;scheduleCarousel();});
+        carousel.addEventListener('focusin',()=>{interactionPaused=true;stopCarousel();});carousel.addEventListener('focusout',event=>{if(!carousel.contains(event.relatedTarget)){interactionPaused=false;scheduleCarousel();}});
+        carousel.addEventListener('touchstart',event=>{interactionPaused=true;stopCarousel();touchStartX=event.changedTouches[0].clientX;},{passive:true});carousel.addEventListener('touchend',event=>{const distance=event.changedTouches[0].clientX-touchStartX;interactionPaused=false;if(Math.abs(distance)>48)setScene(scene+(distance<0?1:-1),true);else{manualHoldUntil=Date.now()+manualHold;scheduleCarousel();}},{passive:true});
+        carousel.addEventListener('touchcancel',()=>{interactionPaused=false;scheduleCarousel();},{passive:true});
     }
     if(carouselNav)carouselNav.addEventListener('keydown',handleCarouselKeys);
     if(typeof IntersectionObserver==='function'){

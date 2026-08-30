@@ -82,6 +82,7 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).not.toContain('promo-value-module');
         expect(service.defaultTemplate).not.toContain('data-promo-progress');
         expect(service.defaultTemplate).not.toContain('data-promo-carousel-toggle');
+        expect(service.defaultTemplate).toContain('data-promo-carousel-status');
         expect(service.defaultTemplate).toContain('{{promo.metaTitle}}');
         expect(service.defaultTemplate).toContain('{{promo.finalTitle}}');
         expect(service.defaultTemplate).toContain('--amber:#efa83f');
@@ -105,9 +106,8 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('--section-top:clamp(76px,6.4vw,108px)');
         expect(service.defaultTemplate).toContain('--section-bottom:clamp(56px,4.8vw,82px)');
         expect(service.defaultTemplate).toContain('--section-top:48px; --section-bottom:32px');
-        expect(service.defaultTemplate).toContain(
-            '.promo-section-title { max-width:15ch; margin-inline:auto;',
-        );
+        expect(service.defaultTemplate).toContain('.promo-section-title { max-width:18ch; margin-inline:0;');
+        expect(service.defaultTemplate).toContain('.promo-faq-heading .promo-section-title');
         expect(service.defaultTemplate).toContain('.promo-final h2 { max-width:15ch; margin-inline:auto;');
         expect(service.defaultTemplate).toContain(
             '.promo-footer { min-height:0; align-items:center; justify-content:center;',
@@ -119,7 +119,11 @@ describe('StorefrontPromotionHtmlService', () => {
             '.promo-footer-meta,.promo-footer-nav { width:100%; justify-content:center; }',
         );
         expect(service.defaultTemplate).toContain('.promo-faq-item.is-faq-closing summary::after');
-        expect(service.defaultTemplateVersion).toBe(23);
+        expect(service.defaultTemplate).not.toContain('promo-scene-index');
+        expect(service.defaultTemplate).not.toContain('promo-step-number');
+        expect(service.defaultTemplate).not.toContain('promo-trust-number');
+        expect(service.defaultTemplate).toContain('promo-trust-mark');
+        expect(service.defaultTemplateVersion).toBe(24);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThanOrEqual(58 * 1024);
     });
@@ -137,6 +141,7 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).toContain('AI 服务订阅');
         expect(html).toContain('低至 0.1 倍起');
         expect(html).toContain('不同模型、通道与当前价格以服务中心为准');
+        expect(html).toContain('具体可用内容、当前价格与支持范围以服务中心页面为准');
         expect(html).toContain('查看可用服务');
         expect(html).toContain('可以直接在这里完成购买或交易吗');
         expect(html.match(/推广页只用于介绍服务方向/gu)).toHaveLength(1);
@@ -221,7 +226,11 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(PROMOTION_VISUAL_SCRIPT).toContain('carouselTimer=setTimeout');
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateProgress');
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateToggle');
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('interactionPaused');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain('interactionPaused');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain('manualHold=10000');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("carousel.addEventListener('mouseenter'");
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("carousel.addEventListener('focusin'");
+        expect(PROMOTION_VISUAL_SCRIPT).toContain('data-promo-carousel-status');
         expect(PROMOTION_VISUAL_SCRIPT).toContain('const animateFaq=(item,opening)=>');
         expect(PROMOTION_VISUAL_SCRIPT).toContain("duration:340,easing:'cubic-bezier(.22,1,.36,1)'");
         expect(PROMOTION_VISUAL_SCRIPT).toContain("typeof Element.prototype.animate!=='function'");
