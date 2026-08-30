@@ -38,6 +38,12 @@ export class ImageGenerationShopResolver {
 
     @Query()
     @Allow(Permission.Authenticated)
+    imageStudioWallet(@Ctx() ctx: RequestContext) {
+        return this.generations.wallet(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
     imagePromptQuotaStatus(@Ctx() ctx: RequestContext) {
         return this.promptEngine.quotaStatus(ctx);
     }
@@ -254,6 +260,12 @@ export class ImageGenerationAdminResolver {
     @Allow(manageImageGenerationPermission.Update)
     retryUnknownImageOutput(@Ctx() ctx: RequestContext, @Args('outputId') outputId: ID) {
         return this.generations.adminRetryUnknown(ctx, outputId);
+    }
+
+    @Mutation()
+    @Allow(manageImageGenerationPermission.Update)
+    reconcileStaleImageGenerationOutputs(@Ctx() ctx: RequestContext) {
+        return this.generations.reconcileStaleOutputs(ctx);
     }
 
     @Mutation()

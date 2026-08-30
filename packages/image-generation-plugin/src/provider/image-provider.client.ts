@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 
+import { IMAGE_GENERATION_DELIVERY_TIMEOUT_MS } from '../constants';
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { ImageProviderCipherService } from '../security/image-provider-cipher.service';
 import { SafeProviderUrlService } from '../security/safe-provider-url.service';
@@ -20,6 +21,7 @@ const MAX_PROVIDER_JSON_BYTES = 40 * 1024 * 1024;
 const MAX_PROMPT_RESPONSE_BYTES = 1024 * 1024;
 const MAX_MODEL_RESPONSE_BYTES = 1024 * 1024;
 const OPENAI_IMAGE_QUALITY = 'medium';
+const IMAGE_GENERATION_TIMEOUT_MESSAGE = '中转站在 10 分钟内未返回完整生图结果';
 
 export type ImageProviderErrorDetails = ProviderTelemetry;
 
@@ -222,14 +224,14 @@ export class ImageProviderClient {
                 new Blob([new Uint8Array(input.reference.bytes)], { type: input.reference.mimeType }),
                 'reference.png',
             );
-            response = await this.requestJson(
+            response = await this.requestGenerationJson(
                 this.safeUrls.endpoint(baseUrl, 'images/edits'),
                 apiKey,
                 form,
                 input.idempotencyKey,
             );
         } else {
-            response = await this.requestJson(
+            response = await this.requestGenerationJson(
                 this.safeUrls.endpoint(baseUrl, 'images/generations'),
                 apiKey,
                 {
@@ -267,7 +269,7 @@ export class ImageProviderClient {
                 image_url: `data:${input.reference.mimeType};base64,${input.reference.bytes.toString('base64')}`,
             });
         }
-        const response = await this.requestJson(
+        const response = await this.requestGenerationJson(
             this.safeUrls.endpoint(baseUrl, 'responses'),
             apiKey,
             {
@@ -307,7 +309,7 @@ export class ImageProviderClient {
                 },
             });
         }
-        const response = await this.requestJson(
+        const response = await this.requestGenerationJson(
             this.safeUrls.endpoint(baseUrl, 'chat/completions'),
             apiKey,
             {
@@ -330,7 +332,7 @@ export class ImageProviderClient {
             baseUrl,
             `models/${encodeURIComponent(input.providerModelId)}:generateContent`,
         );
-        const response = await this.requestJson(
+        const response = await this.requestGenerationJson(
             endpoint,
             apiKey,
             {
@@ -357,28 +359,39 @@ export class ImageProviderClient {
             `models/${encodeURIComponent(input.providerModelId)}:streamGenerateContent`,
         );
         endpoint.searchParams.set('alt', 'sse');
-        const response = await this.request(endpoint, {
-            method: 'POST',
-            redirect: 'manual',
-            headers: {
-                ...this.headers(apiKey),
-                accept: 'text/event-stream',
-                'content-type': 'application/json',
-                'idempotency-key': input.idempotencyKey,
-                'x-goog-api-key': apiKey,
-            },
-            body: JSON.stringify({
-                contents: [{ role: 'user', parts }],
-                generationConfig: {
-                    responseModalities: ['TEXT', 'IMAGE'],
-                    imageConfig: { aspectRatio: input.aspectRatio, imageSize: input.resolution ?? '1K' },
+        const deadline = Date.now() + IMAGE_GENERATION_DELIVERY_TIMEOUT_MS;
+        const response = await this.request(
+            endpoint,
+            {
+                method: 'POST',
+                redirect: 'manual',
+                headers: {
+                    ...this.headers(apiKey),
+                    accept: 'text/event-stream',
+                    'content-type': 'application/json',
+                    'idempotency-key': input.idempotencyKey,
+                    'x-goog-api-key': apiKey,
                 },
-            }),
-        });
+                body: JSON.stringify({
+                    contents: [{ role: 'user', parts }],
+                    generationConfig: {
+                        responseModalities: ['TEXT', 'IMAGE'],
+                        imageConfig: { aspectRatio: input.aspectRatio, imageSize: input.resolution ?? '1K' },
+                    },
+                }),
+            },
+            IMAGE_GENERATION_DELIVERY_TIMEOUT_MS,
+            IMAGE_GENERATION_TIMEOUT_MESSAGE,
+        );
         const details = responseErrorDetails(response);
         let text: string;
         try {
-            text = await readResponseText(response, MAX_PROVIDER_JSON_BYTES);
+            text = await readResponseText(
+                response,
+                MAX_PROVIDER_JSON_BYTES,
+                remainingTimeout(deadline),
+                IMAGE_GENERATION_TIMEOUT_MESSAGE,
+            );
         } catch (error) {
             throw withProviderTelemetry(error, details);
         }
@@ -411,7 +424,7 @@ export class ImageProviderClient {
                 data: input.reference.bytes.toString('base64'),
             });
         }
-        const response = await this.requestJson(
+        const response = await this.requestGenerationJson(
             this.safeUrls.endpoint(baseUrl, 'interactions'),
             apiKey,
             {
@@ -508,6 +521,25 @@ export class ImageProviderClient {
         return pinnedImageDownload(resolved);
     }
 
+    private requestGenerationJson(
+        url: URL,
+        apiKey: string,
+        body: Record<string, unknown> | FormData,
+        idempotencyKey: string,
+        extraHeaders: Record<string, string> = {},
+    ): Promise<ProviderJsonResponse> {
+        return this.requestJson(
+            url,
+            apiKey,
+            body,
+            idempotencyKey,
+            extraHeaders,
+            MAX_PROVIDER_JSON_BYTES,
+            IMAGE_GENERATION_DELIVERY_TIMEOUT_MS,
+            IMAGE_GENERATION_TIMEOUT_MESSAGE,
+        );
+    }
+
     private async requestJson(
         url: URL,
         apiKey: string,
@@ -515,23 +547,36 @@ export class ImageProviderClient {
         idempotencyKey: string,
         extraHeaders: Record<string, string> = {},
         maxResponseBytes = MAX_PROVIDER_JSON_BYTES,
+        timeoutMs = REQUEST_TIMEOUT_MS,
+        timeoutMessage = '中转站响应超时',
     ): Promise<ProviderJsonResponse> {
         const isForm = body instanceof FormData;
-        const response = await this.request(url, {
-            method: 'POST',
-            redirect: 'manual',
-            headers: {
-                ...this.headers(apiKey),
-                ...(!isForm ? { 'content-type': 'application/json' } : {}),
-                'idempotency-key': idempotencyKey,
-                ...extraHeaders,
+        const deadline = Date.now() + timeoutMs;
+        const response = await this.request(
+            url,
+            {
+                method: 'POST',
+                redirect: 'manual',
+                headers: {
+                    ...this.headers(apiKey),
+                    ...(!isForm ? { 'content-type': 'application/json' } : {}),
+                    'idempotency-key': idempotencyKey,
+                    ...extraHeaders,
+                },
+                body: isForm ? body : JSON.stringify(body),
             },
-            body: isForm ? body : JSON.stringify(body),
-        });
+            timeoutMs,
+            timeoutMessage,
+        );
         const details = responseErrorDetails(response);
         let text: string;
         try {
-            text = await readResponseText(response, maxResponseBytes);
+            text = await readResponseText(
+                response,
+                maxResponseBytes,
+                remainingTimeout(deadline),
+                timeoutMessage,
+            );
         } catch (error) {
             throw withProviderTelemetry(error, details);
         }
@@ -550,9 +595,14 @@ export class ImageProviderClient {
         }
     }
 
-    private async request(url: URL, init: RequestInit): Promise<Response> {
+    private async request(
+        url: URL,
+        init: RequestInit,
+        timeoutMs = REQUEST_TIMEOUT_MS,
+        timeoutMessage = '中转站响应超时',
+    ): Promise<Response> {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
             return await fetch(url, {
                 ...init,
@@ -562,7 +612,7 @@ export class ImageProviderClient {
         } catch (error) {
             throw new AmbiguousImageProviderError(
                 error instanceof Error && error.name === 'AbortError'
-                    ? '中转站响应超时'
+                    ? timeoutMessage
                     : `中转站网络错误：${safeError(error)}`,
             );
         } finally {
@@ -927,27 +977,37 @@ function sameModelIdentifier(left: string, right: string): boolean {
     return normalize(left) === normalize(right);
 }
 
-async function readResponseText(response: Response, maxBytes: number): Promise<string> {
-    return (await readResponseBytes(response, maxBytes)).toString('utf8');
+async function readResponseText(
+    response: Response,
+    maxBytes: number,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    timeoutMessage = '中转站响应体超时',
+): Promise<string> {
+    return (await readResponseBytes(response, maxBytes, timeoutMs, timeoutMessage)).toString('utf8');
 }
 
-async function readResponseBytes(response: Response, maxBytes: number): Promise<Buffer> {
+async function readResponseBytes(
+    response: Response,
+    maxBytes: number,
+    timeoutMs: number,
+    timeoutMessage: string,
+): Promise<Buffer> {
     const declared = Number(response.headers.get('content-length') ?? 0);
     if (declared > maxBytes) throw new DefinitiveImageProviderError('中转站响应超过安全大小限制');
     if (!response.body) return Buffer.alloc(0);
     const reader = response.body.getReader();
     const chunks: Buffer[] = [];
     let total = 0;
-    const deadline = Date.now() + REQUEST_TIMEOUT_MS;
+    const deadline = Date.now() + timeoutMs;
     while (true) {
         const remainingMs = deadline - Date.now();
         if (remainingMs <= 0) {
             await reader.cancel().catch(() => undefined);
-            throw new AmbiguousImageProviderError('中转站响应体超时');
+            throw new AmbiguousImageProviderError(timeoutMessage);
         }
         let chunk: ReadableStreamReadResult<Uint8Array>;
         try {
-            chunk = await readChunkWithTimeout(reader, remainingMs);
+            chunk = await readChunkWithTimeout(reader, remainingMs, timeoutMessage);
         } catch (error) {
             await reader.cancel().catch(() => undefined);
             throw error;
@@ -967,12 +1027,10 @@ async function readResponseBytes(response: Response, maxBytes: number): Promise<
 async function readChunkWithTimeout(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     timeoutMs: number,
+    timeoutMessage: string,
 ): Promise<ReadableStreamReadResult<Uint8Array>> {
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(
-            () => reject(new AmbiguousImageProviderError('中转站响应体超时')),
-            timeoutMs,
-        );
+        const timeout = setTimeout(() => reject(new AmbiguousImageProviderError(timeoutMessage)), timeoutMs);
         reader.read().then(
             value => {
                 clearTimeout(timeout);
@@ -984,6 +1042,10 @@ async function readChunkWithTimeout(
             },
         );
     });
+}
+
+function remainingTimeout(deadline: number): number {
+    return Math.max(1, deadline - Date.now());
 }
 
 function safeProviderMetadata(

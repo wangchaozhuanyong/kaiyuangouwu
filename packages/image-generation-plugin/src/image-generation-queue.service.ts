@@ -9,7 +9,12 @@ import {
 } from '@vendure/core';
 import { In, LessThan, LessThanOrEqual } from 'typeorm';
 
-import { IMAGE_DISPATCH_MAX_AGE_MS, IMAGE_GENERATION_LOGGER_CTX, IMAGE_GENERATION_QUEUE } from './constants';
+import {
+    IMAGE_DISPATCH_MAX_AGE_MS,
+    IMAGE_GENERATION_LOGGER_CTX,
+    IMAGE_GENERATION_QUEUE,
+    IMAGE_UNKNOWN_MAX_AGE_MS,
+} from './constants';
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageGenerationDispatch } from './entities/image-generation-dispatch.entity';
 import { ImageGenerationJob } from './entities/image-generation-job.entity';
@@ -56,13 +61,13 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
 
     async reconcileUnknown(): Promise<number> {
         const dispatched = await this.reconcileDispatches();
-        const cutoff = new Date(Date.now() - 15 * 60_000);
+        const cutoff = new Date(Date.now() - IMAGE_UNKNOWN_MAX_AGE_MS);
         const rawRepository = this.connection.rawConnection.getRepository(ImageGenerationOutput);
         const stale = await rawRepository
             .createQueryBuilder('output')
             .innerJoinAndSelect('output.job', 'job')
             .innerJoinAndSelect('job.channel', 'channel')
-            .where('(output.state = :unknown AND output.unknownAt <= :cutoff)', {
+            .where('(output.state = :unknown AND COALESCE(output.unknownAt, output.updatedAt) <= :cutoff)', {
                 unknown: 'UNKNOWN',
                 cutoff,
             })

@@ -29,6 +29,40 @@ describe('ImageProviderRouterService', () => {
         expect(queryBuilder.andWhere.mock.calls.flat().join(' ')).not.toContain('lastTestedAt');
         expect(queryBuilder.andWhere.mock.calls.flat().join(' ')).not.toContain('freshAfter');
     });
+
+    it('exposes the concrete models used by healthy prompt credentials', async () => {
+        const queryBuilder = {
+            where: vi.fn(),
+            andWhere: vi.fn(),
+            orderBy: vi.fn(),
+            addOrderBy: vi.fn(),
+            getMany: vi
+                .fn()
+                .mockResolvedValue([
+                    { textModelId: 'gpt-5.4-mini' },
+                    { textModelId: 'gpt-5.4-mini' },
+                    { textModelId: ' models/gemini-2.5-flash ' },
+                ]),
+        };
+        for (const method of ['where', 'andWhere', 'orderBy', 'addOrderBy'] as const) {
+            queryBuilder[method].mockReturnValue(queryBuilder);
+        }
+        const connection = {
+            getRepository: vi.fn(() => ({
+                createQueryBuilder: vi.fn(() => queryBuilder),
+            })),
+        };
+        const service = new ImageProviderRouterService(connection as any);
+
+        await expect(service.availablePromptModelIds({} as any, 'OPENAI')).resolves.toEqual([
+            'gpt-5.4-mini',
+            'models/gemini-2.5-flash',
+        ]);
+
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith('credential.purpose IN (:...purposes)', {
+            purposes: ['PROMPT', 'BOTH'],
+        });
+    });
 });
 
 describe('image provider smooth weighted routing', () => {

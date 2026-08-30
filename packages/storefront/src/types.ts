@@ -799,6 +799,7 @@ export interface ImageStudioModel {
 export interface ImageStudioConfig {
     enabled: boolean;
     promptOptimizationEnabled: boolean;
+    promptOptimizerModelIds: string[];
     promptRateLimitPerMinute: number;
     promptDailyFreeLimit: number;
     promptDailyFreeUnlimited: boolean;
@@ -815,6 +816,11 @@ export interface ImageStudioConfig {
     maxReferencePixels: number;
     maxQuantity: number;
     models: ImageStudioModel[];
+}
+
+export interface ImageStudioWallet {
+    availableBalance: number;
+    currencyCode: string;
 }
 
 export interface ImagePrivateAssetView {
@@ -878,6 +884,7 @@ export interface ImagePromptOptimizationResult {
     optimizedPrompt: string;
     promptSpec: Record<string, unknown>;
     source: 'MODEL' | 'FALLBACK';
+    optimizerModelId?: string | null;
     recommendedModelCode: string;
     recommendationReason: string;
     promptSkillHash: string;

@@ -15,6 +15,21 @@ export interface ImageJobSettlementSummary {
 
 export type ImageOutputFailureDecision = 'RETRY' | 'UNKNOWN' | 'FAIL';
 
+export interface ImageOutputActivitySnapshot {
+    state: string;
+    unknownAt?: Date | null;
+    updatedAt?: Date | null;
+}
+
+export function hasStaleImageOutput(outputs: readonly ImageOutputActivitySnapshot[], cutoff: Date): boolean {
+    return outputs.some(output => {
+        if (!['RUNNING', 'UNKNOWN'].includes(output.state)) return false;
+        const activityAt =
+            output.state === 'UNKNOWN' ? (output.unknownAt ?? output.updatedAt) : output.updatedAt;
+        return activityAt != null && activityAt.getTime() <= cutoff.getTime();
+    });
+}
+
 export function decideImageOutputFailure(input: {
     retryable: boolean;
     ambiguous: boolean;

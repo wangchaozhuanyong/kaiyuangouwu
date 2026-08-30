@@ -18,6 +18,8 @@ import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { ImageGenerationCostEvent } from '../src/entities/image-generation-cost-event.entity';
 import { ImageGenerationDispatch } from '../src/entities/image-generation-dispatch.entity';
+import { ImageGenerationJob } from '../src/entities/image-generation-job.entity';
+import { ImageGenerationOutput } from '../src/entities/image-generation-output.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
 import { ImagePrivateStorageService } from '../src/storage/image-private-storage.service';
@@ -172,6 +174,7 @@ const STUDIO_CONFIG = gql`
         imageStudioConfig {
             enabled
             defaultModelCode
+            promptOptimizerModelIds
             models {
                 code
                 displayNameZh
@@ -182,6 +185,10 @@ const STUDIO_CONFIG = gql`
             }
         }
         imageStudioBalance
+        imageStudioWallet {
+            availableBalance
+            currencyCode
+        }
     }
 `;
 
@@ -191,6 +198,7 @@ const OPTIMIZE = gql`
             originalPrompt
             optimizedPrompt
             source
+            optimizerModelId
             recommendedModelCode
             recommendationReason
             promptSkillHash
@@ -204,6 +212,8 @@ const CREATE = gql`
             id
             state
             quantity
+            aspectRatio
+            resolution
             reservedAmount
             capturedAmount
             releasedAmount
@@ -262,6 +272,12 @@ const REFUND_OUTPUT = gql`
             state
             refundedAt
         }
+    }
+`;
+
+const RECONCILE_STALE_OUTPUTS = gql`
+    mutation ReconcileStaleImageOutputsE2E {
+        reconcileStaleImageGenerationOutputs
     }
 `;
 
@@ -368,7 +384,7 @@ describe('AI image generation full flow', () => {
         expect(credential.saveImageProviderCredential).toMatchObject({
             scope: 'OPENAI',
             credentialConfigured: true,
-            credentialEnabled: true,
+            credentialEnabled: false,
             apiKeyLast4: '-key',
             providerHealthStatus: 'UNTESTED',
         });
@@ -395,7 +411,7 @@ describe('AI image generation full flow', () => {
         expect(geminiCredential.saveImageProviderCredential).toMatchObject({
             scope: 'GEMINI',
             credentialConfigured: true,
-            credentialEnabled: true,
+            credentialEnabled: false,
             apiKeyLast4: '-key',
             providerHealthStatus: 'UNTESTED',
         });
@@ -506,6 +522,7 @@ describe('AI image generation full flow', () => {
         expect(studio.imageStudioConfig).toMatchObject({
             enabled: true,
             defaultModelCode: 'OPENAI_HIGH_QUALITY',
+            promptOptimizerModelIds: ['prompt-e2e-model'],
             models: [
                 expect.objectContaining({
                     code: 'OPENAI_HIGH_QUALITY',
@@ -516,6 +533,7 @@ describe('AI image generation full flow', () => {
             ],
         });
         expect(studio.imageStudioBalance).toBe(500);
+        expect(studio.imageStudioWallet).toEqual({ availableBalance: 500, currencyCode: 'USD' });
 
         const optimization = (
             await shopClient.query(OPTIMIZE, {
@@ -524,6 +542,7 @@ describe('AI image generation full flow', () => {
         ).optimizeImagePrompt;
         expect(optimization).toMatchObject({
             source: 'MODEL',
+            optimizerModelId: 'prompt-e2e-model',
             recommendedModelCode: 'OPENAI_HIGH_QUALITY',
         });
         expect(optimization.promptSkillHash).toMatch(/^[a-f0-9]{64}$/u);
@@ -547,7 +566,12 @@ describe('AI image generation full flow', () => {
                 },
             })
         ).createImageGeneration;
-        expect(created).toMatchObject({ quantity: 2, reservedAmount: 200 });
+        expect(created).toMatchObject({
+            quantity: 2,
+            aspectRatio: '1:1',
+            resolution: '1K',
+            reservedAmount: 200,
+        });
 
         const succeeded = await waitForJob(created.id, ['SUCCEEDED']);
         expect(succeeded.myImageGenerationJob).toMatchObject({
@@ -608,6 +632,48 @@ describe('AI image generation full flow', () => {
         expect(failed.imageStudioBalance).toBe(400);
 
         const connection = server.app.get(TransactionalConnection);
+        const staleAt = new Date(Date.now() - 16 * 60_000);
+        const staleOutputId = Number(String(failedCreated.outputs[0].id).replace(/^T_/u, ''));
+        const staleJobId = Number(String(failedCreated.id).replace(/^T_/u, ''));
+        await connection.rawConnection.getRepository(ImageGenerationOutput).update(
+            { id: staleOutputId },
+            {
+                state: 'UNKNOWN',
+                unknownAt: staleAt,
+                completedAt: null,
+                walletSettled: false,
+                billingMode: 'PENDING',
+                errorMessage: '中转站响应超时',
+            },
+        );
+        await connection.rawConnection
+            .getRepository(ImageGenerationJob)
+            .update(
+                { id: staleJobId },
+                { state: 'UNKNOWN', completedAt: null, errorMessage: '中转站响应超时' },
+            );
+        const staleOutput = await connection.rawConnection
+            .getRepository(ImageGenerationOutput)
+            .findOneByOrFail({ id: staleOutputId });
+        expect(staleOutput).toMatchObject({ state: 'UNKNOWN', walletSettled: false });
+        expect(staleOutput.unknownAt?.getTime()).toBe(staleAt.getTime());
+        expect((await adminClient.query(RECONCILE_STALE_OUTPUTS)).reconcileStaleImageGenerationOutputs).toBe(
+            1,
+        );
+        expect((await shopClient.query(MY_JOB, { id: failedCreated.id })).myImageGenerationJob).toMatchObject(
+            {
+                state: 'FAILED',
+                capturedAmount: 0,
+                releasedAmount: 100,
+                outputs: [
+                    expect.objectContaining({
+                        state: 'FAILED',
+                        errorMessage: '中转站结果在 15 分钟内无法确认，已自动退回本张费用',
+                    }),
+                ],
+            },
+        );
+
         const customer = await connection.rawConnection
             .getRepository(Customer)
             .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });

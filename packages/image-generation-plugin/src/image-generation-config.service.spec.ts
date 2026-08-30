@@ -104,8 +104,8 @@ describe('ImageGenerationConfigService prompt Skill bootstrap', () => {
 
 describe('ImageGenerationConfigService prompt provider availability', () => {
     it('keeps prompt optimization available when only Gemini has a healthy prompt Key', async () => {
-        const hasAvailable = vi.fn((_ctx: unknown, input: { scope: string; purpose: string }) =>
-            Promise.resolve(input.scope === 'GEMINI' && input.purpose === 'PROMPT'),
+        const availablePromptModelIds = vi.fn((_ctx: unknown, scope: string) =>
+            Promise.resolve(scope === 'GEMINI' ? ['gemini-2.5-flash'] : []),
         );
         const service = new ImageGenerationConfigService(
             {},
@@ -113,7 +113,7 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             {} as never,
             {} as never,
             {} as never,
-            { hasAvailable } as never,
+            { availablePromptModelIds } as never,
             { sourceHash: 'hash' } as never,
         );
         vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
@@ -133,17 +133,78 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
         });
         vi.spyOn(service as never, 'getOrCreateModels').mockResolvedValue([]);
 
-        const result = await service.shopConfig({ channel: { defaultCurrencyCode: 'CNY' } } as never);
+        const result = await service.shopConfig({
+            currencyCode: 'CNY',
+            channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+        } as never);
 
         expect(result.promptOptimizationEnabled).toBe(true);
-        expect(hasAvailable).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ scope: 'OPENAI', purpose: 'PROMPT' }),
+        expect(result.promptOptimizerModelIds).toEqual(['gemini-2.5-flash']);
+        expect(availablePromptModelIds).toHaveBeenCalledWith(expect.anything(), 'OPENAI');
+        expect(availablePromptModelIds).toHaveBeenCalledWith(expect.anything(), 'GEMINI');
+    });
+
+    it('returns model and prompt prices in the active settlement currency', async () => {
+        const service = new ImageGenerationConfigService(
+            {},
+            { rawConnection: {} } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {
+                hasAvailable: vi.fn(() => Promise.resolve(true)),
+                availablePromptModelIds: vi.fn(() => Promise.resolve(['gpt-5.4-mini'])),
+            } as never,
+            { sourceHash: 'hash' } as never,
         );
-        expect(hasAvailable).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ scope: 'GEMINI', purpose: 'PROMPT' }),
-        );
+        vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+        vi.spyOn(service as never, 'getConfig').mockResolvedValue({
+            enabled: true,
+            promptOptimizationEnabled: true,
+            promptRateLimitPerMinute: 3,
+            promptDailyFreeLimit: 20,
+            promptDailyFreeUnlimited: false,
+            paidPromptOptimizationEnabled: true,
+            paidPromptOptimizationPrice: 100,
+            paidPromptOptimizationCurrencyCode: 'CNY',
+            defaultModelCode: 'OPENAI_HIGH_QUALITY',
+            termsVersion: 'test',
+            termsZh: 'test',
+            termsEn: 'test',
+        });
+        vi.spyOn(service as never, 'getOrCreateModels').mockResolvedValue([
+            {
+                id: 1,
+                code: 'OPENAI_HIGH_QUALITY',
+                enabled: true,
+                healthStatus: 'HEALTHY',
+                protocol: 'OPENAI_RESPONSES_IMAGE',
+                providerModelId: 'gpt-image-1',
+                officialModelId: 'gpt-image-1',
+                unitPrice: 100,
+                unitPrice2K: 0,
+                unitPrice4K: 0,
+                currencyCode: 'CNY',
+                resolutionOptions: [{ resolution: '1K', unitPrice: 100, supportedAspectRatios: ['1:1'] }],
+            },
+        ]);
+
+        const result = await service.shopConfig({
+            currencyCode: 'MYR',
+            channel: {
+                defaultCurrencyCode: 'CNY',
+                customFields: { cnyToMyrRate: 0.6, currencyRateMarkupBps: 0 },
+            },
+        } as never);
+
+        expect(result.paidPromptOptimizationPrice).toBe(60);
+        expect(result.paidPromptOptimizationCurrencyCode).toBe('MYR');
+        expect(result.promptOptimizerModelIds).toEqual(['gpt-5.4-mini']);
+        expect(result.models[0]).toMatchObject({
+            unitPrice: 60,
+            currencyCode: 'MYR',
+            resolutionOptions: [{ resolution: '1K', unitPrice: 60 }],
+        });
     });
 });
 

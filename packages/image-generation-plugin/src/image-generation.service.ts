@@ -24,6 +24,7 @@ import {
 } from 'typeorm';
 
 import {
+    IMAGE_UNKNOWN_MAX_AGE_MS,
     MAX_ACTIVE_GENERATION_JOBS,
     MAX_ACTIVE_REFERENCE_ASSETS,
     MAX_ACTIVE_REFERENCE_BYTES,
@@ -45,12 +46,13 @@ import { ImagePrivateAsset } from './entities/image-private-asset.entity';
 import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
 import { ImageUsageQuotaBucket } from './entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from './entities/image-usage-quota-event.entity';
+import { imagePricingSnapshot, quoteImageMoney } from './image-billing-quote';
 import {
     ImageGenerationConfigService,
     modelReady,
     providerScopeForModel,
 } from './image-generation-config.service';
-import { deriveImageJobSettlement } from './image-generation-state';
+import { deriveImageJobSettlement, hasStaleImageOutput } from './image-generation-state';
 import { isImageResolution, resolutionPrice, supportsNativeResolution } from './image-resolution';
 import { ImageUsageQuotaService } from './image-usage-quota.service';
 import { ImagePromptEngineService, startOfBeijingDay } from './prompt/image-prompt-engine.service';
@@ -141,11 +143,13 @@ export class ImageGenerationService {
                 if (!supportsNativeResolution(model, normalized.resolution, normalized.aspectRatio)) {
                     throw new UserInputError('所选模型不支持该画幅的原生清晰度');
                 }
-                const unitPrice = resolutionPrice(model, normalized.resolution);
-                if (unitPrice <= 0) throw new UserInputError('所选清晰度尚未配置价格');
+                const baseUnitPrice = resolutionPrice(model, normalized.resolution);
+                if (baseUnitPrice <= 0) throw new UserInputError('所选清晰度尚未配置价格');
+                const priceQuote = quoteImageMoney(txCtx, baseUnitPrice, model.currencyCode);
+                const unitPrice = priceQuote.amount;
                 if (
                     unitPrice !== normalized.expectedUnitPrice ||
-                    model.currencyCode !== normalized.currencyCode
+                    priceQuote.currencyCode !== normalized.currencyCode
                 ) {
                     throw new UserInputError('PRICE_CHANGED：模型价格已更新，请确认新价格后重新提交');
                 }
@@ -210,6 +214,7 @@ export class ImageGenerationService {
                         resolution: normalized.resolution,
                         quantity: normalized.quantity,
                         unitPriceSnapshot: unitPrice,
+                        pricingSnapshot: imagePricingSnapshot(priceQuote),
                         reservedAmount: 0,
                         expectedChargeAmount: 0,
                         freeQuantityReserved: 0,
@@ -218,7 +223,7 @@ export class ImageGenerationService {
                         quotaEventId: null,
                         capturedAmount: 0,
                         releasedAmount: 0,
-                        currencyCode: model.currencyCode,
+                        currencyCode: priceQuote.currencyCode,
                         walletUsageId: null,
                         state: 'QUEUED',
                         termsVersion: config.termsVersion,
@@ -254,7 +259,7 @@ export class ImageGenerationService {
                 if (expectedChargeAmount > 0) {
                     const usage = await this.walletSpend.reserve(txCtx, {
                         customerId: customer.id,
-                        currencyCode: model.currencyCode,
+                        currencyCode: priceQuote.currencyCode,
                         amount: expectedChargeAmount,
                         resourceType: 'IMAGE_GENERATION_JOB',
                         resourceId: String(job.id),
@@ -268,6 +273,7 @@ export class ImageGenerationService {
                             freeQuantity,
                             paidQuantity,
                             unitPrice,
+                            pricingSnapshot: imagePricingSnapshot(priceQuote),
                         },
                     });
                     job.walletUsageId = usage.id;
@@ -409,26 +415,47 @@ export class ImageGenerationService {
 
     async findMine(ctx: RequestContext, id: ID) {
         const customer = await this.activeCustomer(ctx);
-        const job = await this.connection.getRepository(ctx, ImageGenerationJob).findOne({
+        const repository = this.connection.getRepository(ctx, ImageGenerationJob);
+        let job = await repository.findOne({
             where: { id, channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
             relations: { outputs: { asset: true }, referenceAsset: true },
             order: { outputs: { outputIndex: 'ASC' } },
         });
         if (!job) throw new UserInputError('找不到生图任务');
+        const cutoff = this.staleOutputCutoff();
+        if (hasStaleImageOutput(job.outputs, cutoff)) {
+            await this.reconcileStaleOutputs(ctx, cutoff);
+            job = await repository.findOne({
+                where: {
+                    id,
+                    channelId: ctx.channelId,
+                    customerId: customer.id,
+                    customerDeletedAt: IsNull(),
+                },
+                relations: { outputs: { asset: true }, referenceAsset: true },
+                order: { outputs: { outputIndex: 'ASC' } },
+            });
+            if (!job) throw new UserInputError('找不到生图任务');
+        }
         return this.jobView(job, customer.id);
     }
 
     async findMineList(ctx: RequestContext, skip = 0, take = 20) {
         const customer = await this.activeCustomer(ctx);
-        const [items, totalItems] = await this.connection
-            .getRepository(ctx, ImageGenerationJob)
-            .findAndCount({
-                where: { channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
-                relations: { outputs: { asset: true }, referenceAsset: true },
-                order: { createdAt: 'DESC', outputs: { outputIndex: 'ASC' } },
-                skip: Math.max(0, Math.floor(skip || 0)),
-                take: Math.min(50, Math.max(1, Math.floor(take || 20))),
-            });
+        const repository = this.connection.getRepository(ctx, ImageGenerationJob);
+        const options = {
+            where: { channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
+            relations: { outputs: { asset: true }, referenceAsset: true },
+            order: { createdAt: 'DESC', outputs: { outputIndex: 'ASC' } },
+            skip: Math.max(0, Math.floor(skip || 0)),
+            take: Math.min(50, Math.max(1, Math.floor(take || 20))),
+        } as const;
+        let [items, totalItems] = await repository.findAndCount(options);
+        const cutoff = this.staleOutputCutoff();
+        if (items.some(job => hasStaleImageOutput(job.outputs, cutoff))) {
+            await this.reconcileStaleOutputs(ctx, cutoff);
+            [items, totalItems] = await repository.findAndCount(options);
+        }
         return { items: items.map(job => this.jobView(job, customer.id)), totalItems };
     }
 
@@ -475,17 +502,17 @@ export class ImageGenerationService {
         return deleted;
     }
 
-    async walletBalance(ctx: RequestContext): Promise<number> {
+    async wallet(ctx: RequestContext): Promise<{ availableBalance: number; currencyCode: string }> {
         const customer = await this.activeCustomer(ctx);
-        const model = await this.connection.getRepository(ctx, ImageModelConfig).findOne({
-            where: { channelId: ctx.channelId, enabled: true },
-            order: { isDefault: 'DESC', position: 'ASC' },
-        });
-        const currencyCode = model?.currencyCode ?? ctx.channel.defaultCurrencyCode;
+        const currencyCode = ctx.currencyCode;
         const wallet = await this.connection.getRepository(ctx, ReferralWallet).findOne({
             where: { channelId: ctx.channelId, customerId: customer.id, currencyCode },
         });
-        return wallet?.availableBalance ?? 0;
+        return { availableBalance: wallet?.availableBalance ?? 0, currencyCode };
+    }
+
+    async walletBalance(ctx: RequestContext): Promise<number> {
+        return (await this.wallet(ctx)).availableBalance;
     }
 
     async modelQuotaStatus(ctx: RequestContext) {
@@ -496,6 +523,7 @@ export class ImageGenerationService {
         });
         return Promise.all(
             models.map(async model => {
+                const unitPrice = quoteImageMoney(ctx, model.unitPrice, model.currencyCode);
                 const [free, safety] = await Promise.all([
                     this.quota.status(
                         ctx,
@@ -518,8 +546,8 @@ export class ImageGenerationService {
                     modelCode: model.code,
                     freeImageEnabled: model.freeImageEnabled,
                     paidAfterFreeEnabled: model.paidAfterFreeEnabled,
-                    unitPrice: model.unitPrice,
-                    currencyCode: model.currencyCode,
+                    unitPrice: unitPrice.amount,
+                    currencyCode: unitPrice.currencyCode,
                     free,
                     safety,
                 };
@@ -528,6 +556,7 @@ export class ImageGenerationService {
     }
 
     async adminJobs(ctx: RequestContext, skip = 0, take = 50, state?: string | null) {
+        await this.reconcileStaleOutputs(ctx);
         const [items, totalItems] = await this.connection
             .getRepository(ctx, ImageGenerationJob)
             .findAndCount({
@@ -541,6 +570,7 @@ export class ImageGenerationService {
     }
 
     async adminUsageRecords(ctx: RequestContext, input: ImageAiUsageRecordListInput = {}) {
+        await this.reconcileStaleOutputs(ctx);
         const options = normalizeUsageRecordInput(input);
         const prefetch = options.skip + options.take;
         let imageItems: ImageGenerationJob[] = [];
@@ -1058,7 +1088,7 @@ export class ImageGenerationService {
             .innerJoinAndSelect('output.job', 'job')
             .where('job.channelId = :channelId', { channelId: ctx.channelId })
             .andWhere('output.state = :state', { state: 'UNKNOWN' })
-            .andWhere('output.unknownAt <= :cutoff', { cutoff })
+            .andWhere('COALESCE(output.unknownAt, output.updatedAt) <= :cutoff', { cutoff })
             .take(100)
             .getMany();
         for (const output of outputs) {
@@ -1073,6 +1103,33 @@ export class ImageGenerationService {
             if (released) await this.refreshJob(ctx, output.jobId);
         }
         return outputs.filter(output => output.walletSettled).length;
+    }
+
+    async reconcileStaleOutputs(ctx: RequestContext, cutoff = this.staleOutputCutoff()): Promise<number> {
+        const repository = this.connection.getRepository(ctx, ImageGenerationOutput);
+        const staleRunning = await repository
+            .createQueryBuilder('output')
+            .innerJoin('output.job', 'job')
+            .where('job.channelId = :channelId', { channelId: ctx.channelId })
+            .andWhere('output.state = :state', { state: 'RUNNING' })
+            .andWhere('output.updatedAt <= :cutoff', { cutoff })
+            .take(100)
+            .getMany();
+        for (const output of staleRunning) {
+            await repository.update(
+                { id: output.id, state: 'RUNNING', walletSettled: false },
+                {
+                    state: 'UNKNOWN',
+                    unknownAt: output.updatedAt,
+                    errorMessage: '生图任务超过 15 分钟仍未返回结果，系统正在核对并释放费用',
+                },
+            );
+        }
+        return this.releaseUnknownOlderThan(ctx, cutoff);
+    }
+
+    private staleOutputCutoff(): Date {
+        return new Date(Date.now() - IMAGE_UNKNOWN_MAX_AGE_MS);
     }
 
     private validateCreateInput(input: CreateImageGenerationInput) {

@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi } from '../api';
+import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import { SafeImage } from '../storefront-ui/product-display';
@@ -35,12 +36,18 @@ import {
     StorefrontLanguage,
 } from '../types';
 
+import {
+    imageGenerationPollDelay,
+    imageGenerationProgress,
+    startImageGenerationPolling,
+} from './ai-image-studio-progress';
 import { customerImageResolutions, imageResolutionAvailability } from './ai-image-studio-resolution';
 
 interface AiImageStudioPageProps {
     api: ShopApi;
     customer: ActiveCustomer | null;
     market: MarketConfig;
+    displayCurrencyCode: string;
     language: StorefrontLanguage;
     onBack: () => void;
     onSignIn: () => void;
@@ -57,6 +64,8 @@ function formatBillingMoney(value: number, currencyCode: string, locale: string)
 }
 
 const aspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
+const referenceImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const referenceImageMaxBytes = 10 * 1024 * 1024;
 const activeStates = new Set(['QUEUED', 'RUNNING', 'UNKNOWN']);
 const terminalStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']);
 const successStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED']);
@@ -66,10 +75,11 @@ type AiStudioSetting = 'ASPECT_RATIO' | 'QUANTITY' | 'RESOLUTION';
 type HistoryFilter = 'ALL' | 'SUCCESS' | 'PROCESSING' | 'FAILED';
 
 export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
-    const { api, customer, market, language, onBack, onSignIn, onNotify } = props;
+    const { api, customer, market, displayCurrencyCode, language, onBack, onSignIn, onNotify } = props;
     const isZh = language === 'zh';
     const [config, setConfig] = useState<ImageStudioConfig | null>(null);
     const [balance, setBalance] = useState(0);
+    const [walletCurrencyCode, setWalletCurrencyCode] = useState(market.currencyCode);
     const [promptQuota, setPromptQuota] = useState<ImagePromptQuotaStatus | null>(null);
     const [modelQuotas, setModelQuotas] = useState<ImageModelQuotaStatus[]>([]);
     const [jobs, setJobs] = useState<ImageGenerationJob[]>([]);
@@ -79,17 +89,21 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [originalPrompt, setOriginalPrompt] = useState('');
     const [optimized, setOptimized] = useState(false);
     const [optimizationReason, setOptimizationReason] = useState('');
+    const [lastOptimizerModelId, setLastOptimizerModelId] = useState<string | null>(null);
     const [modelCode, setModelCode] = useState('');
     const [aspectRatio, setAspectRatio] = useState('1:1');
     const [resolution, setResolution] = useState<ImageResolution>('1K');
     const [quantity, setQuantity] = useState(1);
-    // Consent must be an explicit customer action. Keeping this false also
-    // prevents a stale form state from silently authorizing a new charge.
-    const [termsAccepted, setTermsAccepted] = useState(false);
+    // The storefront defaults the consent row to checked while keeping it editable.
+    const [termsAccepted, setTermsAccepted] = useState(true);
     const [referenceAsset, setReferenceAsset] = useState<ImagePrivateAssetView | null>(null);
     const [referenceMode, setReferenceMode] = useState<ImageReferenceMode>('NONE');
     const [referenceBusy, setReferenceBusy] = useState(false);
+    const [referenceError, setReferenceError] = useState('');
+    const [referencePreviewUrl, setReferencePreviewUrl] = useState('');
+    const [referenceFileName, setReferenceFileName] = useState('');
     const referenceInputRef = useRef<HTMLInputElement>(null);
+    const localReferencePreviewRef = useRef('');
     const [activeSetting, setActiveSetting] = useState<AiStudioSetting | null>(null);
     const [termsInfoOpen, setTermsInfoOpen] = useState(false);
     const [historyInfoOpen, setHistoryInfoOpen] = useState(false);
@@ -98,59 +112,123 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [busy, setBusy] = useState<'OPTIMIZE' | 'GENERATE' | ''>('');
     const [actionError, setActionError] = useState('');
     const pollStartedAt = useRef(Date.now());
+    const loadEpoch = useRef(0);
+    const settlementEpoch = useRef(0);
+
+    const updateLocalReferencePreview = useCallback((url: string, fileName = '') => {
+        const previousUrl = localReferencePreviewRef.current;
+        if (previousUrl && previousUrl !== url) URL.revokeObjectURL(previousUrl);
+        localReferencePreviewRef.current = url;
+        setReferencePreviewUrl(url);
+        setReferenceFileName(fileName);
+    }, []);
 
     const load = useCallback(async () => {
+        const epoch = ++loadEpoch.current;
         setLoadError('');
         try {
             const studioConfig = await api.imageStudioConfig();
-            setConfig(studioConfig);
-            setModelCode(
-                current => current || studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
-            );
+            let availableBalance = 0;
+            let currentWalletCurrencyCode = market.currencyCode;
+            let history: Awaited<ReturnType<ShopApi['myImageGenerationJobs']>> = {
+                items: [],
+                totalItems: 0,
+            };
+            let currentPromptQuota: ImagePromptQuotaStatus | null = null;
+            let currentModelQuotas: ImageModelQuotaStatus[] = [];
             if (customer) {
-                const [availableBalance, history, currentPromptQuota, currentModelQuotas] = await Promise.all(
-                    [
-                        api.imageStudioBalance(),
-                        api.myImageGenerationJobs(0, 20),
-                        api.imagePromptQuotaStatus(),
-                        api.imageModelQuotaStatus(),
-                    ],
-                );
-                setBalance(availableBalance);
-                setJobs(history.items);
-                setPromptQuota(currentPromptQuota);
-                setModelQuotas(currentModelQuotas);
+                const [wallet, loadedHistory, loadedPromptQuota, loadedModelQuotas] = await Promise.all([
+                    api.imageStudioWallet(),
+                    api.myImageGenerationJobs(0, 20),
+                    api.imagePromptQuotaStatus(),
+                    api.imageModelQuotaStatus(),
+                ]);
+                availableBalance = wallet.availableBalance;
+                currentWalletCurrencyCode = wallet.currencyCode;
+                history = loadedHistory;
+                currentPromptQuota = loadedPromptQuota;
+                currentModelQuotas = loadedModelQuotas;
             }
+            if (epoch !== loadEpoch.current) return;
+            setConfig(studioConfig);
+            setModelCode(current =>
+                studioConfig.models.some(model => model.code === current)
+                    ? current
+                    : studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
+            );
+            setBalance(availableBalance);
+            setWalletCurrencyCode(currentWalletCurrencyCode);
+            setJobs(history.items);
+            setPromptQuota(currentPromptQuota);
+            setModelQuotas(currentModelQuotas);
         } catch (error) {
-            setLoadError(errorMessage(error));
+            if (epoch === loadEpoch.current) setLoadError(errorMessage(error));
         } finally {
-            setLoading(false);
+            if (epoch === loadEpoch.current) setLoading(false);
         }
-    }, [api, customer]);
+    }, [api, customer, market.currencyCode]);
 
     useEffect(() => {
+        settlementEpoch.current += 1;
+        setLoading(true);
+        setConfig(null);
+        setBalance(0);
+        setWalletCurrencyCode(market.currencyCode);
+        setPromptQuota(null);
+        setModelQuotas([]);
+        setLastOptimizerModelId(null);
+        setBusy('');
+        setActionError('');
         void load();
-    }, [load]);
+        return () => {
+            settlementEpoch.current += 1;
+            loadEpoch.current += 1;
+        };
+    }, [load, market.currencyCode]);
     useEffect(() => {
         // Consent and private reference assets belong to a customer session;
         // never carry either across logout/login changes.
-        setTermsAccepted(false);
+        setTermsAccepted(true);
         setReferenceAsset(null);
         setReferenceMode('NONE');
+        setReferenceError('');
+        updateLocalReferencePreview('');
         if (referenceInputRef.current) referenceInputRef.current.value = '';
-    }, [customer?.id]);
+    }, [customer?.id, updateLocalReferencePreview]);
+    useEffect(
+        () => () => {
+            if (localReferencePreviewRef.current) {
+                URL.revokeObjectURL(localReferencePreviewRef.current);
+                localReferencePreviewRef.current = '';
+            }
+        },
+        [],
+    );
+    const hasActiveJobs = jobs.some(job => activeStates.has(job.state));
     useEffect(() => {
-        if (!jobs.some(job => activeStates.has(job.state))) return;
-        const timeout = window.setTimeout(
-            () => {
-                void load();
-            },
-            Date.now() - pollStartedAt.current < 60_000 ? 2_000 : 5_000,
+        if (!hasActiveJobs) return;
+        const polling = startImageGenerationPolling(load, () =>
+            imageGenerationPollDelay(pollStartedAt.current),
         );
-        return () => window.clearTimeout(timeout);
-    }, [jobs, load]);
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') polling.refreshNow();
+        };
+        const refreshWhenOnline = () => polling.refreshNow();
+        document.addEventListener('visibilitychange', refreshWhenVisible);
+        window.addEventListener('online', refreshWhenOnline);
+        return () => {
+            document.removeEventListener('visibilitychange', refreshWhenVisible);
+            window.removeEventListener('online', refreshWhenOnline);
+            polling.stop();
+        };
+    }, [hasActiveJobs, load]);
 
     const selectedModel = config?.models.find(model => model.code === modelCode) ?? config?.models[0];
+    const optimizerModelIds =
+        lastOptimizerModelId !== null
+            ? [lastOptimizerModelId || (isZh ? '本地规则' : 'Local rules')]
+            : (config?.promptOptimizerModelIds ?? []);
+    const optimizerModelLabel = optimizerModelIds.map(value => value.replace(/^models\//iu, '')).join(' / ');
     const pricedResolutionOptions =
         selectedModel?.resolutionOptions.filter(option => option.unitPrice > 0) ?? [];
     const selectedResolutionOption =
@@ -167,6 +245,11 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         : Math.min(quantity, selectedQuota?.free.remaining ?? 0);
     const paidQuantity = Math.max(0, quantity - freeRemaining);
     const estimatedPrice = (selectedResolutionOption?.unitPrice ?? 0) * paidQuantity;
+    const quoteCurrencyReady = Boolean(
+        selectedModel &&
+        selectedModel.currencyCode === market.currencyCode &&
+        walletCurrencyCode === market.currencyCode,
+    );
     const canGenerate = Boolean(
         customer &&
         config?.enabled &&
@@ -174,6 +257,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         selectedResolutionOption &&
         prompt.trim() &&
         termsAccepted &&
+        quoteCurrencyReady &&
         balance >= estimatedPrice &&
         (selectedQuota?.safety.remaining ?? 0) >= quantity &&
         (paidQuantity === 0 || Boolean(selectedQuota?.paidAfterFreeEnabled)) &&
@@ -205,6 +289,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
 
     const optimizePrompt = async () => {
         if (!prompt.trim() || busy) return;
+        const epoch = settlementEpoch.current;
         setBusy('OPTIMIZE');
         setActionError('');
         try {
@@ -216,10 +301,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
                 idempotencyKey: requestId(),
             });
+            if (epoch !== settlementEpoch.current) return;
             setOriginalPrompt(prompt);
             setPrompt(result.optimizedPrompt);
             setOptimized(true);
             setOptimizationReason(result.recommendationReason);
+            setLastOptimizerModelId(result.optimizerModelId ?? '');
             setPromptQuota(result.promptQuota);
             onNotify(
                 isZh
@@ -230,26 +317,45 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 selectModel(result.recommendedModelCode);
             }
         } catch (error) {
-            setActionError(errorMessage(error));
+            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
         } finally {
-            setBusy('');
+            if (epoch === settlementEpoch.current) setBusy('');
         }
     };
 
     const uploadReference = async (file: File) => {
         if (!termsAccepted) {
-            setActionError(isZh ? '请先阅读并同意 AI 图片服务条款。' : 'Accept the AI image terms first.');
+            setReferenceError(
+                isZh ? '请先阅读并同意 AI 图片服务条款，再添加参考图。' : 'Accept the AI image terms first.',
+            );
+            if (referenceInputRef.current) referenceInputRef.current.value = '';
+            return;
+        }
+        if (!referenceImageTypes.has(file.type)) {
+            setReferenceError(isZh ? '参考图仅支持 JPEG、PNG 或 WebP。' : 'Use a JPEG, PNG, or WebP image.');
+            if (referenceInputRef.current) referenceInputRef.current.value = '';
+            return;
+        }
+        if (file.size > referenceImageMaxBytes) {
+            setReferenceError(isZh ? '参考图不能超过 10MB。' : 'Reference images must be 10MB or smaller.');
+            if (referenceInputRef.current) referenceInputRef.current.value = '';
             return;
         }
         setReferenceBusy(true);
+        setReferenceError('');
         setActionError('');
+        setReferenceAsset(null);
+        setReferenceMode('NONE');
         try {
+            updateLocalReferencePreview(URL.createObjectURL(file), file.name);
             const uploaded = await api.uploadImageReference(file, termsAccepted);
             setReferenceAsset(uploaded);
             setReferenceMode('PRODUCT');
             onNotify(isZh ? '参考图已上传，可继续生成' : 'Reference image uploaded');
         } catch (error) {
-            setActionError(errorMessage(error));
+            updateLocalReferencePreview('');
+            if (referenceInputRef.current) referenceInputRef.current.value = '';
+            setReferenceError(errorMessage(error));
         } finally {
             setReferenceBusy(false);
         }
@@ -258,11 +364,14 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const clearReference = () => {
         setReferenceAsset(null);
         setReferenceMode('NONE');
+        setReferenceError('');
+        updateLocalReferencePreview('');
         if (referenceInputRef.current) referenceInputRef.current.value = '';
     };
 
     const generate = async () => {
         if (!canGenerate || !selectedModel || !selectedResolutionOption || !config) return;
+        const epoch = settlementEpoch.current;
         setBusy('GENERATE');
         setActionError('');
         try {
@@ -281,6 +390,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 idempotencyKey: requestId(),
                 termsAccepted,
             });
+            if (epoch !== settlementEpoch.current) return;
             pollStartedAt.current = Date.now();
             setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
             setBalance(value => Math.max(0, value - job.reservedAmount));
@@ -288,13 +398,14 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 api.imagePromptQuotaStatus(),
                 api.imageModelQuotaStatus(),
             ]);
+            if (epoch !== settlementEpoch.current) return;
             setPromptQuota(nextPromptQuota);
             setModelQuotas(nextModelQuotas);
             onNotify(isZh ? '任务已提交，正在逐张生成' : 'Generation queued');
         } catch (error) {
-            setActionError(errorMessage(error));
+            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
         } finally {
-            setBusy('');
+            if (epoch === settlementEpoch.current) setBusy('');
         }
     };
 
@@ -369,7 +480,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     };
 
     const billingCurrencyCode = selectedModel?.currencyCode ?? market.currencyCode;
-    const selectedResolutionLabel = `${selectedResolutionOption?.resolution ?? resolution} · ${formatBillingMoney(
+    const selectedResolutionLabel = `${selectedResolutionOption?.resolution ?? resolution} · ${formatDisplayMoney(
         selectedResolutionOption?.unitPrice ?? 0,
         billingCurrencyCode,
         market.locale,
@@ -443,49 +554,143 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 <span>
                                     {prompt.length}/{optimized ? 8000 : 2000}
                                 </span>
-                                <button
-                                    type="button"
-                                    disabled={
-                                        !config.promptOptimizationEnabled ||
-                                        !prompt.trim() ||
-                                        Boolean(busy) ||
-                                        Boolean(
-                                            promptQuota &&
-                                            !promptQuota.daily.unlimited &&
-                                            promptQuota.daily.remaining <= 0 &&
-                                            !promptQuota.paidEnabled,
-                                        )
-                                    }
-                                    onClick={() => void optimizePrompt()}
-                                >
-                                    {busy === 'OPTIMIZE' ? <LoaderCircle className="spin" /> : <Sparkles />}
-                                    {isZh ? '智能优化' : 'Improve prompt'}
-                                </button>
+                                <div className="ai-studio-prompt-actions">
+                                    {optimizerModelLabel ? (
+                                        <span
+                                            className="ai-studio-optimizer-model"
+                                            title={optimizerModelIds.join(' / ')}
+                                            aria-label={`${isZh ? '优化模型' : 'Optimizer model'}：${optimizerModelIds.join(' / ')}`}
+                                        >
+                                            <span>{isZh ? '优化模型' : 'Optimizer'}</span>
+                                            <strong>{optimizerModelLabel}</strong>
+                                        </span>
+                                    ) : null}
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            !config.promptOptimizationEnabled ||
+                                            !prompt.trim() ||
+                                            Boolean(busy) ||
+                                            Boolean(
+                                                promptQuota &&
+                                                !promptQuota.daily.unlimited &&
+                                                promptQuota.daily.remaining <= 0 &&
+                                                !promptQuota.paidEnabled,
+                                            )
+                                        }
+                                        onClick={() => void optimizePrompt()}
+                                    >
+                                        {busy === 'OPTIMIZE' ? (
+                                            <LoaderCircle className="spin" />
+                                        ) : (
+                                            <Sparkles />
+                                        )}
+                                        {isZh ? '智能优化' : 'Improve prompt'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div className="ai-studio-reference" aria-label={isZh ? '参考图' : 'Reference image'}>
-                            <label className={referenceBusy ? 'is-disabled' : undefined}>
-                                <ImagePlus aria-hidden="true" />
-                                {referenceBusy
-                                    ? isZh
-                                        ? '上传中…'
-                                        : 'Uploading…'
-                                    : isZh
-                                      ? '添加参考图'
-                                      : 'Add reference'}
-                                <input
-                                    ref={referenceInputRef}
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp"
-                                    disabled={referenceBusy}
-                                    onChange={event => {
-                                        const file = event.target.files?.[0];
-                                        if (file) void uploadReference(file);
-                                    }}
-                                />
-                            </label>
+                        <div
+                            className={`ai-studio-reference${referenceAsset || referenceBusy ? ' has-reference' : ''}`}
+                            aria-label={isZh ? '参考图' : 'Reference image'}
+                        >
+                            {!referenceAsset && !referenceBusy ? (
+                                <label className="ai-studio-reference-add">
+                                    <span className="ai-studio-reference-add-icon" aria-hidden="true">
+                                        <ImagePlus />
+                                    </span>
+                                    <span className="ai-studio-reference-add-copy">
+                                        <strong>{isZh ? '添加参考图' : 'Add reference image'}</strong>
+                                        <small>
+                                            {isZh
+                                                ? '可选 · JPEG、PNG 或 WebP，最大 10MB'
+                                                : 'Optional · JPEG, PNG, or WebP up to 10MB'}
+                                        </small>
+                                    </span>
+                                    <input
+                                        ref={referenceInputRef}
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp"
+                                        onChange={event => {
+                                            const file = event.target.files?.[0];
+                                            if (file) void uploadReference(file);
+                                        }}
+                                    />
+                                </label>
+                            ) : (
+                                <div className="ai-studio-reference-card" aria-live="polite">
+                                    <div className="ai-studio-reference-preview">
+                                        {referencePreviewUrl || referenceAsset?.previewUrl ? (
+                                            <img
+                                                src={referencePreviewUrl || referenceAsset?.previewUrl || ''}
+                                                alt={referenceAsset?.originalName || referenceFileName}
+                                            />
+                                        ) : (
+                                            <ImagePlus aria-hidden="true" />
+                                        )}
+                                        {referenceBusy ? (
+                                            <span
+                                                className="ai-studio-reference-preview-loading"
+                                                aria-hidden="true"
+                                            >
+                                                <LoaderCircle className="spin" />
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <div className="ai-studio-reference-meta">
+                                        <span className={referenceBusy ? 'is-uploading' : 'is-success'}>
+                                            {referenceBusy ? (
+                                                <LoaderCircle className="spin" aria-hidden="true" />
+                                            ) : (
+                                                <CheckCircle2 aria-hidden="true" />
+                                            )}
+                                            {referenceBusy
+                                                ? isZh
+                                                    ? '正在上传'
+                                                    : 'Uploading'
+                                                : isZh
+                                                  ? '上传成功'
+                                                  : 'Upload complete'}
+                                        </span>
+                                        <strong title={referenceAsset?.originalName || referenceFileName}>
+                                            {referenceAsset?.originalName || referenceFileName}
+                                        </strong>
+                                        <small>
+                                            {referenceAsset
+                                                ? `${formatReferenceSize(referenceAsset.byteSize)} · ${referenceAsset.width} × ${referenceAsset.height}`
+                                                : isZh
+                                                  ? '正在安全处理图片…'
+                                                  : 'Processing image securely…'}
+                                        </small>
+                                    </div>
+                                    {!referenceBusy ? (
+                                        <div className="ai-studio-reference-actions">
+                                            <label>
+                                                {isZh ? '更换' : 'Replace'}
+                                                <input
+                                                    ref={referenceInputRef}
+                                                    type="file"
+                                                    accept="image/png,image/jpeg,image/webp"
+                                                    onChange={event => {
+                                                        const file = event.target.files?.[0];
+                                                        if (file) void uploadReference(file);
+                                                    }}
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                aria-label={isZh ? '移除参考图' : 'Remove reference image'}
+                                                onClick={clearReference}
+                                            >
+                                                <Trash2 aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            )}
                             {referenceAsset ? (
-                                <>
+                                <label className="ai-studio-reference-mode">
+                                    <span>{isZh ? '参考图用途' : 'Reference role'}</span>
                                     <select
                                         aria-label={isZh ? '参考图用途' : 'Reference image role'}
                                         value={referenceMode}
@@ -500,25 +705,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         </option>
                                         <option value="EDIT">{isZh ? '编辑原图' : 'Edit'}</option>
                                     </select>
-                                    <div className="ai-studio-reference-preview">
-                                        {referenceAsset.previewUrl ? (
-                                            <img
-                                                src={referenceAsset.previewUrl}
-                                                alt={referenceAsset.originalName}
-                                            />
-                                        ) : (
-                                            <span aria-label={referenceAsset.originalName}>参考图</span>
-                                        )}
-                                        <span>{referenceAsset.originalName}</span>
-                                        <button
-                                            type="button"
-                                            aria-label={isZh ? '移除参考图' : 'Remove reference image'}
-                                            onClick={clearReference}
-                                        >
-                                            <X aria-hidden="true" />
-                                        </button>
-                                    </div>
-                                </>
+                                </label>
+                            ) : null}
+                            {referenceError ? (
+                                <div className="ai-studio-reference-error" role="alert">
+                                    <CircleAlert aria-hidden="true" />
+                                    <span>{referenceError}</span>
+                                </div>
                             ) : null}
                         </div>
                         {optimized ? (
@@ -564,7 +757,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         className={selected ? 'is-selected' : ''}
                                         role="radio"
                                         aria-checked={selected}
-                                        aria-label={`${modelName}，${formatBillingMoney(option?.unitPrice ?? 0, model.currencyCode, market.locale)}${isZh ? '每张' : ' per image'}`}
+                                        aria-label={`${modelName}，${formatDisplayMoney(option?.unitPrice ?? 0, model.currencyCode, market.locale)}${isZh ? '每张' : ' per image'}`}
                                         onClick={() => selectModel(model.code)}
                                     >
                                         <span className="ai-studio-radio-mark" aria-hidden="true">
@@ -572,7 +765,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         </span>
                                         <span className="ai-studio-model-description">{modelName}</span>
                                         <strong>
-                                            {formatBillingMoney(
+                                            {formatDisplayMoney(
                                                 option?.unitPrice ?? 0,
                                                 model.currencyCode,
                                                 market.locale,
@@ -608,13 +801,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 <div className="ai-studio-settlement-amount">
                                     <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
                                     <strong className="is-balance">
-                                        {formatBillingMoney(balance, billingCurrencyCode, market.locale)}
+                                        {formatDisplayMoney(balance, billingCurrencyCode, market.locale)}
                                     </strong>
                                 </div>
                                 <div className="ai-studio-settlement-amount" aria-live="polite">
                                     <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
                                     <strong>
-                                        {formatBillingMoney(
+                                        {formatDisplayMoney(
                                             estimatedPrice,
                                             billingCurrencyCode,
                                             market.locale,
@@ -629,8 +822,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         </strong>
                                         <span>
                                             {isZh
-                                                ? `免费 ${freeRemaining} 张 + 付费 ${paidQuantity} 张；仅成功图片结算，失败自动释放`
-                                                : `${freeRemaining} free + ${paidQuantity} paid; only successful images are charged`}
+                                                ? `免费 ${freeRemaining} 张 + 付费 ${paidQuantity} 张；仅成功图片结算，失败自动释放${displayCurrencyCode === 'USDT' ? `；USDT 仅供估算展示，实际按 ${billingCurrencyCode} 结算` : ''}`
+                                                : `${freeRemaining} free + ${paidQuantity} paid; only successful images are charged${displayCurrencyCode === 'USDT' ? `; USDT is an estimate and settles in ${billingCurrencyCode}` : ''}`}
                                         </span>
                                     </div>
                                 </div>
@@ -817,7 +1010,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                                   disabled={availability.status !== 'AVAILABLE'}
                                                   label={
                                                       availability.status === 'AVAILABLE'
-                                                          ? `${value} · ${formatBillingMoney(
+                                                          ? `${value} · ${formatDisplayMoney(
                                                                 availability.option.unitPrice,
                                                                 billingCurrencyCode,
                                                                 market.locale,
@@ -927,6 +1120,7 @@ function GenerationCard({
     const isZh = language === 'zh';
     const preview = job.outputs.find(output => output.imageUrl) ?? job.outputs[0];
     const statusClass = job.state.toLowerCase();
+    const progress = imageGenerationProgress(job);
     const amountLabel = activeStates.has(job.state)
         ? isZh
             ? `已冻结 ${formatBillingMoney(job.reservedAmount, job.currencyCode, locale)}`
@@ -962,9 +1156,31 @@ function GenerationCard({
                 </header>
                 <p>{job.originalPrompt}</p>
                 {activeStates.has(job.state) ? (
-                    <span className="ai-generation-progress-copy">
-                        {isZh ? '任务正在处理中，请稍候…' : 'Your generation is in progress…'}
-                    </span>
+                    <div className="ai-generation-progress">
+                        <div>
+                            <span className="ai-generation-progress-copy">
+                                {job.state === 'UNKNOWN'
+                                    ? isZh
+                                        ? '正在核对上游结果…'
+                                        : 'Checking the provider result…'
+                                    : isZh
+                                      ? '任务正在处理中，请稍候…'
+                                      : 'Your generation is in progress…'}
+                            </span>
+                            <strong aria-live="polite">
+                                {progress.processed}/{progress.total} · {progress.percentage}%
+                            </strong>
+                        </div>
+                        <progress
+                            max={progress.total}
+                            value={progress.processed || undefined}
+                            aria-label={
+                                isZh
+                                    ? `已处理 ${progress.processed}/${progress.total} 张，${progress.percentage}%`
+                                    : `${progress.processed} of ${progress.total} processed, ${progress.percentage}%`
+                            }
+                        />
+                    </div>
                 ) : job.errorMessage ? (
                     <span className="ai-generation-error-copy">{job.errorMessage}</span>
                 ) : null}
@@ -1181,6 +1397,12 @@ function formatGenerationTime(value: string, locale: string, isZh: boolean): str
         hour12: false,
     }).format(createdAt);
     return sameDay ? `${isZh ? '今天' : 'Today'} ${time}` : new Intl.DateTimeFormat(locale).format(createdAt);
+}
+function formatReferenceSize(byteSize: number): string {
+    if (!Number.isFinite(byteSize) || byteSize <= 0) return '0 KB';
+    const kilobytes = byteSize / 1024;
+    if (kilobytes < 1024) return `${Math.max(1, Math.round(kilobytes))} KB`;
+    return `${(kilobytes / 1024).toFixed(1)} MB`;
 }
 function requestId(): string {
     return globalThis.crypto?.randomUUID?.() ?? `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;

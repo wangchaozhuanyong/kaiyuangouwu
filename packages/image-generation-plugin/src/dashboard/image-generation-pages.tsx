@@ -64,6 +64,7 @@ import {
     imageAiUsageRecordsQuery,
     imageGenerationAdminQuery,
     imageProviderAdminQuery,
+    reconcileStaleImageOutputsMutation,
     refundImageOutputMutation,
     retryImageOutputMutation,
     saveImageCredentialMutation,
@@ -105,19 +106,20 @@ export const imageGenerationAccessRoute: DashboardRouteDefinition = {
     component: () => <ImageGenerationAccessPage />,
 };
 
-function useImageAdminQuery() {
+function useImageAdminQuery(autoRefresh: boolean) {
     return useQuery({
         queryKey: ['image-generation-admin'],
         queryFn: () => api.query<ImageAdminQueryResult>(imageGenerationAdminQuery),
+        refetchInterval: autoRefresh ? 5_000 : false,
     });
 }
 
 function ImageGenerationSettingsPage() {
-    const query = useImageAdminQuery();
-    const config = query.data?.imageGenerationAdminConfig;
-    const [draft, setDraft] = useState<ImageAdminConfigRecord | null>(null);
     const [activeTab, setActiveTab] = useState('base');
     const [historyView, setHistoryView] = useState<'usage' | 'prompts' | 'generation'>('usage');
+    const query = useImageAdminQuery(activeTab === 'jobs' && historyView === 'generation');
+    const config = query.data?.imageGenerationAdminConfig;
+    const [draft, setDraft] = useState<ImageAdminConfigRecord | null>(null);
     const [usageSearch, setUsageSearch] = useState('');
     const [usageState, setUsageState] = useState('');
     const [usageBilling, setUsageBilling] = useState('');
@@ -164,6 +166,7 @@ function ImageGenerationSettingsPage() {
             usagePage,
         ],
         enabled: activeTab === 'jobs' && historyView === 'usage',
+        refetchInterval: 5_000,
         queryFn: () =>
             api.query<ImageAiUsageRecordsQueryResult>(imageAiUsageRecordsQuery, {
                 input: {
@@ -185,6 +188,7 @@ function ImageGenerationSettingsPage() {
     const usageDetailQuery = useQuery({
         queryKey: ['image-ai-usage-record', selectedUsage?.recordType, selectedUsage?.id],
         enabled: activeTab === 'jobs' && historyView === 'usage' && selectedUsage != null,
+        refetchInterval: 5_000,
         queryFn: () =>
             api.query<ImageAiUsageRecordDetailQueryResult>(imageAiUsageRecordDetailQuery, {
                 recordType: selectedUsage?.recordType,
@@ -273,6 +277,22 @@ function ImageGenerationSettingsPage() {
     const retryOutput = useMutation({
         mutationFn: (outputId: string) => api.mutate(retryImageOutputMutation, { outputId }),
         onSuccess: () => void query.refetch(),
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const reconcileStaleOutputs = useMutation({
+        mutationFn: () =>
+            api.mutate<{ reconcileStaleImageGenerationOutputs: number }>(
+                reconcileStaleImageOutputsMutation,
+                {},
+            ),
+        onSuccess: result => {
+            const count = result.reconcileStaleImageGenerationOutputs;
+            if (count > 0) toast.success(`已处理 ${count} 个超时结果，并释放对应费用`);
+            else toast.success('核对完成，当前没有超过 15 分钟的待确认任务');
+            void query.refetch();
+            void usageQuery.refetch();
+            if (selectedUsage) void usageDetailQuery.refetch();
+        },
         onError: error => toast.error(errorMessage(error)),
     });
     const refundOutput = useMutation({
@@ -1005,6 +1025,41 @@ function ImageGenerationSettingsPage() {
                             title={`AI 使用记录（共 ${usageQuery.data?.imageAiUsageRecords.totalItems ?? 0}）`}
                             description="统一记录提示词优化和图片生成；筛选在服务端执行，不受当前页面已加载数量影响。"
                         >
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3">
+                                <p className="text-sm text-muted-foreground">
+                                    状态每 5 秒自动刷新；结果待确认超过 15 分钟后会自动失败并释放本张费用。
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={query.isFetching || usageQuery.isFetching}
+                                        onClick={() => {
+                                            void query.refetch();
+                                            void usageQuery.refetch();
+                                            if (selectedUsage) void usageDetailQuery.refetch();
+                                        }}
+                                    >
+                                        <RefreshCw
+                                            className={`mr-2 h-4 w-4 ${query.isFetching || usageQuery.isFetching ? 'animate-spin' : ''}`}
+                                        />
+                                        刷新状态
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={reconcileStaleOutputs.isPending}
+                                        onClick={() => reconcileStaleOutputs.mutate()}
+                                    >
+                                        {reconcileStaleOutputs.isPending ? (
+                                            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <RefreshCw className="mr-2 h-4 w-4" />
+                                        )}
+                                        核对超时任务
+                                    </Button>
+                                </div>
+                            </div>
                             <div className="mb-5 grid gap-3 rounded-lg bg-muted/30 p-4 md:grid-cols-2 xl:grid-cols-4">
                                 <Field label="客户">
                                     <Input
@@ -1237,103 +1292,141 @@ function ImageGenerationSettingsPage() {
                             ) : null}
                         </PageBlock>
                         {historyView === 'usage' && selectedUsage ? (
-                            <PageBlock
-                                column="full"
-                                blockId="ai-usage-detail"
-                                title="AI 使用记录详情"
-                                description="完整提示词与计费时间线只对具备 AI 审计权限的管理员开放。"
-                            >
-                                {usageDetailQuery.isLoading ? <Skeleton className="h-48 w-full" /> : null}
-                                {usageDetailQuery.error ? (
-                                    <Alert>
-                                        <AlertDescription>
-                                            {errorMessage(usageDetailQuery.error)}
-                                        </AlertDescription>
-                                    </Alert>
-                                ) : null}
-                                {usageDetailQuery.data ? (
-                                    <div className="space-y-5">
-                                        <div className="grid gap-4 md:grid-cols-2">
-                                            <div className="rounded border p-3">
-                                                <strong>原始提示词</strong>
-                                                <div className="mt-2 whitespace-pre-wrap break-words">
-                                                    {usageDetailQuery.data.imageAiUsageRecord.inputPrompt}
+                            <PageBlock column="full" blockId="ai-usage-detail-sheet" className="hidden">
+                                <Sheet open onOpenChange={open => !open && setSelectedUsage(null)}>
+                                    <SheetContent className="flex w-full max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[880px] sm:max-w-[880px]">
+                                        <SheetHeader className="border-b px-6 py-5 text-left">
+                                            <SheetTitle>AI 使用记录详情</SheetTitle>
+                                            <SheetDescription>
+                                                查看完整提示词、上游请求信息和计费状态时间线。
+                                            </SheetDescription>
+                                        </SheetHeader>
+                                        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                                            {usageDetailQuery.isLoading ? (
+                                                <Skeleton className="h-48 w-full" />
+                                            ) : null}
+                                            {usageDetailQuery.error ? (
+                                                <Alert>
+                                                    <AlertDescription>
+                                                        {errorMessage(usageDetailQuery.error)}
+                                                    </AlertDescription>
+                                                </Alert>
+                                            ) : null}
+                                            {usageDetailQuery.data ? (
+                                                <div className="space-y-5">
+                                                    <div className="flex flex-wrap items-center gap-2 rounded border p-3 text-sm">
+                                                        <Badge>
+                                                            {statusZh(
+                                                                usageDetailQuery.data.imageAiUsageRecord
+                                                                    .record.state,
+                                                            )}
+                                                        </Badge>
+                                                        <span>
+                                                            {
+                                                                usageDetailQuery.data.imageAiUsageRecord
+                                                                    .record.modelCode
+                                                            }
+                                                        </span>
+                                                        <span className="text-muted-foreground">
+                                                            {new Date(
+                                                                usageDetailQuery.data.imageAiUsageRecord
+                                                                    .record.createdAt,
+                                                            ).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid gap-4 md:grid-cols-2">
+                                                        <div className="rounded border p-3">
+                                                            <strong>原始提示词</strong>
+                                                            <div className="mt-2 whitespace-pre-wrap break-words">
+                                                                {
+                                                                    usageDetailQuery.data.imageAiUsageRecord
+                                                                        .inputPrompt
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                        <div className="rounded border p-3">
+                                                            <strong>优化/最终提示词</strong>
+                                                            <div className="mt-2 whitespace-pre-wrap break-words">
+                                                                {usageDetailQuery.data.imageAiUsageRecord
+                                                                    .outputPrompt || '—'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        Token：
+                                                        {usageDetailQuery.data.imageAiUsageRecord
+                                                            .totalTokens ?? '—'}{' '}
+                                                        · 上游请求 ID：
+                                                        {usageDetailQuery.data.imageAiUsageRecord.providerRequestIds.join(
+                                                            '、',
+                                                        ) || '—'}
+                                                    </div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-sm">
+                                                            <thead>
+                                                                <tr className="border-b text-left">
+                                                                    <th className="p-2">时间</th>
+                                                                    <th>阶段</th>
+                                                                    <th>状态</th>
+                                                                    <th>额度/金额</th>
+                                                                    <th>Key</th>
+                                                                    <th>说明</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {usageDetailQuery.data.imageAiUsageRecord.timeline.map(
+                                                                    (event, index) => (
+                                                                        <tr
+                                                                            key={`${event.at}:${event.stage}:${index}`}
+                                                                            className="border-b align-top"
+                                                                        >
+                                                                            <td className="p-2">
+                                                                                {new Date(
+                                                                                    event.at,
+                                                                                ).toLocaleString()}
+                                                                            </td>
+                                                                            <td>{event.stage}</td>
+                                                                            <td>{event.status}</td>
+                                                                            <td>
+                                                                                {event.amount == null
+                                                                                    ? '—'
+                                                                                    : `${event.amount}${event.currencyCode ? ` ${event.currencyCode}` : ''}`}
+                                                                                {event.costMicrounits ==
+                                                                                null ? null : (
+                                                                                    <div className="text-xs text-muted-foreground">
+                                                                                        上游成本{' '}
+                                                                                        {(
+                                                                                            event.costMicrounits /
+                                                                                            1_000_000
+                                                                                        ).toFixed(6)}
+                                                                                    </div>
+                                                                                )}
+                                                                            </td>
+                                                                            <td>
+                                                                                {event.keyName || '—'}
+                                                                                {event.keyLast4
+                                                                                    ? ` · 尾号 ${event.keyLast4}`
+                                                                                    : ''}
+                                                                            </td>
+                                                                            <td className="max-w-md break-words">
+                                                                                {event.message}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ),
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="rounded border p-3">
-                                                <strong>优化/最终提示词</strong>
-                                                <div className="mt-2 whitespace-pre-wrap break-words">
-                                                    {usageDetailQuery.data.imageAiUsageRecord.outputPrompt ||
-                                                        '—'}
-                                                </div>
-                                            </div>
+                                            ) : null}
                                         </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            Token：
-                                            {usageDetailQuery.data.imageAiUsageRecord.totalTokens ?? '—'} ·
-                                            上游请求 ID：
-                                            {usageDetailQuery.data.imageAiUsageRecord.providerRequestIds.join(
-                                                '、',
-                                            ) || '—'}
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead>
-                                                    <tr className="border-b text-left">
-                                                        <th className="p-2">时间</th>
-                                                        <th>阶段</th>
-                                                        <th>状态</th>
-                                                        <th>额度/金额</th>
-                                                        <th>Key</th>
-                                                        <th>说明</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {usageDetailQuery.data.imageAiUsageRecord.timeline.map(
-                                                        (event, index) => (
-                                                            <tr
-                                                                key={`${event.at}:${event.stage}:${index}`}
-                                                                className="border-b align-top"
-                                                            >
-                                                                <td className="p-2">
-                                                                    {new Date(event.at).toLocaleString()}
-                                                                </td>
-                                                                <td>{event.stage}</td>
-                                                                <td>{event.status}</td>
-                                                                <td>
-                                                                    {event.amount == null
-                                                                        ? '—'
-                                                                        : `${event.amount}${event.currencyCode ? ` ${event.currencyCode}` : ''}`}
-                                                                    {event.costMicrounits == null ? null : (
-                                                                        <div className="text-xs text-muted-foreground">
-                                                                            上游成本{' '}
-                                                                            {(
-                                                                                event.costMicrounits /
-                                                                                1_000_000
-                                                                            ).toFixed(6)}
-                                                                        </div>
-                                                                    )}
-                                                                </td>
-                                                                <td>
-                                                                    {event.keyName || '—'}
-                                                                    {event.keyLast4
-                                                                        ? ` · 尾号 ${event.keyLast4}`
-                                                                        : ''}
-                                                                </td>
-                                                                <td className="max-w-md break-words">
-                                                                    {event.message}
-                                                                </td>
-                                                            </tr>
-                                                        ),
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        <Button variant="outline" onClick={() => setSelectedUsage(null)}>
-                                            关闭详情
-                                        </Button>
-                                    </div>
-                                ) : null}
+                                        <SheetFooter className="border-t px-6 py-4">
+                                            <Button variant="outline" onClick={() => setSelectedUsage(null)}>
+                                                关闭
+                                            </Button>
+                                        </SheetFooter>
+                                    </SheetContent>
+                                </Sheet>
                             </PageBlock>
                         ) : null}
                         <PageBlock
@@ -1434,6 +1527,37 @@ function ImageGenerationSettingsPage() {
                             title={`任务记录（共 ${data.imageGenerationJobs.totalItems}）`}
                             description="UNKNOWN 不会自动重复生成；15 分钟后自动退回，或由管理员确认后使用同一幂等键重试。"
                         >
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3">
+                                <p className="text-sm text-muted-foreground">
+                                    任务状态每 5 秒自动刷新；超时待确认任务会在 15 分钟后安全释放费用。
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={query.isFetching}
+                                        onClick={() => void query.refetch()}
+                                    >
+                                        <RefreshCw
+                                            className={`mr-2 h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`}
+                                        />
+                                        刷新状态
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={reconcileStaleOutputs.isPending}
+                                        onClick={() => reconcileStaleOutputs.mutate()}
+                                    >
+                                        {reconcileStaleOutputs.isPending ? (
+                                            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <RefreshCw className="mr-2 h-4 w-4" />
+                                        )}
+                                        核对超时任务
+                                    </Button>
+                                </div>
+                            </div>
                             <div className="mb-5 grid gap-3 rounded-lg bg-muted/30 p-4 md:grid-cols-2 xl:grid-cols-4">
                                 <Field label="客户/模型/Key">
                                     <Input

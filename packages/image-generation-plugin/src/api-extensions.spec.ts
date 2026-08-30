@@ -31,6 +31,7 @@ describe('image generation GraphQL surface', () => {
         expect(schema).toContain('lastTestedAt');
         expect(schema).toContain('supportsIdempotency');
         expect(schema).toContain('smokeTestImageModel');
+        expect(schema).toContain('reconcileStaleImageGenerationOutputs');
         expect(schema).toContain('imageGenerationCostSummary');
         expect(schema).toContain('supportedUseCases');
         expect(schema).toContain('supportedModels');

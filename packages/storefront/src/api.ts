@@ -17,6 +17,7 @@ import {
     ImagePromptQuotaStatus,
     ImageReferenceMode,
     ImageStudioConfig,
+    ImageStudioWallet,
     MarketConfig,
     MyReferralOverview,
     Order,
@@ -1363,7 +1364,7 @@ export class ShopApi {
             `
                 query ImageStudioConfig {
                     imageStudioConfig {
-                        enabled promptOptimizationEnabled promptRateLimitPerMinute promptDailyFreeLimit promptDailyFreeUnlimited
+                        enabled promptOptimizationEnabled promptOptimizerModelIds promptRateLimitPerMinute promptDailyFreeLimit promptDailyFreeUnlimited
                         paidPromptOptimizationEnabled paidPromptOptimizationPrice paidPromptOptimizationCurrencyCode
                         defaultModelCode termsVersion termsZh termsEn
                         outputRetentionDays referenceRetentionHours maxReferenceBytes maxReferencePixels maxQuantity
@@ -1389,6 +1390,17 @@ export class ShopApi {
             signal,
         );
         return result.imageStudioBalance;
+    }
+
+    async imageStudioWallet(signal?: AbortSignal): Promise<ImageStudioWallet> {
+        const result = await this.request<{ imageStudioWallet: ImageStudioWallet }>(
+            `query ImageStudioWallet {
+                imageStudioWallet { availableBalance currencyCode }
+            }`,
+            undefined,
+            signal,
+        );
+        return result.imageStudioWallet;
     }
 
     async imagePromptQuotaStatus(signal?: AbortSignal): Promise<ImagePromptQuotaStatus> {
@@ -1430,7 +1442,7 @@ export class ShopApi {
             `
                 mutation OptimizeImagePrompt($input: OptimizeImagePromptInput!) {
                     optimizeImagePrompt(input: $input) {
-                        originalPrompt optimizedPrompt promptSpec source recommendedModelCode recommendationReason promptSkillHash
+                        originalPrompt optimizedPrompt promptSpec source optimizerModelId recommendedModelCode recommendationReason promptSkillHash
                         billingMode chargedAmount currencyCode inputTokens outputTokens totalTokens actualCostMicrounits costCurrency
                         promptQuota {
                             paidEnabled paidPrice currencyCode
