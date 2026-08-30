@@ -45,6 +45,41 @@ function businessPluginBlock(): StorefrontContentBlock {
     };
 }
 
+function navigationBlock(servicesLabel: string): StorefrontContentBlock {
+    return {
+        id: 'navigation',
+        code: 'storefront-navigation',
+        type: 'NAVIGATION',
+        enabled: true,
+        position: 10_000,
+        startsAt: null,
+        endsAt: null,
+        imageUrl: null,
+        backgroundColor: null,
+        textColor: null,
+        targetType: 'NONE',
+        targetValue: null,
+        settings: null,
+        title: '客户端导航',
+        subtitle: '',
+        body: '',
+        ctaLabel: '',
+        items: [
+            {
+                id: 'services-navigation-item',
+                enabled: true,
+                position: 0,
+                imageUrl: null,
+                targetType: 'PAGE',
+                targetValue: '/services',
+                settings: null,
+                label: servicesLabel,
+                description: '',
+            },
+        ],
+    };
+}
+
 function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh') {
     return renderToStaticMarkup(
         <StorefrontContext.Provider value={{ contentBlocks, language, onNavigate: () => undefined }}>
@@ -54,11 +89,18 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
 }
 
 describe('business services page', () => {
-    it('shows the default page name and an empty state before services are enabled', () => {
+    it('shows the centered default navigation name and an empty state before services are enabled', () => {
         const markup = renderPage([]);
 
-        expect(markup).toContain('商业服务');
+        expect(markup).toContain('<h1 class="business-services-page-title">智能服务</h1>');
+        expect(markup).not.toContain('business-services-title-icon');
         expect(markup).toContain('商业服务正在陆续开放');
+    });
+
+    it('keeps the page title synchronized with the configured bottom navigation label', () => {
+        const markup = renderPage([navigationBlock('AI 智能服务')]);
+
+        expect(markup).toContain('<h1 class="business-services-page-title">AI 智能服务</h1>');
     });
 
     it('renders enabled plugins in the business-services main position', () => {

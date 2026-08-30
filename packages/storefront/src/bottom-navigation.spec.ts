@@ -54,7 +54,7 @@ describe('bottom navigation configuration', () => {
         expect(resolveBottomNavigationItems(undefined, 'zh').map(item => item.label)).toEqual([
             '首页',
             '商品',
-            '商业服务',
+            '智能服务',
             '购物车',
             '我的',
         ]);

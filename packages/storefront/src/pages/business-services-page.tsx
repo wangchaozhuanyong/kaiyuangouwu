@@ -1,8 +1,9 @@
-import { BriefcaseBusiness, Puzzle, Sparkles } from 'lucide-react';
+import { Puzzle, Sparkles } from 'lucide-react';
 import type { RouteState } from '../storefront-router';
 import type { StorefrontContentBlock, StorefrontLanguage } from '../types';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
+import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { useStorefront } from '../StorefrontContext';
 
 const CLIENT_PLUGIN_BLOCK_CODE = 'storefront-client-plugins';
@@ -20,6 +21,10 @@ export function BusinessServicesPage() {
     const clientPluginBlock = contentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === CLIENT_PLUGIN_BLOCK_CODE,
     );
+    const navigationBlock = contentBlocks.find(block => block.type === 'NAVIGATION');
+    const pageTitle =
+        resolveBottomNavigationItems(navigationBlock, language).find(item => item.routeName === 'services')
+            ?.label ?? (isZh ? '智能服务' : 'Intelligent services');
     const hasManagedCopy =
         clientPluginBlock?.settings?.businessServicesCopyVersion === BUSINESS_SERVICES_COPY_VERSION;
     const heroTitle =
@@ -35,12 +40,7 @@ export function BusinessServicesPage() {
     return (
         <main className="page business-services-page">
             <header className="topbar business-services-topbar">
-                <div className="business-services-title-lockup">
-                    <span className="business-services-title-icon" aria-hidden="true">
-                        <BriefcaseBusiness />
-                    </span>
-                    <h1>{isZh ? '商业服务' : 'Business services'}</h1>
-                </div>
+                <h1 className="business-services-page-title">{pageTitle}</h1>
             </header>
 
             <section className="business-services-hero" aria-labelledby="business-services-heading">
