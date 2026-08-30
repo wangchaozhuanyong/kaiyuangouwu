@@ -66,24 +66,62 @@ describe('StorefrontPromotionHtmlService', () => {
     });
 
     it('provides a responsive default page with semantic store bindings', () => {
-        expect(service.defaultTemplate).toContain('min-height: 100dvh');
+        expect(service.defaultTemplate).toContain('min-height:100dvh');
         expect(service.defaultTemplate).toContain('Damatong');
         expect(service.defaultTemplate).toContain('data-promo-header');
-        expect(service.defaultTemplate).toContain('data-promo-signal-stage');
-        expect(service.defaultTemplate).toContain('data-promo-signal-canvas');
-        expect(service.defaultTemplate).toContain('promo-network-core');
-        expect(service.defaultTemplate).toContain('data-promo-surface');
+        expect(service.defaultTemplate).toContain('data-promo-motion');
         expect(service.defaultTemplate).toContain('data-promo-reveal');
-        expect(service.defaultTemplate).toContain('promo-capability-mark');
-        expect(service.defaultTemplate).toContain('promo-timeline');
+        expect(service.defaultTemplate).toContain('promo-capability-channels');
+        expect(service.defaultTemplate).toContain('promo-process-path');
         expect(service.defaultTemplate).toContain('promo-faq-item');
+        expect(service.defaultTemplate).toContain('data-promo-carousel');
+        expect(service.defaultTemplate).toContain('promo-hero-art');
+        expect(service.defaultTemplate.match(/data-promo-slide role/g)).toHaveLength(3);
+        expect(service.defaultTemplate.match(/data-promo-slide-button=/g)).toHaveLength(3);
+        expect(service.defaultTemplate).not.toContain('data-promo-value-item');
+        expect(service.defaultTemplate).not.toContain('promo-value-module');
+        expect(service.defaultTemplate).not.toContain('data-promo-progress');
+        expect(service.defaultTemplate).not.toContain('data-promo-carousel-toggle');
         expect(service.defaultTemplate).toContain('{{promo.metaTitle}}');
         expect(service.defaultTemplate).toContain('{{promo.finalTitle}}');
-        expect(service.defaultTemplate).toContain('--faint: #728198');
+        expect(service.defaultTemplate).toContain('--amber:#efa83f');
+        expect(service.defaultTemplate).toContain('Silver Mist');
+        expect(service.defaultTemplate).toContain('damatong-silver-stage-v23.webp');
+        expect(service.defaultTemplate).toContain('damatong-silver-stage-mobile-v23.webp');
+        expect(service.defaultTemplate).toContain('damatong-amber-mark-v15.webp');
+        expect(service.defaultTemplate).not.toContain('damatong-obsidian-field-v15.webp');
+        expect(service.defaultTemplate).not.toContain('damatong-lunar-amber-v15.webp');
         expect(service.defaultTemplate).toContain('data-store-entry');
         expect(service.defaultTemplate).toContain('promo-mobile-entry');
-        expect(service.defaultTemplateVersion).toBe(14);
+        expect(service.defaultTemplate).toContain('prefers-reduced-motion:reduce');
+        expect(service.defaultTemplate).toContain('.promo-hero { min-height:auto; }');
+        expect(service.defaultTemplate).toContain('.promo-hero-inner { min-height:0; padding:68px 0 18px; }');
+        expect(service.defaultTemplate).not.toContain('min-height:max(720px,calc(100svh - 64px))');
+        expect(service.defaultTemplate).not.toContain('min-width:320px');
+        expect(service.defaultTemplate).not.toContain('.promo-value-rail');
+        expect(service.defaultTemplate).not.toContain('<canvas');
+        expect(service.defaultTemplate).not.toContain('data-promo-signal-canvas');
+        expect(service.defaultTemplate).not.toContain('promo-visual-canvas');
+        expect(service.defaultTemplate).toContain('--section-top:clamp(76px,6.4vw,108px)');
+        expect(service.defaultTemplate).toContain('--section-bottom:clamp(56px,4.8vw,82px)');
+        expect(service.defaultTemplate).toContain('--section-top:48px; --section-bottom:32px');
+        expect(service.defaultTemplate).toContain(
+            '.promo-section-title { max-width:15ch; margin-inline:auto;',
+        );
+        expect(service.defaultTemplate).toContain('.promo-final h2 { max-width:15ch; margin-inline:auto;');
+        expect(service.defaultTemplate).toContain(
+            '.promo-footer { min-height:0; align-items:center; justify-content:center;',
+        );
+        expect(service.defaultTemplate).toContain(
+            'padding:30px 0 48px; border-top:1px solid var(--line); text-align:center;',
+        );
+        expect(service.defaultTemplate).toContain(
+            '.promo-footer-meta,.promo-footer-nav { width:100%; justify-content:center; }',
+        );
+        expect(service.defaultTemplate).toContain('.promo-faq-item.is-faq-closing summary::after');
+        expect(service.defaultTemplateVersion).toBe(23);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
+        expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThanOrEqual(58 * 1024);
     });
 
     it('renders a crawl-safe business introduction without live catalog data', () => {
@@ -95,9 +133,10 @@ describe('StorefrontPromotionHtmlService', () => {
         });
 
         expect(html).toContain('Damatong');
-        expect(html).toContain('AI 工具');
-        expect(html).toContain('AI 订阅服务');
-        expect(html).toContain('少花时间筛选');
+        expect(html).toContain('AI 效率工具');
+        expect(html).toContain('AI 服务订阅');
+        expect(html).toContain('低至 0.1 倍起');
+        expect(html).toContain('不同模型、通道与当前价格以服务中心为准');
         expect(html).toContain('查看可用服务');
         expect(html).toContain('可以直接在这里完成购买或交易吗');
         expect(html.match(/推广页只用于介绍服务方向/gu)).toHaveLength(1);
@@ -136,14 +175,22 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(englishHtml).toContain('AI Digital Services');
         expect(englishHtml).toContain('View available services');
         expect(englishHtml).toContain('AI subscriptions');
+        expect(englishHtml).toContain('AI usage credits');
+        expect(englishHtml).toContain('Entrepreneurship');
+        expect(englishHtml).toContain('Coverage across workflows');
+        expect(englishHtml).not.toContain('Token credits');
         expect(englishHtml).not.toContain('查看可用服务');
         expect(englishHtml).not.toContain('服务能力');
         expect(englishHtml).not.toContain('{{promo.');
         expect(chineseHtml).toContain('AI 数字服务');
         expect(chineseHtml).toContain('查看可用服务');
-        expect(chineseHtml).toContain('AI 订阅服务');
+        expect(chineseHtml).toContain('AI 服务订阅');
+        expect(chineseHtml).toContain('低至 0.1 倍起');
+        expect(chineseHtml).toContain('个人创业');
+        expect(chineseHtml).toContain('覆盖多种工作场景');
         expect(chineseHtml).not.toContain('View available services');
         expect(chineseHtml).not.toContain('SERVICE CAPABILITIES');
+        expect(chineseHtml).not.toContain('AI Digital Services');
         expect(chineseHtml).not.toContain('Token');
         expect(chineseHtml).not.toContain('TKN');
         expect(chineseHtml).not.toContain('TOOL');
@@ -153,7 +200,7 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(chineseHtml).not.toContain('{{promo.');
     });
 
-    it('appends only the trusted renderer to pages that opt into the signal canvas', () => {
+    it('appends only the trusted motion controller to pages that opt into promotion motion', () => {
         const html = service.render({
             contentType: 'HTML',
             source: service.defaultTemplate,
@@ -164,6 +211,24 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html.match(/data-storefront-promotion-visual/g)).toHaveLength(1);
         expect(html).toContain(PROMOTION_VISUAL_SCRIPT);
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('${JSON.stringify');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("page.setAttribute('data-promo-motion-state','ready')");
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain("getContext('2d'");
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('webgl');
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('canvas');
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain("addEventListener('scroll'");
+        expect(PROMOTION_VISUAL_SCRIPT).toContain('const slideInterval=3000');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain('carouselTimer=setTimeout');
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateProgress');
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateToggle');
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('interactionPaused');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain('const animateFaq=(item,opening)=>');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("duration:340,easing:'cubic-bezier(.22,1,.36,1)'");
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("typeof Element.prototype.animate!=='function'");
+        expect(PROMOTION_VISUAL_SCRIPT).not.toContain('valueItems');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain(
+            "carouselNav.addEventListener('keydown',handleCarouselKeys)",
+        );
         expect(html).toContain('Damatong');
 
         const renderedScript = html.match(
@@ -177,7 +242,7 @@ describe('StorefrontPromotionHtmlService', () => {
         ).toBe(PROMOTION_VISUAL_SCRIPT_SHA256);
     });
 
-    it('keeps the Damatong network core independent from optional store imagery', () => {
+    it('keeps the bundled Damatong campaign art independent from optional store imagery', () => {
         const withLogo = service.render({
             contentType: 'HTML',
             source: service.defaultTemplate,
@@ -191,9 +256,14 @@ describe('StorefrontPromotionHtmlService', () => {
             entryTicket: 'signed-ticket',
         });
 
-        expect(withLogo).toContain('class="promo-network-core"');
-        expect(withoutLogo).toContain('class="promo-network-core"');
-        expect(withoutLogo).toContain('data-promo-signal-canvas');
+        expect(withLogo).toContain('class="promo-brand-mark"');
+        expect(withoutLogo).toContain('class="promo-brand-mark"');
+        expect(withoutLogo).toContain('data-promo-motion');
+        expect(withoutLogo).toContain('/storefront/promo/damatong-silver-stage-v23.webp');
+        expect(withoutLogo).toContain('/storefront/promo/damatong-silver-stage-mobile-v23.webp');
+        expect(withoutLogo).toContain('/storefront/promo/damatong-amber-mark-v15.webp');
+        expect(withoutLogo).not.toContain('<canvas');
+        expect(withoutLogo).toContain('<picture class="promo-hero-art"');
         expect(withoutLogo).toContain('Damatong');
     });
 
