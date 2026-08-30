@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApiError } from './api';
 import {
+    ForgotPasswordPage,
     loginErrorMessage,
     LoginPage,
     registerErrorMessage,
@@ -144,8 +145,10 @@ describe('auth password visibility controls', () => {
         expect(markup).toContain('人工服务');
         expect(markup).toContain('class="auth-form-heading auth-form-heading-zh"');
         expect(markup).not.toContain('账户登录');
-        expect(markup).toContain('auth-back-row');
+        expect(markup).toContain('auth-hero-header');
         expect(markup).toContain('>返回</span>');
+        expect(markup).toContain('class="auth-route-tabs"');
+        expect(markup).toContain('aria-current="page"');
         expect(markup).toContain('aria-label="登录表单"');
         expect(markup).toMatch(/<label class="auth-field-label"[^>]*>电子邮箱<\/label>/);
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(1);
@@ -161,7 +164,8 @@ describe('auth password visibility controls', () => {
         expect(markup).toContain('验证邮箱即可开始使用');
         expect(markup).toContain('订单与售后状态清晰可查');
         expect(markup).not.toContain('新账户');
-        expect(markup).toContain('auth-back-row');
+        expect(markup).toContain('auth-hero-header');
+        expect(markup).toContain('class="auth-route-tabs"');
         expect(markup).toContain('智联云端 · 桥接未来');
         expect(markup).toContain('aria-label="注册表单"');
         expect(markup).toContain('密码需为 8–72 个字符');
@@ -222,6 +226,17 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('auth-hero-benefit');
         expect(markup).not.toContain('支持服务类型');
     });
+
+    it('reuses the login hero image and copy on the forgot-password page', () => {
+        const markup = renderToStaticMarkup(createElement(ForgotPasswordPage, authPageProps));
+
+        expect(markup).toContain('auth-page-login');
+        expect(markup).toContain('auth-login-ai-campaign-v2-480.webp');
+        expect(markup).toContain('你的 AI 工具，一处购买与管理');
+        expect(markup).toContain('主流工具精选');
+        expect(markup).toContain('找回密码');
+        expect(markup).not.toContain('auth-ai-bridge-hero');
+    });
 });
 
 describe('managed auth visual layout', () => {
@@ -232,6 +247,9 @@ describe('managed auth visual layout', () => {
         expect(styles).toContain('.auth-page .auth-hero-message-managed > .auth-hero-copy > p');
         expect(styles).toContain('.auth-page .auth-hero-message-managed .auth-hero-tags');
         expect(styles).toContain('.auth-page-managed .login-content');
+        expect(styles).toContain('.auth-page .auth-hero-header .auth-back-button');
+        expect(styles).toContain('.auth-page .auth-password-toggle svg');
+        expect(styles).toContain('.auth-route-tabs');
     });
 });
 

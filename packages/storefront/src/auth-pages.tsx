@@ -280,9 +280,17 @@ export function LoginPage({
             heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
+            <AuthRouteTabs
+                active="login"
+                language={language}
+                onLogin={() => navigateTo({ name: 'login' })}
+                onRegister={() => navigateTo({ name: 'register' })}
+            />
             <header className={`auth-form-heading auth-form-heading-${language}`}>
                 <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
-                <p>{isZh ? '查看订单与售后进度' : 'View orders and support status'}</p>
+                <p>
+                    {isZh ? '登录后继续管理你的 AI 工具与订单' : 'Continue managing your AI tools and orders'}
+                </p>
             </header>
             <form aria-label={isZh ? '登录表单' : 'Sign-in form'} onSubmit={event => void submit(event)}>
                 <Field
@@ -514,9 +522,19 @@ export function RegisterPage({
                 </AuthResult>
             ) : (
                 <>
+                    <AuthRouteTabs
+                        active="register"
+                        language={language}
+                        onLogin={() => navigateTo({ name: 'login' })}
+                        onRegister={() => navigateTo({ name: 'register' })}
+                    />
                     <header className={`auth-form-heading auth-form-heading-${language}`}>
                         <h1>{isZh ? '创建账户' : 'Create your account'}</h1>
-                        <p>{isZh ? '验证邮箱后完成注册' : 'Verify email to finish registration'}</p>
+                        <p>
+                            {isZh
+                                ? '验证邮箱后，即可统一管理收藏与订单'
+                                : 'Verify your email to manage favorites and orders'}
+                        </p>
                     </header>
                     <form
                         aria-label={isZh ? '注册表单' : 'Registration form'}
@@ -836,7 +854,14 @@ export function VerifyAccountPage({
     );
 }
 
-export function ForgotPasswordPage({ api, language, storefrontName, logoUrl, onBack }: AuthPageBaseProps) {
+export function ForgotPasswordPage({
+    api,
+    language,
+    storefrontName,
+    logoUrl,
+    authVisualContent,
+    onBack,
+}: AuthPageBaseProps & AuthVisualProps) {
     const navigate = useNavigate();
     const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
@@ -867,6 +892,8 @@ export function ForgotPasswordPage({ api, language, storefrontName, logoUrl, onB
     return (
         <AuthLayout
             title={isZh ? '忘记密码' : 'Forgot password'}
+            heroVariant="login"
+            heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack }}
         >
             {requested ? (
@@ -889,12 +916,14 @@ export function ForgotPasswordPage({ api, language, storefrontName, logoUrl, onB
                 </AuthResult>
             ) : (
                 <>
-                    <h1>{isZh ? '重置登录密码' : 'Reset your password'}</h1>
-                    <p>
-                        {isZh
-                            ? '输入注册邮箱，我们将发送重置链接'
-                            : 'Enter your email to receive a reset link'}
-                    </p>
+                    <header className={`auth-form-heading auth-form-heading-${language}`}>
+                        <h1>{isZh ? '找回密码' : 'Recover your password'}</h1>
+                        <p>
+                            {isZh
+                                ? '输入注册邮箱，我们会向你发送密码重置链接'
+                                : 'Enter your email and we will send you a password reset link'}
+                        </p>
+                    </header>
                     <form onSubmit={event => void submit(event)}>
                         <Field
                             name="emailAddress"
@@ -1086,6 +1115,17 @@ function AuthLayout({
                     decoding="async"
                     fetchPriority="high"
                 />
+                <div className="auth-hero-header">
+                    <button
+                        className="auth-back-button"
+                        type="button"
+                        onClick={onBack}
+                        aria-label={language === 'zh' ? '返回' : 'Back'}
+                    >
+                        <ArrowLeft aria-hidden="true" />
+                        <span>{language === 'zh' ? '返回' : 'Back'}</span>
+                    </button>
+                </div>
                 <div
                     className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}${hasManagedHero ? ' auth-hero-message-managed' : ''}`}
                 >
@@ -1172,17 +1212,6 @@ function AuthLayout({
             </section>
             <section className="login-content">
                 <div className="auth-form-column">
-                    <div className="auth-back-row">
-                        <button
-                            className="auth-back-button"
-                            type="button"
-                            onClick={onBack}
-                            aria-label={language === 'zh' ? '返回' : 'Back'}
-                        >
-                            <ArrowLeft aria-hidden="true" />
-                            <span>{language === 'zh' ? '返回' : 'Back'}</span>
-                        </button>
-                    </div>
                     <div className="auth-card-content">{children}</div>
                 </div>
             </section>
@@ -1311,6 +1340,34 @@ function SubmitButton({
             {submitting && <span className="auth-button-spinner" aria-hidden="true" />}
             <span>{submitting ? busy : idle}</span>
         </button>
+    );
+}
+
+function AuthRouteTabs({
+    active,
+    language,
+    onLogin,
+    onRegister,
+}: {
+    active: 'login' | 'register';
+    language: StorefrontLanguage;
+    onLogin: () => void;
+    onRegister: () => void;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <nav className="auth-route-tabs" aria-label={isZh ? '账户操作' : 'Account actions'}>
+            <button type="button" aria-current={active === 'login' ? 'page' : undefined} onClick={onLogin}>
+                {isZh ? '登录' : 'Sign in'}
+            </button>
+            <button
+                type="button"
+                aria-current={active === 'register' ? 'page' : undefined}
+                onClick={onRegister}
+            >
+                {isZh ? '注册' : 'Register'}
+            </button>
+        </nav>
     );
 }
 

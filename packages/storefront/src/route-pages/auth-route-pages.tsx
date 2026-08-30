@@ -87,6 +87,7 @@ export function ForgotPasswordRoutePage() {
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
                 storefrontName={runtime.storefrontName}
+                authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'login')}
                 onBack={runtime.goBack}
             />
         </AuthRouteBoundary>
