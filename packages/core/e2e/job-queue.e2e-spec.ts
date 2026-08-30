@@ -9,6 +9,7 @@ import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-conf
 
 import { PluginWithJobQueue } from './fixtures/test-plugins/with-job-queue';
 import { cancelJobDocument, getRunningJobsDocument } from './graphql/shared-definitions';
+import { pollUntil } from './utils/poll-until';
 
 describe('JobQueue', () => {
     const activeConfig = testConfig();
@@ -139,6 +140,8 @@ describe('JobQueue', () => {
         expect(jobs.items[0].id).toBe(jobId);
 
         PluginWithJobQueue.jobSubject.next();
+        // Wait until the cancelled processor has released its interval before starting another job.
+        await pollUntil(() => PluginWithJobQueue.jobHasDoneWork);
     });
 
     it('subscribe to result of job', async () => {
@@ -156,6 +159,8 @@ describe('JobQueue', () => {
 
         expect(result.status).toBe(200);
         expect(await result.text()).toBe('Job subscription timed out. The job may still be running');
+        // Under CI load the subscription can time out while the job is still pending in the queue.
+        await pollUntil(async () => (await getJobsInTestQueue(JobState.RUNNING)).items.length === 1);
         const jobs = await getJobsInTestQueue(JobState.RUNNING);
         expect(jobs.items.length).toBe(1);
     });

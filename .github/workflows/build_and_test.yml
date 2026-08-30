@@ -277,6 +277,7 @@ jobs:
         needs: detect-changes
         if: needs.detect-changes.outputs.packages == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         permissions:
             contents: read
         services:
@@ -305,6 +306,7 @@ jobs:
         needs: detect-changes
         if: needs.detect-changes.outputs.packages == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         permissions:
             contents: read
         services:
@@ -343,6 +345,7 @@ jobs:
         needs: detect-changes
         if: needs.detect-changes.outputs.packages == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         permissions:
             contents: read
         services:
@@ -379,6 +382,7 @@ jobs:
         needs: detect-changes
         if: needs.detect-changes.outputs.packages == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         permissions:
             contents: read
         services:

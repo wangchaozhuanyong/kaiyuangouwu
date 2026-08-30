@@ -816,7 +816,7 @@ export class ImageGenerationService {
         return true;
     }
 
-    async purgeSensitiveRecords(): Promise<number> {
+    purgeSensitiveRecords(): number {
         // 提示词和计费调用记录按审计策略长期保留；合规删除必须走单独授权流程。
         return 0;
     }
@@ -1006,7 +1006,7 @@ export class ImageGenerationService {
         await this.refreshJob(ctx, output.jobId);
     }
 
-    async settleSuccessfulOutput(
+    settleSuccessfulOutput(
         ctx: RequestContext,
         outputId: ID,
         assetId: ID,
@@ -1239,7 +1239,7 @@ export class ImageGenerationService {
         return finalPrompt;
     }
 
-    private async transitionAndRelease(
+    private transitionAndRelease(
         ctx: RequestContext,
         job: ImageGenerationJob,
         output: ImageGenerationOutput,
