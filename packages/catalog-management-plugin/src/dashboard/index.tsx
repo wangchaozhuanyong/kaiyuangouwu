@@ -3,8 +3,10 @@ import { defineDashboardExtension } from '@vendure/dashboard';
 import { CatalogExportAction } from './catalog-export-action';
 import { CatalogImportAction } from './catalog-import-workbench';
 import { CatalogProductWorkspace } from './catalog-product-workspace';
+import { catalogSupplierRoute } from './catalog-supplier-page';
 
 defineDashboardExtension({
+    routes: [catalogSupplierRoute],
     actionBarItems: [
         {
             id: 'catalog-safe-import',

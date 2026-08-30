@@ -4,10 +4,12 @@ import { Allow, Ctx, ID, RequestContext } from '@vendure/core';
 
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogOperationsService } from './catalog-operations.service';
+import { CatalogSupplierService } from './catalog-supplier.service';
 import {
     manageCatalogExportPermission,
     manageCatalogImportPermission,
     manageCatalogOperationsPermission,
+    manageCatalogSupplierPermission,
 } from './constants';
 import {
     AppendCatalogImportRowsInput,
@@ -16,10 +18,13 @@ import {
     CatalogProductListOptions,
     CatalogProductSummaryFilterInput,
     CreateCatalogProductVariantInput,
+    CatalogSupplierListOptions,
+    CreateCatalogSupplierInput,
     ResolveCatalogImportRowInput,
     ResolveCatalogImportRowsInput,
     SaveCatalogProductInput,
     SaveInventoryLotInput,
+    UpdateCatalogSupplierInput,
     UpdateCatalogVariantOperationsInput,
 } from './types';
 
@@ -28,6 +33,7 @@ export class CatalogManagementAdminResolver {
     constructor(
         private readonly imports: CatalogImportService,
         private readonly operations: CatalogOperationsService,
+        private readonly suppliers: CatalogSupplierService,
     ) {}
 
     @Query()
@@ -83,6 +89,29 @@ export class CatalogManagementAdminResolver {
     @Allow(manageCatalogExportPermission.Read, manageCatalogImportPermission.Read)
     catalogExportRows(@Ctx() ctx: RequestContext, @Args('skip') skip?: number, @Args('take') take?: number) {
         return this.operations.exportRows(ctx, skip, take);
+    }
+
+    @Query()
+    @Allow(manageCatalogSupplierPermission.Read, manageCatalogImportPermission.Read)
+    catalogSuppliers(@Ctx() ctx: RequestContext, @Args('options') options?: CatalogSupplierListOptions) {
+        return this.suppliers.findAll(ctx, options ?? {});
+    }
+
+    @Query()
+    @Allow(manageCatalogSupplierPermission.Read, manageCatalogImportPermission.Read)
+    catalogSupplier(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.suppliers.findOneWithLinkedCount(ctx, id);
+    }
+
+    @Query()
+    @Allow(manageCatalogSupplierPermission.Read, manageCatalogImportPermission.Read)
+    catalogSupplierVariants(
+        @Ctx() ctx: RequestContext,
+        @Args('supplierId') supplierId: ID,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+    ) {
+        return this.suppliers.linkedVariants(ctx, supplierId, skip, take);
     }
 
     @Mutation()
@@ -168,5 +197,25 @@ export class CatalogManagementAdminResolver {
     @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
     saveCatalogInventoryLot(@Ctx() ctx: RequestContext, @Args('input') input: SaveInventoryLotInput) {
         return this.operations.saveLot(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Create)
+    async createCatalogSupplier(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: CreateCatalogSupplierInput,
+    ) {
+        const supplier = await this.suppliers.create(ctx, input);
+        return { ...supplier, linkedVariantCount: 0 };
+    }
+
+    @Mutation()
+    @Allow(manageCatalogSupplierPermission.Update)
+    async updateCatalogSupplier(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateCatalogSupplierInput,
+    ) {
+        const supplier = await this.suppliers.update(ctx, input);
+        return this.suppliers.findOneWithLinkedCount(ctx, supplier.id);
     }
 }

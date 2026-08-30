@@ -16,6 +16,7 @@ import {
 } from '@vendure/core';
 import { In } from 'typeorm';
 
+import { CatalogSupplierService } from './catalog-supplier.service';
 import { manageCatalogImportPermission, manageCatalogOperationsPermission } from './constants';
 import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
@@ -36,6 +37,7 @@ export class CatalogOperationsService {
         private readonly productService: ProductService,
         private readonly productVariantService: ProductVariantService,
         private readonly stockMovementService: StockMovementService,
+        private readonly suppliers: CatalogSupplierService,
     ) {}
 
     async saveProduct(ctx: RequestContext, input: SaveCatalogProductInput) {
@@ -147,7 +149,7 @@ export class CatalogOperationsService {
         const stockLocations = await this.stockLocations(ctx);
         const allowedStockLocationIds = new Set(stockLocations.map(location => location.id));
         const variantIds = variants.items.map(variant => variant.id);
-        const [costs, policies, lots] = variantIds.length
+        const [costs, policies, lots, supplierBindings] = variantIds.length
             ? await Promise.all([
                   this.connection.getRepository(ctx, VariantCostRecord).find({
                       where: { variantId: In(variantIds), channelId: ctx.channelId },
@@ -160,8 +162,12 @@ export class CatalogOperationsService {
                       where: { variantId: In(variantIds) },
                       order: { expiresAt: 'ASC', manufacturedAt: 'ASC', createdAt: 'ASC' },
                   }),
+                  this.suppliers.associations(ctx, variantIds),
               ])
-            : [[], [], []];
+            : [[], [], [], []];
+        const supplierByVariant = new Map(
+            supplierBindings.map(binding => [String(binding.variantId), binding.supplier]),
+        );
         const latestCost = new Map<string, VariantCostRecord>();
         for (const cost of costs) {
             const key = `${String(cost.variantId)}:${cost.currencyCode}`;
@@ -178,6 +184,7 @@ export class CatalogOperationsService {
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
                 const costMicrounits = cost ? Number(cost.costMicrounits) : null;
                 const margin = calculateMargin(variant.price, costMicrounits);
+                const supplier = supplierByVariant.get(String(variant.id));
                 return {
                     id: String(variant.id),
                     name: variant.name,
@@ -189,6 +196,7 @@ export class CatalogOperationsService {
                     purchaseUnit: stringOrEmpty(customFields.purchaseUnit),
                     packageQuantity: numberOrDefault(customFields.packageQuantity, 1),
                     shelfLifeDays: nullableNumber(customFields.shelfLifeDays),
+                    supplier: supplier ? { ...supplier, linkedVariantCount: 0 } : null,
                     sellingPrice: variant.price,
                     currencyCode: variant.currencyCode,
                     purchaseCostMicrounits: costMicrounits,
@@ -243,7 +251,7 @@ export class CatalogOperationsService {
             return { items: [], totalItems: page.totalItems, scannedItems: page.items.length };
         }
 
-        const [hydrated, costs, policies, lots] = await Promise.all([
+        const [hydrated, costs, policies, lots, supplierBindings] = await Promise.all([
             this.connection.getRepository(ctx, ProductVariant).find({
                 where: { id: In(variantIds) },
                 relations: [
@@ -270,7 +278,11 @@ export class CatalogOperationsService {
                 relations: ['stockLocation'],
                 order: { expiresAt: 'ASC', manufacturedAt: 'ASC', createdAt: 'ASC' },
             }),
+            this.suppliers.associations(ctx, variantIds),
         ]);
+        const supplierByVariant = new Map(
+            supplierBindings.map(binding => [String(binding.variantId), binding.supplier]),
+        );
         const hydratedById = new Map(hydrated.map(variant => [String(variant.id), variant]));
         const latestCost = new Map<string, VariantCostRecord>();
         for (const cost of costs) {
@@ -308,6 +320,7 @@ export class CatalogOperationsService {
                         variantEnabled: variant.enabled,
                         systemCreatedAt: product.createdAt,
                         sourceCreatedAt: nullableDateValue(productFields.sourceCreatedAt),
+                        supplierName: supplierByVariant.get(String(variant.id))?.name ?? null,
                         sku: variant.sku,
                         barcode: stringOrEmpty(fields.barcode),
                         specification: stringOrEmpty(fields.specification),
@@ -520,6 +533,9 @@ export class CatalogOperationsService {
                 'MANUAL',
                 null,
             );
+        }
+        if (input.supplierId !== undefined) {
+            await this.suppliers.setVariantSupplier(ctx, variant.id, input.supplierId ?? null);
         }
         return returnWorkspace ? this.workspace(ctx, variant.productId) : null;
     }

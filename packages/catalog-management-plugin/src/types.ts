@@ -88,6 +88,37 @@ export interface UpdateCatalogVariantOperationsInput {
     stockOnHand?: number | null;
     minimumStock?: number | null;
     maximumStock?: number | null;
+    supplierId?: ID | null;
+}
+
+export interface CatalogSupplierListOptions {
+    skip?: number | null;
+    take?: number | null;
+    text?: string | null;
+    enabled?: boolean | null;
+}
+
+export interface CreateCatalogSupplierInput {
+    code?: string | null;
+    name: string;
+    enabled?: boolean | null;
+    contactName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    notes?: string | null;
+}
+
+export interface UpdateCatalogSupplierInput {
+    id: ID;
+    code?: string;
+    name?: string;
+    enabled?: boolean;
+    contactName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    notes?: string | null;
 }
 
 export interface SaveCatalogProductInput {
@@ -175,6 +206,7 @@ export interface NormalizedCatalogRow {
     barcode: string;
     lotCode: string;
     lotQuantity: number | null;
+    supplier: string;
     /** Names of mapped source columns. Raw source cell values are intentionally not sent. */
     providedFields: string[];
     /**

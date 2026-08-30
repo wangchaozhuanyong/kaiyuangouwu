@@ -3,6 +3,7 @@ import { UserInputError } from '@vendure/core';
 import { createHash } from 'node:crypto';
 import * as XLSX from 'xlsx';
 
+import { normalizeSupplierDisplayName } from './catalog-supplier.service';
 import { MAX_CATALOG_IMPORT_BYTES, MAX_CATALOG_IMPORT_ROWS } from './constants';
 import { NormalizedCatalogRow, UploadedCatalogFile } from './types';
 
@@ -49,6 +50,8 @@ const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
     条码: 'barcode',
     批次号: 'lotCode',
     批次数量: 'lotQuantity',
+    供货商: 'supplier',
+    供应商: 'supplier',
 };
 
 const requiredFields: Array<keyof NormalizedCatalogRow> = [
@@ -277,6 +280,7 @@ function normalizeRow(
         barcode: textValue(values.get('barcode')),
         lotCode: textValue(values.get('lotCode')),
         lotQuantity,
+        supplier: normalizeSupplierDisplayName(textValue(values.get('supplier'))),
         providedFields: [...values.keys()].map(String),
         raw,
     };
@@ -321,6 +325,7 @@ function invalidRow(
         barcode: textValue(cells[fields.indexOf('barcode')]),
         lotCode: textValue(cells[fields.indexOf('lotCode')]),
         lotQuantity: null,
+        supplier: normalizeSupplierDisplayName(textValue(cells[fields.indexOf('supplier')])),
         providedFields: fields
             .filter((field): field is keyof NormalizedCatalogRow => Boolean(field))
             .map(String),

@@ -34,6 +34,41 @@ export const adminApiExtensions = gql`
         name: String!
     }
 
+    type CatalogSupplier implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        channelId: ID!
+        code: String!
+        name: String!
+        enabled: Boolean!
+        contactName: String
+        phone: String
+        email: String
+        address: String
+        notes: String
+        linkedVariantCount: Int!
+    }
+
+    type CatalogSupplierList implements PaginatedList {
+        items: [CatalogSupplier!]!
+        totalItems: Int!
+    }
+
+    type CatalogSupplierVariant {
+        id: ID!
+        productId: ID!
+        productName: String!
+        name: String!
+        sku: String!
+        enabled: Boolean!
+    }
+
+    type CatalogSupplierVariantList implements PaginatedList {
+        items: [CatalogSupplierVariant!]!
+        totalItems: Int!
+    }
+
     type CatalogImportJob implements Node {
         id: ID!
         createdAt: DateTime!
@@ -127,6 +162,7 @@ export const adminApiExtensions = gql`
         purchaseUnit: String!
         packageQuantity: Float!
         shelfLifeDays: Int
+        supplier: CatalogSupplier
         sellingPrice: Money!
         currencyCode: CurrencyCode!
         purchaseCostMicrounits: Float
@@ -179,6 +215,7 @@ export const adminApiExtensions = gql`
         variantEnabled: Boolean!
         systemCreatedAt: DateTime!
         sourceCreatedAt: DateTime
+        supplierName: String
         sku: String!
         barcode: String!
         specification: String!
@@ -260,6 +297,7 @@ export const adminApiExtensions = gql`
         barcode: String!
         lotCode: String!
         lotQuantity: Int
+        supplier: String!
         providedFields: [String!]!
     }
 
@@ -296,6 +334,37 @@ export const adminApiExtensions = gql`
         stockOnHand: Int
         minimumStock: Int
         maximumStock: Int
+        supplierId: ID
+    }
+
+    input CatalogSupplierListOptions {
+        skip: Int
+        take: Int
+        text: String
+        enabled: Boolean
+    }
+
+    input CreateCatalogSupplierInput {
+        code: String
+        name: String!
+        enabled: Boolean
+        contactName: String
+        phone: String
+        email: String
+        address: String
+        notes: String
+    }
+
+    input UpdateCatalogSupplierInput {
+        id: ID!
+        code: String
+        name: String
+        enabled: Boolean
+        contactName: String
+        phone: String
+        email: String
+        address: String
+        notes: String
     }
 
     input SaveCatalogProductInput {
@@ -365,6 +434,9 @@ export const adminApiExtensions = gql`
         ): CatalogProductSummaryList!
         catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!
+        catalogSuppliers(options: CatalogSupplierListOptions): CatalogSupplierList!
+        catalogSupplier(id: ID!): CatalogSupplier!
+        catalogSupplierVariants(supplierId: ID!, skip: Int, take: Int): CatalogSupplierVariantList!
     }
 
     extend type Mutation {
@@ -379,5 +451,7 @@ export const adminApiExtensions = gql`
         createCatalogProductVariant(input: CreateCatalogProductVariantInput!): CatalogProductWorkspace!
         saveCatalogProduct(input: SaveCatalogProductInput!): Product!
         saveCatalogInventoryLot(input: SaveCatalogInventoryLotInput!): CatalogInventoryLot!
+        createCatalogSupplier(input: CreateCatalogSupplierInput!): CatalogSupplier!
+        updateCatalogSupplier(input: UpdateCatalogSupplierInput!): CatalogSupplier!
     }
 `;

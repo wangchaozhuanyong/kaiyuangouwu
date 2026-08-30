@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 
-import { parseCatalogArrayBuffer, rowsForCatalogTransport } from './catalog-local-file';
+import {
+    CATALOG_MAPPING_EXCLUDED,
+    parseCatalogArrayBuffer,
+    rowsForCatalogTransport,
+} from './catalog-local-file';
 
 describe('browser-local catalog parser', () => {
     it('parses typed Chinese rows, detects warnings and conflicting duplicates without networking', async () => {
@@ -117,6 +121,110 @@ describe('browser-local catalog parser', () => {
             purchaseCost: 1.25,
             sellingPrice: 2.5,
         });
+    });
+
+    it('maps supplier and classifies the 17 removed source columns as explicitly excluded', async () => {
+        const excluded = [
+            '扩展条码',
+            '主编码',
+            '批发价',
+            '会员价',
+            '会员折扣',
+            '积分商品',
+            '库位',
+            '拼音码',
+            '货号',
+            '自定义1',
+            '自定义2',
+            '自定义3',
+            '重量',
+            '是否称重',
+            '是否传秤',
+            '是否计数商品',
+            '称编码',
+        ];
+        const mapped = [
+            '名称',
+            '分类',
+            '条码',
+            '规格',
+            '主单位',
+            '库存量',
+            '进货价',
+            '销售价',
+            '毛利率',
+            '库存上限',
+            '库存下限',
+            '品牌',
+            '供货商',
+            '生产日期',
+            '保质期',
+            '商品状态',
+            '商品描述',
+            '标签',
+            '创建日期',
+        ];
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(
+            workbook,
+            XLSX.utils.aoa_to_sheet([
+                [...mapped, ...excluded],
+                [
+                    '匿名商品',
+                    '匿名分类',
+                    '6900000000001',
+                    '500ml',
+                    '瓶',
+                    0,
+                    1.25,
+                    2.5,
+                    '50%',
+                    100,
+                    0,
+                    '匿名品牌',
+                    '匿名供货商',
+                    null,
+                    365,
+                    '启用',
+                    '',
+                    '匿名标签',
+                    new Date('2026-08-30T00:00:00Z'),
+                    ...excluded.map(() => ''),
+                ],
+            ]),
+            'Sheet1',
+        );
+
+        const parsed = await parseCatalogArrayBuffer(toArrayBuffer(workbook), '36列匿名测试.xlsx');
+
+        expect(parsed.headers).toHaveLength(36);
+        expect(parsed.mappedHeaders).toBe(19);
+        expect(parsed.excludedHeaders).toEqual(excluded);
+        expect(parsed.unknownHeaders).toEqual([]);
+        expect(parsed.rows[0].supplier).toBe('匿名供货商');
+        expect(parsed.fieldMapping['主编码']).toBe(CATALOG_MAPPING_EXCLUDED);
+    });
+
+    it('keeps unknown columns unresolved until the user maps or explicitly excludes them', async () => {
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(
+            workbook,
+            XLSX.utils.aoa_to_sheet([
+                ['名称', '分类', '进货价', '销售价', '外部备注'],
+                ['匿名商品', '匿名分类', 1, 2, '测试'],
+            ]),
+            'Sheet1',
+        );
+        const buffer = toArrayBuffer(workbook);
+        const unresolved = await parseCatalogArrayBuffer(buffer, '未知列.xlsx');
+        expect(unresolved.unknownHeaders).toEqual(['外部备注']);
+
+        const excluded = await parseCatalogArrayBuffer(buffer, '未知列.xlsx', undefined, {
+            ...unresolved.fieldMapping,
+            外部备注: CATALOG_MAPPING_EXCLUDED,
+        });
+        expect(excluded.unknownHeaders).toEqual([]);
+        expect(excluded.excludedHeaders).toContain('外部备注');
     });
 });
 

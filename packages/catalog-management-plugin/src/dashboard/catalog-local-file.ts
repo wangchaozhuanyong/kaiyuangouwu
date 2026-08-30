@@ -1,11 +1,14 @@
 import * as XLSX from 'xlsx';
-import type { NormalizedCatalogRow } from '../types';
+
+import { type NormalizedCatalogRow } from '../types';
 
 type CellValue = string | number | boolean | Date | null | undefined;
 
-export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v1';
+export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v2';
 export const MAX_LOCAL_CATALOG_BYTES = 20 * 1024 * 1024;
 export const MAX_LOCAL_CATALOG_ROWS = 20_000;
+export const CATALOG_MAPPING_EXCLUDED = '__excluded__';
+export const CATALOG_MAPPING_UNKNOWN = '__unknown__';
 
 export const CATALOG_FIELD_OPTIONS: Array<{ value: keyof NormalizedCatalogRow; label: string }> = [
     { value: 'name', label: '商品名称' },
@@ -34,6 +37,7 @@ export const CATALOG_FIELD_OPTIONS: Array<{ value: keyof NormalizedCatalogRow; l
     { value: 'lotQuantity', label: '批次数量' },
     { value: 'sourceCreatedAt', label: '来源创建日期' },
     { value: 'channelCode', label: '门店' },
+    { value: 'supplier', label: '供货商' },
 ];
 
 const importableFields = new Set<keyof NormalizedCatalogRow>(
@@ -81,7 +85,29 @@ const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
     条码: 'barcode',
     批次号: 'lotCode',
     批次数量: 'lotQuantity',
+    供货商: 'supplier',
+    供应商: 'supplier',
 };
+
+export const CATALOG_EXCLUDED_HEADERS = new Set([
+    '扩展条码',
+    '主编码',
+    '批发价',
+    '会员价',
+    '会员折扣',
+    '积分商品',
+    '库位',
+    '拼音码',
+    '货号',
+    '自定义1',
+    '自定义2',
+    '自定义3',
+    '重量',
+    '是否称重',
+    '是否传秤',
+    '是否计数商品',
+    '称编码',
+]);
 
 const requiredFields: Array<keyof NormalizedCatalogRow> = [
     'name',
@@ -108,6 +134,9 @@ export interface LocalCatalogFile {
     duplicateGroups: number;
     duplicateRows: number;
     warningRows: number;
+    mappedHeaders: number;
+    excludedHeaders: string[];
+    unknownHeaders: string[];
 }
 
 export interface CatalogWorkerRequest {
@@ -155,13 +184,25 @@ export async function parseCatalogArrayBuffer(
     }
 
     const headers = matrix[0].map(normalizeHeader);
-    const columnFields = headers.map(header => {
+    const mappingStatuses = headers.map(header => {
         if (fieldMappingOverrides && Object.prototype.hasOwnProperty.call(fieldMappingOverrides, header)) {
-            const override = fieldMappingOverrides[header] as keyof NormalizedCatalogRow | undefined;
-            return override && importableFields.has(override) ? override : undefined;
+            const override = fieldMappingOverrides[header];
+            if (override && importableFields.has(override as keyof NormalizedCatalogRow)) {
+                return { field: override as keyof NormalizedCatalogRow, status: 'MAPPED' as const };
+            }
+            if (override === CATALOG_MAPPING_EXCLUDED) {
+                return { field: undefined, status: 'EXCLUDED' as const };
+            }
+            return { field: undefined, status: 'UNKNOWN' as const };
         }
-        return headerAliases[header];
+        const field = headerAliases[header];
+        if (field) return { field, status: 'MAPPED' as const };
+        if (CATALOG_EXCLUDED_HEADERS.has(header)) {
+            return { field: undefined, status: 'EXCLUDED' as const };
+        }
+        return { field: undefined, status: 'UNKNOWN' as const };
     });
+    const columnFields = mappingStatuses.map(item => item.field);
     const missing = requiredFields.filter(field => !columnFields.includes(field));
     if (missing.length > 0) {
         throw new Error(`缺少必填列：${missing.map(displayField).join('、')}`);
@@ -205,12 +246,25 @@ export async function parseCatalogArrayBuffer(
         sheetName,
         headers,
         fieldMapping: Object.fromEntries(
-            headers.flatMap((header, index) => (header ? [[header, String(columnFields[index] ?? '')]] : [])),
+            headers.flatMap((header, index) => {
+                if (!header) return [];
+                const item = mappingStatuses[index];
+                const value =
+                    item.status === 'MAPPED'
+                        ? String(item.field)
+                        : item.status === 'EXCLUDED'
+                          ? CATALOG_MAPPING_EXCLUDED
+                          : CATALOG_MAPPING_UNKNOWN;
+                return [[header, value]];
+            }),
         ),
         rows,
         errors,
         ...duplicateCounts,
         warningRows: rows.filter(hasLocalWarning).length,
+        mappedHeaders: mappingStatuses.filter(item => item.status === 'MAPPED').length,
+        excludedHeaders: headers.filter((_, index) => mappingStatuses[index].status === 'EXCLUDED'),
+        unknownHeaders: headers.filter((_, index) => mappingStatuses[index].status === 'UNKNOWN'),
     };
 }
 
@@ -437,6 +491,7 @@ function normalizeRow(
         barcode: textValue(values.get('barcode')),
         lotCode: textValue(values.get('lotCode')),
         lotQuantity,
+        supplier: normalizeSupplier(textValue(values.get('supplier'))),
         providedFields: [...values.keys()].map(String),
         raw,
     };
@@ -514,6 +569,7 @@ function stableProductRow(row: NormalizedCatalogRow): string {
         sourceCreatedAt: row.sourceCreatedAt,
         sku: row.sku,
         barcode: row.barcode,
+        supplier: row.supplier,
     });
 }
 
@@ -533,6 +589,12 @@ function normalizeHeader(value: CellValue): string {
 
 function normalizeIdentity(value: string): string {
     return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-Hans');
+}
+
+function normalizeSupplier(value: string): string {
+    return ['', '-', '无', '无供应商', '无供货商', 'none', 'null'].includes(normalizeIdentity(value))
+        ? ''
+        : value;
 }
 
 function textValue(value: CellValue): string {

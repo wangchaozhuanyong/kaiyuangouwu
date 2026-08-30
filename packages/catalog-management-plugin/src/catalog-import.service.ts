@@ -28,10 +28,16 @@ import {
     normalizeIdentity,
 } from './catalog-file-parser.service';
 import { CatalogOperationsService } from './catalog-operations.service';
+import {
+    CatalogSupplierService,
+    normalizeSupplierDisplayName,
+    normalizeSupplierName,
+} from './catalog-supplier.service';
 import { MAX_CATALOG_IMPORT_BYTES, MAX_CATALOG_IMPORT_ROWS } from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
+import { CatalogSupplier } from './entities/catalog-supplier.entity';
 import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
@@ -77,6 +83,7 @@ export class CatalogImportService {
         private readonly facetService: FacetService,
         private readonly facetValueService: FacetValueService,
         private readonly searchService: SearchService,
+        private readonly suppliers: CatalogSupplierService,
     ) {}
 
     registerEnqueuer(enqueue: (jobId: ID) => Promise<void>): void {
@@ -196,7 +203,7 @@ export class CatalogImportService {
             );
         }
 
-        const [catalogIndex, bindings, stockLocations] = await Promise.all([
+        const [catalogIndex, bindings, stockLocations, suppliersByName] = await Promise.all([
             this.buildCatalogIndex(ctx),
             this.connection.getRepository(ctx, CatalogSourceBinding).find({
                 where: {
@@ -205,6 +212,10 @@ export class CatalogImportService {
                 },
             }),
             this.operations.stockLocations(ctx),
+            this.suppliers.findByNames(
+                ctx,
+                rows.map(item => item.normalizedData.supplier),
+            ),
         ]);
         const bindingMap = new Map(bindings.map(binding => [binding.sourceKey, binding]));
         const duplicateGroups = groupRows(rows.map(row => row.normalizedData));
@@ -239,7 +250,7 @@ export class CatalogImportService {
                 if (scopeError) {
                     plan = { ...emptyPlan('ERROR'), message: scopeError };
                 } else if (productFingerprints.size > 1) {
-                    plan = conflictPlan('同一商品标识出现不同价格、成本或规格，请人工确认');
+                    plan = conflictPlan('同一商品标识出现不同价格、规格或供货商等字段，请人工确认');
                 } else if (fingerprints.size > 1) {
                     plan = conflictPlan('同一商品标识在文件中出现不同数值，请人工确认');
                 } else if (duplicateRows[0]?.rowNumber !== row.rowNumber) {
@@ -254,6 +265,7 @@ export class CatalogImportService {
                         context,
                         catalogIndex,
                         bindingMap.get(entity.sourceKey),
+                        suppliersByName,
                     );
                 }
                 entity.action = plan.action;
@@ -328,7 +340,7 @@ export class CatalogImportService {
             }),
         );
         try {
-            const [catalogIndex, bindings] = await Promise.all([
+            const [catalogIndex, bindings, suppliersByName] = await Promise.all([
                 this.buildCatalogIndex(ctx),
                 this.connection.getRepository(ctx, CatalogSourceBinding).find({
                     where: {
@@ -336,6 +348,10 @@ export class CatalogImportService {
                         sourceKey: In([...new Set(parsed.rows.map(catalogSourceKey))]),
                     },
                 }),
+                this.suppliers.findByNames(
+                    ctx,
+                    parsed.rows.map(row => row.supplier),
+                ),
             ]);
             const bindingMap = new Map(bindings.map(binding => [binding.sourceKey, binding]));
             const duplicateGroups = groupRows(parsed.rows);
@@ -356,7 +372,14 @@ export class CatalogImportService {
                         message: `与第 ${duplicateRows[0]?.rowNumber ?? row.rowNumber} 行完全重复，已跳过`,
                     };
                 } else {
-                    plan = await this.planRow(ctx, row, input, catalogIndex, bindingMap.get(sourceKey));
+                    plan = await this.planRow(
+                        ctx,
+                        row,
+                        input,
+                        catalogIndex,
+                        bindingMap.get(sourceKey),
+                        suppliersByName,
+                    );
                 }
                 importRows.push(
                     new CatalogImportRow({
@@ -663,12 +686,16 @@ export class CatalogImportService {
         input: CatalogImportContextInput,
         catalogIndex: CatalogIndexProduct[],
         binding?: CatalogSourceBinding,
+        suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
         const warnings = [validationWarning(row)];
         const categoryExists = catalogIndex.some(item =>
             item.categories.has(normalizeIdentity(row.category)),
         );
         if (!categoryExists) warnings.push('分类不存在，确认后将创建新分类');
+        const supplier = suppliersByName.get(normalizeSupplierName(row.supplier));
+        if (row.supplier && !supplier) warnings.push(`供货商“${row.supplier}”不存在，确认后将创建`);
+        if (supplier && !supplier.enabled) warnings.push(`供货商“${supplier.name}”已停用`);
         const warning = warnings.filter((value): value is string => Boolean(value)).join('；') || null;
         let targetProduct: Product | undefined;
         let targetVariant: ProductVariant | undefined;
@@ -791,7 +818,7 @@ export class CatalogImportService {
         variant: ProductVariant,
         job: Pick<CatalogImportJob, 'stockLocationId' | 'currencyCode'>,
     ): Promise<Record<string, unknown>> {
-        const [product, stock, cost, policy] = await Promise.all([
+        const [product, stock, cost, policy, supplierBinding] = await Promise.all([
             this.connection.getRepository(ctx, Product).findOne({
                 where: { id: variant.productId },
                 relations: ['translations', 'facetValues', 'facetValues.facet'],
@@ -806,6 +833,7 @@ export class CatalogImportService {
             this.connection.getRepository(ctx, InventoryPolicy).findOne({
                 where: { variantId: variant.id, stockLocationId: job.stockLocationId },
             }),
+            this.suppliers.association(ctx, variant.id),
         ]);
         const customFields = (variant.customFields ?? {}) as Record<string, unknown>;
         const productCustomFields = (product?.customFields ?? {}) as Record<string, unknown>;
@@ -833,6 +861,9 @@ export class CatalogImportService {
             purchaseUnit: stringValue(customFields.purchaseUnit),
             packageQuantity: numberValue(customFields.packageQuantity) ?? 1,
             shelfLifeDays: numberValue(customFields.shelfLifeDays),
+            supplierId: supplierBinding ? String(supplierBinding.supplierId) : null,
+            supplierName: supplierBinding?.supplier.name ?? null,
+            supplierEnabled: supplierBinding?.supplier.enabled ?? null,
             sellingPrice: price?.price ?? null,
             currencyCode: job.currencyCode,
             purchaseCostMicrounits: cost ? Number(cost.costMicrounits) : null,
@@ -932,6 +963,13 @@ export class CatalogImportService {
             row.sourceCreatedAt,
             snapshot.productSourceCreatedAt,
             shouldClear(row, 'sourceCreatedAt', clearBlankFields),
+        );
+        changedOptional(
+            changes,
+            'supplier',
+            row.supplier || null,
+            snapshot.supplierName,
+            shouldClear(row, 'supplier', clearBlankFields),
         );
         if (row.manufacturedAt || row.lotCode) changes.inventoryLot = { from: null, to: true };
         changes.currencyCode = currencyCode;
@@ -1194,6 +1232,22 @@ export class CatalogImportService {
         }
 
         if (!variant) throw new UserInputError('无法创建或加载 SKU');
+        let supplierCreated = false;
+        let appliedSupplierId: ID | null = null;
+        const updateSupplier =
+            Boolean(row.normalizedData.supplier) ||
+            shouldClear(row.normalizedData, 'supplier', job.clearBlankFields);
+        if (updateSupplier) {
+            const existingSupplier = row.normalizedData.supplier
+                ? await this.suppliers.findByName(ctx, row.normalizedData.supplier)
+                : null;
+            const supplier = row.normalizedData.supplier
+                ? (existingSupplier ?? (await this.suppliers.ensureByName(ctx, row.normalizedData.supplier)))
+                : null;
+            supplierCreated = Boolean(supplier && !existingSupplier);
+            appliedSupplierId = supplier?.id ?? null;
+            await this.suppliers.setVariantSupplier(ctx, variant.id, appliedSupplierId);
+        }
         if (row.normalizedData.purchaseCost != null) {
             await this.operations.recordCost(
                 ctx,
@@ -1296,6 +1350,8 @@ export class CatalogImportService {
             variantCreated,
             stockLocationId: String(stockLocationId),
             lotId: lotId ? String(lotId) : null,
+            supplierId: appliedSupplierId ? String(appliedSupplierId) : null,
+            supplierCreated,
         };
         row.appliedAt = new Date();
         row.message = row.action === 'CREATE' ? '新增成功' : '更新成功';
@@ -1383,6 +1439,8 @@ export class CatalogImportService {
                     );
                 }
             }
+            const priorSupplierId = stringValue(before.supplierId);
+            await this.suppliers.setVariantSupplier(ctx, variant.id, priorSupplierId || null);
         }
         if (product) {
             if (Boolean(before.productCreated)) {
@@ -1445,6 +1503,10 @@ export class CatalogImportService {
                     state: 'VOID',
                 });
             }
+        }
+        const appliedSupplierId = stringValue(applied.supplierId);
+        if (Boolean(applied.supplierCreated) && appliedSupplierId) {
+            await this.suppliers.disableIfUnused(ctx, appliedSupplierId);
         }
         const priorBinding = recordValue(before.sourceBinding);
         if (priorBinding) {
@@ -1764,6 +1826,7 @@ function productFieldFingerprint(row: NormalizedCatalogRow): string {
         sourceCreatedAt: row.sourceCreatedAt,
         sku: row.sku,
         barcode: row.barcode,
+        supplier: row.supplier,
     });
 }
 
@@ -1790,6 +1853,7 @@ function createChanges(row: NormalizedCatalogRow, currencyCode: CurrencyCode): R
         purchaseCostMicrounits: microunits(row.purchaseCost),
         stockOnHand: row.stockOnHand,
         sourceCreatedAt: row.sourceCreatedAt,
+        supplier: row.supplier || null,
         currencyCode,
     };
 }
@@ -2009,6 +2073,46 @@ function validateImportSource(input: BeginCatalogImportInput): void {
     if (input.source.detectedHeaders.length < 1 || input.source.detectedHeaders.length > 100) {
         throw new UserInputError('表头数量无效');
     }
+    const unresolvedHeaders = input.source.detectedHeaders.filter(header => {
+        const mapped = input.source.fieldMapping[header];
+        return !mapped || mapped === '__unknown__';
+    });
+    if (unresolvedHeaders.length > 0) {
+        throw new UserInputError(`存在未解决列：${unresolvedHeaders.join('、')}`);
+    }
+    const allowedMappings = new Set([
+        'name',
+        'category',
+        'channelCode',
+        'stockLocationCode',
+        'currencyCode',
+        'specification',
+        'primaryUnit',
+        'purchaseUnit',
+        'packageQuantity',
+        'stockOnHand',
+        'purchaseCost',
+        'sellingPrice',
+        'reportedMargin',
+        'maximumStock',
+        'minimumStock',
+        'brand',
+        'manufacturedAt',
+        'shelfLifeDays',
+        'enabled',
+        'description',
+        'tags',
+        'sourceCreatedAt',
+        'sku',
+        'barcode',
+        'lotCode',
+        'lotQuantity',
+        'supplier',
+        '__excluded__',
+    ]);
+    if (Object.values(input.source.fieldMapping).some(mapping => !allowedMappings.has(mapping))) {
+        throw new UserInputError('字段映射包含不支持的系统字段');
+    }
 }
 
 function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): NormalizedCatalogRow {
@@ -2075,6 +2179,7 @@ function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): No
         'barcode',
         'lotCode',
         'lotQuantity',
+        'supplier',
     ]);
     const providedFields = [...new Set((row.providedFields ?? []).filter(field => allowedFields.has(field)))];
     return {
@@ -2111,6 +2216,7 @@ function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): No
         barcode: safeImportText(row.barcode, 255),
         lotCode: safeImportText(row.lotCode, 80),
         lotQuantity: row.lotQuantity,
+        supplier: normalizeSupplierDisplayName(safeImportText(row.supplier, 255)),
         providedFields,
     };
 }

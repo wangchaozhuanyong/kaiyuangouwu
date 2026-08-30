@@ -6,14 +6,18 @@ import { CatalogImportQueueService } from './catalog-import-queue.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogManagementAdminResolver } from './catalog-management.resolver';
 import { CatalogOperationsService } from './catalog-operations.service';
+import { CatalogSupplierService } from './catalog-supplier.service';
 import {
     manageCatalogExportPermission,
     manageCatalogImportPermission,
     manageCatalogOperationsPermission,
+    manageCatalogSupplierPermission,
 } from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
+import { CatalogSupplier } from './entities/catalog-supplier.entity';
+import { CatalogVariantSupplier } from './entities/catalog-variant-supplier.entity';
 import { InventoryLotMovement } from './entities/inventory-lot-movement.entity';
 import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
@@ -31,6 +35,8 @@ import './types';
         InventoryPolicy,
         InventoryLot,
         InventoryLotMovement,
+        CatalogSupplier,
+        CatalogVariantSupplier,
     ],
     providers: [
         CatalogFileParserService,
@@ -38,12 +44,14 @@ import './types';
         CatalogImportService,
         CatalogImportQueueService,
         InventoryLotLifecycleService,
+        CatalogSupplierService,
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(
             manageCatalogImportPermission,
             manageCatalogOperationsPermission,
             manageCatalogExportPermission,
+            manageCatalogSupplierPermission,
         );
         config.customFields.Product.push({
             name: 'sourceCreatedAt',

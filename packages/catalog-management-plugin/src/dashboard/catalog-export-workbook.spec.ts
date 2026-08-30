@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import type { CatalogExportRowRecord } from './catalog-management.graphql';
 
 import { buildCatalogExport } from './catalog-export-workbook';
 import { parseCatalogArrayBuffer } from './catalog-local-file';
+import { type CatalogExportRowRecord } from './catalog-management.graphql';
 
 describe('browser-local catalog export', () => {
     it('creates the four standard worksheets with typed source and system dates', () => {
@@ -19,8 +19,8 @@ describe('browser-local catalog export', () => {
             '进货价（必填）': 1.255,
             '销售价（必填）': 2.5,
         });
-        expect(workbook.Sheets['商品与SKU'].S2.t).toBe('d');
-        expect(workbook.Sheets['商品与SKU'].T2.t).toBe('d');
+        expect(workbook.Sheets['商品与SKU'].R2.t).toBe('d');
+        expect(productRows[0].供货商).toBe('匿名供货商');
     });
 
     it('creates UTF-8 CSV locally without exposing workbook internals', () => {
@@ -53,7 +53,9 @@ describe('browser-local catalog export', () => {
             lotQuantity: 4,
             manufacturedAt: '2026-08-01T00:00:00.000Z',
             shelfLifeDays: 365,
+            supplier: '匿名供货商',
         });
+        expect(parsed.unknownHeaders).toEqual([]);
     });
 });
 
@@ -70,6 +72,7 @@ function exportRow(): CatalogExportRowRecord {
         variantEnabled: true,
         systemCreatedAt: '2026-08-29T12:00:00.000Z',
         sourceCreatedAt: '2025-01-02T00:00:00.000Z',
+        supplierName: '匿名供货商',
         sku: '=FORMULA',
         barcode: '0012345',
         specification: '500ml',

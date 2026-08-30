@@ -28,6 +28,7 @@ function createService() {
         productService as never,
         productVariantService as never,
         {} as never,
+        {} as never,
     );
     return { connection, productService, productVariantService, service, txCtx };
 }

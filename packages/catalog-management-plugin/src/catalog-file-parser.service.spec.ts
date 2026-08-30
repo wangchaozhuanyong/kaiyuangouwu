@@ -113,6 +113,17 @@ describe('CatalogFileParserService', () => {
         });
         expect(() => parser.parseBuffer(invalid, 'catalog.pdf')).toThrow('仅支持');
     });
+
+    it('normalizes supplier aliases and treats “无” as no supplier', () => {
+        const buffer = workbookBuffer([
+            ['名称', '分类', '进货价', '销售价', '供应商'],
+            ['商品A', '零食', 1, 2, ' 中国供货商 '],
+            ['商品B', '零食', 1, 2, '无'],
+        ]);
+        const parsed = parser.parseBuffer(buffer, 'catalog.xlsx');
+
+        expect(parsed.rows.map(row => row.supplier)).toEqual(['中国供货商', '']);
+    });
 });
 
 function workbookBuffer(rows: unknown[][]): Buffer {

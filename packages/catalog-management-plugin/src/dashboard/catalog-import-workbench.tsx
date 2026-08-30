@@ -49,11 +49,13 @@ import {
     XCircle,
 } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
-import type { LocalCatalogFile } from './catalog-local-file';
 
 import {
     CATALOG_BROWSER_PARSER_VERSION,
     CATALOG_FIELD_OPTIONS,
+    CATALOG_MAPPING_EXCLUDED,
+    CATALOG_MAPPING_UNKNOWN,
+    type LocalCatalogFile,
     rowsForCatalogTransport,
 } from './catalog-local-file';
 import { parseCatalogFileLocally } from './catalog-local-file-client';
@@ -176,6 +178,9 @@ function CatalogImportWorkbench({
                 throw new Error('请先完成浏览器本地预检并选择目标仓库');
             }
             if (localPreview.errors.length > 0) throw new Error('请先修正本地解析错误');
+            if (localPreview.unknownHeaders.length > 0) {
+                throw new Error(`存在 ${localPreview.unknownHeaders.length} 个未解决列，请先映射或明确排除`);
+            }
             setTransferProgress(0);
             const started = await api.mutate<{ beginCatalogImport: CatalogImportJobRecord }>(
                 beginCatalogImportMutation,
@@ -385,10 +390,7 @@ function CatalogImportWorkbench({
                                         <Button variant="outline" onClick={reset} disabled={running}>
                                             选择其他文件
                                         </Button>
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => void downloadReport(job.id, job.originalFilename)}
-                                        >
+                                        <Button variant="outline" onClick={() => void downloadReport(job)}>
                                             <Download className="mr-2 size-4" /> 下载报告
                                         </Button>
                                         {['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(job.state) && (
@@ -705,7 +707,7 @@ function UploadPanel({
                             空白字段清除模式（高风险）
                         </Label>
                         <p className="text-xs leading-5 text-muted-foreground">
-                            默认关闭。开启后，仅对文件中实际存在的列生效；留空的描述、品牌、标签、条码、规格、单位、保质期和库存预警值会被清除。SKU、价格、成本和库存数不会被空值清除。
+                            默认关闭。开启后，仅对文件中实际存在的列生效；留空的描述、品牌、标签、条码、规格、单位、保质期、库存预警值和供货商会被清除。SKU、价格、成本和库存数不会被空值清除。
                         </p>
                     </div>
                     <Switch
@@ -758,6 +760,7 @@ function UploadPanel({
                         <Button
                             disabled={
                                 localPreview.errors.length > 0 ||
+                                localPreview.unknownHeaders.length > 0 ||
                                 mappingDirty ||
                                 !stockLocationId ||
                                 !currencyCode ||
@@ -802,16 +805,19 @@ function FieldMappingEditor({
                     <div key={header} className="space-y-1">
                         <Label className="text-xs">{header}</Label>
                         <Select
-                            value={mapping[header] || '__ignore__'}
+                            value={mapping[header] || CATALOG_MAPPING_UNKNOWN}
                             onValueChange={value => {
-                                if (value) onChange(header, value === '__ignore__' ? '' : value);
+                                if (value) onChange(header, value);
                             }}
                         >
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="__ignore__">忽略此列</SelectItem>
+                                <SelectItem value={CATALOG_MAPPING_UNKNOWN} disabled>
+                                    未解决（阻止预览）
+                                </SelectItem>
+                                <SelectItem value={CATALOG_MAPPING_EXCLUDED}>明确排除此列</SelectItem>
                                 {CATALOG_FIELD_OPTIONS.map(option => {
                                     const usedByAnotherHeader = Object.entries(mapping).some(
                                         ([mappedHeader, field]) =>
@@ -859,10 +865,26 @@ function LocalPreviewSummary({ preview }: Readonly<{ preview: LocalCatalogFile }
                 destructive={preview.duplicateRows > 0}
             />
             <LocalMetric label="风险警告" value={preview.warningRows} destructive={preview.warningRows > 0} />
+            <LocalMetric label="已映射列" value={preview.mappedHeaders} />
+            <LocalMetric label="明确排除列" value={preview.excludedHeaders.length} />
+            <LocalMetric
+                label="未知列"
+                value={preview.unknownHeaders.length}
+                destructive={preview.unknownHeaders.length > 0}
+            />
             <div className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-5">
-                {preview.sheetName} · {preview.headers.length} 个已识别表头 · 文件摘要{' '}
+                {preview.sheetName} · 共 {preview.headers.length} 列（已映射 {preview.mappedHeaders}、明确排除{' '}
+                {preview.excludedHeaders.length}、未知 {preview.unknownHeaders.length}）· 文件摘要{' '}
                 {preview.fileHash.slice(0, 12)}…
             </div>
+            {preview.unknownHeaders.length > 0 && (
+                <Alert variant="destructive" className="sm:col-span-2 lg:col-span-5">
+                    <AlertTriangle className="size-4" />
+                    <AlertDescription>
+                        未知列：{preview.unknownHeaders.join('、')}。请映射到系统字段或选择“明确排除此列”。
+                    </AlertDescription>
+                </Alert>
+            )}
             {preview.errors.length > 0 && (
                 <Alert variant="destructive" className="sm:col-span-2 lg:col-span-5">
                     <XCircle className="size-4" />
@@ -1089,6 +1111,7 @@ function downloadTemplate(): void {
             '商品描述',
             '标签',
             '创建日期',
+            '供货商',
         ],
         [
             '示例商品',
@@ -1115,18 +1138,34 @@ function downloadTemplate(): void {
             '',
             '',
             '',
+            '示例供货商',
         ],
     ];
     downloadCsv(rows.map(row => row.map(csvCell).join(',')).join('\r\n'), '商品导入标准模板.csv');
 }
 
-async function downloadReport(jobId: string, originalFilename: string): Promise<void> {
+async function downloadReport(job: CatalogImportJobRecord): Promise<void> {
     try {
         const result = await api.query<{ catalogImportRows: CatalogImportRowRecord[] }>(
             catalogImportRowsQuery,
-            { jobId, action: null },
+            { jobId: job.id, action: null },
         );
+        const headerAudit = (job.detectedHeaders ?? []).map(header => {
+            const mapping = job.fieldMapping?.[header] ?? CATALOG_MAPPING_UNKNOWN;
+            return [
+                header,
+                mapping === CATALOG_MAPPING_EXCLUDED
+                    ? 'EXCLUDED'
+                    : mapping === CATALOG_MAPPING_UNKNOWN
+                      ? 'UNKNOWN'
+                      : 'MAPPED',
+                mapping.startsWith('__') ? '' : mapping,
+            ];
+        });
         const content = [
+            ['原始表头', '处理状态', '系统字段'],
+            ...headerAudit,
+            [],
             ['行号', '结果', '处理选择', '商品名称', '分类', 'SKU', '说明', '应用时间'],
             ...result.catalogImportRows.map(row => [
                 String(row.rowNumber),
@@ -1141,7 +1180,7 @@ async function downloadReport(jobId: string, originalFilename: string): Promise<
         ]
             .map(row => row.map(csvCell).join(','))
             .join('\r\n');
-        const safeName = originalFilename.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_');
+        const safeName = job.originalFilename.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_');
         downloadCsv(content, `${safeName || '商品导入'}-导入报告.csv`);
     } catch (error) {
         toast.error(errorMessage(error));

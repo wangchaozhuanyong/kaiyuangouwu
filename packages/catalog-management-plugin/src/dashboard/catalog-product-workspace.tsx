@@ -31,15 +31,18 @@ import {
     useQueryClient,
 } from '@vendure/dashboard';
 import { AlertTriangle, Boxes, CalendarClock, Loader2, Plus, Save } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 
 import {
+    CatalogSupplierRecord,
     CatalogVariantCreationContextRecord,
     CatalogWorkspaceRecord,
     CatalogWorkspaceVariantRecord,
     catalogProductVariantCreationContextQuery,
     catalogProductWorkspaceQuery,
+    catalogSuppliersQuery,
     createCatalogProductVariantMutation,
+    createCatalogSupplierMutation,
     saveCatalogInventoryLotMutation,
 } from './catalog-management.graphql';
 
@@ -58,6 +61,7 @@ interface VariantDraft {
     stockOnHand: string;
     minimumStock: string;
     maximumStock: string;
+    supplierId: string;
 }
 
 interface LotDraft {
@@ -121,6 +125,42 @@ export function CatalogProductWorkspace({
     });
     const workspace = workspaceQuery.data?.catalogProductWorkspace;
     const creationContext = creationContextQuery.data?.product;
+    const [supplierSearch, setSupplierSearch] = useState('');
+    const deferredSupplierSearch = useDeferredValue(supplierSearch.trim());
+    const suppliersQuery = useQuery({
+        queryKey: ['catalog-suppliers', 'workspace', deferredSupplierSearch],
+        queryFn: () =>
+            api.query<{ catalogSuppliers: { items: CatalogSupplierRecord[]; totalItems: number } }>(
+                catalogSuppliersQuery,
+                {
+                    options: {
+                        skip: 0,
+                        take: 100,
+                        text: deferredSupplierSearch || null,
+                    },
+                },
+            ),
+        enabled: Boolean(productId),
+    });
+    const suppliers = useMemo(() => {
+        const byId = new Map<string, Pick<CatalogSupplierRecord, 'id' | 'code' | 'name' | 'enabled'>>();
+        for (const supplier of workspace?.variants.map(variant => variant.supplier).filter(Boolean) ?? []) {
+            if (supplier) byId.set(supplier.id, supplier);
+        }
+        for (const supplier of suppliersQuery.data?.catalogSuppliers.items ?? []) {
+            byId.set(supplier.id, supplier);
+        }
+        return [...byId.values()];
+    }, [suppliersQuery.data, workspace]);
+    const createSupplierMutation = useMutation({
+        mutationFn: (name: string) =>
+            api.mutate(createCatalogSupplierMutation, { input: { name, enabled: true } }),
+        onSuccess: async () => {
+            toast.success('供货商已创建，可在下拉列表中选择');
+            await queryClient.invalidateQueries({ queryKey: ['catalog-suppliers'] });
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
     const [stockLocationId, setStockLocationId] = useState('');
     const [drafts, setDrafts] = useState<Record<string, VariantDraft>>({});
     const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
@@ -388,13 +428,38 @@ export function CatalogProductWorkspace({
             </div>
 
             <section id="catalog-sku-workspace" className="space-y-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                     <div className="flex items-center gap-2">
                         <Boxes className="size-5" />
                         <div>
-                            <h3 className="font-semibold">规格、单位、价格与库存</h3>
+                            <h3 className="font-semibold">规格、单位、价格、供货商与库存</h3>
                             <p className="text-sm text-muted-foreground">在同一张表内完成高频 SKU 设置。</p>
                         </div>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                            className="sm:w-56"
+                            value={supplierSearch}
+                            placeholder="搜索供货商后打开下拉框"
+                            onChange={event => setSupplierSearch(event.target.value)}
+                        />
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={createSupplierMutation.isPending}
+                            onClick={() => {
+                                const name = window.prompt('请输入供货商名称')?.trim();
+                                if (name) createSupplierMutation.mutate(name);
+                            }}
+                        >
+                            {createSupplierMutation.isPending ? (
+                                <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                                <Plus className="mr-2 size-4" />
+                            )}
+                            快速新增供货商
+                        </Button>
                     </div>
                     <Button
                         type="button"
@@ -427,6 +492,7 @@ export function CatalogProductWorkspace({
                                 <TableHead className="min-w-40">SKU / 状态</TableHead>
                                 <TableHead className="min-w-36">条码</TableHead>
                                 <TableHead className="min-w-36">规格</TableHead>
+                                <TableHead className="min-w-48">供货商</TableHead>
                                 <TableHead className="min-w-28">销售单位</TableHead>
                                 <TableHead className="min-w-28">采购单位</TableHead>
                                 <TableHead className="min-w-24">换算</TableHead>
@@ -482,6 +548,30 @@ export function CatalogProductWorkspace({
                                                     updateDraft(variant.id, { specification: e.target.value })
                                                 }
                                             />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Select
+                                                value={draft.supplierId || '__none__'}
+                                                onValueChange={value =>
+                                                    updateDraft(variant.id, {
+                                                        supplierId:
+                                                            !value || value === '__none__' ? '' : value,
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="无供货商" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none__">无供货商</SelectItem>
+                                                    {suppliers.map(supplier => (
+                                                        <SelectItem key={supplier.id} value={supplier.id}>
+                                                            {supplier.name}
+                                                            {!supplier.enabled ? '（已停用）' : ''}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </TableCell>
                                         <TableCell>
                                             <Input
@@ -1070,6 +1160,7 @@ function toDraft(variant: CatalogWorkspaceVariantRecord, stockLocationId: string
         stockOnHand: String(stock?.stockOnHand ?? 0),
         minimumStock: stock?.minimumStock == null ? '' : String(stock.minimumStock),
         maximumStock: stock?.maximumStock == null ? '' : String(stock.maximumStock),
+        supplierId: variant.supplier?.id ?? '',
     };
 }
 
@@ -1120,6 +1211,7 @@ function variantOperationInput(
         stockOnHand: requiredInteger(draft.stockOnHand, '库存'),
         minimumStock: optionalInteger(draft.minimumStock, '库存下限'),
         maximumStock: optionalInteger(draft.maximumStock, '库存上限'),
+        supplierId: draft.supplierId || null,
     };
 }
 

@@ -171,6 +171,12 @@ export const catalogProductWorkspaceQuery = gql`
                 purchaseUnit
                 packageQuantity
                 shelfLifeDays
+                supplier {
+                    id
+                    code
+                    name
+                    enabled
+                }
                 sellingPrice
                 currencyCode
                 purchaseCostMicrounits
@@ -248,6 +254,7 @@ export const catalogExportRowsQuery = gql`
                 variantEnabled
                 systemCreatedAt
                 sourceCreatedAt
+                supplierName
                 sku
                 barcode
                 specification
@@ -301,6 +308,70 @@ export const saveCatalogInventoryLotMutation = gql`
             quantityOnHand
             expiresAt
             state
+        }
+    }
+`;
+
+const catalogSupplierFields = gql`
+    fragment CatalogSupplierFields on CatalogSupplier {
+        id
+        createdAt
+        updatedAt
+        channelId
+        code
+        name
+        enabled
+        contactName
+        phone
+        email
+        address
+        notes
+        linkedVariantCount
+    }
+`;
+
+export const catalogSuppliersQuery = gql`
+    ${catalogSupplierFields}
+    query CatalogSuppliers($options: CatalogSupplierListOptions) {
+        catalogSuppliers(options: $options) {
+            items {
+                ...CatalogSupplierFields
+            }
+            totalItems
+        }
+    }
+`;
+
+export const catalogSupplierVariantsQuery = gql`
+    query CatalogSupplierVariants($supplierId: ID!, $skip: Int, $take: Int) {
+        catalogSupplierVariants(supplierId: $supplierId, skip: $skip, take: $take) {
+            items {
+                id
+                productId
+                productName
+                name
+                sku
+                enabled
+            }
+            totalItems
+        }
+    }
+`;
+
+export const createCatalogSupplierMutation = gql`
+    ${catalogSupplierFields}
+    mutation CreateCatalogSupplier($input: CreateCatalogSupplierInput!) {
+        createCatalogSupplier(input: $input) {
+            ...CatalogSupplierFields
+        }
+    }
+`;
+
+export const updateCatalogSupplierMutation = gql`
+    ${catalogSupplierFields}
+    mutation UpdateCatalogSupplier($input: UpdateCatalogSupplierInput!) {
+        updateCatalogSupplier(input: $input) {
+            ...CatalogSupplierFields
         }
     }
 `;
@@ -367,6 +438,7 @@ export interface CatalogExportRowRecord {
     variantEnabled: boolean;
     systemCreatedAt: string;
     sourceCreatedAt: string | null;
+    supplierName: string | null;
     sku: string;
     barcode: string;
     specification: string;
@@ -435,6 +507,7 @@ export interface CatalogWorkspaceVariantRecord {
     purchaseUnit: string;
     packageQuantity: number;
     shelfLifeDays: number | null;
+    supplier: Pick<CatalogSupplierRecord, 'id' | 'code' | 'name' | 'enabled'> | null;
     sellingPrice: number;
     currencyCode: string;
     purchaseCostMicrounits: number | null;
@@ -462,4 +535,29 @@ export interface CatalogWorkspaceVariantRecord {
         state: string;
         daysUntilExpiry: number | null;
     }>;
+}
+
+export interface CatalogSupplierRecord {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    channelId: string;
+    code: string;
+    name: string;
+    enabled: boolean;
+    contactName: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    notes: string | null;
+    linkedVariantCount: number;
+}
+
+export interface CatalogSupplierVariantRecord {
+    id: string;
+    productId: string;
+    productName: string;
+    name: string;
+    sku: string;
+    enabled: boolean;
 }

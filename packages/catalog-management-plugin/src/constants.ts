@@ -19,3 +19,8 @@ export const manageCatalogExportPermission = new CrudPermissionDefinition(
     'CatalogExport',
     operation => `${operation} structured catalog export data`,
 );
+
+export const manageCatalogSupplierPermission = new CrudPermissionDefinition(
+    'CatalogSupplier',
+    operation => `${operation} catalog suppliers and default SKU supplier assignments`,
+);
