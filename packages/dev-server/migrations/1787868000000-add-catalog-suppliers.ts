@@ -30,7 +30,7 @@ export class AddCatalogSuppliers1787868000000 implements MigrationInterface {
                         { name: 'code', type: 'varchar', length: '64' },
                         { name: 'name', type: 'varchar', length: '255' },
                         { name: 'normalizedName', type: 'varchar', length: '255' },
-                        { name: 'enabled', type: 'boolean', default: true },
+                        { name: 'enabled', type: 'boolean', default: isMysql ? 1 : true },
                         { name: 'contactName', type: 'varchar', length: '120', isNullable: true },
                         { name: 'phone', type: 'varchar', length: '80', isNullable: true },
                         { name: 'email', type: 'varchar', length: '255', isNullable: true },
