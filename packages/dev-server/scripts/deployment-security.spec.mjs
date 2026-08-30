@@ -222,6 +222,9 @@ void test('MySQL restore drill is isolated, hardened, and scheduled weekly', asy
     assert.match(restoreScript, /trap cleanup_restore_database EXIT/u);
     assert.match(restoreScript, /sha256sum --check/u);
     assert.match(restoreScript, /gzip -t/u);
+    assert.match(restoreScript, /backup_tables=.*CREATE TABLE/u);
+    assert.match(restoreScript, /backupTables/u);
+    assert.match(restoreScript, /backup_tables.*restored_tables/u);
     assert.match(restoreScript, /restore-drill\.json/u);
     assert.match(service, /^User=root$/mu);
     assert.match(service, /^NoNewPrivileges=true$/mu);

@@ -52,10 +52,12 @@ restore_database_created=true
 gzip -dc "${backup_file}" | mysql --protocol=socket --user=root "${restore_database}"
 
 readonly source_tables="$(MYSQL_PWD="${DB_PASSWORD}" mysql --host="${DB_HOST}" --port="${DB_PORT}" --user="${DB_USERNAME}" --batch --skip-column-names --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'" "${DB_NAME}")"
+readonly backup_tables="$(gzip -dc "${backup_file}" | awk '/^CREATE TABLE `/ { count++ } END { print count + 0 }')"
 readonly restored_tables="$(mysql --protocol=socket --user=root --batch --skip-column-names --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '${restore_database}' AND table_type = 'BASE TABLE'")"
 
-if [[ "${source_tables}" -eq 0 || "${source_tables}" -ne "${restored_tables}" ]]; then
-    printf 'Restore drill table count mismatch: source=%s restored=%s\n' "${source_tables}" "${restored_tables}" >&2
+if [[ "${backup_tables}" -eq 0 || "${backup_tables}" -ne "${restored_tables}" ]]; then
+    printf 'Restore drill table count mismatch: backup=%s restored=%s current_source=%s\n' \
+        "${backup_tables}" "${restored_tables}" "${source_tables}" >&2
     exit 1
 fi
 
@@ -63,8 +65,9 @@ mysql --protocol=socket --user=root --execute="DROP DATABASE \`${restore_databas
 restore_database_created=false
 
 install -d -m 0700 "${vendure_evidence_dir}"
-printf '{"completedAt":"%s","backupFile":"%s","temporaryRestoreDatabase":"%s","sourceTables":%s,"restoredTables":%s}\n' \
-    "${restore_stamp}" "${backup_file}" "${restore_database}" "${source_tables}" "${restored_tables}" \
+printf '{"completedAt":"%s","backupFile":"%s","temporaryRestoreDatabase":"%s","sourceTables":%s,"backupTables":%s,"restoredTables":%s}\n' \
+    "${restore_stamp}" "${backup_file}" "${restore_database}" "${source_tables}" "${backup_tables}" "${restored_tables}" \
     > "${vendure_evidence_dir}/restore-drill.json"
 
-printf 'Restore drill passed and temporary database removed: database=%s tables=%s\n' "${restore_database}" "${restored_tables}"
+printf 'Restore drill passed and temporary database removed: database=%s backup_tables=%s restored_tables=%s current_source_tables=%s\n' \
+    "${restore_database}" "${backup_tables}" "${restored_tables}" "${source_tables}"

@@ -276,10 +276,16 @@ sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
 sudo -n systemctl enable --now vendure-production-healthcheck.timer
-sudo -n systemctl start vendure-production-healthcheck.service
+if ! sudo -n systemctl start vendure-production-healthcheck.service; then
+    sudo -n journalctl -u vendure-production-healthcheck.service -n 80 --no-pager >&2 || true
+    fail 'the production health check service failed'
+fi
 if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
     "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" != "success" ]]; then
-    sudo -n systemctl start vendure-mysql-restore-drill.service
+    if ! sudo -n systemctl start vendure-mysql-restore-drill.service; then
+        sudo -n journalctl -u vendure-mysql-restore-drill.service -n 80 --no-pager >&2 || true
+        fail 'the MySQL restore drill failed'
+    fi
 fi
 [[ "$(sudo -n systemctl is-enabled vendure-mysql-restore-drill.timer)" == "enabled" ]]
 [[ "$(sudo -n systemctl is-active vendure-mysql-restore-drill.timer)" == "active" ]]
