@@ -7,6 +7,9 @@ import { AddUsdtManualRefunds1787886000000 } from './1787886000000-add-usdt-manu
 import { AlignChannelUsdtSchema1787889600000 } from './1787889600000-align-channel-usdt-schema';
 
 const mysqlTestSocket = process.env.TEST_MYSQL_SOCKET ?? '';
+const mysqlTestHost = process.env.TEST_MYSQL_HOST ?? '';
+const mysqlTestPort = Number(process.env.TEST_MYSQL_PORT ?? 3306);
+const mysqlTestPassword = process.env.TEST_MYSQL_PASSWORD ?? '';
 
 describe('Channel announcements, USDT wallets and refund audit migrations', () => {
     it.each(['mysql', 'postgres', 'sqlite'] as const)(
@@ -177,14 +180,53 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
         }
     });
 
-    it.runIf(Boolean(mysqlTestSocket))(
+    it('creates replacement indexes before dropping MySQL foreign-key backing indexes', async () => {
+        const calls: string[] = [];
+        const table = new Table({
+            name: 'system_announcement_channels_channel',
+            columns: [
+                { name: 'systemAnnouncementId', type: 'int', isPrimary: true },
+                { name: 'channelId', type: 'int', isPrimary: true },
+            ],
+            indices: [
+                {
+                    name: 'IDX_aa074cb9061687d3e3b2bc7fc8',
+                    columnNames: ['systemAnnouncementId'],
+                },
+                {
+                    name: 'IDX_system_announcement_channels_channel',
+                    columnNames: ['channelId'],
+                },
+            ],
+        });
+        const queryRunner = {
+            getTable: vi.fn().mockResolvedValue(table),
+            createIndex: vi.fn(async (_tableName: string, index: { name?: string }) => {
+                calls.push(`create:${index.name}`);
+            }),
+            dropIndex: vi.fn(async (_tableName: string, index: { name?: string }) => {
+                calls.push(`drop:${index.name}`);
+            }),
+        } as unknown as QueryRunner;
+
+        await new AlignChannelUsdtSchema1787889600000().up(queryRunner);
+
+        expect(calls).toEqual([
+            'create:IDX_adcdad637ed68b4349d68d6a6c',
+            'drop:IDX_system_announcement_channels_channel',
+        ]);
+    });
+
+    it.runIf(Boolean(mysqlTestSocket || mysqlTestHost))(
         'applies, enforces uniqueness and rolls back against an isolated real MySQL database',
         async () => {
             const dataSource = new DataSource({
                 type: 'mysql',
+                ...(mysqlTestHost ? { host: mysqlTestHost, port: mysqlTestPort } : {}),
                 username: 'root',
+                password: mysqlTestPassword,
                 database: 'codex_usdt_migration_test',
-                extra: { socketPath: mysqlTestSocket },
+                ...(mysqlTestSocket ? { extra: { socketPath: mysqlTestSocket } } : {}),
                 entities: [],
                 synchronize: false,
             });

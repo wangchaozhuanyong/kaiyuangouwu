@@ -45,11 +45,15 @@ async function alignIndex(
     const obsolete = table.indices.find(index => index.name === obsoleteName);
     const expected = table.indices.find(index => index.name === expectedName);
 
-    if (obsolete) await queryRunner.dropIndex(tableName, obsolete);
+    // MySQL will not drop an index while a foreign key depends on it. Create the
+    // equivalent replacement first so the constraint remains continuously backed,
+    // then remove the obsolete name. This order also makes a retry safe after a
+    // partially-applied MySQL DDL migration.
     if (!expected) {
         await queryRunner.createIndex(
             tableName,
             new TableIndex({ name: expectedName, columnNames, isUnique: false }),
         );
     }
+    if (obsolete) await queryRunner.dropIndex(tableName, obsolete);
 }
