@@ -12956,15 +12956,327 @@ img.fatal-error-mark {
 .ai-generation-detail .ai-generation-grid {
     margin-top: 12px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
     gap: 8px;
 }
 
 .ai-generation-detail .ai-generation-output-actions {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
 }
 
 .ai-generation-detail .ai-generation-output-actions > * {
-    flex: 1 1 42%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 5px 3px !important;
+    border: 0;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: #f4efff;
+    color: #6130d7;
+    font-size: 10px !important;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+}
+
+.ai-generation-detail .ai-generation-output-actions > button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+.ai-generation-detail .ai-generation-output-actions svg {
+    width: 13px;
+    height: 13px;
+    flex: none;
+}
+
+.ai-generation-output-preview {
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    border: 0;
+    display: block;
+    background: #eef0f4;
+}
+
+.ai-generation-output-preview > .safe-image-frame,
+.ai-generation-output-preview > .image-placeholder,
+.ai-generation-output-preview img {
+    width: 100%;
+    height: 100%;
+}
+
+.ai-generation-output-preview > .safe-image-frame {
+    display: block;
+}
+
+.ai-generation-output-preview img {
+    object-fit: contain;
+}
+
+.ai-generation-output-preview > span:last-child {
+    min-height: 24px;
+    padding: 4px 7px;
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgb(20 18 28 / 72%);
+    color: #fff;
+    font-size: 9px;
+    font-weight: var(--font-weight-semibold);
+    opacity: 0;
+    transform: translateY(3px);
+    transition:
+        opacity 150ms ease,
+        transform 150ms ease;
+}
+
+.ai-generation-output-preview:hover > span:last-child,
+.ai-generation-output-preview:focus-visible > span:last-child {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@media (hover: none) {
+    .ai-generation-output-preview > span:last-child {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ai-generation-output-preview > span:last-child svg {
+    width: 12px;
+    height: 12px;
+}
+
+.ai-generation-lightbox {
+    position: fixed;
+    z-index: 1300;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.ai-generation-lightbox-mask {
+    width: 100%;
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgb(8 10 16 / 92%);
+    backdrop-filter: blur(10px);
+}
+
+.ai-generation-lightbox-dialog {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: 56px minmax(0, 1fr) auto;
+    color: #fff;
+    outline: none;
+}
+
+.ai-generation-lightbox-dialog > header {
+    min-width: 0;
+    padding: max(8px, env(safe-area-inset-top, 0px)) 12px 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ai-generation-lightbox-dialog > header strong {
+    overflow: hidden;
+    color: #fff;
+    font-size: 14px;
+    font-weight: var(--font-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-generation-lightbox-dialog > header button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgb(255 255 255 / 12%);
+    color: #fff;
+}
+
+.ai-generation-lightbox-media {
+    min-width: 0;
+    min-height: 0;
+    padding: 12px;
+    display: grid;
+    place-items: center;
+}
+
+.ai-generation-lightbox-media > .safe-image-frame,
+.ai-generation-lightbox-media > .image-placeholder {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    display: contents;
+}
+
+.ai-generation-lightbox-media img {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.ai-generation-lightbox-dialog > footer {
+    padding: 10px 16px max(16px, env(safe-area-inset-bottom, 16px));
+    display: flex;
+    justify-content: center;
+}
+
+.ai-generation-lightbox-dialog > footer button {
+    min-width: 168px;
+    min-height: 44px;
+    padding: 9px 18px;
+    border: 0;
+    border-radius: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: #fff;
+    color: #352354;
+    font-size: 13px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.ai-generation-lightbox-dialog > footer button:disabled {
+    cursor: wait;
+    opacity: 0.58;
+}
+
+.ai-generation-lightbox-dialog > footer svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Keep the compact studio readable on phone-sized screens. */
+.ai-studio-shell,
+.sheet.ai-studio-bottom-sheet,
+.ai-generation-lightbox {
+    --ai-font-caption: 12px;
+    --ai-font-body: 13px;
+}
+
+.ai-studio-optimizer-model,
+.ai-studio-optimizer-model strong,
+.ai-studio-reference-add-copy small,
+.ai-studio-resolution-picker button small,
+.ai-studio-reference-meta > span,
+.ai-studio-reference-meta small,
+.ai-studio-reference-actions label,
+.ai-studio-reference-actions button,
+.ai-studio-reference-error,
+.ai-studio-model-grid code,
+.ai-generation-card code,
+.ai-studio-settlement-refund span,
+.ai-studio-low-balance,
+.ai-studio-history-heading > button,
+.ai-studio-history-filters button,
+.ai-generation-card-preview > small,
+.ai-generation-card header time,
+.ai-generation-status,
+.ai-generation-error-copy,
+.ai-generation-progress-copy,
+.ai-generation-progress strong,
+.ai-generation-meta span,
+.ai-generation-card footer > strong,
+.ai-generation-card footer button,
+.ai-generation-card footer a,
+.ai-studio-setting-sheet > button small,
+.ai-studio-info-sheet small,
+.ai-generation-output-preview > span:last-child {
+    font-size: var(--ai-font-caption);
+}
+
+.ai-studio-heading span,
+.ai-studio-option-row span,
+.ai-studio-prompt-tools,
+.ai-studio-prompt-tools button,
+.ai-studio-optimized,
+.ai-studio-error,
+.ai-studio-reference-add-copy strong,
+.ai-studio-reference-meta strong,
+.ai-studio-reference-mode,
+.ai-studio-model-description,
+.ai-studio-model-grid strong,
+.ai-studio-setting-trigger strong,
+.ai-studio-settlement-refund strong,
+.ai-studio-history-heading p,
+.ai-generation-card-content > p,
+.ai-generation-detail > p {
+    font-size: var(--ai-font-body);
+}
+
+.ai-studio-terms-row {
+    font-size: var(--ai-font-body) !important;
+    line-height: 1.55;
+}
+
+.ai-generation-detail .ai-generation-output-actions > * {
+    min-height: 36px;
+    font-size: var(--ai-font-caption) !important;
+}
+
+.ai-generation-lightbox-dialog > footer button {
+    font-size: 14px;
+}
+
+.ai-studio-history-filters button {
+    min-height: 34px;
+}
+
+.ai-generation-progress progress {
+    height: 4px;
+}
+
+.ai-generation-meta span {
+    padding: 3px 7px;
+}
+
+.ai-generation-card footer {
+    flex-wrap: wrap;
+    row-gap: 7px;
+}
+
+.ai-generation-card footer > div {
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.ai-generation-card footer button,
+.ai-generation-card footer a {
+    min-height: 32px;
+    padding: 6px 8px;
+}
+
+.ai-generation-card footer .ai-generation-delete-button {
+    width: 32px;
 }
 
 @media (max-width: 760px) {

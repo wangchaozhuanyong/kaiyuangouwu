@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    imageGenerationElapsedSeconds,
     imageGenerationPollDelay,
     imageGenerationProgress,
     startImageGenerationPolling,
@@ -22,7 +23,19 @@ describe('AI image generation progress', () => {
                     { state: 'QUEUED' },
                 ],
             }),
-        ).toEqual({ processed: 2, total: 4, percentage: 50 });
+        ).toEqual({ processed: 2, total: 4, percentage: 50, determinate: true });
+    });
+
+    it('keeps unsettled work indeterminate and reports elapsed time without a fake percentage', () => {
+        expect(
+            imageGenerationProgress({
+                quantity: 1,
+                outputs: [{ state: 'RUNNING' }],
+            }),
+        ).toEqual({ processed: 0, total: 1, percentage: 0, determinate: false });
+        expect(
+            imageGenerationElapsedSeconds('2026-08-30T08:00:00.000Z', Date.parse('2026-08-30T08:00:12.900Z')),
+        ).toBe(12);
     });
 
     it('uses fast polling for the first minute and backs off afterward', () => {

@@ -64,7 +64,26 @@ describe('AI Image Studio compact generation flow', () => {
         expect(pageSource).toContain("document.addEventListener('visibilitychange'");
         expect(pageSource).toContain("window.addEventListener('online'");
         expect(pageSource).toContain('imageGenerationProgress(job)');
+        expect(pageSource).toContain('imageGenerationElapsedSeconds(job.createdAt, progressClock)');
+        expect(pageSource).toContain('progress.determinate');
         expect(pageSource).toContain('<progress');
         expect(stylesheet).toContain('.ai-generation-progress');
+    });
+
+    it('opens generated images in an in-app fullscreen preview and downloads the original', () => {
+        expect(pageSource).toContain('className="ai-generation-output-preview"');
+        expect(pageSource).toContain('className="ai-generation-lightbox"');
+        expect(pageSource).toContain('saveGeneratedImage');
+        expect(pageSource).toContain('output.downloadUrl ?? output.imageUrl');
+        expect(stylesheet).toContain('.ai-generation-output-preview > .safe-image-frame');
+        expect(stylesheet).toContain('.ai-generation-lightbox-dialog');
+    });
+
+    it('uses readable compact typography instead of 9px and 10px operational text', () => {
+        expect(stylesheet).toContain('--ai-font-caption: 12px');
+        expect(stylesheet).toContain('--ai-font-body: 13px');
+        expect(stylesheet).toContain('.ai-generation-card-content > p,');
+        expect(stylesheet).toContain('.ai-generation-progress-copy,');
+        expect(stylesheet).toContain('.ai-studio-history-filters button {');
     });
 });

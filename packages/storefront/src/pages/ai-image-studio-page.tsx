@@ -9,6 +9,7 @@ import {
     ImagePlus,
     Info,
     LoaderCircle,
+    Maximize2,
     RefreshCw,
     RotateCcw,
     Sparkles,
@@ -17,6 +18,7 @@ import {
     X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ShopApi } from '../api';
 import { formatDisplayMoney } from '../money-display';
@@ -26,6 +28,7 @@ import { SafeImage } from '../storefront-ui/product-display';
 import {
     ActiveCustomer,
     ImageGenerationJob,
+    ImageGenerationOutput,
     ImageModelQuotaStatus,
     ImagePrivateAssetView,
     ImagePromptQuotaStatus,
@@ -37,6 +40,7 @@ import {
 } from '../types';
 
 import {
+    imageGenerationElapsedSeconds,
     imageGenerationPollDelay,
     imageGenerationProgress,
     startImageGenerationPolling,
@@ -1088,6 +1092,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 job={selectedJob}
                                 language={language}
                                 locale={market.locale}
+                                onNotify={onNotify}
                                 onDelete={outputId => void deleteOutput(outputId)}
                             />
                         </Sheet>
@@ -1121,6 +1126,14 @@ function GenerationCard({
     const preview = job.outputs.find(output => output.imageUrl) ?? job.outputs[0];
     const statusClass = job.state.toLowerCase();
     const progress = imageGenerationProgress(job);
+    const [progressClock, setProgressClock] = useState(() => Date.now());
+    useEffect(() => {
+        if (!activeStates.has(job.state)) return;
+        setProgressClock(Date.now());
+        const interval = window.setInterval(() => setProgressClock(Date.now()), 1_000);
+        return () => window.clearInterval(interval);
+    }, [job.id, job.state]);
+    const elapsedSeconds = imageGenerationElapsedSeconds(job.createdAt, progressClock);
     const amountLabel = activeStates.has(job.state)
         ? isZh
             ? `已冻结 ${formatBillingMoney(job.reservedAmount, job.currencyCode, locale)}`
@@ -1168,16 +1181,24 @@ function GenerationCard({
                                       : 'Your generation is in progress…'}
                             </span>
                             <strong aria-live="polite">
-                                {progress.processed}/{progress.total} · {progress.percentage}%
+                                {progress.determinate
+                                    ? `${progress.processed}/${progress.total} · ${progress.percentage}%`
+                                    : isZh
+                                      ? `已等待 ${formatGenerationElapsed(elapsedSeconds, true)}`
+                                      : `Elapsed ${formatGenerationElapsed(elapsedSeconds, false)}`}
                             </strong>
                         </div>
                         <progress
                             max={progress.total}
-                            value={progress.processed || undefined}
+                            value={progress.determinate ? progress.processed : undefined}
                             aria-label={
-                                isZh
-                                    ? `已处理 ${progress.processed}/${progress.total} 张，${progress.percentage}%`
-                                    : `${progress.processed} of ${progress.total} processed, ${progress.percentage}%`
+                                progress.determinate
+                                    ? isZh
+                                        ? `已处理 ${progress.processed}/${progress.total} 张，${progress.percentage}%`
+                                        : `${progress.processed} of ${progress.total} processed, ${progress.percentage}%`
+                                    : isZh
+                                      ? `图片生成中，已等待 ${formatGenerationElapsed(elapsedSeconds, true)}`
+                                      : `Image generation in progress, elapsed ${formatGenerationElapsed(elapsedSeconds, false)}`
                             }
                         />
                     </div>
@@ -1233,14 +1254,33 @@ function GenerationDetail({
     job,
     language,
     locale,
+    onNotify,
     onDelete,
 }: Readonly<{
     job: ImageGenerationJob;
     language: StorefrontLanguage;
     locale: string;
+    onNotify(message: string): void;
     onDelete(outputId: string): void;
 }>) {
     const isZh = language === 'zh';
+    const [previewOutput, setPreviewOutput] = useState<ImageGenerationOutput | null>(null);
+    const [downloadingOutputId, setDownloadingOutputId] = useState<string | null>(null);
+    const downloadOutput = async (output: ImageGenerationOutput) => {
+        const source = output.downloadUrl ?? output.imageUrl;
+        if (!source || downloadingOutputId) return;
+        setDownloadingOutputId(output.id);
+        try {
+            await saveGeneratedImage(source, `ai-image-${job.id}-${output.outputIndex + 1}`);
+            onNotify(isZh ? '图片已保存' : 'Image saved');
+        } catch {
+            onNotify(
+                isZh ? '下载失败，请刷新页面后重试' : 'Download failed. Refresh the page and try again.',
+            );
+        } finally {
+            setDownloadingOutputId(null);
+        }
+    };
     const settlementLabel =
         job.state === 'UNKNOWN'
             ? isZh
@@ -1275,10 +1315,26 @@ function GenerationDetail({
                 {job.outputs.map(output => (
                     <div key={output.id} className={`ai-generation-output is-${output.state.toLowerCase()}`}>
                         {output.imageUrl ? (
-                            <SafeImage
-                                src={output.imageUrl}
-                                alt={`${job.originalPrompt} ${output.outputIndex + 1}`}
-                            />
+                            <button
+                                type="button"
+                                className="ai-generation-output-preview"
+                                style={{ aspectRatio: generationAspectRatio(job.aspectRatio) }}
+                                aria-label={
+                                    isZh
+                                        ? `全屏查看第 ${output.outputIndex + 1} 张图片`
+                                        : `View image ${output.outputIndex + 1} fullscreen`
+                                }
+                                onClick={() => setPreviewOutput(output)}
+                            >
+                                <SafeImage
+                                    src={output.imageUrl}
+                                    alt={`${job.originalPrompt} ${output.outputIndex + 1}`}
+                                />
+                                <span aria-hidden="true">
+                                    <Maximize2 />
+                                    {isZh ? '全屏' : 'Fullscreen'}
+                                </span>
+                            </button>
                         ) : (
                             <div className="ai-generation-placeholder">
                                 {['QUEUED', 'RUNNING'].includes(output.state) ? (
@@ -1292,16 +1348,26 @@ function GenerationDetail({
                         )}
                         <div className="ai-generation-output-actions">
                             {output.imageUrl ? (
-                                <a href={output.imageUrl} target="_blank" rel="noreferrer">
+                                <button type="button" onClick={() => setPreviewOutput(output)}>
                                     <Eye />
                                     {isZh ? '查看' : 'View'}
-                                </a>
+                                </button>
                             ) : null}
-                            {output.downloadUrl ? (
-                                <a href={output.downloadUrl}>
+                            {output.downloadUrl || output.imageUrl ? (
+                                <button
+                                    type="button"
+                                    disabled={downloadingOutputId === output.id}
+                                    onClick={() => void downloadOutput(output)}
+                                >
                                     <ArrowDownToLine />
-                                    {isZh ? '下载' : 'Download'}
-                                </a>
+                                    {downloadingOutputId === output.id
+                                        ? isZh
+                                            ? '保存中'
+                                            : 'Saving'
+                                        : isZh
+                                          ? '下载'
+                                          : 'Download'}
+                                </button>
                             ) : null}
                             {output.imageUrl ? (
                                 <button type="button" onClick={() => onDelete(output.id)}>
@@ -1313,8 +1379,134 @@ function GenerationDetail({
                     </div>
                 ))}
             </div>
+            {previewOutput?.imageUrl ? (
+                <GenerationImagePreview
+                    imageUrl={previewOutput.imageUrl}
+                    alt={`${job.originalPrompt} ${previewOutput.outputIndex + 1}`}
+                    title={
+                        isZh
+                            ? `生成图片 ${previewOutput.outputIndex + 1}/${job.outputs.length}`
+                            : `Generated image ${previewOutput.outputIndex + 1}/${job.outputs.length}`
+                    }
+                    language={language}
+                    downloading={downloadingOutputId === previewOutput.id}
+                    onClose={() => setPreviewOutput(null)}
+                    onDownload={() => downloadOutput(previewOutput)}
+                />
+            ) : null}
         </div>
     );
+}
+
+function GenerationImagePreview({
+    imageUrl,
+    alt,
+    title,
+    language,
+    downloading,
+    onClose,
+    onDownload,
+}: Readonly<{
+    imageUrl: string;
+    alt: string;
+    title: string;
+    language: StorefrontLanguage;
+    downloading: boolean;
+    onClose(): void;
+    onDownload(): Promise<void>;
+}>) {
+    const isZh = language === 'zh';
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const previousFocusRef = useRef<HTMLElement | null>(null);
+    const onCloseRef = useRef(onClose);
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
+    useEffect(() => {
+        previousFocusRef.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus());
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                onCloseRef.current();
+                return;
+            }
+            if (event.key !== 'Tab' || !dialogRef.current) return;
+            const focusableElements = Array.from(
+                dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [tabindex="0"]'),
+            ).filter(element => element !== dialogRef.current && !element.hidden);
+            if (!focusableElements.length) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                dialogRef.current.focus();
+                return;
+            }
+            const currentIndex = focusableElements.indexOf(document.activeElement as HTMLElement);
+            const nextIndex = event.shiftKey
+                ? currentIndex <= 0
+                    ? focusableElements.length - 1
+                    : currentIndex - 1
+                : currentIndex < 0 || currentIndex === focusableElements.length - 1
+                  ? 0
+                  : currentIndex + 1;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            focusableElements[nextIndex].focus();
+        };
+        window.addEventListener('keydown', handleKeyDown, true);
+        return () => {
+            window.cancelAnimationFrame(focusFrame);
+            window.removeEventListener('keydown', handleKeyDown, true);
+            document.body.style.overflow = previousOverflow;
+            previousFocusRef.current?.focus();
+        };
+    }, []);
+
+    const content = (
+        <div className="ai-generation-lightbox" role="presentation">
+            <button
+                type="button"
+                className="ai-generation-lightbox-mask"
+                aria-label={isZh ? '关闭全屏预览' : 'Close fullscreen preview'}
+                onClick={onClose}
+            />
+            <div
+                ref={dialogRef}
+                className="ai-generation-lightbox-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-label={title}
+                tabIndex={-1}
+            >
+                <header>
+                    <strong>{title}</strong>
+                    <button type="button" onClick={onClose} aria-label={isZh ? '关闭' : 'Close'}>
+                        <X aria-hidden="true" />
+                    </button>
+                </header>
+                <div className="ai-generation-lightbox-media">
+                    <SafeImage src={imageUrl} alt={alt} />
+                </div>
+                <footer>
+                    <button type="button" disabled={downloading} onClick={() => void onDownload()}>
+                        <ArrowDownToLine />
+                        {downloading
+                            ? isZh
+                                ? '保存中…'
+                                : 'Saving…'
+                            : isZh
+                              ? '下载原图'
+                              : 'Download original'}
+                    </button>
+                </footer>
+            </div>
+        </div>
+    );
+    return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
 function SettingTrigger({
@@ -1361,6 +1553,45 @@ function SheetOption({
             <i aria-hidden="true">{selected ? <Check /> : null}</i>
         </button>
     );
+}
+
+function generationAspectRatio(value: string): string {
+    const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/u.exec(value.trim());
+    if (!match) return '1 / 1';
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    return width > 0 && height > 0 ? `${width} / ${height}` : '1 / 1';
+}
+
+function formatGenerationElapsed(totalSeconds: number, isZh: boolean): string {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes < 1) return isZh ? `${seconds} 秒` : `${seconds}s`;
+    return isZh ? `${minutes} 分 ${seconds} 秒` : `${minutes}m ${seconds}s`;
+}
+
+async function saveGeneratedImage(url: string, fileNameBase: string): Promise<void> {
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) throw new Error(`Image download failed (${response.status})`);
+    const blob = await response.blob();
+    if (!blob.size) throw new Error('The generated image is empty');
+    const extension =
+        {
+            'image/avif': 'avif',
+            'image/gif': 'gif',
+            'image/jpeg': 'jpg',
+            'image/png': 'png',
+            'image/webp': 'webp',
+        }[blob.type.toLowerCase()] ?? 'png';
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `${fileNameBase}.${extension}`;
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
 }
 
 function stateLabel(state: string, isZh: boolean): string {
