@@ -55,7 +55,7 @@ export const adminApiExtensions = gql`
         totalItems: Int!
     }
 
-    type CatalogSupplierVariant {
+    type CatalogSupplierVariant implements Node {
         id: ID!
         productId: ID!
         productName: String!

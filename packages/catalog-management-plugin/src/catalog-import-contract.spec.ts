@@ -1,4 +1,4 @@
-import { print } from 'graphql';
+import { Kind, print, type TypeNode } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
 import { adminApiExtensions } from './api-extensions';
@@ -29,5 +29,33 @@ describe('catalog import privacy contract', () => {
 
         expect(schema).not.toContain('type CatalogExportPage implements PaginatedList');
         expect(schema).toContain('type CatalogExportPage {');
+    });
+
+    it('uses Node items for every Vendure PaginatedList implementation', () => {
+        const objectTypes = adminApiExtensions.definitions.filter(
+            definition => definition.kind === Kind.OBJECT_TYPE_DEFINITION,
+        );
+        const nodeTypes = new Set(
+            objectTypes
+                .filter(definition => definition.interfaces?.some(item => item.name.value === 'Node'))
+                .map(definition => definition.name.value),
+        );
+        const paginatedTypes = objectTypes.filter(definition =>
+            definition.interfaces?.some(item => item.name.value === 'PaginatedList'),
+        );
+        const unwrapTypeName = (type: TypeNode): string =>
+            type.kind === Kind.NAMED_TYPE ? type.name.value : unwrapTypeName(type.type);
+
+        expect(paginatedTypes.length).toBeGreaterThan(0);
+        for (const paginatedType of paginatedTypes) {
+            const itemsField = paginatedType.fields?.find(field => field.name.value === 'items');
+            if (itemsField == null) {
+                throw new Error(`${paginatedType.name.value}.items must be declared`);
+            }
+            expect(
+                nodeTypes.has(unwrapTypeName(itemsField.type)),
+                `${paginatedType.name.value}.items must implement Node`,
+            ).toBe(true);
+        }
     });
 });
