@@ -14,7 +14,7 @@ const foreignKeys = [
         referencedTableName: 'channel',
         referencedColumnNames: ['id'],
     },
-] as const;
+];
 
 export class AlignSystemAnnouncementChannelForeignKeys1787893200000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
