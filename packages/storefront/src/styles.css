@@ -1221,8 +1221,8 @@ img.fatal-error-mark {
 }
 
 .quick-grid button > span {
-    width: 44px;
-    height: 44px;
+    width: 50px;
+    height: 50px;
     border-radius: 12px;
     background: transparent;
     border: 0;
@@ -1236,8 +1236,8 @@ img.fatal-error-mark {
 }
 
 .colorful-icon-badge {
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -1247,8 +1247,8 @@ img.fatal-error-mark {
 }
 
 .colorful-icon-img-wrap {
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
     border-radius: 12px;
     overflow: hidden;
     display: flex;
@@ -9129,8 +9129,8 @@ img.fatal-error-mark {
     }
 
     .quick-grid button > span {
-        width: 38px;
-        height: 38px;
+        width: 46px;
+        height: 46px;
     }
 
     .category-layout {
