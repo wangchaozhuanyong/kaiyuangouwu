@@ -85,7 +85,7 @@ const FALLBACK_ENTRY_FORM = `<form data-store-entry style="position:fixed;right:
 </form>`;
 
 const PROMOTION_ZH_COPY = {
-    metaTitle: 'Damatong | AI 数字服务',
+    metaTitle: '{storeName} | AI 数字服务',
     metaDescription: 'AI API 中转、AI 服务订阅、调用额度与人工支持，一个入口更快找到。',
     skipToContent: '跳到主要内容',
     brandType: 'AI 数字服务',
@@ -97,7 +97,7 @@ const PROMOTION_ZH_COPY = {
     headerViewServices: '查看服务',
     viewServices: '查看可用服务',
     enterService: '进入服务中心',
-    heroEyebrow: 'Damatong · AI 服务入口',
+    heroEyebrow: '{storeName} · AI 服务入口',
     heroLead: '连接需要的',
     heroHighlight: 'AI 服务',
     heroTail: '',
@@ -107,24 +107,24 @@ const PROMOTION_ZH_COPY = {
         '面向个人、创作者、开发者与小团队，提供清晰易懂的 AI 数字服务入口。减少筛选和使用成本，让用户更简单地找到适合自己的工具与服务。',
     carouselRole: '轮播',
     slideRole: '轮播页',
-    heroCarouselAria: 'Damatong AI 服务推荐',
+    heroCarouselAria: '{storeName} AI 服务推荐',
     carouselNavigation: '切换推荐服务',
     pauseCarousel: '暂停轮播',
     resumeCarousel: '继续轮播',
     heroSlideOneAria: '第 1 项，共 3 项：AI API 中转低至 0.1 倍起',
-    heroSlideOneEyebrow: 'Damatong · AI API 中转',
+    heroSlideOneEyebrow: '{storeName} · AI API 中转',
     heroSlideOneTitleLead: 'AI API 中转',
     heroSlideOneTitleAccent: '低至 0.1 倍起',
     heroSlideOneDescription: '覆盖多种模型与通道，不同模型、通道与当前价格以服务中心为准。',
     heroSlideOneControl: 'AI API',
     heroSlideTwoAria: '第 2 项，共 3 项：AI 服务订阅，更轻的长期使用成本',
-    heroSlideTwoEyebrow: 'Damatong · AI 服务订阅',
+    heroSlideTwoEyebrow: '{storeName} · AI 服务订阅',
     heroSlideTwoTitleLead: 'AI 服务订阅',
     heroSlideTwoTitleAccent: '更轻的长期使用成本',
     heroSlideTwoDescription: '按当前需求查看可用订阅方向，减少筛选和长期使用成本。',
     heroSlideTwoControl: 'AI 订阅',
     heroSlideThreeAria: '第 3 项，共 3 项：人工服务支持，从选择到使用都有人跟进',
-    heroSlideThreeEyebrow: 'Damatong · 一站式服务',
+    heroSlideThreeEyebrow: '{storeName} · 一站式服务',
     heroSlideThreeTitleLead: '人工服务支持',
     heroSlideThreeTitleAccent: '从选择到使用，都有人跟进',
     heroSlideThreeDescription: '遇到选择与使用问题时，可以获得清晰、及时的人工协助。',
@@ -134,7 +134,7 @@ const PROMOTION_ZH_COPY = {
     trustClear: '清晰说明',
     trustScenarios: '多场景覆盖',
     trustSupport: '人工服务支持',
-    networkAria: 'Damatong 位于中心，连接助手、编程、创作与 API 四类 AI 服务',
+    networkAria: '{storeName} 位于中心，连接助手、编程、创作与 API 四类 AI 服务',
     networkAssistant: '助手',
     networkAssistantDescription: '日常协作与信息处理',
     networkCoding: '编程',
@@ -156,7 +156,7 @@ const PROMOTION_ZH_COPY = {
     valueSupportDescription: '从选择到使用，遇到问题时可以获得人工服务支持。',
     servicesLabel: '服务能力',
     servicesTitle: '一个入口，连接订阅、API 与额度。',
-    servicesIntro: '从日常订阅到开发调用，Damatong 按真实需求组织服务，让你更快找到适合的方向。',
+    servicesIntro: '从日常订阅到开发调用，{storeName} 按真实需求组织服务，让你更快找到适合的方向。',
     capabilitySubscriptionTitle: 'AI 服务订阅',
     capabilitySubscriptionMark: 'AI',
     capabilitySubscriptionDescription: '适合希望以更轻成本使用主流 AI 服务的个人、创作者与小团队。',
@@ -191,7 +191,7 @@ const PROMOTION_ZH_COPY = {
     processStepFourDescription: '使用过程中遇到问题，可以通过人工服务获得帮助。',
     trustLabel: '服务保障',
     trustTitle: '信息清楚，选择更安心。',
-    trustIntro: '从服务方向到使用支持，Damatong 把关键说明放在你需要做决定的地方。',
+    trustIntro: '从服务方向到使用支持，{storeName} 把关键说明放在你需要做决定的地方。',
     trustOneTitle: '说明先讲清楚',
     trustOneDescription: '服务中心会说明适用对象、服务方向和使用方式，具体可用内容以当前页面为准。',
     trustTwoTitle: '覆盖多种工作场景',
@@ -200,9 +200,9 @@ const PROMOTION_ZH_COPY = {
     trustThreeDescription: '遇到服务选择或使用问题时，可以通过客服中心提交问题并获得人工协助。',
     faqTitle: '开始之前，先确认这些。',
     faqIntro: '如果还没想好从哪一类服务开始，可以先看这里。',
-    faqOneQuestion: 'Damatong 主要提供什么？',
+    faqOneQuestion: '{storeName} 主要提供什么？',
     faqOneAnswer:
-        'Damatong 聚合 AI 服务订阅、AI API 中转、AI 调用额度和 AI 效率工具，帮助不同使用场景找到清楚的服务入口。',
+        '{storeName} 聚合 AI 服务订阅、AI API 中转、AI 调用额度和 AI 效率工具，帮助不同使用场景找到清楚的服务入口。',
     faqTwoQuestion: '我应该从哪一类服务开始？',
     faqTwoAnswer:
         '如果你希望直接使用 AI 服务，可以先了解订阅方向；如果你需要开发调用或团队接入，可以先了解 AI API 中转与调用额度。',
@@ -210,13 +210,14 @@ const PROMOTION_ZH_COPY = {
     faqThreeAnswer:
         '适合。页面按个人使用、内容创作、开发调用和小团队协作等场景整理服务，你可以从最接近当前任务的一项开始。',
     faqFourQuestion: '具体服务详情在哪里查看？',
-    faqFourAnswer: '点击页面中的“查看可用服务”，进入 Damatong 服务中心查看当前可用内容、服务说明和支持信息。',
+    faqFourAnswer:
+        '点击页面中的“查看可用服务”，进入 {storeName} 服务中心查看当前可用内容、服务说明和支持信息。',
     faqFiveQuestion: '可以直接在这里完成购买或交易吗？',
-    faqFiveAnswer: '推广页只用于介绍服务方向，具体服务详情、价格与后续操作请进入 Damatong 服务中心查看。',
-    finalLabel: 'Damatong / 服务中心',
+    faqFiveAnswer: '推广页只用于介绍服务方向，具体服务详情、价格与后续操作请进入 {storeName} 服务中心查看。',
+    finalLabel: '{storeName} / 服务中心',
     finalTitle: '用更轻的成本，连接需要的 AI 服务。',
     finalIntro: '进入服务中心，查看当前可用的 AI 服务订阅、API 中转、调用额度与人工支持。',
-    finalSignalAria: 'Damatong 服务中心提供的信息',
+    finalSignalAria: '{storeName} 服务中心提供的信息',
     finalDiscoverLabel: '发现',
     finalDiscoverDescription: '按场景浏览',
     finalChooseLabel: '选择',
@@ -225,7 +226,7 @@ const PROMOTION_ZH_COPY = {
     finalSupportDescription: '需要时获得支持',
     mobileEntryAria: '进入服务中心',
     mobileEntry: '进入服务中心',
-    footerType: 'Damatong · AI 数字服务',
+    footerType: '{storeName} · AI 数字服务',
     footerNavigation: '规则与支持',
     privacy: '隐私政策',
     terms: '使用条款',
@@ -235,7 +236,7 @@ const PROMOTION_ZH_COPY = {
 type PromotionCopyKey = keyof typeof PROMOTION_ZH_COPY;
 
 const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
-    metaTitle: 'Damatong | AI Digital Services',
+    metaTitle: '{storeName} | AI Digital Services',
     metaDescription:
         'AI API routing, AI service subscriptions, usage credits, and human support through one clear entry point.',
     skipToContent: 'Skip to main content',
@@ -248,37 +249,37 @@ const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
     headerViewServices: 'View services',
     viewServices: 'View available services',
     enterService: 'Enter service center',
-    heroEyebrow: 'DAMATONG · AI SERVICE ENTRY',
+    heroEyebrow: '{storeName} · AI SERVICE ENTRY',
     heroLead: 'Connect the',
     heroHighlight: 'AI services',
     heroTail: 'you need',
     heroTailLead: 'Connect the',
     heroTailEnd: 'AI services you need',
     heroDescription:
-        'For individuals, creators, developers, and small teams, Damatong provides a clear entry point to AI digital services. ' +
+        'For individuals, creators, developers, and small teams, {storeName} provides a clear entry point to AI digital services. ' +
         'Spend less time comparing tools and more time choosing what fits your work.',
     carouselRole: 'carousel',
     slideRole: 'slide',
-    heroCarouselAria: 'Damatong AI service highlights',
+    heroCarouselAria: '{storeName} AI service highlights',
     carouselNavigation: 'Choose a featured service',
     pauseCarousel: 'Pause carousel',
     resumeCarousel: 'Resume carousel',
     heroSlideOneAria: 'Slide 1 of 3: Selected AI API routes from 0.1 times',
-    heroSlideOneEyebrow: 'Damatong · AI API ROUTING',
+    heroSlideOneEyebrow: '{storeName} · AI API ROUTING',
     heroSlideOneTitleLead: 'AI API routing',
     heroSlideOneTitleAccent: 'from 0.1×',
     heroSlideOneDescription:
         'Connect to multiple models and routes. Current rates vary by model and route; check the service center for details.',
     heroSlideOneControl: 'AI API',
     heroSlideTwoAria: 'Slide 2 of 3: AI service subscriptions with lighter long-term costs',
-    heroSlideTwoEyebrow: 'Damatong · AI SUBSCRIPTIONS',
+    heroSlideTwoEyebrow: '{storeName} · AI SUBSCRIPTIONS',
     heroSlideTwoTitleLead: 'AI service subscriptions',
     heroSlideTwoTitleAccent: 'Lighter long-term costs',
     heroSlideTwoDescription:
         'Review currently available subscription directions with less searching and lower ongoing costs.',
     heroSlideTwoControl: 'Subscriptions',
     heroSlideThreeAria: 'Slide 3 of 3: Human support from choosing a service through using it',
-    heroSlideThreeEyebrow: 'Damatong · ONE SERVICE ENTRY',
+    heroSlideThreeEyebrow: '{storeName} · ONE SERVICE ENTRY',
     heroSlideThreeTitleLead: 'Human service support',
     heroSlideThreeTitleAccent: 'Help from choosing to using',
     heroSlideThreeDescription:
@@ -289,7 +290,7 @@ const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
     trustClear: 'Clear guidance',
     trustScenarios: 'Many use cases',
     trustSupport: 'Human support',
-    networkAria: 'Damatong at the center, connecting Assistant, Coding, Creative, and API services',
+    networkAria: '{storeName} at the center, connecting Assistant, Coding, Creative, and API services',
     networkAssistant: 'Assistant',
     networkAssistantDescription: 'Everyday work and information',
     networkCoding: 'Coding',
@@ -314,7 +315,7 @@ const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
     servicesLabel: 'SERVICE CAPABILITIES',
     servicesTitle: 'One entry point for subscriptions, API, and credits.',
     servicesIntro:
-        'From everyday subscriptions to developer calls, Damatong organizes services around real needs so you can find the right direction sooner.',
+        'From everyday subscriptions to developer calls, {storeName} organizes services around real needs so you can find the right direction sooner.',
     capabilitySubscriptionTitle: 'AI service subscriptions',
     capabilitySubscriptionMark: 'AI',
     capabilitySubscriptionDescription:
@@ -361,7 +362,7 @@ const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
     trustLabel: 'SERVICE SUPPORT',
     trustTitle: 'Clear information makes decisions easier.',
     trustIntro:
-        'From service direction to getting started, Damatong puts the details you need where decisions happen.',
+        'From service direction to getting started, {storeName} puts the details you need where decisions happen.',
     trustOneTitle: 'The basics are clear first',
     trustOneDescription:
         'The service center explains who each direction suits, how it works, and what is currently available.',
@@ -373,9 +374,9 @@ const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
         'You can contact the support center for human help with service selection or usage questions.',
     faqTitle: 'Before you start, check these answers.',
     faqIntro: 'If you are not sure where to begin, these answers can help.',
-    faqOneQuestion: 'What does Damatong provide?',
+    faqOneQuestion: 'What does {storeName} provide?',
     faqOneAnswer:
-        'Damatong brings together AI service subscriptions, AI API routing, AI usage credits, and AI productivity tools ' +
+        '{storeName} brings together AI service subscriptions, AI API routing, AI usage credits, and AI productivity tools ' +
         'so different use cases have a clear starting point.',
     faqTwoQuestion: 'Which service should I start with?',
     faqTwoAnswer:
@@ -386,15 +387,15 @@ const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
         'Yes. Services are organized around individual use, content creation, development, and team collaboration so you can start with the closest match.',
     faqFourQuestion: 'Where can I see the full service details?',
     faqFourAnswer:
-        'Select “View available services” to enter the Damatong service center and see current options, service details, and support information.',
+        'Select “View available services” to enter the {storeName} service center and see current options, service details, and support information.',
     faqFiveQuestion: 'Can I complete a purchase or transaction here?',
     faqFiveAnswer:
-        'This promotion page introduces service directions. Enter the Damatong service center for specific details, pricing, and next steps.',
-    finalLabel: 'DAMATONG / SERVICE CENTER',
+        'This promotion page introduces service directions. Enter the {storeName} service center for specific details, pricing, and next steps.',
+    finalLabel: '{storeName} / SERVICE CENTER',
     finalTitle: 'Connect to the AI services you need at a lighter cost.',
     finalIntro:
         'Enter the service center to review available AI subscriptions, API routing, usage credits, and human support.',
-    finalSignalAria: 'Information provided by the Damatong service center',
+    finalSignalAria: 'Information provided by the {storeName} service center',
     finalDiscoverLabel: 'DISCOVER',
     finalDiscoverDescription: 'Browse by use case',
     finalChooseLabel: 'CHOOSE',
@@ -403,7 +404,7 @@ const PROMOTION_EN_COPY: Record<PromotionCopyKey, string> = {
     finalSupportDescription: 'Get help when needed',
     mobileEntryAria: 'Enter the service center',
     mobileEntry: 'Enter service center',
-    footerType: 'Damatong · AI digital services',
+    footerType: '{storeName} · AI digital services',
     footerNavigation: 'Rules and support',
     privacy: 'Privacy policy',
     terms: 'Terms of use',
@@ -695,7 +696,9 @@ export class StorefrontPromotionHtmlService {
                 if (key.startsWith('promo.')) {
                     const copyKey = key.slice('promo.'.length) as PromotionCopyKey;
                     const value = copy[copyKey];
-                    return value === undefined ? match : this.escapeHtml(value);
+                    return value === undefined
+                        ? match
+                        : this.escapeHtml(value.split('{storeName}').join(bindings['store.name']));
                 }
                 return this.escapeHtml(bindings[key as keyof StorefrontPromotionBindings] ?? '');
             },

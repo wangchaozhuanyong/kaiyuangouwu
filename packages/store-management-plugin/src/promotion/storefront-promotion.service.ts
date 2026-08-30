@@ -24,6 +24,12 @@ interface StorefrontChannelFields {
     storefrontNameEn?: string | null;
 }
 
+const DEFAULT_PROMOTION_BRAND = {
+    zh: '云桥Ai',
+    en: 'Yunqiao Ai',
+    logoUrl: '/storefront/logo.svg',
+} as const;
+
 @Injectable()
 export class StorefrontPromotionService {
     constructor(
@@ -177,8 +183,10 @@ export class StorefrontPromotionService {
         const fields = ctx.channel.customFields as StorefrontChannelFields;
         const isEnglish = String(ctx.languageCode).toLowerCase().startsWith('en');
         const name = isEnglish
-            ? fields.storefrontNameEn?.trim() || ctx.channel.code
-            : fields.storefrontNameZh?.trim() || fields.storefrontNameEn?.trim() || ctx.channel.code;
+            ? fields.storefrontNameEn?.trim() || DEFAULT_PROMOTION_BRAND.en
+            : fields.storefrontNameZh?.trim() ||
+              fields.storefrontNameEn?.trim() ||
+              DEFAULT_PROMOTION_BRAND.zh;
         const description = this.truncate(
             isEnglish
                 ? profile?.descriptionEn?.trim() || ''
@@ -187,7 +195,7 @@ export class StorefrontPromotionService {
         );
         const logoUrl = profile?.logoAsset
             ? this.webpMediaUrl(this.assetUrl(ctx.req, profile.logoAsset), 'storefront-thumbnail-320')
-            : '';
+            : DEFAULT_PROMOTION_BRAND.logoUrl;
         const heroSource = hero?.imageAsset
             ? this.assetUrl(ctx.req, hero.imageAsset)
             : this.legacyAssetUrl(ctx.req, hero?.imageUrl);
