@@ -35,10 +35,11 @@ export function ManagedLegalPage({
         <main className="page subpage legal-page">
             <SubHeader title={title} language={language} onBack={onBack} />
             <article className="legal-managed-content">
-                <header className="legal-managed-intro">
-                    <h1>{title}</h1>
-                    {document?.subtitle && <p>{document.subtitle}</p>}
-                </header>
+                {document?.subtitle && (
+                    <header className="legal-managed-intro">
+                        <p>{document.subtitle}</p>
+                    </header>
+                )}
                 {document ? (
                     <div className="legal-managed-body">{document.body}</div>
                 ) : (
