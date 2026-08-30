@@ -31,6 +31,8 @@ import {
     MAX_GENERATION_COUNT,
     MAX_PROMPT_LENGTH,
     MAX_REFERENCE_BYTES,
+    MAX_REFERENCE_IMAGES_PER_JOB,
+    MAX_REFERENCE_INSTRUCTION_LENGTH,
     MAX_REFERENCE_UPLOADS_PER_DAY,
     MAX_REFERENCE_UPLOADS_PER_MINUTE,
     supportedAspectRatios,
@@ -153,24 +155,33 @@ export class ImageGenerationService {
                 ) {
                     throw new UserInputError('PRICE_CHANGED：模型价格已更新，请确认新价格后重新提交');
                 }
-                let reference: ImagePrivateAsset | null = null;
-                if (normalized.referenceAssetId) {
-                    reference = await this.connection.getRepository(txCtx, ImagePrivateAsset).findOne({
-                        where: {
-                            id: normalized.referenceAssetId,
-                            channelId: txCtx.channelId,
-                            customerId: customer.id,
-                            kind: 'REFERENCE',
-                        },
-                    });
-                    if (!reference || reference.deletedAt || reference.expiresAt.getTime() <= Date.now()) {
-                        throw new UserInputError('参考图不存在或已过期');
-                    }
+                const loadedReferences = normalized.referenceAssetIds.length
+                    ? await this.connection.getRepository(txCtx, ImagePrivateAsset).find({
+                          where: {
+                              id: In(normalized.referenceAssetIds),
+                              channelId: txCtx.channelId,
+                              customerId: customer.id,
+                              kind: 'REFERENCE',
+                          },
+                      })
+                    : [];
+                const referencesById = new Map(loadedReferences.map(asset => [String(asset.id), asset]));
+                const references = normalized.referenceAssetIds.map(id => referencesById.get(String(id)));
+                if (
+                    references.some(
+                        asset => !asset || asset.deletedAt || asset.expiresAt.getTime() <= Date.now(),
+                    )
+                ) {
+                    throw new UserInputError('参考图不存在或已过期');
                 }
-                if ((normalized.referenceMode === 'NONE') !== !reference) {
+                const validReferences = references as ImagePrivateAsset[];
+                const reference = validReferences[0] ?? null;
+                if ((normalized.referenceMode === 'NONE') !== !validReferences.length) {
                     throw new UserInputError('参考图和参考模式必须同时设置');
                 }
-                if (reference) await this.storage.retainReferenceWhileActive(txCtx, reference.id);
+                for (const asset of validReferences) {
+                    await this.storage.retainReferenceWhileActive(txCtx, asset.id);
+                }
                 const promptSpec = this.rules.fallbackSpec(normalized.prompt, normalized.referenceMode);
                 const finalPrompt = this.compileFinalPrompt(normalized, promptSpec);
                 this.promptEngine.assertSafe(finalPrompt);
@@ -207,7 +218,11 @@ export class ImageGenerationService {
                         providerIdempotencySupportedSnapshot: model.supportsIdempotency,
                         originalPrompt: normalized.prompt,
                         finalPrompt,
-                        promptSpec: promptSpec as unknown as Record<string, any>,
+                        promptSpec: {
+                            ...promptSpec,
+                            referenceAssetIds: normalized.referenceAssetIds.map(String),
+                            referenceInstruction: normalized.referenceInstruction || null,
+                        } as unknown as Record<string, any>,
                         promptSkillHash: this.rules.sourceHash,
                         referenceMode: normalized.referenceMode,
                         aspectRatio: normalized.aspectRatio,
@@ -1151,15 +1166,38 @@ export class ImageGenerationService {
         if (!input.termsAccepted) throw new UserInputError('请先同意 AI 图片服务条款');
         const idempotencyKey = input.idempotencyKey.trim();
         if (!/^[a-zA-Z0-9._:-]{8,64}$/u.test(idempotencyKey)) throw new UserInputError('请求幂等键无效');
+        const referenceAssetIds = uniqueReferenceAssetIds(input);
+        if (referenceAssetIds.length > MAX_REFERENCE_IMAGES_PER_JOB) {
+            throw new UserInputError(`每次最多可以使用 ${MAX_REFERENCE_IMAGES_PER_JOB} 张参考图`);
+        }
+        const referenceInstruction = input.referenceInstruction?.trim() ?? '';
+        if (referenceInstruction.length > MAX_REFERENCE_INSTRUCTION_LENGTH) {
+            throw new UserInputError(`参考要求不能超过 ${MAX_REFERENCE_INSTRUCTION_LENGTH} 个字符`);
+        }
         const referenceMode = normalizeReferenceMode(input.referenceMode);
-        return { ...input, prompt, optimizedPrompt, idempotencyKey, referenceMode, resolution };
+        if (!referenceAssetIds.length && referenceInstruction) {
+            throw new UserInputError('添加参考要求前请先上传参考图');
+        }
+        return {
+            ...input,
+            prompt,
+            optimizedPrompt,
+            idempotencyKey,
+            referenceAssetId: referenceAssetIds[0] ?? null,
+            referenceAssetIds,
+            referenceInstruction,
+            referenceMode,
+            resolution,
+        };
     }
 
     private assertSameCreateRequest(
         job: ImageGenerationJob,
         input: ReturnType<ImageGenerationService['validateCreateInput']>,
     ): void {
-        const sameReference = String(job.referenceAssetId ?? '') === String(input.referenceAssetId ?? '');
+        const sameReference =
+            storedReferenceAssetIds(job).join('|') === input.referenceAssetIds.map(String).join('|');
+        const sameReferenceInstruction = storedReferenceInstruction(job) === input.referenceInstruction;
         const expectedPrompt = this.compileFinalPrompt(
             input,
             this.rules.fallbackSpec(input.prompt, input.referenceMode),
@@ -1171,6 +1209,7 @@ export class ImageGenerationService {
             !sameExplicitOptimizedPrompt ||
             job.referenceMode !== input.referenceMode ||
             !sameReference ||
+            !sameReferenceInstruction ||
             job.aspectRatio !== input.aspectRatio ||
             job.resolution !== input.resolution ||
             job.quantity !== input.quantity ||
@@ -1188,9 +1227,14 @@ export class ImageGenerationService {
     ): string {
         const base = input.optimizedPrompt || this.rules.render(promptSpec);
         const referenceInstruction = referenceModeInstruction(input.referenceMode);
-        const finalPrompt = referenceInstruction
-            ? `${base}\nReference instruction: ${referenceInstruction}`
-            : base;
+        const referenceLines = [
+            input.referenceAssetIds.length > 1
+                ? `Reference images are attached in order from 1 to ${input.referenceAssetIds.length}.`
+                : '',
+            referenceInstruction ? `Reference instruction: ${referenceInstruction}` : '',
+            input.referenceInstruction ? `Specific reference requirement: ${input.referenceInstruction}` : '',
+        ].filter(Boolean);
+        const finalPrompt = referenceLines.length ? `${base}\n${referenceLines.join('\n')}` : base;
         if (finalPrompt.length > 8_000) throw new UserInputError('最终提示词超过 8000 个字符');
         return finalPrompt;
     }
@@ -1788,6 +1832,29 @@ function quotaTypeZh(value: string): string {
             } as Record<string, string>
         )[value] ?? value
     );
+}
+
+function uniqueReferenceAssetIds(input: CreateImageGenerationInput): ID[] {
+    const unique = new Map<string, ID>();
+    for (const id of [...(input.referenceAssetIds ?? []), input.referenceAssetId]) {
+        if (id === null || id === undefined || !String(id).trim()) continue;
+        if (!unique.has(String(id))) unique.set(String(id), id);
+    }
+    return [...unique.values()];
+}
+
+function storedReferenceAssetIds(job: ImageGenerationJob): string[] {
+    const snapshotIds = job.promptSpec?.referenceAssetIds;
+    if (Array.isArray(snapshotIds)) {
+        const ids = snapshotIds.map(String).filter(Boolean);
+        if (ids.length) return ids;
+    }
+    return job.referenceAssetId ? [String(job.referenceAssetId)] : [];
+}
+
+function storedReferenceInstruction(job: ImageGenerationJob): string {
+    const value = job.promptSpec?.referenceInstruction;
+    return typeof value === 'string' ? value : '';
 }
 
 function normalizeReferenceMode(value?: ImageReferenceMode | null): ImageReferenceMode {

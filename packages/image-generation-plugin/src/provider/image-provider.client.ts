@@ -211,19 +211,23 @@ export class ImageProviderClient {
         input: ProviderGenerationInput,
     ): Promise<ProviderGenerationResult> {
         const size = openAiSize(input.aspectRatio, input.resolution ?? '1K', input.providerModelId);
+        const references = providerReferences(input);
         let response: ProviderJsonResponse;
-        if (input.reference) {
+        if (references.length) {
             const form = new FormData();
             form.set('model', input.providerModelId);
             form.set('prompt', input.prompt);
             form.set('size', size);
             form.set('quality', OPENAI_IMAGE_QUALITY);
             form.set('n', '1');
-            form.set(
-                'image',
-                new Blob([new Uint8Array(input.reference.bytes)], { type: input.reference.mimeType }),
-                'reference.png',
-            );
+            references.forEach((reference, index) => {
+                const fieldName = references.length === 1 ? 'image' : 'image[]';
+                form.append(
+                    fieldName,
+                    new Blob([new Uint8Array(reference.bytes)], { type: reference.mimeType }),
+                    `reference-${index + 1}.png`,
+                );
+            });
             response = await this.requestGenerationJson(
                 this.safeUrls.endpoint(baseUrl, 'images/edits'),
                 apiKey,
@@ -263,10 +267,11 @@ export class ImageProviderClient {
                 text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}`,
             },
         ];
-        if (input.reference) {
+        const references = providerReferences(input);
+        for (const reference of references) {
             content.push({
                 type: 'input_image',
-                image_url: `data:${input.reference.mimeType};base64,${input.reference.bytes.toString('base64')}`,
+                image_url: `data:${reference.mimeType};base64,${reference.bytes.toString('base64')}`,
             });
         }
         const response = await this.requestGenerationJson(
@@ -282,7 +287,7 @@ export class ImageProviderClient {
                         quality: OPENAI_IMAGE_QUALITY,
                         size: openAiSize(input.aspectRatio, input.resolution ?? '1K', input.providerModelId),
                         output_format: 'png',
-                        action: input.reference ? 'edit' : 'generate',
+                        action: references.length ? 'edit' : 'generate',
                     },
                 ],
                 tool_choice: { type: 'image_generation' },
@@ -301,11 +306,11 @@ export class ImageProviderClient {
         const content: Array<Record<string, unknown>> = [
             { type: 'text', text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}` },
         ];
-        if (input.reference) {
+        for (const reference of providerReferences(input)) {
             content.push({
                 type: 'image_url',
                 image_url: {
-                    url: `data:${input.reference.mimeType};base64,${input.reference.bytes.toString('base64')}`,
+                    url: `data:${reference.mimeType};base64,${reference.bytes.toString('base64')}`,
                 },
             });
         }
@@ -417,11 +422,11 @@ export class ImageProviderClient {
         input: ProviderGenerationInput,
     ): Promise<ProviderGenerationResult> {
         const interactionInput: Array<Record<string, unknown>> = [{ type: 'text', text: input.prompt }];
-        if (input.reference) {
+        for (const reference of providerReferences(input)) {
             interactionInput.push({
                 type: 'image',
-                mime_type: input.reference.mimeType,
-                data: input.reference.bytes.toString('base64'),
+                mime_type: reference.mimeType,
+                data: reference.bytes.toString('base64'),
             });
         }
         const response = await this.requestGenerationJson(
@@ -742,15 +747,20 @@ function geminiParts(input: ProviderGenerationInput): Array<Record<string, unkno
     const parts: Array<Record<string, unknown>> = [
         { text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}` },
     ];
-    if (input.reference) {
+    for (const reference of providerReferences(input)) {
         parts.push({
             inlineData: {
-                mimeType: input.reference.mimeType,
-                data: input.reference.bytes.toString('base64'),
+                mimeType: reference.mimeType,
+                data: reference.bytes.toString('base64'),
             },
         });
     }
     return parts;
+}
+
+function providerReferences(input: ProviderGenerationInput): Array<{ bytes: Buffer; mimeType: string }> {
+    if (input.references?.length) return input.references;
+    return input.reference ? [input.reference] : [];
 }
 
 function parseGeminiStreamResponse(text: string): unknown {

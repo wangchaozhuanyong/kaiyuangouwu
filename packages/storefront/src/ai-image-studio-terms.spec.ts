@@ -10,7 +10,8 @@ describe('AI Image Studio compact generation flow', () => {
         expect(pageSource).toContain('setTermsAccepted(true)');
         expect(pageSource).toContain('termsAccepted &&');
         expect(pageSource).toContain('termsAccepted,');
-        expect(pageSource).toContain('referenceAssetId: referenceAsset?.id ?? null');
+        expect(pageSource).toContain('referenceAssetIds: referenceAssets.map(asset => asset.id)');
+        expect(pageSource).toContain('referenceInstruction: referenceInstruction.trim() || null');
         expect(pageSource).toContain('referenceMode,');
         expect(pageSource).toContain('api.uploadImageReference');
         expect(pageSource).toContain('type="file"');
@@ -21,6 +22,7 @@ describe('AI Image Studio compact generation flow', () => {
         expect(pageSource).toContain('config.termsZh');
         expect(pageSource).toContain('config.termsEn');
         expect(pageSource).toContain('setTermsInfoOpen(true)');
+        expect(pageSource).not.toContain('<small>({config.termsVersion})</small>');
         expect(stylesheet).toContain('.ai-studio-terms-row');
         expect(stylesheet).toContain('.ai-studio-info-sheet');
     });
@@ -44,12 +46,25 @@ describe('AI Image Studio compact generation flow', () => {
 
     it('keeps mobile text entry stable and confirms reference uploads with a local preview', () => {
         expect(pageSource).toContain('URL.createObjectURL(file)');
-        expect(pageSource).toContain('referencePreviewUrl || referenceAsset?.previewUrl');
+        expect(pageSource).toContain('multiple');
+        expect(pageSource).toContain('item.previewUrl');
         expect(pageSource).toContain("? '上传成功'");
-        expect(pageSource).toContain('className="ai-studio-reference-card"');
+        expect(pageSource).toContain('className={`ai-studio-reference-card is-${item.state.toLowerCase()}`}');
         expect(stylesheet).toContain('.ai-studio-reference-card');
         expect(stylesheet).toMatch(/\.ai-studio-prompt-wrap textarea \{[^}]*font-size: 16px;/);
         expect(stylesheet).toContain('overflow-x: clip');
+    });
+
+    it('supports three references, custom instructions, card navigation, and confirmed record deletion', () => {
+        expect(pageSource).toContain('const referenceImageLimit = 3');
+        expect(pageSource).toContain('setReferenceSettingsOpen(true)');
+        expect(pageSource).toContain('具体参考要求（可选）');
+        expect(pageSource).toContain('className="ai-generation-card-preview"');
+        expect(pageSource).toContain('onClick={onView}');
+        expect(pageSource).toContain('role="alertdialog"');
+        expect(pageSource).not.toContain('window.confirm(');
+        expect(pageSource).not.toContain('onDelete(output.id)');
+        expect(stylesheet).toContain('.ai-confirmation-dialog');
     });
 
     it('shows the concrete optimizer model immediately before the optimize action', () => {

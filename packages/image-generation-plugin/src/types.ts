@@ -85,7 +85,9 @@ export interface CreateImageGenerationInput {
     prompt: string;
     optimizedPrompt?: string | null;
     referenceAssetId?: ID | null;
+    referenceAssetIds?: ID[] | null;
     referenceMode?: ImageReferenceMode | null;
+    referenceInstruction?: string | null;
     aspectRatio: string;
     resolution: ImageResolution;
     quantity: number;
@@ -130,6 +132,7 @@ export interface ProviderGenerationInput {
     aspectRatio: string;
     resolution?: ImageResolution;
     reference?: { bytes: Buffer; mimeType: string };
+    references?: Array<{ bytes: Buffer; mimeType: string }>;
     idempotencyKey: string;
 }
 

@@ -973,7 +973,9 @@ export interface CreateImageGenerationInput {
     prompt: string;
     optimizedPrompt?: string | null;
     referenceAssetId?: string | null;
+    referenceAssetIds?: string[] | null;
     referenceMode?: ImageReferenceMode | null;
+    referenceInstruction?: string | null;
     aspectRatio: string;
     resolution: ImageResolution;
     quantity: number;

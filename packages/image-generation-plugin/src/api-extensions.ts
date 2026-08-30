@@ -186,7 +186,9 @@ const commonTypes = gql`
         prompt: String!
         optimizedPrompt: String
         referenceAssetId: ID
+        referenceAssetIds: [ID!]
         referenceMode: ImageReferenceMode
+        referenceInstruction: String
         aspectRatio: String!
         resolution: String!
         quantity: Int!

@@ -112,7 +112,10 @@ describe('ImageProviderClient', () => {
             providerModelId: 'gpt-image-1',
             prompt: 'keep the product and replace the background',
             aspectRatio: '3:4',
-            reference: { bytes: Buffer.from('reference-image'), mimeType: 'image/png' },
+            references: [
+                { bytes: Buffer.from('reference-image-1'), mimeType: 'image/png' },
+                { bytes: Buffer.from('reference-image-2'), mimeType: 'image/jpeg' },
+            ],
             idempotencyKey: 'image-responses-1',
         });
 
@@ -128,6 +131,7 @@ describe('ImageProviderClient', () => {
                         role: 'user',
                         content: [
                             expect.objectContaining({ type: 'input_text' }),
+                            expect.objectContaining({ type: 'input_image' }),
                             expect.objectContaining({ type: 'input_image' }),
                         ],
                     }),
@@ -337,7 +341,10 @@ describe('ImageProviderClient', () => {
             prompt: 'keep the product and replace the background',
             aspectRatio: '3:4',
             resolution: '4K',
-            reference: { bytes: Buffer.from('reference-image'), mimeType: 'image/png' },
+            references: [
+                { bytes: Buffer.from('reference-image-1'), mimeType: 'image/png' },
+                { bytes: Buffer.from('reference-image-2'), mimeType: 'image/jpeg' },
+            ],
             idempotencyKey: 'image-job-interactions-1',
         });
 
@@ -356,6 +363,7 @@ describe('ImageProviderClient', () => {
                 input: [
                     { type: 'text', text: 'keep the product and replace the background' },
                     expect.objectContaining({ type: 'image', mime_type: 'image/png' }),
+                    expect.objectContaining({ type: 'image', mime_type: 'image/jpeg' }),
                 ],
                 response_format: {
                     type: 'image',

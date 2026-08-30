@@ -316,12 +316,32 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
                     '中转站账号或地址已更换，已拒绝使用旧任务参数发起请求',
                 );
             }
-            const reference = output.job.referenceAsset
-                ? {
-                      bytes: await this.storage.read(output.job.referenceAsset),
-                      mimeType: output.job.referenceAsset.mimeType,
-                  }
-                : undefined;
+            const referenceAssetIds = generationReferenceAssetIds(output.job);
+            const loadedReferences = referenceAssetIds.length
+                ? await this.connection.getRepository(ctx, ImagePrivateAsset).find({
+                      where: {
+                          id: In(referenceAssetIds),
+                          channelId: output.job.channelId,
+                          customerId: output.job.customerId,
+                          kind: 'REFERENCE',
+                      },
+                  })
+                : [];
+            const referencesById = new Map(loadedReferences.map(asset => [String(asset.id), asset]));
+            const orderedReferences = referenceAssetIds.map(id => referencesById.get(String(id)));
+            if (
+                orderedReferences.some(
+                    asset => !asset || asset.deletedAt || asset.expiresAt.getTime() <= Date.now(),
+                )
+            ) {
+                throw new DefinitiveImageProviderError('参考图不存在或已过期');
+            }
+            const references = await Promise.all(
+                (orderedReferences as ImagePrivateAsset[]).map(async asset => ({
+                    bytes: await this.storage.read(asset),
+                    mimeType: asset.mimeType,
+                })),
+            );
             providerStage = 'CALLING';
             providerStartedAt = Date.now();
             const result = await this.providerClient.generate(
@@ -332,7 +352,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap {
                     prompt: output.job.finalPrompt,
                     aspectRatio: output.job.aspectRatio,
                     resolution: output.job.resolution,
-                    reference,
+                    references,
                     idempotencyKey: output.providerIdempotencyKey,
                 },
             );
@@ -533,6 +553,15 @@ function providerErrorDetails(error: unknown): ProviderTelemetry {
     if (!error || typeof error !== 'object' || !('details' in error)) return {};
     const details = (error as { details?: unknown }).details;
     return details && typeof details === 'object' ? details : {};
+}
+
+function generationReferenceAssetIds(job: ImageGenerationJob): ID[] {
+    const snapshotIds = job.promptSpec?.referenceAssetIds;
+    if (Array.isArray(snapshotIds)) {
+        const ids = snapshotIds.map(String).filter(Boolean);
+        if (ids.length) return ids;
+    }
+    return job.referenceAssetId ? [job.referenceAssetId] : [];
 }
 
 function dispatchBackoffMs(attemptCount: number): number {

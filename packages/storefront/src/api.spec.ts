@@ -152,7 +152,9 @@ describe('ShopApi storefront mutations', () => {
             prompt: '白色保温杯商品图',
             optimizedPrompt: null,
             referenceAssetId: null,
+            referenceAssetIds: ['reference-1', 'reference-2'],
             referenceMode: 'NONE' as const,
+            referenceInstruction: '把图1主体放到图2场景',
             aspectRatio: '16:9',
             resolution: '4K' as const,
             quantity: 3,
@@ -172,6 +174,8 @@ describe('ShopApi storefront mutations', () => {
             aspectRatio: '16:9',
             resolution: '4K',
             quantity: 3,
+            referenceAssetIds: ['reference-1', 'reference-2'],
+            referenceInstruction: '把图1主体放到图2场景',
         });
     });
     it('switches the active checkout order to the selected settlement currency', async () => {

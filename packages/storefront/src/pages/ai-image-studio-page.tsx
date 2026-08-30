@@ -70,6 +70,7 @@ function formatBillingMoney(value: number, currencyCode: string, locale: string)
 const aspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
 const referenceImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const referenceImageMaxBytes = 10 * 1024 * 1024;
+const referenceImageLimit = 3;
 const activeStates = new Set(['QUEUED', 'RUNNING', 'UNKNOWN']);
 const terminalStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']);
 const successStates = new Set(['PARTIAL_SUCCESS', 'SUCCEEDED']);
@@ -77,6 +78,14 @@ const failedStates = new Set(['FAILED', 'CANCELLED']);
 
 type AiStudioSetting = 'ASPECT_RATIO' | 'QUANTITY' | 'RESOLUTION';
 type HistoryFilter = 'ALL' | 'SUCCESS' | 'PROCESSING' | 'FAILED';
+type ReferenceUploadItem = {
+    id: string;
+    fileName: string;
+    previewUrl: string;
+    asset: ImagePrivateAssetView | null;
+    state: 'UPLOADING' | 'SUCCEEDED' | 'FAILED';
+    error: string;
+};
 
 export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const { api, customer, market, displayCurrencyCode, language, onBack, onSignIn, onNotify } = props;
@@ -100,31 +109,34 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [quantity, setQuantity] = useState(1);
     // The storefront defaults the consent row to checked while keeping it editable.
     const [termsAccepted, setTermsAccepted] = useState(true);
-    const [referenceAsset, setReferenceAsset] = useState<ImagePrivateAssetView | null>(null);
+    const [referenceItems, setReferenceItems] = useState<ReferenceUploadItem[]>([]);
     const [referenceMode, setReferenceMode] = useState<ImageReferenceMode>('NONE');
-    const [referenceBusy, setReferenceBusy] = useState(false);
+    const [referenceInstruction, setReferenceInstruction] = useState('');
+    const [referenceSettingsOpen, setReferenceSettingsOpen] = useState(false);
     const [referenceError, setReferenceError] = useState('');
-    const [referencePreviewUrl, setReferencePreviewUrl] = useState('');
-    const [referenceFileName, setReferenceFileName] = useState('');
     const referenceInputRef = useRef<HTMLInputElement>(null);
-    const localReferencePreviewRef = useRef('');
+    const localReferencePreviewUrlsRef = useRef(new Set<string>());
     const [activeSetting, setActiveSetting] = useState<AiStudioSetting | null>(null);
     const [termsInfoOpen, setTermsInfoOpen] = useState(false);
     const [historyInfoOpen, setHistoryInfoOpen] = useState(false);
     const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('ALL');
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+    const [pendingDeleteJobId, setPendingDeleteJobId] = useState<string | null>(null);
+    const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
     const [busy, setBusy] = useState<'OPTIMIZE' | 'GENERATE' | ''>('');
     const [actionError, setActionError] = useState('');
     const pollStartedAt = useRef(Date.now());
     const loadEpoch = useRef(0);
     const settlementEpoch = useRef(0);
 
-    const updateLocalReferencePreview = useCallback((url: string, fileName = '') => {
-        const previousUrl = localReferencePreviewRef.current;
-        if (previousUrl && previousUrl !== url) URL.revokeObjectURL(previousUrl);
-        localReferencePreviewRef.current = url;
-        setReferencePreviewUrl(url);
-        setReferenceFileName(fileName);
+    const revokeReferencePreview = useCallback((url: string) => {
+        if (!url || !localReferencePreviewUrlsRef.current.has(url)) return;
+        URL.revokeObjectURL(url);
+        localReferencePreviewUrlsRef.current.delete(url);
+    }, []);
+    const clearReferencePreviews = useCallback(() => {
+        for (const url of localReferencePreviewUrlsRef.current) URL.revokeObjectURL(url);
+        localReferencePreviewUrlsRef.current.clear();
     }, []);
 
     const load = useCallback(async () => {
@@ -193,21 +205,15 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         // Consent and private reference assets belong to a customer session;
         // never carry either across logout/login changes.
         setTermsAccepted(true);
-        setReferenceAsset(null);
+        clearReferencePreviews();
+        setReferenceItems([]);
         setReferenceMode('NONE');
+        setReferenceInstruction('');
+        setReferenceSettingsOpen(false);
         setReferenceError('');
-        updateLocalReferencePreview('');
         if (referenceInputRef.current) referenceInputRef.current.value = '';
-    }, [customer?.id, updateLocalReferencePreview]);
-    useEffect(
-        () => () => {
-            if (localReferencePreviewRef.current) {
-                URL.revokeObjectURL(localReferencePreviewRef.current);
-                localReferencePreviewRef.current = '';
-            }
-        },
-        [],
-    );
+    }, [clearReferencePreviews, customer?.id]);
+    useEffect(() => () => clearReferencePreviews(), [clearReferencePreviews]);
     const hasActiveJobs = jobs.some(job => activeStates.has(job.state));
     useEffect(() => {
         if (!hasActiveJobs) return;
@@ -228,6 +234,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     }, [hasActiveJobs, load]);
 
     const selectedModel = config?.models.find(model => model.code === modelCode) ?? config?.models[0];
+    const referenceAssets = referenceItems.flatMap(item => (item.asset ? [item.asset] : []));
+    const referenceBusy = referenceItems.some(item => item.state === 'UPLOADING');
+    const referenceHasFailure = referenceItems.some(item => item.state === 'FAILED');
     const optimizerModelIds =
         lastOptimizerModelId !== null
             ? [lastOptimizerModelId || (isZh ? '本地规则' : 'Local rules')]
@@ -265,6 +274,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         balance >= estimatedPrice &&
         (selectedQuota?.safety.remaining ?? 0) >= quantity &&
         (paidQuantity === 0 || Boolean(selectedQuota?.paidAfterFreeEnabled)) &&
+        !referenceBusy &&
+        !referenceHasFailure &&
+        (!referenceAssets.length || referenceMode !== 'NONE') &&
         !busy,
     );
     const selectModel = (code: string) => {
@@ -327,7 +339,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         }
     };
 
-    const uploadReference = async (file: File) => {
+    const uploadReferences = async (files: File[]) => {
         if (!termsAccepted) {
             setReferenceError(
                 isZh ? '请先阅读并同意 AI 图片服务条款，再添加参考图。' : 'Accept the AI image terms first.',
@@ -335,42 +347,120 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             if (referenceInputRef.current) referenceInputRef.current.value = '';
             return;
         }
-        if (!referenceImageTypes.has(file.type)) {
-            setReferenceError(isZh ? '参考图仅支持 JPEG、PNG 或 WebP。' : 'Use a JPEG, PNG, or WebP image.');
+        const availableSlots = Math.max(0, referenceImageLimit - referenceItems.length);
+        if (!availableSlots) {
+            setReferenceError(
+                isZh
+                    ? `每次最多上传 ${referenceImageLimit} 张参考图。`
+                    : `Upload up to ${referenceImageLimit} reference images.`,
+            );
+            return;
+        }
+        const validationErrors: string[] = [];
+        const pendingUploads = files.slice(0, availableSlots).flatMap<{
+            file: File;
+            item: ReferenceUploadItem;
+        }>(file => {
+            if (!referenceImageTypes.has(file.type)) {
+                validationErrors.push(
+                    isZh
+                        ? `${file.name}：仅支持 JPEG、PNG 或 WebP。`
+                        : `${file.name}: use JPEG, PNG, or WebP.`,
+                );
+                return [];
+            }
+            if (file.size > referenceImageMaxBytes) {
+                validationErrors.push(
+                    isZh ? `${file.name}：不能超过 10MB。` : `${file.name}: must be 10MB or smaller.`,
+                );
+                return [];
+            }
+            const previewUrl = URL.createObjectURL(file);
+            localReferencePreviewUrlsRef.current.add(previewUrl);
+            return [
+                {
+                    file,
+                    item: {
+                        id: requestId(),
+                        fileName: file.name,
+                        previewUrl,
+                        asset: null,
+                        state: 'UPLOADING',
+                        error: '',
+                    },
+                },
+            ];
+        });
+        const pendingItems = pendingUploads.map(upload => upload.item);
+        if (files.length > availableSlots) {
+            validationErrors.push(
+                isZh
+                    ? `本次只添加了前 ${availableSlots} 张，每次最多 ${referenceImageLimit} 张。`
+                    : `Only the first ${availableSlots} images were added.`,
+            );
+        }
+        setReferenceError(validationErrors.join(' '));
+        if (!pendingItems.length) {
             if (referenceInputRef.current) referenceInputRef.current.value = '';
             return;
         }
-        if (file.size > referenceImageMaxBytes) {
-            setReferenceError(isZh ? '参考图不能超过 10MB。' : 'Reference images must be 10MB or smaller.');
-            if (referenceInputRef.current) referenceInputRef.current.value = '';
-            return;
-        }
-        setReferenceBusy(true);
-        setReferenceError('');
         setActionError('');
-        setReferenceAsset(null);
-        setReferenceMode('NONE');
-        try {
-            updateLocalReferencePreview(URL.createObjectURL(file), file.name);
-            const uploaded = await api.uploadImageReference(file, termsAccepted);
-            setReferenceAsset(uploaded);
-            setReferenceMode('PRODUCT');
-            onNotify(isZh ? '参考图已上传，可继续生成' : 'Reference image uploaded');
-        } catch (error) {
-            updateLocalReferencePreview('');
-            if (referenceInputRef.current) referenceInputRef.current.value = '';
-            setReferenceError(errorMessage(error));
-        } finally {
-            setReferenceBusy(false);
+        setReferenceItems(current => [...current, ...pendingItems]);
+        const results = await Promise.all(
+            pendingUploads.map(async ({ file, item }) => {
+                try {
+                    const uploaded = await api.uploadImageReference(file, termsAccepted);
+                    setReferenceItems(current =>
+                        current.map(currentItem =>
+                            currentItem.id === item.id
+                                ? { ...currentItem, asset: uploaded, state: 'SUCCEEDED', error: '' }
+                                : currentItem,
+                        ),
+                    );
+                    return true;
+                } catch (error) {
+                    const message = errorMessage(error);
+                    setReferenceItems(current =>
+                        current.map(currentItem =>
+                            currentItem.id === item.id
+                                ? { ...currentItem, state: 'FAILED', error: message }
+                                : currentItem,
+                        ),
+                    );
+                    return false;
+                }
+            }),
+        );
+        const uploadedCount = results.filter(Boolean).length;
+        if (uploadedCount) {
+            setReferenceMode(current => (current === 'NONE' ? 'PRODUCT' : current));
+            onNotify(
+                isZh ? `已成功上传 ${uploadedCount} 张参考图` : `${uploadedCount} reference images uploaded`,
+            );
         }
+        if (results.some(result => !result)) {
+            setReferenceError(
+                isZh
+                    ? '部分参考图上传失败，请移除失败项后重试。'
+                    : 'Some uploads failed. Remove them and try again.',
+            );
+        }
+        if (referenceInputRef.current) referenceInputRef.current.value = '';
     };
 
-    const clearReference = () => {
-        setReferenceAsset(null);
-        setReferenceMode('NONE');
+    const removeReference = (id: string) => {
+        const target = referenceItems.find(item => item.id === id);
+        if (target) revokeReferencePreview(target.previewUrl);
+        setReferenceItems(current => {
+            const next = current.filter(item => item.id !== id);
+            if (!next.some(item => item.asset)) {
+                setReferenceMode('NONE');
+                setReferenceInstruction('');
+                setReferenceSettingsOpen(false);
+            }
+            return next;
+        });
         setReferenceError('');
-        updateLocalReferencePreview('');
-        if (referenceInputRef.current) referenceInputRef.current.value = '';
     };
 
     const generate = async () => {
@@ -383,8 +473,10 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 modelCode: selectedModel.code,
                 prompt: optimized ? originalPrompt || prompt : prompt,
                 optimizedPrompt: optimized ? prompt : null,
-                referenceAssetId: referenceAsset?.id ?? null,
+                referenceAssetId: referenceAssets[0]?.id ?? null,
+                referenceAssetIds: referenceAssets.map(asset => asset.id),
                 referenceMode,
+                referenceInstruction: referenceInstruction.trim() || null,
                 aspectRatio,
                 resolution: selectedResolutionOption.resolution,
                 quantity,
@@ -421,26 +513,19 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             setActionError(errorMessage(error));
         }
     };
-    const deleteOutput = async (outputId: string) => {
-        try {
-            await api.deleteMyGeneratedImage(outputId);
-            await load();
-        } catch (error) {
-            setActionError(errorMessage(error));
-        }
-    };
-    const deleteJob = async (id: string) => {
-        const confirmed = window.confirm(
-            isZh
-                ? '删除后将立即清理生成图并在前台隐藏任务；提示词、调用和计费审计记录仍按合规要求保留。是否继续？'
-                : 'This removes generated images and hides the task. Audit records remain for compliance. Continue?',
-        );
-        if (!confirmed) return;
+    const deleteJob = async () => {
+        const id = pendingDeleteJobId;
+        if (!id || deletingJobId) return;
+        setDeletingJobId(id);
         try {
             await api.deleteMyImageGenerationJob(id);
+            setPendingDeleteJobId(null);
+            if (selectedJobId === id) setSelectedJobId(null);
             await load();
         } catch (error) {
             setActionError(errorMessage(error));
+        } finally {
+            setDeletingJobId(null);
         }
     };
     const regenerate = (job: ImageGenerationJob) => {
@@ -595,121 +680,141 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                             </div>
                         </div>
                         <div
-                            className={`ai-studio-reference${referenceAsset || referenceBusy ? ' has-reference' : ''}`}
-                            aria-label={isZh ? '参考图' : 'Reference image'}
+                            className={`ai-studio-reference${referenceItems.length ? ' has-reference' : ''}`}
+                            aria-label={isZh ? '参考图' : 'Reference images'}
                         >
-                            {!referenceAsset && !referenceBusy ? (
-                                <label className="ai-studio-reference-add">
+                            {referenceItems.length ? (
+                                <div className="ai-studio-reference-list" aria-live="polite">
+                                    {referenceItems.map((item, index) => (
+                                        <div
+                                            key={item.id}
+                                            className={`ai-studio-reference-card is-${item.state.toLowerCase()}`}
+                                        >
+                                            <div className="ai-studio-reference-preview">
+                                                <img src={item.previewUrl} alt={item.fileName} />
+                                                <span
+                                                    className="ai-studio-reference-index"
+                                                    aria-hidden="true"
+                                                >
+                                                    {index + 1}
+                                                </span>
+                                                {item.state === 'UPLOADING' ? (
+                                                    <span
+                                                        className="ai-studio-reference-preview-loading"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <LoaderCircle className="spin" />
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <div className="ai-studio-reference-meta">
+                                                <span
+                                                    className={
+                                                        item.state === 'SUCCEEDED'
+                                                            ? 'is-success'
+                                                            : item.state === 'FAILED'
+                                                              ? 'is-error'
+                                                              : 'is-uploading'
+                                                    }
+                                                >
+                                                    {item.state === 'UPLOADING' ? (
+                                                        <LoaderCircle className="spin" aria-hidden="true" />
+                                                    ) : item.state === 'SUCCEEDED' ? (
+                                                        <CheckCircle2 aria-hidden="true" />
+                                                    ) : (
+                                                        <CircleAlert aria-hidden="true" />
+                                                    )}
+                                                    {item.state === 'UPLOADING'
+                                                        ? isZh
+                                                            ? '正在上传'
+                                                            : 'Uploading'
+                                                        : item.state === 'SUCCEEDED'
+                                                          ? isZh
+                                                              ? '上传成功'
+                                                              : 'Upload complete'
+                                                          : isZh
+                                                            ? '上传失败'
+                                                            : 'Upload failed'}
+                                                </span>
+                                                <strong title={item.asset?.originalName || item.fileName}>
+                                                    {item.asset?.originalName || item.fileName}
+                                                </strong>
+                                                <small title={item.error || undefined}>
+                                                    {item.asset
+                                                        ? `${formatReferenceSize(item.asset.byteSize)} · ${item.asset.width} × ${item.asset.height}`
+                                                        : item.error ||
+                                                          (isZh
+                                                              ? '正在安全处理图片…'
+                                                              : 'Processing image securely…')}
+                                                </small>
+                                            </div>
+                                            <div className="ai-studio-reference-actions">
+                                                <button
+                                                    type="button"
+                                                    aria-label={
+                                                        isZh
+                                                            ? `移除第 ${index + 1} 张参考图`
+                                                            : `Remove reference image ${index + 1}`
+                                                    }
+                                                    onClick={() => removeReference(item.id)}
+                                                >
+                                                    <Trash2 aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
+                            {referenceItems.length < referenceImageLimit ? (
+                                <label
+                                    className={`ai-studio-reference-add${referenceItems.length ? ' is-compact' : ''}`}
+                                >
                                     <span className="ai-studio-reference-add-icon" aria-hidden="true">
                                         <ImagePlus />
                                     </span>
                                     <span className="ai-studio-reference-add-copy">
-                                        <strong>{isZh ? '添加参考图' : 'Add reference image'}</strong>
+                                        <strong>
+                                            {referenceItems.length
+                                                ? isZh
+                                                    ? `继续添加（${referenceItems.length}/${referenceImageLimit}）`
+                                                    : `Add more (${referenceItems.length}/${referenceImageLimit})`
+                                                : isZh
+                                                  ? '添加参考图'
+                                                  : 'Add reference images'}
+                                        </strong>
                                         <small>
                                             {isZh
-                                                ? '可选 · JPEG、PNG 或 WebP，最大 10MB'
-                                                : 'Optional · JPEG, PNG, or WebP up to 10MB'}
+                                                ? `可选 · 最多 ${referenceImageLimit} 张，单张最大 10MB`
+                                                : `Optional · up to ${referenceImageLimit} images, 10MB each`}
                                         </small>
                                     </span>
                                     <input
                                         ref={referenceInputRef}
                                         type="file"
+                                        multiple
                                         accept="image/png,image/jpeg,image/webp"
                                         onChange={event => {
-                                            const file = event.target.files?.[0];
-                                            if (file) void uploadReference(file);
+                                            const files = Array.from(event.target.files ?? []);
+                                            if (files.length) void uploadReferences(files);
                                         }}
                                     />
                                 </label>
-                            ) : (
-                                <div className="ai-studio-reference-card" aria-live="polite">
-                                    <div className="ai-studio-reference-preview">
-                                        {referencePreviewUrl || referenceAsset?.previewUrl ? (
-                                            <img
-                                                src={referencePreviewUrl || referenceAsset?.previewUrl || ''}
-                                                alt={referenceAsset?.originalName || referenceFileName}
-                                            />
-                                        ) : (
-                                            <ImagePlus aria-hidden="true" />
-                                        )}
-                                        {referenceBusy ? (
-                                            <span
-                                                className="ai-studio-reference-preview-loading"
-                                                aria-hidden="true"
-                                            >
-                                                <LoaderCircle className="spin" />
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    <div className="ai-studio-reference-meta">
-                                        <span className={referenceBusy ? 'is-uploading' : 'is-success'}>
-                                            {referenceBusy ? (
-                                                <LoaderCircle className="spin" aria-hidden="true" />
-                                            ) : (
-                                                <CheckCircle2 aria-hidden="true" />
-                                            )}
-                                            {referenceBusy
-                                                ? isZh
-                                                    ? '正在上传'
-                                                    : 'Uploading'
-                                                : isZh
-                                                  ? '上传成功'
-                                                  : 'Upload complete'}
-                                        </span>
-                                        <strong title={referenceAsset?.originalName || referenceFileName}>
-                                            {referenceAsset?.originalName || referenceFileName}
-                                        </strong>
-                                        <small>
-                                            {referenceAsset
-                                                ? `${formatReferenceSize(referenceAsset.byteSize)} · ${referenceAsset.width} × ${referenceAsset.height}`
-                                                : isZh
-                                                  ? '正在安全处理图片…'
-                                                  : 'Processing image securely…'}
-                                        </small>
-                                    </div>
-                                    {!referenceBusy ? (
-                                        <div className="ai-studio-reference-actions">
-                                            <label>
-                                                {isZh ? '更换' : 'Replace'}
-                                                <input
-                                                    ref={referenceInputRef}
-                                                    type="file"
-                                                    accept="image/png,image/jpeg,image/webp"
-                                                    onChange={event => {
-                                                        const file = event.target.files?.[0];
-                                                        if (file) void uploadReference(file);
-                                                    }}
-                                                />
-                                            </label>
-                                            <button
-                                                type="button"
-                                                aria-label={isZh ? '移除参考图' : 'Remove reference image'}
-                                                onClick={clearReference}
-                                            >
-                                                <Trash2 aria-hidden="true" />
-                                            </button>
-                                        </div>
-                                    ) : null}
-                                </div>
-                            )}
-                            {referenceAsset ? (
-                                <label className="ai-studio-reference-mode">
-                                    <span>{isZh ? '参考图用途' : 'Reference role'}</span>
-                                    <select
-                                        aria-label={isZh ? '参考图用途' : 'Reference image role'}
-                                        value={referenceMode}
-                                        onChange={event =>
-                                            setReferenceMode(event.target.value as ImageReferenceMode)
-                                        }
-                                    >
-                                        <option value="PRODUCT">{isZh ? '商品主体' : 'Product'}</option>
-                                        <option value="STYLE">{isZh ? '风格参考' : 'Style'}</option>
-                                        <option value="COMPOSITION">
-                                            {isZh ? '构图参考' : 'Composition'}
-                                        </option>
-                                        <option value="EDIT">{isZh ? '编辑原图' : 'Edit'}</option>
-                                    </select>
-                                </label>
+                            ) : null}
+                            {referenceAssets.length ? (
+                                <button
+                                    type="button"
+                                    className="ai-studio-reference-mode"
+                                    aria-haspopup="dialog"
+                                    aria-expanded={referenceSettingsOpen}
+                                    onClick={() => setReferenceSettingsOpen(true)}
+                                >
+                                    <span>{isZh ? '参考图要求' : 'Reference instructions'}</span>
+                                    <strong>
+                                        {referenceInstruction.trim() ||
+                                            referenceModeLabel(referenceMode, isZh)}
+                                    </strong>
+                                    <ChevronDown aria-hidden="true" />
+                                </button>
                             ) : null}
                             {referenceError ? (
                                 <div className="ai-studio-reference-error" role="alert">
@@ -872,8 +977,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     }}
                                 >
                                     {isZh ? 'AI 图片服务条款' : 'AI image terms'}
-                                </button>{' '}
-                                <small>({config.termsVersion})</small>
+                                </button>
                             </span>
                         </label>
                     </section>
@@ -925,7 +1029,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     language={language}
                                     locale={market.locale}
                                     onCancel={() => void cancel(job.id)}
-                                    onDeleteJob={() => void deleteJob(job.id)}
+                                    onDeleteJob={() => setPendingDeleteJobId(job.id)}
                                     onRegenerate={() => regenerate(job)}
                                     onRefresh={() => void load()}
                                     onView={() => setSelectedJobId(job.id)}
@@ -1043,6 +1147,57 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                         </Sheet>
                     ) : null}
 
+                    {referenceSettingsOpen ? (
+                        <Sheet
+                            title={isZh ? '设置参考图要求' : 'Reference image instructions'}
+                            language={language}
+                            onClose={() => setReferenceSettingsOpen(false)}
+                            className="ai-studio-bottom-sheet"
+                        >
+                            <div className="ai-studio-reference-sheet">
+                                <div
+                                    className="ai-studio-setting-sheet"
+                                    role="radiogroup"
+                                    aria-label={isZh ? '参考图用途' : 'Reference image role'}
+                                >
+                                    {referenceModeOptions(isZh).map(option => (
+                                        <SheetOption
+                                            key={option.value}
+                                            selected={referenceMode === option.value}
+                                            label={option.label}
+                                            description={option.description}
+                                            onClick={() => setReferenceMode(option.value)}
+                                        />
+                                    ))}
+                                </div>
+                                <label className="ai-studio-reference-instruction">
+                                    <span>
+                                        {isZh ? '具体参考要求（可选）' : 'Specific requirements (optional)'}
+                                    </span>
+                                    <textarea
+                                        value={referenceInstruction}
+                                        maxLength={500}
+                                        rows={4}
+                                        placeholder={
+                                            isZh
+                                                ? '例如：把图1的人物放到图2的室内场景中，保留人物面部特征和图2光线。'
+                                                : 'Example: Place the person from image 1 into the scene from image 2 while preserving their face and the lighting.'
+                                        }
+                                        onChange={event => setReferenceInstruction(event.target.value)}
+                                    />
+                                    <small>{referenceInstruction.length}/500</small>
+                                </label>
+                                <button
+                                    type="button"
+                                    className="ai-studio-reference-sheet-done"
+                                    onClick={() => setReferenceSettingsOpen(false)}
+                                >
+                                    {isZh ? '完成' : 'Done'}
+                                </button>
+                            </div>
+                        </Sheet>
+                    ) : null}
+
                     {termsInfoOpen ? (
                         <Sheet
                             title={isZh ? 'AI 图片服务条款' : 'AI image terms'}
@@ -1093,9 +1248,22 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 language={language}
                                 locale={market.locale}
                                 onNotify={onNotify}
-                                onDelete={outputId => void deleteOutput(outputId)}
                             />
                         </Sheet>
+                    ) : null}
+                    {pendingDeleteJobId ? (
+                        <ConfirmationDialog
+                            title={isZh ? '确认删除这条生成记录？' : 'Delete this generation?'}
+                            description={
+                                isZh
+                                    ? '删除后将立即清理生成图并在前台隐藏任务；提示词、调用和计费审计记录仍按合规要求保留。'
+                                    : 'Generated images will be removed and the task will be hidden. Compliance audit records remain.'
+                            }
+                            language={language}
+                            busy={deletingJobId === pendingDeleteJobId}
+                            onCancel={() => setPendingDeleteJobId(null)}
+                            onConfirm={() => void deleteJob()}
+                        />
                     ) : null}
                 </div>
             )}
@@ -1147,7 +1315,12 @@ function GenerationCard({
             : `Paid ${formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}`;
     return (
         <article className={`ai-generation-card is-${statusClass}`}>
-            <div className="ai-generation-card-preview">
+            <button
+                type="button"
+                className="ai-generation-card-preview"
+                aria-label={isZh ? '查看生成详情' : 'View generation details'}
+                onClick={onView}
+            >
                 {preview?.imageUrl ? (
                     <SafeImage src={preview.imageUrl} alt={job.originalPrompt} />
                 ) : (
@@ -1156,7 +1329,7 @@ function GenerationCard({
                     </span>
                 )}
                 {job.outputs.length > 1 ? <small>+{job.outputs.length - 1}</small> : null}
-            </div>
+            </button>
             <div className="ai-generation-card-content">
                 <header>
                     <span className={`ai-generation-status is-${statusClass}`}>
@@ -1255,13 +1428,11 @@ function GenerationDetail({
     language,
     locale,
     onNotify,
-    onDelete,
 }: Readonly<{
     job: ImageGenerationJob;
     language: StorefrontLanguage;
     locale: string;
     onNotify(message: string): void;
-    onDelete(outputId: string): void;
 }>) {
     const isZh = language === 'zh';
     const [previewOutput, setPreviewOutput] = useState<ImageGenerationOutput | null>(null);
@@ -1367,12 +1538,6 @@ function GenerationDetail({
                                         : isZh
                                           ? '下载'
                                           : 'Download'}
-                                </button>
-                            ) : null}
-                            {output.imageUrl ? (
-                                <button type="button" onClick={() => onDelete(output.id)}>
-                                    <Trash2 />
-                                    {isZh ? '删除' : 'Delete'}
                                 </button>
                             ) : null}
                         </div>
@@ -1507,6 +1672,124 @@ function GenerationImagePreview({
         </div>
     );
     return typeof document === 'undefined' ? content : createPortal(content, document.body);
+}
+
+function ConfirmationDialog({
+    title,
+    description,
+    language,
+    busy,
+    onCancel,
+    onConfirm,
+}: Readonly<{
+    title: string;
+    description: string;
+    language: StorefrontLanguage;
+    busy: boolean;
+    onCancel(): void;
+    onConfirm(): void;
+}>) {
+    const isZh = language === 'zh';
+    const cancelButtonRef = useRef<HTMLButtonElement>(null);
+    const onCancelRef = useRef(onCancel);
+    useEffect(() => {
+        onCancelRef.current = onCancel;
+    }, [onCancel]);
+    useEffect(() => {
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const focusFrame = window.requestAnimationFrame(() => cancelButtonRef.current?.focus());
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape' || busy) return;
+            event.preventDefault();
+            onCancelRef.current();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.cancelAnimationFrame(focusFrame);
+            window.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [busy]);
+    const content = (
+        <div className="ai-confirmation-dialog-layer" role="presentation">
+            <button
+                type="button"
+                className="ai-confirmation-dialog-mask"
+                aria-label={isZh ? '取消删除' : 'Cancel deletion'}
+                disabled={busy}
+                onClick={onCancel}
+            />
+            <section
+                className="ai-confirmation-dialog"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="ai-delete-confirmation-title"
+                aria-describedby="ai-delete-confirmation-description"
+            >
+                <span className="ai-confirmation-dialog-icon" aria-hidden="true">
+                    <Trash2 />
+                </span>
+                <h2 id="ai-delete-confirmation-title">{title}</h2>
+                <p id="ai-delete-confirmation-description">{description}</p>
+                <footer>
+                    <button ref={cancelButtonRef} type="button" disabled={busy} onClick={onCancel}>
+                        {isZh ? '取消' : 'Cancel'}
+                    </button>
+                    <button type="button" className="is-danger" disabled={busy} onClick={onConfirm}>
+                        {busy ? <LoaderCircle className="spin" /> : <Trash2 />}
+                        {busy ? (isZh ? '删除中…' : 'Deleting…') : isZh ? '确认删除' : 'Delete'}
+                    </button>
+                </footer>
+            </section>
+        </div>
+    );
+    return typeof document === 'undefined' ? content : createPortal(content, document.body);
+}
+
+function referenceModeOptions(isZh: boolean): Array<{
+    value: ImageReferenceMode;
+    label: string;
+    description: string;
+}> {
+    return [
+        {
+            value: 'PRODUCT',
+            label: isZh ? '商品 / 物体主体' : 'Product / object',
+            description: isZh
+                ? '保留外形、材质、颜色和品牌细节'
+                : 'Preserve shape, material, color, and brand details',
+        },
+        {
+            value: 'IDENTITY',
+            label: isZh ? '人物主体' : 'Person identity',
+            description: isZh ? '保留人物面部与身份特征' : 'Preserve facial and identity characteristics',
+        },
+        {
+            value: 'STYLE',
+            label: isZh ? '风格参考' : 'Visual style',
+            description: isZh ? '参考色彩、质感和视觉氛围' : 'Use its palette, texture, and visual mood',
+        },
+        {
+            value: 'COMPOSITION',
+            label: isZh ? '构图 / 场景参考' : 'Composition / scene',
+            description: isZh
+                ? '参考空间关系、布局和镜头'
+                : 'Use its layout, spatial relationships, and framing',
+        },
+        {
+            value: 'EDIT',
+            label: isZh ? '编辑原图' : 'Edit source image',
+            description: isZh ? '只改动明确提出的区域' : 'Change only the explicitly requested areas',
+        },
+    ];
+}
+
+function referenceModeLabel(mode: ImageReferenceMode, isZh: boolean): string {
+    return (
+        referenceModeOptions(isZh).find(option => option.value === mode)?.label ??
+        (isZh ? '请设置参考要求' : 'Set reference instructions')
+    );
 }
 
 function SettingTrigger({
