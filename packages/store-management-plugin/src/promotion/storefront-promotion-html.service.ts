@@ -98,8 +98,8 @@ const PROMOTION_ZH_COPY = {
     enterService: '进入服务中心',
     heroEyebrow: 'Damatong · AI 数字服务',
     heroLead: '让',
-    heroHighlight: 'AI 工具',
-    heroTail: '，真正进入你的工作流',
+    heroHighlight: 'AI 工具，',
+    heroTail: '真正进入你的工作流',
     heroDescription:
         '面向个人、创作者、开发者与小团队，提供清晰易懂的 AI 数字服务入口。减少筛选和使用成本，让用户更简单地找到适合自己的工具与服务。',
     learnService: '了解服务方式',
