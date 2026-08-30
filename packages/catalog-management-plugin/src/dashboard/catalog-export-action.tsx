@@ -12,12 +12,18 @@ import {
     toast,
     useChannel,
     useMutation,
+    useQuery,
 } from '@vendure/dashboard';
-import { Download, FileSpreadsheet, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Download, FileSpreadsheet, Loader2, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
 import { CatalogExportFormat, downloadCatalogBlob, exportCatalogRowsLocally } from './catalog-export-file';
-import { CatalogExportRowRecord, catalogExportRowsQuery } from './catalog-management.graphql';
+import {
+    CatalogExportRowRecord,
+    CatalogIntegritySummaryRecord,
+    catalogExportRowsQuery,
+    catalogIntegritySummaryQuery,
+} from './catalog-management.graphql';
 
 export function CatalogExportAction() {
     const [open, setOpen] = useState(false);
@@ -38,6 +44,18 @@ function CatalogExportSheet({
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void }>) {
     const { activeChannel } = useChannel();
     const [progress, setProgress] = useState(0);
+    const integrityQuery = useQuery({
+        queryKey: ['catalog-integrity-summary', activeChannel?.id],
+        queryFn: () => api.query<CatalogIntegritySummaryRecord>(catalogIntegritySummaryQuery),
+        enabled: open,
+    });
+    const integrity = integrityQuery.data?.catalogIntegritySummary;
+    const hasIntegrityGaps = Boolean(
+        integrity &&
+        (integrity.productsWithoutVariants > 0 ||
+            integrity.variantsWithoutCategory > 0 ||
+            integrity.variantsWithoutCost > 0),
+    );
     const mutation = useMutation({
         mutationFn: async (format: CatalogExportFormat) => {
             const rows: CatalogExportRowRecord[] = [];
@@ -89,6 +107,38 @@ function CatalogExportSheet({
                     <div className="rounded-lg border p-4 text-sm">
                         当前门店：<strong>{activeChannel?.code ?? '—'}</strong>
                     </div>
+                    {integrityQuery.isLoading && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                            <Loader2 className="size-4 animate-spin" /> 正在检查报表完整性
+                        </div>
+                    )}
+                    {integrityQuery.isError && (
+                        <Alert variant="destructive">
+                            <AlertTriangle className="size-4" />
+                            <AlertDescription className="space-y-2">
+                                <p>完整性检查失败，为避免生成遗漏数据的报表，当前已暂停导出。</p>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void integrityQuery.refetch()}
+                                >
+                                    重新检查
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                    {hasIntegrityGaps && integrity && (
+                        <Alert>
+                            <AlertTriangle className="size-4" />
+                            <AlertDescription>
+                                当前有 {integrity.productsWithoutVariants} 个商品尚无 SKU（不会进入报表）、
+                                {integrity.variantsWithoutCategory} 个 SKU 缺少分类、
+                                {integrity.variantsWithoutCost} 个 SKU 缺少成本。缺少分类或成本的现有 SKU
+                                可重新导入且不会被写成 0；请在商品抽屉补齐后再作为完整标准报表使用。
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     {mutation.isPending && (
                         <div className="space-y-2" role="status">
                             <div className="flex justify-between text-xs text-muted-foreground">
@@ -99,13 +149,20 @@ function CatalogExportSheet({
                         </div>
                     )}
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <Button disabled={mutation.isPending} onClick={() => mutation.mutate('xlsx')}>
+                        <Button
+                            disabled={
+                                mutation.isPending || integrityQuery.isLoading || integrityQuery.isError
+                            }
+                            onClick={() => mutation.mutate('xlsx')}
+                        >
                             {mutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                             导出标准 XLSX
                         </Button>
                         <Button
                             variant="outline"
-                            disabled={mutation.isPending}
+                            disabled={
+                                mutation.isPending || integrityQuery.isLoading || integrityQuery.isError
+                            }
                             onClick={() => mutation.mutate('csv')}
                         >
                             导出商品 CSV

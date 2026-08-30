@@ -1,16 +1,31 @@
-import { CurrencyCode, Permission, SortOrder } from '@vendure/common/lib/generated-types';
+import { CurrencyCode, LanguageCode, Permission, SortOrder } from '@vendure/common/lib/generated-types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CatalogOperationsService } from './catalog-operations.service';
 import { manageCatalogOperationsPermission } from './constants';
 
 function createService() {
-    const txCtx = { channelId: 'channel-1', languageCode: 'zh_Hans' };
+    const txCtx = {
+        channelId: 'channel-1',
+        languageCode: 'zh_Hans',
+        channel: { defaultCurrencyCode: CurrencyCode.CNY },
+    };
+    const relationAdd = vi.fn(() => Promise.resolve());
+    const collectionRepository = {
+        save: vi.fn(value => Promise.resolve(value)),
+        createQueryBuilder: vi.fn(() => ({
+            relation: vi.fn(() => ({
+                of: vi.fn(() => ({ add: relationAdd })),
+            })),
+        })),
+    };
     const connection = {
         withTransaction: vi.fn((_ctx, work) => Promise.resolve(work(txCtx))),
         getEntityOrThrow: vi.fn(),
+        getRepository: vi.fn(() => collectionRepository),
     };
     const productService = {
+        create: vi.fn(() => Promise.resolve({ id: 'product-new', name: '新商品' })),
         update: vi.fn(() => Promise.resolve({ id: 'product-1' })),
         findAll: vi.fn(),
     };
@@ -23,14 +38,25 @@ function createService() {
             }),
         ),
     };
+    const eventBus = { publish: vi.fn(() => Promise.resolve()) };
     const service = new CatalogOperationsService(
         connection as never,
         productService as never,
         productVariantService as never,
         {} as never,
         {} as never,
+        eventBus as never,
     );
-    return { connection, productService, productVariantService, service, txCtx };
+    return {
+        collectionRepository,
+        connection,
+        eventBus,
+        productService,
+        productVariantService,
+        relationAdd,
+        service,
+        txCtx,
+    };
 }
 
 const productInput = {
@@ -54,6 +80,148 @@ function authorizedContext(
 }
 
 describe('CatalogOperationsService', () => {
+    it('creates the product, first SKU, cost, stock policy and category in one transaction', async () => {
+        const {
+            collectionRepository,
+            connection,
+            eventBus,
+            productService,
+            productVariantService,
+            relationAdd,
+            service,
+            txCtx,
+        } = createService();
+        const collection = { id: 'collection-1', filters: [] };
+        connection.getEntityOrThrow.mockResolvedValue(collection);
+        productVariantService.create.mockResolvedValue([{ id: 'variant-new' }]);
+        vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
+        const savePolicy = vi.spyOn(service, 'savePolicy').mockResolvedValue({} as never);
+        const recordCost = vi.spyOn(service, 'recordCost').mockResolvedValue({} as never);
+
+        await expect(
+            service.createProduct(
+                authorizedContext([
+                    Permission.CreateProduct,
+                    manageCatalogOperationsPermission.Update,
+                ]) as never,
+                {
+                    product: {
+                        enabled: true,
+                        translations: [
+                            {
+                                languageCode: LanguageCode.zh_Hans,
+                                name: '新商品',
+                                slug: 'new-product',
+                                description: '说明',
+                            },
+                        ],
+                    },
+                    variant: {
+                        stockLocationId: 'stock-1',
+                        sku: 'NEW-001',
+                        enabled: true,
+                        packageQuantity: 1,
+                        sellingPrice: 1_000,
+                        purchaseCostMicrounits: 7_000,
+                        stockOnHand: 5,
+                        minimumStock: 2,
+                        maximumStock: 20,
+                    },
+                    collectionIds: ['collection-1'],
+                },
+            ),
+        ).resolves.toEqual({ id: 'product-new', name: '新商品' });
+
+        expect(connection.withTransaction).toHaveBeenCalledOnce();
+        expect(productService.create).toHaveBeenCalledWith(txCtx, expect.objectContaining({ enabled: true }));
+        expect(productVariantService.create).toHaveBeenCalledWith(
+            txCtx,
+            expect.arrayContaining([
+                expect.objectContaining({
+                    productId: 'product-new',
+                    sku: 'NEW-001',
+                    prices: [{ currencyCode: CurrencyCode.CNY, price: 1_000 }],
+                    stockLevels: [{ stockLocationId: 'stock-1', stockOnHand: 5 }],
+                }),
+            ]),
+        );
+        expect(savePolicy).toHaveBeenCalledWith(txCtx, 'variant-new', 'stock-1', 2, 20);
+        expect(recordCost).toHaveBeenCalledWith(
+            txCtx,
+            'variant-new',
+            CurrencyCode.CNY,
+            7_000,
+            'MANUAL',
+            null,
+        );
+        expect(collectionRepository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                filters: [
+                    expect.objectContaining({
+                        code: 'product-id-filter',
+                    }),
+                ],
+            }),
+        );
+        expect(relationAdd).toHaveBeenCalledWith('variant-new');
+        expect(eventBus.publish).toHaveBeenCalledOnce();
+    });
+
+    it('rejects product creation without a category before opening a transaction', async () => {
+        const { connection, service } = createService();
+
+        await expect(
+            service.createProduct(
+                authorizedContext([
+                    Permission.CreateProduct,
+                    manageCatalogOperationsPermission.Update,
+                ]) as never,
+                {
+                    product: { translations: [] },
+                    variant: {
+                        stockLocationId: 'stock-1',
+                        sku: 'NEW-001',
+                        packageQuantity: 1,
+                        sellingPrice: 0,
+                        purchaseCostMicrounits: 0,
+                        stockOnHand: 0,
+                    },
+                    collectionIds: [],
+                },
+            ),
+        ).rejects.toThrow('新增商品必须选择至少一个分类');
+        expect(connection.withTransaction).not.toHaveBeenCalled();
+    });
+
+    it('reports products without SKUs and variant rows missing category or cost', async () => {
+        const { productService, service } = createService();
+        productService.findAll.mockResolvedValue({ items: [], totalItems: 3 });
+        vi.spyOn(service, 'exportRows').mockResolvedValue({
+            totalItems: 2,
+            scannedItems: 2,
+            items: [
+                {
+                    productId: 'product-1',
+                    categories: [],
+                    purchaseCostMicrounits: null,
+                },
+                {
+                    productId: 'product-2',
+                    categories: ['分类'],
+                    purchaseCostMicrounits: 1_000,
+                },
+            ],
+        } as never);
+
+        await expect(service.integritySummary({} as never)).resolves.toEqual({
+            totalProducts: 3,
+            totalVariants: 2,
+            productsWithoutVariants: 1,
+            variantsWithoutCategory: 1,
+            variantsWithoutCost: 1,
+        });
+    });
+
     it('saves the product and every operations record inside the same transaction context', async () => {
         const { connection, productService, productVariantService, service, txCtx } = createService();
         const updateVariant = vi.spyOn(service, 'updateVariant').mockResolvedValue(null);

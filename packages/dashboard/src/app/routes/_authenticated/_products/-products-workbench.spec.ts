@@ -22,4 +22,15 @@ describe('product workbench integration', () => {
         expect(source).not.toContain("filteredProductIds?.join(',')");
         expect(graphqlSource).toContain('products: catalogProducts');
     });
+
+    it('creates the product and its required first SKU through the catalog orchestrator', () => {
+        const source = readFileSync(path.join(routesDirectory, 'products_.$id.tsx'), 'utf8');
+        const graphqlSource = readFileSync(path.join(routesDirectory, 'products.graphql.ts'), 'utf8');
+
+        expect(source).toContain('customCreateMutationFn');
+        expect(source).toContain('<InitialCatalogVariantFields');
+        expect(source).toContain('initialCollectionIds.length > 0');
+        expect(graphqlSource).toContain('createCatalogProduct(input: $input)');
+        expect(graphqlSource).toContain('catalogProductCreationContext');
+    });
 });

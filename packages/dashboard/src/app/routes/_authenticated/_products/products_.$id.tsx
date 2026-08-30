@@ -7,9 +7,12 @@ import { EntityAssets } from '@/vdb/components/shared/entity-assets.js';
 import { ErrorPage } from '@/vdb/components/shared/error-page.js';
 import { FormFieldWrapper } from '@/vdb/components/shared/form-field-wrapper.js';
 import { TranslatableFormFieldWrapper } from '@/vdb/components/shared/translatable-form-field.js';
+import { Badge } from '@/vdb/components/ui/badge.js';
 import { Button } from '@/vdb/components/ui/button.js';
 import { Field } from '@/vdb/components/ui/field.js';
 import { Input } from '@/vdb/components/ui/input.js';
+import { Label } from '@/vdb/components/ui/label.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/vdb/components/ui/select.js';
 import { Switch } from '@/vdb/components/ui/switch.js';
 import { NEW_ENTITY_PATH } from '@/vdb/constants.js';
 import { ActionBarItem } from '@/vdb/framework/layout-engine/action-bar-item-wrapper.js';
@@ -28,21 +31,24 @@ import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { hasMeaningfulRichText } from '@/vdb/utils/rich-text-content.js';
 import { contentSourceLanguageCode } from '@/vdb/utils/supported-storefront-languages.js';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { Layers, LibraryBig, Package, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AddOptionGroupDialog } from './components/add-option-group-dialog.js';
 import { AddProductVariantDialog } from './components/add-product-variant-dialog.js';
 import { GenerateVariantsPanel } from './components/generate-variants-panel.js';
+import { ProductCollectionSelector } from './components/product-collection-selector.js';
 import { ProductCollectionsPanel } from './components/product-collections-panel.js';
 import { ProductFulfillmentTypePanel } from './components/product-fulfillment-type-panel.js';
 import { ProductOptionGroupBadge } from './components/product-option-group-badge.js';
 import { ProductVariantsTable } from './components/product-variants-table.js';
 import {
     assignProductsToChannelDocument,
+    catalogProductCreationContextDocument,
+    createCatalogProductDocument,
     createProductDocument,
     productDetailDocument,
     removeOptionGroupsFromProductDocument,
@@ -63,6 +69,30 @@ type ProductTranslationFormValue = {
     slug?: string | null;
     description?: string | null;
 };
+
+interface CatalogProductCreationContextRecord {
+    catalogProductCreationContext: {
+        currencyCode: string;
+        stockLocations: Array<{ id: string; name: string }>;
+    };
+}
+
+interface InitialCatalogVariantDraft {
+    stockLocationId: string;
+    sku: string;
+    enabled: boolean;
+    barcode: string;
+    specification: string;
+    saleUnit: string;
+    purchaseUnit: string;
+    packageQuantity: string;
+    shelfLifeDays: string;
+    sellingPrice: string;
+    purchaseCost: string;
+    stockOnHand: string;
+    minimumStock: string;
+    maximumStock: string;
+}
 
 function productSourceTranslationIndex(
     translations: readonly ProductTranslationFormValue[] | null | undefined,
@@ -174,6 +204,218 @@ function NoVariantsPrompt({
     );
 }
 
+function InitialCatalogVariantFields({
+    draft,
+    collectionIds,
+    creationContext,
+    loading,
+    error,
+    validationMessage,
+    onRetry,
+    onDraftChange,
+    onCollectionIdsChange,
+}: Readonly<{
+    draft: InitialCatalogVariantDraft;
+    collectionIds: string[];
+    creationContext: CatalogProductCreationContextRecord['catalogProductCreationContext'] | undefined;
+    loading: boolean;
+    error: unknown;
+    validationMessage: string | null;
+    onRetry: () => void;
+    onDraftChange: (draft: InitialCatalogVariantDraft) => void;
+    onCollectionIdsChange: (ids: string[]) => void;
+}>) {
+    const update = (values: Partial<InitialCatalogVariantDraft>) => onDraftChange({ ...draft, ...values });
+    const margin = initialCatalogMargin(draft.sellingPrice, draft.purchaseCost);
+
+    if (loading) {
+        return (
+            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground" role="status">
+                正在加载门店币种与仓库…
+            </div>
+        );
+    }
+    if (error || !creationContext) {
+        return (
+            <div className="space-y-3 rounded-lg border border-destructive/40 p-4 text-sm text-destructive">
+                <p>无法加载商品创建资料，暂不能创建商品。</p>
+                <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                    重试
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="space-y-2">
+                <Label>
+                    商品分类 <span className="text-destructive">*</span>
+                </Label>
+                <ProductCollectionSelector
+                    value={collectionIds}
+                    selectedCollections={[]}
+                    onChange={onCollectionIdsChange}
+                />
+                {collectionIds.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                        至少选择一个分类，避免生成无法归类的商品。
+                    </p>
+                )}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <InitialCatalogField label="SKU 编码" required>
+                    <Input value={draft.sku} onChange={event => update({ sku: event.target.value })} />
+                </InitialCatalogField>
+                <InitialCatalogField label="条码">
+                    <Input
+                        value={draft.barcode}
+                        onChange={event => update({ barcode: event.target.value })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="规格说明">
+                    <Input
+                        value={draft.specification}
+                        onChange={event => update({ specification: event.target.value })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="销售单位">
+                    <Input
+                        value={draft.saleUnit}
+                        onChange={event => update({ saleUnit: event.target.value })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="采购单位">
+                    <Input
+                        value={draft.purchaseUnit}
+                        onChange={event => update({ purchaseUnit: event.target.value })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="包装换算" required>
+                    <InitialNumberInput
+                        value={draft.packageQuantity}
+                        step="0.001"
+                        onChange={packageQuantity => update({ packageQuantity })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label={`销售价（${creationContext.currencyCode}）`} required>
+                    <InitialNumberInput
+                        value={draft.sellingPrice}
+                        step="0.01"
+                        onChange={sellingPrice => update({ sellingPrice })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label={`进货价（${creationContext.currencyCode}）`} required>
+                    <InitialNumberInput
+                        value={draft.purchaseCost}
+                        step="0.001"
+                        onChange={purchaseCost => update({ purchaseCost })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="毛利率（系统计算）">
+                    <div className="flex h-9 items-center">
+                        <Badge variant={margin != null && margin < 0 ? 'destructive' : 'secondary'}>
+                            {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
+                        </Badge>
+                    </div>
+                </InitialCatalogField>
+                <InitialCatalogField label="当前仓库" required>
+                    <Select
+                        value={draft.stockLocationId}
+                        onValueChange={stockLocationId => stockLocationId && update({ stockLocationId })}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="选择仓库" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {creationContext.stockLocations.map(location => (
+                                <SelectItem key={location.id} value={location.id}>
+                                    {location.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </InitialCatalogField>
+                <InitialCatalogField label="库存量" required>
+                    <InitialNumberInput
+                        value={draft.stockOnHand}
+                        step="1"
+                        onChange={stockOnHand => update({ stockOnHand })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="库存下限">
+                    <InitialNumberInput
+                        value={draft.minimumStock}
+                        step="1"
+                        onChange={minimumStock => update({ minimumStock })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="库存上限">
+                    <InitialNumberInput
+                        value={draft.maximumStock}
+                        step="1"
+                        onChange={maximumStock => update({ maximumStock })}
+                    />
+                </InitialCatalogField>
+                <InitialCatalogField label="保质期（天）">
+                    <InitialNumberInput
+                        value={draft.shelfLifeDays}
+                        step="1"
+                        onChange={shelfLifeDays => update({ shelfLifeDays })}
+                    />
+                </InitialCatalogField>
+                <div className="flex items-center justify-between rounded-lg border p-4 sm:col-span-2 xl:col-span-1">
+                    <div>
+                        <Label htmlFor="initial-catalog-variant-enabled">SKU 销售状态</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">可独立于商品主体停用。</p>
+                    </div>
+                    <Switch
+                        id="initial-catalog-variant-enabled"
+                        checked={draft.enabled}
+                        onCheckedChange={enabled => update({ enabled })}
+                    />
+                </div>
+            </div>
+            {validationMessage && (
+                <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+                    {validationMessage}
+                </p>
+            )}
+        </div>
+    );
+}
+
+function InitialCatalogField({
+    label,
+    required,
+    children,
+}: Readonly<{ label: string; required?: boolean; children: ReactNode }>) {
+    return (
+        <div className="space-y-2">
+            <Label>
+                {label} {required && <span className="text-destructive">*</span>}
+            </Label>
+            {children}
+        </div>
+    );
+}
+
+function InitialNumberInput({
+    value,
+    step,
+    onChange,
+}: Readonly<{ value: string; step: string; onChange: (value: string) => void }>) {
+    return (
+        <Input
+            type="number"
+            min="0"
+            step={step}
+            value={value}
+            onChange={event => onChange(event.target.value)}
+        />
+    );
+}
+
 function ProductDetailPage() {
     const params = Route.useParams();
     return <ProductEditor productId={params.id} />;
@@ -202,6 +444,40 @@ export function ProductEditor({
     const { channels } = useChannel();
     const { priceFactor, priceFactorField } = usePriceFactor();
     const [catalogWorkspaceDirty, setCatalogWorkspaceDirty] = useState(false);
+    const [initialVariant, setInitialVariant] = useState<InitialCatalogVariantDraft>(() =>
+        emptyInitialCatalogVariant(),
+    );
+    const [initialCollectionIds, setInitialCollectionIds] = useState<string[]>([]);
+    const creationContextQuery = useQuery({
+        queryKey: ['catalog-product-creation-context'],
+        queryFn: () =>
+            api.query<CatalogProductCreationContextRecord>(catalogProductCreationContextDocument, {}),
+        enabled: creatingNewEntity,
+    });
+    const creationContext = creationContextQuery.data?.catalogProductCreationContext;
+    const defaultStockLocationId = creationContext?.stockLocations[0]?.id ?? '';
+
+    useEffect(() => {
+        if (!creatingNewEntity || initialVariant.stockLocationId || !defaultStockLocationId) return;
+        setInitialVariant(current => ({ ...current, stockLocationId: defaultStockLocationId }));
+    }, [creatingNewEntity, defaultStockLocationId, initialVariant.stockLocationId]);
+
+    const initialCatalogDirty = useMemo(
+        () =>
+            creatingNewEntity &&
+            (JSON.stringify(initialVariant) !==
+                JSON.stringify(emptyInitialCatalogVariant(defaultStockLocationId)) ||
+                initialCollectionIds.length > 0),
+        [creatingNewEntity, defaultStockLocationId, initialCollectionIds.length, initialVariant],
+    );
+    const initialCatalogValidationMessage = !creatingNewEntity
+        ? null
+        : !creationContext
+          ? '商品创建资料尚未加载'
+          : initialCollectionIds.length === 0
+            ? '请至少选择一个商品分类'
+            : initialCatalogVariantValidationMessage(initialVariant);
+    const initialCatalogValid = !creatingNewEntity || initialCatalogValidationMessage == null;
 
     const { form, submitHandler, entity, isPending, refreshEntity, resetForm } = useDetailPage({
         pageId,
@@ -209,6 +485,21 @@ export function ProductEditor({
         queryDocument: withProductVariantCustomFields(productDetailDocument),
         createDocument: createProductDocument,
         updateDocument: updateProductDocument,
+        customCreateMutationFn: async product => {
+            if (!creationContext) throw new Error('商品创建资料尚未加载，请稍后重试');
+            const variant = initialCatalogVariantInput(initialVariant);
+            const result = await api.mutate<{ createCatalogProduct: { id: string } }>(
+                createCatalogProductDocument,
+                {
+                    input: {
+                        product,
+                        variant,
+                        collectionIds: initialCollectionIds,
+                    },
+                },
+            );
+            return result.createCatalogProduct as any;
+        },
         customUpdateMutationFn: async product => {
             const variants: Record<string, unknown>[] = [];
             const failures: unknown[] = [];
@@ -309,8 +600,8 @@ export function ProductEditor({
     }, [productId]);
 
     useEffect(() => {
-        onDirtyChange?.(form.formState.isDirty || catalogWorkspaceDirty);
-    }, [catalogWorkspaceDirty, form.formState.isDirty, onDirtyChange]);
+        onDirtyChange?.(form.formState.isDirty || catalogWorkspaceDirty || initialCatalogDirty);
+    }, [catalogWorkspaceDirty, form.formState.isDirty, initialCatalogDirty, onDirtyChange]);
 
     const removeAllOptionGroups = async (
         product: { id: string; updatedAt: string },
@@ -352,8 +643,9 @@ export function ProductEditor({
                     <Button
                         type="submit"
                         disabled={
-                            (!form.formState.isDirty && !catalogWorkspaceDirty) ||
+                            (!form.formState.isDirty && !catalogWorkspaceDirty && !initialCatalogDirty) ||
                             !form.formState.isValid ||
+                            !initialCatalogValid ||
                             isPending
                         }
                     >
@@ -425,6 +717,31 @@ export function ProductEditor({
                         render={({ field }) => <RichTextInput {...field} required aria-required="true" />}
                     />
                 </PageBlock>
+                {creatingNewEntity && (
+                    <PageBlock
+                        column="main"
+                        blockId="initial-catalog-variant"
+                        title={<Trans>Initial SKU, pricing and inventory</Trans>}
+                        description={
+                            <Trans>
+                                The product and its first SKU are created together. If any step fails, nothing
+                                is saved.
+                            </Trans>
+                        }
+                    >
+                        <InitialCatalogVariantFields
+                            draft={initialVariant}
+                            collectionIds={initialCollectionIds}
+                            creationContext={creationContext}
+                            loading={creationContextQuery.isLoading}
+                            error={creationContextQuery.error}
+                            validationMessage={initialCatalogValidationMessage}
+                            onRetry={() => void creationContextQuery.refetch()}
+                            onDraftChange={setInitialVariant}
+                            onCollectionIdsChange={setInitialCollectionIds}
+                        />
+                    </PageBlock>
+                )}
                 <CustomFieldsPageBlock column="main" entityType="Product" control={form.control} />
                 {entity && (
                     <PageBlock
@@ -640,4 +957,85 @@ export function ProductEditor({
             </PageLayout>
         </Page>
     );
+}
+
+function emptyInitialCatalogVariant(stockLocationId = ''): InitialCatalogVariantDraft {
+    return {
+        stockLocationId,
+        sku: '',
+        enabled: true,
+        barcode: '',
+        specification: '',
+        saleUnit: '',
+        purchaseUnit: '',
+        packageQuantity: '1',
+        shelfLifeDays: '',
+        sellingPrice: '0.00',
+        purchaseCost: '0.000',
+        stockOnHand: '0',
+        minimumStock: '',
+        maximumStock: '',
+    };
+}
+
+function initialCatalogVariantValidationMessage(draft: InitialCatalogVariantDraft): string | null {
+    try {
+        initialCatalogVariantInput(draft);
+        return null;
+    } catch (error) {
+        return error instanceof Error ? error.message : '首个 SKU 信息不完整';
+    }
+}
+
+function initialCatalogVariantInput(draft: InitialCatalogVariantDraft) {
+    if (!draft.stockLocationId) throw new Error('请选择当前仓库');
+    if (!draft.sku.trim()) throw new Error('SKU 编码不能为空');
+    const packageQuantity = requiredCatalogNumber(draft.packageQuantity, '包装换算');
+    if (packageQuantity <= 0) throw new Error('包装换算必须大于 0');
+    const minimumStock = optionalCatalogInteger(draft.minimumStock, '库存下限');
+    const maximumStock = optionalCatalogInteger(draft.maximumStock, '库存上限');
+    if (minimumStock != null && maximumStock != null && maximumStock < minimumStock) {
+        throw new Error('库存上限不能小于库存下限');
+    }
+    return {
+        stockLocationId: draft.stockLocationId,
+        sku: draft.sku.trim(),
+        enabled: draft.enabled,
+        barcode: draft.barcode.trim() || null,
+        specification: draft.specification.trim() || null,
+        saleUnit: draft.saleUnit.trim() || null,
+        purchaseUnit: draft.purchaseUnit.trim() || null,
+        packageQuantity,
+        shelfLifeDays: optionalCatalogInteger(draft.shelfLifeDays, '保质期'),
+        sellingPrice: Math.round(requiredCatalogNumber(draft.sellingPrice, '销售价') * 100),
+        purchaseCostMicrounits: Math.round(requiredCatalogNumber(draft.purchaseCost, '进货价') * 1_000),
+        stockOnHand: requiredCatalogInteger(draft.stockOnHand, '库存量'),
+        minimumStock,
+        maximumStock,
+    };
+}
+
+function requiredCatalogNumber(value: string, label: string): number {
+    if (!value.trim()) throw new Error(`${label}不能为空`);
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${label}必须是非负数`);
+    return parsed;
+}
+
+function requiredCatalogInteger(value: string, label: string): number {
+    const parsed = requiredCatalogNumber(value, label);
+    if (!Number.isInteger(parsed)) throw new Error(`${label}必须是整数`);
+    return parsed;
+}
+
+function optionalCatalogInteger(value: string, label: string): number | null {
+    if (!value.trim()) return null;
+    return requiredCatalogInteger(value, label);
+}
+
+function initialCatalogMargin(sellingPrice: string, purchaseCost: string): number | null {
+    const price = Number(sellingPrice);
+    const cost = Number(purchaseCost);
+    if (!Number.isFinite(price) || !Number.isFinite(cost) || price <= 0) return null;
+    return (price - cost) / price;
 }

@@ -16,6 +16,7 @@ export type {
     CatalogImportResolution,
     CatalogImportState,
     CatalogProductSummaryFilterInput,
+    CreateCatalogProductInput,
     NormalizedCatalogRow,
     SaveCatalogProductInput,
 } from './types.js';

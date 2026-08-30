@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+    ConfigurableOperation,
     CurrencyCode,
     GlobalFlag,
     LanguageCode,
@@ -8,6 +9,9 @@ import {
 } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    Collection,
+    CollectionModificationEvent,
+    EventBus,
     ForbiddenError,
     Product,
     ProductService,
@@ -30,6 +34,7 @@ import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import {
     CatalogProductListOptions,
     CatalogProductSummaryFilterInput,
+    CreateCatalogProductInput,
     CreateCatalogProductVariantInput,
     SaveCatalogProductInput,
     SaveInventoryLotInput,
@@ -44,7 +49,61 @@ export class CatalogOperationsService {
         private readonly productVariantService: ProductVariantService,
         private readonly stockMovementService: StockMovementService,
         private readonly suppliers: CatalogSupplierService,
+        private readonly eventBus: EventBus,
     ) {}
+
+    async creationContext(ctx: RequestContext) {
+        return {
+            currencyCode: ctx.channel.defaultCurrencyCode,
+            stockLocations: await this.stockLocations(ctx),
+        };
+    }
+
+    async integritySummary(ctx: RequestContext) {
+        const productPage = await this.productService.findAll(ctx, { skip: 0, take: 1 });
+        const productIdsWithVariants = new Set<string>();
+        let totalVariants = 0;
+        let variantsWithoutCategory = 0;
+        let variantsWithoutCost = 0;
+        let skip = 0;
+        do {
+            const page = await this.exportRows(ctx, skip, 500);
+            totalVariants = page.totalItems;
+            for (const row of page.items) {
+                productIdsWithVariants.add(row.productId);
+                if (row.categories.length === 0) variantsWithoutCategory += 1;
+                if (row.purchaseCostMicrounits == null) variantsWithoutCost += 1;
+            }
+            const scannedItems = page.scannedItems ?? page.items.length;
+            if (scannedItems === 0) break;
+            skip += scannedItems;
+        } while (skip < totalVariants);
+        return {
+            totalProducts: productPage.totalItems,
+            totalVariants,
+            productsWithoutVariants: Math.max(productPage.totalItems - productIdsWithVariants.size, 0),
+            variantsWithoutCategory,
+            variantsWithoutCost,
+        };
+    }
+
+    async createProduct(ctx: RequestContext, input: CreateCatalogProductInput) {
+        const canCreateProduct = ctx.userHasPermissions([Permission.CreateProduct, Permission.CreateCatalog]);
+        const canMaintainOperations = ctx.userHasPermissions([
+            manageCatalogOperationsPermission.Update,
+            manageCatalogImportPermission.Update,
+        ]);
+        if (!canCreateProduct || !canMaintainOperations) throw new ForbiddenError();
+        validateInitialProductInput(input);
+
+        return this.connection.withTransaction(ctx, async txCtx => {
+            await this.requireStockLocation(txCtx, input.variant.stockLocationId);
+            const product = await this.productService.create(txCtx, input.product);
+            const variant = await this.createInitialVariant(txCtx, product, input);
+            await this.assignInitialCollections(txCtx, product.id, variant.id, input.collectionIds);
+            return product;
+        });
+    }
 
     async saveProduct(ctx: RequestContext, input: SaveCatalogProductInput) {
         const canMaintainProduct = ctx.userHasPermissions([
@@ -143,6 +202,88 @@ export class CatalogOperationsService {
             }
             return this.workspace(txCtx, product.id);
         });
+    }
+
+    private async createInitialVariant(
+        ctx: RequestContext,
+        product: Product,
+        input: CreateCatalogProductInput,
+    ): Promise<ProductVariant> {
+        const variantInput = input.variant;
+        const [variant] = await this.productVariantService.create(ctx, [
+            {
+                productId: product.id,
+                enabled: variantInput.enabled ?? true,
+                sku: variantInput.sku.trim(),
+                prices: [
+                    {
+                        currencyCode: ctx.channel.defaultCurrencyCode,
+                        price: variantInput.sellingPrice,
+                    },
+                ],
+                translations: [
+                    {
+                        languageCode: ctx.languageCode,
+                        name: product.name,
+                    },
+                ],
+                optionIds: [],
+                stockLevels: [
+                    {
+                        stockLocationId: variantInput.stockLocationId,
+                        stockOnHand: variantInput.stockOnHand,
+                    },
+                ],
+                trackInventory: GlobalFlag.INHERIT,
+                customFields: {
+                    barcode: blankToNull(variantInput.barcode),
+                    specification: blankToNull(variantInput.specification),
+                    saleUnit: blankToNull(variantInput.saleUnit),
+                    purchaseUnit: blankToNull(variantInput.purchaseUnit),
+                    packageQuantity: variantInput.packageQuantity,
+                    shelfLifeDays: variantInput.shelfLifeDays ?? null,
+                },
+            },
+        ]);
+        await this.savePolicy(
+            ctx,
+            variant.id,
+            variantInput.stockLocationId,
+            variantInput.minimumStock ?? null,
+            variantInput.maximumStock ?? null,
+        );
+        await this.recordCost(
+            ctx,
+            variant.id,
+            ctx.channel.defaultCurrencyCode,
+            variantInput.purchaseCostMicrounits,
+            'MANUAL',
+            null,
+        );
+        return variant;
+    }
+
+    private async assignInitialCollections(
+        ctx: RequestContext,
+        productId: ID,
+        variantId: ID,
+        collectionIds: ID[],
+    ): Promise<void> {
+        const uniqueCollectionIds = [...new Set(collectionIds.map(String))];
+        const repository = this.connection.getRepository(ctx, Collection);
+        for (const collectionId of uniqueCollectionIds) {
+            const collection = await this.connection.getEntityOrThrow(ctx, Collection, collectionId, {
+                channelId: ctx.channelId,
+            });
+            collection.filters = withDirectProductAssignment(collection.filters ?? [], productId);
+            await repository.save(collection);
+            await repository
+                .createQueryBuilder()
+                .relation(Collection, 'productVariants')
+                .of(collection.id)
+                .add(variantId);
+            await this.eventBus.publish(new CollectionModificationEvent(ctx, collection, [variantId]));
+        }
     }
 
     async workspace(ctx: RequestContext, productId: ID) {
@@ -692,6 +833,89 @@ function validatePolicy(minimumStock?: number | null, maximumStock?: number | nu
     }
     if (minimumStock != null && maximumStock != null && maximumStock < minimumStock) {
         throw new UserInputError('库存上限不能小于库存下限');
+    }
+}
+
+function validateInitialProductInput(input: CreateCatalogProductInput): void {
+    if (input.collectionIds.length === 0) throw new UserInputError('新增商品必须选择至少一个分类');
+    if (input.collectionIds.length > 100) throw new UserInputError('单个商品最多选择 100 个分类');
+    const variant = input.variant;
+    if (!variant.sku.trim()) throw new UserInputError('SKU 编码不能为空');
+    if (!Number.isInteger(variant.sellingPrice) || variant.sellingPrice < 0) {
+        throw new UserInputError('销售价必须是非负整数货币单位');
+    }
+    if (!Number.isInteger(variant.purchaseCostMicrounits) || variant.purchaseCostMicrounits < 0) {
+        throw new UserInputError('进货价精度必须是千分之一货币单位');
+    }
+    if (!Number.isInteger(variant.stockOnHand) || variant.stockOnHand < 0) {
+        throw new UserInputError('库存必须是非负整数');
+    }
+    if (!Number.isFinite(variant.packageQuantity) || variant.packageQuantity <= 0) {
+        throw new UserInputError('包装换算数量必须大于 0');
+    }
+    if (
+        variant.shelfLifeDays != null &&
+        (!Number.isInteger(variant.shelfLifeDays) || variant.shelfLifeDays < 0)
+    ) {
+        throw new UserInputError('保质期必须是非负整数');
+    }
+    validatePolicy(variant.minimumStock, variant.maximumStock);
+}
+
+function withDirectProductAssignment(
+    filters: ConfigurableOperation[],
+    productId: ID,
+): ConfigurableOperation[] {
+    const normalizedProductId = String(productId);
+    const existingIndex = filters.findIndex(filter => {
+        if (filter.code !== 'product-id-filter') return false;
+        return parseProductIds(filter).includes(normalizedProductId);
+    });
+    if (existingIndex >= 0) return filters;
+
+    const reusableIndex = filters.findIndex(filter => {
+        if (filter.code !== 'product-id-filter') return false;
+        if (!filter.args.some(argument => argument.name === 'productIds')) return false;
+        const combineWithAnd = filter.args.find(argument => argument.name === 'combineWithAnd')?.value;
+        return combineWithAnd === 'false' || filters.length === 1;
+    });
+    if (reusableIndex >= 0) {
+        return filters.map((filter, index) => {
+            if (index !== reusableIndex) return filter;
+            const productIds = [...new Set([...parseProductIds(filter), normalizedProductId])];
+            return {
+                ...filter,
+                args: filter.args.map(argument =>
+                    argument.name === 'productIds'
+                        ? { ...argument, value: JSON.stringify(productIds) }
+                        : argument,
+                ),
+            };
+        });
+    }
+
+    return [
+        ...filters,
+        {
+            code: 'product-id-filter',
+            args: [
+                { name: 'productIds', value: JSON.stringify([normalizedProductId]) },
+                { name: 'combineWithAnd', value: filters.length > 0 ? 'false' : 'true' },
+            ],
+        },
+    ];
+}
+
+function parseProductIds(filter: ConfigurableOperation): string[] {
+    const value = filter.args.find(argument => argument.name === 'productIds')?.value;
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        return Array.isArray(parsed) && parsed.every(id => typeof id === 'string')
+            ? [...new Set(parsed)]
+            : [];
+    } catch {
+        return [];
     }
 }
 

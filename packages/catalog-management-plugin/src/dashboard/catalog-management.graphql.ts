@@ -292,6 +292,18 @@ export const catalogExportRowsQuery = gql`
     }
 `;
 
+export const catalogIntegritySummaryQuery = gql`
+    query CatalogIntegritySummary {
+        catalogIntegritySummary {
+            totalProducts
+            totalVariants
+            productsWithoutVariants
+            variantsWithoutCategory
+            variantsWithoutCost
+        }
+    }
+`;
+
 export const updateCatalogVariantOperationsMutation = gql`
     mutation UpdateCatalogVariantOperations($input: UpdateCatalogVariantOperationsInput!) {
         updateCatalogVariantOperations(input: $input) {
@@ -471,6 +483,16 @@ export interface CatalogExportRowRecord {
         currencyCode: string;
         state: string;
     }>;
+}
+
+export interface CatalogIntegritySummaryRecord {
+    catalogIntegritySummary: {
+        totalProducts: number;
+        totalVariants: number;
+        productsWithoutVariants: number;
+        variantsWithoutCategory: number;
+        variantsWithoutCost: number;
+    };
 }
 
 export interface CatalogWorkspaceRecord {

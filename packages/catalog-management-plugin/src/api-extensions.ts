@@ -180,6 +180,19 @@ export const adminApiExtensions = gql`
         variants: [CatalogWorkspaceVariant!]!
     }
 
+    type CatalogProductCreationContext {
+        currencyCode: CurrencyCode!
+        stockLocations: [CatalogImportStockLocation!]!
+    }
+
+    type CatalogIntegritySummary {
+        totalProducts: Int!
+        totalVariants: Int!
+        productsWithoutVariants: Int!
+        variantsWithoutCategory: Int!
+        variantsWithoutCost: Int!
+    }
+
     type CatalogExportStockRow {
         stockLocationId: ID!
         stockLocationName: String!
@@ -281,7 +294,7 @@ export const adminApiExtensions = gql`
         purchaseUnit: String!
         packageQuantity: Float!
         stockOnHand: Int
-        purchaseCost: Float!
+        purchaseCost: Float
         sellingPrice: Float!
         reportedMargin: Float
         maximumStock: Int
@@ -373,6 +386,29 @@ export const adminApiExtensions = gql`
         variants: [UpdateCatalogVariantOperationsInput!]!
     }
 
+    input CreateCatalogInitialVariantInput {
+        stockLocationId: ID!
+        sku: String!
+        enabled: Boolean = true
+        barcode: String
+        specification: String
+        saleUnit: String
+        purchaseUnit: String
+        packageQuantity: Float!
+        shelfLifeDays: Int
+        sellingPrice: Money!
+        purchaseCostMicrounits: Float!
+        stockOnHand: Int!
+        minimumStock: Int
+        maximumStock: Int
+    }
+
+    input CreateCatalogProductInput {
+        product: CreateProductInput!
+        variant: CreateCatalogInitialVariantInput!
+        collectionIds: [ID!]!
+    }
+
     input CreateCatalogProductVariantInput {
         productId: ID!
         stockLocationId: ID!
@@ -427,6 +463,8 @@ export const adminApiExtensions = gql`
         catalogImportJob(id: ID!): CatalogImportJob!
         catalogImportJobs(skip: Int, take: Int): CatalogImportJobList!
         catalogImportRows(jobId: ID!, action: CatalogImportAction): [CatalogImportRow!]!
+        catalogIntegritySummary: CatalogIntegritySummary!
+        catalogProductCreationContext: CatalogProductCreationContext!
         catalogProductWorkspace(productId: ID!): CatalogProductWorkspace!
         catalogProductSummaries(
             filter: CatalogProductSummaryFilterInput
@@ -450,6 +488,7 @@ export const adminApiExtensions = gql`
         rollbackCatalogImport(id: ID!): CatalogImportJob!
         updateCatalogVariantOperations(input: UpdateCatalogVariantOperationsInput!): CatalogProductWorkspace!
         createCatalogProductVariant(input: CreateCatalogProductVariantInput!): CatalogProductWorkspace!
+        createCatalogProduct(input: CreateCatalogProductInput!): Product!
         saveCatalogProduct(input: SaveCatalogProductInput!): Product!
         saveCatalogInventoryLot(input: SaveCatalogInventoryLotInput!): CatalogInventoryLot!
         createCatalogSupplier(input: CreateCatalogSupplierInput!): CatalogSupplier!

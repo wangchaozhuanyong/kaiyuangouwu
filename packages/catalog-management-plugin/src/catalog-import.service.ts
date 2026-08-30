@@ -689,10 +689,10 @@ export class CatalogImportService {
         suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
         const warnings = [validationWarning(row)];
-        const categoryExists = catalogIndex.some(item =>
-            item.categories.has(normalizeIdentity(row.category)),
-        );
-        if (!categoryExists) warnings.push('分类不存在，确认后将创建新分类');
+        const categoryExists =
+            Boolean(row.category) &&
+            catalogIndex.some(item => item.categories.has(normalizeIdentity(row.category)));
+        if (row.category && !categoryExists) warnings.push('分类不存在，确认后将创建新分类');
         const supplier = suppliersByName.get(normalizeSupplierName(row.supplier));
         if (row.supplier && !supplier) warnings.push(`供货商“${row.supplier}”不存在，确认后将创建`);
         if (supplier && !supplier.enabled) warnings.push(`供货商“${supplier.name}”已停用`);
@@ -754,6 +754,18 @@ export class CatalogImportService {
         }
 
         if (!targetVariant) {
+            const missingCreateFields = [
+                !row.category ? '分类' : null,
+                row.purchaseCost == null ? '进货价' : null,
+            ].filter((value): value is string => Boolean(value));
+            if (missingCreateFields.length > 0) {
+                return {
+                    ...emptyPlan('ERROR'),
+                    targetProductId: targetProduct?.id ?? null,
+                    expectedProductUpdatedAt: targetProduct?.updatedAt ?? null,
+                    message: `新建商品或 SKU 缺少必填字段：${missingCreateFields.join('、')}`,
+                };
+            }
             const createPlan: PlannedRow = {
                 action: 'CREATE',
                 targetProductId: targetProduct?.id ?? null,
@@ -922,12 +934,14 @@ export class CatalogImportService {
             shouldClear(row, 'shelfLifeDays', clearBlankFields),
         );
         changed(changes, 'sellingPrice', money(row.sellingPrice), snapshot.sellingPrice);
-        changed(
-            changes,
-            'purchaseCostMicrounits',
-            microunits(row.purchaseCost),
-            snapshot.purchaseCostMicrounits,
-        );
+        if (row.purchaseCost != null) {
+            changed(
+                changes,
+                'purchaseCostMicrounits',
+                microunits(row.purchaseCost),
+                snapshot.purchaseCostMicrounits,
+            );
+        }
         changed(changes, 'stockOnHand', row.stockOnHand, snapshot.stockOnHand);
         changedOptional(
             changes,
@@ -1323,14 +1337,19 @@ export class CatalogImportService {
                         row.normalizedData.lotQuantity ?? row.normalizedData.stockOnHand ?? 0,
                         0,
                     ),
-                    purchaseCostMicrounits: microunits(row.normalizedData.purchaseCost),
+                    purchaseCostMicrounits:
+                        row.normalizedData.purchaseCost == null
+                            ? null
+                            : microunits(row.normalizedData.purchaseCost),
                     currencyCode: job.currencyCode,
                 },
                 row.normalizedData.lotQuantity != null && row.normalizedData.stockOnHand == null,
             );
             lotId = lot.id;
         }
-        await this.assignCategory(ctx, product.id, row.normalizedData.category);
+        if (row.normalizedData.category) {
+            await this.assignCategory(ctx, product.id, row.normalizedData.category);
+        }
         await this.connection.getRepository(ctx, CatalogSourceBinding).upsert(
             {
                 channelId: ctx.channelId,
@@ -2126,10 +2145,12 @@ function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): No
         throw new UserInputError('商品行号超出导入范围');
     }
     const name = safeRequiredRowText(row.name, 255, row.rowNumber, '名称');
-    const category = safeRequiredRowText(row.category, 255, row.rowNumber, '分类');
-    const purchaseCost = finiteRowNumber(row.purchaseCost, row.rowNumber, '进货价', true);
+    const category = safeImportText(row.category, 255);
+    const purchaseCost = finiteRowNumber(row.purchaseCost, row.rowNumber, '进货价', false);
     const sellingPrice = finiteRowNumber(row.sellingPrice, row.rowNumber, '销售价', true);
-    if (purchaseCost < 0) throw new UserInputError(`第 ${row.rowNumber} 行：进货价不能为负数`);
+    if (purchaseCost != null && purchaseCost < 0) {
+        throw new UserInputError(`第 ${row.rowNumber} 行：进货价不能为负数`);
+    }
     if (sellingPrice < 0) throw new UserInputError(`第 ${row.rowNumber} 行：销售价不能为负数`);
     if (row.shelfLifeDays != null && (!Number.isInteger(row.shelfLifeDays) || row.shelfLifeDays < 0)) {
         throw new UserInputError(`第 ${row.rowNumber} 行：保质期必须是非负整数`);

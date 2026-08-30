@@ -61,6 +61,23 @@ describe('browser-local catalog export', () => {
         });
         expect(parsed.unknownHeaders).toEqual([]);
     });
+
+    it('keeps existing SKU rows importable when legacy category or cost data is missing', async () => {
+        const row = exportRow();
+        row.sku = 'SKU-LEGACY-INCOMPLETE';
+        row.categories = [];
+        row.purchaseCostMicrounits = null;
+        const output = buildCatalogExport([row], 'xlsx');
+
+        const parsed = await parseCatalogArrayBuffer(output.buffer, '历史商品报表.xlsx');
+
+        expect(parsed.errors).toEqual([]);
+        expect(parsed.rows[0]).toMatchObject({
+            sku: 'SKU-LEGACY-INCOMPLETE',
+            category: '',
+            purchaseCost: null,
+        });
+    });
 });
 
 function exportRow(): CatalogExportRowRecord {

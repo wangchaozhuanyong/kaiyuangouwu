@@ -17,8 +17,9 @@ import {
     CatalogImportAction,
     CatalogProductListOptions,
     CatalogProductSummaryFilterInput,
-    CreateCatalogProductVariantInput,
     CatalogSupplierListOptions,
+    CreateCatalogProductInput,
+    CreateCatalogProductVariantInput,
     CreateCatalogSupplierInput,
     ResolveCatalogImportRowInput,
     ResolveCatalogImportRowsInput,
@@ -56,6 +57,18 @@ export class CatalogManagementAdminResolver {
         @Args('action') action?: CatalogImportAction,
     ) {
         return this.imports.findRows(ctx, jobId, action);
+    }
+
+    @Query()
+    @Allow(manageCatalogOperationsPermission.Read, manageCatalogImportPermission.Read)
+    catalogIntegritySummary(@Ctx() ctx: RequestContext) {
+        return this.operations.integritySummary(ctx);
+    }
+
+    @Query()
+    @Allow(manageCatalogOperationsPermission.Read, manageCatalogImportPermission.Read)
+    catalogProductCreationContext(@Ctx() ctx: RequestContext) {
+        return this.operations.creationContext(ctx);
     }
 
     @Query()
@@ -180,6 +193,17 @@ export class CatalogManagementAdminResolver {
         @Args('input') input: CreateCatalogProductVariantInput,
     ) {
         return this.operations.createVariant(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(
+        Permission.CreateProduct,
+        Permission.CreateCatalog,
+        manageCatalogOperationsPermission.Update,
+        manageCatalogImportPermission.Update,
+    )
+    createCatalogProduct(@Ctx() ctx: RequestContext, @Args('input') input: CreateCatalogProductInput) {
+        return this.operations.createProduct(ctx, input);
     }
 
     @Mutation()

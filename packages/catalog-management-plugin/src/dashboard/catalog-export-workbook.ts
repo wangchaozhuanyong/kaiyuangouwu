@@ -136,7 +136,11 @@ function lotSheet(rows: CatalogExportRowRecord[]): XLSX.WorkSheet {
 function guideSheet(): XLSX.WorkSheet {
     const values = [
         ['工作表', '字段', '规则'],
-        ['商品与SKU', '名称、分类、进货价、销售价', '必填；SKU 建议填写并保持唯一'],
+        [
+            '商品与SKU',
+            '名称、分类、进货价、销售价',
+            '新建时必填；历史 SKU 的分类或成本为空时，重新导入会保留现状，不会写成 0',
+        ],
         ['商品与SKU', '毛利率', '系统根据售价和最新进货价计算，不作为导入权威值'],
         ['商品与SKU', '创建日期', '保存来源报表日期，不覆盖系统创建时间'],
         ['商品与SKU', 'SKU状态', 'SKU 可独立停用；未填写时沿用商品状态'],

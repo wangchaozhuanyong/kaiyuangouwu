@@ -104,6 +104,13 @@ export interface DetailPageOptions<
     transformCreateInput?: (input: VariablesOf<C>[VarNameCreate]) => VariablesOf<C>[VarNameCreate];
     transformUpdateInput?: (input: VariablesOf<U>[VarNameUpdate]) => VariablesOf<U>[VarNameUpdate];
     /**
+     * Runs a page-specific create while retaining the generated form and validation schema.
+     * The callback must resolve to the same entity shape returned by the configured create mutation.
+     */
+    customCreateMutationFn?: (
+        input: VariablesOf<C>[VarNameCreate],
+    ) => Promise<ResultOf<C>[keyof ResultOf<C>]>;
+    /**
      * Runs a page-specific update while retaining the generated form and validation schema.
      * The callback must resolve to the same entity shape returned by the configured update mutation.
      */
@@ -297,6 +304,7 @@ export function useDetailPage<
         setValuesForUpdate,
         transformCreateInput,
         transformUpdateInput,
+        customCreateMutationFn,
         customUpdateMutationFn,
         getUpdateRequestHeaders,
         extendSchema,
@@ -330,11 +338,26 @@ export function useDetailPage<
     };
 
     const createMutation = useMutation({
-        mutationFn: createDocument ? api.mutate(createDocument) : undefined,
+        mutationFn: createDocument
+            ? async (variables: VariablesOf<C>) => {
+                  if (customCreateMutationFn) {
+                      return {
+                          customEntity: await customCreateMutationFn(
+                              (variables as Record<string, any>).input,
+                          ),
+                      };
+                  }
+                  return api.mutate(createDocument, variables);
+              }
+            : undefined,
         onSuccess: data => {
             if (createDocument) {
                 const createMutationName = getMutationName(createDocument);
-                onSuccess?.((data as any)[createMutationName]);
+                onSuccess?.(
+                    customCreateMutationFn
+                        ? (data as { customEntity: ResultOf<C>[keyof ResultOf<C>] }).customEntity
+                        : (data as any)[createMutationName],
+                );
             }
         },
         onError,
@@ -381,7 +404,7 @@ export function useDetailPage<
 
             if (isNew) {
                 const finalInput = transformCreateInput?.(filteredValues) ?? filteredValues;
-                createMutation.mutate({ input: finalInput });
+                createMutation.mutate({ input: finalInput } as VariablesOf<C>);
             } else {
                 const finalInput = transformUpdateInput?.(filteredValues) ?? filteredValues;
                 updateMutation.mutate({ input: finalInput } as VariablesOf<U>);
@@ -400,7 +423,7 @@ export function useDetailPage<
         form: form as any,
         submitHandler,
         entity,
-        isPending: updateMutation.isPending || detailQuery?.isPending,
+        isPending: createMutation.isPending || updateMutation.isPending || detailQuery?.isPending,
         refreshEntity: detailQuery.refetch,
         resetForm,
     };

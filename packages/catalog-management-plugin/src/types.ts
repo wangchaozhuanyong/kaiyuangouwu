@@ -1,4 +1,5 @@
 import type {
+    CreateProductInput,
     CurrencyCode,
     ProductListOptions,
     UpdateProductInput,
@@ -124,6 +125,29 @@ export interface UpdateCatalogSupplierInput {
 export interface SaveCatalogProductInput {
     product: UpdateProductInput;
     variants: UpdateCatalogVariantOperationsInput[];
+}
+
+export interface CreateCatalogInitialVariantInput {
+    stockLocationId: ID;
+    sku: string;
+    enabled?: boolean | null;
+    barcode?: string | null;
+    specification?: string | null;
+    saleUnit?: string | null;
+    purchaseUnit?: string | null;
+    packageQuantity: number;
+    shelfLifeDays?: number | null;
+    sellingPrice: number;
+    purchaseCostMicrounits: number;
+    stockOnHand: number;
+    minimumStock?: number | null;
+    maximumStock?: number | null;
+}
+
+export interface CreateCatalogProductInput {
+    product: CreateProductInput;
+    variant: CreateCatalogInitialVariantInput;
+    collectionIds: ID[];
 }
 
 export interface CreateCatalogProductVariantInput {

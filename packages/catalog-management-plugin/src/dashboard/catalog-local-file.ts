@@ -460,13 +460,14 @@ function normalizeRow(
     const name = textValue(values.get('name'));
     const category = textValue(values.get('category'));
     if (!name) throw new Error(`第 ${rowNumber} 行：名称不能为空`);
-    if (!category) throw new Error(`第 ${rowNumber} 行：分类不能为空`);
-    const purchaseCost = decimalValue(values.get('purchaseCost'), rowNumber, '进货价', true);
+    const purchaseCost = decimalValue(values.get('purchaseCost'), rowNumber, '进货价');
     const sellingPrice = decimalValue(values.get('sellingPrice'), rowNumber, '销售价', true);
     const shelfLifeDays = integerValue(values.get('shelfLifeDays'), rowNumber, '保质期');
     const lotQuantity = integerValue(values.get('lotQuantity'), rowNumber, '批次数量');
     const packageQuantity = decimalValue(values.get('packageQuantity'), rowNumber, '包装换算') ?? 1;
-    if (purchaseCost < 0) throw new Error(`第 ${rowNumber} 行：进货价不能为负数`);
+    if (purchaseCost != null && purchaseCost < 0) {
+        throw new Error(`第 ${rowNumber} 行：进货价不能为负数`);
+    }
     if (sellingPrice < 0) throw new Error(`第 ${rowNumber} 行：销售价不能为负数`);
     if (shelfLifeDays != null && shelfLifeDays < 0) {
         throw new Error(`第 ${rowNumber} 行：保质期不能为负数`);

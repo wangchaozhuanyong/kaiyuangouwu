@@ -237,6 +237,26 @@ export const createProductDocument = graphql(`
     }
 `);
 
+export const catalogProductCreationContextDocument = parse(`
+    query CatalogProductCreationContext {
+        catalogProductCreationContext {
+            currencyCode
+            stockLocations {
+                id
+                name
+            }
+        }
+    }
+`);
+
+export const createCatalogProductDocument = parse(`
+    mutation CreateCatalogProduct($input: CreateCatalogProductInput!) {
+        createCatalogProduct(input: $input) {
+            id
+        }
+    }
+`);
+
 export const updateProductDocument = graphql(`
     mutation UpdateProduct($input: UpdateProductInput!) {
         updateProduct(input: $input) {
