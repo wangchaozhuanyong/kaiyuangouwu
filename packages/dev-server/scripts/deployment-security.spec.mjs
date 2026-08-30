@@ -39,6 +39,28 @@ void test('promotion route preserves backend CSP without inheriting the storefro
     assert.doesNotMatch(promoLocation, /add_header Content-Security-Policy/u);
 });
 
+void test('legacy browser fallback files bypass the promotion gate without weakening other routes', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const fallbackLocations = [
+        '/legacy-browser-guard.js',
+        '/unsupported-browser.html',
+    ].map(route =>
+        config.match(
+            new RegExp(
+                `location = ${route.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')} \\{(?<body>[\\s\\S]*?)\\n    \\}`,
+                'u',
+            ),
+        ),
+    );
+
+    for (const location of fallbackLocations) {
+        assert.ok(location?.groups?.body);
+        assert.match(location.groups.body, /try_files \$uri =404;/u);
+        assert.doesNotMatch(location.groups.body, /auth_request/u);
+    }
+    assert.match(fallbackLocations[1].groups.body, /script-src 'none'/u);
+});
+
 void test('production PM2 config starts compiled runtime entries without the development CLI', async () => {
     const config = await readFile(
         path.join(repositoryRoot, 'deploy/ecosystem.production.config.cjs'),

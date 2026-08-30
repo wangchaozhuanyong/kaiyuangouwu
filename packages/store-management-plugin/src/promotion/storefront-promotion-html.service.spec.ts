@@ -188,6 +188,8 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).not.toContain('user-scalable');
         expect(html).toContain('data-storefront-promotion-accessibility');
         expect(html).toContain(':focus-visible');
+        expect(html).toContain('<meta http-equiv="X-UA-Compatible" content="IE=edge">');
+        expect(html).toContain('<meta name="renderer" content="webkit">');
     });
 
     it('keeps the browser icons synchronized with the current store logo', () => {

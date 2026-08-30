@@ -319,6 +319,16 @@ export class StorefrontPromotionHtmlService {
         if ($('meta[charset]').length === 0) {
             $('head').prepend('<meta charset="utf-8">');
         }
+        $('meta[name="renderer"]').remove();
+        $('meta[http-equiv]').each((_index, element) => {
+            const value = ($(element).attr('http-equiv') ?? '').toLowerCase();
+            if (value === 'x-ua-compatible') $(element).remove();
+        });
+        $('meta[charset]')
+            .first()
+            .after(
+                '<meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="renderer" content="webkit">',
+            );
         $('meta[name="viewport"]').remove();
         $('head').append('<meta name="viewport" content="width=device-width, initial-scale=1">');
         $('style[data-storefront-promotion-accessibility]').remove();
