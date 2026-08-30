@@ -348,10 +348,17 @@ node deploy/verify-production-release.mjs \
 
 验收脚本会走完整推广入口：确认未携带 Cookie 的 Shop API 返回 `STOREFRONT_ENTRY_REQUIRED`，从 `/promo` 获取签名票据并换取入口 Cookie，再验证 Shop API、带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。Dashboard 验证会以发布 SHA 追加缓存穿透参数，并递归检查入口 HTML 引用及 JS 中声明的所有懒加载 JS/CSS；任一资源 404、状态码或 MIME 类型异常均视为发布失败并回滚。`/assets/` 目录本身不是有效静态资源验收地址。
 
+实时更新端点必须返回 `text/event-stream`，并在两秒内输出 `ready` 事件：
+
+```bash
+curl -sS -N --max-time 2 https://damatong.net/storefront-realtime/events | sed -n '1,4p'
+```
+
 另外检查：
 
 - `pm2 jlist` 中 `vendure-api`、`vendure-worker` 均为 `online`；
 - `127.0.0.1:3002` 正常监听，公网不直接暴露 3002；
+- `/storefront-realtime/events` 不缓冲 SSE，连接断开后前端能自动重连；
 - 公网 `https://damatong.net/admin-api` 仍被 Nginx 拒绝；
 - 管理后台能读取各店铺设置，前台按对应 Channel/店铺域名展示；
 - 实际支付、邮件、短信和物流在未配置真实供应商前不得宣称已具备正式交易能力。

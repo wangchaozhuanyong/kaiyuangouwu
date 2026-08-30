@@ -1,13 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     ContentTranslationService,
     PreparedLocalizedContentField,
 } from '@vendure/content-translation-plugin';
-import { Channel, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { Channel, EventBus, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { In } from 'typeorm';
 
 import { SystemAnnouncement } from './entities/system-announcement.entity';
+import { StorefrontDataChangedEvent } from './realtime/storefront-data-changed.event';
 import {
     CreateSystemAnnouncementInput,
     SystemAnnouncementPublicView,
@@ -19,6 +20,7 @@ export class SystemAnnouncementService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly translations: ContentTranslationService,
+        @Optional() private readonly eventBus?: EventBus,
     ) {}
 
     findAll(ctx: RequestContext): Promise<SystemAnnouncement[]> {
@@ -62,6 +64,7 @@ export class SystemAnnouncementService {
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
         const saved = await repository.save(repository.create(values));
         await this.recordTranslationState(ctx, saved, prepared);
+        await this.publishChanged(ctx, saved);
         return saved;
     }
 
@@ -72,19 +75,43 @@ export class SystemAnnouncementService {
             relations: { channels: true },
         });
         if (!announcement) throw new UserInputError('找不到该系统公告');
+        const previousAllChannels = announcement.targetMode === 'ALL';
+        const previousChannelIds = announcement.channels.map(channel => channel.id);
         const { values, prepared } = await this.normalize(ctx, input, announcement);
         Object.assign(announcement, values);
         const saved = await repository.save(announcement);
         await this.recordTranslationState(ctx, saved, prepared);
+        await this.publishChanged(ctx, saved, previousAllChannels, previousChannelIds);
         return saved;
     }
 
     async delete(ctx: RequestContext, id: ID) {
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
-        const announcement = await repository.findOne({ where: { id } });
+        const announcement = await repository.findOne({ where: { id }, relations: { channels: true } });
         if (!announcement) return { result: 'NOT_DELETED', message: '找不到该系统公告' };
         await repository.remove(announcement);
+        await this.publishChanged(ctx, announcement);
         return { result: 'DELETED' };
+    }
+
+    private async publishChanged(
+        ctx: RequestContext,
+        announcement: SystemAnnouncement,
+        previousAllChannels = false,
+        previousChannelIds: ID[] = [],
+    ): Promise<void> {
+        const allChannels = previousAllChannels || announcement.targetMode === 'ALL';
+        const channelIds = Array.from(
+            new Set([...previousChannelIds, ...announcement.channels.map(channel => channel.id)].map(String)),
+        );
+        await this.eventBus?.publish(
+            new StorefrontDataChangedEvent(ctx, ['content'], {
+                allChannels,
+                channelIds,
+                entityType: 'SystemAnnouncement',
+                entityIds: [announcement.id],
+            }),
+        );
     }
 
     private async normalize(

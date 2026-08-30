@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
     ConfigurableOperationInput,
     CreatePromotionInput,
@@ -11,6 +11,7 @@ import {
     ConfigService,
     CurrencyCode,
     CustomerService,
+    EventBus,
     idsAreEqual,
     isGraphQlErrorResult,
     ProductVariantService,
@@ -27,6 +28,7 @@ import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from '../entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
+import { StorefrontDataChangedEvent } from '../realtime/storefront-data-changed.event';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import {
     CreateStoreCouponCampaignInput,
@@ -51,6 +53,7 @@ export class StorePromotionCampaignService {
         private readonly productVariantService: ProductVariantService,
         private readonly customerService: CustomerService,
         private readonly configService: ConfigService,
+        @Optional() private readonly eventBus?: EventBus,
     ) {}
 
     async findCoupons(ctx: RequestContext): Promise<StoreCouponCampaignView[]> {
@@ -449,6 +452,13 @@ export class StorePromotionCampaignService {
         }
         const updated = (await this.findCoupons(ctx)).find(coupon => idsAreEqual(coupon.id, id));
         if (!updated) throw new UserInputError('优惠券活动停止发放后无法读取');
+        await this.eventBus?.publish(
+            new StorefrontDataChangedEvent(ctx, ['content'], {
+                channelIds: [ctx.channelId],
+                entityType: 'StoreCouponCampaign',
+                entityIds: [id],
+            }),
+        );
         return updated;
     }
 

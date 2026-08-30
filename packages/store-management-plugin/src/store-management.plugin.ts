@@ -69,6 +69,8 @@ import { StorefrontPromotionHtmlService } from './promotion/storefront-promotion
 import { StorefrontPromotionController } from './promotion/storefront-promotion.controller';
 import { StorefrontPromotionAdminResolver } from './promotion/storefront-promotion.resolver';
 import { StorefrontPromotionService } from './promotion/storefront-promotion.service';
+import { StorefrontRealtimeController } from './realtime/storefront-realtime.controller';
+import { StorefrontRealtimeService } from './realtime/storefront-realtime.service';
 import { referralBalancePaymentHandler } from './referral/referral-payment-handler';
 import { configureReferralPaymentProofSecret } from './referral/referral-payment-proof';
 import { auditReferralBalancesTask, reconcileReferralRewardsTask } from './referral/referral-tasks';
@@ -154,7 +156,7 @@ import {
         StoreUsdtWallet,
         StoreUsdtWalletAudit,
     ],
-    controllers: [StorefrontPromotionController],
+    controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
         MerchantCatalogAccessService,
         MerchantInitialPasswordService,
@@ -180,6 +182,7 @@ import {
         ReferralService,
         ReferralWalletSpendService,
         SystemAnnouncementService,
+        StorefrontRealtimeService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,

@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
             strictPort: true,
             proxy: {
                 '/shop-api': apiProxyTarget,
+                '/storefront-realtime': apiProxyTarget,
                 '/assets': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
             },
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => {
             strictPort: true,
             proxy: {
                 '/shop-api': apiProxyTarget,
+                '/storefront-realtime': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
             },
         },

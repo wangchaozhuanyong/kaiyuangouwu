@@ -30,6 +30,10 @@ export type {
 } from './promotion/account-entry-proof.js';
 export { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service.js';
 export {
+    StorefrontDataChangedEvent,
+    type StorefrontRealtimeTopic,
+} from './realtime/storefront-data-changed.event.js';
+export {
     ReferralWalletSpendService,
     type ReserveReferralWalletInput,
     type SettleReferralWalletInput,

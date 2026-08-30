@@ -27,6 +27,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from './query-client';
+import { invalidateStorefrontRealtimeQueries } from './realtime-updates';
 import { captureReferralAttribution } from './referral-attribution';
 import { productDescriptionText } from './rich-text';
 import { PageSkeleton } from './route-loading';
@@ -433,6 +434,18 @@ export function App() {
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
     const cart = cartQuery.data ?? null;
     const customer = customerQuery.data ?? null;
+
+    useEffect(() => {
+        const controller = new AbortController();
+        void api.watchRealtime(event => {
+            void invalidateStorefrontRealtimeQueries(queryClient, event, {
+                marketCode: storefrontQueryKeys.market(market),
+                languageCode: vendureLanguageCode,
+                customerId: customer?.id,
+            });
+        }, controller.signal);
+        return () => controller.abort();
+    }, [api, customer?.id, market, queryClient, vendureLanguageCode]);
 
     useEffect(() => {
         void api.recordStorefrontVisit().catch(() => undefined);

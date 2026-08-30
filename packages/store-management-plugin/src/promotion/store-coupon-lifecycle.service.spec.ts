@@ -396,7 +396,7 @@ function createIssueHarness({
         { findOneByUserId: vi.fn(async () => customer) } as any,
         { findOne: vi.fn(async () => promotion) } as any,
         {} as any,
-        {} as any,
+        { publish: vi.fn(async () => undefined) } as any,
         {} as any,
     );
     return {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
     ContentTranslationService,
     LocalizedContentFieldInput,
@@ -9,6 +9,7 @@ import {
     Channel,
     ChannelService,
     EntityNotFoundError,
+    EventBus,
     ID,
     RequestContext,
     TransactionalConnection,
@@ -20,6 +21,7 @@ import { StoreDomain } from '@vendure/store-domain-plugin';
 import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { StoreProfile } from './entities/store-profile.entity';
+import { StorefrontDataChangedEvent } from './realtime/storefront-data-changed.event';
 import { StoreActivationReadinessService } from './store-activation-readiness.service';
 import { isOperationalStorefront } from './storefront-activation.service';
 import { StoreProfileStatus, UpdateMyStoreProfileInput, UpdateStoreProfileInput } from './types';
@@ -36,6 +38,7 @@ export class StoreProfileService {
         private readonly channelService: ChannelService,
         private readonly activationReadinessService: StoreActivationReadinessService,
         private readonly translations: ContentTranslationService,
+        @Optional() private readonly eventBus?: EventBus,
     ) {}
 
     async createDraft(ctx: RequestContext, channel: Channel): Promise<StoreProfile> {
@@ -128,6 +131,7 @@ export class StoreProfileService {
 
         const saved = await repository.save(profile);
         await this.recordProfileTranslationState(ctx, saved, prepared);
+        await this.publishChanged(ctx, saved);
         return (await this.attachOperationalState(ctx, [saved]))[0];
     }
 
@@ -162,7 +166,18 @@ export class StoreProfileService {
 
         const saved = await repository.save(profile);
         await this.recordProfileTranslationState(ctx, saved, prepared);
+        await this.publishChanged(ctx, saved);
         return (await this.attachOperationalState(ctx, [saved]))[0];
+    }
+
+    private async publishChanged(ctx: RequestContext, profile: StoreProfile): Promise<void> {
+        await this.eventBus?.publish(
+            new StorefrontDataChangedEvent(ctx, ['config'], {
+                channelIds: [profile.channelId],
+                entityType: 'StoreProfile',
+                entityIds: [profile.id],
+            }),
+        );
     }
 
     private async prepareProfileTranslations(
