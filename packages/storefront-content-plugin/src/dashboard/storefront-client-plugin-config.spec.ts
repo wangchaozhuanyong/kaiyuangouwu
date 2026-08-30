@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    BUSINESS_SERVICES_COPY_VERSION,
     addClientPlugin,
     clientPluginBlockInput,
     clientPluginCatalog,
     clientPluginDraftIsValid,
+    clientPluginPageCopyIsValid,
+    clientPluginPageCopyTranslation,
     clientPluginPlacement,
     createClientPluginDraft,
     moveClientPlugin,
@@ -21,9 +24,34 @@ describe('storefront client plugin configuration', () => {
             code: 'storefront-client-plugins',
             type: 'CLIENT_PLUGINS',
             enabled: true,
+            settings: {
+                businessServicesCopyVersion: BUSINESS_SERVICES_COPY_VERSION,
+            },
             items: [],
         });
+        expect(clientPluginPageCopyTranslation(draft, 'zh_Hans')).toMatchObject({
+            title: '发现更多商业能力',
+            body: '这里展示店铺为你开放的工具、服务和专属权益。',
+        });
+        expect(clientPluginPageCopyIsValid(draft)).toBe(true);
         expect(clientPluginDraftIsValid(draft)).toBe(true);
+    });
+
+    it('migrates the legacy internal block label to storefront page copy defaults', () => {
+        const legacy = createClientPluginDraft();
+        legacy.settings = { version: 1, page: 'category' };
+        legacy.translations = legacy.translations.map(translation => ({
+            ...translation,
+            title: translation.languageCode === 'zh_Hans' ? '客户端插件配置' : 'Storefront client plugins',
+            body: '',
+        }));
+
+        const migrated = createClientPluginDraft(legacy);
+
+        expect(clientPluginPageCopyTranslation(migrated, 'zh_Hans').title).toBe('发现更多商业能力');
+        expect(clientPluginPageCopyTranslation(migrated, 'en').body).toBe(
+            'Explore tools, services, and benefits enabled by this store.',
+        );
     });
 
     it('adds, places, orders and removes platform plugins', () => {
@@ -64,6 +92,37 @@ describe('storefront client plugin configuration', () => {
         expect(input.items[0].translations.map(translation => translation.languageCode)).toEqual([
             'zh_Hans',
             'en',
+        ]);
+        expect(input.settings).toMatchObject({
+            businessServicesCopyVersion: BUSINESS_SERVICES_COPY_VERSION,
+        });
+    });
+
+    it('serializes customized business-services page copy', () => {
+        const draft = createClientPluginDraft();
+        draft.translations = draft.translations.map(translation =>
+            translation.languageCode === 'zh_Hans'
+                ? { ...translation, title: '更多服务', body: '选择适合你的店铺服务。' }
+                : { ...translation, title: 'More services', body: 'Choose services for your store.' },
+        );
+
+        const input = clientPluginBlockInput(draft);
+
+        expect(input.translations).toEqual([
+            {
+                languageCode: 'zh_Hans',
+                title: '更多服务',
+                subtitle: '',
+                body: '选择适合你的店铺服务。',
+                ctaLabel: '',
+            },
+            {
+                languageCode: 'en',
+                title: 'More services',
+                subtitle: '',
+                body: 'Choose services for your store.',
+                ctaLabel: '',
+            },
         ]);
     });
 

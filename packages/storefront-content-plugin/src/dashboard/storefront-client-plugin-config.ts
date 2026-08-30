@@ -9,6 +9,9 @@ import {
 import { ContentBlock, ContentBlockTranslation, ContentItem } from './storefront-content.graphql';
 
 export const CLIENT_PLUGIN_BLOCK_CODE = STOREFRONT_CLIENT_PLUGINS_CODE;
+export const BUSINESS_SERVICES_COPY_VERSION = 1;
+
+export type ClientPluginLanguageCode = 'zh_Hans' | 'en';
 
 export const clientPluginPlacementOptions = [
     {
@@ -54,12 +57,15 @@ export interface ClientPluginCategoryRule {
     includeChildren: boolean;
 }
 
-function blockTranslation(languageCode: 'zh_Hans' | 'en'): ContentBlockTranslation {
+function blockTranslation(languageCode: ClientPluginLanguageCode): ContentBlockTranslation {
     return {
         languageCode,
-        title: languageCode === 'zh_Hans' ? '客户端插件配置' : 'Storefront client plugins',
+        title: languageCode === 'zh_Hans' ? '发现更多商业能力' : 'Discover more business capabilities',
         subtitle: '',
-        body: '',
+        body:
+            languageCode === 'zh_Hans'
+                ? '这里展示店铺为你开放的工具、服务和专属权益。'
+                : 'Explore tools, services, and benefits enabled by this store.',
         ctaLabel: '',
     };
 }
@@ -81,6 +87,27 @@ function normalizedBlockTranslations(translations: ContentBlockTranslation[]) {
         ...translations.find(translation => translation.languageCode === languageCode),
         languageCode,
     }));
+}
+
+function hasManagedBusinessServicesCopy(block: ContentBlock): boolean {
+    return block.settings?.businessServicesCopyVersion === BUSINESS_SERVICES_COPY_VERSION;
+}
+
+export function clientPluginPageCopyTranslation(
+    block: ContentBlock,
+    languageCode: ClientPluginLanguageCode,
+): ContentBlockTranslation {
+    return (
+        block.translations.find(translation => translation.languageCode === languageCode) ??
+        blockTranslation(languageCode)
+    );
+}
+
+export function clientPluginPageCopyIsValid(block: ContentBlock): boolean {
+    return (['zh_Hans', 'en'] as const).every(languageCode => {
+        const translation = clientPluginPageCopyTranslation(block, languageCode);
+        return Boolean(translation.title.trim() && translation.body.trim());
+    });
 }
 
 export function clientPluginCode(item: ContentItem): string | null {
@@ -132,7 +159,11 @@ export function createClientPluginDraft(block?: ContentBlock): ContentBlock {
             textColor: null,
             targetType: 'NONE',
             targetValue: null,
-            settings: { version: 1, page: 'category' },
+            settings: {
+                version: 1,
+                page: 'category',
+                businessServicesCopyVersion: BUSINESS_SERVICES_COPY_VERSION,
+            },
             translations: [blockTranslation('zh_Hans'), blockTranslation('en')],
             items: [],
         };
@@ -144,7 +175,13 @@ export function createClientPluginDraft(block?: ContentBlock): ContentBlock {
         type: 'CLIENT_PLUGINS',
         layoutVariant: 'CUSTOM',
         enabled: true,
-        translations: normalizedBlockTranslations(block.translations),
+        settings: {
+            ...(block.settings ?? {}),
+            businessServicesCopyVersion: BUSINESS_SERVICES_COPY_VERSION,
+        },
+        translations: hasManagedBusinessServicesCopy(block)
+            ? normalizedBlockTranslations(block.translations)
+            : [blockTranslation('zh_Hans'), blockTranslation('en')],
         items: [...block.items]
             .sort((left, right) => left.position - right.position)
             .map((item, position) => ({
@@ -263,6 +300,7 @@ export function moveClientPlugin(block: ContentBlock, fromIndex: number, toIndex
 export function clientPluginDraftIsValid(block: ContentBlock): boolean {
     const codes = block.items.map(clientPluginCode);
     return (
+        clientPluginPageCopyIsValid(block) &&
         codes.every(Boolean) &&
         new Set(codes).size === codes.length &&
         block.items.every(item => {
@@ -299,7 +337,12 @@ export function clientPluginBlockInput(block: ContentBlock) {
         textColor: null,
         targetType: 'NONE' as const,
         targetValue: null,
-        settings: { ...(block.settings ?? {}), version: 1, page: 'category' },
+        settings: {
+            ...(block.settings ?? {}),
+            version: 1,
+            page: 'category',
+            businessServicesCopyVersion: BUSINESS_SERVICES_COPY_VERSION,
+        },
         translations: block.translations.map(({ languageCode, title, subtitle, body, ctaLabel }) => ({
             languageCode,
             title: title.trim(),

@@ -17,9 +17,7 @@ import {
     toast,
 } from '@vendure/dashboard';
 import {
-    CheckCircle2,
     Clock3,
-    ExternalLink,
     GripVertical,
     ImagePlus,
     MessageCircle,
@@ -168,16 +166,16 @@ export function SupportSettingsEditor({
                         </div>
                     </SheetHeader>
 
-                    <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_360px] lg:overflow-hidden">
-                        <div className="min-w-0 space-y-6 px-6 py-5 lg:overflow-y-auto">
-                            <section className="space-y-4 rounded-lg border bg-muted/15 p-4">
-                                <div className="flex items-center gap-2">
-                                    <Clock3 className="size-4 text-primary" aria-hidden="true" />
-                                    <h3 className="text-sm font-semibold">
-                                        {isZh ? '客服内容' : 'Service details'}
+                    <div className="flex-1 overflow-y-auto px-6 py-5">
+                        <div className="mx-auto max-w-4xl space-y-8">
+                            <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">
+                                <div className="flex items-center gap-2 border-b pb-4">
+                                    <Clock3 className="size-5 text-primary" aria-hidden="true" />
+                                    <h3 className="text-base font-semibold">
+                                        {isZh ? '客服内容 (全局)' : 'Service details (Global)'}
                                     </h3>
                                 </div>
-                                <div className="grid gap-4 sm:grid-cols-[minmax(120px,0.7fr)_1fr_1fr]">
+                                <div className="grid gap-6 pt-2 sm:grid-cols-3">
                                     <Field label={isZh ? '展示日期' : 'Days'}>
                                         <Input
                                             value={isZh ? serviceTime.daysZh : serviceTime.daysEn}
@@ -208,393 +206,311 @@ export function SupportSettingsEditor({
                                         />
                                     </Field>
                                 </div>
-                                <Field label={isZh ? '客服说明' : 'Service note'}>
-                                    <Input
-                                        value={bodyTranslation?.body ?? ''}
-                                        placeholder={
-                                            isZh
-                                                ? '非工作时间可留言，我们会尽快回复'
-                                                : 'Leave a message and we will reply as soon as possible.'
-                                        }
-                                        onChange={event => updateBody(event.target.value)}
-                                    />
-                                </Field>
+                                <div className="pt-2">
+                                    <Field label={isZh ? '客服说明' : 'Service note'}>
+                                        <Input
+                                            value={bodyTranslation?.body ?? ''}
+                                            placeholder={
+                                                isZh
+                                                    ? '非工作时间可留言，我们会尽快回复'
+                                                    : 'Leave a message and we will reply as soon as possible.'
+                                            }
+                                            onChange={event => updateBody(event.target.value)}
+                                        />
+                                    </Field>
+                                </div>
                             </section>
 
-                            <section className="space-y-3">
+                            <section className="space-y-4">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="text-sm font-semibold">
-                                            {isZh ? '联系方式' : 'Contact channels'}
+                                        <h3 className="text-base font-semibold">
+                                            {isZh ? '联系渠道配置' : 'Contact Channels'}
                                         </h3>
-                                        <p className="mt-1 text-xs text-muted-foreground">
+                                        <p className="mt-1 text-sm text-muted-foreground">
                                             {isZh
-                                                ? '拖动行调整客户端顺序；关闭的渠道不会展示。'
-                                                : 'Drag rows to reorder them. Disabled channels stay hidden.'}
+                                                ? '拖动卡片调整客户端顺序；关闭的渠道不会展示。'
+                                                : 'Drag cards to reorder them. Disabled channels stay hidden.'}
                                         </p>
                                     </div>
-                                    <Badge variant="secondary">
+                                    <Badge variant="secondary" className="text-sm px-3 py-1">
                                         {rows.filter(entry => entry.item.enabled).length}/5{' '}
                                         {isZh ? '已启用' : 'enabled'}
                                     </Badge>
                                 </div>
-                                <div className="overflow-hidden rounded-lg border">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-muted/45 text-xs text-muted-foreground">
-                                            <tr>
-                                                <th className="w-12 px-3 py-3 text-left">
-                                                    {isZh ? '排序' : 'Order'}
-                                                </th>
-                                                <th className="px-3 py-3 text-left">
-                                                    {isZh ? '渠道' : 'Channel'}
-                                                </th>
-                                                <th className="hidden px-3 py-3 text-left sm:table-cell">
-                                                    {isZh ? '跳转方式' : 'Mode'}
-                                                </th>
-                                                <th className="w-24 px-3 py-3 text-left">
-                                                    {isZh ? '状态' : 'Status'}
-                                                </th>
-                                                <th className="w-20 px-3 py-3 text-right">
-                                                    {isZh ? '操作' : 'Action'}
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rows.map(({ channel, item, index }) => {
-                                                const Icon = channelIcons[channel.key];
-                                                const configured =
-                                                    channel.key === 'WECHAT'
-                                                        ? Boolean(item.imageAsset || item.imageUrl)
-                                                        : supportLinkIsValid(item.targetValue);
-                                                return (
-                                                    <tr
-                                                        key={channel.key}
-                                                        draggable={!saving}
-                                                        className={`border-t transition-colors ${
-                                                            selectedChannel === channel.key
-                                                                ? 'bg-primary/[0.04]'
-                                                                : 'hover:bg-muted/30'
-                                                        } ${draggedChannel === channel.key ? 'opacity-50' : ''}`}
-                                                        onDragStart={() => setDraggedChannel(channel.key)}
-                                                        onDragEnd={() => setDraggedChannel(null)}
-                                                        onDragOver={event => event.preventDefault()}
-                                                        onDrop={() => {
-                                                            if (draggedChannel)
-                                                                reorderChannels(draggedChannel, channel.key);
-                                                            setDraggedChannel(null);
-                                                        }}
+
+                                <div className="space-y-4">
+                                    {rows.map(({ channel, item, index }) => {
+                                        const Icon = channelIcons[channel.key];
+                                        const configured =
+                                            channel.key === 'WECHAT'
+                                                ? Boolean(item.imageAsset || item.imageUrl)
+                                                : supportLinkIsValid(item.targetValue);
+                                        const itemTranslation =
+                                            item.translations.find(t => t.languageCode === languageCode) ??
+                                            item.translations[0];
+                                        const account =
+                                            typeof item.settings?.supportAccount === 'string'
+                                                ? item.settings.supportAccount
+                                                : '';
+
+                                        return (
+                                            <div
+                                                key={channel.key}
+                                                draggable={!saving}
+                                                className={`group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-all ${
+                                                    draggedChannel === channel.key
+                                                        ? 'opacity-50 scale-[0.98]'
+                                                        : 'hover:shadow-md'
+                                                }`}
+                                                onDragStart={() => setDraggedChannel(channel.key)}
+                                                onDragEnd={() => setDraggedChannel(null)}
+                                                onDragOver={event => event.preventDefault()}
+                                                onDrop={() => {
+                                                    if (draggedChannel)
+                                                        reorderChannels(draggedChannel, channel.key);
+                                                    setDraggedChannel(null);
+                                                }}
+                                            >
+                                                {/* Header / Summary Row */}
+                                                <div className="flex items-center gap-4 bg-muted/20 p-4">
+                                                    <div
+                                                        className="cursor-grab p-1 text-muted-foreground hover:text-foreground"
+                                                        aria-label={isZh ? '拖动排序' : 'Drag to reorder'}
                                                     >
-                                                        <td className="px-3 py-3">
-                                                            <GripVertical
-                                                                className="size-4 cursor-grab text-muted-foreground"
-                                                                aria-label={
-                                                                    isZh ? '拖动排序' : 'Drag to reorder'
-                                                                }
-                                                            />
-                                                        </td>
-                                                        <td className="px-3 py-3">
-                                                            <button
-                                                                type="button"
-                                                                className="flex items-center gap-2 text-left"
-                                                                onClick={() =>
-                                                                    setSelectedChannel(channel.key)
-                                                                }
-                                                            >
-                                                                <span
-                                                                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted"
-                                                                    aria-hidden="true"
+                                                        <GripVertical className="size-5" />
+                                                    </div>
+
+                                                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                                        <Icon className="size-5" />
+                                                    </div>
+
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="font-semibold text-foreground">
+                                                                {isZh ? channel.labelZh : channel.labelEn}
+                                                            </h4>
+                                                            {!configured && item.enabled && (
+                                                                <Badge
+                                                                    variant="destructive"
+                                                                    className="text-[10px]"
                                                                 >
-                                                                    <Icon className="size-4" />
-                                                                </span>
-                                                                <span className="font-medium">
-                                                                    {isZh ? channel.labelZh : channel.labelEn}
-                                                                </span>
-                                                            </button>
-                                                        </td>
-                                                        <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
+                                                                    {isZh ? '需配置' : 'Needs Setup'}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <p className="truncate text-xs text-muted-foreground">
                                                             {isZh
                                                                 ? channel.targetModeZh
                                                                 : channel.targetModeEn}
-                                                        </td>
-                                                        <td className="px-3 py-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <Switch
-                                                                    checked={item.enabled}
-                                                                    disabled={saving}
-                                                                    aria-label={`${isZh ? channel.labelZh : channel.labelEn} ${
-                                                                        item.enabled ? 'enabled' : 'disabled'
-                                                                    }`}
-                                                                    onCheckedChange={enabled =>
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-3 pr-2">
+                                                        <span className="text-sm font-medium text-muted-foreground">
+                                                            {item.enabled
+                                                                ? isZh
+                                                                    ? '已启用'
+                                                                    : 'Enabled'
+                                                                : isZh
+                                                                  ? '已停用'
+                                                                  : 'Disabled'}
+                                                        </span>
+                                                        <Switch
+                                                            checked={item.enabled}
+                                                            disabled={saving}
+                                                            onCheckedChange={enabled =>
+                                                                updateItem(index, { ...item, enabled })
+                                                            }
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Edit Form Body */}
+                                                <div className="border-t bg-card p-5">
+                                                    <div className="grid gap-6 md:grid-cols-2">
+                                                        <Field label={isZh ? '显示名称' : 'Display name'}>
+                                                            <Input
+                                                                value={itemTranslation.label ?? ''}
+                                                                placeholder={
+                                                                    isZh ? channel.labelZh : channel.labelEn
+                                                                }
+                                                                onChange={event =>
+                                                                    updateItemTranslation(index, item, {
+                                                                        label: event.target.value,
+                                                                    })
+                                                                }
+                                                            />
+                                                        </Field>
+
+                                                        {channel.key === 'WECHAT' ? (
+                                                            <Field
+                                                                label={
+                                                                    isZh
+                                                                        ? '微信号或公众号 (可选)'
+                                                                        : 'WeChat ID (Optional)'
+                                                                }
+                                                            >
+                                                                <Input
+                                                                    value={account}
+                                                                    onChange={event =>
                                                                         updateItem(index, {
                                                                             ...item,
-                                                                            enabled,
+                                                                            settings: {
+                                                                                ...item.settings,
+                                                                                supportAccount:
+                                                                                    event.target.value,
+                                                                            },
                                                                         })
                                                                     }
                                                                 />
-                                                                <span className="hidden text-xs text-muted-foreground xl:inline">
-                                                                    {configured
-                                                                        ? isZh
-                                                                            ? '已配置'
-                                                                            : 'Ready'
-                                                                        : isZh
-                                                                          ? '待配置'
-                                                                          : 'Setup'}
-                                                                </span>
+                                                            </Field>
+                                                        ) : (
+                                                            <Field
+                                                                label={isZh ? '跳转链接' : 'Direct link'}
+                                                                hint={
+                                                                    isZh
+                                                                        ? '使用平台官方 HTTPS 链接；未安装应用时可回退到网页。'
+                                                                        : 'Use an official HTTPS link with a browser fallback.'
+                                                                }
+                                                            >
+                                                                <Input
+                                                                    value={item.targetValue ?? ''}
+                                                                    placeholder={channel.linkPlaceholder}
+                                                                    onChange={event =>
+                                                                        updateItem(index, {
+                                                                            ...item,
+                                                                            targetValue: event.target.value,
+                                                                        })
+                                                                    }
+                                                                />
+                                                            </Field>
+                                                        )}
+
+                                                        <div className="md:col-span-2">
+                                                            <Field label={isZh ? '辅助说明' : 'Helper text'}>
+                                                                <Textarea
+                                                                    value={itemTranslation.description ?? ''}
+                                                                    placeholder={
+                                                                        isZh
+                                                                            ? channel.descriptionZh
+                                                                            : channel.descriptionEn
+                                                                    }
+                                                                    className="min-h-[60px]"
+                                                                    onChange={event =>
+                                                                        updateItemTranslation(index, item, {
+                                                                            description: event.target.value,
+                                                                        })
+                                                                    }
+                                                                />
+                                                            </Field>
+                                                        </div>
+
+                                                        {channel.key === 'WECHAT' ? (
+                                                            <div className="md:col-span-2">
+                                                                <Field
+                                                                    label={
+                                                                        isZh ? '微信二维码' : 'WeChat QR Code'
+                                                                    }
+                                                                >
+                                                                    <div className="flex items-start gap-4">
+                                                                        <div
+                                                                            className={[
+                                                                                'flex size-24 shrink-0 items-center justify-center',
+                                                                                'overflow-hidden rounded-md border-2 border-dashed bg-muted/30',
+                                                                            ].join(' ')}
+                                                                        >
+                                                                            {item.imageAsset ? (
+                                                                                <img
+                                                                                    src={
+                                                                                        item.imageAsset
+                                                                                            .preview
+                                                                                    }
+                                                                                    alt=""
+                                                                                    className="size-full object-cover"
+                                                                                />
+                                                                            ) : item.imageUrl ? (
+                                                                                <img
+                                                                                    src={item.imageUrl}
+                                                                                    alt=""
+                                                                                    className="size-full object-cover"
+                                                                                />
+                                                                            ) : (
+                                                                                <QrCode className="size-8 text-muted-foreground/50" />
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex-1 space-y-2">
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="outline"
+                                                                                onClick={() => {
+                                                                                    setSelectedChannel(
+                                                                                        channel.key,
+                                                                                    );
+                                                                                    setAssetPickerOpen(true);
+                                                                                }}
+                                                                            >
+                                                                                <ImagePlus
+                                                                                    className="mr-2 size-4"
+                                                                                    aria-hidden="true"
+                                                                                />
+                                                                                {isZh
+                                                                                    ? '选择或上传'
+                                                                                    : 'Select or upload'}
+                                                                            </Button>
+                                                                            <ImageSizeHint guidance="icon" />
+                                                                            {(item.imageAsset ||
+                                                                                item.imageUrl) && (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                                                    onClick={() =>
+                                                                                        updateItem(index, {
+                                                                                            ...item,
+                                                                                            imageAsset: null,
+                                                                                            imageUrl: '',
+                                                                                        })
+                                                                                    }
+                                                                                >
+                                                                                    <X className="mr-1 size-4" />
+                                                                                    {isZh ? '移除' : 'Remove'}
+                                                                                </Button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </Field>
                                                             </div>
-                                                        </td>
-                                                        <td className="px-3 py-3 text-right">
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() =>
-                                                                    setSelectedChannel(channel.key)
-                                                                }
-                                                            >
-                                                                {isZh ? '编辑' : 'Edit'}
-                                                            </Button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {draft.items.length > rows.length ? (
-                                    <p className="text-xs text-muted-foreground">
-                                        {isZh
-                                            ? `已保留 ${draft.items.length - rows.length} 个旧版条目，新版客服页不会展示。`
-                                            : `${draft.items.length - rows.length} legacy items are preserved and hidden from the new page.`}
-                                    </p>
-                                ) : null}
-                            </section>
-                        </div>
-
-                        <aside className="min-w-0 border-t bg-muted/25 px-5 py-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                    <span className="flex size-9 items-center justify-center rounded-full bg-background shadow-sm">
-                                        <SelectedIcon className="size-4" aria-hidden="true" />
-                                    </span>
-                                    <div>
-                                        <h3 className="text-sm font-semibold">
-                                            {isZh ? selected.channel.labelZh : selected.channel.labelEn}
-                                        </h3>
-                                        <p className="text-xs text-muted-foreground">
-                                            {selectedConfigured
-                                                ? isZh
-                                                    ? '配置有效'
-                                                    : 'Ready'
-                                                : isZh
-                                                  ? '需要补充配置'
-                                                  : 'Needs setup'}
-                                        </p>
-                                    </div>
-                                </div>
-                                {selectedConfigured ? (
-                                    <CheckCircle2 className="size-5 text-emerald-600" aria-hidden="true" />
-                                ) : null}
-                            </div>
-
-                            <div className="mt-5 space-y-4">
-                                <Field label={isZh ? '显示名称' : 'Display name'}>
-                                    <Input
-                                        value={selectedTranslation?.label ?? ''}
-                                        onChange={event =>
-                                            updateItemTranslation(selected.index, selected.item, {
-                                                label: event.target.value,
-                                            })
-                                        }
-                                    />
-                                </Field>
-                                <Field label={isZh ? '辅助说明' : 'Helper text'}>
-                                    <Textarea
-                                        rows={3}
-                                        value={selectedTranslation?.description ?? ''}
-                                        onChange={event =>
-                                            updateItemTranslation(selected.index, selected.item, {
-                                                description: event.target.value,
-                                            })
-                                        }
-                                    />
-                                </Field>
-                                <Field label={isZh ? '账号或群号（可选）' : 'Account or group ID (optional)'}>
-                                    <Input
-                                        value={supportAccount}
-                                        onChange={event =>
-                                            updateItem(selected.index, {
-                                                ...selected.item,
-                                                settings: {
-                                                    ...(selected.item.settings ?? {}),
-                                                    supportAccount: event.target.value,
-                                                },
-                                            })
-                                        }
-                                    />
-                                </Field>
-
-                                {selected.channel.key === 'WECHAT' ? (
-                                    <Field label={isZh ? '微信二维码' : 'WeChat QR code'}>
-                                        <div className="rounded-lg border bg-background p-3">
-                                            <div className="flex items-center gap-3">
-                                                {selected.item.imageAsset?.preview ||
-                                                selected.item.imageUrl ? (
-                                                    <img
-                                                        className="size-24 shrink-0 rounded-md border bg-white object-contain p-1"
-                                                        src={
-                                                            selected.item.imageAsset?.preview ??
-                                                            selected.item.imageUrl ??
-                                                            undefined
-                                                        }
-                                                        alt={
-                                                            isZh ? '微信客服二维码预览' : 'WeChat QR preview'
-                                                        }
-                                                    />
-                                                ) : (
-                                                    <div className="flex size-24 shrink-0 items-center justify-center rounded-md border border-dashed bg-muted/40">
-                                                        <QrCode
-                                                            className="size-7 text-muted-foreground"
-                                                            aria-hidden="true"
-                                                        />
-                                                    </div>
-                                                )}
-                                                <div className="min-w-0 flex-1 space-y-2">
-                                                    <p className="text-xs leading-5 text-muted-foreground">
-                                                        {isZh
-                                                            ? '上传清晰的正方形二维码，客户端点击“扫码”后放大展示。'
-                                                            : 'Upload a clear square QR code for the storefront sheet.'}
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => setAssetPickerOpen(true)}
-                                                        >
-                                                            <ImagePlus
-                                                                className="size-4"
-                                                                aria-hidden="true"
-                                                            />
-                                                            {selected.item.imageAsset ||
-                                                            selected.item.imageUrl
-                                                                ? isZh
-                                                                    ? '更换二维码'
-                                                                    : 'Replace QR'
-                                                                : isZh
-                                                                  ? '选择或上传'
-                                                                  : 'Select or upload'}
-                                                        </Button>
-                                                        {selected.item.imageAsset ||
-                                                        selected.item.imageUrl ? (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() =>
-                                                                    updateItem(selected.index, {
-                                                                        ...selected.item,
-                                                                        imageAsset: null,
-                                                                        imageAssetId: null,
-                                                                        imageUrl: null,
-                                                                    })
-                                                                }
-                                                            >
-                                                                <X className="size-4" aria-hidden="true" />
-                                                                {isZh ? '移除' : 'Remove'}
-                                                            </Button>
                                                         ) : null}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <ImageSizeHint guidance="icon" />
-                                        </div>
-                                        <AssetPickerDialog
-                                            open={assetPickerOpen}
-                                            onClose={() => setAssetPickerOpen(false)}
-                                            onSelect={assets => {
-                                                const asset = assets[0] ?? null;
-                                                updateItem(selected.index, {
-                                                    ...selected.item,
-                                                    imageAsset: asset,
-                                                    imageAssetId: asset?.id ?? null,
-                                                    imageUrl: asset?.preview ?? null,
-                                                });
-                                                setAssetPickerOpen(false);
-                                            }}
-                                            initialSelectedAssets={
-                                                selected.item.imageAsset ? [selected.item.imageAsset] : []
-                                            }
-                                            title={isZh ? '选择微信二维码' : 'Select WeChat QR code'}
-                                            imageGuidance="icon"
-                                        />
-                                    </Field>
-                                ) : (
-                                    <Field
-                                        label={isZh ? '跳转链接' : 'Direct link'}
-                                        hint={
-                                            isZh
-                                                ? '使用平台官方 HTTPS 链接；未安装应用时可回退到网页。'
-                                                : 'Use an official HTTPS link with a browser fallback.'
+                                        );
+                                    })}
+                                </div>
+                                <AssetPickerDialog
+                                    open={assetPickerOpen}
+                                    onClose={() => setAssetPickerOpen(false)}
+                                    onSelect={assets => {
+                                        const asset = assets[0] ?? null;
+                                        const editChannel = rows.find(r => r.channel.key === selectedChannel);
+                                        if (editChannel) {
+                                            updateItem(editChannel.index, {
+                                                ...editChannel.item,
+                                                imageAsset: asset,
+                                                imageAssetId: asset?.id ?? null,
+                                                imageUrl: asset?.preview ?? null,
+                                            });
                                         }
-                                    >
-                                        <Input
-                                            inputMode="url"
-                                            autoCapitalize="none"
-                                            spellCheck={false}
-                                            placeholder={selected.channel.linkPlaceholder}
-                                            value={selected.item.targetValue ?? ''}
-                                            onChange={event => {
-                                                const targetValue = event.target.value || null;
-                                                updateItem(selected.index, {
-                                                    ...selected.item,
-                                                    targetType: targetValue ? 'URL' : 'NONE',
-                                                    targetValue,
-                                                });
-                                            }}
-                                        />
-                                        {selected.item.targetValue ? (
-                                            <p
-                                                className={`mt-2 flex items-center gap-1 text-xs ${
-                                                    supportLinkIsValid(selected.item.targetValue)
-                                                        ? 'text-emerald-600'
-                                                        : 'text-destructive'
-                                                }`}
-                                            >
-                                                {supportLinkIsValid(selected.item.targetValue) ? (
-                                                    <CheckCircle2 className="size-3.5" aria-hidden="true" />
-                                                ) : (
-                                                    <X className="size-3.5" aria-hidden="true" />
-                                                )}
-                                                {supportLinkIsValid(selected.item.targetValue)
-                                                    ? isZh
-                                                        ? '链接格式有效'
-                                                        : 'Valid link'
-                                                    : isZh
-                                                      ? '请输入完整的 HTTP(S) 链接'
-                                                      : 'Enter a complete HTTP(S) URL'}
-                                            </p>
-                                        ) : null}
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={!supportLinkIsValid(selected.item.targetValue)}
-                                            onClick={() =>
-                                                selected.item.targetValue &&
-                                                window.open(
-                                                    selected.item.targetValue,
-                                                    '_blank',
-                                                    'noopener,noreferrer',
-                                                )
-                                            }
-                                        >
-                                            <ExternalLink className="size-4" aria-hidden="true" />
-                                            {isZh ? '测试跳转' : 'Test link'}
-                                        </Button>
-                                    </Field>
-                                )}
-                            </div>
-                        </aside>
+                                        setAssetPickerOpen(false);
+                                    }}
+                                    initialSelectedAssets={[]}
+                                    title={isZh ? '选择微信二维码' : 'Select WeChat QR code'}
+                                    imageGuidance="icon"
+                                />
+                            </section>
+                        </div>
                     </div>
 
                     <SheetFooter className="shrink-0 border-t px-6 py-4">

@@ -1955,8 +1955,7 @@ function BlockEditor({
                 <SheetContent
                     className={
                         '@container/editor flex max-w-none flex-col gap-0 overflow-hidden p-0 ' +
-                        'data-[side=right]:w-full data-[side=right]:sm:w-[88vw] ' +
-                        'data-[side=right]:sm:max-w-[1440px]'
+                        'data-[side=right]:w-screen data-[side=right]:max-w-none !border-l-0'
                     }
                 >
                     <SheetHeader className="shrink-0 border-b px-4 py-4 pr-14 text-left @md/editor:px-6 @md/editor:pr-14">
@@ -2000,7 +1999,7 @@ function BlockEditor({
                         </div>
                         <p className="text-xs text-muted-foreground">{text.simpleModeHint}</p>
                     </SheetHeader>
-                    <div className="grid min-h-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto @5xl/editor:grid-cols-[minmax(0,1fr)_360px] @5xl/editor:overflow-hidden">
+                    <div className="grid min-h-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto @5xl/editor:grid-cols-[minmax(0,1fr)_400px] @5xl/editor:overflow-hidden">
                         <div className="@container/editor-form min-w-0 space-y-7 px-4 py-5 @md/editor:px-6 @5xl/editor:overflow-y-auto">
                             <section className="space-y-4">
                                 <h3 className="text-sm font-medium">{text.basic}</h3>

@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Customer,
     CustomerService,
     EntityNotFoundError,
+    EventBus,
     OrderLine,
     RequestContext,
     TransactionalConnection,
@@ -15,6 +16,7 @@ import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { StorefrontReview } from './entities/storefront-review.entity';
 import { storefrontReviewStates } from './review.constants';
+import { StorefrontReviewChangedEvent } from './storefront-review-changed.event';
 import {
     ModerateStorefrontReviewInput,
     StorefrontReviewCandidate,
@@ -39,6 +41,7 @@ export class StorefrontReviewService {
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
         private readonly translations: ContentTranslationService,
+        @Optional() private readonly eventBus?: EventBus,
     ) {}
 
     async findApprovedForProduct(
@@ -222,7 +225,9 @@ export class StorefrontReviewService {
                 productVariantId: line.productVariant.id,
             }),
         );
-        return this.getMineOrThrow(ctx, review.id, customer.id);
+        const saved = await this.getMineOrThrow(ctx, review.id, customer.id);
+        await this.publishChanged(ctx, saved, false);
+        return saved;
     }
 
     async moderate(ctx: RequestContext, input: ModerateStorefrontReviewInput): Promise<StorefrontReview> {
@@ -279,7 +284,26 @@ export class StorefrontReviewService {
                 prepared,
             );
         }
-        return this.getAdminOrThrow(ctx, review.id);
+        const saved = await this.getAdminOrThrow(ctx, review.id);
+        await this.publishChanged(ctx, saved, input.state === 'APPROVED');
+        return saved;
+    }
+
+    private async publishChanged(
+        ctx: RequestContext,
+        review: StorefrontReview,
+        publicListingChanged: boolean,
+    ): Promise<void> {
+        if (review.productId == null || review.customerId == null) return;
+        await this.eventBus?.publish(
+            new StorefrontReviewChangedEvent(
+                ctx,
+                review.productId,
+                review.customerId,
+                review.id,
+                publicListingChanged,
+            ),
+        );
     }
 
     private validateSubmission(input: SubmitStorefrontReviewInput): void {

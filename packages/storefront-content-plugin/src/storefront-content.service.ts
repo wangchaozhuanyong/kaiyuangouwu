@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Asset,
     EntityNotFoundError,
+    EventBus,
     RequestContext,
     TransactionalConnection,
     TranslatorService,
@@ -35,6 +36,7 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
 import { StorefrontContentItem } from './entities/storefront-content-item.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
+import { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
 import {
     ApplyStorefrontContentChangesInput,
@@ -59,6 +61,7 @@ export class StorefrontContentService {
         private readonly translator: TranslatorService,
         private readonly externalImageService: StorefrontExternalImageService,
         private readonly contentTranslations: ContentTranslationService,
+        @Optional() private readonly eventBus?: EventBus,
     ) {}
 
     async findAllForAdmin(ctx: RequestContext): Promise<StorefrontContentBlock[]> {
@@ -139,10 +142,12 @@ export class StorefrontContentService {
                 select: { type: true },
             })
         ).map(block => block.type);
-        return {
+        const result = {
             heroAutoplayIntervalSeconds: saved.heroAutoplayIntervalSeconds,
             configuredBlockTypes: Array.from(new Set(configuredBlockTypes)),
         };
+        await this.publishChanged(ctx, [saved.id]);
+        return result;
     }
 
     async create(
@@ -174,7 +179,9 @@ export class StorefrontContentService {
         );
         await this.replaceBlockTranslations(ctx, block, input.translations);
         await this.syncItems(ctx, block, input.items ?? []);
-        return this.translateBlock(await this.getOwnedBlockOrThrow(ctx, block.id), ctx, false);
+        const saved = this.translateBlock(await this.getOwnedBlockOrThrow(ctx, block.id), ctx, false);
+        await this.publishChanged(ctx, [block.id]);
+        return saved;
     }
 
     async update(
@@ -285,7 +292,9 @@ export class StorefrontContentService {
         if (input.items) {
             await this.syncItems(ctx, block, input.items);
         }
-        return this.translateBlock(await this.getOwnedBlockOrThrow(ctx, block.id), ctx, false);
+        const saved = this.translateBlock(await this.getOwnedBlockOrThrow(ctx, block.id), ctx, false);
+        await this.publishChanged(ctx, [block.id]);
+        return saved;
     }
 
     async applyChanges(
@@ -323,6 +332,10 @@ export class StorefrontContentService {
             block.position = positionById.get(String(block.id)) ?? block.position;
         }
         await this.connection.getRepository(ctx, StorefrontContentBlock).save(blocks);
+        await this.publishChanged(
+            ctx,
+            blocks.map(block => block.id),
+        );
         return this.findAllForAdmin(ctx);
     }
 
@@ -396,12 +409,21 @@ export class StorefrontContentService {
             if (block) block.position = position;
         });
         await this.connection.getRepository(ctx, StorefrontContentBlock).save(blocks);
+        await this.publishChanged(
+            ctx,
+            blocks.map(block => block.id),
+        );
     }
 
     async delete(ctx: RequestContext, id: ID): Promise<{ result: 'DELETED'; message: string }> {
         const block = await this.getOwnedBlockOrThrow(ctx, id);
         await this.connection.getRepository(ctx, StorefrontContentBlock).remove(block);
+        await this.publishChanged(ctx, [id]);
         return { result: 'DELETED', message: '店铺装修区块已删除' };
+    }
+
+    private async publishChanged(ctx: RequestContext, entityIds: ID[]): Promise<void> {
+        await this.eventBus?.publish(new StorefrontContentChangedEvent(ctx, entityIds));
     }
 
     private async syncItems(
