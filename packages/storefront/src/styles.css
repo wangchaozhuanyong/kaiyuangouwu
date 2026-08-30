@@ -13752,3 +13752,160 @@ img.fatal-error-mark {
         margin-top: 0;
     }
 }
+
+/* Published auth visuals mirror the dashboard preview instead of adding client-only content. */
+.auth-hero-managed .auth-hero-tags {
+    display: flex;
+}
+
+@media (max-width: 1023px) {
+    .auth-page {
+        --auth-managed-hero-height: clamp(210px, 58.974vw, 230px);
+        overflow: visible;
+    }
+
+    .auth-page .auth-hero-managed {
+        height: var(--auth-managed-hero-height);
+    }
+
+    .auth-page .auth-hero-managed::before {
+        display: none;
+    }
+
+    .auth-page .auth-hero-managed::after {
+        background:
+            linear-gradient(
+                90deg,
+                color-mix(in srgb, var(--auth-hero-overlay-color) 88%, transparent) 0%,
+                color-mix(in srgb, var(--auth-hero-overlay-color) 52%, transparent) 42%,
+                color-mix(in srgb, var(--auth-hero-overlay-color) 28%, transparent) 100%
+            ),
+            linear-gradient(
+                0deg,
+                color-mix(in srgb, var(--auth-hero-overlay-color) 46%, transparent) 0%,
+                transparent 62%
+            );
+    }
+
+    .auth-page .auth-hero-managed > picture > img {
+        object-position: 50% 50%;
+        filter: saturate(1.06) contrast(1.03);
+    }
+
+    .auth-page .auth-hero-message-managed {
+        width: auto;
+        height: auto;
+        inset: auto 20px 20px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        justify-content: flex-end;
+        text-align: center;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-kicker {
+        width: auto;
+        min-height: 0;
+        justify-content: center;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-eyebrow {
+        width: auto;
+        max-width: min(100%, 260px);
+        min-height: 26px;
+        padding: 5px 14px;
+        border: 1px solid color-mix(in srgb, var(--auth-hero-accent-color) 82%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--auth-hero-overlay-color) 36%, transparent);
+        color: var(--auth-hero-accent-color);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        line-height: 1.3;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-copy {
+        width: 100%;
+        margin: 10px 0 0;
+        align-self: auto;
+        display: grid;
+        justify-items: center;
+        gap: 4px;
+    }
+
+    .auth-page .auth-hero-message-managed h2 {
+        max-width: 100%;
+        font-size: clamp(20px, 5.64vw, 22px);
+        line-height: 1.2;
+        letter-spacing: -0.035em;
+        text-align: center;
+        -webkit-line-clamp: 2;
+    }
+
+    .auth-page .auth-hero-message-managed > .auth-hero-copy > p {
+        max-width: 100%;
+        margin: 0;
+        display: -webkit-box;
+        color: color-mix(in srgb, var(--auth-hero-text-color) 90%, transparent);
+        font-size: 14px;
+        line-height: 1.4;
+        text-align: center;
+        -webkit-line-clamp: 2;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-tags {
+        width: auto;
+        max-width: 100%;
+        margin: 14px 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        overflow: visible;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-tags > span,
+    .auth-page .auth-hero-message-managed .auth-hero-tags > span:first-child {
+        min-height: 26px;
+        padding: 6px 12px;
+        border: 1px solid color-mix(in srgb, var(--auth-hero-text-color) 38%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--auth-hero-overlay-color) 40%, transparent);
+        color: color-mix(in srgb, var(--auth-hero-text-color) 94%, transparent);
+        font-size: 11px;
+        letter-spacing: 0;
+        line-height: 1.15;
+        box-shadow: none;
+    }
+
+    .auth-page-managed .login-content {
+        min-height: calc(100dvh - var(--auth-managed-hero-height));
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 360px) {
+    .auth-page .auth-hero-message-managed {
+        right: 14px;
+        bottom: 14px;
+        left: 14px;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-copy {
+        margin-top: 8px;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-tags {
+        margin-top: 10px;
+        gap: 6px;
+    }
+
+    .auth-page .auth-hero-message-managed .auth-hero-tags > span,
+    .auth-page .auth-hero-message-managed .auth-hero-tags > span:first-child {
+        padding-right: 9px;
+        padding-left: 9px;
+        font-size: 10px;
+    }
+}

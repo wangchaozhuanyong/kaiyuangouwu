@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -214,6 +215,23 @@ describe('auth password visibility controls', () => {
         expect(markup).toContain('后台卖点3');
         expect(markup).toContain('--auth-hero-overlay-color:#010203');
         expect(markup).toContain('--auth-hero-accent-color:#abcdef');
+        expect(markup).toContain('auth-hero-managed');
+        expect(markup).toContain('auth-hero-message-managed');
+        expect(markup).toContain('class="auth-hero-tags"');
+        expect(markup).not.toContain('auth-brand-lockup');
+        expect(markup).not.toContain('auth-hero-benefit');
+        expect(markup).not.toContain('支持服务类型');
+    });
+});
+
+describe('managed auth visual layout', () => {
+    it('keeps the dashboard preview composition visible on mobile and short screens', () => {
+        const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(styles).toContain('--auth-managed-hero-height: clamp(210px, 58.974vw, 230px)');
+        expect(styles).toContain('.auth-page .auth-hero-message-managed > .auth-hero-copy > p');
+        expect(styles).toContain('.auth-page .auth-hero-message-managed .auth-hero-tags');
+        expect(styles).toContain('.auth-page-managed .login-content');
     });
 });
 

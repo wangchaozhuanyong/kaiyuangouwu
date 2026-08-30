@@ -1066,10 +1066,17 @@ function AuthLayout({
           } as CSSProperties)
         : undefined;
     const managedHeroSrc = heroContent?.imageUrl?.trim();
+    const hasManagedHero = Boolean(authVisualVariant && heroContent);
 
     return (
-        <main className={`page subpage auth-page auth-page-${heroVariant}`} aria-label={title}>
-            <section className={`auth-hero auth-hero-${heroVariant}`} style={heroStyle}>
+        <main
+            className={`page subpage auth-page auth-page-${heroVariant}${hasManagedHero ? ' auth-page-managed' : ''}`}
+            aria-label={title}
+        >
+            <section
+                className={`auth-hero auth-hero-${heroVariant}${hasManagedHero ? ' auth-hero-managed' : ''}`}
+                style={heroStyle}
+            >
                 <SafeImage
                     src={managedHeroSrc || hero.src}
                     fallbackSrc={hero.fallbackSrc}
@@ -1079,29 +1086,33 @@ function AuthLayout({
                     decoding="async"
                     fetchPriority="high"
                 />
-                <div className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}`}>
+                <div
+                    className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}${hasManagedHero ? ' auth-hero-message-managed' : ''}`}
+                >
                     <div className="auth-hero-kicker">
-                        <div className="auth-brand-lockup">
-                            <div className="auth-brand-main">
-                                {logoUrl ? (
-                                    <img
-                                        className="auth-brand-mark"
-                                        src={storefrontWebpUrl(logoUrl, 'thumbnail')}
-                                        alt={storefrontName}
-                                    />
-                                ) : (
-                                    <span className="auth-brand-mark" aria-hidden="true">
-                                        桥
-                                    </span>
-                                )}
-                                <strong>{storefrontName}</strong>
+                        {!hasManagedHero && (
+                            <div className="auth-brand-lockup">
+                                <div className="auth-brand-main">
+                                    {logoUrl ? (
+                                        <img
+                                            className="auth-brand-mark"
+                                            src={storefrontWebpUrl(logoUrl, 'thumbnail')}
+                                            alt={storefrontName}
+                                        />
+                                    ) : (
+                                        <span className="auth-brand-mark" aria-hidden="true">
+                                            桥
+                                        </span>
+                                    )}
+                                    <strong>{storefrontName}</strong>
+                                </div>
+                                <small>
+                                    {language === 'zh'
+                                        ? '智联云端 · 桥接未来'
+                                        : 'Cloud intelligence · Bridging tomorrow'}
+                                </small>
                             </div>
-                            <small>
-                                {language === 'zh'
-                                    ? '智联云端 · 桥接未来'
-                                    : 'Cloud intelligence · Bridging tomorrow'}
-                            </small>
-                        </div>
+                        )}
                         {heroMessage && <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>}
                     </div>
                     {heroMessage && (
@@ -1110,42 +1121,51 @@ function AuthLayout({
                                 <h2>{heroMessage.title}</h2>
                                 <p>{heroMessage.description}</p>
                             </div>
-                            <div className="auth-hero-footer">
-                                <div
-                                    className={`auth-hero-benefits auth-hero-benefits-${heroVariant}`}
-                                    aria-label={heroMessage.tags.join('、')}
-                                >
-                                    {heroMessage.benefits.map((benefit, index) => {
-                                        const Icon =
-                                            heroVariant === 'register'
-                                                ? ([ShieldCheck, Zap, Headphones][index] ?? ShieldCheck)
-                                                : ([Sparkles, ShoppingBag, Headphones][index] ?? Sparkles);
-                                        return (
-                                            <div className="auth-hero-benefit" key={benefit.title}>
-                                                <span className="auth-hero-benefit-icon">
-                                                    <Icon aria-hidden="true" />
-                                                </span>
-                                                <span className="auth-hero-benefit-copy">
-                                                    <strong>{benefit.title}</strong>
-                                                    <small>{benefit.description}</small>
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
+                            {hasManagedHero ? (
+                                <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
+                                    {heroMessage.tags.map((tag, index) => (
+                                        <span key={`${tag}-${index}`}>{tag}</span>
+                                    ))}
                                 </div>
-                                {heroMessage.serviceTypes.length ? (
-                                    <div className="auth-hero-services">
-                                        <span className="auth-hero-services-label">
-                                            {language === 'zh' ? '支持服务类型' : 'Services available'}
-                                        </span>
-                                        <div className="auth-hero-service-list">
-                                            {heroMessage.serviceTypes.map(serviceType => (
-                                                <span key={serviceType}>{serviceType}</span>
-                                            ))}
-                                        </div>
+                            ) : (
+                                <div className="auth-hero-footer">
+                                    <div
+                                        className={`auth-hero-benefits auth-hero-benefits-${heroVariant}`}
+                                        aria-label={heroMessage.tags.join('、')}
+                                    >
+                                        {heroMessage.benefits.map((benefit, index) => {
+                                            const Icon =
+                                                heroVariant === 'register'
+                                                    ? ([ShieldCheck, Zap, Headphones][index] ?? ShieldCheck)
+                                                    : ([Sparkles, ShoppingBag, Headphones][index] ??
+                                                      Sparkles);
+                                            return (
+                                                <div className="auth-hero-benefit" key={benefit.title}>
+                                                    <span className="auth-hero-benefit-icon">
+                                                        <Icon aria-hidden="true" />
+                                                    </span>
+                                                    <span className="auth-hero-benefit-copy">
+                                                        <strong>{benefit.title}</strong>
+                                                        <small>{benefit.description}</small>
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                ) : null}
-                            </div>
+                                    {heroMessage.serviceTypes.length ? (
+                                        <div className="auth-hero-services">
+                                            <span className="auth-hero-services-label">
+                                                {language === 'zh' ? '支持服务类型' : 'Services available'}
+                                            </span>
+                                            <div className="auth-hero-service-list">
+                                                {heroMessage.serviceTypes.map(serviceType => (
+                                                    <span key={serviceType}>{serviceType}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
