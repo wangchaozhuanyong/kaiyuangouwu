@@ -5,6 +5,7 @@ import { ScopeSystemAnnouncements1787878800000 } from './1787878800000-scope-sys
 import { AddChannelUsdtWallets1787882400000 } from './1787882400000-add-channel-usdt-wallets';
 import { AddUsdtManualRefunds1787886000000 } from './1787886000000-add-usdt-manual-refunds';
 import { AlignChannelUsdtSchema1787889600000 } from './1787889600000-align-channel-usdt-schema';
+import { AlignSystemAnnouncementChannelForeignKeys1787893200000 } from './1787893200000-align-system-announcement-channel-foreign-keys';
 
 const mysqlTestSocket = process.env.TEST_MYSQL_SOCKET ?? '';
 const mysqlTestHost = process.env.TEST_MYSQL_HOST ?? '';
@@ -102,11 +103,13 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
             const walletMigration = new AddChannelUsdtWallets1787882400000();
             const refundMigration = new AddUsdtManualRefunds1787886000000();
             const alignmentMigration = new AlignChannelUsdtSchema1787889600000();
+            const foreignKeyMigration = new AlignSystemAnnouncementChannelForeignKeys1787893200000();
 
             await announcementMigration.up(queryRunner);
             await walletMigration.up(queryRunner);
             await refundMigration.up(queryRunner);
             await alignmentMigration.up(queryRunner);
+            await foreignKeyMigration.up(queryRunner);
 
             const joinTable = await queryRunner.getTable('system_announcement_channels_channel');
             expect(joinTable?.indices.map(index => index.name)).toEqual(
@@ -116,6 +119,20 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
                 expect.arrayContaining([
                     'IDX_system_announcement_channels_announcement',
                     'IDX_system_announcement_channels_channel',
+                ]),
+            );
+            expect(joinTable?.foreignKeys).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'FK_system_announcement_channels_announcement',
+                        onDelete: 'CASCADE',
+                        onUpdate: 'CASCADE',
+                    }),
+                    expect.objectContaining({
+                        name: 'FK_system_announcement_channels_channel',
+                        onDelete: 'CASCADE',
+                        onUpdate: 'CASCADE',
+                    }),
                 ]),
             );
 
@@ -159,6 +176,7 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
             await insertRefund();
             await expect(insertRefund()).rejects.toThrow();
 
+            await foreignKeyMigration.down(queryRunner);
             await alignmentMigration.down(queryRunner);
             const rolledBackJoinTable = await queryRunner.getTable('system_announcement_channels_channel');
             expect(rolledBackJoinTable?.indices.map(index => index.name)).toEqual(
@@ -241,17 +259,33 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
                 const walletMigration = new AddChannelUsdtWallets1787882400000();
                 const refundMigration = new AddUsdtManualRefunds1787886000000();
                 const alignmentMigration = new AlignChannelUsdtSchema1787889600000();
+                const foreignKeyMigration = new AlignSystemAnnouncementChannelForeignKeys1787893200000();
 
                 await announcementMigration.up(queryRunner);
                 await walletMigration.up(queryRunner);
                 await refundMigration.up(queryRunner);
                 await alignmentMigration.up(queryRunner);
+                await foreignKeyMigration.up(queryRunner);
 
                 const joinTable = await queryRunner.getTable('system_announcement_channels_channel');
                 expect(joinTable?.indices.map(index => index.name)).toEqual(
                     expect.arrayContaining([
                         'IDX_aa074cb9061687d3e3b2bc7fc8',
                         'IDX_adcdad637ed68b4349d68d6a6c',
+                    ]),
+                );
+                expect(joinTable?.foreignKeys).toEqual(
+                    expect.arrayContaining([
+                        expect.objectContaining({
+                            name: 'FK_system_announcement_channels_announcement',
+                            onDelete: 'CASCADE',
+                            onUpdate: 'CASCADE',
+                        }),
+                        expect.objectContaining({
+                            name: 'FK_system_announcement_channels_channel',
+                            onDelete: 'CASCADE',
+                            onUpdate: 'CASCADE',
+                        }),
                     ]),
                 );
 
@@ -291,6 +325,7 @@ describe('Channel announcements, USDT wallets and refund audit migrations', () =
                 await insertRefund();
                 await expect(insertRefund()).rejects.toThrow();
 
+                await foreignKeyMigration.down(queryRunner);
                 await alignmentMigration.down(queryRunner);
                 const rolledBackJoinTable = await queryRunner.getTable(
                     'system_announcement_channels_channel',

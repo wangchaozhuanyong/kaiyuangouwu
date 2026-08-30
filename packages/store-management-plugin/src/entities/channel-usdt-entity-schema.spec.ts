@@ -33,6 +33,10 @@ describe('Channel announcement and USDT entity schema', () => {
         expect(joinTable?.inverseJoinColumns?.[0]?.foreignKeyConstraintName).toBe(
             'FK_system_announcement_channels_channel',
         );
+        const relation = getMetadataArgsStorage().relations.find(
+            item => item.target === SystemAnnouncement && item.propertyName === 'channels',
+        );
+        expect(relation?.options).toMatchObject({ onDelete: 'CASCADE', onUpdate: 'CASCADE' });
     });
 
     it('declares the operational indexes created by production migrations', () => {

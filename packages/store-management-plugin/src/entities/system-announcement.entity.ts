@@ -18,7 +18,7 @@ export class SystemAnnouncement extends VendureEntity {
     @Column('varchar', { length: 16, default: 'ALL' })
     targetMode: SystemAnnouncementTargetMode;
 
-    @ManyToMany(() => Channel)
+    @ManyToMany(() => Channel, { onDelete: 'CASCADE', onUpdate: 'CASCADE' })
     @JoinTable({
         name: 'system_announcement_channels_channel',
         joinColumn: {
