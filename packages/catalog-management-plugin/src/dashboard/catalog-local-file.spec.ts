@@ -8,6 +8,27 @@ import {
 } from './catalog-local-file';
 
 describe('browser-local catalog parser', () => {
+    it('parses UTF-8 Chinese CSV files without requiring a BOM', async () => {
+        const csv = ['名称,分类,SKU,进货价,销售价', '匿名商品,匿名分类,UTF8-CSV-001,1.25,2.50'].join('\n');
+
+        const result = await parseCatalogArrayBuffer(
+            new TextEncoder().encode(csv).buffer,
+            '匿名测试.csv',
+            'text/csv',
+        );
+
+        expect(result.headers).toEqual(['名称', '分类', 'SKU', '进货价', '销售价']);
+        expect(result.errors).toEqual([]);
+        expect(result.rows).toHaveLength(1);
+        expect(result.rows[0]).toMatchObject({
+            name: '匿名商品',
+            category: '匿名分类',
+            sku: 'UTF8-CSV-001',
+            purchaseCost: 1.25,
+            sellingPrice: 2.5,
+        });
+    });
+
     it('parses typed Chinese rows, detects warnings and conflicting duplicates without networking', async () => {
         const fetchSpy = vi.fn();
         vi.stubGlobal('fetch', fetchSpy);

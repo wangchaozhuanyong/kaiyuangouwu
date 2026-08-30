@@ -157,15 +157,7 @@ export async function parseCatalogArrayBuffer(
     assertLocalFile(filename, buffer.byteLength);
     let workbook: XLSX.WorkBook;
     try {
-        workbook = XLSX.read(new Uint8Array(buffer), {
-            type: 'array',
-            cellDates: true,
-            cellFormula: false,
-            cellHTML: false,
-            cellStyles: false,
-            dense: true,
-            WTF: false,
-        });
+        workbook = readCatalogWorkbook(buffer, filename);
     } catch {
         throw new Error('无法解析文件，请确认文件是有效的 Numbers、Excel 或 CSV 文件');
     }
@@ -266,6 +258,32 @@ export async function parseCatalogArrayBuffer(
         excludedHeaders: headers.filter((_, index) => mappingStatuses[index].status === 'EXCLUDED'),
         unknownHeaders: headers.filter((_, index) => mappingStatuses[index].status === 'UNKNOWN'),
     };
+}
+
+function readCatalogWorkbook(buffer: ArrayBuffer, filename: string): XLSX.WorkBook {
+    const commonOptions = {
+        cellDates: true,
+        cellFormula: false,
+        cellHTML: false,
+        cellStyles: false,
+        dense: true,
+        WTF: false,
+    } as const;
+    const bytes = new Uint8Array(buffer);
+    if (filename.trim().toLocaleLowerCase('en-US').endsWith('.csv')) {
+        try {
+            return XLSX.read(new TextDecoder('utf-8', { fatal: true }).decode(bytes), {
+                ...commonOptions,
+                type: 'string',
+            });
+        } catch {
+            // Preserve SheetJS' legacy code-page handling for non-UTF-8 CSV files.
+        }
+    }
+    return XLSX.read(bytes, {
+        ...commonOptions,
+        type: 'array',
+    });
 }
 
 interface StandardStockRow {
