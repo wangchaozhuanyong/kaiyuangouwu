@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => {
 
     return {
         plugins: [TanStackRouterVite({ target: 'react', autoCodeSplitting: true }), tailwindcss(), react()],
+        build: {
+            target: ['chrome111', 'edge111', 'firefox128', 'safari16.4'],
+        },
         server: {
             port: 5175,
             strictPort: true,

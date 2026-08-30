@@ -23,7 +23,7 @@
 | P1     | Dashboard/Admin UI 与构建链升级 | Angular、Apollo Client、Vite、esbuild、Nx/Lerna 已完成 | 预发布回归管理流程与 CSP                                                   |
 | P1     | 运行产物依赖瘦身                | 本地已完成；待 Linux 正式产物复验                      | 运行包不含六类构建工具，模块加载、静态 Dashboard、邮件和业务 E2E 通过      |
 | P1     | 运行产物的持续漏洞扫描          | 本地与手动 Linux CI 的 High+ 门禁已完成                 | CI 保存 `RUNTIME-AUDIT.json`，High 和 Critical 阻断发布                    |
-| P2     | Nginx 新版 HTTP/2 语法          | 等待目标机版本核对                                     | 先执行 `nginx -v` 确认版本，再修改 `listen ... http2` 并通过 `nginx -t`    |
+| P2     | Nginx HTTP/2 语法               | 已核对生产机为 Nginx 1.24.0，保留 `listen ... http2`   | 生产机 `nginx -t` 通过；升级至 1.25.1+ 后再评估切换为 `http2 on`           |
 
 ## P1 建议分批
 

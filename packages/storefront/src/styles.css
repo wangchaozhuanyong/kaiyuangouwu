@@ -4,9 +4,10 @@
     color: #0f172a;
     background: #f1f5f9;
     --font-ui:
-        'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'PingFang SC',
+        -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'PingFang SC',
         'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
-    --font-numeric: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
+    --font-numeric: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Segoe UI',
+        Roboto, sans-serif;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
@@ -3032,10 +3033,13 @@ img.fatal-error-mark {
 
 .section-header-action-btn,
 .section-header > button {
+    min-width: 44px;
+    min-height: 32px;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 2px;
-    padding: 2px 0;
+    padding: 5px 4px;
     border: 0;
     background: transparent;
     color: #64748b;

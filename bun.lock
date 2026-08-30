@@ -729,6 +729,7 @@
         "xss": "^1.0.15",
       },
       "devDependencies": {
+        "@playwright/test": "^1.58.2",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/router-devtools": "^1.167.1",
         "@tanstack/router-plugin": "^1.168.33",
