@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
 
@@ -15,11 +15,14 @@ import {
     fingerprintReceivingAddress,
     isValidTronMainnetAddress,
     loadUsdtWalletConfiguration,
+    UsdtWalletConfigurationService,
 } from './usdt-wallet-configuration.service';
 
 const address = USDT_TRC20_CONTRACT_ADDRESS;
 
 describe('USDT payment security', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
     it('validates the TRON Base58Check checksum instead of trusting the T prefix', () => {
         expect(isValidTronMainnetAddress(address)).toBe(true);
         expect(isValidTronMainnetAddress(`${address.slice(0, -1)}2`)).toBe(false);
@@ -58,6 +61,19 @@ describe('USDT payment security', () => {
             receivingAddress: address,
             receivingAddressFingerprint: fingerprintReceivingAddress(address),
         });
+    });
+
+    it('encrypts Channel wallet addresses with authenticated encryption before persistence', () => {
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', 'unit-test-wallet-encryption-key-that-is-long-enough');
+        const configuration = new UsdtWalletConfigurationService();
+
+        const encrypted = configuration.encryptReceivingAddress(address);
+        const tamperedParts = encrypted.split(':');
+        tamperedParts[2] = `${tamperedParts[2][0] === 'A' ? 'B' : 'A'}${tamperedParts[2].slice(1)}`;
+
+        expect(encrypted).not.toContain(address);
+        expect(configuration.decryptReceivingAddress(encrypted)).toBe(address);
+        expect(() => configuration.decryptReceivingAddress(tamperedParts.join(':'))).toThrow();
     });
 
     it('signs server-only settlement proofs and rejects tampering', () => {

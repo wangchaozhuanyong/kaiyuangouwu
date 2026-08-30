@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+    Channel,
     isGraphQlErrorResult,
     OrderService,
     Payment,
@@ -13,10 +14,16 @@ import { LessThan, MoreThan, QueryFailedError } from 'typeorm';
 import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
 
+import { maskTronAddress, StoreUsdtWalletService } from './store-usdt-wallet.service';
 import { createUsdtPaymentProof } from './usdt-payment-proof';
-import { USDT_PAYMENT_INTENT_STATUS, USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt-payment.constants';
+import {
+    USDT_PAYMENT_INTENT_STATUS,
+    USDT_TRC20_CONTRACT_ADDRESS,
+    USDT_TRC20_NETWORK,
+    USDT_TRC20_PAYMENT_METHOD_CODE,
+} from './usdt-payment.constants';
 import { ConfirmedTrc20Transfer, UsdtTrc20Client } from './usdt-trc20-client';
-import { UsdtWalletConfigurationService } from './usdt-wallet-configuration.service';
+import { fingerprintReceivingAddress, isValidTronMainnetAddress } from './usdt-wallet-configuration.service';
 
 const PAYMENT_MATCH_GRACE_MS = 60 * 1000;
 const FINALITY_DISCOVERY_GRACE_MS = 30 * 60 * 1000;
@@ -37,13 +44,41 @@ export interface StoreUsdtPaymentIntentView {
     orderId: string;
     orderCode: string;
     network: string;
+    channelId: string;
+    channelCode: string;
+    fiatCurrencyCode: string;
+    fiatAmount: number;
+    fiatPerUsdtRate: number;
+    markupPercent: number;
+    rateSource: string;
+    receivingAddressMasked: string;
+    receivingAddressFingerprint: string;
+    baseUsdtAmount: number;
     expectedUsdtAmount: number;
+    receivedUsdtAmount: number | null;
+    senderAddressMasked: string | null;
     status: string;
     transactionId: string | null;
     failureReason: string | null;
     createdAt: Date;
     expiresAt: Date;
     settledAt: Date | null;
+    blockNumber: number | null;
+    blockTimestamp: Date | null;
+    lastCheckedAt: Date | null;
+}
+
+export interface StoreUsdtChannelPaymentStats {
+    channelId: string;
+    channelCode: string;
+    totalCount: number;
+    pendingCount: number;
+    settledCount: number;
+    manualReviewCount: number;
+    expiredCount: number;
+    expectedUsdtTotal: number;
+    receivedUsdtTotal: number;
+    fiatTotals: Array<{ currencyCode: string; amount: number }>;
 }
 
 @Injectable()
@@ -52,65 +87,192 @@ export class UsdtPaymentService {
         private readonly connection: TransactionalConnection,
         private readonly orderService: OrderService,
         private readonly requestContextService: RequestContextService,
-        private readonly walletConfiguration: UsdtWalletConfigurationService,
+        private readonly storeWallets: StoreUsdtWalletService,
         private readonly tronClient: UsdtTrc20Client,
     ) {}
 
-    walletStatus(): {
+    async walletStatus(
+        ctx: RequestContext,
+        channelId = ctx.channelId,
+    ): Promise<{
         configured: boolean;
         network: string;
         receivingAddressMasked: string | null;
         receivingAddressFingerprint: string | null;
-    } {
-        const wallet = this.walletConfiguration.get();
+        reviewStatus: string;
+    }> {
+        const wallet = await this.storeWallets.status(ctx, channelId);
         return {
-            configured: wallet.enabled,
+            configured: wallet.configured,
             network: wallet.network,
-            receivingAddressMasked: wallet.receivingAddress
-                ? `${wallet.receivingAddress.slice(0, 8)}…${wallet.receivingAddress.slice(-8)}`
-                : null,
-            receivingAddressFingerprint: wallet.receivingAddressFingerprint,
+            receivingAddressMasked: wallet.activeReceivingAddressMasked,
+            receivingAddressFingerprint: wallet.activeReceivingAddressFingerprint,
+            reviewStatus: wallet.reviewStatus,
         };
     }
 
     async listForChannel(ctx: RequestContext): Promise<StoreUsdtPaymentIntentView[]> {
         const intents = await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).find({
             where: { channelId: ctx.channelId },
-            relations: { order: true },
+            relations: { order: true, channel: true, quote: true },
             order: { createdAt: 'DESC' },
-            take: 50,
+            take: 100,
         });
-        return intents.map(intent => ({
+        return intents.map(intent => this.toIntentView(intent));
+    }
+
+    async listForPlatform(
+        ctx: RequestContext,
+        channelId?: string | null,
+    ): Promise<StoreUsdtPaymentIntentView[]> {
+        const intents = await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).find({
+            ...(channelId ? { where: { channelId } } : {}),
+            relations: { order: true, channel: true, quote: true },
+            order: { createdAt: 'DESC' },
+            take: 200,
+        });
+        return intents.map(intent => this.toIntentView(intent));
+    }
+
+    async stats(ctx: RequestContext, channelId?: string | null): Promise<StoreUsdtChannelPaymentStats[]> {
+        const query = this.connection
+            .getRepository(ctx, StorefrontUsdtPaymentIntent)
+            .createQueryBuilder('intent')
+            .innerJoin('intent.channel', 'channel')
+            .innerJoin('intent.quote', 'quote')
+            .select('intent.channelId', 'channelId')
+            .addSelect('channel.code', 'channelCode')
+            .addSelect('quote.fiatCurrencyCode', 'currencyCode')
+            .addSelect('COUNT(intent.id)', 'totalCount')
+            .addSelect('SUM(CASE WHEN intent.status = :pendingStatus THEN 1 ELSE 0 END)', 'pendingCount')
+            .addSelect('SUM(CASE WHEN intent.status = :settledStatus THEN 1 ELSE 0 END)', 'settledCount')
+            .addSelect(
+                'SUM(CASE WHEN intent.status = :manualReviewStatus THEN 1 ELSE 0 END)',
+                'manualReviewCount',
+            )
+            .addSelect('SUM(CASE WHEN intent.status = :expiredStatus THEN 1 ELSE 0 END)', 'expiredCount')
+            .addSelect('COALESCE(SUM(intent.expectedUsdtAmount), 0)', 'expectedUsdtTotal')
+            .addSelect(
+                'COALESCE(SUM(CASE WHEN intent.status = :settledStatus THEN intent.receivedUsdtAmount ELSE 0 END), 0)',
+                'receivedUsdtTotal',
+            )
+            .addSelect(
+                'COALESCE(SUM(CASE WHEN intent.status = :settledStatus THEN quote.fiatAmount ELSE 0 END), 0)',
+                'fiatAmountTotal',
+            )
+            .setParameters({
+                pendingStatus: USDT_PAYMENT_INTENT_STATUS.pending,
+                settledStatus: USDT_PAYMENT_INTENT_STATUS.settled,
+                manualReviewStatus: USDT_PAYMENT_INTENT_STATUS.manualReview,
+                expiredStatus: USDT_PAYMENT_INTENT_STATUS.expired,
+            })
+            .groupBy('intent.channelId')
+            .addGroupBy('channel.code')
+            .addGroupBy('quote.fiatCurrencyCode');
+        if (channelId) query.andWhere('intent.channelId = :channelId', { channelId });
+        const rows = await query.getRawMany<{
+            channelId: string | number;
+            channelCode: string;
+            currencyCode: string;
+            totalCount: string | number;
+            pendingCount: string | number;
+            settledCount: string | number;
+            manualReviewCount: string | number;
+            expiredCount: string | number;
+            expectedUsdtTotal: string | number;
+            receivedUsdtTotal: string | number;
+            fiatAmountTotal: string | number;
+        }>();
+        const grouped = new Map<string, StoreUsdtChannelPaymentStats>();
+        for (const row of rows) {
+            const key = String(row.channelId);
+            let summary = grouped.get(key);
+            if (!summary) {
+                summary = {
+                    channelId: key,
+                    channelCode: row.channelCode,
+                    totalCount: 0,
+                    pendingCount: 0,
+                    settledCount: 0,
+                    manualReviewCount: 0,
+                    expiredCount: 0,
+                    expectedUsdtTotal: 0,
+                    receivedUsdtTotal: 0,
+                    fiatTotals: [],
+                };
+                grouped.set(key, summary);
+            }
+            summary.totalCount += Number(row.totalCount);
+            summary.pendingCount += Number(row.pendingCount);
+            summary.settledCount += Number(row.settledCount);
+            summary.manualReviewCount += Number(row.manualReviewCount);
+            summary.expiredCount += Number(row.expiredCount);
+            summary.expectedUsdtTotal += Number(row.expectedUsdtTotal);
+            summary.receivedUsdtTotal += Number(row.receivedUsdtTotal);
+            const fiatAmount = Number(row.fiatAmountTotal);
+            if (fiatAmount) summary.fiatTotals.push({ currencyCode: row.currencyCode, amount: fiatAmount });
+        }
+        const channels = channelId
+            ? await this.connection.getRepository(ctx, Channel).find({ where: { id: channelId } })
+            : await this.connection.getRepository(ctx, Channel).find({ order: { code: 'ASC' } });
+        for (const channel of channels) {
+            const key = String(channel.id);
+            if (!grouped.has(key)) grouped.set(key, emptyChannelStats(key, channel.code));
+        }
+        return Array.from(grouped.values())
+            .map(summary => ({
+                ...summary,
+                expectedUsdtTotal: roundUsdt(summary.expectedUsdtTotal),
+                receivedUsdtTotal: roundUsdt(summary.receivedUsdtTotal),
+            }))
+            .sort((left, right) => left.channelCode.localeCompare(right.channelCode));
+    }
+
+    async statsForChannel(ctx: RequestContext): Promise<StoreUsdtChannelPaymentStats> {
+        const [summary] = await this.stats(ctx, String(ctx.channelId));
+        if (summary) return summary;
+        return emptyChannelStats(String(ctx.channelId), ctx.channel.code);
+    }
+
+    private toIntentView(intent: StorefrontUsdtPaymentIntent): StoreUsdtPaymentIntentView {
+        return {
             id: String(intent.id),
             orderId: String(intent.orderId),
             orderCode: intent.order.code,
             network: intent.network,
+            channelId: String(intent.channelId),
+            channelCode: intent.channel.code,
+            fiatCurrencyCode: intent.quote.fiatCurrencyCode,
+            fiatAmount: intent.quote.fiatAmount,
+            fiatPerUsdtRate: intent.quote.fiatPerUsdtRate,
+            markupPercent: intent.quote.markupBps / 100,
+            rateSource: intent.quote.source,
+            receivingAddressMasked: maskTronAddress(intent.receivingAddress),
+            receivingAddressFingerprint: intent.receivingAddressFingerprint,
+            baseUsdtAmount: Number(intent.baseUsdtAmount),
             expectedUsdtAmount: Number(intent.expectedUsdtAmount),
+            receivedUsdtAmount: intent.receivedUsdtAmount ? Number(intent.receivedUsdtAmount) : null,
+            senderAddressMasked: intent.senderAddress ? maskTronAddress(intent.senderAddress) : null,
             status: intent.status,
             transactionId: intent.transactionId,
             failureReason: intent.failureReason,
             createdAt: intent.createdAt,
             expiresAt: intent.expiresAt,
             settledAt: intent.settledAt,
-        }));
+            blockNumber: intent.blockNumber,
+            blockTimestamp: intent.blockTimestamp,
+            lastCheckedAt: intent.lastCheckedAt,
+        };
     }
 
     async ensureIntent(
         ctx: RequestContext,
         quote: StorefrontUsdtCheckoutQuote,
     ): Promise<StorefrontUsdtPaymentIntent> {
-        const wallet = this.walletConfiguration.requireConfigured();
         const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
         const existing = await repository.findOne({ where: { quoteId: quote.id } });
-        if (existing) {
-            if (
-                existing.receivingAddress !== wallet.receivingAddress ||
-                existing.receivingAddressFingerprint !== wallet.receivingAddressFingerprint
-            ) {
-                throw new Error('现有订单报价绑定的钱包与服务器安全配置不一致，请联系商家');
-            }
-            return existing;
-        }
+        if (existing) return existing;
+        const wallet = await this.storeWallets.requireConfigured(ctx, quote.channelId);
 
         const baseAmount = normalizeUsdtAmount(quote.usdtAmount);
         const baseUnits = usdtAmountToBaseUnits(baseAmount);
@@ -159,23 +321,19 @@ export class UsdtPaymentService {
     }
 
     async scanPendingPayments(ctx: RequestContext, now = new Date()): Promise<UsdtPaymentScanResult> {
-        const wallet = this.walletConfiguration.get();
         const result: UsdtPaymentScanResult = {
-            configured: wallet.enabled,
+            configured: false,
             pendingIntentCount: 0,
             transferCount: 0,
             settledCount: 0,
             manualReviewCount: 0,
             expiredCount: 0,
         };
-        if (!wallet.enabled || !wallet.receivingAddressFingerprint) return result;
-
         const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
         const expiryCutoff = new Date(now.getTime() - FINALITY_DISCOVERY_GRACE_MS);
         const stale = await repository.find({
             where: {
                 status: USDT_PAYMENT_INTENT_STATUS.pending,
-                receivingAddressFingerprint: wallet.receivingAddressFingerprint,
                 expiresAt: LessThan(expiryCutoff),
             },
         });
@@ -188,34 +346,42 @@ export class UsdtPaymentService {
         const pending = await repository.find({
             where: {
                 status: USDT_PAYMENT_INTENT_STATUS.pending,
-                receivingAddressFingerprint: wallet.receivingAddressFingerprint,
                 expiresAt: MoreThan(expiryCutoff),
             },
             relations: { channel: true, quote: true },
             order: { createdAt: 'ASC' },
         });
         result.pendingIntentCount = pending.length;
+        result.configured = pending.length > 0;
         if (!pending.length) return result;
 
-        const oldestCreatedAt = pending.reduce(
-            (oldest, intent) => (intent.createdAt < oldest ? intent.createdAt : oldest),
-            pending[0].createdAt,
-        );
-        const transfers = await this.tronClient.incomingTransfers(
-            new Date(oldestCreatedAt.getTime() - PAYMENT_MATCH_GRACE_MS),
-        );
-        result.transferCount = transfers.length;
-
+        const byReceivingAddress = new Map<string, StorefrontUsdtPaymentIntent[]>();
         for (const intent of pending) {
-            intent.lastCheckedAt = now;
-            const transfer = findMatchingTransfer(intent, transfers);
-            if (!transfer) continue;
-            const solidified = await this.tronClient.solidifiedTransaction(transfer.transactionId);
-            if (!solidified) continue;
-            const status = await this.settleMatchedIntent(intent, transfer, solidified.blockNumber, now);
-            intent.status = status as StorefrontUsdtPaymentIntent['status'];
-            if (status === USDT_PAYMENT_INTENT_STATUS.settled) result.settledCount += 1;
-            if (status === USDT_PAYMENT_INTENT_STATUS.manualReview) result.manualReviewCount += 1;
+            const addressIntents = byReceivingAddress.get(intent.receivingAddress) ?? [];
+            addressIntents.push(intent);
+            byReceivingAddress.set(intent.receivingAddress, addressIntents);
+        }
+        for (const [receivingAddress, addressIntents] of byReceivingAddress) {
+            const oldestCreatedAt = addressIntents.reduce(
+                (oldest, intent) => (intent.createdAt < oldest ? intent.createdAt : oldest),
+                addressIntents[0].createdAt,
+            );
+            const transfers = await this.tronClient.incomingTransfers(
+                receivingAddress,
+                new Date(oldestCreatedAt.getTime() - PAYMENT_MATCH_GRACE_MS),
+            );
+            result.transferCount += transfers.length;
+            for (const intent of addressIntents) {
+                intent.lastCheckedAt = now;
+                const transfer = findMatchingTransfer(intent, transfers);
+                if (!transfer) continue;
+                const solidified = await this.tronClient.solidifiedTransaction(transfer.transactionId);
+                if (!solidified) continue;
+                const status = await this.settleMatchedIntent(intent, transfer, solidified.blockNumber, now);
+                intent.status = status as StorefrontUsdtPaymentIntent['status'];
+                if (status === USDT_PAYMENT_INTENT_STATUS.settled) result.settledCount += 1;
+                if (status === USDT_PAYMENT_INTENT_STATUS.manualReview) result.manualReviewCount += 1;
+            }
         }
         const stillPending = pending.filter(intent => intent.status === USDT_PAYMENT_INTENT_STATUS.pending);
         if (stillPending.length) await repository.save(stillPending, { reload: false });
@@ -238,14 +404,14 @@ export class UsdtPaymentService {
             if (!locked || locked.status !== USDT_PAYMENT_INTENT_STATUS.pending) {
                 return locked?.status ?? USDT_PAYMENT_INTENT_STATUS.manualReview;
             }
-            const wallet = this.walletConfiguration.requireConfigured();
             if (
-                locked.receivingAddress !== wallet.receivingAddress ||
-                locked.receivingAddressFingerprint !== wallet.receivingAddressFingerprint ||
-                locked.tokenContractAddress !== wallet.tokenContractAddress
+                locked.network !== USDT_TRC20_NETWORK ||
+                locked.tokenContractAddress !== USDT_TRC20_CONTRACT_ADDRESS ||
+                !isValidTronMainnetAddress(locked.receivingAddress) ||
+                locked.receivingAddressFingerprint !== fingerprintReceivingAddress(locked.receivingAddress)
             ) {
                 locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
-                locked.failureReason = '收款钱包安全指纹与付款报价不一致';
+                locked.failureReason = '订单绑定的收款钱包快照未通过完整性校验';
                 await repository.save(locked, { reload: false });
                 return locked.status;
             }
@@ -373,4 +539,23 @@ function isUniqueConstraintViolation(error: unknown): boolean {
 
 function isLockUnsupported(error: unknown): boolean {
     return error instanceof Error && /Locking not supported|pessimistic lock/iu.test(error.message);
+}
+
+function roundUsdt(value: number): number {
+    return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function emptyChannelStats(channelId: string, channelCode: string): StoreUsdtChannelPaymentStats {
+    return {
+        channelId,
+        channelCode,
+        totalCount: 0,
+        pendingCount: 0,
+        settledCount: 0,
+        manualReviewCount: 0,
+        expiredCount: 0,
+        expectedUsdtTotal: 0,
+        receivedUsdtTotal: 0,
+        fiatTotals: [],
+    };
 }

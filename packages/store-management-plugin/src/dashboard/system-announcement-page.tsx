@@ -1,6 +1,7 @@
 import {
     Badge,
     Button,
+    ChannelSelector,
     ConfirmationDialog,
     DashboardRouteDefinition,
     Input,
@@ -47,6 +48,8 @@ interface AnnouncementDraft {
     titleEn: string;
     contentZh: string;
     contentEn: string;
+    targetMode: 'ALL' | 'SINGLE' | 'MULTIPLE';
+    channelIds: string[];
     linkUrl: string;
     startsAt: string;
     endsAt: string;
@@ -136,6 +139,9 @@ function SystemAnnouncementPage() {
                                                 </Badge>
                                                 <Badge variant="outline">
                                                     优先级 {announcement.priority}
+                                                </Badge>
+                                                <Badge variant="outline">
+                                                    {announcementScopeLabel(announcement)}
                                                 </Badge>
                                             </div>
                                             <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
@@ -326,6 +332,61 @@ function AnnouncementEditor({
                                         onChange={event => update('linkUrl', event.target.value)}
                                     />
                                 </Field>
+                                <Field
+                                    label="发布范围"
+                                    hint="指定范围后，只有被选网店的访客能看到。"
+                                    className="sm:col-span-2"
+                                >
+                                    <div className="grid gap-2 sm:grid-cols-3">
+                                        {(
+                                            [
+                                                ['ALL', '全部网店'],
+                                                ['SINGLE', '指定网店'],
+                                                ['MULTIPLE', '指定多个网店'],
+                                            ] as const
+                                        ).map(([mode, label]) => (
+                                            <Button
+                                                key={mode}
+                                                type="button"
+                                                variant={
+                                                    localDraft.targetMode === mode ? 'secondary' : 'outline'
+                                                }
+                                                onClick={() =>
+                                                    setLocalDraft(current =>
+                                                        current
+                                                            ? {
+                                                                  ...current,
+                                                                  targetMode: mode,
+                                                                  channelIds:
+                                                                      mode === 'ALL'
+                                                                          ? []
+                                                                          : mode === 'SINGLE'
+                                                                            ? current.channelIds.slice(0, 1)
+                                                                            : current.channelIds,
+                                                              }
+                                                            : current,
+                                                    )
+                                                }
+                                            >
+                                                {label}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                    {localDraft.targetMode !== 'ALL' ? (
+                                        <ChannelSelector
+                                            multiple={true}
+                                            value={localDraft.channelIds}
+                                            onChange={channelIds =>
+                                                update(
+                                                    'channelIds',
+                                                    localDraft.targetMode === 'SINGLE'
+                                                        ? channelIds.slice(-1)
+                                                        : channelIds,
+                                                )
+                                            }
+                                        />
+                                    ) : null}
+                                </Field>
                                 <Field label="开始时间">
                                     <Input
                                         type="datetime-local"
@@ -402,6 +463,8 @@ function newAnnouncementDraft(): AnnouncementDraft {
         titleEn: '',
         contentZh: '',
         contentEn: '',
+        targetMode: 'ALL',
+        channelIds: [],
         linkUrl: '',
         startsAt: '',
         endsAt: '',
@@ -417,6 +480,8 @@ function draftFromAnnouncement(value: SystemAnnouncementRecord): AnnouncementDra
         titleEn: value.titleEn,
         contentZh: value.contentZh,
         contentEn: value.contentEn,
+        targetMode: value.targetMode,
+        channelIds: value.channels.map(channel => channel.id),
         linkUrl: value.linkUrl ?? '',
         startsAt: localDateTime(value.startsAt),
         endsAt: localDateTime(value.endsAt),
@@ -435,12 +500,16 @@ function announcementInput(value: AnnouncementDraft, includeId: boolean) {
         linkUrl: value.linkUrl || null,
         startsAt: isoDate(value.startsAt),
         endsAt: isoDate(value.endsAt),
+        targetMode: value.targetMode,
+        channelIds: value.channelIds,
     };
 }
 
 function announcementDraftError(value: AnnouncementDraft): string | null {
     if (!value.titleZh.trim()) return '请填写中文标题';
     if (!value.contentZh.trim()) return '请填写中文内容';
+    if (value.targetMode === 'SINGLE' && value.channelIds.length !== 1) return '请选择 1 个网店';
+    if (value.targetMode === 'MULTIPLE' && value.channelIds.length < 2) return '请至少选择 2 个网店';
     const priority = Number(value.priority);
     if (!Number.isInteger(priority) || priority < 0 || priority > 999) return '优先级必须是 0 到 999 的整数';
     if (value.startsAt && value.endsAt && Date.parse(value.startsAt) >= Date.parse(value.endsAt))
@@ -462,4 +531,9 @@ function formatDateRange(startsAt: string | null, endsAt: string | null): string
 }
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function announcementScopeLabel(value: SystemAnnouncementRecord): string {
+    if (value.targetMode === 'ALL') return '全部网店';
+    return value.channels.map(channel => channel.code).join('、') || '未选网店';
 }

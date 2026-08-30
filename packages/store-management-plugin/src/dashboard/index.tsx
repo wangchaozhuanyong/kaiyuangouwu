@@ -17,6 +17,7 @@ import {
 import { storeProvisioningRoute } from './store-provisioning-page';
 import { storefrontPromotionRoute } from './storefront-promotion-page';
 import { systemAnnouncementRoute } from './system-announcement-page';
+import { usdtPaymentManagementRoute } from './usdt-payment-management-page';
 
 defineDashboardExtension({
     routes: [
@@ -30,6 +31,7 @@ defineDashboardExtension({
         storeFlashSaleRoute,
         storePromotionCampaignRoute,
         systemAnnouncementRoute,
+        usdtPaymentManagementRoute,
         referralRoute,
     ],
     widgets: [

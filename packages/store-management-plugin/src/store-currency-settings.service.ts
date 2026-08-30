@@ -26,8 +26,8 @@ import {
     StoreUsdtRateScheduleMode,
     UpdateStoreCurrencyConfigurationInput,
 } from './types';
-import { UsdtPaymentService } from './usdt/usdt-payment.service';
 import { UsdtOtcRateService } from './usdt-otc-rate.service';
+import { UsdtPaymentService } from './usdt/usdt-payment.service';
 
 const SUPPORTED_CURRENCIES = [CurrencyCode.CNY, CurrencyCode.MYR] as const;
 const BNM_EXCHANGE_RATE_URL = 'https://api.bnm.gov.my/public/exchange-rate/CNY?session=1200&quote=rm';
@@ -90,12 +90,12 @@ export class StoreCurrencySettingsService {
     ) {}
 
     async get(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
-        return this.toConfiguration(await this.getActiveChannel(ctx));
+        return this.toConfiguration(ctx, await this.getActiveChannel(ctx));
     }
 
-    getPublic(ctx: RequestContext): StoreCurrencyConfiguration {
+    async getPublic(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
         return {
-            ...this.toConfiguration(ctx.channel),
+            ...(await this.toConfiguration(ctx, ctx.channel)),
             ...publicCurrencySelection(ctx.channel),
         };
     }
@@ -130,7 +130,7 @@ export class StoreCurrencySettingsService {
             },
         });
         if (isGraphQlErrorResult(updated)) throw new UserInputError(updated.message);
-        return this.toConfiguration(updated);
+        return this.toConfiguration(ctx, updated);
     }
 
     async refreshUsdtRate(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
@@ -147,7 +147,7 @@ export class StoreCurrencySettingsService {
             },
         });
         if (isGraphQlErrorResult(updated)) throw new UserInputError(updated.message);
-        return this.toConfiguration(updated);
+        return this.toConfiguration(ctx, updated);
     }
 
     async createCheckoutUsdtQuote(ctx: RequestContext): Promise<StorefrontUsdtCheckoutQuoteView> {
@@ -240,7 +240,7 @@ export class StoreCurrencySettingsService {
             },
         });
         if (isGraphQlErrorResult(updated)) throw new UserInputError(updated.message);
-        return this.toConfiguration(updated);
+        return this.toConfiguration(ctx, updated);
     }
 
     async syncPrices(ctx: RequestContext): Promise<StoreCurrencyConfiguration> {
@@ -265,7 +265,7 @@ export class StoreCurrencySettingsService {
         const results: StoreCurrencyAutomaticSyncResult[] = [];
         const failures: string[] = [];
         for (const channel of channels) {
-            const configuration = this.toConfiguration(channel);
+            const configuration = await this.toConfiguration(ctx, channel);
             const hasBothCurrencies = SUPPORTED_CURRENCIES.every(currency =>
                 configuration.availableCurrencyCodes.includes(currency),
             );
@@ -311,13 +311,16 @@ export class StoreCurrencySettingsService {
         } while (skip < totalItems);
 
         const now = new Date();
-        const dueChannels = channels.filter(channel => {
-            const configuration = this.toConfiguration(channel, now);
-            return (
+        const dueChannels: Channel[] = [];
+        for (const channel of channels) {
+            const configuration = await this.toConfiguration(ctx, channel, now);
+            if (
                 configuration.usdtDisplayEnabled &&
                 isUsdtRateRefreshDue(configuration, configuration.usdtRateUpdatedAt, now)
-            );
-        });
+            ) {
+                dueChannels.push(channel);
+            }
+        }
         if (!dueChannels.length) return [];
 
         const snapshot = await this.usdtOtcRateService.fetchCnyRate();
@@ -437,9 +440,13 @@ export class StoreCurrencySettingsService {
         }
     }
 
-    private toConfiguration(channel: Channel, now = new Date()): StoreCurrencyConfiguration {
+    private async toConfiguration(
+        ctx: RequestContext,
+        channel: Channel,
+        now = new Date(),
+    ): Promise<StoreCurrencyConfiguration> {
         const customFields = channel.customFields as CurrencyChannelFields;
-        const usdtPayment = this.usdtPaymentService.walletStatus();
+        const usdtPayment = await this.usdtPaymentService.walletStatus(ctx, channel.id);
         const availableCurrencyCodes = channel.availableCurrencyCodes.filter(isSupportedCurrency);
         const defaultCurrencyCode = isSupportedCurrency(channel.defaultCurrencyCode)
             ? channel.defaultCurrencyCode
@@ -490,6 +497,7 @@ export class StoreCurrencySettingsService {
             usdtPaymentNetwork: usdtPayment.network,
             usdtReceivingAddressMasked: usdtPayment.receivingAddressMasked,
             usdtReceivingAddressFingerprint: usdtPayment.receivingAddressFingerprint,
+            usdtWalletReviewStatus: usdtPayment.reviewStatus,
         };
     }
 

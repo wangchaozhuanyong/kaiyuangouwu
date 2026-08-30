@@ -40,14 +40,20 @@ import {
     RefreshStoreExchangeRateResult,
     RefreshStoreUsdtRateResult,
     StoreCurrencyConfigurationRecord,
+    StorePaymentDetailRecord,
+    StorePaymentStatsRecord,
     StoreUsdtPaymentIntentRecord,
+    StoreUsdtPaymentStatsRecord,
+    SubmitMyStoreUsdtWalletResult,
     UpdateStoreCurrencyConfigurationResult,
     UsdtRateScheduleMode,
     myStoreCurrencyConfigurationQuery,
     refreshMyStoreExchangeRateMutation,
     refreshMyStoreUsdtRateMutation,
+    submitMyStoreUsdtWalletMutation,
     updateMyStoreCurrencyConfigurationMutation,
 } from './store-currency.graphql';
+import { UsdtManualRefundDialog, UsdtManualRefundList } from './usdt-manual-refund-dialog';
 
 type SupportedCurrency = 'CNY' | 'MYR';
 
@@ -87,6 +93,7 @@ export const storeCurrencySettingsRoute: DashboardRouteDefinition = {
 function StoreCurrencySettingsPage() {
     const { activeChannel } = useChannel();
     const [draft, setDraft] = useState<CurrencyDraft | null>(null);
+    const [walletAddress, setWalletAddress] = useState('');
     const query = useQuery({
         queryKey: ['my-store-currency-configuration', activeChannel?.id],
         queryFn: () => api.query<MyStoreCurrencyConfigurationResult>(myStoreCurrencyConfigurationQuery),
@@ -94,6 +101,11 @@ function StoreCurrencySettingsPage() {
     });
     const configuration = query.data?.myStoreCurrencyConfiguration;
     const paymentIntents = query.data?.myStoreUsdtPaymentIntents ?? [];
+    const wallet = query.data?.myStoreUsdtWallet;
+    const paymentStats = query.data?.myStoreUsdtPaymentStats;
+    const storePaymentStats = query.data?.myStorePaymentStats ?? [];
+    const storePaymentDetails = query.data?.myStorePaymentDetails ?? [];
+    const manualRefunds = query.data?.myStoreUsdtManualRefunds ?? [];
 
     useEffect(() => {
         if (configuration) setDraft(toDraft(configuration));
@@ -126,6 +138,18 @@ function StoreCurrencySettingsPage() {
             setDraft(toDraft(result.refreshMyStoreUsdtRate));
             void query.refetch();
             toast.success('已更新 Binance 与 OKX P2P 商家收购 USDT 中位价');
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const submitWalletMutation = useMutation({
+        mutationFn: (receivingAddress: string) =>
+            api.mutate<SubmitMyStoreUsdtWalletResult>(submitMyStoreUsdtWalletMutation, {
+                receivingAddress,
+            }),
+        onSuccess: () => {
+            setWalletAddress('');
+            void query.refetch();
+            toast.success('USDT 收款地址已提交，等待平台审核');
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -190,9 +214,9 @@ function StoreCurrencySettingsPage() {
                                     <TabsTrigger value="usdt-rate">USDT 收购价</TabsTrigger>
                                     <TabsTrigger value="payments">
                                         到账记录
-                                        {paymentIntents.length ? (
+                                        {storePaymentDetails.length ? (
                                             <Badge variant="outline" className="ml-2 tabular-nums">
-                                                {paymentIntents.length}
+                                                {storePaymentDetails.length}
                                             </Badge>
                                         ) : null}
                                     </TabsTrigger>
@@ -533,17 +557,87 @@ function StoreCurrencySettingsPage() {
                                             {configuration?.usdtPaymentConfigured ? '已配置' : '未配置'}
                                         </Badge>
                                     </div>
+                                    <section className="space-y-4 rounded-lg border p-4">
+                                        <SectionHeading
+                                            title="本网店 USDT 收款钱包"
+                                            description="只填写 TRON 主网收款地址，请勿提交私钥或助记词。地址加密保存，审核通过后仅影响新订单。"
+                                        />
+                                        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                                            <Input
+                                                value={walletAddress}
+                                                placeholder="T..."
+                                                autoComplete="off"
+                                                spellCheck={false}
+                                                onChange={event => setWalletAddress(event.target.value)}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                disabled={
+                                                    submitWalletMutation.isPending || !walletAddress.trim()
+                                                }
+                                                onClick={() =>
+                                                    submitWalletMutation.mutate(walletAddress.trim())
+                                                }
+                                            >
+                                                {submitWalletMutation.isPending ? '提交中' : '提交审核'}
+                                            </Button>
+                                        </div>
+                                        <div className="grid gap-3 text-sm sm:grid-cols-3">
+                                            <MetadataItem
+                                                label="审核状态"
+                                                value={walletReviewStatusLabel(wallet?.reviewStatus)}
+                                            />
+                                            <MetadataItem
+                                                label="已启用地址"
+                                                value={wallet?.activeReceivingAddressMasked ?? '无'}
+                                            />
+                                            <MetadataItem
+                                                label="待审核地址"
+                                                value={wallet?.pendingReceivingAddress ?? '无'}
+                                            />
+                                        </div>
+                                        {wallet?.rejectionReason ? (
+                                            <Alert variant="destructive">
+                                                <AlertDescription>
+                                                    驳回原因：{wallet.rejectionReason}
+                                                </AlertDescription>
+                                            </Alert>
+                                        ) : null}
+                                    </section>
                                 </TabsContent>
 
                                 <TabsContent value="payments" className="mt-0 space-y-4">
                                     <div className="flex flex-wrap items-start justify-between gap-3">
                                         <div>
-                                            <h3 className="text-base font-semibold">USDT 到账记录</h3>
-                                            <HelpText>最近 50 笔 TRC20 付款报价与到账状态。</HelpText>
+                                            <h3 className="text-base font-semibold">全部支付方式收款</h3>
+                                            <HelpText>
+                                                按支付方式和订单币种统计已结算、退款与净收，明细显示最近 100
+                                                笔支付。
+                                            </HelpText>
                                         </div>
-                                        <Badge variant="outline">{paymentIntents.length} 条</Badge>
+                                        <Badge variant="outline">{storePaymentDetails.length} 笔支付</Badge>
                                     </div>
-                                    <PaymentIntentList intents={paymentIntents} />
+                                    <StorePaymentStats stats={storePaymentStats} />
+                                    <StorePaymentDetailList
+                                        details={storePaymentDetails}
+                                        onRefundRecorded={() => query.refetch()}
+                                    />
+                                    <section className="space-y-4 border-t pt-5">
+                                        <SectionHeading
+                                            title="USDT 人工退款记录"
+                                            description="链上退款成功后登记的 Vendure 已结算退款；金额会自动扣减净收。"
+                                        />
+                                        <UsdtManualRefundList refunds={manualRefunds} />
+                                    </section>
+                                    <section className="space-y-4 border-t pt-5">
+                                        <SectionHeading
+                                            title="USDT 链上核对"
+                                            description="TRC20 专属报价、链上实收金额和人工复核状态。"
+                                        />
+                                        <UsdtPaymentStats stats={paymentStats} />
+                                        <PaymentIntentList intents={paymentIntents} />
+                                    </section>
                                 </TabsContent>
                             </Tabs>
                         ) : null}
@@ -551,6 +645,127 @@ function StoreCurrencySettingsPage() {
                 </PageBlock>
             </PageLayout>
         </Page>
+    );
+}
+
+function StorePaymentStats({ stats }: { stats: StorePaymentStatsRecord[] }) {
+    if (!stats.length) return <HelpText>暂无已结算的支付。</HelpText>;
+    return (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {stats.map(summary => (
+                <article
+                    key={`${summary.paymentMethodCode}:${summary.currencyCode}`}
+                    className="rounded-lg border p-4"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong>{summary.paymentMethodCode}</strong>
+                        <Badge variant="outline">
+                            {summary.currencyCode} · {summary.settledCount} 笔
+                        </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                        <MetadataItem
+                            label="实收"
+                            value={formatMoney(summary.currencyCode, summary.grossAmount)}
+                        />
+                        <MetadataItem
+                            label={`退款（${summary.refundCount} 笔）`}
+                            value={formatMoney(summary.currencyCode, summary.refundedAmount)}
+                        />
+                        <MetadataItem
+                            label="净收"
+                            value={formatMoney(summary.currencyCode, summary.netAmount)}
+                        />
+                    </div>
+                </article>
+            ))}
+        </div>
+    );
+}
+
+function StorePaymentDetailList({
+    details,
+    onRefundRecorded,
+}: {
+    details: StorePaymentDetailRecord[];
+    onRefundRecorded: () => void | Promise<unknown>;
+}) {
+    if (!details.length) {
+        return (
+            <div className="rounded-lg bg-muted/35 px-5 py-10 text-center">
+                <strong className="block text-sm">暂无支付明细</strong>
+                <HelpText>客户创建支付后，记录会显示在这里。</HelpText>
+            </div>
+        );
+    }
+    return (
+        <div className="grid max-h-[36rem] gap-3 overflow-y-auto pr-1">
+            {details.map(detail => (
+                <article
+                    key={`${detail.channelId}:${detail.id}`}
+                    className="grid gap-3 rounded-lg bg-muted/35 p-4 sm:grid-cols-[1fr_auto]"
+                >
+                    <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <strong>订单 {detail.orderCode}</strong>
+                            <Badge variant={detail.paymentState === 'Settled' ? 'default' : 'outline'}>
+                                {paymentStateLabel(detail.paymentState)}
+                            </Badge>
+                            <Badge variant="outline">{detail.paymentMethodCode}</Badge>
+                        </div>
+                        <p className="break-all text-sm text-muted-foreground">
+                            交易号：{detail.transactionId ?? '暂无'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            支付 ID {detail.id} · {formatDate(detail.createdAt)}
+                        </p>
+                    </div>
+                    <div className="text-left text-sm sm:text-right">
+                        <strong className="block text-lg tabular-nums">
+                            {formatMoney(detail.currencyCode, detail.amount)}
+                        </strong>
+                        <span className="block text-muted-foreground">
+                            退款 {formatMoney(detail.currencyCode, detail.refundedAmount)}
+                        </span>
+                        <span className="block font-medium">
+                            净收 {formatMoney(detail.currencyCode, detail.netAmount)}
+                        </span>
+                        {detail.paymentMethodCode === 'usdt-trc20' ? (
+                            <div className="mt-3">
+                                <UsdtManualRefundDialog
+                                    payment={detail}
+                                    onRecorded={() => void onRefundRecorded()}
+                                />
+                            </div>
+                        ) : null}
+                    </div>
+                </article>
+            ))}
+        </div>
+    );
+}
+
+function UsdtPaymentStats({ stats }: { stats: StoreUsdtPaymentStatsRecord | undefined }) {
+    if (!stats) return null;
+    return (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MetadataItem label="已到账" value={`${stats.settledCount} 笔`} />
+            <MetadataItem label="实际到账 USDT" value={`₮${stats.receivedUsdtTotal.toFixed(6)}`} />
+            <MetadataItem
+                label="等待 / 人工复核"
+                value={`${stats.pendingCount} / ${stats.manualReviewCount}`}
+            />
+            <MetadataItem
+                label="法币成交额"
+                value={
+                    stats.fiatTotals.length
+                        ? stats.fiatTotals
+                              .map(total => `${total.currencyCode} ${(total.amount / 100).toFixed(2)}`)
+                              .join(' / ')
+                        : '暂无'
+                }
+            />
+        </div>
     );
 }
 
@@ -667,6 +882,18 @@ function PaymentIntentList({ intents }: { intents: StoreUsdtPaymentIntentRecord[
                                 ? `交易：${intent.transactionId}`
                                 : `报价有效至：${formatDate(intent.expiresAt)}`}
                         </p>
+                        <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                            <span>
+                                原订单金额：{intent.fiatCurrencyCode} {(intent.fiatAmount / 100).toFixed(2)}
+                            </span>
+                            <span>
+                                汇率：{intent.fiatPerUsdtRate.toFixed(4)}（{intent.rateSource}）
+                            </span>
+                            <span>收款地址：{intent.receivingAddressMasked}</span>
+                            <span>实际到账：{intent.receivedUsdtAmount?.toFixed(6) ?? '未到账'}</span>
+                            <span>链上区块：{intent.blockNumber ?? '未确认'}</span>
+                            <span>最后检查：{formatDate(intent.lastCheckedAt)}</span>
+                        </div>
                         {intent.failureReason ? (
                             <p className="mb-0 mt-1 text-sm font-semibold text-destructive">
                                 {intent.failureReason}
@@ -745,6 +972,36 @@ function usdtPaymentStatusLabel(status: string): string {
             EXPIRED: '报价已过期',
         }[status] ?? status
     );
+}
+
+function walletReviewStatusLabel(status: string | undefined): string {
+    return (
+        {
+            UNCONFIGURED: '未配置',
+            PENDING: '待平台审核',
+            ACTIVE: '已审核启用',
+            REJECTED: '已驳回',
+        }[status ?? 'UNCONFIGURED'] ??
+        status ??
+        '未配置'
+    );
+}
+
+function paymentStateLabel(state: string): string {
+    return (
+        {
+            Created: '已创建',
+            Authorized: '已授权',
+            Settled: '已结算',
+            Declined: '已拒绝',
+            Error: '错误',
+            Cancelled: '已取消',
+        }[state] ?? state
+    );
+}
+
+function formatMoney(currencyCode: string, amount: number): string {
+    return `${currencyCode} ${(amount / 100).toFixed(2)}`;
 }
 
 function errorMessage(error: unknown): string {

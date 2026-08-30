@@ -49,14 +49,13 @@ export interface SolidifiedTronTransaction {
 export class UsdtTrc20Client {
     constructor(private readonly walletConfiguration: UsdtWalletConfigurationService) {}
 
-    async incomingTransfers(minTimestamp: Date): Promise<ConfirmedTrc20Transfer[]> {
-        const wallet = this.walletConfiguration.requireConfigured();
+    async incomingTransfers(receivingAddress: string, minTimestamp: Date): Promise<ConfirmedTrc20Transfer[]> {
         const records: ConfirmedTrc20Transfer[] = [];
         let fingerprint: string | undefined;
 
         for (let page = 0; page < MAX_TRANSFER_PAGES; page += 1) {
             const url = new URL(
-                `/v1/accounts/${encodeURIComponent(wallet.receivingAddress)}/transactions/trc20`,
+                `/v1/accounts/${encodeURIComponent(receivingAddress)}/transactions/trc20`,
                 TRONGRID_BASE_URL,
             );
             url.searchParams.set('only_confirmed', 'true');
@@ -75,7 +74,7 @@ export class UsdtTrc20Client {
             const payload = (await response.json()) as TronGridTransferResponse;
             if (payload.success === false) throw new Error('TronGrid rejected the transfer query');
             for (const record of payload.data ?? []) {
-                const transfer = parseConfirmedUsdtTransfer(record, wallet.receivingAddress);
+                const transfer = parseConfirmedUsdtTransfer(record, receivingAddress);
                 if (transfer) records.push(transfer);
             }
             fingerprint = payload.meta?.fingerprint;

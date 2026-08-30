@@ -1,5 +1,7 @@
 import type { CurrencyCode, ID } from '@vendure/core';
 
+export type SystemAnnouncementTargetMode = 'ALL' | 'SINGLE' | 'MULTIPLE';
+
 export interface CreateSystemAnnouncementInput {
     enabled?: boolean | null;
     priority?: number | null;
@@ -10,6 +12,8 @@ export interface CreateSystemAnnouncementInput {
     linkUrl?: string | null;
     startsAt?: Date | null;
     endsAt?: Date | null;
+    targetMode?: SystemAnnouncementTargetMode | null;
+    channelIds?: ID[] | null;
 }
 
 export interface UpdateSystemAnnouncementInput extends CreateSystemAnnouncementInput {
@@ -416,6 +420,7 @@ export interface StoreCurrencyConfiguration {
     usdtPaymentNetwork: string;
     usdtReceivingAddressMasked: string | null;
     usdtReceivingAddressFingerprint: string | null;
+    usdtWalletReviewStatus: string;
 }
 
 export interface UpdateStoreCurrencyConfigurationInput {

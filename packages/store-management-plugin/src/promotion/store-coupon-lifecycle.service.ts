@@ -26,6 +26,7 @@ import {
 } from '../entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
+import { StorefrontDataChangedEvent } from '../realtime/storefront-data-changed.event';
 import {
     StoreCouponCampaignActionResult,
     StoreCouponLedgerEntryList,
@@ -211,6 +212,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 note: '优惠券已锁定到购物车订单',
             });
         }
+        await this.publishCustomerCouponChanged(ctx, customer);
         return this.toCustomerCouponView(coupon);
     }
 
@@ -223,6 +225,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         }
         const order = await this.orderService.findOne(ctx, coupon.lockedOrderId, ['lines', 'shippingLines']);
         await this.releaseLockedCoupon(ctx, coupon, order ?? null, '客户在购物车取消使用优惠券');
+        await this.publishCustomerCouponChanged(ctx, customer);
         return this.toCustomerCouponView(coupon);
     }
 
@@ -237,6 +240,8 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             throw new UserInputError('当前状态的优惠券不能撤销');
         }
         await this.revokeCoupon(ctx, coupon, reason?.trim() || '管理员撤销优惠券');
+        const customer = await this.customerService.findOne(ctx, coupon.customerId);
+        if (customer) await this.publishCustomerCouponChanged(ctx, customer);
         return this.toCustomerCouponView(coupon);
     }
 
@@ -275,6 +280,13 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 affectedCount++;
             }
         }
+        await this.eventBus.publish(
+            new StorefrontDataChangedEvent(ctx, ['content'], {
+                channelIds: [ctx.channelId],
+                entityType: 'StoreCouponCampaign',
+                entityIds: [campaignId],
+            }),
+        );
         return { campaignId, affectedCount };
     }
 
@@ -486,7 +498,33 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             idempotencyKey: `CLAIMED:${coupon.id}`,
             note: grantedByAdmin ? '管理员发放优惠券' : '客户领取优惠券',
         });
+        await this.publishCustomerCouponChanged(ctx, customer, true, promotion.id);
         return this.toCustomerCouponView(coupon);
+    }
+
+    private async publishCustomerCouponChanged(
+        ctx: RequestContext,
+        customer: Customer,
+        publicContentChanged = false,
+        campaignId?: ID,
+    ): Promise<void> {
+        if (publicContentChanged) {
+            await this.eventBus.publish(
+                new StorefrontDataChangedEvent(ctx, ['content'], {
+                    channelIds: [ctx.channelId],
+                    entityType: 'StoreCouponCampaign',
+                    entityIds: campaignId == null ? undefined : [campaignId],
+                }),
+            );
+        }
+        if (customer.user?.id == null) return;
+        await this.eventBus.publish(
+            new StorefrontDataChangedEvent(ctx, ['coupons'], {
+                channelIds: [ctx.channelId],
+                userIds: [customer.user.id],
+                entityType: 'CustomerCoupon',
+            }),
+        );
     }
 
     private async redeemForPaidOrder(ctx: RequestContext, orderId: ID): Promise<void> {

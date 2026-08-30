@@ -91,8 +91,7 @@ const zhCopy = {
     accessible: '可访问',
     suspended: '已停用',
     invalidName: '店铺名称必须是 1 至 16 个显示单位',
-    conflict:
-        '店铺资料已被其他管理员更新。请刷新页面获取最新数据，再合并并保存你的修改。',
+    conflict: '店铺资料已被其他管理员更新。请刷新页面获取最新数据，再合并并保存你的修改。',
     readiness: '上线检查',
     ready: '已满足全部上线条件',
     notReady: '仍有未完成项目，请完成后联系平台管理员启用店铺',
@@ -195,8 +194,7 @@ function MyStoreProfilePage() {
             setDraft(toDraft(result.updateMyStoreProfile));
             toast.success(text.saved);
         },
-        onError: error =>
-            toast.error(isConcurrentModification(error) ? text.conflict : errorMessage(error)),
+        onError: error => toast.error(isConcurrentModification(error) ? text.conflict : errorMessage(error)),
     });
 
     const save = () => {
@@ -223,11 +221,7 @@ function MyStoreProfilePage() {
             <PageTitle>{text.title}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
-                    <Button
-                        type="button"
-                        onClick={save}
-                        disabled={!draft || !isDirty || mutation.isPending}
-                    >
+                    <Button type="button" onClick={save} disabled={!draft || !isDirty || mutation.isPending}>
                         {mutation.isPending ? (
                             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                         ) : (

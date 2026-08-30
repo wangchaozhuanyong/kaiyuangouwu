@@ -32,6 +32,8 @@ describe('StoreManagementPlugin promotion options', () => {
 
     it('enables secure cookies and removes development host bypasses by default in production', () => {
         vi.stubEnv('NODE_ENV', 'production');
+        vi.stubEnv('USDT_PAYMENT_PROOF_SECRET', 'production-usdt-proof-secret-that-is-long-enough');
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', 'production-wallet-encryption-key-that-is-long-enough');
 
         StoreManagementPlugin.init({
             signingSecret: 'production-promotion-secret-that-is-long-enough',
@@ -56,7 +58,8 @@ describe('StoreManagementPlugin promotion options', () => {
             save: vi.fn().mockImplementation(role => Promise.resolve(role)),
         };
         const paymentMethodRepository = {
-            findOne: vi.fn().mockResolvedValue({ id: 'referral-payment-method' }),
+            findOne: vi.fn().mockResolvedValue({ id: 'referral-payment-method', enabled: true }),
+            save: vi.fn().mockImplementation(value => Promise.resolve(value)),
         };
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
@@ -76,8 +79,15 @@ describe('StoreManagementPlugin promotion options', () => {
             connection as any,
             { create: vi.fn().mockResolvedValue({}) } as any,
             { create: vi.fn() } as any,
-            { assignToChannels: vi.fn().mockResolvedValue(undefined) } as any,
+            {
+                assignToChannels: vi.fn().mockResolvedValue(undefined),
+                removeFromChannels: vi.fn().mockResolvedValue(undefined),
+            } as any,
             { get: vi.fn().mockReturnValue({ enabled: false }) } as any,
+            {
+                seedLegacyWallet: vi.fn().mockResolvedValue(undefined),
+                list: vi.fn().mockResolvedValue([]),
+            } as any,
         );
 
         await plugin.onApplicationBootstrap();

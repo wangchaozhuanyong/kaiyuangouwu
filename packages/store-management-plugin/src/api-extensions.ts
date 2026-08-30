@@ -80,6 +80,7 @@ const commonTypes = gql`
         usdtPaymentNetwork: String!
         usdtReceivingAddressMasked: String
         usdtReceivingAddressFingerprint: String
+        usdtWalletReviewStatus: String!
     }
 
     type StorefrontUsdtCheckoutQuote {
@@ -103,16 +104,125 @@ const commonTypes = gql`
 
     type StoreUsdtPaymentIntent {
         id: ID!
+        channelId: ID!
+        channelCode: String!
         orderId: ID!
         orderCode: String!
         network: String!
+        fiatCurrencyCode: String!
+        fiatAmount: Money!
+        fiatPerUsdtRate: Float!
+        markupPercent: Float!
+        rateSource: String!
+        receivingAddressMasked: String!
+        receivingAddressFingerprint: String!
+        baseUsdtAmount: Float!
         expectedUsdtAmount: Float!
+        receivedUsdtAmount: Float
+        senderAddressMasked: String
         status: String!
         transactionId: String
         failureReason: String
         createdAt: DateTime!
         expiresAt: DateTime!
         settledAt: DateTime
+        blockNumber: Int
+        blockTimestamp: DateTime
+        lastCheckedAt: DateTime
+    }
+
+    type StoreUsdtWallet {
+        channelId: ID!
+        channelCode: String!
+        reviewStatus: String!
+        configured: Boolean!
+        network: String!
+        activeReceivingAddressMasked: String
+        activeReceivingAddressFingerprint: String
+        pendingReceivingAddress: String
+        pendingReceivingAddressFingerprint: String
+        submittedAt: DateTime
+        reviewedAt: DateTime
+        rejectionReason: String
+    }
+
+    type StoreUsdtFiatTotal {
+        currencyCode: String!
+        amount: Money!
+    }
+
+    type StoreUsdtChannelPaymentStats {
+        channelId: ID!
+        channelCode: String!
+        totalCount: Int!
+        pendingCount: Int!
+        settledCount: Int!
+        manualReviewCount: Int!
+        expiredCount: Int!
+        expectedUsdtTotal: Float!
+        receivedUsdtTotal: Float!
+        fiatTotals: [StoreUsdtFiatTotal!]!
+    }
+
+    type StorePaymentMethodStats {
+        channelId: ID!
+        channelCode: String!
+        paymentMethodCode: String!
+        currencyCode: CurrencyCode!
+        settledCount: Int!
+        refundCount: Int!
+        grossAmount: Money!
+        refundedAmount: Money!
+        netAmount: Money!
+    }
+
+    type StorePaymentDetail {
+        id: ID!
+        channelId: ID!
+        channelCode: String!
+        orderId: ID!
+        orderCode: String!
+        paymentMethodCode: String!
+        paymentState: String!
+        currencyCode: CurrencyCode!
+        amount: Money!
+        refundedAmount: Money!
+        netAmount: Money!
+        transactionId: String
+        createdAt: DateTime!
+    }
+
+    input StoreUsdtManualRefundInput {
+        paymentId: ID!
+        amount: Money!
+        usdtAmount: String!
+        transactionId: String!
+        reason: String!
+    }
+
+    type StoreUsdtManualRefund {
+        id: ID!
+        channelId: ID!
+        channelCode: String!
+        paymentId: ID!
+        orderId: ID!
+        orderCode: String!
+        currencyCode: CurrencyCode!
+        amount: Money!
+        usdtAmount: String!
+        network: String!
+        transactionId: String!
+        blockNumber: Int!
+        reason: String!
+        operatorUserId: ID!
+        state: String!
+        createdAt: DateTime!
+    }
+
+    input ReviewStoreUsdtWalletInput {
+        channelId: ID!
+        approved: Boolean!
+        rejectionReason: String
     }
 
     type StoreCustomerCoupon {
@@ -190,6 +300,38 @@ const commonTypes = gql`
         siteIntroEn: String!
         serviceTextZh: String!
         serviceTextEn: String!
+        featureOneTitleZh: String!
+        featureOneTitleEn: String!
+        featureOneTextZh: String!
+        featureOneTextEn: String!
+        featureTwoTitleZh: String!
+        featureTwoTitleEn: String!
+        featureTwoTextZh: String!
+        featureTwoTextEn: String!
+        featureThreeTitleZh: String!
+        featureThreeTitleEn: String!
+        featureThreeTextZh: String!
+        featureThreeTextEn: String!
+        qrEyebrowZh: String!
+        qrEyebrowEn: String!
+        qrTitleZh: String!
+        qrTitleEn: String!
+        qrDescriptionZh: String!
+        qrDescriptionEn: String!
+        sceneOneZh: String!
+        sceneOneEn: String!
+        sceneTwoZh: String!
+        sceneTwoEn: String!
+        sceneThreeZh: String!
+        sceneThreeEn: String!
+        sceneFourZh: String!
+        sceneFourEn: String!
+        ctaTextZh: String!
+        ctaTextEn: String!
+        footerTitleZh: String!
+        footerTitleEn: String!
+        footerTextZh: String!
+        footerTextEn: String!
         foregroundColor: String!
         accentColor: String!
         overlayOpacity: Int!
@@ -371,12 +513,20 @@ export const adminApiExtensions = gql`
         usdtRateDailyTime: String!
     }
 
+    enum SystemAnnouncementTargetMode {
+        ALL
+        SINGLE
+        MULTIPLE
+    }
+
     type SystemAnnouncement implements Node {
         id: ID!
         createdAt: DateTime!
         updatedAt: DateTime!
         enabled: Boolean!
         priority: Int!
+        targetMode: SystemAnnouncementTargetMode!
+        channels: [Channel!]!
         titleZh: String!
         titleEn: String!
         contentZh: String!
@@ -396,6 +546,8 @@ export const adminApiExtensions = gql`
         linkUrl: String
         startsAt: DateTime
         endsAt: DateTime
+        targetMode: SystemAnnouncementTargetMode
+        channelIds: [ID!]
     }
 
     input UpdateSystemAnnouncementInput {
@@ -409,6 +561,8 @@ export const adminApiExtensions = gql`
         linkUrl: String
         startsAt: DateTime
         endsAt: DateTime
+        targetMode: SystemAnnouncementTargetMode
+        channelIds: [ID!]
     }
 
     type StorefrontPromotionPage {
@@ -637,6 +791,38 @@ export const adminApiExtensions = gql`
         siteIntroEn: String!
         serviceTextZh: String!
         serviceTextEn: String!
+        featureOneTitleZh: String
+        featureOneTitleEn: String
+        featureOneTextZh: String
+        featureOneTextEn: String
+        featureTwoTitleZh: String
+        featureTwoTitleEn: String
+        featureTwoTextZh: String
+        featureTwoTextEn: String
+        featureThreeTitleZh: String
+        featureThreeTitleEn: String
+        featureThreeTextZh: String
+        featureThreeTextEn: String
+        qrEyebrowZh: String
+        qrEyebrowEn: String
+        qrTitleZh: String
+        qrTitleEn: String
+        qrDescriptionZh: String
+        qrDescriptionEn: String
+        sceneOneZh: String
+        sceneOneEn: String
+        sceneTwoZh: String
+        sceneTwoEn: String
+        sceneThreeZh: String
+        sceneThreeEn: String
+        sceneFourZh: String
+        sceneFourEn: String
+        ctaTextZh: String
+        ctaTextEn: String
+        footerTitleZh: String
+        footerTitleEn: String
+        footerTextZh: String
+        footerTextEn: String
         foregroundColor: String!
         accentColor: String!
         overlayOpacity: Int!
@@ -660,6 +846,38 @@ export const adminApiExtensions = gql`
         siteIntroEn: String!
         serviceTextZh: String!
         serviceTextEn: String!
+        featureOneTitleZh: String
+        featureOneTitleEn: String
+        featureOneTextZh: String
+        featureOneTextEn: String
+        featureTwoTitleZh: String
+        featureTwoTitleEn: String
+        featureTwoTextZh: String
+        featureTwoTextEn: String
+        featureThreeTitleZh: String
+        featureThreeTitleEn: String
+        featureThreeTextZh: String
+        featureThreeTextEn: String
+        qrEyebrowZh: String
+        qrEyebrowEn: String
+        qrTitleZh: String
+        qrTitleEn: String
+        qrDescriptionZh: String
+        qrDescriptionEn: String
+        sceneOneZh: String
+        sceneOneEn: String
+        sceneTwoZh: String
+        sceneTwoEn: String
+        sceneThreeZh: String
+        sceneThreeEn: String
+        sceneFourZh: String
+        sceneFourEn: String
+        ctaTextZh: String
+        ctaTextEn: String
+        footerTitleZh: String
+        footerTitleEn: String
+        footerTextZh: String
+        footerTextEn: String
         foregroundColor: String!
         accentColor: String!
         overlayOpacity: Int!
@@ -826,7 +1044,18 @@ export const adminApiExtensions = gql`
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
         myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
+        myStoreUsdtWallet: StoreUsdtWallet!
         myStoreUsdtPaymentIntents: [StoreUsdtPaymentIntent!]!
+        myStoreUsdtPaymentStats: StoreUsdtChannelPaymentStats!
+        myStorePaymentStats: [StorePaymentMethodStats!]!
+        myStorePaymentDetails: [StorePaymentDetail!]!
+        myStoreUsdtManualRefunds: [StoreUsdtManualRefund!]!
+        storeUsdtWallets: [StoreUsdtWallet!]!
+        storeUsdtPaymentIntents(channelId: ID): [StoreUsdtPaymentIntent!]!
+        storeUsdtPaymentStats(channelId: ID): [StoreUsdtChannelPaymentStats!]!
+        storePaymentStats(channelId: ID): [StorePaymentMethodStats!]!
+        storePaymentDetails(channelId: ID): [StorePaymentDetail!]!
+        storeUsdtManualRefunds(channelId: ID): [StoreUsdtManualRefund!]!
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
@@ -858,6 +1087,9 @@ export const adminApiExtensions = gql`
         refreshMyStoreExchangeRate: StoreCurrencyConfiguration!
         syncMyStoreCurrencyPrices: StoreCurrencyConfiguration!
         refreshMyStoreUsdtRate: StoreCurrencyConfiguration!
+        submitMyStoreUsdtWallet(receivingAddress: String!): StoreUsdtWallet!
+        reviewStoreUsdtWallet(input: ReviewStoreUsdtWalletInput!): StoreUsdtWallet!
+        recordStoreUsdtManualRefund(input: StoreUsdtManualRefundInput!): StoreUsdtManualRefund!
         completeInitialPasswordChange(password: String!): MerchantInitialPasswordStatus!
         saveStorefrontPromotionDraft(input: UpdateStorefrontPromotionDraftInput!): StorefrontPromotionPage!
         publishStorefrontPromotionPage: StorefrontPromotionPage!

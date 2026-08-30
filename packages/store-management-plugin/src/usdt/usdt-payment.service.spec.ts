@@ -51,12 +51,13 @@ describe('UsdtPaymentService', () => {
         expect(intent).toMatchObject({
             receivingAddress,
             receivingAddressFingerprint,
+            network: 'TRC20',
             tokenContractAddress: USDT_TRC20_CONTRACT_ADDRESS,
             status: 'PENDING',
         });
     });
 
-    it('settles only a solidified exact transfer and records the Vendure payment idempotently', async () => {
+    it('settles an old intent from its wallet snapshot even when the current Channel wallet changed', async () => {
         const now = new Date('2026-08-26T02:05:00.000Z');
         const intent = new StorefrontUsdtPaymentIntent({
             id: 'intent-1',
@@ -69,6 +70,7 @@ describe('UsdtPaymentService', () => {
             expectedUsdtAmount: '13.850123',
             receivingAddress,
             receivingAddressFingerprint,
+            network: 'TRC20',
             tokenContractAddress: USDT_TRC20_CONTRACT_ADDRESS,
             status: 'PENDING',
         });
@@ -120,13 +122,14 @@ describe('UsdtPaymentService', () => {
             connection as any,
             orderService as any,
             { create: vi.fn().mockResolvedValue({ channelId: 'channel-1' }) } as any,
-            { get: () => wallet, requireConfigured: () => wallet } as any,
+            { requireConfigured: vi.fn(() => Promise.reject(new Error('wallet was rotated'))) } as any,
             tronClient as any,
         );
 
         const result = await service.scanPendingPayments({} as any, now);
 
         expect(result).toMatchObject({ settledCount: 1, manualReviewCount: 0 });
+        expect(tronClient.incomingTransfers).toHaveBeenCalledWith(receivingAddress, expect.any(Date));
         expect(orderService.addPaymentToOrder).toHaveBeenCalledWith(
             expect.objectContaining({ channelId: 'channel-1' }),
             'order-1',

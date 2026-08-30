@@ -34,6 +34,7 @@ import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 import { StoreProfile } from './entities/store-profile.entity';
+import { StoreUsdtWallet } from './entities/store-usdt-wallet.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
@@ -63,6 +64,8 @@ import { StorefrontPromotionHtmlService } from './promotion/storefront-promotion
 import { StorefrontPromotionController } from './promotion/storefront-promotion.controller';
 import { StorefrontPromotionAdminResolver } from './promotion/storefront-promotion.resolver';
 import { StorefrontPromotionService } from './promotion/storefront-promotion.service';
+import { StorefrontRealtimeController } from './realtime/storefront-realtime.controller';
+import { StorefrontRealtimeService } from './realtime/storefront-realtime.service';
 import { referralBalancePaymentHandler } from './referral/referral-payment-handler';
 import { configureReferralPaymentProofSecret } from './referral/referral-payment-proof';
 import { auditReferralBalancesTask, reconcileReferralRewardsTask } from './referral/referral-tasks';
@@ -88,6 +91,7 @@ import {
     refreshStoreUsdtRatesTask,
     syncAutomaticStoreCurrencyPricesTask,
 } from './store-currency-tasks';
+import { StorePaymentReportingService } from './store-payment-reporting.service';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
 import { StoreProvisioningResolver } from './store-provisioning.resolver';
@@ -101,6 +105,9 @@ import {
 } from './system-announcement.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
 import { StorefrontPromotionPluginOptions } from './types';
+import { UsdtOtcRateService } from './usdt-otc-rate.service';
+import { StoreUsdtWalletService } from './usdt/store-usdt-wallet.service';
+import { UsdtManualRefundService } from './usdt/usdt-manual-refund.service';
 import { usdtTrc20PaymentHandler } from './usdt/usdt-payment-handler';
 import {
     configureUsdtPaymentProofSecret,
@@ -110,10 +117,10 @@ import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
 import { UsdtPaymentService } from './usdt/usdt-payment.service';
 import { UsdtTrc20Client } from './usdt/usdt-trc20-client';
 import {
+    isAcceptableUsdtWalletEncryptionSecret,
     loadUsdtWalletConfiguration,
     UsdtWalletConfigurationService,
 } from './usdt/usdt-wallet-configuration.service';
-import { UsdtOtcRateService } from './usdt-otc-rate.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin],
@@ -139,8 +146,9 @@ import { UsdtOtcRateService } from './usdt-otc-rate.service';
         StorefrontDailyVisitor,
         StorefrontUsdtCheckoutQuote,
         StorefrontUsdtPaymentIntent,
+        StoreUsdtWallet,
     ],
-    controllers: [StorefrontPromotionController],
+    controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
         MerchantCatalogAccessService,
         MerchantInitialPasswordService,
@@ -149,10 +157,13 @@ import { UsdtOtcRateService } from './usdt-otc-rate.service';
         StorefrontActivationService,
         StoreCommerceSettingsService,
         StoreCurrencySettingsService,
+        StorePaymentReportingService,
         UsdtOtcRateService,
         UsdtWalletConfigurationService,
+        StoreUsdtWalletService,
         UsdtTrc20Client,
         UsdtPaymentService,
+        UsdtManualRefundService,
         StoreProvisioningService,
         StorefrontEntryMiddleware,
         StorefrontPromotionAccessService,
@@ -163,6 +174,7 @@ import { UsdtOtcRateService } from './usdt-otc-rate.service';
         ReferralService,
         ReferralWalletSpendService,
         SystemAnnouncementService,
+        StorefrontRealtimeService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
@@ -266,6 +278,7 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
         private readonly paymentMethodService: PaymentMethodService,
         private readonly channelService: ChannelService,
         private readonly usdtWalletConfiguration: UsdtWalletConfigurationService,
+        private readonly storeUsdtWallets: StoreUsdtWalletService,
     ) {}
 
     static init(options: StorefrontPromotionPluginOptions = {}): typeof StoreManagementPlugin {
@@ -287,11 +300,18 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
             ),
         };
         configureReferralPaymentProofSecret(signingSecret || 'development-referral-payment-proof-secret');
-        const usdtWallet = loadUsdtWalletConfiguration(process.env, production);
+        loadUsdtWalletConfiguration(process.env, production);
         const usdtPaymentProofSecret = process.env.USDT_PAYMENT_PROOF_SECRET?.trim() || '';
-        if (production && usdtWallet.enabled && !isAcceptableUsdtPaymentProofSecret(usdtPaymentProofSecret)) {
+        const usdtWalletEncryptionSecret =
+            process.env.USDT_WALLET_ENCRYPTION_KEY?.trim() || usdtPaymentProofSecret;
+        if (production && !isAcceptableUsdtPaymentProofSecret(usdtPaymentProofSecret)) {
             throw new Error(
-                'USDT_PAYMENT_PROOF_SECRET must be a non-placeholder secret of at least 32 characters when USDT receiving is enabled',
+                'USDT_PAYMENT_PROOF_SECRET must be a non-placeholder secret of at least 32 characters in production',
+            );
+        }
+        if (production && !isAcceptableUsdtWalletEncryptionSecret(usdtWalletEncryptionSecret)) {
+            throw new Error(
+                'USDT_WALLET_ENCRYPTION_KEY must be a non-placeholder secret of at least 32 characters in production',
             );
         }
         configureUsdtPaymentProofSecret(usdtPaymentProofSecret || 'development-usdt-payment-proof-secret');
@@ -344,18 +364,16 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
     private async ensureUsdtPaymentMethod(): Promise<void> {
         const ctx = await this.requestContextService.create({ apiType: 'admin' });
         const repository = this.connection.rawConnection.getRepository(PaymentMethod);
-        const walletConfigured = this.usdtWalletConfiguration.get().enabled;
+        const channels = await this.connection.getRepository(ctx, Channel).find();
+        await this.storeUsdtWallets.seedLegacyWallet(ctx, channels, this.usdtWalletConfiguration.get());
+        const configuredChannelIds = new Set(
+            (await this.storeUsdtWallets.list(ctx))
+                .filter(wallet => wallet.configured)
+                .map(wallet => String(wallet.channelId)),
+        );
         let paymentMethod = await repository.findOne({
             where: { code: USDT_TRC20_PAYMENT_METHOD_CODE },
         });
-        if (!walletConfigured) {
-            if (paymentMethod?.enabled) {
-                paymentMethod.enabled = false;
-                await repository.save(paymentMethod, { reload: false });
-            }
-            return;
-        }
-        const channels = await this.connection.getRepository(ctx, Channel).find();
         if (!paymentMethod) {
             paymentMethod = await this.paymentMethodService.create(ctx, {
                 code: USDT_TRC20_PAYMENT_METHOD_CODE,
@@ -382,7 +400,17 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
             ctx,
             PaymentMethod,
             paymentMethod.id,
-            channels.map(channel => channel.id),
+            channels
+                .filter(channel => configuredChannelIds.has(String(channel.id)))
+                .map(channel => channel.id),
+        );
+        await this.channelService.removeFromChannels(
+            ctx,
+            PaymentMethod,
+            paymentMethod.id,
+            channels
+                .filter(channel => !configuredChannelIds.has(String(channel.id)))
+                .map(channel => channel.id),
         );
     }
 
