@@ -2,6 +2,7 @@ import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
+import { In } from 'typeorm';
 
 import { IMAGE_GENERATION_OPTIONS, launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
@@ -93,15 +94,23 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         await this.synchronizeActiveSkillRelease();
         const config = await this.getOrCreateConfig(ctx);
         const models = await this.getOrCreateModels(ctx);
-        const credentials = await this.connection
-            .getRepository(ctx, ImageProviderCredential)
-            .createQueryBuilder('credential')
-            .where('credential.archivedAt IS NULL')
-            .getMany();
+        const credentialEnabled = (
+            await Promise.all(
+                models
+                    .filter(model => model.enabled && modelReady(model))
+                    .map(model =>
+                        this.providerRouter.hasAvailable(ctx, {
+                            scope: providerScopeForModel(model.protocol, model.providerModelId),
+                            purpose: 'IMAGE',
+                            modelConfigId: model.id,
+                        }),
+                    ),
+            )
+        ).some(Boolean);
         return {
             ...config,
             models,
-            credentialEnabled: credentials.some(credential => credential?.enabled),
+            credentialEnabled,
             activeSkillHash: this.rules.sourceHash,
             skillAutoActivateEnabled: this.options.autoActivateSkillReleases === true,
         };
@@ -151,10 +160,14 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         const bindingRepository = ctx
             ? this.connection.getRepository(ctx, ImageProviderCredentialModel)
             : this.connection.rawConnection.getRepository(ImageProviderCredentialModel);
-        const bindings = await bindingRepository.find({
-            where: { credentialId: credential.id },
-            relations: { modelConfig: true },
-        });
+        const bindingsQuery = bindingRepository
+            .createQueryBuilder('binding')
+            .innerJoinAndSelect('binding.modelConfig', 'model')
+            .where('binding.credentialId = :credentialId', { credentialId: credential.id });
+        if (ctx) {
+            bindingsQuery.andWhere('model.channelId = :channelId', { channelId: ctx.channelId });
+        }
+        const bindings = await bindingsQuery.getMany();
         return {
             id: credential.id,
             code: credential.code,
@@ -318,7 +331,10 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         let credential = input.id
             ? await repository.findOne({ where: { id: input.id } })
             : await repository.findOne({ where: { code } });
+        if (input.id && !credential) throw new UserInputError('找不到 Key');
         if (credential?.archivedAt) throw new UserInputError('已归档的 Key 不能编辑');
+        if (credential && credential.code !== code)
+            throw new UserInputError('稳定代码创建后不能修改，请新建 Key');
         const apiKey = input.apiKey?.trim();
         if (!credential && !apiKey) throw new UserInputError('首次配置必须填写 API Key');
         const normalizedBaseUrl = baseUrl.toString().replace(/\/$/u, '');
@@ -375,7 +391,17 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 throw new UserInputError('Key 只能绑定同一供应商协议的模型');
             }
             const bindingRepository = this.connection.getRepository(txCtx, ImageProviderCredentialModel);
-            await bindingRepository.delete({ credentialId: saved.id });
+            const currentChannelModels = await modelRepository.find({
+                where: { channelId: txCtx.channelId },
+                select: { id: true },
+            });
+            const currentChannelModelIds = currentChannelModels.map(model => model.id);
+            if (currentChannelModelIds.length) {
+                await bindingRepository.delete({
+                    credentialId: saved.id,
+                    modelConfigId: In(currentChannelModelIds),
+                });
+            }
             if (models.length) {
                 await bindingRepository.save(
                     models.map(

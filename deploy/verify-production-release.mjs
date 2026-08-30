@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 const SHOP_API_PROBE = Object.freeze({ query: '{__typename}' });
 const ENTRY_COOKIE_NAME = 'storefront-entry';
 const DEFAULT_TIMEOUT_MS = 10_000;
+const MAX_DASHBOARD_ASSETS = 500;
 
 function decodeHtmlAttribute(value) {
     return value
@@ -72,6 +73,28 @@ export function extractStorefrontAssetUrl(html, storefrontUrl) {
     throw new Error('Authenticated storefront HTML does not reference a same-origin JS or CSS asset');
 }
 
+export function extractDashboardAssetUrls(html, dashboardUrl) {
+    const dashboard = normalizeDashboardUrl(dashboardUrl);
+    const urls = [];
+    for (const match of html.matchAll(/<(?:link|script)\b[^>]*>/giu)) {
+        const reference = readHtmlAttribute(match[0], 'href') ?? readHtmlAttribute(match[0], 'src');
+        if (!reference) continue;
+        const assetUrl = new URL(reference, dashboard);
+        if (
+            assetUrl.origin === dashboard.origin &&
+            assetUrl.pathname.startsWith('/dashboard/assets/') &&
+            /\.(?:css|js)$/u.test(assetUrl.pathname)
+        ) {
+            urls.push(assetUrl);
+        }
+    }
+    const unique = [...new Map(urls.map(url => [url.href, url])).values()];
+    if (!unique.length) {
+        throw new Error('Dashboard HTML does not reference a same-origin JS or CSS asset');
+    }
+    return unique;
+}
+
 function normalizeStorefrontUrl(value) {
     const url = new URL(value);
     if (url.username || url.password) {
@@ -92,6 +115,26 @@ function normalizeDashboardUrl(value) {
     return url;
 }
 
+function dashboardAssetReferences(source, dashboard) {
+    const references = [];
+    for (const match of source.matchAll(
+        /(?:^|["'`(])((?:\.\/)?assets\/[A-Za-z0-9_.-]+\.(?:js|css))(?![A-Za-z0-9_.-])/gu,
+    )) {
+        const reference = match[1].replace(/^\.\//u, '');
+        const assetUrl = new URL(reference, dashboard);
+        if (assetUrl.origin === dashboard.origin && assetUrl.pathname.startsWith('/dashboard/assets/')) {
+            references.push(assetUrl);
+        }
+    }
+    return references;
+}
+
+function cacheBustedUrl(url, releaseId) {
+    const result = new URL(url);
+    result.searchParams.set('__release', releaseId);
+    return result;
+}
+
 async function fetchWithTimeout(fetchImpl, url, init, timeoutMs) {
     try {
         return await fetchImpl(url, {
@@ -109,6 +152,64 @@ function expectStatus(response, expectedStatus, label) {
     if (response.status !== expectedStatus) {
         throw new Error(`${label}: expected HTTP ${expectedStatus}, received ${response.status}`);
     }
+}
+
+function expectDashboardAssetContentType(response, assetUrl) {
+    const contentType = response.headers.get('content-type') ?? '';
+    const expected = assetUrl.pathname.endsWith('.css') ? /text\/css/iu : /javascript|ecmascript/iu;
+    if (!expected.test(contentType)) {
+        throw new Error(
+            `Dashboard asset ${assetUrl.pathname}: unexpected content-type ${contentType || '(missing)'}`,
+        );
+    }
+}
+
+export async function verifyDashboardAssets({
+    dashboardUrl,
+    fetchImpl = globalThis.fetch,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    releaseId = String(Date.now()),
+}) {
+    if (typeof fetchImpl !== 'function') {
+        throw new Error('This verifier requires a Node.js runtime with global fetch support');
+    }
+    const dashboard = normalizeDashboardUrl(dashboardUrl);
+    const dashboardResponse = await fetchWithTimeout(
+        fetchImpl,
+        cacheBustedUrl(dashboard, releaseId),
+        { redirect: 'follow', headers: { 'cache-control': 'no-cache' } },
+        timeoutMs,
+    );
+    expectStatus(dashboardResponse, 200, 'Dashboard');
+    const queue = extractDashboardAssetUrls(await dashboardResponse.text(), dashboard);
+    const discovered = new Map(queue.map(url => [url.href, url]));
+    const verified = new Set();
+
+    while (queue.length) {
+        if (discovered.size > MAX_DASHBOARD_ASSETS) {
+            throw new Error(`Dashboard asset graph exceeds ${MAX_DASHBOARD_ASSETS} files`);
+        }
+        const assetUrl = queue.shift();
+        if (!assetUrl || verified.has(assetUrl.href)) continue;
+        const response = await fetchWithTimeout(
+            fetchImpl,
+            cacheBustedUrl(assetUrl, releaseId),
+            { redirect: 'manual', headers: { 'cache-control': 'no-cache' } },
+            timeoutMs,
+        );
+        expectStatus(response, 200, `Dashboard asset ${assetUrl.pathname}`);
+        expectDashboardAssetContentType(response, assetUrl);
+        const source = await response.text();
+        verified.add(assetUrl.href);
+        if (!assetUrl.pathname.endsWith('.js')) continue;
+        for (const referencedUrl of dashboardAssetReferences(source, dashboard)) {
+            if (!discovered.has(referencedUrl.href)) {
+                discovered.set(referencedUrl.href, referencedUrl);
+                queue.push(referencedUrl);
+            }
+        }
+    }
+    return { assetCount: verified.size };
 }
 
 async function readJson(response, label) {
@@ -136,6 +237,7 @@ export async function verifyProductionRelease({
     dashboardUrl,
     fetchImpl = globalThis.fetch,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    releaseId = String(Date.now()),
 }) {
     if (typeof fetchImpl !== 'function') {
         throw new Error('This verifier requires a Node.js runtime with global fetch support');
@@ -232,10 +334,8 @@ export async function verifyProductionRelease({
     await assetResponse.body?.cancel();
     checks.push('storefront build asset');
 
-    const dashboardResponse = await fetchWithTimeout(fetchImpl, dashboard, { redirect: 'follow' }, timeoutMs);
-    expectStatus(dashboardResponse, 200, 'Dashboard');
-    await dashboardResponse.body?.cancel();
-    checks.push('dashboard');
+    await verifyDashboardAssets({ dashboardUrl: dashboard, fetchImpl, timeoutMs, releaseId });
+    checks.push('dashboard asset graph');
 
     const adminApiUrl = new URL('/admin-api', storefront);
     const adminApiResponse = await fetchWithTimeout(fetchImpl, adminApiUrl, shopApiRequest(), timeoutMs);
@@ -252,6 +352,7 @@ async function main() {
             'storefront-url': { type: 'string' },
             'dashboard-url': { type: 'string' },
             'timeout-ms': { type: 'string', default: String(DEFAULT_TIMEOUT_MS) },
+            'release-id': { type: 'string', default: String(Date.now()) },
         },
         strict: true,
     });
@@ -265,6 +366,7 @@ async function main() {
         storefrontUrl: values['storefront-url'],
         dashboardUrl: values['dashboard-url'],
         timeoutMs,
+        releaseId: values['release-id'],
     });
     for (const check of checks) {
         process.stdout.write(`[pass] ${check}\n`);

@@ -121,7 +121,7 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，Skill
 
 `Monitor Production Health` 工作流在每小时的第 17 和 47 分自动巡检，也可手动触发。它使用同一个
 GitHub OIDC 临时角色通过 AWS SSM 执行只读检查：物理可用内存与 Swap 余量、API/Worker 的 PM2
-状态与运行目录、本机及公网 `/health`。任一项不符合门禁时工作流失败并保留当次
+状态与运行目录、本机及公网 `/health`，以及绕过 CDN 缓存后的 Dashboard 动态资源图。任一项不符合门禁时工作流失败并保留当次
 `PRODUCTION_MEMORY` 趋势数据；不依赖 SSH 或长期 AWS Access Key。
 
 若候选 API 未通过健康检查且自动回滚本身失败，可手动运行 `Recover Current Production Runtime` 工作流。
@@ -330,7 +330,7 @@ sudo -n systemctl reload nginx
 6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 8. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
-9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功。
+9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
 10. 从候选产物预演并执行本次审核过的库存继承修复，再预演并执行店铺图片同步；两者写入都必须使用 `--apply --allow-remote`，成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
@@ -342,10 +342,11 @@ sudo -n systemctl reload nginx
 cd /var/www/kaiyuangouwu
 node deploy/verify-production-release.mjs \
   --storefront-url https://damatong.net \
-  --dashboard-url https://console.damatong.net/dashboard/
+  --dashboard-url https://console.damatong.net/dashboard/ \
+  --release-id "$(cat /var/www/kaiyuangouwu-releases/current-sha)"
 ```
 
-验收脚本会走完整推广入口：确认未携带 Cookie 的 Shop API 返回 `STOREFRONT_ENTRY_REQUIRED`，从 `/promo` 获取签名票据并换取入口 Cookie，再验证 Shop API、带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。`/assets/` 目录本身不是有效静态资源验收地址。
+验收脚本会走完整推广入口：确认未携带 Cookie 的 Shop API 返回 `STOREFRONT_ENTRY_REQUIRED`，从 `/promo` 获取签名票据并换取入口 Cookie，再验证 Shop API、带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。Dashboard 验证会以发布 SHA 追加缓存穿透参数，并递归检查入口 HTML 引用及 JS 中声明的所有懒加载 JS/CSS；任一资源 404、状态码或 MIME 类型异常均视为发布失败并回滚。`/assets/` 目录本身不是有效静态资源验收地址。
 
 另外检查：
 

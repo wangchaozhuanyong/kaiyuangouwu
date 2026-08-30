@@ -64,7 +64,9 @@ vi.mock('@vendure/dashboard', async () => {
         UnsavedChangesConfirmation: container,
         api: { mutate: vi.fn(), query: vi.fn() },
         toast: { error: vi.fn(), success: vi.fn() },
+        useChannel: () => ({ activeChannel: { id: 'channel-1' } }),
         useMutation: () => ({ isPending: false, mutate: vi.fn() }),
+        usePermissions: () => ({ hasPermissions: () => true }),
         useQuery: () => ({
             data: {
                 imageProviderAdminConfigs: [
@@ -97,9 +99,40 @@ vi.mock('@vendure/dashboard', async () => {
     };
 });
 
-import { ImageGenerationAccessPage, ProviderCredentialEditorSheet } from './image-generation-pages';
+import {
+    ImageGenerationAccessPage,
+    ProviderCredentialEditorSheet,
+    reconcileImageAdminConfig,
+    toLocalDayBoundary,
+} from './image-generation-pages';
+import { ImageAdminConfigRecord } from './image-generation.graphql';
 
 describe('ImageGenerationAccessPage', () => {
+    it('converts date filters from the browser local day to API timestamps', () => {
+        expect(toLocalDayBoundary('2026-08-30', false)).toBe(new Date(2026, 7, 30, 0, 0, 0, 0).toISOString());
+        expect(toLocalDayBoundary('2026-08-30', true)).toBe(
+            new Date(2026, 7, 30, 23, 59, 59, 999).toISOString(),
+        );
+        expect(toLocalDayBoundary('2026-02-30', false)).toBeNull();
+    });
+
+    it('keeps dirty fields while accepting fresh server health and readiness fields', () => {
+        const baseline = adminConfig();
+        const current = structuredClone(baseline);
+        current.termsZh = '尚未保存的新条款';
+        current.models[0].unitPrice = 250;
+        const incoming = structuredClone(baseline);
+        incoming.credentialEnabled = true;
+        incoming.models[0].healthStatus = 'HEALTHY';
+
+        const reconciled = reconcileImageAdminConfig(current, baseline, incoming);
+
+        expect(reconciled.termsZh).toBe('尚未保存的新条款');
+        expect(reconciled.models[0].unitPrice).toBe(250);
+        expect(reconciled.credentialEnabled).toBe(true);
+        expect(reconciled.models[0].healthStatus).toBe('HEALTHY');
+    });
+
     it('renders provider summaries and a compact credential management table', () => {
         const markup = renderToStaticMarkup(<ImageGenerationAccessPage />);
 
@@ -154,5 +187,59 @@ describe('ImageGenerationAccessPage', () => {
         expect(markup).toContain('留空表示不更换');
         expect(markup).toContain('保存并测试');
         expect(markup).toContain('归档 Key');
+        expect(markup).toContain('id="provider-key-code"');
+        expect(markup).toMatch(/id="provider-key-code"[^>]*disabled=""/u);
+        expect(markup).toContain('创建后不可修改');
     });
 });
+
+function adminConfig(): ImageAdminConfigRecord {
+    return {
+        id: 'config-1',
+        enabled: false,
+        promptOptimizationEnabled: true,
+        promptRateLimitPerMinute: 3,
+        promptDailyFreeLimit: 20,
+        promptDailyFreeUnlimited: false,
+        paidPromptOptimizationEnabled: false,
+        paidPromptOptimizationPrice: 0,
+        paidPromptOptimizationCurrencyCode: 'CNY',
+        defaultModelCode: 'OPENAI_HIGH_QUALITY',
+        termsVersion: 'test',
+        termsZh: '原条款',
+        termsEn: 'Original terms',
+        credentialEnabled: false,
+        activeSkillHash: 'hash',
+        skillAutoActivateEnabled: true,
+        models: [
+            {
+                id: 'model-1',
+                code: 'OPENAI_HIGH_QUALITY',
+                enabled: true,
+                displayNameZh: '高质量',
+                displayNameEn: 'High quality',
+                descriptionZh: '说明',
+                descriptionEn: 'Description',
+                officialModelId: 'gpt-image-1',
+                providerModelId: 'gpt-image-1',
+                protocol: 'OPENAI_RESPONSES_IMAGE',
+                unitPrice: 100,
+                unitPrice2K: 0,
+                unitPrice4K: 0,
+                resolutionOptions: [],
+                currencyCode: 'CNY',
+                position: 0,
+                isDefault: true,
+                healthStatus: 'UNTESTED',
+                healthMessage: null,
+                lastTestedAt: null,
+                supportsIdempotency: false,
+                freeImageEnabled: false,
+                dailyFreeImageLimit: 0,
+                dailyFreeImageUnlimited: false,
+                paidAfterFreeEnabled: true,
+                dailyGenerationSafetyLimit: 20,
+            },
+        ],
+    };
+}

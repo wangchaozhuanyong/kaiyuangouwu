@@ -103,7 +103,17 @@ export const imageGenerationAdminQuery = gql`
         imageGenerationAdminConfig {
             ...ImageStudioAdminConfigFields
         }
-        imageGenerationJobs(take: 30) {
+    }
+`;
+
+export const imageGenerationOperationsQuery = gql`
+    query ImageGenerationOperations(
+        $includeJobs: Boolean!
+        $includeCosts: Boolean!
+        $includeSkills: Boolean!
+        $includePromptAudit: Boolean!
+    ) {
+        imageGenerationJobs(take: 30) @include(if: $includeJobs) {
             totalItems
             items {
                 id
@@ -146,7 +156,7 @@ export const imageGenerationAdminQuery = gql`
                 }
             }
         }
-        imageGenerationCostSummary(days: 30) {
+        imageGenerationCostSummary(days: 30) @include(if: $includeCosts) {
             from
             to
             truncated
@@ -166,7 +176,7 @@ export const imageGenerationAdminQuery = gql`
                 averageLatencyMs
             }
         }
-        imagePromptSkillReleases {
+        imagePromptSkillReleases @include(if: $includeSkills) {
             id
             createdAt
             bundleVersion
@@ -177,7 +187,7 @@ export const imageGenerationAdminQuery = gql`
             supportedModels
             routingStrategy
         }
-        imagePromptOptimizationAudit(take: 30) {
+        imagePromptOptimizationAudit(take: 30) @include(if: $includePromptAudit) {
             totalItems
             items {
                 id
@@ -560,8 +570,11 @@ export interface ImageAiUsageRecordDetailQueryResult {
 
 export interface ImageAdminQueryResult {
     imageGenerationAdminConfig: ImageAdminConfigRecord;
-    imageGenerationJobs: { items: ImageAdminJobRecord[]; totalItems: number };
-    imageGenerationCostSummary: {
+}
+
+export interface ImageAdminOperationsQueryResult {
+    imageGenerationJobs?: { items: ImageAdminJobRecord[]; totalItems: number };
+    imageGenerationCostSummary?: {
         from: string;
         to: string;
         truncated: boolean;
@@ -581,7 +594,7 @@ export interface ImageAdminQueryResult {
             averageLatencyMs: number;
         }>;
     };
-    imagePromptSkillReleases: Array<{
+    imagePromptSkillReleases?: Array<{
         id: string;
         createdAt: string;
         bundleVersion: number;
@@ -592,7 +605,7 @@ export interface ImageAdminQueryResult {
         supportedModels: string[];
         routingStrategy: string;
     }>;
-    imagePromptOptimizationAudit: {
+    imagePromptOptimizationAudit?: {
         totalItems: number;
         items: Array<{
             id: string;

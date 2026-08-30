@@ -210,6 +210,9 @@ for attempt in $(seq 1 30); do
     [[ "${attempt}" != "30" ]] || fail 'candidate API health check did not pass'
     sleep 2
 done
+node "${repository}/deploy/verify-dashboard-assets.mjs" \
+    --dashboard-url http://127.0.0.1:3002/dashboard/ \
+    --release-id "${target_sha}"
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
 
@@ -225,6 +228,9 @@ pointer_changed=1
 
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null
 curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
+node "${repository}/deploy/verify-dashboard-assets.mjs" \
+    --dashboard-url https://console.damatong.net/dashboard/ \
+    --release-id "${target_sha}"
 
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-production-release-retention.cjs" \

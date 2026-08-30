@@ -137,6 +137,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /rollback 1/u);
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
+    assert.match(script, /verify-dashboard-assets\.mjs/u);
+    assert.match(script, /--release-id "\$\{target_sha\}"/u);
     assert.match(script, /managed storefront data changed/u);
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
     assert.match(script, /ensure-production-swap\.sh/u);
@@ -188,6 +190,7 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /--stage scheduled-monitor --check/u);
     assert.match(script, /127\.0\.0\.1:3002\/health/u);
     assert.match(script, /https:\/\/damatong\.net\/health/u);
+    assert.match(script, /verify-dashboard-assets\.mjs/u);
     assert.match(script, /pm2 jlist/u);
     assert.match(script, /vendure-api/u);
     assert.match(script, /vendure-worker/u);

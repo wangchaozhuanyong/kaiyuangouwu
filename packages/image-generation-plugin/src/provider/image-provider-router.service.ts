@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
-import { IsNull } from 'typeorm';
+import { Brackets, IsNull, SelectQueryBuilder } from 'typeorm';
 
+import { ImageModelConfig } from '../entities/image-model-config.entity';
 import { ImageProviderCredentialModel } from '../entities/image-provider-credential-model.entity';
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { ImageProviderScope } from '../types';
@@ -35,12 +36,7 @@ export class ImageProviderRouterService {
                 .orderBy('credential.priority', 'ASC')
                 .addOrderBy('credential.id', 'ASC');
             if (input.modelConfigId) {
-                query.innerJoin(
-                    ImageProviderCredentialModel,
-                    'binding',
-                    'binding.credentialId = credential.id AND binding.modelConfigId = :modelConfigId',
-                    { modelConfigId: input.modelConfigId },
-                );
+                applyModelBindingPolicy(query, input.modelConfigId, txCtx.channelId);
             }
             if (supportsLock(this.connection.rawConnection.options.type)) query.setLock('pessimistic_write');
             const candidates = await query.getMany();
@@ -85,12 +81,7 @@ export class ImageProviderRouterService {
             })
             .andWhere('credential.purpose IN (:...purposes)', { purposes: [input.purpose, 'BOTH'] });
         if (input.modelConfigId) {
-            query.innerJoin(
-                ImageProviderCredentialModel,
-                'binding',
-                'binding.credentialId = credential.id AND binding.modelConfigId = :modelConfigId',
-                { modelConfigId: input.modelConfigId },
-            );
+            applyModelBindingPolicy(query, input.modelConfigId, ctx.channelId);
         }
         return (await query.getCount()) > 0;
     }
@@ -131,6 +122,36 @@ export class ImageProviderRouterService {
             },
         );
     }
+}
+
+function applyModelBindingPolicy(
+    query: SelectQueryBuilder<ImageProviderCredential>,
+    modelConfigId: ID,
+    channelId: ID,
+): void {
+    const selectedBinding = query
+        .subQuery()
+        .select('1')
+        .from(ImageProviderCredentialModel, 'selected_binding')
+        .where('selected_binding.credentialId = credential.id')
+        .andWhere('selected_binding.modelConfigId = :modelConfigId')
+        .getQuery();
+    const currentChannelBinding = query
+        .subQuery()
+        .select('1')
+        .from(ImageProviderCredentialModel, 'channel_binding')
+        .innerJoin(ImageModelConfig, 'channel_model', 'channel_model.id = channel_binding.modelConfigId')
+        .where('channel_binding.credentialId = credential.id')
+        .andWhere('channel_model.channelId = :routeChannelId')
+        .getQuery();
+
+    query
+        .andWhere(
+            new Brackets(where =>
+                where.where(`EXISTS ${selectedBinding}`).orWhere(`NOT EXISTS ${currentChannelBinding}`),
+            ),
+        )
+        .setParameters({ modelConfigId, routeChannelId: channelId });
 }
 
 export function selectSmoothWeightedCredential<T extends { id: ID; weight: number; currentWeight: number }>(

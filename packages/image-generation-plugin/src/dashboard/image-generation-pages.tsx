@@ -33,7 +33,9 @@ import {
     UnsavedChangesConfirmation,
     api,
     toast,
+    useChannel,
     useMutation,
+    usePermissions,
     useQuery,
 } from '@vendure/dashboard';
 import {
@@ -48,11 +50,12 @@ import {
     Search,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
     ImageAdminConfigRecord,
     ImageAdminModelRecord,
+    ImageAdminOperationsQueryResult,
     ImageAdminQueryResult,
     ImageAiUsageRecordDetailQueryResult,
     ImageAiUsageRecordsQueryResult,
@@ -63,6 +66,7 @@ import {
     imageAiUsageRecordDetailQuery,
     imageAiUsageRecordsQuery,
     imageGenerationAdminQuery,
+    imageGenerationOperationsQuery,
     imageProviderAdminQuery,
     refundImageOutputMutation,
     retryImageOutputMutation,
@@ -105,17 +109,24 @@ export const imageGenerationAccessRoute: DashboardRouteDefinition = {
     component: () => <ImageGenerationAccessPage />,
 };
 
-function useImageAdminQuery() {
+function useImageAdminQuery(channelId?: string) {
     return useQuery({
-        queryKey: ['image-generation-admin'],
+        queryKey: ['image-generation-admin', channelId],
         queryFn: () => api.query<ImageAdminQueryResult>(imageGenerationAdminQuery),
+        enabled: Boolean(channelId),
     });
 }
 
 function ImageGenerationSettingsPage() {
-    const query = useImageAdminQuery();
+    const { activeChannel } = useChannel();
+    const { hasPermissions } = usePermissions();
+    const canUpdate = hasPermissions(['UpdateImageGeneration']);
+    const query = useImageAdminQuery(activeChannel?.id);
     const config = query.data?.imageGenerationAdminConfig;
     const [draft, setDraft] = useState<ImageAdminConfigRecord | null>(null);
+    const draftRef = useRef<ImageAdminConfigRecord | null>(null);
+    const baselineRef = useRef<ImageAdminConfigRecord | null>(null);
+    const draftChannelRef = useRef<string | undefined>(undefined);
     const [activeTab, setActiveTab] = useState('base');
     const [historyView, setHistoryView] = useState<'usage' | 'prompts' | 'generation'>('usage');
     const [usageSearch, setUsageSearch] = useState('');
@@ -134,6 +145,19 @@ function ImageGenerationSettingsPage() {
     const [jobFrom, setJobFrom] = useState('');
     const [usagePage, setUsagePage] = useState(0);
     const [selectedUsage, setSelectedUsage] = useState<{ recordType: string; id: string } | null>(null);
+    const operationsQuery = useQuery({
+        queryKey: ['image-generation-operations', activeChannel?.id, activeTab, historyView],
+        enabled:
+            Boolean(activeChannel?.id) &&
+            (activeTab === 'prompts' || activeTab === 'jobs' || activeTab === 'costs'),
+        queryFn: () =>
+            api.query<ImageAdminOperationsQueryResult>(imageGenerationOperationsQuery, {
+                includeJobs: activeTab === 'jobs' && historyView === 'generation',
+                includeCosts: activeTab === 'costs',
+                includeSkills: activeTab === 'prompts',
+                includePromptAudit: activeTab === 'jobs' && historyView === 'prompts',
+            }),
+    });
     useEffect(() => {
         setUsagePage(0);
     }, [
@@ -151,6 +175,7 @@ function ImageGenerationSettingsPage() {
     const usageQuery = useQuery({
         queryKey: [
             'image-ai-usage-records',
+            activeChannel?.id,
             usageSearch,
             usageState,
             usageBilling,
@@ -172,8 +197,8 @@ function ImageGenerationSettingsPage() {
                     customer: usageSearch || null,
                     state: usageState || null,
                     billingMode: usageBilling || null,
-                    from: usageFrom ? `${usageFrom}T00:00:00.000Z` : null,
-                    to: usageTo ? `${usageTo}T23:59:59.999Z` : null,
+                    from: toLocalDayBoundary(usageFrom, false),
+                    to: toLocalDayBoundary(usageTo, true),
                     modelCode: usageModel || null,
                     credentialCode: usageKey || null,
                     recordType: usageType || null,
@@ -183,7 +208,7 @@ function ImageGenerationSettingsPage() {
             }),
     });
     const usageDetailQuery = useQuery({
-        queryKey: ['image-ai-usage-record', selectedUsage?.recordType, selectedUsage?.id],
+        queryKey: ['image-ai-usage-record', activeChannel?.id, selectedUsage?.recordType, selectedUsage?.id],
         enabled: activeTab === 'jobs' && historyView === 'usage' && selectedUsage != null,
         queryFn: () =>
             api.query<ImageAiUsageRecordDetailQueryResult>(imageAiUsageRecordDetailQuery, {
@@ -191,59 +216,104 @@ function ImageGenerationSettingsPage() {
                 id: selectedUsage?.id,
             }),
     });
-    useEffect(() => setDraft(config ? structuredClone(config) : null), [config]);
+    useEffect(() => {
+        if (!config) return;
+        const incoming = structuredClone(config);
+        const channelChanged = draftChannelRef.current !== activeChannel?.id;
+        const next = channelChanged
+            ? incoming
+            : reconcileImageAdminConfig(draftRef.current, baselineRef.current, incoming);
+        baselineRef.current = incoming;
+        draftRef.current = next;
+        draftChannelRef.current = activeChannel?.id;
+        setDraft(next);
+    }, [activeChannel?.id, config]);
+    useEffect(() => {
+        draftRef.current = draft;
+    }, [draft]);
+
+    const applySavedModel = (savedModel: ImageAdminModelRecord) => {
+        if (baselineRef.current) {
+            baselineRef.current = replaceAdminModel(baselineRef.current, savedModel);
+        }
+        setDraft(current => {
+            const next = current ? replaceAdminModel(current, savedModel) : current;
+            draftRef.current = next;
+            return next;
+        });
+    };
+    const commitConfig = (savedConfig: ImageAdminConfigRecord) => {
+        const next = structuredClone(savedConfig);
+        baselineRef.current = next;
+        draftRef.current = next;
+        setDraft(next);
+    };
 
     const saveConfig = useMutation({
         mutationFn: (value: ImageAdminConfigRecord) =>
-            api.mutate(saveImageGenerationConfigMutation, {
-                input: {
-                    enabled: value.enabled,
-                    promptOptimizationEnabled: value.promptOptimizationEnabled,
-                    promptRateLimitPerMinute: value.promptRateLimitPerMinute,
-                    promptDailyFreeLimit: value.promptDailyFreeLimit,
-                    promptDailyFreeUnlimited: value.promptDailyFreeUnlimited,
-                    paidPromptOptimizationEnabled: value.paidPromptOptimizationEnabled,
-                    paidPromptOptimizationPrice: value.paidPromptOptimizationPrice,
-                    paidPromptOptimizationCurrencyCode: value.paidPromptOptimizationCurrencyCode,
-                    defaultModelCode: value.defaultModelCode,
-                    termsVersion: value.termsVersion,
-                    termsZh: value.termsZh,
-                    termsEn: value.termsEn,
-                    models: value.models.map(modelInput),
+            api.mutate<{ saveImageGenerationConfig: ImageAdminConfigRecord }>(
+                saveImageGenerationConfigMutation,
+                {
+                    input: {
+                        enabled: value.enabled,
+                        promptOptimizationEnabled: value.promptOptimizationEnabled,
+                        promptRateLimitPerMinute: value.promptRateLimitPerMinute,
+                        promptDailyFreeLimit: value.promptDailyFreeLimit,
+                        promptDailyFreeUnlimited: value.promptDailyFreeUnlimited,
+                        paidPromptOptimizationEnabled: value.paidPromptOptimizationEnabled,
+                        paidPromptOptimizationPrice: value.paidPromptOptimizationPrice,
+                        paidPromptOptimizationCurrencyCode: value.paidPromptOptimizationCurrencyCode,
+                        defaultModelCode: value.defaultModelCode,
+                        termsVersion: value.termsVersion,
+                        termsZh: value.termsZh,
+                        termsEn: value.termsEn,
+                        models: value.models.map(modelInput),
+                    },
                 },
-            }),
-        onSuccess: () => {
+            ),
+        onSuccess: result => {
+            commitConfig(result.saveImageGenerationConfig);
             toast.success('AI 生图配置已保存');
-            void query.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
     });
     const saveModel = useMutation({
         mutationFn: (model: ImageAdminModelRecord) =>
-            api.mutate(saveImageModelMutation, { input: modelInput(model) }),
-        onSuccess: () => {
+            api.mutate<{ saveImageModel: ImageAdminModelRecord }>(saveImageModelMutation, {
+                input: modelInput(model),
+            }),
+        onSuccess: result => {
+            applySavedModel(result.saveImageModel);
             toast.success('模型设置已保存');
-            void query.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
     });
     const testModel = useMutation({
         mutationFn: async (model: ImageAdminModelRecord) => {
-            await api.mutate(saveImageModelMutation, { input: modelInput(model) });
-            return api.mutate<{ testImageModel: { ok: boolean; message: string } }>(testImageModelMutation, {
-                code: model.code,
-            });
+            const saved = await api.mutate<{ saveImageModel: ImageAdminModelRecord }>(
+                saveImageModelMutation,
+                { input: modelInput(model) },
+            );
+            const tested = await api.mutate<{ testImageModel: { ok: boolean; message: string } }>(
+                testImageModelMutation,
+                { code: model.code },
+            );
+            return { savedModel: saved.saveImageModel, test: tested.testImageModel };
         },
         onSuccess: result => {
-            (result.testImageModel.ok ? toast.success : toast.error)(result.testImageModel.message);
+            applySavedModel(result.savedModel);
+            (result.test.ok ? toast.success : toast.error)(result.test.message);
             void query.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
     });
     const smokeTestModel = useMutation({
         mutationFn: async (model: ImageAdminModelRecord) => {
-            await api.mutate(saveImageModelMutation, { input: modelInput(model) });
-            return api.mutate<{
+            const saved = await api.mutate<{ saveImageModel: ImageAdminModelRecord }>(
+                saveImageModelMutation,
+                { input: modelInput(model) },
+            );
+            const tested = await api.mutate<{
                 smokeTestImageModel: {
                     ok: boolean;
                     message: string;
@@ -251,9 +321,11 @@ function ImageGenerationSettingsPage() {
                     costCurrency?: string | null;
                 };
             }>(smokeTestImageModelMutation, { code: model.code });
+            return { savedModel: saved.saveImageModel, test: tested.smokeTestImageModel };
         },
         onSuccess: result => {
-            const test = result.smokeTestImageModel;
+            applySavedModel(result.savedModel);
+            const test = result.test;
             const cost =
                 test.actualCostMicrounits == null
                     ? ''
@@ -268,12 +340,16 @@ function ImageGenerationSettingsPage() {
         onSuccess: () => {
             toast.success('已设为当前提示词规则版本');
             void query.refetch();
+            void operationsQuery.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
     });
     const retryOutput = useMutation({
         mutationFn: (outputId: string) => api.mutate(retryImageOutputMutation, { outputId }),
-        onSuccess: () => void query.refetch(),
+        onSuccess: () => {
+            void operationsQuery.refetch();
+            void usageQuery.refetch();
+        },
         onError: error => toast.error(errorMessage(error)),
     });
     const refundOutput = useMutation({
@@ -281,7 +357,8 @@ function ImageGenerationSettingsPage() {
             api.mutate(refundImageOutputMutation, { outputId, reason }),
         onSuccess: () => {
             toast.success('本张图片费用已退回返利余额');
-            void query.refetch();
+            void operationsQuery.refetch();
+            void usageQuery.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -290,7 +367,31 @@ function ImageGenerationSettingsPage() {
     if (query.error)
         return <ErrorPage title="AI 生图服务" retry={() => void query.refetch()} error={query.error} />;
     if (!draft || !query.data) return <LoadingPage title="AI 生图服务" />;
-    const data = query.data;
+    if (operationsQuery.isLoading) return <LoadingPage title="AI 生图服务" />;
+    if (operationsQuery.error)
+        return (
+            <ErrorPage
+                title="AI 生图服务"
+                retry={() => void operationsQuery.refetch()}
+                error={operationsQuery.error}
+            />
+        );
+    const data = {
+        ...query.data,
+        imageGenerationJobs: operationsQuery.data?.imageGenerationJobs ?? { items: [], totalItems: 0 },
+        imageGenerationCostSummary: operationsQuery.data?.imageGenerationCostSummary ?? {
+            from: '',
+            to: '',
+            truncated: false,
+            items: [],
+        },
+        imagePromptSkillReleases: operationsQuery.data?.imagePromptSkillReleases ?? [],
+        imagePromptOptimizationAudit: operationsQuery.data?.imagePromptOptimizationAudit ?? {
+            items: [],
+            totalItems: 0,
+        },
+    };
+    const isDirty = !sameAdminConfig(draft, baselineRef.current);
     const activeSkillRelease = data.imagePromptSkillReleases.find(release => release.status === 'ACTIVE');
     const filteredJobs = data.imageGenerationJobs.items.filter(job => {
         const search = jobSearch.trim().toLowerCase();
@@ -309,7 +410,9 @@ function ImageGenerationSettingsPage() {
         const matchesBilling =
             !jobBilling ||
             (jobBilling === 'FREE' ? job.freeQuantityCaptured > 0 : job.paidQuantityReserved > 0);
-        const matchesFrom = !jobFrom || new Date(job.createdAt).getTime() >= new Date(jobFrom).getTime();
+        const jobFromBoundary = toLocalDayBoundary(jobFrom, false);
+        const matchesFrom =
+            !jobFromBoundary || new Date(job.createdAt).getTime() >= new Date(jobFromBoundary).getTime();
         return matchesSearch && matchesState && matchesBilling && matchesFrom;
     });
 
@@ -329,14 +432,25 @@ function ImageGenerationSettingsPage() {
     return (
         <Page pageId="image-generation-settings">
             <PageTitle>AI 生图服务</PageTitle>
+            <UnsavedChangesConfirmation when={isDirty} />
             <PageActionBar>
                 <PageActionBarRight>
-                    <Button disabled={saveConfig.isPending} onClick={() => saveConfig.mutate(draft)}>
+                    <Button
+                        disabled={!canUpdate || !isDirty || saveConfig.isPending}
+                        onClick={() => saveConfig.mutate(draft)}
+                    >
                         <Save className="mr-2 h-4 w-4" />
                         保存全部设置
                     </Button>
                 </PageActionBarRight>
             </PageActionBar>
+            {!canUpdate ? (
+                <Alert className="mb-4">
+                    <AlertDescription>
+                        当前账号只有查看权限。修改配置、模型测试、任务重试和退款需要“更新 AI 生图”权限。
+                    </AlertDescription>
+                </Alert>
+            ) : null}
             <PageLayout>
                 <PageBlock column="full" blockId="image-navigation">
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -356,60 +470,68 @@ function ImageGenerationSettingsPage() {
                         title="基础设置"
                         description="客户从返利余额按成功生成的图片数量和原生清晰度付费，支持 1–4 张和一张参考图。"
                     >
-                        {!draft.credentialEnabled ? (
-                            <Alert>
-                                <AlertDescription>平台中转站尚未启用，客户端不会开放生图。</AlertDescription>
-                            </Alert>
-                        ) : null}
-                        <div className="grid gap-5 md:grid-cols-2">
-                            <Toggle
-                                label="启用 AI 图片工坊"
-                                checked={draft.enabled}
-                                onChange={enabled => setDraft({ ...draft, enabled })}
-                            />
-                            <Toggle
-                                label="启用提示词优化"
-                                checked={draft.promptOptimizationEnabled}
-                                onChange={promptOptimizationEnabled =>
-                                    setDraft({ ...draft, promptOptimizationEnabled })
-                                }
-                            />
-                            <Field label="默认模型">
-                                <select
-                                    className="h-9 w-full rounded-md border bg-background px-3"
-                                    value={draft.defaultModelCode}
-                                    onChange={event => setDefaultModel(event.target.value)}
-                                >
-                                    {draft.models.map(model => (
-                                        <option key={model.code} value={model.code}>
-                                            {model.displayNameZh} · {model.officialModelId}
-                                        </option>
-                                    ))}
-                                </select>
-                            </Field>
-                            <Field label="条款版本">
-                                <Input
-                                    value={draft.termsVersion}
-                                    onChange={event =>
-                                        setDraft({ ...draft, termsVersion: event.target.value })
+                        <fieldset disabled={!canUpdate} className="contents">
+                            {!draft.credentialEnabled ? (
+                                <Alert>
+                                    <AlertDescription>
+                                        平台中转站尚未启用，客户端不会开放生图。
+                                    </AlertDescription>
+                                </Alert>
+                            ) : null}
+                            <div className="grid gap-5 md:grid-cols-2">
+                                <Toggle
+                                    label="启用 AI 图片工坊"
+                                    checked={draft.enabled}
+                                    onChange={enabled => setDraft({ ...draft, enabled })}
+                                />
+                                <Toggle
+                                    label="启用提示词优化"
+                                    checked={draft.promptOptimizationEnabled}
+                                    onChange={promptOptimizationEnabled =>
+                                        setDraft({ ...draft, promptOptimizationEnabled })
                                     }
                                 />
-                            </Field>
-                            <Field label="中文服务条款">
-                                <Textarea
-                                    rows={5}
-                                    value={draft.termsZh}
-                                    onChange={event => setDraft({ ...draft, termsZh: event.target.value })}
-                                />
-                            </Field>
-                            <Field label="英文服务条款">
-                                <Textarea
-                                    rows={5}
-                                    value={draft.termsEn}
-                                    onChange={event => setDraft({ ...draft, termsEn: event.target.value })}
-                                />
-                            </Field>
-                        </div>
+                                <Field label="默认模型">
+                                    <select
+                                        className="h-9 w-full rounded-md border bg-background px-3"
+                                        value={draft.defaultModelCode}
+                                        onChange={event => setDefaultModel(event.target.value)}
+                                    >
+                                        {draft.models.map(model => (
+                                            <option key={model.code} value={model.code}>
+                                                {model.displayNameZh} · {model.officialModelId}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                                <Field label="条款版本">
+                                    <Input
+                                        value={draft.termsVersion}
+                                        onChange={event =>
+                                            setDraft({ ...draft, termsVersion: event.target.value })
+                                        }
+                                    />
+                                </Field>
+                                <Field label="中文服务条款">
+                                    <Textarea
+                                        rows={5}
+                                        value={draft.termsZh}
+                                        onChange={event =>
+                                            setDraft({ ...draft, termsZh: event.target.value })
+                                        }
+                                    />
+                                </Field>
+                                <Field label="英文服务条款">
+                                    <Textarea
+                                        rows={5}
+                                        value={draft.termsEn}
+                                        onChange={event =>
+                                            setDraft({ ...draft, termsEn: event.target.value })
+                                        }
+                                    />
+                                </Field>
+                            </div>
+                        </fieldset>
                     </PageBlock>
                 ) : null}
 
@@ -420,278 +542,288 @@ function ImageGenerationSettingsPage() {
                         title="模型与单张价格"
                         description="友好名称、用途说明和官方模型 ID 会展示给客户。只读测试不生图；真实生图测试可能产生上游费用。健康状态会持续有效，直到修改连接配置或检测到真实故障。"
                     >
-                        <Alert className="mb-4">
-                            <AlertDescription>
-                                你当前使用订阅号中转：Codex 图片选“Codex 订阅号中转”，Gemini 图片选“Gemini
-                                订阅号中转”。带“高级”的选项只在中转站文档明确要求时使用。
-                            </AlertDescription>
-                        </Alert>
-                        <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-                            {draft.models.map(model => (
-                                <div key={model.code} className="space-y-3 rounded-lg border p-4">
-                                    <div className="flex items-center justify-between">
-                                        <strong>{model.displayNameZh}</strong>
-                                        <Badge>{statusZh(model.healthStatus)}</Badge>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        官方 ID：{model.officialModelId}
-                                    </div>
-                                    {model.healthMessage ? (
-                                        <div className="text-xs text-muted-foreground">
-                                            {model.healthMessage}
-                                            {model.lastTestedAt
-                                                ? ` · ${new Date(model.lastTestedAt).toLocaleString()}`
-                                                : ''}
+                        <fieldset disabled={!canUpdate} className="contents">
+                            <Alert className="mb-4">
+                                <AlertDescription>
+                                    你当前使用订阅号中转：Codex 图片选“Codex 订阅号中转”，Gemini 图片选“Gemini
+                                    订阅号中转”。带“高级”的选项只在中转站文档明确要求时使用。
+                                </AlertDescription>
+                            </Alert>
+                            <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
+                                {draft.models.map(model => (
+                                    <div key={model.code} className="space-y-3 rounded-lg border p-4">
+                                        <div className="flex items-center justify-between">
+                                            <strong>{model.displayNameZh}</strong>
+                                            <Badge>{statusZh(model.healthStatus)}</Badge>
                                         </div>
-                                    ) : null}
-                                    <Toggle
-                                        label="启用模型"
-                                        checked={model.enabled}
-                                        onChange={enabled => updateModel(model.code, { enabled })}
-                                    />
-                                    <Field label="中文名称">
-                                        <Input
-                                            value={model.displayNameZh}
-                                            onChange={event =>
-                                                updateModel(model.code, { displayNameZh: event.target.value })
-                                            }
+                                        <div className="text-xs text-muted-foreground">
+                                            官方 ID：{model.officialModelId}
+                                        </div>
+                                        {model.healthMessage ? (
+                                            <div className="text-xs text-muted-foreground">
+                                                {model.healthMessage}
+                                                {model.lastTestedAt
+                                                    ? ` · ${new Date(model.lastTestedAt).toLocaleString()}`
+                                                    : ''}
+                                            </div>
+                                        ) : null}
+                                        <Toggle
+                                            label="启用模型"
+                                            checked={model.enabled}
+                                            onChange={enabled => updateModel(model.code, { enabled })}
                                         />
-                                    </Field>
-                                    <Field label="英文名称">
-                                        <Input
-                                            value={model.displayNameEn}
-                                            onChange={event =>
-                                                updateModel(model.code, { displayNameEn: event.target.value })
-                                            }
-                                        />
-                                    </Field>
-                                    <Field label="中文用途说明">
-                                        <Textarea
-                                            rows={3}
-                                            value={model.descriptionZh}
-                                            onChange={event =>
-                                                updateModel(model.code, { descriptionZh: event.target.value })
-                                            }
-                                        />
-                                    </Field>
-                                    <Field label="英文用途说明">
-                                        <Textarea
-                                            rows={3}
-                                            value={model.descriptionEn}
-                                            onChange={event =>
-                                                updateModel(model.code, { descriptionEn: event.target.value })
-                                            }
-                                        />
-                                    </Field>
-                                    <Field label="中转站模型 ID">
-                                        <Input
-                                            value={model.providerModelId}
-                                            onChange={event =>
-                                                updateModel(model.code, {
-                                                    providerModelId: event.target.value,
-                                                })
-                                            }
-                                        />
-                                    </Field>
-                                    <Field label="中转站调用方式">
-                                        <select
-                                            className="h-9 w-full rounded-md border bg-background px-3"
-                                            value={model.protocol}
-                                            onChange={event =>
-                                                updateModel(
-                                                    model.code,
-                                                    protocolChange(model, event.target.value),
-                                                )
-                                            }
-                                        >
-                                            <optgroup label="推荐方式">
-                                                {imageProtocolOptionsForModel(model)
-                                                    .filter(option => option.recommended)
-                                                    .map(option => (
-                                                        <option key={option.value} value={option.value}>
-                                                            {option.label}
-                                                        </option>
-                                                    ))}
-                                            </optgroup>
-                                            <optgroup label="高级兼容方式（仅按中转站说明选择）">
-                                                {imageProtocolOptionsForModel(model)
-                                                    .filter(option => !option.recommended)
-                                                    .map(option => (
-                                                        <option key={option.value} value={option.value}>
-                                                            {option.label}
-                                                        </option>
-                                                    ))}
-                                            </optgroup>
-                                        </select>
-                                        <p className="text-xs leading-5 text-muted-foreground">
-                                            当前模型：{model.providerModelId || model.officialModelId}
-                                        </p>
-                                        <p className="text-xs leading-5 text-muted-foreground">
-                                            {imageProtocolOption(model.protocol).description}
-                                        </p>
-                                    </Field>
-                                    <div className="grid gap-3 sm:grid-cols-3">
-                                        {(
-                                            [
-                                                ['1K', 'unitPrice'],
-                                                ['2K', 'unitPrice2K'],
-                                                ['4K', 'unitPrice4K'],
-                                            ] as const
-                                        ).map(([resolution, priceField]) => {
-                                            const supported = modelSupportsResolution(model, resolution);
-                                            return (
-                                                <Field
-                                                    key={resolution}
-                                                    label={`${resolution} 单张价格（${model.currencyCode}）`}
-                                                >
-                                                    <Input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        disabled={!supported}
-                                                        value={minorToMajor(
-                                                            model[priceField],
-                                                            model.currencyCode,
-                                                        )}
-                                                        onChange={event =>
-                                                            updateModel(model.code, {
-                                                                [priceField]: majorToMinor(
-                                                                    event.target.value,
-                                                                    model.currencyCode,
-                                                                ),
-                                                            })
-                                                        }
-                                                    />
-                                                    {!supported ? (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            当前模型/协议不支持原生 {resolution}
-                                                        </span>
-                                                    ) : resolution !== '1K' ? (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            价格设为 0 时客户端不开放该档
-                                                        </span>
-                                                    ) : null}
-                                                </Field>
-                                            );
-                                        })}
-                                    </div>
-                                    <Toggle
-                                        label="设为默认"
-                                        checked={model.isDefault}
-                                        onChange={isDefault => {
-                                            if (isDefault) setDefaultModel(model.code);
-                                            else if (draft.defaultModelCode !== model.code)
-                                                updateModel(model.code, { isDefault: false });
-                                        }}
-                                    />
-                                    <Toggle
-                                        label="中转站保证幂等"
-                                        checked={model.supportsIdempotency}
-                                        onChange={supportsIdempotency =>
-                                            updateModel(model.code, { supportsIdempotency })
-                                        }
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        仅在中转站明确保证同一幂等键不会重复生图时开启。
-                                    </p>
-                                    <Toggle
-                                        label="启用每日免费生图"
-                                        checked={model.freeImageEnabled}
-                                        onChange={freeImageEnabled =>
-                                            updateModel(model.code, { freeImageEnabled })
-                                        }
-                                    />
-                                    <Field label="每位客户每天免费张数">
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            value={model.dailyFreeImageLimit}
-                                            disabled={model.dailyFreeImageUnlimited}
-                                            onChange={event =>
-                                                updateModel(model.code, {
-                                                    dailyFreeImageLimit: Number(event.target.value) || 0,
-                                                })
-                                            }
-                                        />
-                                    </Field>
-                                    <Toggle
-                                        label="免费生图不限次数"
-                                        checked={model.dailyFreeImageUnlimited}
-                                        onChange={dailyFreeImageUnlimited =>
-                                            updateModel(model.code, {
-                                                dailyFreeImageUnlimited,
-                                                dailyFreeImageLimit: dailyFreeImageUnlimited
-                                                    ? 0
-                                                    : model.dailyFreeImageLimit,
-                                            })
-                                        }
-                                    />
-                                    <Toggle
-                                        label="免费用完后允许付费"
-                                        checked={model.paidAfterFreeEnabled}
-                                        onChange={paidAfterFreeEnabled =>
-                                            updateModel(model.code, { paidAfterFreeEnabled })
-                                        }
-                                    />
-                                    <Field label="每位客户每日生图安全上限">
-                                        <Input
-                                            type="number"
-                                            min="1"
-                                            value={model.dailyGenerationSafetyLimit}
-                                            onChange={event =>
-                                                updateModel(model.code, {
-                                                    dailyGenerationSafetyLimit:
-                                                        Number(event.target.value) || 1,
-                                                })
-                                            }
-                                        />
-                                    </Field>
-                                    <div className="grid gap-2 sm:grid-cols-3">
-                                        <Button
-                                            variant="outline"
-                                            disabled={
-                                                saveModel.isPending ||
-                                                testModel.isPending ||
-                                                smokeTestModel.isPending
-                                            }
-                                            onClick={() => saveModel.mutate(model)}
-                                        >
-                                            保存模型
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            disabled={
-                                                saveModel.isPending ||
-                                                testModel.isPending ||
-                                                smokeTestModel.isPending
-                                            }
-                                            onClick={() => testModel.mutate(model)}
-                                        >
-                                            <RefreshCw className="mr-2 h-4 w-4" />
-                                            只读测试
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            disabled={
-                                                saveModel.isPending ||
-                                                testModel.isPending ||
-                                                smokeTestModel.isPending
-                                            }
-                                            onClick={() => {
-                                                if (
-                                                    window.confirm(
-                                                        '将真实生成 1 张简单测试图，中转站可能收费。是否继续？',
+                                        <Field label="中文名称">
+                                            <Input
+                                                value={model.displayNameZh}
+                                                onChange={event =>
+                                                    updateModel(model.code, {
+                                                        displayNameZh: event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label="英文名称">
+                                            <Input
+                                                value={model.displayNameEn}
+                                                onChange={event =>
+                                                    updateModel(model.code, {
+                                                        displayNameEn: event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label="中文用途说明">
+                                            <Textarea
+                                                rows={3}
+                                                value={model.descriptionZh}
+                                                onChange={event =>
+                                                    updateModel(model.code, {
+                                                        descriptionZh: event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label="英文用途说明">
+                                            <Textarea
+                                                rows={3}
+                                                value={model.descriptionEn}
+                                                onChange={event =>
+                                                    updateModel(model.code, {
+                                                        descriptionEn: event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label="中转站模型 ID">
+                                            <Input
+                                                value={model.providerModelId}
+                                                onChange={event =>
+                                                    updateModel(model.code, {
+                                                        providerModelId: event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label="中转站调用方式">
+                                            <select
+                                                className="h-9 w-full rounded-md border bg-background px-3"
+                                                value={model.protocol}
+                                                onChange={event =>
+                                                    updateModel(
+                                                        model.code,
+                                                        protocolChange(model, event.target.value),
                                                     )
-                                                )
-                                                    smokeTestModel.mutate(model);
+                                                }
+                                            >
+                                                <optgroup label="推荐方式">
+                                                    {imageProtocolOptionsForModel(model)
+                                                        .filter(option => option.recommended)
+                                                        .map(option => (
+                                                            <option key={option.value} value={option.value}>
+                                                                {option.label}
+                                                            </option>
+                                                        ))}
+                                                </optgroup>
+                                                <optgroup label="高级兼容方式（仅按中转站说明选择）">
+                                                    {imageProtocolOptionsForModel(model)
+                                                        .filter(option => !option.recommended)
+                                                        .map(option => (
+                                                            <option key={option.value} value={option.value}>
+                                                                {option.label}
+                                                            </option>
+                                                        ))}
+                                                </optgroup>
+                                            </select>
+                                            <p className="text-xs leading-5 text-muted-foreground">
+                                                当前模型：{model.providerModelId || model.officialModelId}
+                                            </p>
+                                            <p className="text-xs leading-5 text-muted-foreground">
+                                                {imageProtocolOption(model.protocol).description}
+                                            </p>
+                                        </Field>
+                                        <div className="grid gap-3 sm:grid-cols-3">
+                                            {(
+                                                [
+                                                    ['1K', 'unitPrice'],
+                                                    ['2K', 'unitPrice2K'],
+                                                    ['4K', 'unitPrice4K'],
+                                                ] as const
+                                            ).map(([resolution, priceField]) => {
+                                                const supported = modelSupportsResolution(model, resolution);
+                                                return (
+                                                    <Field
+                                                        key={resolution}
+                                                        label={`${resolution} 单张价格（${model.currencyCode}）`}
+                                                    >
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            disabled={!supported}
+                                                            value={minorToMajor(
+                                                                model[priceField],
+                                                                model.currencyCode,
+                                                            )}
+                                                            onChange={event =>
+                                                                updateModel(model.code, {
+                                                                    [priceField]: majorToMinor(
+                                                                        event.target.value,
+                                                                        model.currencyCode,
+                                                                    ),
+                                                                })
+                                                            }
+                                                        />
+                                                        {!supported ? (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                当前模型/协议不支持原生 {resolution}
+                                                            </span>
+                                                        ) : resolution !== '1K' ? (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                价格设为 0 时客户端不开放该档
+                                                            </span>
+                                                        ) : null}
+                                                    </Field>
+                                                );
+                                            })}
+                                        </div>
+                                        <Toggle
+                                            label="设为默认"
+                                            checked={model.isDefault}
+                                            onChange={isDefault => {
+                                                if (isDefault) setDefaultModel(model.code);
+                                                else if (draft.defaultModelCode !== model.code)
+                                                    updateModel(model.code, { isDefault: false });
                                             }}
-                                        >
-                                            付费生图测试
-                                        </Button>
+                                        />
+                                        <Toggle
+                                            label="中转站保证幂等"
+                                            checked={model.supportsIdempotency}
+                                            onChange={supportsIdempotency =>
+                                                updateModel(model.code, { supportsIdempotency })
+                                            }
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            仅在中转站明确保证同一幂等键不会重复生图时开启。
+                                        </p>
+                                        <Toggle
+                                            label="启用每日免费生图"
+                                            checked={model.freeImageEnabled}
+                                            onChange={freeImageEnabled =>
+                                                updateModel(model.code, { freeImageEnabled })
+                                            }
+                                        />
+                                        <Field label="每位客户每天免费张数">
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                value={model.dailyFreeImageLimit}
+                                                disabled={model.dailyFreeImageUnlimited}
+                                                onChange={event =>
+                                                    updateModel(model.code, {
+                                                        dailyFreeImageLimit: Number(event.target.value) || 0,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <Toggle
+                                            label="免费生图不限次数"
+                                            checked={model.dailyFreeImageUnlimited}
+                                            onChange={dailyFreeImageUnlimited =>
+                                                updateModel(model.code, {
+                                                    dailyFreeImageUnlimited,
+                                                    dailyFreeImageLimit: dailyFreeImageUnlimited
+                                                        ? 0
+                                                        : model.dailyFreeImageLimit,
+                                                })
+                                            }
+                                        />
+                                        <Toggle
+                                            label="免费用完后允许付费"
+                                            checked={model.paidAfterFreeEnabled}
+                                            onChange={paidAfterFreeEnabled =>
+                                                updateModel(model.code, { paidAfterFreeEnabled })
+                                            }
+                                        />
+                                        <Field label="每位客户每日生图安全上限">
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                value={model.dailyGenerationSafetyLimit}
+                                                onChange={event =>
+                                                    updateModel(model.code, {
+                                                        dailyGenerationSafetyLimit:
+                                                            Number(event.target.value) || 1,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                        <div className="grid gap-2 sm:grid-cols-3">
+                                            <Button
+                                                variant="outline"
+                                                disabled={
+                                                    saveModel.isPending ||
+                                                    testModel.isPending ||
+                                                    smokeTestModel.isPending
+                                                }
+                                                onClick={() => saveModel.mutate(model)}
+                                            >
+                                                保存模型
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                disabled={
+                                                    saveModel.isPending ||
+                                                    testModel.isPending ||
+                                                    smokeTestModel.isPending
+                                                }
+                                                onClick={() => testModel.mutate(model)}
+                                            >
+                                                <RefreshCw className="mr-2 h-4 w-4" />
+                                                只读测试
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                disabled={
+                                                    saveModel.isPending ||
+                                                    testModel.isPending ||
+                                                    smokeTestModel.isPending
+                                                }
+                                                onClick={() => {
+                                                    if (
+                                                        window.confirm(
+                                                            '将真实生成 1 张简单测试图，中转站可能收费。是否继续？',
+                                                        )
+                                                    )
+                                                        smokeTestModel.mutate(model);
+                                                }}
+                                            >
+                                                付费生图测试
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        </fieldset>
                     </PageBlock>
                 ) : null}
 
@@ -770,216 +902,226 @@ function ImageGenerationSettingsPage() {
                         title="提示词规划 Skill"
                         description="把客户的简短想法整理成可执行的生图方案，并自动推荐更合适的模型。"
                     >
-                        <Alert className="mb-4">
-                            <AlertDescription>
-                                当前运行的是本站维护的 <strong>image-prompt-pro</strong>
-                                ，不会在线下载或直接执行某个 GitHub
-                                Skill；公开项目只作为设计与许可来源参考，实际版本以本地发布哈希为准，GitHub
-                                Star 数不参与自动选用或升级。
-                                <strong>全站同时只能启用 1 个规则包。</strong>
-                                当前版本会自动用于后续的“智能优化”和模型推荐；切换历史版本时，系统会自动停用旧版本。已经完成或正在执行的任务仍保留原规则哈希，不会被改写。
-                                当前升级方式：
-                                <strong>
-                                    {draft.skillAutoActivateEnabled
-                                        ? '新规则包随代码部署后自动启用'
-                                        : '新规则包登记后由管理员手动启用'}
-                                </strong>
-                                。
-                            </AlertDescription>
-                        </Alert>
-                        <div className="mb-6 grid gap-4 lg:grid-cols-3">
-                            <div className="rounded-lg border p-4">
-                                <strong>结构化提示词规划</strong>
-                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                    自动补齐主体、场景、构图、光线、风格、颜色、材质、精确文字、保留项和避免项，客户仍可在生成前继续修改。
-                                </p>
-                            </div>
-                            <div className="rounded-lg border p-4">
-                                <strong>按任务自动选模型</strong>
-                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                    复杂文字与版式优先 Codex 图片 2，精细编辑与抠图优先 1.5，日常商品图优先
-                                    1，快速试稿和插画优先 Gemini。
-                                </p>
-                            </div>
-                            <div className="rounded-lg border p-4">
-                                <strong>忠实与安全约束</strong>
-                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                    保留客户指定的文字、人物、商品和参考图要求；不凭空编造品牌、价格、促销、认证、Logo、功效或商品声明。
-                                </p>
-                            </div>
-                        </div>
-                        {activeSkillRelease ? (
-                            <div className="mb-6 rounded-lg border bg-muted/30 p-4">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <strong>当前发布：{skillReleaseName(activeSkillRelease)}</strong>
-                                    <Badge variant="success">全站唯一启用</Badge>
-                                    <Badge variant="secondary">
-                                        规则格式 v{activeSkillRelease.bundleVersion}
-                                    </Badge>
-                                    <Badge variant="outline">
-                                        {routingStrategyZh(activeSkillRelease.routingStrategy)}路由
-                                    </Badge>
-                                </div>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    {activeSkillRelease.supportedUseCases.map(useCase => (
-                                        <Badge key={useCase} variant="secondary">
-                                            {skillUseCaseZh(useCase)}
-                                        </Badge>
-                                    ))}
-                                </div>
-                                <p className="mt-3 text-xs text-muted-foreground">
-                                    当前规则哈希：
-                                    <span className="font-mono">{draft.activeSkillHash}</span>
-                                </p>
-                            </div>
-                        ) : null}
-                        <div className="mb-3">
-                            <strong>调用额度与收费</strong>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                这些设置控制客户每天可以使用多少次提示词优化，不影响生图次数和模型单价。
-                            </p>
-                        </div>
-                        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            <Field label="每分钟最多优化次数">
-                                <Input
-                                    type="number"
-                                    min="1"
-                                    value={draft.promptRateLimitPerMinute}
-                                    onChange={event =>
-                                        setDraft({
-                                            ...draft,
-                                            promptRateLimitPerMinute: Number(event.target.value) || 1,
-                                        })
-                                    }
-                                />
-                            </Field>
-                            <Field label="每天免费优化次数">
-                                <Input
-                                    type="number"
-                                    min="0"
-                                    disabled={draft.promptDailyFreeUnlimited}
-                                    value={draft.promptDailyFreeLimit}
-                                    onChange={event =>
-                                        setDraft({
-                                            ...draft,
-                                            promptDailyFreeLimit: Number(event.target.value) || 0,
-                                        })
-                                    }
-                                />
-                            </Field>
-                            <Toggle
-                                label="免费优化不限次数"
-                                checked={draft.promptDailyFreeUnlimited}
-                                onChange={promptDailyFreeUnlimited =>
-                                    setDraft({
-                                        ...draft,
-                                        promptDailyFreeUnlimited,
-                                        promptDailyFreeLimit: promptDailyFreeUnlimited
-                                            ? 0
-                                            : draft.promptDailyFreeLimit,
-                                    })
-                                }
-                            />
-                            <Toggle
-                                label="免费用完后允许付费优化"
-                                checked={draft.paidPromptOptimizationEnabled}
-                                onChange={paidPromptOptimizationEnabled =>
-                                    setDraft({ ...draft, paidPromptOptimizationEnabled })
-                                }
-                            />
-                            <Field label={`付费优化单次价格（${draft.paidPromptOptimizationCurrencyCode}）`}>
-                                <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={minorToMajor(
-                                        draft.paidPromptOptimizationPrice,
-                                        draft.paidPromptOptimizationCurrencyCode,
-                                    )}
-                                    onChange={event =>
-                                        setDraft({
-                                            ...draft,
-                                            paidPromptOptimizationPrice: majorToMinor(
-                                                event.target.value,
-                                                draft.paidPromptOptimizationCurrencyCode,
-                                            ),
-                                        })
-                                    }
-                                />
-                            </Field>
-                        </div>
-                        <div className="mb-3">
-                            <strong>规则包历史</strong>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                新任务只使用标记为“当前使用”的版本。历史备用版本不会参与运行，除非手动切换。
-                            </p>
-                        </div>
-                        <div className="space-y-3">
-                            {data.imagePromptSkillReleases.map(release => (
-                                <div key={release.id} className="rounded-lg border p-4">
-                                    <div className="flex flex-wrap items-start justify-between gap-3">
-                                        <div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <strong>{skillReleaseName(release)}</strong>
-                                                <Badge
-                                                    variant={
-                                                        release.status === 'ACTIVE' ? 'success' : 'secondary'
-                                                    }
-                                                >
-                                                    {release.status === 'ACTIVE' ? '当前使用' : '历史备用'}
-                                                </Badge>
-                                                <Badge variant="outline">
-                                                    规则格式 v{release.bundleVersion}
-                                                </Badge>
-                                            </div>
-                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                创建于 {new Date(release.createdAt).toLocaleString()}
-                                                {release.activatedAt
-                                                    ? ` · 最近启用于 ${new Date(release.activatedAt).toLocaleString()}`
-                                                    : ''}
-                                            </p>
-                                        </div>
-                                        {release.status !== 'ACTIVE' ? (
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                disabled={activateSkill.isPending}
-                                                onClick={() => activateSkill.mutate(release.id)}
-                                            >
-                                                设为当前版本
-                                            </Button>
-                                        ) : null}
-                                    </div>
-                                    <div className="mt-4 grid gap-3 md:grid-cols-3">
-                                        <div>
-                                            <div className="text-xs text-muted-foreground">支持场景</div>
-                                            <div className="mt-2 flex flex-wrap gap-1.5">
-                                                {release.supportedUseCases.map(useCase => (
-                                                    <Badge key={useCase} variant="outline">
-                                                        {skillUseCaseZh(useCase)}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-xs text-muted-foreground">可推荐模型</div>
-                                            <p className="mt-2 text-sm">
-                                                {release.supportedModels.join('、') || '未记录'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <div className="text-xs text-muted-foreground">路由策略</div>
-                                            <p className="mt-2 text-sm">
-                                                {routingStrategyZh(release.routingStrategy)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <p className="mt-4 break-all font-mono text-xs text-muted-foreground">
-                                        SHA-256：{release.sourceHash}
+                        <fieldset disabled={!canUpdate} className="contents">
+                            <Alert className="mb-4">
+                                <AlertDescription>
+                                    当前运行的是本站维护的 <strong>image-prompt-pro</strong>
+                                    ，不会在线下载或直接执行某个 GitHub
+                                    Skill；公开项目只作为设计与许可来源参考，实际版本以本地发布哈希为准，GitHub
+                                    Star 数不参与自动选用或升级。
+                                    <strong>全站同时只能启用 1 个规则包。</strong>
+                                    当前版本会自动用于后续的“智能优化”和模型推荐；切换历史版本时，系统会自动停用旧版本。已经完成或正在执行的任务仍保留原规则哈希，不会被改写。
+                                    当前升级方式：
+                                    <strong>
+                                        {draft.skillAutoActivateEnabled
+                                            ? '新规则包随代码部署后自动启用'
+                                            : '新规则包登记后由管理员手动启用'}
+                                    </strong>
+                                    。
+                                </AlertDescription>
+                            </Alert>
+                            <div className="mb-6 grid gap-4 lg:grid-cols-3">
+                                <div className="rounded-lg border p-4">
+                                    <strong>结构化提示词规划</strong>
+                                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                        自动补齐主体、场景、构图、光线、风格、颜色、材质、精确文字、保留项和避免项，客户仍可在生成前继续修改。
                                     </p>
                                 </div>
-                            ))}
-                        </div>
+                                <div className="rounded-lg border p-4">
+                                    <strong>按任务自动选模型</strong>
+                                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                        复杂文字与版式优先 Codex 图片 2，精细编辑与抠图优先
+                                        1.5，日常商品图优先 1，快速试稿和插画优先 Gemini。
+                                    </p>
+                                </div>
+                                <div className="rounded-lg border p-4">
+                                    <strong>忠实与安全约束</strong>
+                                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                        保留客户指定的文字、人物、商品和参考图要求；不凭空编造品牌、价格、促销、认证、Logo、功效或商品声明。
+                                    </p>
+                                </div>
+                            </div>
+                            {activeSkillRelease ? (
+                                <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <strong>当前发布：{skillReleaseName(activeSkillRelease)}</strong>
+                                        <Badge variant="success">全站唯一启用</Badge>
+                                        <Badge variant="secondary">
+                                            规则格式 v{activeSkillRelease.bundleVersion}
+                                        </Badge>
+                                        <Badge variant="outline">
+                                            {routingStrategyZh(activeSkillRelease.routingStrategy)}路由
+                                        </Badge>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {activeSkillRelease.supportedUseCases.map(useCase => (
+                                            <Badge key={useCase} variant="secondary">
+                                                {skillUseCaseZh(useCase)}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <p className="mt-3 text-xs text-muted-foreground">
+                                        当前规则哈希：
+                                        <span className="font-mono">{draft.activeSkillHash}</span>
+                                    </p>
+                                </div>
+                            ) : null}
+                            <div className="mb-3">
+                                <strong>调用额度与收费</strong>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    这些设置控制客户每天可以使用多少次提示词优化，不影响生图次数和模型单价。
+                                </p>
+                            </div>
+                            <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <Field label="每分钟最多优化次数">
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        value={draft.promptRateLimitPerMinute}
+                                        onChange={event =>
+                                            setDraft({
+                                                ...draft,
+                                                promptRateLimitPerMinute: Number(event.target.value) || 1,
+                                            })
+                                        }
+                                    />
+                                </Field>
+                                <Field label="每天免费优化次数">
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        disabled={draft.promptDailyFreeUnlimited}
+                                        value={draft.promptDailyFreeLimit}
+                                        onChange={event =>
+                                            setDraft({
+                                                ...draft,
+                                                promptDailyFreeLimit: Number(event.target.value) || 0,
+                                            })
+                                        }
+                                    />
+                                </Field>
+                                <Toggle
+                                    label="免费优化不限次数"
+                                    checked={draft.promptDailyFreeUnlimited}
+                                    onChange={promptDailyFreeUnlimited =>
+                                        setDraft({
+                                            ...draft,
+                                            promptDailyFreeUnlimited,
+                                            promptDailyFreeLimit: promptDailyFreeUnlimited
+                                                ? 0
+                                                : draft.promptDailyFreeLimit,
+                                        })
+                                    }
+                                />
+                                <Toggle
+                                    label="免费用完后允许付费优化"
+                                    checked={draft.paidPromptOptimizationEnabled}
+                                    onChange={paidPromptOptimizationEnabled =>
+                                        setDraft({ ...draft, paidPromptOptimizationEnabled })
+                                    }
+                                />
+                                <Field
+                                    label={`付费优化单次价格（${draft.paidPromptOptimizationCurrencyCode}）`}
+                                >
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={minorToMajor(
+                                            draft.paidPromptOptimizationPrice,
+                                            draft.paidPromptOptimizationCurrencyCode,
+                                        )}
+                                        onChange={event =>
+                                            setDraft({
+                                                ...draft,
+                                                paidPromptOptimizationPrice: majorToMinor(
+                                                    event.target.value,
+                                                    draft.paidPromptOptimizationCurrencyCode,
+                                                ),
+                                            })
+                                        }
+                                    />
+                                </Field>
+                            </div>
+                            <div className="mb-3">
+                                <strong>规则包历史</strong>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    新任务只使用标记为“当前使用”的版本。历史备用版本不会参与运行，除非手动切换。
+                                </p>
+                            </div>
+                            <div className="space-y-3">
+                                {data.imagePromptSkillReleases.map(release => (
+                                    <div key={release.id} className="rounded-lg border p-4">
+                                        <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <strong>{skillReleaseName(release)}</strong>
+                                                    <Badge
+                                                        variant={
+                                                            release.status === 'ACTIVE'
+                                                                ? 'success'
+                                                                : 'secondary'
+                                                        }
+                                                    >
+                                                        {release.status === 'ACTIVE'
+                                                            ? '当前使用'
+                                                            : '历史备用'}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        规则格式 v{release.bundleVersion}
+                                                    </Badge>
+                                                </div>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    创建于 {new Date(release.createdAt).toLocaleString()}
+                                                    {release.activatedAt
+                                                        ? ` · 最近启用于 ${new Date(release.activatedAt).toLocaleString()}`
+                                                        : ''}
+                                                </p>
+                                            </div>
+                                            {release.status !== 'ACTIVE' ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={activateSkill.isPending}
+                                                    onClick={() => activateSkill.mutate(release.id)}
+                                                >
+                                                    设为当前版本
+                                                </Button>
+                                            ) : null}
+                                        </div>
+                                        <div className="mt-4 grid gap-3 md:grid-cols-3">
+                                            <div>
+                                                <div className="text-xs text-muted-foreground">支持场景</div>
+                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                    {release.supportedUseCases.map(useCase => (
+                                                        <Badge key={useCase} variant="outline">
+                                                            {skillUseCaseZh(useCase)}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    可推荐模型
+                                                </div>
+                                                <p className="mt-2 text-sm">
+                                                    {release.supportedModels.join('、') || '未记录'}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-muted-foreground">路由策略</div>
+                                                <p className="mt-2 text-sm">
+                                                    {routingStrategyZh(release.routingStrategy)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <p className="mt-4 break-all font-mono text-xs text-muted-foreground">
+                                            SHA-256：{release.sourceHash}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </fieldset>
                     </PageBlock>
                 ) : null}
 
@@ -1566,6 +1708,9 @@ function ImageGenerationSettingsPage() {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
+                                                                    disabled={
+                                                                        !canUpdate || retryOutput.isPending
+                                                                    }
                                                                     onClick={() =>
                                                                         retryOutput.mutate(output.id)
                                                                     }
@@ -1578,6 +1723,9 @@ function ImageGenerationSettingsPage() {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
+                                                                    disabled={
+                                                                        !canUpdate || refundOutput.isPending
+                                                                    }
                                                                     onClick={() => {
                                                                         const reason =
                                                                             window.prompt('请输入退款原因');
@@ -2270,11 +2418,17 @@ export function ProviderCredentialEditorSheet({
                                         <Input
                                             id="provider-key-code"
                                             maxLength={64}
+                                            disabled={Boolean(config.id)}
                                             value={draft.code}
                                             onChange={event =>
                                                 update('code', event.target.value.toLowerCase())
                                             }
                                         />
+                                        {config.id ? (
+                                            <p className="text-xs text-muted-foreground">
+                                                稳定编码已写入任务与审计快照，创建后不可修改。
+                                            </p>
+                                        ) : null}
                                     </Field>
                                     <Field label="供应商" htmlFor="provider-key-scope">
                                         <select
@@ -2837,6 +2991,73 @@ function ErrorPage({ title, retry, error }: Readonly<{ title: string; retry(): v
             </PageLayout>
         </Page>
     );
+}
+export function toLocalDayBoundary(value: string, endOfDay: boolean): string | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return null;
+    const [year, month, day] = value.split('-').map(Number);
+    const boundary = new Date(
+        year,
+        month - 1,
+        day,
+        endOfDay ? 23 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 999 : 0,
+    );
+    if (boundary.getFullYear() !== year || boundary.getMonth() !== month - 1 || boundary.getDate() !== day) {
+        return null;
+    }
+    return boundary.toISOString();
+}
+
+export function reconcileImageAdminConfig(
+    current: ImageAdminConfigRecord | null,
+    baseline: ImageAdminConfigRecord | null,
+    incoming: ImageAdminConfigRecord,
+): ImageAdminConfigRecord {
+    if (!current || !baseline) return structuredClone(incoming);
+    const next = reconcileRecord(current, baseline, incoming);
+    const currentModels = new Map(current.models.map(model => [model.code, model]));
+    const baselineModels = new Map(baseline.models.map(model => [model.code, model]));
+    next.models = incoming.models.map(model => {
+        const currentModel = currentModels.get(model.code);
+        const baselineModel = baselineModels.get(model.code);
+        return currentModel && baselineModel
+            ? reconcileRecord(currentModel, baselineModel, model)
+            : structuredClone(model);
+    });
+    return next;
+}
+
+function reconcileRecord<T extends object>(current: T, baseline: T, incoming: T): T {
+    const result = structuredClone(incoming) as Record<string, unknown>;
+    for (const key of Object.keys(incoming)) {
+        if (key === 'models') continue;
+        const currentValue = (current as Record<string, unknown>)[key];
+        const baselineValue = (baseline as Record<string, unknown>)[key];
+        if (!sameValue(currentValue, baselineValue)) result[key] = structuredClone(currentValue);
+    }
+    return result as T;
+}
+
+function replaceAdminModel(
+    config: ImageAdminConfigRecord,
+    savedModel: ImageAdminModelRecord,
+): ImageAdminConfigRecord {
+    return {
+        ...config,
+        models: config.models.map(model =>
+            model.code === savedModel.code ? structuredClone(savedModel) : model,
+        ),
+    };
+}
+
+function sameAdminConfig(left: ImageAdminConfigRecord | null, right: ImageAdminConfigRecord | null): boolean {
+    return sameValue(left, right);
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
 }
 function modelInput(model: ImageAdminModelRecord) {
     const {

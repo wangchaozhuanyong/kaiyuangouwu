@@ -372,7 +372,7 @@ describe('AI image generation full flow', () => {
         expect(credential.saveImageProviderCredential).toMatchObject({
             scope: 'OPENAI',
             credentialConfigured: true,
-            credentialEnabled: true,
+            credentialEnabled: false,
             apiKeyLast4: '-key',
             providerHealthStatus: 'UNTESTED',
         });
@@ -399,7 +399,7 @@ describe('AI image generation full flow', () => {
         expect(geminiCredential.saveImageProviderCredential).toMatchObject({
             scope: 'GEMINI',
             credentialConfigured: true,
-            credentialEnabled: true,
+            credentialEnabled: false,
             apiKeyLast4: '-key',
             providerHealthStatus: 'UNTESTED',
         });
@@ -452,7 +452,8 @@ describe('AI image generation full flow', () => {
                 enabled: true,
                 priority: 10,
                 weight: 1,
-                modelCodes: ['OPENAI_HIGH_QUALITY'],
+                // Empty bindings intentionally exercise supplier/purpose auto-routing.
+                modelCodes: [],
             },
         });
         expect((await adminClient.query(TEST_MODEL, { code: 'OPENAI_HIGH_QUALITY' })).testImageModel.ok).toBe(

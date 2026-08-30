@@ -4,8 +4,10 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 
 import {
+    extractDashboardAssetUrls,
     extractEntryTicket,
     extractStorefrontAssetUrl,
+    verifyDashboardAssets,
     verifyProductionRelease,
 } from '../../../deploy/verify-production-release.mjs';
 
@@ -81,7 +83,25 @@ async function startFixtureServer({ allowUnauthenticatedShopApi = false } = {}) 
         }
         if (request.method === 'GET' && requestUrl.pathname === '/dashboard/') {
             response.writeHead(200, { 'content-type': 'text/html' });
-            response.end('<html></html>');
+            response.end(
+                '<html><head><link href="/dashboard/assets/dashboard.css" rel="stylesheet"></head>' +
+                    '<body><script src="/dashboard/assets/dashboard-main.js"></script></body></html>',
+            );
+            return;
+        }
+        if (request.method === 'GET' && requestUrl.pathname === '/dashboard/assets/dashboard.css') {
+            response.writeHead(200, { 'content-type': 'text/css' });
+            response.end('body{}');
+            return;
+        }
+        if (request.method === 'GET' && requestUrl.pathname === '/dashboard/assets/dashboard-main.js') {
+            response.writeHead(200, { 'content-type': 'application/javascript' });
+            response.end('const chunk = "assets/dashboard-lazy.js";');
+            return;
+        }
+        if (request.method === 'GET' && requestUrl.pathname === '/dashboard/assets/dashboard-lazy.js') {
+            response.writeHead(200, { 'content-type': 'application/javascript' });
+            response.end('export const loaded = true;');
             return;
         }
         if (request.method === 'POST' && requestUrl.pathname === '/admin-api') {
@@ -120,7 +140,7 @@ test('verifies the signed promotion entry flow and production public surfaces', 
         'authenticated Shop API',
         'authenticated storefront',
         'storefront build asset',
-        'dashboard',
+        'dashboard asset graph',
         'public Admin API denial',
     ]);
 });
@@ -155,5 +175,43 @@ test('extracts tickets and same-origin build assets without depending on attribu
                 'https://shop.example.com',
             ),
         /same-origin/u,
+    );
+    assert.deepEqual(
+        extractDashboardAssetUrls(
+            '<script defer src="/dashboard/assets/index.js"></script>',
+            'https://console.example.com/dashboard/',
+        ).map(url => url.href),
+        ['https://console.example.com/dashboard/assets/index.js'],
+    );
+});
+
+test('rejects a missing lazy Dashboard chunk even when the entry asset is healthy', async () => {
+    const responses = new Map([
+        [
+            '/dashboard/',
+            new Response('<script src="/dashboard/assets/main.js"></script>', {
+                status: 200,
+                headers: { 'content-type': 'text/html' },
+            }),
+        ],
+        [
+            '/dashboard/assets/main.js',
+            new Response('const lazy = "assets/missing.js";', {
+                status: 200,
+                headers: { 'content-type': 'application/javascript' },
+            }),
+        ],
+    ]);
+    const fetchImpl = async url =>
+        responses.get(new URL(url).pathname)?.clone() ?? new Response('', { status: 404 });
+
+    await assert.rejects(
+        verifyDashboardAssets({
+            dashboardUrl: 'https://console.example.com/dashboard/',
+            fetchImpl,
+            releaseId: 'test-release',
+            timeoutMs: 1_000,
+        }),
+        /missing\.js.*expected HTTP 200, received 404/u,
     );
 });
