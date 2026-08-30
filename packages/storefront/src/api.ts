@@ -244,7 +244,7 @@ const imageGenerationJobFields = `
     errorMessage
     completedAt
     referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
-    outputs { id outputIndex state attemptCount errorMessage completedAt refundedAt billingMode chargeAmount imageUrl downloadUrl }
+    outputs { id outputIndex state attemptCount errorMessage completedAt refundedAt billingMode chargeAmount width height imageUrl downloadUrl }
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order

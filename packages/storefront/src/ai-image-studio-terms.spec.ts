@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const pageSource = readFileSync(new URL('./pages/ai-image-studio-page.tsx', import.meta.url), 'utf8');
 const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const apiSource = readFileSync(new URL('./api.ts', import.meta.url), 'utf8');
 
 describe('AI Image Studio compact generation flow', () => {
     it('defaults consent to checked while preserving the generation gate', () => {
@@ -42,6 +43,23 @@ describe('AI Image Studio compact generation flow', () => {
         expect(pageSource).toContain('setSelectedJobId(job.id)');
         expect(stylesheet).toContain('.ai-studio-history-filters');
         expect(stylesheet).toContain('.ai-generation-card-preview');
+    });
+
+    it('keeps mixed image ratios visible without stretching or cropping the history card', () => {
+        expect(stylesheet).toMatch(
+            /\.ai-generation-card \{[^}]*grid-template-columns: 96px minmax\(0, 1fr\);[^}]*align-items: start;/,
+        );
+        expect(stylesheet).toMatch(/\.ai-generation-card-preview \{[^}]*min-height: 0;[^}]*aspect-ratio: 1;/);
+        expect(stylesheet).toMatch(/\.ai-generation-card-preview img \{[^}]*object-fit: contain;/);
+    });
+
+    it('shows stored output dimensions and warns when the provider ratio misses the target', () => {
+        expect(apiSource).toContain('chargeAmount width height imageUrl downloadUrl');
+        expect(pageSource).toContain('summarizeImageOutputDimensions(job.outputs, job.aspectRatio)');
+        expect(pageSource).toContain('实际比例与目标');
+        expect(pageSource).toContain('generationOutputAspectRatio(job.aspectRatio, output)');
+        expect(stylesheet).toContain('.ai-generation-ratio-warning');
+        expect(stylesheet).toContain('.ai-generation-output-size.is-mismatch');
     });
 
     it('keeps mobile text entry stable and confirms reference uploads with a local preview', () => {

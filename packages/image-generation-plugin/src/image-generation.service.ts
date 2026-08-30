@@ -1352,6 +1352,8 @@ export class ImageGenerationService {
             referenceAsset: job.referenceAsset ? this.assetView(job.referenceAsset, customerId) : null,
             outputs: (job.outputs ?? []).map(output => ({
                 ...output,
+                width: output.asset?.width ?? null,
+                height: output.asset?.height ?? null,
                 imageUrl: output.asset ? this.storage.signedUrl(output.asset, customerId) : null,
                 downloadUrl: output.asset ? this.storage.signedUrl(output.asset, customerId, true) : null,
             })),

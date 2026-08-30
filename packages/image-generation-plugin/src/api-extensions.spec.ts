@@ -16,6 +16,9 @@ describe('image generation GraphQL surface', () => {
         expect(schema).toContain('deleteMyImageGenerationJob');
         expect(schema).toContain('referenceAssetIds: [ID!]');
         expect(schema).toContain('referenceInstruction: String');
+        expect(schema).toMatch(
+            /type ImageGenerationOutput implements Node[\s\S]*width: Int[\s\S]*height: Int/,
+        );
     });
 
     it('separates provider credentials from store-level image configuration', () => {

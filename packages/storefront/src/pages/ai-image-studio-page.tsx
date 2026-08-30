@@ -40,6 +40,12 @@ import {
 } from '../types';
 
 import {
+    formatImageDimensions,
+    generationOutputAspectRatio,
+    imageAspectRatioMismatch,
+    summarizeImageOutputDimensions,
+} from './ai-image-studio-dimensions';
+import {
     imageGenerationElapsedSeconds,
     imageGenerationPollDelay,
     imageGenerationProgress,
@@ -1294,6 +1300,14 @@ function GenerationCard({
     const preview = job.outputs.find(output => output.imageUrl) ?? job.outputs[0];
     const statusClass = job.state.toLowerCase();
     const progress = imageGenerationProgress(job);
+    const dimensionSummary = summarizeImageOutputDimensions(job.outputs, job.aspectRatio);
+    const actualSizeLabel = dimensionSummary.sharedDimensions
+        ? dimensionSummary.sharedDimensions
+        : dimensionSummary.distinctSizeCount > 1
+          ? isZh
+              ? `${dimensionSummary.distinctSizeCount} 种尺寸`
+              : `${dimensionSummary.distinctSizeCount} sizes`
+          : null;
     const [progressClock, setProgressClock] = useState(() => Date.now());
     useEffect(() => {
         if (!activeStates.has(job.state)) return;
@@ -1379,10 +1393,27 @@ function GenerationCard({
                     <span className="ai-generation-error-copy">{job.errorMessage}</span>
                 ) : null}
                 <div className="ai-generation-meta">
-                    <span>{job.aspectRatio}</span>
+                    <span>{isZh ? `目标 ${job.aspectRatio}` : `Target ${job.aspectRatio}`}</span>
                     <span>{job.resolution}</span>
                     <span>{isZh ? `${job.quantity} 张` : `${job.quantity} images`}</span>
+                    {actualSizeLabel ? (
+                        <span className={dimensionSummary.mismatchCount ? 'is-mismatch' : 'is-actual-size'}>
+                            {isZh ? `实际 ${actualSizeLabel}` : `Actual ${actualSizeLabel}`}
+                        </span>
+                    ) : null}
                 </div>
+                {dimensionSummary.mismatchCount ? (
+                    <div className="ai-generation-ratio-warning">
+                        <CircleAlert aria-hidden="true" />
+                        <span>
+                            {isZh
+                                ? `${dimensionSummary.mismatchCount} 张图片的实际比例与目标 ${job.aspectRatio} 不一致`
+                                : `${dimensionSummary.mismatchCount} output${
+                                      dimensionSummary.mismatchCount > 1 ? 's' : ''
+                                  } do not match target ${job.aspectRatio}`}
+                        </span>
+                    </div>
+                ) : null}
                 <footer>
                     <strong>{amountLabel}</strong>
                     <div>
@@ -1468,6 +1499,14 @@ function GenerationDetail({
                 : isZh
                   ? `实付 ${formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}`
                   : `Paid ${formatBillingMoney(job.capturedAmount, job.currencyCode, locale)}`;
+    const dimensionSummary = summarizeImageOutputDimensions(job.outputs, job.aspectRatio);
+    const actualSizeLabel = dimensionSummary.sharedDimensions
+        ? dimensionSummary.sharedDimensions
+        : dimensionSummary.distinctSizeCount > 1
+          ? isZh
+              ? `${dimensionSummary.distinctSizeCount} 种尺寸`
+              : `${dimensionSummary.distinctSizeCount} sizes`
+          : null;
     return (
         <div className="ai-generation-detail">
             <div className="ai-generation-detail-summary">
@@ -1478,71 +1517,106 @@ function GenerationDetail({
             </div>
             <p>{job.originalPrompt}</p>
             <div className="ai-generation-meta">
-                <span>{job.aspectRatio}</span>
+                <span>{isZh ? `目标 ${job.aspectRatio}` : `Target ${job.aspectRatio}`}</span>
                 <span>{job.resolution}</span>
                 <span>{isZh ? `${job.quantity} 张` : `${job.quantity} images`}</span>
+                {actualSizeLabel ? (
+                    <span className={dimensionSummary.mismatchCount ? 'is-mismatch' : 'is-actual-size'}>
+                        {isZh ? `实际 ${actualSizeLabel}` : `Actual ${actualSizeLabel}`}
+                    </span>
+                ) : null}
             </div>
+            {dimensionSummary.mismatchCount ? (
+                <div className="ai-generation-ratio-warning">
+                    <CircleAlert aria-hidden="true" />
+                    <span>
+                        {isZh
+                            ? `${dimensionSummary.mismatchCount} 张图片的实际比例与目标 ${job.aspectRatio} 不一致`
+                            : `${dimensionSummary.mismatchCount} output${
+                                  dimensionSummary.mismatchCount > 1 ? 's' : ''
+                              } do not match target ${job.aspectRatio}`}
+                    </span>
+                </div>
+            ) : null}
             <div className="ai-generation-grid">
-                {job.outputs.map(output => (
-                    <div key={output.id} className={`ai-generation-output is-${output.state.toLowerCase()}`}>
-                        {output.imageUrl ? (
-                            <button
-                                type="button"
-                                className="ai-generation-output-preview"
-                                style={{ aspectRatio: generationAspectRatio(job.aspectRatio) }}
-                                aria-label={
-                                    isZh
-                                        ? `全屏查看第 ${output.outputIndex + 1} 张图片`
-                                        : `View image ${output.outputIndex + 1} fullscreen`
-                                }
-                                onClick={() => setPreviewOutput(output)}
-                            >
-                                <SafeImage
-                                    src={output.imageUrl}
-                                    alt={`${job.originalPrompt} ${output.outputIndex + 1}`}
-                                />
-                                <span aria-hidden="true">
-                                    <Maximize2 />
-                                    {isZh ? '全屏' : 'Fullscreen'}
-                                </span>
-                            </button>
-                        ) : (
-                            <div className="ai-generation-placeholder">
-                                {['QUEUED', 'RUNNING'].includes(output.state) ? (
-                                    <LoaderCircle className="spin" />
-                                ) : (
-                                    <CircleAlert />
-                                )}
-                                <span>{stateLabel(output.state, isZh)}</span>
-                                {output.errorMessage ? <small>{output.errorMessage}</small> : null}
-                            </div>
-                        )}
-                        <div className="ai-generation-output-actions">
+                {job.outputs.map(output => {
+                    const dimensionsLabel = formatImageDimensions(output);
+                    const ratioMismatch = imageAspectRatioMismatch(job.aspectRatio, output);
+                    return (
+                        <div
+                            key={output.id}
+                            className={`ai-generation-output is-${output.state.toLowerCase()}`}
+                        >
                             {output.imageUrl ? (
-                                <button type="button" onClick={() => setPreviewOutput(output)}>
-                                    <Eye />
-                                    {isZh ? '查看' : 'View'}
-                                </button>
-                            ) : null}
-                            {output.downloadUrl || output.imageUrl ? (
                                 <button
                                     type="button"
-                                    disabled={downloadingOutputId === output.id}
-                                    onClick={() => void downloadOutput(output)}
+                                    className="ai-generation-output-preview"
+                                    style={{
+                                        aspectRatio: generationOutputAspectRatio(job.aspectRatio, output),
+                                    }}
+                                    aria-label={
+                                        isZh
+                                            ? `全屏查看第 ${output.outputIndex + 1} 张图片`
+                                            : `View image ${output.outputIndex + 1} fullscreen`
+                                    }
+                                    onClick={() => setPreviewOutput(output)}
                                 >
-                                    <ArrowDownToLine />
-                                    {downloadingOutputId === output.id
-                                        ? isZh
-                                            ? '保存中'
-                                            : 'Saving'
-                                        : isZh
-                                          ? '下载'
-                                          : 'Download'}
+                                    <SafeImage
+                                        src={output.imageUrl}
+                                        alt={`${job.originalPrompt} ${output.outputIndex + 1}`}
+                                    />
+                                    {dimensionsLabel ? (
+                                        <span
+                                            className={`ai-generation-output-size${
+                                                ratioMismatch ? ' is-mismatch' : ''
+                                            }`}
+                                        >
+                                            {dimensionsLabel}
+                                        </span>
+                                    ) : null}
+                                    <span aria-hidden="true">
+                                        <Maximize2 />
+                                        {isZh ? '全屏' : 'Fullscreen'}
+                                    </span>
                                 </button>
-                            ) : null}
+                            ) : (
+                                <div className="ai-generation-placeholder">
+                                    {['QUEUED', 'RUNNING'].includes(output.state) ? (
+                                        <LoaderCircle className="spin" />
+                                    ) : (
+                                        <CircleAlert />
+                                    )}
+                                    <span>{stateLabel(output.state, isZh)}</span>
+                                    {output.errorMessage ? <small>{output.errorMessage}</small> : null}
+                                </div>
+                            )}
+                            <div className="ai-generation-output-actions">
+                                {output.imageUrl ? (
+                                    <button type="button" onClick={() => setPreviewOutput(output)}>
+                                        <Eye />
+                                        {isZh ? '查看' : 'View'}
+                                    </button>
+                                ) : null}
+                                {output.downloadUrl || output.imageUrl ? (
+                                    <button
+                                        type="button"
+                                        disabled={downloadingOutputId === output.id}
+                                        onClick={() => void downloadOutput(output)}
+                                    >
+                                        <ArrowDownToLine />
+                                        {downloadingOutputId === output.id
+                                            ? isZh
+                                                ? '保存中'
+                                                : 'Saving'
+                                            : isZh
+                                              ? '下载'
+                                              : 'Download'}
+                                    </button>
+                                ) : null}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             {previewOutput?.imageUrl ? (
                 <GenerationImagePreview
@@ -1836,14 +1910,6 @@ function SheetOption({
             <i aria-hidden="true">{selected ? <Check /> : null}</i>
         </button>
     );
-}
-
-function generationAspectRatio(value: string): string {
-    const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/u.exec(value.trim());
-    if (!match) return '1 / 1';
-    const width = Number(match[1]);
-    const height = Number(match[2]);
-    return width > 0 && height > 0 ? `${width} / ${height}` : '1 / 1';
 }
 
 function formatGenerationElapsed(totalSeconds: number, isZh: boolean): string {

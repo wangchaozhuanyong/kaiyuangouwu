@@ -102,6 +102,8 @@ const commonTypes = gql`
         refundedAt: DateTime
         billingMode: String!
         chargeAmount: Money!
+        width: Int
+        height: Int
         imageUrl: String
         downloadUrl: String
     }

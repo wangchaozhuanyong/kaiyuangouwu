@@ -876,6 +876,8 @@ export interface ImageGenerationOutput {
     refundedAt?: string | null;
     billingMode: string;
     chargeAmount: number;
+    width?: number | null;
+    height?: number | null;
     imageUrl?: string | null;
     downloadUrl?: string | null;
 }
