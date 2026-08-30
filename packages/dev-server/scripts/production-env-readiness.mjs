@@ -222,6 +222,22 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
             : 'missing, short, or placeholder',
     });
     pushCheck(checks, {
+        id: 'usdt-wallet-encryption-key',
+        title: 'USDT Channel 钱包加密密钥',
+        passed: isConfiguredSecret(env.USDT_WALLET_ENCRYPTION_KEY, 32),
+        detail: isConfiguredSecret(env.USDT_WALLET_ENCRYPTION_KEY, 32)
+            ? 'configured'
+            : 'missing, short, or placeholder',
+    });
+    pushCheck(checks, {
+        id: 'usdt-payment-proof-secret',
+        title: 'USDT 到账结算签名密钥',
+        passed: isConfiguredSecret(env.USDT_PAYMENT_PROOF_SECRET, 32),
+        detail: isConfiguredSecret(env.USDT_PAYMENT_PROOF_SECRET, 32)
+            ? 'configured'
+            : 'missing, short, or placeholder',
+    });
+    pushCheck(checks, {
         id: 'content-translation-provider',
         title: '客户内容自动翻译服务',
         passed: isConfiguredSecret(env.VENDURE_GOOGLE_TRANSLATION_API_KEY, 16),

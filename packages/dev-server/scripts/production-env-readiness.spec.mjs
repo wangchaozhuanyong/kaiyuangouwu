@@ -22,6 +22,8 @@ function readyEnvironment(overrides = {}) {
         SUPERADMIN_PASSWORD: 'p4ssword-that-is-long-and-random',
         COOKIE_SECRET: 'cookie-secret-that-is-longer-than-thirty-two-characters',
         AUTO_CARD_ENCRYPTION_KEY: 'auto-card-secret-that-is-longer-than-thirty-two-characters',
+        USDT_WALLET_ENCRYPTION_KEY: 'usdt-wallet-secret-that-is-longer-than-thirty-two-characters',
+        USDT_PAYMENT_PROOF_SECRET: 'usdt-proof-secret-that-is-longer-than-thirty-two-characters',
         VENDURE_GOOGLE_TRANSLATION_API_KEY: 'google-translation-api-key-for-production-tests',
         ORDER_CONFIRMATION_TOKEN_SECRET:
             'order-confirmation-secret-that-is-longer-than-thirty-two-characters',
@@ -84,7 +86,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 32, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 34, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -204,7 +206,7 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 33, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 35, manual: 0, blocker: 0 });
 });
 
 void test('blocks a missing or placeholder auto-card encryption key', () => {
@@ -221,6 +223,29 @@ void test('blocks a missing or placeholder auto-card encryption key', () => {
             ),
             true,
         );
+    }
+});
+
+void test('blocks missing or placeholder USDT wallet and payment secrets', () => {
+    for (const field of ['USDT_WALLET_ENCRYPTION_KEY', 'USDT_PAYMENT_PROOF_SECRET']) {
+        for (const value of ['', 'replace-with-a-random-secret-at-least-32-characters']) {
+            const report = evaluateProductionEnvironment(
+                readyEnvironment({ [field]: value }),
+                'server',
+                confirmedControls,
+            );
+            assert.equal(report.ready, false);
+            assert.equal(
+                report.checks.some(
+                    check =>
+                        check.id ===
+                            (field === 'USDT_WALLET_ENCRYPTION_KEY'
+                                ? 'usdt-wallet-encryption-key'
+                                : 'usdt-payment-proof-secret') && check.status === 'blocker',
+                ),
+                true,
+            );
+        }
     }
 });
 

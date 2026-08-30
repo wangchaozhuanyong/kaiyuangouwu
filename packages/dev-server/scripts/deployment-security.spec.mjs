@@ -12,6 +12,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(config, /location \^~ \/digital-delivery\//u);
     assert.match(config, /limit_req_zone \$binary_remote_addr zone=vendure_shop_api/u);
     assert.match(config, /limit_req_zone \$binary_remote_addr zone=vendure_admin_api/u);
+    assert.match(config, /limit_conn_zone \$binary_remote_addr zone=vendure_realtime_per_ip/u);
     assert.match(config, /Strict-Transport-Security/u);
     assert.match(config, /Content-Security-Policy/u);
     assert.match(config, /Permissions-Policy/u);
@@ -27,6 +28,15 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         4,
     );
     assert.match(config, /root \/var\/www\/kaiyuangouwu-current\/packages\/storefront\/dist;/u);
+    const realtimeLocations = [
+        ...config.matchAll(/location = \/storefront-realtime\/events \{(?<body>[\s\S]*?)\n    \}/gu),
+    ];
+    assert.equal(realtimeLocations.length, 1);
+    for (const location of realtimeLocations) {
+        assert.match(location.groups.body, /proxy_buffering off;/u);
+        assert.match(location.groups.body, /proxy_read_timeout 1h;/u);
+        assert.match(location.groups.body, /limit_conn vendure_realtime_per_ip 6;/u);
+    }
 });
 
 void test('promotion route preserves backend CSP without inheriting the storefront policy', async () => {
@@ -41,10 +51,7 @@ void test('promotion route preserves backend CSP without inheriting the storefro
 
 void test('legacy browser fallback files bypass the promotion gate without weakening other routes', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
-    const fallbackLocations = [
-        '/legacy-browser-guard.js',
-        '/unsupported-browser.html',
-    ].map(route =>
+    const fallbackLocations = ['/legacy-browser-guard.js', '/unsupported-browser.html'].map(route =>
         config.match(
             new RegExp(
                 `location = ${route.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')} \\{(?<body>[\\s\\S]*?)\\n    \\}`,

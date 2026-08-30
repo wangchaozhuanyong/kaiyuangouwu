@@ -15,10 +15,16 @@
 - 后台每分钟查询一次 TRON 已确认转账，并通过 SolidityNode 收据再次确认交易已经固化成功。
 - 确认收款地址、官方 USDT 合约、精确金额、到账时间及交易哈希均正确后，自动把 Vendure 付款结算并将订单推进到待发货。
 - 客户端不能提交“我已付款”来改变订单状态；只有服务器生成的短时 HMAC 凭证能够创建已结算付款。
+- 每个 Channel 可单独提交 USDT 收款地址，平台管理员审核通过后才会用于该网店的新订单。
+- 更换收款地址不会改写已生成订单的钱包快照；Worker 会按历史地址分组扫描，保证旧订单仍能确认到账。
+- 商家或平台管理员可对已结算的 USDT 支付登记人工退款：填写原订单币种退款金额、实际转出 USDT、退款交易哈希和原因；系统确认交易已在 TRON 固化后，建立 Vendure `Settled` 退款并记录 Channel、操作人和区块号。
+- 收款统计覆盖全部支付方式，统一使用“`Settled` 实收 − `Settled` 退款 = 净收”；USDT 人工退款登记成功后会自动扣减对应网店和订单币种的净收。
 
 ## 收款钱包防篡改
 
-收款地址只读取服务器环境变量 `STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS`，没有 Admin API、Shop API 或 Dashboard 修改入口。生产环境启用地址时，还必须提供 `STOREFRONT_USDT_TRC20_ADDRESS_SHA256`；地址与固定指纹不一致会拒绝启动。
+收款地址由商家在 Dashboard 提交，由 SuperAdmin 对照商家钱包后审核。数据库只保存 AES-256-GCM 密文和 SHA-256 完整性指纹，密钥从 `USDT_WALLET_ENCRYPTION_KEY` 读取，API 与 Worker 必须使用同一个密钥。该地址是公开收款地址；系统永远不应接收或保存私钥、助记词和钱包密码。
+
+`STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS` 仅作为升级兼容入口：首次启动时，系统会把它加密复制到尚未配置钱包的 Channel，不会覆盖已有网店配置。其 SHA-256 指纹仍由 `STOREFRONT_USDT_TRC20_ADDRESS_SHA256` 独立校验。
 
 离线生成指纹示例：
 
@@ -30,12 +36,12 @@ STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS=T... bun -e 'import { createHash } from 
 
 ## 正式开放前必须配置
 
-1. 填写公开的 TRC20 收款地址；不要把私钥、助记词或钱包密码放入服务器。
-2. 生成并独立复核地址 SHA-256 指纹。
-3. 生成独立的 `USDT_PAYMENT_PROOF_SECRET`，API 与 Worker 必须使用同一个值。
-4. 建议申请只读 `TRONGRID_API_KEY`，API 与 Worker 使用同一个收款地址配置。
+1. 生成独立的 `USDT_WALLET_ENCRYPTION_KEY`，API 与 Worker 必须使用同一个值，且不能丢失，否则无法解密已保存地址。
+2. 生成独立的 `USDT_PAYMENT_PROOF_SECRET`，API 与 Worker 必须使用同一个值。
+3. 商家在 Dashboard 只填写公开 TRC20 收款地址，平台管理员核对完整地址和指纹后审核通过；不要提交私钥、助记词或密码。
+4. 建议申请只读 `TRONGRID_API_KEY`，API 与 Worker 使用同一个 Key。
 5. 使用候选产物的专用迁移入口执行数据库迁移，确认
-   `AddUsdtRateSchedule1787788800000` 已应用后再启动 Vendure Worker；管理后台随后可把采集间隔设为
+   `AddChannelUsdtWallets1787803200000` 已应用后再启动 Vendure Worker；管理后台随后可把采集间隔设为
    `60` 分钟（每 1 小时）。没有 Worker 就不会自动采集汇率或补扫到账。
 6. 使用小额真实 USDT 完成一次端到端验收，确认订单只进入“待发货”，不会直接标记为“已发货”。
 
@@ -43,7 +49,9 @@ STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS=T... bun -e 'import { createHash } from 
 
 - 少付、多付、锁价超时后到账、发错网络或订单金额在付款前发生变化。
 - 区块交易已经到账，但 Vendure 订单因优惠券失效等原因无法按原金额结算；系统会标记为 `MANUAL_REVIEW`，不会重复入账。
-- 退款不会自动从钱包转出，避免服务器持有私钥；必须人工复核后从安全钱包处理。
+- 退款不会自动从钱包转出，避免服务器持有私钥；必须先从安全钱包完成链上转账，再在商家端“到账记录”或平台端“支付与收款管理”中选择原支付登记退款。
+- 登记时系统校验支付归属、可退余额、交易哈希格式、哈希未被收款或退款重复使用，以及交易是否成功固化；操作人仍必须人工核对退款接收地址和实际 USDT 数量。
+- 只有成功写入 Vendure 且状态为 `Settled` 的退款才会扣减统计。若只在线下转账而不登记，系统无法自动识别和扣减。
 
 ## OKX 数据源注意事项
 

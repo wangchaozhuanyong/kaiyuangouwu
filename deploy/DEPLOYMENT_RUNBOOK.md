@@ -276,10 +276,17 @@ curl -I https://console.damatong.net/dashboard/
 curl -I https://damatong.net/assets/
 ```
 
+实时更新端点必须返回 `text/event-stream`，并在两秒内输出 `ready` 事件：
+
+```bash
+curl -sS -N --max-time 2 https://damatong.net/storefront-realtime/events | sed -n '1,4p'
+```
+
 另外检查：
 
 - `pm2 jlist` 中 `vendure-api`、`vendure-worker` 均为 `online`；
 - `127.0.0.1:3002` 正常监听，公网不直接暴露 3002；
+- `/storefront-realtime/events` 不缓冲 SSE，连接断开后前端能自动重连；
 - 公网 `https://damatong.net/admin-api` 仍被 Nginx 拒绝；
 - 管理后台能读取各店铺设置，前台按对应 Channel/店铺域名展示；
 - 实际支付、邮件、短信和物流在未配置真实供应商前不得宣称已具备正式交易能力。

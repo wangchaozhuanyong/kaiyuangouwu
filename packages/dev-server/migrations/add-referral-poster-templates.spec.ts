@@ -2,6 +2,7 @@ import { DataSource, QueryRunner, Table, TableColumn } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AddReferralPosterTemplates1787785200000 } from './1787785200000-add-referral-poster-templates';
+import { AddMobileReferralPosterCopy1787806800000 } from './1787806800000-add-mobile-referral-poster-copy';
 
 describe('referral poster template migration', () => {
     it.each(['mysql', 'postgres', 'sqlite', 'sqljs'] as const)(
@@ -64,6 +65,13 @@ describe('referral poster template migration', () => {
                     'defaultPosterTemplate',
                 )?.length,
             ).toBe('64');
+
+            const mobileMigration = new AddMobileReferralPosterCopy1787806800000();
+            await mobileMigration.up(queryRunner);
+            const mobileTable = await queryRunner.getTable('referral_poster_template');
+            expect(mobileTable?.findColumnByName('featureOneTitleZh')?.length).toBe('100');
+            expect(mobileTable?.findColumnByName('ctaTextZh')?.length).toBe('140');
+            expect(mobileTable?.findColumnByName('footerTextEn')?.length).toBe('220');
 
             await migration.down(queryRunner);
             await expect(queryRunner.hasTable('referral_poster_template')).resolves.toBe(false);

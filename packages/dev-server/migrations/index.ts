@@ -52,6 +52,9 @@ import { AddReferralPosterTemplates1787785200000 } from './1787785200000-add-ref
 import { AddUsdtRateSchedule1787788800000 } from './1787788800000-add-usdt-rate-schedule';
 import { AddImageGeneration1787792400000 } from './1787792400000-add-image-generation';
 import { NormalizeDigitalInventory1787796000000 } from './1787796000000-normalize-digital-inventory';
+import { ScopeSystemAnnouncements1787799600000 } from './1787799600000-scope-system-announcements';
+import { AddChannelUsdtWallets1787803200000 } from './1787803200000-add-channel-usdt-wallets';
+import { AddMobileReferralPosterCopy1787806800000 } from './1787806800000-add-mobile-referral-poster-copy';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -108,4 +111,7 @@ export const devServerMigrations = [
     AddUsdtRateSchedule1787788800000,
     AddImageGeneration1787792400000,
     NormalizeDigitalInventory1787796000000,
+    ScopeSystemAnnouncements1787799600000,
+    AddChannelUsdtWallets1787803200000,
+    AddMobileReferralPosterCopy1787806800000,
 ];
