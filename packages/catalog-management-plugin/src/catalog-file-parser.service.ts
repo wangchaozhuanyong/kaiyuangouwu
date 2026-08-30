@@ -41,6 +41,7 @@ const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
     保质期天数: 'shelfLifeDays',
     商品状态: 'enabled',
     状态: 'enabled',
+    SKU状态: 'variantEnabled',
     商品描述: 'description',
     描述: 'description',
     标签: 'tags',
@@ -270,6 +271,7 @@ function normalizeRow(
         manufacturedAt: dateValue(values.get('manufacturedAt'), rowNumber, '生产日期'),
         shelfLifeDays,
         enabled: statusValue(values.get('enabled'), rowNumber),
+        variantEnabled: statusValue(values.get('variantEnabled'), rowNumber, 'SKU 状态'),
         description: textValue(values.get('description')),
         tags: textValue(values.get('tags'))
             .split(/[，,；;、]/)
@@ -318,6 +320,7 @@ function invalidRow(
         manufacturedAt: null,
         shelfLifeDays: null,
         enabled: null,
+        variantEnabled: null,
         description: textValue(cells[fields.indexOf('description')]),
         tags: [],
         sourceCreatedAt: null,
@@ -389,12 +392,12 @@ function dateValue(value: CellValue, row: number, label: string): string | null 
     return date.toISOString();
 }
 
-function statusValue(value: CellValue, row: number): boolean | null {
+function statusValue(value: CellValue, row: number, label = '商品状态'): boolean | null {
     const status = normalizeIdentity(textValue(value));
     if (!status) return null;
     if (['启用', '上架', '是', 'true', '1', 'enabled'].includes(status)) return true;
     if (['禁用', '停用', '下架', '否', 'false', '0', 'disabled'].includes(status)) return false;
-    throw new UserInputError(`第 ${row} 行：商品状态只支持启用或禁用`);
+    throw new UserInputError(`第 ${row} 行：${label}只支持启用或禁用`);
 }
 
 function displayField(field: keyof NormalizedCatalogRow): string {

@@ -43,10 +43,12 @@ function productSheet(rows: CatalogExportRowRecord[]): XLSX.WorkSheet {
             '毛利率',
             '品牌',
             '商品状态',
+            'SKU状态',
             '商品描述',
             '标签',
             '保质期',
             '创建日期',
+            '系统创建时间',
             '供货商',
         ],
         ...rows.map(row => [
@@ -64,21 +66,24 @@ function productSheet(rows: CatalogExportRowRecord[]): XLSX.WorkSheet {
             row.margin,
             row.brand ?? '',
             row.productEnabled ? '启用' : '禁用',
+            row.variantEnabled ? '启用' : '禁用',
             row.description,
             row.tags.join('，'),
             row.shelfLifeDays,
             dateCell(row.sourceCreatedAt),
+            dateCell(row.systemCreatedAt),
             safeText(row.supplierName ?? ''),
         ]),
     ];
     const sheet = XLSX.utils.aoa_to_sheet(values, { cellDates: true });
-    sheet['!cols'] = [24, 18, 18, 18, 16, 12, 12, 10, 8, 12, 12, 10, 16, 10, 36, 22, 10, 18, 20].map(wch => ({
-        wch,
-    }));
+    sheet['!cols'] = [24, 18, 18, 18, 16, 12, 12, 10, 8, 12, 12, 10, 16, 10, 10, 36, 22, 10, 18, 20, 20].map(
+        wch => ({ wch }),
+    );
     applyNumberFormat(sheet, rows.length, 'J', '#,##0.000');
     applyNumberFormat(sheet, rows.length, 'K', '#,##0.00');
     applyNumberFormat(sheet, rows.length, 'L', '0.0%');
-    applyNumberFormat(sheet, rows.length, 'R', 'yyyy-mm-dd');
+    applyNumberFormat(sheet, rows.length, 'S', 'yyyy-mm-dd');
+    applyNumberFormat(sheet, rows.length, 'T', 'yyyy-mm-dd hh:mm');
     return sheet;
 }
 
@@ -134,6 +139,8 @@ function guideSheet(): XLSX.WorkSheet {
         ['商品与SKU', '名称、分类、进货价、销售价', '必填；SKU 建议填写并保持唯一'],
         ['商品与SKU', '毛利率', '系统根据售价和最新进货价计算，不作为导入权威值'],
         ['商品与SKU', '创建日期', '保存来源报表日期，不覆盖系统创建时间'],
+        ['商品与SKU', 'SKU状态', 'SKU 可独立停用；未填写时沿用商品状态'],
+        ['商品与SKU', '系统创建时间', '只读审计字段，重新导入时不会覆盖系统时间'],
         ['商品与SKU', '供货商', '按当前门店为 SKU 保存一个默认供货商；“无”表示不绑定'],
         ['库存策略', '库存量、上下限', '按 SKU 与仓库记录；数量必须为整数'],
         ['批次效期', '批次号、生产日期、到期日期', '同一 SKU、仓库、批次号必须唯一'],

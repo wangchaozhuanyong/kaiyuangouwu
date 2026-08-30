@@ -290,6 +290,7 @@ export const adminApiExtensions = gql`
         manufacturedAt: String
         shelfLifeDays: Int
         enabled: Boolean
+        variantEnabled: Boolean
         description: String!
         tags: [String!]!
         sourceCreatedAt: String

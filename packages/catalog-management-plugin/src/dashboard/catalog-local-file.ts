@@ -30,6 +30,7 @@ export const CATALOG_FIELD_OPTIONS: Array<{ value: keyof NormalizedCatalogRow; l
     { value: 'brand', label: '品牌' },
     { value: 'tags', label: '标签' },
     { value: 'enabled', label: '状态' },
+    { value: 'variantEnabled', label: 'SKU 状态' },
     { value: 'description', label: '描述' },
     { value: 'manufacturedAt', label: '生产日期' },
     { value: 'shelfLifeDays', label: '保质期天数' },
@@ -76,6 +77,7 @@ const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
     保质期天数: 'shelfLifeDays',
     商品状态: 'enabled',
     状态: 'enabled',
+    SKU状态: 'variantEnabled',
     商品描述: 'description',
     描述: 'description',
     标签: 'tags',
@@ -107,6 +109,7 @@ export const CATALOG_EXCLUDED_HEADERS = new Set([
     '是否传秤',
     '是否计数商品',
     '称编码',
+    '系统创建时间',
 ]);
 
 const requiredFields: Array<keyof NormalizedCatalogRow> = [
@@ -499,6 +502,7 @@ function normalizeRow(
         manufacturedAt: dateValue(values.get('manufacturedAt'), rowNumber, '生产日期'),
         shelfLifeDays,
         enabled: statusValue(values.get('enabled'), rowNumber),
+        variantEnabled: statusValue(values.get('variantEnabled'), rowNumber, 'SKU 状态'),
         description: textValue(values.get('description')),
         tags: textValue(values.get('tags'))
             .split(/[，,；;、]/u)
@@ -582,6 +586,7 @@ function stableProductRow(row: NormalizedCatalogRow): string {
         sellingPrice: row.sellingPrice,
         brand: row.brand,
         enabled: row.enabled,
+        variantEnabled: row.variantEnabled,
         description: row.description,
         tags: row.tags,
         sourceCreatedAt: row.sourceCreatedAt,
@@ -666,12 +671,12 @@ function dateValue(value: CellValue, rowNumber: number, label: string): string |
     return date.toISOString();
 }
 
-function statusValue(value: CellValue, rowNumber: number): boolean | null {
+function statusValue(value: CellValue, rowNumber: number, label = '商品状态'): boolean | null {
     const status = normalizeIdentity(textValue(value));
     if (!status) return null;
     if (['启用', '上架', '是', 'true', '1', 'enabled'].includes(status)) return true;
     if (['禁用', '停用', '下架', '否', 'false', '0', 'disabled'].includes(status)) return false;
-    throw new Error(`第 ${rowNumber} 行：商品状态只支持启用或禁用`);
+    throw new Error(`第 ${rowNumber} 行：${label}只支持启用或禁用`);
 }
 
 function displayField(field: keyof NormalizedCatalogRow): string {

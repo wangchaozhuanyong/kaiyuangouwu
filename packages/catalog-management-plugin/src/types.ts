@@ -199,6 +199,7 @@ export interface NormalizedCatalogRow {
     manufacturedAt: string | null;
     shelfLifeDays: number | null;
     enabled: boolean | null;
+    variantEnabled?: boolean | null;
     description: string;
     tags: string[];
     sourceCreatedAt: string | null;

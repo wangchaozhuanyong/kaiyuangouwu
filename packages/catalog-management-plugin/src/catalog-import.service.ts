@@ -883,6 +883,7 @@ export class CatalogImportService {
     ): Record<string, unknown> {
         const changes: Record<string, unknown> = {};
         changed(changes, 'productEnabled', row.enabled, snapshot.productEnabled);
+        changed(changes, 'variantEnabled', effectiveVariantEnabled(row), snapshot.variantEnabled);
         changedOptional(
             changes,
             'productDescription',
@@ -1165,7 +1166,7 @@ export class CatalogImportService {
             const created = await this.productVariantService.create(ctx, [
                 {
                     productId: product.id,
-                    enabled: row.normalizedData.enabled ?? true,
+                    enabled: effectiveVariantEnabled(row.normalizedData) ?? true,
                     sku,
                     price: money(row.normalizedData.sellingPrice),
                     prices: [
@@ -1199,10 +1200,11 @@ export class CatalogImportService {
                 ...((variant.customFields ?? {}) as Record<string, unknown>),
                 ...variantCustomFieldUpdates(row.normalizedData, job.clearBlankFields),
             };
+            const variantEnabled = effectiveVariantEnabled(row.normalizedData);
             await this.productVariantService.update(ctx, [
                 {
                     id: variant.id,
-                    ...(row.normalizedData.enabled != null ? { enabled: row.normalizedData.enabled } : {}),
+                    ...(variantEnabled != null ? { enabled: variantEnabled } : {}),
                     ...(row.normalizedData.sku ? { sku: row.normalizedData.sku } : {}),
                     ...(row.normalizedData.sellingPrice != null
                         ? {
@@ -1821,6 +1823,7 @@ function productFieldFingerprint(row: NormalizedCatalogRow): string {
         sellingPrice: row.sellingPrice,
         brand: row.brand,
         enabled: row.enabled,
+        variantEnabled: row.variantEnabled,
         description: row.description,
         tags: row.tags,
         sourceCreatedAt: row.sourceCreatedAt,
@@ -1853,6 +1856,8 @@ function createChanges(row: NormalizedCatalogRow, currencyCode: CurrencyCode): R
         purchaseCostMicrounits: microunits(row.purchaseCost),
         stockOnHand: row.stockOnHand,
         sourceCreatedAt: row.sourceCreatedAt,
+        productEnabled: row.enabled ?? true,
+        variantEnabled: effectiveVariantEnabled(row) ?? true,
         supplier: row.supplier || null,
         currencyCode,
     };
@@ -2100,6 +2105,7 @@ function validateImportSource(input: BeginCatalogImportInput): void {
         'manufacturedAt',
         'shelfLifeDays',
         'enabled',
+        'variantEnabled',
         'description',
         'tags',
         'sourceCreatedAt',
@@ -2172,6 +2178,7 @@ function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): No
         'manufacturedAt',
         'shelfLifeDays',
         'enabled',
+        'variantEnabled',
         'description',
         'tags',
         'sourceCreatedAt',
@@ -2206,6 +2213,7 @@ function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): No
         manufacturedAt: normalizedDate(row.manufacturedAt, '生产日期'),
         shelfLifeDays: row.shelfLifeDays,
         enabled: typeof row.enabled === 'boolean' ? row.enabled : null,
+        variantEnabled: typeof row.variantEnabled === 'boolean' ? row.variantEnabled : null,
         description: safeImportText(row.description, 50_000),
         tags: [...new Set((row.tags ?? []).map(tag => safeImportText(tag, 255)).filter(Boolean))].slice(
             0,
@@ -2219,6 +2227,10 @@ function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: number): No
         supplier: normalizeSupplierDisplayName(safeImportText(row.supplier, 255)),
         providedFields,
     };
+}
+
+function effectiveVariantEnabled(row: NormalizedCatalogRow): boolean | null {
+    return typeof row.variantEnabled === 'boolean' ? row.variantEnabled : row.enabled;
 }
 
 function finiteRowNumber(value: number | null, rowNumber: number, label: string, required: true): number;

@@ -18,8 +18,11 @@ describe('browser-local catalog export', () => {
             SKU: "'=FORMULA",
             '进货价（必填）': 1.255,
             '销售价（必填）': 2.5,
+            商品状态: '启用',
+            SKU状态: '禁用',
         });
-        expect(workbook.Sheets['商品与SKU'].R2.t).toBe('d');
+        expect(workbook.Sheets['商品与SKU'].S2.t).toBe('d');
+        expect(workbook.Sheets['商品与SKU'].T2.t).toBe('d');
         expect(productRows[0].供货商).toBe('匿名供货商');
     });
 
@@ -54,6 +57,7 @@ describe('browser-local catalog export', () => {
             manufacturedAt: '2026-08-01T00:00:00.000Z',
             shelfLifeDays: 365,
             supplier: '匿名供货商',
+            variantEnabled: false,
         });
         expect(parsed.unknownHeaders).toEqual([]);
     });
@@ -69,7 +73,7 @@ function exportRow(): CatalogExportRowRecord {
         brand: '测试品牌',
         tags: ['标签A'],
         productEnabled: true,
-        variantEnabled: true,
+        variantEnabled: false,
         systemCreatedAt: '2026-08-29T12:00:00.000Z',
         sourceCreatedAt: '2025-01-02T00:00:00.000Z',
         supplierName: '匿名供货商',

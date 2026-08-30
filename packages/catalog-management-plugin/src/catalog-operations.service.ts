@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { CurrencyCode, GlobalFlag, Permission, SortOrder } from '@vendure/common/lib/generated-types';
+import {
+    CurrencyCode,
+    GlobalFlag,
+    LanguageCode,
+    Permission,
+    SortOrder,
+} from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     ForbiddenError,
@@ -310,12 +316,17 @@ export class CatalogOperationsService {
                         productName: translation?.name ?? variant.name,
                         description: translation?.description ?? '',
                         categories: uniqueNames(
-                            data.collections.flatMap(collection =>
-                                collection.translations.map(item => item.name),
+                            data.collections.map(
+                                collection =>
+                                    collection.translations.find(
+                                        item => item.languageCode === ctx.languageCode,
+                                    )?.name ??
+                                    collection.translations[0]?.name ??
+                                    '',
                             ),
                         ),
-                        brand: facetValueNames(product, 'catalog-brand')[0] ?? null,
-                        tags: facetValueNames(product, 'catalog-tag'),
+                        brand: facetValueNames(product, 'catalog-brand', ctx.languageCode)[0] ?? null,
+                        tags: facetValueNames(product, 'catalog-tag', ctx.languageCode),
                         productEnabled: product.enabled,
                         variantEnabled: variant.enabled,
                         systemCreatedAt: product.createdAt,
@@ -940,11 +951,16 @@ function numberOrDefault(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function facetValueNames(product: Product, facetCode: string): string[] {
+function facetValueNames(product: Product, facetCode: string, languageCode: LanguageCode): string[] {
     return uniqueNames(
         (product.facetValues ?? [])
             .filter(value => value.facet?.code === facetCode)
-            .map(value => value.translations[0]?.name ?? value.code),
+            .map(
+                value =>
+                    value.translations.find(item => item.languageCode === languageCode)?.name ??
+                    value.translations[0]?.name ??
+                    value.code,
+            ),
     );
 }
 
