@@ -1435,7 +1435,7 @@ export class CatalogImportService {
                     purchaseCostMicrounits:
                         previousLot.purchaseCostMicrounits == null
                             ? null
-                            : stringValue(previousLot.purchaseCostMicrounits),
+                            : stringOrNumberValue(previousLot.purchaseCostMicrounits) || null,
                     currencyCode: (stringValue(previousLot.currencyCode) || job.currencyCode) as CurrencyCode,
                     state: stringValue(previousLot.state) || 'ACTIVE',
                 });
@@ -1943,6 +1943,11 @@ function shortCode(value: string): string {
 
 function stringValue(value: unknown): string {
     return typeof value === 'string' ? value : '';
+}
+
+function stringOrNumberValue(value: unknown): string {
+    if (typeof value === 'string') return value;
+    return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
 }
 
 function numberValue(value: unknown): number | null {

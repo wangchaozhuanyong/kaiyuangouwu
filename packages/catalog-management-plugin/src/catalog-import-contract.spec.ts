@@ -12,6 +12,8 @@ describe('catalog import privacy contract', () => {
         expect(schema).toContain('finalizeCatalogImportPreview');
         expect(schema).toContain('saveCatalogProduct');
         expect(schema).toContain('catalogProductSummaries');
+        expect(schema).toContain('catalogProducts');
+        expect(schema).toContain('createCatalogProductVariant');
         expect(schema).toContain('rows: [CatalogNormalizedRowInput!]!');
         expect(schema).not.toContain('Upload');
         expect(schema).not.toContain('multipart');

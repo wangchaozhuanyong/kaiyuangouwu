@@ -203,6 +203,35 @@ export const catalogProductWorkspaceQuery = gql`
     }
 `;
 
+export const catalogProductVariantCreationContextQuery = gql`
+    query CatalogProductVariantCreationContext($productId: ID!) {
+        product(id: $productId) {
+            id
+            name
+            translations {
+                languageCode
+                name
+            }
+            optionGroups {
+                id
+                name
+                options {
+                    id
+                    name
+                }
+            }
+        }
+    }
+`;
+
+export const createCatalogProductVariantMutation = gql`
+    mutation CreateCatalogProductVariant($input: CreateCatalogProductVariantInput!) {
+        createCatalogProductVariant(input: $input) {
+            productId
+        }
+    }
+`;
+
 export const catalogExportRowsQuery = gql`
     query CatalogExportRows($skip: Int, $take: Int) {
         catalogExportRows(skip: $skip, take: $take) {
@@ -380,6 +409,19 @@ export interface CatalogWorkspaceRecord {
         stockLocations: Array<{ id: string; name: string }>;
         variants: CatalogWorkspaceVariantRecord[];
     };
+}
+
+export interface CatalogVariantCreationContextRecord {
+    product: {
+        id: string;
+        name: string;
+        translations: Array<{ languageCode: string; name: string }>;
+        optionGroups: Array<{
+            id: string;
+            name: string;
+            options: Array<{ id: string; name: string }>;
+        }>;
+    } | null;
 }
 
 export interface CatalogWorkspaceVariantRecord {

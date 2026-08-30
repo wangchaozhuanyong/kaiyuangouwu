@@ -24,9 +24,9 @@ import { ListPage } from '@/vdb/framework/page/list-page.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { Filter, LayersIcon, ListRestart, Loader2, PlusIcon } from 'lucide-react';
+import { Filter, LayersIcon, ListRestart, PlusIcon } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -43,7 +43,7 @@ import {
 } from './components/product-bulk-actions.js';
 import { getProductFulfillmentType } from './components/product-fulfillment-type.js';
 import {
-    catalogProductSummariesDocument,
+    catalogFilteredProductListDocument,
     productListDocument,
     reindexDocument,
     withProductVariantCustomFields,
@@ -108,20 +108,6 @@ function ProductListPage() {
     const canAssignAllProducts = isAssignAllProductsAvailable(activeChannel, channels, DEFAULT_CHANNEL_CODE);
     const summaryFilter = useMemo(() => catalogSummaryFilterInput(advancedFilters), [advancedFilters]);
     const hasAdvancedFilters = Object.keys(summaryFilter).length > 0;
-    const summaryQuery = useQuery({
-        queryKey: ['catalog-product-summaries', activeChannel?.id, summaryFilter],
-        queryFn: () =>
-            api.query<{
-                catalogProductSummaries: {
-                    items: Array<{ productId: string }>;
-                    totalItems: number;
-                };
-            }>(catalogProductSummariesDocument, { filter: summaryFilter }),
-        enabled: hasAdvancedFilters && Boolean(activeChannel?.id),
-    });
-    const filteredProductIds = hasAdvancedFilters
-        ? (summaryQuery.data?.catalogProductSummaries.items.map(item => item.productId) ?? [])
-        : null;
     const AssignAllProductsDropdownItem = useCallback(
         () => (
             <DropdownMenuItem onClick={() => setAssignAllDialogOpen(true)}>
@@ -160,7 +146,9 @@ function ProductListPage() {
         <>
             <ListPage
                 pageId="product-list"
-                listQuery={withProductVariantCustomFields(productListDocument)}
+                listQuery={withProductVariantCustomFields(
+                    hasAdvancedFilters ? catalogFilteredProductListDocument : productListDocument,
+                )}
                 title={<Trans>Products</Trans>}
                 searchPlaceholder={t`Search product name, URL identifier or SKU`}
                 customizeColumns={{
@@ -284,26 +272,20 @@ function ProductListPage() {
                     },
                 }}
                 transformVariables={variables => {
-                    const filter = variables.options?.filter ?? {};
                     return {
                         options: {
                             ...variables.options,
                             filterOperator: 'AND',
-                            filter:
-                                filteredProductIds == null
-                                    ? filter
-                                    : {
-                                          _and: [filter, { id: { in: filteredProductIds } }],
-                                      },
+                            filter: variables.options?.filter ?? {},
                         },
-                    };
+                        ...(hasAdvancedFilters ? { catalogFilter: summaryFilter } : {}),
+                    } as typeof variables;
                 }}
                 transformQueryKey={queryKey => [
                     ...queryKey,
                     'catalog-advanced-filter',
                     hasAdvancedFilters,
-                    summaryQuery.isFetching,
-                    filteredProductIds?.join(',') ?? '',
+                    summaryFilter,
                 ]}
                 defaultSort={[{ id: 'updatedAt', desc: true }]}
                 defaultColumnOrder={[
@@ -377,13 +359,7 @@ function ProductListPage() {
                     itemId="catalog-advanced-filter-button"
                     requiresPermission={['ReadCatalogOperations', 'ReadCatalogImport']}
                 >
-                    <CatalogAdvancedFilterAction
-                        value={advancedFilters}
-                        resultCount={summaryQuery.data?.catalogProductSummaries.totalItems}
-                        loading={summaryQuery.isFetching}
-                        error={summaryQuery.error}
-                        onApply={setAdvancedFilters}
-                    />
+                    <CatalogAdvancedFilterAction value={advancedFilters} onApply={setAdvancedFilters} />
                 </ActionBarItem>
                 <ActionBarItem itemId="rebuild-index-button" requiresPermission={['UpdateCatalog']}>
                     <Button variant="outline" onClick={handleRebuildSearchIndex}>
@@ -454,15 +430,9 @@ function compactVariantValues(values: string[]): string {
 
 function CatalogAdvancedFilterAction({
     value,
-    resultCount,
-    loading,
-    error,
     onApply,
 }: Readonly<{
     value: CatalogAdvancedFilters;
-    resultCount?: number;
-    loading: boolean;
-    error: unknown;
     onApply: (value: CatalogAdvancedFilters) => void;
 }>) {
     const [open, setOpen] = useState(false);
@@ -487,7 +457,7 @@ function CatalogAdvancedFilterAction({
                     setOpen(true);
                 }}
             >
-                {loading ? <Loader2 className="animate-spin" /> : <Filter />}
+                <Filter />
                 高级筛选
                 {activeCount > 0 && <Badge variant="secondary">{activeCount}</Badge>}
             </Button>
@@ -593,16 +563,6 @@ function CatalogAdvancedFilterAction({
                                 onCheckedChange={lowStock => update({ lowStock })}
                             />
                         </div>
-                        {error != null && (
-                            <p className="text-sm text-destructive sm:col-span-2">
-                                筛选查询失败：{error instanceof Error ? error.message : String(error)}
-                            </p>
-                        )}
-                        {activeCount > 0 && resultCount != null && (
-                            <p className="text-sm text-muted-foreground sm:col-span-2">
-                                当前条件匹配 {resultCount} 个商品。
-                            </p>
-                        )}
                     </div>
                     <SheetFooter className="border-t pt-4">
                         <Button

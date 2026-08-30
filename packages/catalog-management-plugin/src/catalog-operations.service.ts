@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CurrencyCode, Permission } from '@vendure/common/lib/generated-types';
+import { CurrencyCode, GlobalFlag, Permission, SortOrder } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     ForbiddenError,
@@ -21,7 +21,9 @@ import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import {
+    CatalogProductListOptions,
     CatalogProductSummaryFilterInput,
+    CreateCatalogProductVariantInput,
     SaveCatalogProductInput,
     SaveInventoryLotInput,
     UpdateCatalogVariantOperationsInput,
@@ -65,6 +67,73 @@ export class CatalogOperationsService {
                 await this.updateVariant(txCtx, variant, false, false);
             }
             return product;
+        });
+    }
+
+    async createVariant(ctx: RequestContext, input: CreateCatalogProductVariantInput) {
+        const canCreateProduct = ctx.userHasPermissions([Permission.CreateProduct, Permission.CreateCatalog]);
+        const canMaintainOperations = ctx.userHasPermissions([
+            manageCatalogOperationsPermission.Update,
+            manageCatalogImportPermission.Update,
+        ]);
+        if (!canCreateProduct || !canMaintainOperations) throw new ForbiddenError();
+        validateCreateVariantInput(input);
+
+        return this.connection.withTransaction(ctx, async txCtx => {
+            await this.requireStockLocation(txCtx, input.stockLocationId);
+            const product = await this.connection.getEntityOrThrow(txCtx, Product, input.productId, {
+                channelId: txCtx.channelId,
+                relations: ['optionGroups', 'optionGroups.options', 'variants', 'variants.options'],
+            });
+            validateVariantOptions(product, input.optionIds);
+            const [variant] = await this.productVariantService.create(txCtx, [
+                {
+                    productId: product.id,
+                    enabled: input.enabled ?? true,
+                    sku: input.sku.trim(),
+                    prices: [{ currencyCode: input.currencyCode, price: input.sellingPrice }],
+                    translations: [
+                        {
+                            languageCode: txCtx.languageCode,
+                            name: input.name.trim(),
+                        },
+                    ],
+                    optionIds: input.optionIds,
+                    stockLevels: [
+                        {
+                            stockLocationId: input.stockLocationId,
+                            stockOnHand: input.stockOnHand,
+                        },
+                    ],
+                    trackInventory: GlobalFlag.INHERIT,
+                    customFields: {
+                        barcode: blankToNull(input.barcode),
+                        specification: blankToNull(input.specification),
+                        saleUnit: blankToNull(input.saleUnit),
+                        purchaseUnit: blankToNull(input.purchaseUnit),
+                        packageQuantity: input.packageQuantity,
+                        shelfLifeDays: input.shelfLifeDays ?? null,
+                    },
+                },
+            ]);
+            await this.savePolicy(
+                txCtx,
+                variant.id,
+                input.stockLocationId,
+                input.minimumStock ?? null,
+                input.maximumStock ?? null,
+            );
+            if (input.purchaseCostMicrounits != null) {
+                await this.recordCost(
+                    txCtx,
+                    variant.id,
+                    input.currencyCode,
+                    input.purchaseCostMicrounits,
+                    'MANUAL',
+                    null,
+                );
+            }
+            return this.workspace(txCtx, product.id);
         });
     }
 
@@ -170,7 +239,9 @@ export class CatalogOperationsService {
             sort: { updatedAt: 'DESC' },
         });
         const variantIds = page.items.map(variant => variant.id);
-        if (variantIds.length === 0) return { items: [], totalItems: page.totalItems };
+        if (variantIds.length === 0) {
+            return { items: [], totalItems: page.totalItems, scannedItems: page.items.length };
+        }
 
         const [hydrated, costs, policies, lots] = await Promise.all([
             this.connection.getRepository(ctx, ProductVariant).find({
@@ -208,6 +279,7 @@ export class CatalogOperationsService {
         }
         return {
             totalItems: page.totalItems,
+            scannedItems: page.items.length,
             items: page.items.flatMap(variant => {
                 const data = hydratedById.get(String(variant.id));
                 if (!data?.product) return [];
@@ -295,7 +367,7 @@ export class CatalogOperationsService {
         };
     }
 
-    async productSummaries(ctx: RequestContext, filter: CatalogProductSummaryFilterInput) {
+    async matchingProductIds(ctx: RequestContext, filter: CatalogProductSummaryFilterInput) {
         validateSummaryFilter(filter);
         const matchingProductIds = new Set<string>();
         let skip = 0;
@@ -309,11 +381,65 @@ export class CatalogOperationsService {
             for (const row of page.items) {
                 if (matchesSummaryFilter(row, filter)) matchingProductIds.add(row.productId);
             }
-            skip += page.items.length;
-            if (page.items.length === 0) break;
+            skip += page.scannedItems ?? page.items.length;
+            if ((page.scannedItems ?? page.items.length) === 0) break;
         } while (skip < totalItems);
-        const items = [...matchingProductIds].map(productId => ({ productId }));
-        return { items, totalItems: items.length };
+        return [...matchingProductIds];
+    }
+
+    async productSummaries(
+        ctx: RequestContext,
+        filter: CatalogProductSummaryFilterInput,
+        skip = 0,
+        take = 100,
+    ) {
+        const productIds = await this.matchingProductIds(ctx, filter);
+        const safeSkip = Math.max(skip, 0);
+        const safeTake = Math.min(Math.max(take, 1), 500);
+        return {
+            items: productIds.slice(safeSkip, safeSkip + safeTake).map(productId => ({ productId })),
+            totalItems: productIds.length,
+        };
+    }
+
+    /**
+     * Returns the regular ProductList shape without sending every matching ID through GraphQL.
+     * Matching IDs stay on the server and are applied in bounded chunks, then the final page is
+     * sorted and sliced in memory. This also avoids database driver parameter limits for large
+     * catalog filters while preserving the Dashboard's ordinary name/facet filters.
+     */
+    async filteredProducts(
+        ctx: RequestContext,
+        filter: CatalogProductSummaryFilterInput,
+        options: CatalogProductListOptions,
+    ) {
+        const matchingProductIds = await this.matchingProductIds(ctx, filter);
+        if (matchingProductIds.length === 0) return { items: [], totalItems: 0 };
+
+        const products = new Map<string, Product>();
+        const normalFilter = options.filter ?? {};
+        for (const ids of chunks(matchingProductIds, 100)) {
+            const page = await this.productService.findAll(ctx, {
+                ...options,
+                skip: 0,
+                take: ids.length,
+                sort: undefined,
+                filter: {
+                    _and: [normalFilter, { id: { in: ids } }],
+                },
+            });
+            for (const product of page.items) products.set(String(product.id), product);
+        }
+
+        const sorted = [...products.values()].sort((left, right) =>
+            compareProducts(left, right, options.sort),
+        );
+        const skip = Math.max(0, options.skip ?? 0);
+        const take = Math.min(Math.max(options.take ?? 10, 1), 100);
+        return {
+            items: sorted.slice(skip, skip + take),
+            totalItems: sorted.length,
+        };
     }
 
     async updateVariant(
@@ -540,6 +666,96 @@ function validatePolicy(minimumStock?: number | null, maximumStock?: number | nu
     if (minimumStock != null && maximumStock != null && maximumStock < minimumStock) {
         throw new UserInputError('库存上限不能小于库存下限');
     }
+}
+
+function validateCreateVariantInput(input: CreateCatalogProductVariantInput): void {
+    if (!input.name.trim()) throw new UserInputError('SKU 名称不能为空');
+    if (!input.sku.trim()) throw new UserInputError('SKU 编码不能为空');
+    if (!Number.isInteger(input.sellingPrice) || input.sellingPrice < 0) {
+        throw new UserInputError('销售价必须是非负整数货币单位');
+    }
+    if (!Number.isInteger(input.stockOnHand) || input.stockOnHand < 0) {
+        throw new UserInputError('库存必须是非负整数');
+    }
+    if (!Number.isFinite(input.packageQuantity) || input.packageQuantity <= 0) {
+        throw new UserInputError('包装换算数量必须大于 0');
+    }
+    if (input.shelfLifeDays != null && (!Number.isInteger(input.shelfLifeDays) || input.shelfLifeDays < 0)) {
+        throw new UserInputError('保质期必须是非负整数');
+    }
+    if (
+        input.purchaseCostMicrounits != null &&
+        (!Number.isInteger(input.purchaseCostMicrounits) || input.purchaseCostMicrounits < 0)
+    ) {
+        throw new UserInputError('进货价精度必须是千分之一货币单位');
+    }
+    validatePolicy(input.minimumStock, input.maximumStock);
+}
+
+function validateVariantOptions(product: Product, optionIds: ID[]): void {
+    if (product.optionGroups.length === 0) {
+        throw new UserInputError('当前商品没有规格模板，不能新增多个 SKU');
+    }
+    if (new Set(optionIds.map(String)).size !== optionIds.length) {
+        throw new UserInputError('同一规格值不能重复选择');
+    }
+    const selectedIds = new Set(optionIds.map(String));
+    for (const group of product.optionGroups) {
+        const selectedCount = group.options.filter(option => selectedIds.has(String(option.id))).length;
+        if (selectedCount !== 1) throw new UserInputError(`规格“${group.name}”必须选择一个值`);
+    }
+    if (selectedIds.size !== product.optionGroups.length) {
+        throw new UserInputError('包含不属于当前商品规格模板的规格值');
+    }
+    const selectedKey = [...selectedIds].sort().join(':');
+    const duplicate = product.variants.some(
+        variant =>
+            variant.options
+                .map(option => String(option.id))
+                .sort()
+                .join(':') === selectedKey,
+    );
+    if (duplicate) throw new UserInputError('当前规格组合已存在，请直接编辑已有 SKU');
+}
+
+function chunks<T>(values: T[], size: number): T[][] {
+    const result: T[][] = [];
+    for (let index = 0; index < values.length; index += size) {
+        result.push(values.slice(index, index + size));
+    }
+    return result;
+}
+
+function compareProducts(left: Product, right: Product, sort: CatalogProductListOptions['sort']): number {
+    const entries = Object.entries(sort ?? {});
+    for (const [field, direction] of entries) {
+        const compared = compareProductValue(
+            (left as unknown as Record<string, unknown>)[field],
+            (right as unknown as Record<string, unknown>)[field],
+        );
+        if (compared !== 0) return direction === SortOrder.DESC ? -compared : compared;
+    }
+    return compareProductValue(String(left.id), String(right.id));
+}
+
+function compareProductValue(left: unknown, right: unknown): number {
+    const leftDate = left instanceof Date ? left.getTime() : null;
+    const rightDate = right instanceof Date ? right.getTime() : null;
+    if (leftDate != null && rightDate != null) return leftDate - rightDate;
+    if (typeof left === 'number' && typeof right === 'number') return left - right;
+    if (typeof left === 'boolean' && typeof right === 'boolean') return Number(left) - Number(right);
+    return comparableProductText(left).localeCompare(comparableProductText(right), 'zh-Hans', {
+        numeric: true,
+        sensitivity: 'base',
+    });
+}
+
+function comparableProductText(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+        return String(value);
+    }
+    return '';
 }
 
 interface CatalogSummarySourceRow {

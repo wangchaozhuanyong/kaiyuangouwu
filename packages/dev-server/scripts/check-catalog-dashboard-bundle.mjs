@@ -10,6 +10,9 @@ const requiredMarkers = [
     'catalog-safe-import',
     'catalog-browser-export',
     'catalog-product-workspace',
+    'createCatalogProductVariant',
+    'products: catalogProducts',
+    'Select one value for every product option',
 ];
 const found = new Set();
 

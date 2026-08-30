@@ -1,4 +1,8 @@
-import type { CurrencyCode, UpdateProductInput } from '@vendure/common/lib/generated-types';
+import type {
+    CurrencyCode,
+    ProductListOptions,
+    UpdateProductInput,
+} from '@vendure/common/lib/generated-types';
 import type { ID } from '@vendure/common/lib/shared-types';
 import type {
     CustomProductFields,
@@ -91,6 +95,27 @@ export interface SaveCatalogProductInput {
     variants: UpdateCatalogVariantOperationsInput[];
 }
 
+export interface CreateCatalogProductVariantInput {
+    productId: ID;
+    stockLocationId: ID;
+    name: string;
+    sku: string;
+    optionIds: ID[];
+    enabled?: boolean | null;
+    barcode?: string | null;
+    specification?: string | null;
+    saleUnit?: string | null;
+    purchaseUnit?: string | null;
+    packageQuantity: number;
+    shelfLifeDays?: number | null;
+    sellingPrice: number;
+    purchaseCostMicrounits?: number | null;
+    currencyCode: CurrencyCode;
+    stockOnHand: number;
+    minimumStock?: number | null;
+    maximumStock?: number | null;
+}
+
 export interface CatalogProductSummaryFilterInput {
     text?: string | null;
     category?: string | null;
@@ -107,6 +132,8 @@ export interface CatalogProductSummaryFilterInput {
     lowStock?: boolean | null;
     expiringWithinDays?: number | null;
 }
+
+export type CatalogProductListOptions = ProductListOptions;
 
 export interface SaveInventoryLotInput {
     id?: ID | null;
