@@ -47,6 +47,26 @@ describe('StoreManagementPlugin promotion options', () => {
         });
     });
 
+    it('allows production startup without a refund sender while keeping invalid addresses blocked', () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        vi.stubEnv('USDT_PAYMENT_PROOF_SECRET', 'production-usdt-proof-secret-that-is-long-enough');
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', 'production-wallet-encryption-key-that-is-long-enough');
+        vi.stubEnv('USDT_REFUND_SENDER_ADDRESSES', '');
+
+        expect(() =>
+            StoreManagementPlugin.init({
+                signingSecret: 'production-promotion-secret-that-is-long-enough',
+            }),
+        ).not.toThrow();
+
+        vi.stubEnv('USDT_REFUND_SENDER_ADDRESSES', 'not-a-tron-address');
+        expect(() =>
+            StoreManagementPlugin.init({
+                signingSecret: 'production-promotion-secret-that-is-long-enough',
+            }),
+        ).toThrow('invalid TRON mainnet address');
+    });
+
     it('requires payment proofs and every wallet encryption key to use independent secrets', () => {
         const sharedSecret = 'production-shared-usdt-secret-that-is-long-enough';
         vi.stubEnv('NODE_ENV', 'production');

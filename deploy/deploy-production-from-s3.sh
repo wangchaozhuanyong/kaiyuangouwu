@@ -183,6 +183,8 @@ sudo -n systemctl start vendure-mysql-backup.service
 
 set -a
 # shellcheck disable=SC1090
+sudo -n "$(command -v node)" \
+    "${repository}/deploy/initialize-production-usdt-secrets.mjs" "${environment_file}"
 source "${environment_file}"
 set +a
 

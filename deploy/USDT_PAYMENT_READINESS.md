@@ -27,10 +27,10 @@
 
 钱包 App、Dashboard 待审完整地址和地址指纹必须由第二名审核人员交叉核对。拥有生产代码和全部部署密钥的攻击者仍可修改程序本身，因此生产主机权限、CI/CD 审批和密钥管理仍然属于安全边界。
 
-## 正式开放前必须配置
+## 正式开放与按需能力配置
 
 1. 在生产 Secret Manager 生成互不相同的 `USDT_PAYMENT_PROOF_SECRET` 与 `USDT_WALLET_ENCRYPTION_KEY`；API 与 Worker 必须读取一致的值。不得把密钥写入仓库、发布日志或聊天记录。
-2. 把经过财务与安全审核的退款付款钱包配置到 `USDT_REFUND_SENDER_ADDRESSES`。只配置公钥地址，不得配置私钥、助记词或钱包密码。
+2. 需要启用人工退款登记时，把经过财务与安全审核的退款付款钱包配置到 `USDT_REFUND_SENDER_ADDRESSES`。只配置公钥地址，不得配置私钥、助记词或钱包密码。留空不会阻断其他功能部署，但所有人工 USDT 退款登记都会被拒绝；修改后需重启 API 与 Worker。
 3. 建议申请只读 `TRONGRID_API_KEY`，供 API 与 Worker 查询到账和退款交易凭证。
 4. 使用候选产物的专用迁移入口执行数据库迁移，并确认 `ScopeSystemAnnouncements1787878800000`、`AddChannelUsdtWallets1787882400000`、`AddUsdtManualRefunds1787886000000` 均已应用。
 5. 由每个商家提交收款地址，再由 SuperAdmin 对照钱包 App 完整地址审核；驳回更换地址时，原启用地址仍继续可用。

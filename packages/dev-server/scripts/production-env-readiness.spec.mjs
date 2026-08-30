@@ -88,7 +88,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 33, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 34, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -210,7 +210,7 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 34, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 35, manual: 0, blocker: 0 });
 });
 
 void test('blocks a missing or placeholder auto-card encryption key', () => {
@@ -279,7 +279,6 @@ void test('blocks unsafe USDT settlement, wallet encryption and refund allowlist
         {
             USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS: 'usdt-wallet-key-that-is-longer-than-thirty-two-characters',
         },
-        { USDT_REFUND_SENDER_ADDRESSES: '' },
         { USDT_REFUND_SENDER_ADDRESSES: 'not-a-tron-address' },
     ]) {
         const report = evaluateProductionEnvironment(
@@ -289,10 +288,33 @@ void test('blocks unsafe USDT settlement, wallet encryption and refund allowlist
         );
         assert.equal(report.ready, false);
         assert.equal(
-            report.checks.some(check => check.id === 'usdt-wallet-security' && check.status === 'blocker'),
+            report.checks.some(
+                check =>
+                    (check.id === 'usdt-wallet-security' || check.id === 'usdt-refund-sender-allowlist') &&
+                    check.status === 'blocker',
+            ),
             true,
         );
     }
+});
+
+void test('allows deployment without refund senders while marking manual refunds disabled', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({ USDT_REFUND_SENDER_ADDRESSES: '' }),
+        'server',
+        confirmedControls,
+    );
+
+    assert.equal(report.ready, true);
+    assert.deepEqual(
+        report.checks.find(check => check.id === 'usdt-refund-sender-allowlist'),
+        {
+            id: 'usdt-refund-sender-allowlist',
+            title: 'USDT 人工退款付款钱包白名单',
+            status: 'pass',
+            detail: 'not configured; manual USDT refund registration remains disabled',
+        },
+    );
 });
 
 void test('blocks a single-host release without a required offsite backup destination', () => {

@@ -132,6 +132,11 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /sha256sum --check/u);
     assert.match(script, /verify-runtime\.mjs" --expected-sha/u);
     assert.match(script, /vendure-mysql-backup\.service/u);
+    assert.match(script, /initialize-production-usdt-secrets\.mjs/u);
+    assert.ok(
+        script.indexOf('initialize-production-usdt-secrets.mjs') <
+            script.indexOf('source "${environment_file}"'),
+    );
     assert.ok(script.includes(migrationReadinessCommand));
     assert.match(script, /switch-production-runtime\.sh/u);
     assert.match(script, /rollback 1/u);

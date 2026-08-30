@@ -321,9 +321,11 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
         if (production) {
             assertProductionUsdtSecretIsolation(process.env, usdtPaymentProofSecret);
         }
-        if (production && !loadReviewedRefundSenders(process.env).length) {
-            throw new Error('USDT_REFUND_SENDER_ADDRESSES must contain at least one reviewed TRON wallet');
-        }
+        // An empty allowlist keeps manual USDT refund registration disabled in
+        // UsdtManualRefundService. Validate non-empty configuration at startup,
+        // but do not block unrelated production capabilities while finance is
+        // still reviewing the sender wallet.
+        if (production) loadReviewedRefundSenders(process.env);
         configureUsdtPaymentProofSecret(usdtPaymentProofSecret || 'development-usdt-payment-proof-secret');
         return StoreManagementPlugin;
     }

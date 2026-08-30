@@ -436,16 +436,25 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
         isConfiguredSecret(walletEncryptionKey, 32) &&
         previousWalletKeys.every(value => isConfiguredSecret(value, 32)) &&
         new Set(walletKeyRing).size === walletKeyRing.length &&
-        !walletKeyRing.includes(paymentProofSecret) &&
-        refundSenders.length > 0 &&
-        refundSenders.every(isTronMainnetAddress);
+        !walletKeyRing.includes(paymentProofSecret);
     pushCheck(checks, {
         id: 'usdt-wallet-security',
-        title: 'USDT 钱包加密、结算签名与退款白名单',
+        title: 'USDT 钱包加密与结算签名',
         passed: usdtSecurityReady,
         detail: usdtSecurityReady
-            ? 'independent secrets and reviewed refund senders configured'
-            : 'proof secret, wallet key ring, secret isolation, or refund sender allowlist is missing/unsafe',
+            ? 'independent proof and wallet encryption secrets configured'
+            : 'proof secret, wallet key ring, or secret isolation is missing/unsafe',
+    });
+    const refundSenderAllowlistValid = refundSenders.every(isTronMainnetAddress);
+    pushCheck(checks, {
+        id: 'usdt-refund-sender-allowlist',
+        title: 'USDT 人工退款付款钱包白名单',
+        passed: refundSenderAllowlistValid,
+        detail: !refundSenderAllowlistValid
+            ? 'refund sender allowlist contains an invalid TRON mainnet address'
+            : refundSenders.length
+              ? 'reviewed refund senders configured'
+              : 'not configured; manual USDT refund registration remains disabled',
     });
     pushCheck(checks, {
         id: 'bootstrap-disabled',
