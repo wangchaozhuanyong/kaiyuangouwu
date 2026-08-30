@@ -237,6 +237,15 @@ node "${repository}/deploy/verify-dashboard-assets.mjs" \
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-production-release-retention.cjs" \
     /usr/local/sbin/vendure-production-release-retention
+sudo -n install -o root -g root -m 0755 \
+    "${repository}/deploy/systemd/vendure-mysql-restore-drill" \
+    /usr/local/sbin/vendure-mysql-restore-drill
+sudo -n install -o root -g root -m 0644 \
+    "${repository}/deploy/systemd/vendure-mysql-restore-drill.service" \
+    /etc/systemd/system/vendure-mysql-restore-drill.service
+sudo -n install -o root -g root -m 0644 \
+    "${repository}/deploy/systemd/vendure-mysql-restore-drill.timer" \
+    /etc/systemd/system/vendure-mysql-restore-drill.timer
 sudo -n install -o root -g root -m 0644 \
     "${repository}/deploy/systemd/vendure-production-release-retention.service" \
     /etc/systemd/system/vendure-production-release-retention.service
@@ -248,6 +257,14 @@ sudo -n install -o root -g root -m 0755 \
     /usr/local/sbin/vendure-production-deploy-from-s3
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
+sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
+if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
+    "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" != "success" ]]; then
+    sudo -n systemctl start vendure-mysql-restore-drill.service
+fi
+[[ "$(sudo -n systemctl is-enabled vendure-mysql-restore-drill.timer)" == "enabled" ]]
+[[ "$(sudo -n systemctl is-active vendure-mysql-restore-drill.timer)" == "active" ]]
+[[ "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" == "success" ]]
 
 printf '%s\n' "${target_sha}" > "${releases_dir}/.current-sha.new"
 mv "${releases_dir}/.current-sha.new" "${current_marker}"

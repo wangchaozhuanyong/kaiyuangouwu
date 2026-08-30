@@ -51,10 +51,7 @@ void test('promotion route preserves backend CSP without inheriting the storefro
 
 void test('legacy browser fallback files bypass the promotion gate without weakening other routes', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
-    const fallbackLocations = [
-        '/legacy-browser-guard.js',
-        '/unsupported-browser.html',
-    ].map(route =>
+    const fallbackLocations = ['/legacy-browser-guard.js', '/unsupported-browser.html'].map(route =>
         config.match(
             new RegExp(
                 `location = ${route.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')} \\{(?<body>[\\s\\S]*?)\\n    \\}`,
@@ -187,6 +184,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /node "\$\{memory_guard\}" --stage post-switch --report/u);
     assert.match(script, /retain_release_file/u);
     assert.match(script, /mv -- "\$\{source_path\}" "\$\{destination_path\}"/u);
+    assert.match(script, /vendure-mysql-restore-drill\.service/u);
+    assert.match(script, /systemctl enable --now vendure-mysql-restore-drill\.timer/u);
+    assert.match(script, /systemctl is-enabled vendure-mysql-restore-drill\.timer/u);
+    assert.match(script, /systemctl is-active vendure-mysql-restore-drill\.timer/u);
 
     assert.match(workflow, /workflow_run:/u);
     assert.match(workflow, /id-token: write/u);
@@ -197,6 +198,37 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /AWS-RunShellScript/u);
     assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
+});
+
+void test('MySQL restore drill is isolated, hardened, and scheduled weekly', async () => {
+    const restoreScript = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-mysql-restore-drill'),
+        'utf8',
+    );
+    const service = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-mysql-restore-drill.service'),
+        'utf8',
+    );
+    const timer = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-mysql-restore-drill.timer'),
+        'utf8',
+    );
+
+    assert.match(restoreScript, /vendure_restore_drill_/u);
+    assert.match(restoreScript, /trap cleanup_restore_database EXIT/u);
+    assert.match(restoreScript, /sha256sum --check/u);
+    assert.match(restoreScript, /gzip -t/u);
+    assert.match(restoreScript, /restore-drill\.json/u);
+    assert.match(service, /^User=root$/mu);
+    assert.match(service, /^NoNewPrivileges=true$/mu);
+    assert.match(service, /^ProtectSystem=strict$/mu);
+    assert.match(service, /^StateDirectory=vendure-readiness$/mu);
+    assert.match(service, /^StateDirectoryMode=0700$/mu);
+    assert.match(service, /^ReadOnlyPaths=\/var\/backups\/vendure-mysql$/mu);
+    assert.match(service, /^ReadWritePaths=\/var\/lib\/vendure-readiness$/mu);
+    assert.match(timer, /^OnCalendar=Sun \*-\*-\* 20:15:00 UTC$/mu);
+    assert.match(timer, /^RandomizedDelaySec=30m$/mu);
+    assert.match(timer, /^Persistent=true$/mu);
 });
 
 void test('production swap setup is fixed-size, persistent, and low-swappiness', async () => {
