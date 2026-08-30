@@ -102,6 +102,21 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
+    it('loads the AI studio wallet in the active settlement currency', async () => {
+        const myrMarket = { ...market, currencyCode: 'MYR' };
+        const wallet = { availableBalance: 612, currencyCode: 'MYR' };
+        const fetchMock = mockGraphQlResponse({ imageStudioWallet: wallet });
+
+        await expect(new ShopApi(myrMarket).imageStudioWallet()).resolves.toEqual(wallet);
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining('currencyCode=MYR'),
+            expect.objectContaining({ method: 'POST' }),
+        );
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        expect(request.query).toContain('imageStudioWallet { availableBalance currencyCode }');
+    });
+
     it('switches the active checkout order to the selected settlement currency', async () => {
         const order = {
             __typename: 'Order',

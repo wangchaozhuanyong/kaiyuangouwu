@@ -38,6 +38,12 @@ export class ImageGenerationShopResolver {
 
     @Query()
     @Allow(Permission.Authenticated)
+    imageStudioWallet(@Ctx() ctx: RequestContext) {
+        return this.generations.wallet(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
     imagePromptQuotaStatus(@Ctx() ctx: RequestContext) {
         return this.promptEngine.quotaStatus(ctx);
     }

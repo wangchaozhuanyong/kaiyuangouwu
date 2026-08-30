@@ -72,6 +72,7 @@ import { AddCatalogProductSourceCreatedAt1787857200000 } from './1787857200000-a
 import { AlignCatalogAndSystemAnnouncementSchema1787860800000 } from './1787860800000-align-catalog-and-system-announcement-schema';
 import { AlignReferralPosterTemplateDefaults1787864400000 } from './1787864400000-align-referral-poster-template-defaults';
 import { AddCatalogSuppliers1787868000000 } from './1787868000000-add-catalog-suppliers';
+import { AddImagePricingSnapshots1787871600000 } from './1787871600000-add-image-pricing-snapshots';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -148,4 +149,5 @@ export const devServerMigrations = [
     AlignCatalogAndSystemAnnouncementSchema1787860800000,
     AlignReferralPosterTemplateDefaults1787864400000,
     AddCatalogSuppliers1787868000000,
+    AddImagePricingSnapshots1787871600000,
 ];

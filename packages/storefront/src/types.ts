@@ -849,6 +849,11 @@ export interface ImageStudioConfig {
     models: ImageStudioModel[];
 }
 
+export interface ImageStudioWallet {
+    availableBalance: number;
+    currencyCode: string;
+}
+
 export interface ImagePrivateAssetView {
     id: string;
     originalName: string;

@@ -1,6 +1,8 @@
+import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Channel, Customer, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+import type { ImagePricingSnapshot } from '../image-billing-quote';
 
 @Entity({ name: 'image_prompt_optimization' })
 @Index('IDX_image_prompt_optimization_customer_created', ['channelId', 'customerId', 'createdAt'])
@@ -59,8 +61,11 @@ export class ImagePromptOptimization extends VendureEntity {
     @Money({ default: 0 })
     chargedAmount: number;
 
+    @Column({ type: 'simple-json', nullable: true })
+    pricingSnapshot: ImagePricingSnapshot | null;
+
     @Column({ type: 'varchar', length: 3, default: 'CNY' })
-    currencyCode: string;
+    currencyCode: CurrencyCode;
 
     @EntityId({ nullable: true })
     walletUsageId: ID | null;

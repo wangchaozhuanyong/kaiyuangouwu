@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi } from '../api';
+import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import { SafeImage } from '../storefront-ui/product-display';
@@ -41,6 +42,7 @@ interface AiImageStudioPageProps {
     api: ShopApi;
     customer: ActiveCustomer | null;
     market: MarketConfig;
+    displayCurrencyCode: string;
     language: StorefrontLanguage;
     onBack: () => void;
     onSignIn: () => void;
@@ -66,10 +68,11 @@ type AiStudioSetting = 'ASPECT_RATIO' | 'QUANTITY' | 'RESOLUTION';
 type HistoryFilter = 'ALL' | 'SUCCESS' | 'PROCESSING' | 'FAILED';
 
 export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
-    const { api, customer, market, language, onBack, onSignIn, onNotify } = props;
+    const { api, customer, market, displayCurrencyCode, language, onBack, onSignIn, onNotify } = props;
     const isZh = language === 'zh';
     const [config, setConfig] = useState<ImageStudioConfig | null>(null);
     const [balance, setBalance] = useState(0);
+    const [walletCurrencyCode, setWalletCurrencyCode] = useState(market.currencyCode);
     const [promptQuota, setPromptQuota] = useState<ImagePromptQuotaStatus | null>(null);
     const [modelQuotas, setModelQuotas] = useState<ImageModelQuotaStatus[]>([]);
     const [jobs, setJobs] = useState<ImageGenerationJob[]>([]);
@@ -98,39 +101,70 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [busy, setBusy] = useState<'OPTIMIZE' | 'GENERATE' | ''>('');
     const [actionError, setActionError] = useState('');
     const pollStartedAt = useRef(Date.now());
+    const loadEpoch = useRef(0);
+    const settlementEpoch = useRef(0);
 
     const load = useCallback(async () => {
+        const epoch = ++loadEpoch.current;
         setLoadError('');
         try {
             const studioConfig = await api.imageStudioConfig();
-            setConfig(studioConfig);
-            setModelCode(
-                current => current || studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
-            );
+            let availableBalance = 0;
+            let currentWalletCurrencyCode = market.currencyCode;
+            let history: Awaited<ReturnType<ShopApi['myImageGenerationJobs']>> = {
+                items: [],
+                totalItems: 0,
+            };
+            let currentPromptQuota: ImagePromptQuotaStatus | null = null;
+            let currentModelQuotas: ImageModelQuotaStatus[] = [];
             if (customer) {
-                const [availableBalance, history, currentPromptQuota, currentModelQuotas] = await Promise.all(
-                    [
-                        api.imageStudioBalance(),
-                        api.myImageGenerationJobs(0, 20),
-                        api.imagePromptQuotaStatus(),
-                        api.imageModelQuotaStatus(),
-                    ],
-                );
-                setBalance(availableBalance);
-                setJobs(history.items);
-                setPromptQuota(currentPromptQuota);
-                setModelQuotas(currentModelQuotas);
+                const [wallet, loadedHistory, loadedPromptQuota, loadedModelQuotas] = await Promise.all([
+                    api.imageStudioWallet(),
+                    api.myImageGenerationJobs(0, 20),
+                    api.imagePromptQuotaStatus(),
+                    api.imageModelQuotaStatus(),
+                ]);
+                availableBalance = wallet.availableBalance;
+                currentWalletCurrencyCode = wallet.currencyCode;
+                history = loadedHistory;
+                currentPromptQuota = loadedPromptQuota;
+                currentModelQuotas = loadedModelQuotas;
             }
+            if (epoch !== loadEpoch.current) return;
+            setConfig(studioConfig);
+            setModelCode(current =>
+                studioConfig.models.some(model => model.code === current)
+                    ? current
+                    : studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
+            );
+            setBalance(availableBalance);
+            setWalletCurrencyCode(currentWalletCurrencyCode);
+            setJobs(history.items);
+            setPromptQuota(currentPromptQuota);
+            setModelQuotas(currentModelQuotas);
         } catch (error) {
-            setLoadError(errorMessage(error));
+            if (epoch === loadEpoch.current) setLoadError(errorMessage(error));
         } finally {
-            setLoading(false);
+            if (epoch === loadEpoch.current) setLoading(false);
         }
-    }, [api, customer]);
+    }, [api, customer, market.currencyCode]);
 
     useEffect(() => {
+        settlementEpoch.current += 1;
+        setLoading(true);
+        setConfig(null);
+        setBalance(0);
+        setWalletCurrencyCode(market.currencyCode);
+        setPromptQuota(null);
+        setModelQuotas([]);
+        setBusy('');
+        setActionError('');
         void load();
-    }, [load]);
+        return () => {
+            settlementEpoch.current += 1;
+            loadEpoch.current += 1;
+        };
+    }, [load, market.currencyCode]);
     useEffect(() => {
         // Consent and private reference assets belong to a customer session;
         // never carry either across logout/login changes.
@@ -167,6 +201,11 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         : Math.min(quantity, selectedQuota?.free.remaining ?? 0);
     const paidQuantity = Math.max(0, quantity - freeRemaining);
     const estimatedPrice = (selectedResolutionOption?.unitPrice ?? 0) * paidQuantity;
+    const quoteCurrencyReady = Boolean(
+        selectedModel &&
+        selectedModel.currencyCode === market.currencyCode &&
+        walletCurrencyCode === market.currencyCode,
+    );
     const canGenerate = Boolean(
         customer &&
         config?.enabled &&
@@ -174,6 +213,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         selectedResolutionOption &&
         prompt.trim() &&
         termsAccepted &&
+        quoteCurrencyReady &&
         balance >= estimatedPrice &&
         (selectedQuota?.safety.remaining ?? 0) >= quantity &&
         (paidQuantity === 0 || Boolean(selectedQuota?.paidAfterFreeEnabled)) &&
@@ -205,6 +245,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
 
     const optimizePrompt = async () => {
         if (!prompt.trim() || busy) return;
+        const epoch = settlementEpoch.current;
         setBusy('OPTIMIZE');
         setActionError('');
         try {
@@ -216,6 +257,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
                 idempotencyKey: requestId(),
             });
+            if (epoch !== settlementEpoch.current) return;
             setOriginalPrompt(prompt);
             setPrompt(result.optimizedPrompt);
             setOptimized(true);
@@ -230,9 +272,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 selectModel(result.recommendedModelCode);
             }
         } catch (error) {
-            setActionError(errorMessage(error));
+            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
         } finally {
-            setBusy('');
+            if (epoch === settlementEpoch.current) setBusy('');
         }
     };
 
@@ -263,6 +305,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
 
     const generate = async () => {
         if (!canGenerate || !selectedModel || !selectedResolutionOption || !config) return;
+        const epoch = settlementEpoch.current;
         setBusy('GENERATE');
         setActionError('');
         try {
@@ -281,6 +324,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 idempotencyKey: requestId(),
                 termsAccepted,
             });
+            if (epoch !== settlementEpoch.current) return;
             pollStartedAt.current = Date.now();
             setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
             setBalance(value => Math.max(0, value - job.reservedAmount));
@@ -288,13 +332,14 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 api.imagePromptQuotaStatus(),
                 api.imageModelQuotaStatus(),
             ]);
+            if (epoch !== settlementEpoch.current) return;
             setPromptQuota(nextPromptQuota);
             setModelQuotas(nextModelQuotas);
             onNotify(isZh ? '任务已提交，正在逐张生成' : 'Generation queued');
         } catch (error) {
-            setActionError(errorMessage(error));
+            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
         } finally {
-            setBusy('');
+            if (epoch === settlementEpoch.current) setBusy('');
         }
     };
 
@@ -369,7 +414,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     };
 
     const billingCurrencyCode = selectedModel?.currencyCode ?? market.currencyCode;
-    const selectedResolutionLabel = `${selectedResolutionOption?.resolution ?? resolution} · ${formatBillingMoney(
+    const selectedResolutionLabel = `${selectedResolutionOption?.resolution ?? resolution} · ${formatDisplayMoney(
         selectedResolutionOption?.unitPrice ?? 0,
         billingCurrencyCode,
         market.locale,
@@ -556,7 +601,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                     model.resolutionOptions.find(item =>
                                         item.supportedAspectRatios.includes(aspectRatio),
                                     );
-                                const description = isZh ? model.descriptionZh : model.descriptionEn;
+                                const modelName = model.officialModelId;
                                 return (
                                     <button
                                         type="button"
@@ -564,15 +609,15 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         className={selected ? 'is-selected' : ''}
                                         role="radio"
                                         aria-checked={selected}
-                                        aria-label={`${description}，${formatBillingMoney(option?.unitPrice ?? 0, model.currencyCode, market.locale)}${isZh ? '每张' : ' per image'}`}
+                                        aria-label={`${modelName}，${formatDisplayMoney(option?.unitPrice ?? 0, model.currencyCode, market.locale)}${isZh ? '每张' : ' per image'}`}
                                         onClick={() => selectModel(model.code)}
                                     >
                                         <span className="ai-studio-radio-mark" aria-hidden="true">
                                             {selected ? <Check /> : null}
                                         </span>
-                                        <span className="ai-studio-model-description">{description}</span>
+                                        <span className="ai-studio-model-description">{modelName}</span>
                                         <strong>
-                                            {formatBillingMoney(
+                                            {formatDisplayMoney(
                                                 option?.unitPrice ?? 0,
                                                 model.currencyCode,
                                                 market.locale,
@@ -608,13 +653,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 <div className="ai-studio-settlement-amount">
                                     <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
                                     <strong className="is-balance">
-                                        {formatBillingMoney(balance, billingCurrencyCode, market.locale)}
+                                        {formatDisplayMoney(balance, billingCurrencyCode, market.locale)}
                                     </strong>
                                 </div>
                                 <div className="ai-studio-settlement-amount" aria-live="polite">
                                     <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
                                     <strong>
-                                        {formatBillingMoney(
+                                        {formatDisplayMoney(
                                             estimatedPrice,
                                             billingCurrencyCode,
                                             market.locale,
@@ -629,8 +674,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                         </strong>
                                         <span>
                                             {isZh
-                                                ? `免费 ${freeRemaining} 张 + 付费 ${paidQuantity} 张；仅成功图片结算，失败自动释放`
-                                                : `${freeRemaining} free + ${paidQuantity} paid; only successful images are charged`}
+                                                ? `免费 ${freeRemaining} 张 + 付费 ${paidQuantity} 张；仅成功图片结算，失败自动释放${displayCurrencyCode === 'USDT' ? `；USDT 仅供估算展示，实际按 ${billingCurrencyCode} 结算` : ''}`
+                                                : `${freeRemaining} free + ${paidQuantity} paid; only successful images are charged${displayCurrencyCode === 'USDT' ? `; USDT is an estimate and settles in ${billingCurrencyCode}` : ''}`}
                                         </span>
                                     </div>
                                 </div>
@@ -817,7 +862,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                                   disabled={availability.status !== 'AVAILABLE'}
                                                   label={
                                                       availability.status === 'AVAILABLE'
-                                                          ? `${value} · ${formatBillingMoney(
+                                                          ? `${value} · ${formatDisplayMoney(
                                                                 availability.option.unitPrice,
                                                                 billingCurrencyCode,
                                                                 market.locale,

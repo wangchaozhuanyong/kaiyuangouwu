@@ -11,8 +11,8 @@ import { randomUUID } from 'node:crypto';
 
 import { MAX_PROMPT_LENGTH } from '../constants';
 import { ImageGenerationConfig } from '../entities/image-generation-config.entity';
-import { ImageModelConfig } from '../entities/image-model-config.entity';
 import { ImagePromptOptimization } from '../entities/image-prompt-optimization.entity';
+import { imagePricingSnapshot, quoteImageMoney } from '../image-billing-quote';
 import { ImageGenerationConfigService } from '../image-generation-config.service';
 import { ImageUsageQuotaService } from '../image-usage-quota.service';
 import { ImageProviderClient } from '../provider/image-provider.client';
@@ -65,6 +65,9 @@ export class ImagePromptEngineService {
         });
         if (existing) {
             if (existing.source === 'PENDING') throw new UserInputError('该提示词优化请求正在处理中');
+            if (existing.currencyCode !== ctx.currencyCode) {
+                throw new UserInputError('请求幂等键已被其他币种的提示词优化请求使用');
+            }
             return this.optimizationResult(ctx, customer, existing);
         }
         await this.consumeMinuteLimit(ctx, customer, requestKey);
@@ -200,6 +203,11 @@ export class ImagePromptEngineService {
         const minuteLimit = config?.promptRateLimitPerMinute ?? 3;
         const dailyLimit = config?.promptDailyFreeLimit ?? 20;
         const dailyUnlimited = config?.promptDailyFreeUnlimited ?? false;
+        const paidPrice = quoteImageMoney(
+            ctx,
+            config?.paidPromptOptimizationPrice ?? 0,
+            config?.paidPromptOptimizationCurrencyCode ?? ctx.channel.defaultCurrencyCode,
+        );
         const [minute, daily] = await Promise.all([
             this.quota.status(ctx, customer.id, 'PROMPT_MINUTE', minuteLimit),
             this.quota.status(ctx, customer.id, 'PROMPT_DAILY_FREE', dailyLimit, dailyUnlimited),
@@ -208,8 +216,8 @@ export class ImagePromptEngineService {
             minute,
             daily,
             paidEnabled: config?.paidPromptOptimizationEnabled ?? false,
-            paidPrice: config?.paidPromptOptimizationPrice ?? 0,
-            currencyCode: config?.paidPromptOptimizationCurrencyCode ?? ctx.channel.defaultCurrencyCode,
+            paidPrice: paidPrice.amount,
+            currencyCode: paidPrice.currencyCode,
         };
     }
 
@@ -310,7 +318,17 @@ export class ImagePromptEngineService {
             const existing = await repository.findOne({
                 where: { channelId: txCtx.channelId, customerId: customer.id, idempotencyKey: requestKey },
             });
-            if (existing) return existing;
+            if (existing) {
+                if (existing.currencyCode !== txCtx.currencyCode) {
+                    throw new UserInputError('请求幂等键已被其他币种的提示词优化请求使用');
+                }
+                return existing;
+            }
+            const priceQuote = quoteImageMoney(
+                txCtx,
+                config.paidPromptOptimizationPrice,
+                config.paidPromptOptimizationCurrencyCode,
+            );
             const record = await repository.save(
                 new ImagePromptOptimization({
                     channelId: txCtx.channelId,
@@ -326,7 +344,8 @@ export class ImagePromptEngineService {
                     idempotencyKey: requestKey,
                     billingMode: 'PENDING',
                     chargedAmount: 0,
-                    currencyCode: config.paidPromptOptimizationCurrencyCode,
+                    pricingSnapshot: imagePricingSnapshot(priceQuote),
+                    currencyCode: priceQuote.currencyCode,
                     walletUsageId: null,
                     quotaEventId: null,
                     inputTokens: null,
@@ -363,24 +382,24 @@ export class ImagePromptEngineService {
                     throw new UserInputError('今天的免费提示词优化额度已用完，管理员尚未开启付费优化');
                 }
                 if (
-                    input.expectedPrice !== config.paidPromptOptimizationPrice ||
-                    input.currencyCode !== config.paidPromptOptimizationCurrencyCode
+                    input.expectedPrice !== priceQuote.amount ||
+                    input.currencyCode !== priceQuote.currencyCode
                 ) {
                     throw new UserInputError('PRICE_CHANGED：提示词优化价格已更新，请刷新后重试');
                 }
                 const usage = await this.walletSpend.reserve(txCtx, {
                     customerId: customer.id,
-                    currencyCode: config.paidPromptOptimizationCurrencyCode,
-                    amount: config.paidPromptOptimizationPrice,
+                    currencyCode: priceQuote.currencyCode,
+                    amount: priceQuote.amount,
                     resourceType: 'IMAGE_PROMPT_OPTIMIZATION',
                     resourceId: String(record.id),
                     idempotencyKey: `PROMPT_PAID:${String(txCtx.channelId)}:${String(customer.id)}:${requestKey}`,
                     actorId: txCtx.activeUserId,
                     actorType: 'CUSTOMER',
-                    metadata: { priceSnapshot: config.paidPromptOptimizationPrice },
+                    metadata: { pricingSnapshot: imagePricingSnapshot(priceQuote) },
                 });
                 record.billingMode = 'PAID';
-                record.chargedAmount = config.paidPromptOptimizationPrice;
+                record.chargedAmount = priceQuote.amount;
                 record.walletUsageId = usage.id;
             }
             return repository.save(record);
@@ -442,10 +461,7 @@ export class ImagePromptEngineService {
         }
     }
 
-    private async recommendEnabledModel(
-        ctx: RequestContext,
-        spec: ImagePromptSpec,
-    ): Promise<{ model: ImageModelConfig; reason: string }> {
+    private async recommendEnabledModel(ctx: RequestContext, spec: ImagePromptSpec) {
         const preferred = this.rules.recommendation(spec);
         const { models } = await this.configService.shopConfig(ctx);
         const healthy = models;

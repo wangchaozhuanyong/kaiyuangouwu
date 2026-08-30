@@ -222,6 +222,11 @@ const commonTypes = gql`
         free: ImageQuotaWindowStatus!
         safety: ImageQuotaWindowStatus!
     }
+
+    type ImageStudioWallet {
+        availableBalance: Money!
+        currencyCode: CurrencyCode!
+    }
 `;
 
 export const shopApiExtensions = gql`
@@ -251,6 +256,7 @@ export const shopApiExtensions = gql`
     extend type Query {
         imageStudioConfig: ImageStudioConfig!
         imageStudioBalance: Money!
+        imageStudioWallet: ImageStudioWallet!
         imagePromptQuotaStatus: ImagePromptQuotaStatus!
         imageModelQuotaStatus: [ImageModelQuotaStatus!]!
         recommendImageModel(input: OptimizeImagePromptInput!): ImageModelRecommendation!

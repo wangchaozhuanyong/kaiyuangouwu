@@ -10,6 +10,7 @@ import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
+import { quoteImageMoney } from './image-billing-quote';
 import { supportsNativeResolution } from './image-resolution';
 import { PromptRulesService } from './prompt/prompt-rules.service';
 import { ImageProviderRouterService } from './provider/image-provider-router.service';
@@ -217,6 +218,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 ),
             )
         ).some(Boolean);
+        const promptPrice = quoteImageMoney(
+            ctx,
+            config.paidPromptOptimizationPrice,
+            config.paidPromptOptimizationCurrencyCode,
+        );
         return {
             enabled: config.enabled && availableModels.length > 0,
             promptOptimizationEnabled: config.promptOptimizationEnabled && optimizerAvailable,
@@ -224,8 +230,8 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             promptDailyFreeLimit: config.promptDailyFreeLimit,
             promptDailyFreeUnlimited: config.promptDailyFreeUnlimited,
             paidPromptOptimizationEnabled: config.paidPromptOptimizationEnabled,
-            paidPromptOptimizationPrice: config.paidPromptOptimizationPrice,
-            paidPromptOptimizationCurrencyCode: config.paidPromptOptimizationCurrencyCode,
+            paidPromptOptimizationPrice: promptPrice.amount,
+            paidPromptOptimizationCurrencyCode: promptPrice.currencyCode,
             defaultModelCode: config.defaultModelCode,
             termsVersion: config.termsVersion,
             termsZh: config.termsZh,
@@ -235,7 +241,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             maxReferenceBytes: 10 * 1024 * 1024,
             maxReferencePixels: 40_000_000,
             maxQuantity: 4,
-            models: availableModels,
+            models: availableModels.map(model => shopModelView(ctx, model)),
         };
     }
 
@@ -926,6 +932,23 @@ function validateModelInput(input: SaveImageModelInput): (typeof launchModelDefi
         throw new UserInputError('当前模型或协议不支持原生 4K，请将 4K 价格设为 0');
     }
     return definition;
+}
+
+function shopModelView(ctx: RequestContext, model: ImageModelConfig) {
+    const unitPrice = quoteImageMoney(ctx, model.unitPrice, model.currencyCode);
+    const unitPrice2K = quoteImageMoney(ctx, model.unitPrice2K, model.currencyCode);
+    const unitPrice4K = quoteImageMoney(ctx, model.unitPrice4K, model.currencyCode);
+    return {
+        ...model,
+        unitPrice: unitPrice.amount,
+        unitPrice2K: unitPrice2K.amount,
+        unitPrice4K: unitPrice4K.amount,
+        currencyCode: unitPrice.currencyCode,
+        resolutionOptions: model.resolutionOptions.map(option => ({
+            ...option,
+            unitPrice: quoteImageMoney(ctx, option.unitPrice, model.currencyCode).amount,
+        })),
+    };
 }
 
 function requiredText(value: string, maxLength: number, label: string): string {

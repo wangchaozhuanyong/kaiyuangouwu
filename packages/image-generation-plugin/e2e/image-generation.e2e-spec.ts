@@ -186,6 +186,10 @@ const STUDIO_CONFIG = gql`
             }
         }
         imageStudioBalance
+        imageStudioWallet {
+            availableBalance
+            currencyCode
+        }
     }
 `;
 
@@ -551,6 +555,7 @@ describe('AI image generation full flow', () => {
             ],
         });
         expect(studio.imageStudioBalance).toBe(500);
+        expect(studio.imageStudioWallet).toEqual({ availableBalance: 500, currencyCode: 'USD' });
 
         const optimization = (
             await shopClient.query(OPTIMIZE, {

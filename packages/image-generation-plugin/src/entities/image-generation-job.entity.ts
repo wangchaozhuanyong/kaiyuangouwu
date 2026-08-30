@@ -2,6 +2,7 @@ import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Channel, Customer, EntityId, Money, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, VersionColumn } from 'typeorm';
+import type { ImagePricingSnapshot } from '../image-billing-quote';
 import type { ImageResolution } from '../types';
 
 import { ImageGenerationOutput } from './image-generation-output.entity';
@@ -112,6 +113,9 @@ export class ImageGenerationJob extends VendureEntity {
 
     @Money()
     unitPriceSnapshot: number;
+
+    @Column({ type: 'simple-json', nullable: true })
+    pricingSnapshot: ImagePricingSnapshot | null;
 
     @Money()
     reservedAmount: number;

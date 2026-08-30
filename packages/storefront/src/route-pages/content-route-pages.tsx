@@ -46,6 +46,7 @@ export function ImageStudioRoutePage() {
                 api={runtime.api}
                 customer={runtime.customer}
                 market={runtime.market}
+                displayCurrencyCode={runtime.displayCurrencyCode}
                 language={runtime.language}
                 onBack={runtime.goBack}
                 onSignIn={() => runtime.navigate({ name: 'login' })}

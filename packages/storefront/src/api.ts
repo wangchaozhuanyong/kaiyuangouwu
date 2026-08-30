@@ -17,6 +17,7 @@ import {
     ImagePromptQuotaStatus,
     ImageReferenceMode,
     ImageStudioConfig,
+    ImageStudioWallet,
     MarketConfig,
     MyReferralOverview,
     Order,
@@ -1421,6 +1422,17 @@ export class ShopApi {
             signal,
         );
         return result.imageStudioBalance;
+    }
+
+    async imageStudioWallet(signal?: AbortSignal): Promise<ImageStudioWallet> {
+        const result = await this.request<{ imageStudioWallet: ImageStudioWallet }>(
+            `query ImageStudioWallet {
+                imageStudioWallet { availableBalance currencyCode }
+            }`,
+            undefined,
+            signal,
+        );
+        return result.imageStudioWallet;
     }
 
     async imagePromptQuotaStatus(signal?: AbortSignal): Promise<ImagePromptQuotaStatus> {

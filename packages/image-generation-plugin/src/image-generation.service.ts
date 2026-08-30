@@ -45,6 +45,7 @@ import { ImagePrivateAsset } from './entities/image-private-asset.entity';
 import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
 import { ImageUsageQuotaBucket } from './entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from './entities/image-usage-quota-event.entity';
+import { imagePricingSnapshot, quoteImageMoney } from './image-billing-quote';
 import {
     ImageGenerationConfigService,
     modelReady,
@@ -141,11 +142,13 @@ export class ImageGenerationService {
                 if (!supportsNativeResolution(model, normalized.resolution, normalized.aspectRatio)) {
                     throw new UserInputError('所选模型不支持该画幅的原生清晰度');
                 }
-                const unitPrice = resolutionPrice(model, normalized.resolution);
-                if (unitPrice <= 0) throw new UserInputError('所选清晰度尚未配置价格');
+                const baseUnitPrice = resolutionPrice(model, normalized.resolution);
+                if (baseUnitPrice <= 0) throw new UserInputError('所选清晰度尚未配置价格');
+                const priceQuote = quoteImageMoney(txCtx, baseUnitPrice, model.currencyCode);
+                const unitPrice = priceQuote.amount;
                 if (
                     unitPrice !== normalized.expectedUnitPrice ||
-                    model.currencyCode !== normalized.currencyCode
+                    priceQuote.currencyCode !== normalized.currencyCode
                 ) {
                     throw new UserInputError('PRICE_CHANGED：模型价格已更新，请确认新价格后重新提交');
                 }
@@ -210,6 +213,7 @@ export class ImageGenerationService {
                         resolution: normalized.resolution,
                         quantity: normalized.quantity,
                         unitPriceSnapshot: unitPrice,
+                        pricingSnapshot: imagePricingSnapshot(priceQuote),
                         reservedAmount: 0,
                         expectedChargeAmount: 0,
                         freeQuantityReserved: 0,
@@ -218,7 +222,7 @@ export class ImageGenerationService {
                         quotaEventId: null,
                         capturedAmount: 0,
                         releasedAmount: 0,
-                        currencyCode: model.currencyCode,
+                        currencyCode: priceQuote.currencyCode,
                         walletUsageId: null,
                         state: 'QUEUED',
                         termsVersion: config.termsVersion,
@@ -254,7 +258,7 @@ export class ImageGenerationService {
                 if (expectedChargeAmount > 0) {
                     const usage = await this.walletSpend.reserve(txCtx, {
                         customerId: customer.id,
-                        currencyCode: model.currencyCode,
+                        currencyCode: priceQuote.currencyCode,
                         amount: expectedChargeAmount,
                         resourceType: 'IMAGE_GENERATION_JOB',
                         resourceId: String(job.id),
@@ -268,6 +272,7 @@ export class ImageGenerationService {
                             freeQuantity,
                             paidQuantity,
                             unitPrice,
+                            pricingSnapshot: imagePricingSnapshot(priceQuote),
                         },
                     });
                     job.walletUsageId = usage.id;
@@ -475,17 +480,17 @@ export class ImageGenerationService {
         return deleted;
     }
 
-    async walletBalance(ctx: RequestContext): Promise<number> {
+    async wallet(ctx: RequestContext): Promise<{ availableBalance: number; currencyCode: string }> {
         const customer = await this.activeCustomer(ctx);
-        const model = await this.connection.getRepository(ctx, ImageModelConfig).findOne({
-            where: { channelId: ctx.channelId, enabled: true },
-            order: { isDefault: 'DESC', position: 'ASC' },
-        });
-        const currencyCode = model?.currencyCode ?? ctx.channel.defaultCurrencyCode;
+        const currencyCode = ctx.currencyCode;
         const wallet = await this.connection.getRepository(ctx, ReferralWallet).findOne({
             where: { channelId: ctx.channelId, customerId: customer.id, currencyCode },
         });
-        return wallet?.availableBalance ?? 0;
+        return { availableBalance: wallet?.availableBalance ?? 0, currencyCode };
+    }
+
+    async walletBalance(ctx: RequestContext): Promise<number> {
+        return (await this.wallet(ctx)).availableBalance;
     }
 
     async modelQuotaStatus(ctx: RequestContext) {
@@ -496,6 +501,7 @@ export class ImageGenerationService {
         });
         return Promise.all(
             models.map(async model => {
+                const unitPrice = quoteImageMoney(ctx, model.unitPrice, model.currencyCode);
                 const [free, safety] = await Promise.all([
                     this.quota.status(
                         ctx,
@@ -518,8 +524,8 @@ export class ImageGenerationService {
                     modelCode: model.code,
                     freeImageEnabled: model.freeImageEnabled,
                     paidAfterFreeEnabled: model.paidAfterFreeEnabled,
-                    unitPrice: model.unitPrice,
-                    currencyCode: model.currencyCode,
+                    unitPrice: unitPrice.amount,
+                    currencyCode: unitPrice.currencyCode,
                     free,
                     safety,
                 };
