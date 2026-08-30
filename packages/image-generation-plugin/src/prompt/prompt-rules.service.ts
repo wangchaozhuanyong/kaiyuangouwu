@@ -1,5 +1,5 @@
-import type { ImagePromptSpec, ImageReferenceMode } from '../types';
 import { Injectable } from '@nestjs/common';
+import type { ImagePromptSpec, ImageReferenceMode } from '../types';
 
 import bundleJson from './prompt-rules.bundle';
 
@@ -12,11 +12,57 @@ interface PromptRuleBundle {
     useCases: Array<{
         code: string;
         defaults: { composition: string; lighting: string; style: string };
+        defaultsZh?: { composition: string; lighting: string; style: string };
         avoid: string[];
+        avoidZh?: string[];
     }>;
 }
 
 let activeBundle: PromptRuleBundle = bundleJson;
+
+export type PromptOutputLanguage = 'en' | 'zh';
+
+const legacyChineseFallback = {
+    composition: '主体清晰、构图协调，并具有明确的视觉层级',
+    lighting: '符合场景且自然协调的光线',
+    style: '高质量、可信且符合请求的视觉风格',
+    avoid: ['结构畸变', '不必要的文字', '视觉杂乱'],
+};
+
+const renderCopy = {
+    en: {
+        subject: 'Subject',
+        scene: 'Scene',
+        composition: 'Composition',
+        lighting: 'Lighting',
+        camera: 'Camera',
+        style: 'Style',
+        colors: 'Colors',
+        materials: 'Materials',
+        exactText: 'Render this text exactly',
+        preserve: 'Preserve',
+        avoid: 'Avoid',
+        fieldSeparator: ': ',
+        listSeparator: ', ',
+        itemSeparator: '; ',
+    },
+    zh: {
+        subject: '主体',
+        scene: '场景',
+        composition: '构图',
+        lighting: '光线',
+        camera: '镜头',
+        style: '风格',
+        colors: '色彩',
+        materials: '材质',
+        exactText: '需精确呈现的文字',
+        preserve: '保留',
+        avoid: '避免',
+        fieldSeparator: '：',
+        listSeparator: '，',
+        itemSeparator: '；',
+    },
+} as const;
 
 @Injectable()
 export class PromptRulesService {
@@ -33,9 +79,15 @@ export class PromptRulesService {
         activeBundle = value;
     }
 
-    fallbackSpec(prompt: string, referenceMode: ImageReferenceMode = 'NONE'): ImagePromptSpec {
+    fallbackSpec(
+        prompt: string,
+        referenceMode: ImageReferenceMode = 'NONE',
+        language: PromptOutputLanguage = detectPromptLanguage(prompt),
+    ): ImagePromptSpec {
         const useCase = classifyUseCase(prompt, referenceMode);
         const profile = activeBundle.useCases.find(item => item.code === useCase) ?? activeBundle.useCases[0];
+        const defaults = language === 'zh' ? (profile.defaultsZh ?? legacyChineseFallback) : profile.defaults;
+        const avoid = language === 'zh' ? (profile.avoidZh ?? legacyChineseFallback.avoid) : profile.avoid;
         const exactText = [...prompt.matchAll(/[“"「『](.*?)[”"」』]/gu)]
             .map(match => match[1])
             .filter(Boolean);
@@ -43,15 +95,27 @@ export class PromptRulesService {
             useCase,
             subject: prompt.trim(),
             scene: '',
-            composition: profile.defaults.composition,
-            lighting: profile.defaults.lighting,
+            composition: defaults.composition,
+            lighting: defaults.lighting,
             camera: '',
-            style: profile.defaults.style,
+            style: defaults.style,
             colors: [],
             materials: [],
             exactText,
-            preserve: referenceMode === 'NONE' ? [] : ['用户明确要求保留的参考图主体与细节'],
-            avoid: [...profile.avoid, 'extra fingers', 'distorted anatomy', 'unrequested text'],
+            preserve:
+                referenceMode === 'NONE'
+                    ? []
+                    : [
+                          language === 'zh'
+                              ? '用户明确要求保留的参考图主体与细节'
+                              : 'the reference subject and details the user explicitly requested to preserve',
+                      ],
+            avoid: [
+                ...avoid,
+                ...(language === 'zh'
+                    ? ['多余手指', '畸形人体结构', '未要求的文字']
+                    : ['extra fingers', 'distorted anatomy', 'unrequested text']),
+            ],
             referenceMode,
         };
     }
@@ -133,23 +197,53 @@ export class PromptRulesService {
         );
     }
 
-    render(spec: ImagePromptSpec): string {
+    render(
+        spec: ImagePromptSpec,
+        language: PromptOutputLanguage = detectPromptLanguage(spec.subject),
+    ): string {
+        const copy = renderCopy[language];
         const lines = [
-            `Subject: ${spec.subject}`,
-            spec.scene && `Scene: ${spec.scene}`,
-            `Composition: ${spec.composition}`,
-            `Lighting: ${spec.lighting}`,
-            spec.camera && `Camera: ${spec.camera}`,
-            `Style: ${spec.style}`,
-            spec.colors.length && `Colors: ${spec.colors.join(', ')}`,
-            spec.materials.length && `Materials: ${spec.materials.join(', ')}`,
+            `${copy.subject}${copy.fieldSeparator}${spec.subject}`,
+            spec.scene && `${copy.scene}${copy.fieldSeparator}${spec.scene}`,
+            `${copy.composition}${copy.fieldSeparator}${spec.composition}`,
+            `${copy.lighting}${copy.fieldSeparator}${spec.lighting}`,
+            spec.camera && `${copy.camera}${copy.fieldSeparator}${spec.camera}`,
+            `${copy.style}${copy.fieldSeparator}${spec.style}`,
+            spec.colors.length &&
+                `${copy.colors}${copy.fieldSeparator}${spec.colors.join(copy.listSeparator)}`,
+            spec.materials.length &&
+                `${copy.materials}${copy.fieldSeparator}${spec.materials.join(copy.listSeparator)}`,
             spec.exactText.length &&
-                `Render this text exactly: ${spec.exactText.map(text => JSON.stringify(text)).join(', ')}`,
-            spec.preserve.length && `Preserve: ${spec.preserve.join('; ')}`,
-            spec.avoid.length && `Avoid: ${spec.avoid.join('; ')}`,
+                `${copy.exactText}${copy.fieldSeparator}${spec.exactText
+                    .map(text => JSON.stringify(text))
+                    .join(copy.listSeparator)}`,
+            spec.preserve.length &&
+                `${copy.preserve}${copy.fieldSeparator}${spec.preserve.join(copy.itemSeparator)}`,
+            spec.avoid.length && `${copy.avoid}${copy.fieldSeparator}${spec.avoid.join(copy.itemSeparator)}`,
         ].filter(Boolean);
         return lines.join('\n').slice(0, 8_000);
     }
+}
+
+export function promptLanguageFromLanguageCode(languageCode?: string | null): PromptOutputLanguage {
+    return /^zh(?:_|-|$)/iu.test(languageCode?.trim() ?? '') ? 'zh' : 'en';
+}
+
+export function detectPromptLanguage(
+    prompt: string,
+    fallback: PromptOutputLanguage = 'en',
+): PromptOutputLanguage {
+    const textWithoutExactRequestedText = prompt
+        .replace(/[“"「『](.*?)[”"」』]/gu, ' ')
+        .replace(/https?:\/\/\S+/giu, ' ');
+    if (/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(textWithoutExactRequestedText)) {
+        return 'en';
+    }
+    const hanCount = textWithoutExactRequestedText.match(/\p{Script=Han}/gu)?.length ?? 0;
+    const latinWordCount =
+        textWithoutExactRequestedText.match(/\p{Script=Latin}+(?:['’-]\p{Script=Latin}+)*/gu)?.length ?? 0;
+    if (hanCount === 0 && latinWordCount === 0) return fallback;
+    return hanCount > latinWordCount ? 'zh' : 'en';
 }
 
 function isRuleBundle(value: unknown): value is PromptRuleBundle {

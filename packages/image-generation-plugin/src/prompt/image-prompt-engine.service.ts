@@ -23,9 +23,14 @@ import {
     type OptimizeImagePromptInput,
 } from '../types';
 
-import { PromptRulesService } from './prompt-rules.service';
+import {
+    detectPromptLanguage,
+    promptLanguageFromLanguageCode,
+    PromptRulesService,
+    type PromptOutputLanguage,
+} from './prompt-rules.service';
 
-const OPTIMIZER_SYSTEM_PROMPT = [
+const OPTIMIZER_SYSTEM_PROMPT_BASE = [
     'You are the server-side prompt compiler for an ecommerce image studio.',
     'Return exactly one JSON object with these keys: useCase, subject, scene, composition, lighting, ',
     'camera, style, colors, materials, exactText, preserve, avoid, referenceMode.',
@@ -58,7 +63,8 @@ export class ImagePromptEngineService {
             throw new UserInputError('当前店铺尚未开启提示词优化');
         }
         const referenceMode = normalizeReferenceMode(input.referenceMode);
-        const fallback = this.rules.fallbackSpec(prompt, referenceMode);
+        const outputLanguage = detectPromptLanguage(prompt, promptLanguageFromLanguageCode(ctx.languageCode));
+        const fallback = this.rules.fallbackSpec(prompt, referenceMode, outputLanguage);
         const requestKey = normalizeIdempotencyKey(input.idempotencyKey);
         const existing = await this.connection.getRepository(ctx, ImagePromptOptimization).findOne({
             where: { channelId: ctx.channelId, customerId: customer.id, idempotencyKey: requestKey },
@@ -71,7 +77,15 @@ export class ImagePromptEngineService {
             return this.optimizationResult(ctx, customer, existing);
         }
         await this.consumeMinuteLimit(ctx, customer, requestKey);
-        const reserved = await this.reserveOptimization(ctx, customer, prompt, fallback, input, requestKey);
+        const reserved = await this.reserveOptimization(
+            ctx,
+            customer,
+            prompt,
+            fallback,
+            input,
+            requestKey,
+            outputLanguage,
+        );
 
         let spec = fallback;
         let source = 'FALLBACK';
@@ -100,8 +114,12 @@ export class ImagePromptEngineService {
                     try {
                         const promptResult = await this.providerClient.optimizePrompt(
                             routedCredential,
-                            OPTIMIZER_SYSTEM_PROMPT,
-                            JSON.stringify({ prompt, referenceMode }),
+                            optimizerSystemPrompt(outputLanguage),
+                            JSON.stringify({
+                                prompt,
+                                referenceMode,
+                                targetLanguage: outputLanguage === 'zh' ? 'Simplified Chinese' : 'English',
+                            }),
                         );
                         await this.configService
                             .recordCredentialRuntimeSuccess(ctx, routedCredential)
@@ -129,7 +147,13 @@ export class ImagePromptEngineService {
             if (!parsed) upstreamCallCount += 1;
             spec =
                 parsed ??
-                (await this.repairSpec(selectedCredential, selectedResult.text, prompt, referenceMode)) ??
+                (await this.repairSpec(
+                    selectedCredential,
+                    selectedResult.text,
+                    prompt,
+                    referenceMode,
+                    outputLanguage,
+                )) ??
                 fallback;
             source = spec === fallback ? 'FALLBACK' : 'MODEL';
             providerSucceeded = source === 'MODEL';
@@ -139,8 +163,8 @@ export class ImagePromptEngineService {
             providerError = (error instanceof Error ? error.message : String(error)).slice(0, 500);
         }
         if (!providerSucceeded && !providerError) providerError = '上游结果无法解析，已使用本地规则结果';
-        const recommendation = await this.recommendEnabledModel(ctx, spec);
-        const optimizedPrompt = this.rules.render(spec);
+        const recommendation = await this.recommendEnabledModel(ctx, spec, outputLanguage);
+        const optimizedPrompt = this.rules.render(spec, outputLanguage);
         Object.assign(reserved, {
             optimizedPrompt,
             promptSpec: spec,
@@ -253,11 +277,22 @@ export class ImagePromptEngineService {
         if (!(await this.configService.shopConfig(ctx)).enabled) {
             throw new UserInputError('当前店铺的 AI 图片工坊不可用');
         }
-        const spec = this.rules.fallbackSpec(normalized, normalizeReferenceMode(referenceMode));
-        const recommendation = await this.recommendEnabledModel(ctx, spec);
+        const outputLanguage = detectPromptLanguage(
+            normalized,
+            promptLanguageFromLanguageCode(ctx.languageCode),
+        );
+        const spec = this.rules.fallbackSpec(
+            normalized,
+            normalizeReferenceMode(referenceMode),
+            outputLanguage,
+        );
+        const recommendation = await this.recommendEnabledModel(ctx, spec, outputLanguage);
         return {
             modelCode: recommendation.model.code,
-            modelName: recommendation.model.displayNameZh,
+            modelName:
+                outputLanguage === 'zh'
+                    ? recommendation.model.displayNameZh
+                    : recommendation.model.displayNameEn,
             officialModelId: recommendation.model.officialModelId,
             unitPrice: recommendation.model.unitPrice,
             currencyCode: recommendation.model.currencyCode,
@@ -301,6 +336,7 @@ export class ImagePromptEngineService {
         fallback: ImagePromptSpec,
         input: OptimizeImagePromptInput,
         requestKey: string,
+        outputLanguage: PromptOutputLanguage,
     ): Promise<ImagePromptOptimization> {
         return this.connection.withTransaction(ctx, async txCtx => {
             if (supportsRateLimitLock(this.connection.rawConnection.options.type)) {
@@ -335,7 +371,7 @@ export class ImagePromptEngineService {
                     channelId: txCtx.channelId,
                     customerId: customer.id,
                     inputPrompt: prompt,
-                    optimizedPrompt: this.rules.render(fallback),
+                    optimizedPrompt: this.rules.render(fallback, outputLanguage),
                     promptSpec: fallback as unknown as Record<string, any>,
                     source: 'PENDING',
                     optimizerModelId: null,
@@ -437,12 +473,18 @@ export class ImagePromptEngineService {
         invalidJson: string,
         prompt: string,
         referenceMode: ImageReferenceMode,
+        outputLanguage: PromptOutputLanguage,
     ): Promise<ImagePromptSpec | undefined> {
         try {
             const repaired = await this.providerClient.optimizePrompt(
                 credential,
-                `${OPTIMIZER_SYSTEM_PROMPT}\nThe previous output was invalid. Repair it and output valid JSON only.`,
-                JSON.stringify({ prompt, referenceMode, invalidOutput: invalidJson.slice(0, 4_000) }),
+                `${optimizerSystemPrompt(outputLanguage)}\nThe previous output was invalid. Repair it and output valid JSON only.`,
+                JSON.stringify({
+                    prompt,
+                    referenceMode,
+                    targetLanguage: outputLanguage === 'zh' ? 'Simplified Chinese' : 'English',
+                    invalidOutput: invalidJson.slice(0, 4_000),
+                }),
             );
             return this.parseSpec(repaired.text);
         } catch {
@@ -462,7 +504,11 @@ export class ImagePromptEngineService {
         }
     }
 
-    private async recommendEnabledModel(ctx: RequestContext, spec: ImagePromptSpec) {
+    private async recommendEnabledModel(
+        ctx: RequestContext,
+        spec: ImagePromptSpec,
+        outputLanguage: PromptOutputLanguage,
+    ) {
         const preferred = this.rules.recommendation(spec);
         const { models } = await this.configService.shopConfig(ctx);
         const healthy = models;
@@ -475,8 +521,12 @@ export class ImagePromptEngineService {
             model: selected,
             reason:
                 selected.code === preferred.modelCode
-                    ? preferred.reasonZh
-                    : `推荐模型当前不可用，已选择可用的 ${selected.displayNameZh}`,
+                    ? outputLanguage === 'zh'
+                        ? preferred.reasonZh
+                        : preferred.reasonEn
+                    : outputLanguage === 'zh'
+                      ? `推荐模型当前不可用，已选择可用的 ${selected.displayNameZh}`
+                      : `The recommended model is unavailable. Using ${selected.displayNameEn} instead.`,
         };
     }
 
@@ -486,6 +536,22 @@ export class ImagePromptEngineService {
         if (!customer) throw new UserInputError('找不到当前客户');
         return customer;
     }
+}
+
+export function optimizerSystemPrompt(language: PromptOutputLanguage): string {
+    const languageInstruction =
+        language === 'zh'
+            ? [
+                  'Write subject, scene, composition, lighting, camera, style, colors, materials, preserve,',
+                  'and avoid entirely in Simplified Chinese. Do not mix in English except for exact user',
+                  'text, brand names, product names, and model names.',
+              ].join(' ')
+            : [
+                  'Write subject, scene, composition, lighting, camera, style, colors, materials, preserve,',
+                  'and avoid entirely in English. Do not mix in another language except for exact user text,',
+                  'brand names, product names, and model names.',
+              ].join(' ');
+    return `${OPTIMIZER_SYSTEM_PROMPT_BASE}\n${languageInstruction}`;
 }
 
 export async function firstSuccessfulPromptProvider<T>(

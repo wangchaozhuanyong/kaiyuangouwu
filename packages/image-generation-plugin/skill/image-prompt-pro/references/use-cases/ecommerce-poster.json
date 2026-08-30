@@ -6,5 +6,11 @@
         "lighting": "polished campaign lighting",
         "style": "conversion-focused ecommerce poster"
     },
-    "avoid": ["invented price", "invented promotion", "misspelled exact text", "unreadable typography"]
+    "defaultsZh": {
+        "composition": "标题层级清晰，以商品为视觉中心，合理安排优惠信息区和行动号召",
+        "lighting": "精致统一的广告光线",
+        "style": "注重转化的电商海报视觉"
+    },
+    "avoid": ["invented price", "invented promotion", "misspelled exact text", "unreadable typography"],
+    "avoidZh": ["虚构价格", "虚构促销信息", "指定文字拼写错误", "难以辨认的排版"]
 }

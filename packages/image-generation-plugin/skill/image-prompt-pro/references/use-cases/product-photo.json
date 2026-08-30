@@ -6,10 +6,16 @@
         "lighting": "controlled commercial lighting",
         "style": "credible ecommerce photography"
     },
+    "defaultsZh": {
+        "composition": "商品层级清晰，并保留经过设计的留白",
+        "lighting": "可控且专业的商业摄影光线",
+        "style": "真实可信的电商商品摄影"
+    },
     "avoid": [
         "invented branding",
         "invented certification",
         "incorrect packaging text",
         "warped product geometry"
-    ]
+    ],
+    "avoidZh": ["虚构品牌信息", "虚构认证信息", "包装文字错误", "商品结构变形"]
 }

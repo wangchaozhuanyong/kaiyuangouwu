@@ -6,5 +6,11 @@
         "lighting": "coherent stylized lighting",
         "style": "intentional editorial illustration"
     },
-    "avoid": ["unrequested text", "muddy hierarchy", "accidental signature", "visual clutter"]
+    "defaultsZh": {
+        "composition": "轮廓清晰，视觉层级明确",
+        "lighting": "协调统一的风格化光线",
+        "style": "构思明确的编辑插画风格"
+    },
+    "avoid": ["unrequested text", "muddy hierarchy", "accidental signature", "visual clutter"],
+    "avoidZh": ["未要求的文字", "层级模糊", "意外签名", "视觉杂乱"]
 }

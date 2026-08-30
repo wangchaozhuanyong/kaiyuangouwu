@@ -6,5 +6,11 @@
         "lighting": "physically plausible daylight and practical lights",
         "style": "high-end photoreal interior visualization"
     },
-    "avoid": ["impossible geometry", "floating furniture", "blocked circulation", "inconsistent shadows"]
+    "defaultsZh": {
+        "composition": "建筑结构合理的广角构图",
+        "lighting": "符合物理规律的自然光与室内实用光源",
+        "style": "高端写实室内设计效果图"
+    },
+    "avoid": ["impossible geometry", "floating furniture", "blocked circulation", "inconsistent shadows"],
+    "avoidZh": ["不合理的空间结构", "悬浮家具", "动线受阻", "阴影不一致"]
 }
