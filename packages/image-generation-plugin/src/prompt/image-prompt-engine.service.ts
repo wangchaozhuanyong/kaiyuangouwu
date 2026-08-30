@@ -3,11 +3,13 @@ import {
     Customer,
     CustomerService,
     RequestContext,
+    RequestContextService,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
 import { ReferralWalletSpendService } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
+import { LessThan } from 'typeorm';
 
 import { MAX_PROMPT_LENGTH } from '../constants';
 import { ImageGenerationConfig } from '../entities/image-generation-config.entity';
@@ -47,6 +49,7 @@ export class ImagePromptEngineService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
+        private readonly requestContextService: RequestContextService,
         private readonly configService: ImageGenerationConfigService,
         private readonly quota: ImageUsageQuotaService,
         private readonly walletSpend: ReferralWalletSpendService,
@@ -243,6 +246,53 @@ export class ImagePromptEngineService {
             paidPrice: paidPrice.amount,
             currencyCode: paidPrice.currencyCode,
         };
+    }
+
+    async recoverPendingOptimizations(cutoff = new Date(Date.now() - 5 * 60_000)): Promise<number> {
+        const stale = await this.connection.rawConnection.getRepository(ImagePromptOptimization).find({
+            where: { source: 'PENDING', updatedAt: LessThan(cutoff) },
+            relations: { channel: true },
+            take: 100,
+        });
+        let recovered = 0;
+        for (const pending of stale) {
+            const ctx = await this.requestContextService.create({
+                apiType: 'admin',
+                channelOrToken: pending.channel,
+            });
+            const changed = await this.connection.withTransaction(ctx, async txCtx => {
+                const repository = this.connection.getRepository(txCtx, ImagePromptOptimization);
+                const record = await repository.findOne({ where: { id: pending.id, source: 'PENDING' } });
+                if (!record) return false;
+                if (record.billingMode === 'FREE' && record.quotaEventId) {
+                    await this.quota.release(txCtx, record.quotaEventId, 1);
+                    record.billingMode = 'RELEASED';
+                } else if (record.billingMode === 'PAID' && record.walletUsageId) {
+                    await this.walletSpend.release(txCtx, {
+                        usageId: record.walletUsageId,
+                        amount: record.chargedAmount,
+                        operationKey: `PROMPT_STALE_RELEASE:${String(record.id)}`,
+                        actorType: 'SYSTEM',
+                        metadata: { reason: '提示词优化进程中断，已使用本地规则恢复' },
+                    });
+                    record.billingMode = 'REFUNDED';
+                    record.chargedAmount = 0;
+                }
+                const referenceMode = normalizeReferenceMode(
+                    record.promptSpec?.referenceMode as ImageReferenceMode | undefined,
+                );
+                const fallback = this.rules.fallbackSpec(record.inputPrompt, referenceMode);
+                record.promptSpec = fallback;
+                record.optimizedPrompt = this.rules.render(fallback);
+                record.source = 'FALLBACK';
+                record.errorMessage = '提示词优化处理超时，已使用本地规则恢复且释放预占额度';
+                record.latencyMs = Math.min(2_147_483_647, Date.now() - record.createdAt.getTime());
+                await repository.save(record, { reload: false });
+                return true;
+            });
+            if (changed) recovered += 1;
+        }
+        return recovered;
     }
 
     private async optimizationResult(

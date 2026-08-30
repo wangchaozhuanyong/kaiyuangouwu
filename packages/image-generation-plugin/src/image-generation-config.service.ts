@@ -2,10 +2,11 @@ import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
-import { In } from 'typeorm';
+import { In, MoreThanOrEqual } from 'typeorm';
 
 import { IMAGE_GENERATION_OPTIONS, launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
+import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
@@ -147,6 +148,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 textModelId: '',
                 providerHealthStatus: 'UNCONFIGURED',
                 providerHealthMessage: null,
+                providerRuntimeStatus: 'NO_RECENT_CALLS',
+                lastRuntimeOutcome: null,
+                lastRuntimeAt: null,
+                recentAttempts: 0,
+                recentSuccessRate: 0,
                 priority: 100,
                 weight: 1,
                 cooldownUntil: null,
@@ -169,6 +175,26 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             bindingsQuery.andWhere('model.channelId = :channelId', { channelId: ctx.channelId });
         }
         const bindings = await bindingsQuery.getMany();
+        const costRepository = ctx
+            ? this.connection.getRepository(ctx, ImageGenerationCostEvent)
+            : this.connection.rawConnection.getRepository(ImageGenerationCostEvent);
+        const recentCosts = await costRepository.find({
+            where: {
+                credentialCodeSnapshot: credential.code,
+                createdAt: MoreThanOrEqual(new Date(Date.now() - 24 * 60 * 60 * 1_000)),
+                ...(ctx ? { channelId: ctx.channelId } : {}),
+            },
+            order: { createdAt: 'DESC' },
+            take: 1_000,
+        });
+        const recentSuccesses = recentCosts.filter(cost => cost.outcome === 'SUCCEEDED').length;
+        const recentSuccessRate = recentCosts.length ? recentSuccesses / recentCosts.length : 0;
+        const latestCost = recentCosts[0];
+        const providerRuntimeStatus = !latestCost
+            ? 'NO_RECENT_CALLS'
+            : latestCost.outcome !== 'SUCCEEDED' || recentSuccessRate < 0.9
+              ? 'FLUCTUATING'
+              : 'STABLE';
         return {
             id: credential.id,
             code: credential.code,
@@ -182,11 +208,18 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             textModelId: credential?.textModelId ?? '',
             providerHealthStatus: credential?.healthStatus ?? 'UNCONFIGURED',
             providerHealthMessage: credential?.healthMessage ?? null,
+            providerRuntimeStatus,
+            lastRuntimeOutcome: latestCost?.outcome ?? null,
+            lastRuntimeAt: latestCost?.createdAt ?? null,
+            recentAttempts: recentCosts.length,
+            recentSuccessRate,
             priority: credential.priority,
             weight: credential.weight,
             cooldownUntil: credential.cooldownUntil,
             lastUsedAt: credential.lastUsedAt,
-            modelCodes: bindings.map(binding => binding.modelConfig.code),
+            modelCodes: bindings
+                .map(binding => binding.modelConfig.code)
+                .filter(code => !retiredLaunchModelCodes.has(code)),
         };
     }
 
@@ -425,7 +458,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         return this.providerAdminView(ctx, credential);
     }
 
-    async testCredential(ctx: RequestContext, id: ID) {
+    async testCredential(ctx: RequestContext, id: ID, enableOnSuccess = false) {
         const credential = await this.connection.getRepository(ctx, ImageProviderCredential).findOne({
             where: { id },
         });
@@ -436,6 +469,8 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         credential.healthMessage = result.message.slice(0, 500);
         credential.consecutiveFailures = result.ok ? 0 : credential.consecutiveFailures + 1;
         credential.cooldownUntil = null;
+        if (result.ok && enableOnSuccess) credential.enabled = true;
+        if (!result.ok) credential.enabled = false;
         await this.connection.getRepository(ctx, ImageProviderCredential).save(credential, { reload: false });
         return { ...result, testedAt: credential.lastTestedAt };
     }

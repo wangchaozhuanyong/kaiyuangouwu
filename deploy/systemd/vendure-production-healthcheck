@@ -35,6 +35,10 @@ if ! curl --fail --silent --show-error --max-time 10 https://damatong.net/health
     failures+=("public-health-failed")
 fi
 
+if ! curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null; then
+    failures+=("image-generation-health-failed")
+fi
+
 latest_backup_file="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
 latest_backup_epoch=""
 if [[ -n "${latest_backup_file}" ]]; then

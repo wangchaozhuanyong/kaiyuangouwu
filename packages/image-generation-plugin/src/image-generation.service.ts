@@ -821,7 +821,9 @@ export class ImageGenerationService {
         await this.connection
             .getRepository(ctx, ImageGenerationJob)
             .update({ id: job.id }, { customerDeletedAt: job.customerDeletedAt });
-        if (job.referenceAssetId) await this.storage.deleteOwned(ctx, job.referenceAssetId, customer.id);
+        for (const referenceAssetId of storedReferenceAssetIds(job)) {
+            await this.storage.deleteOwned(ctx, referenceAssetId, customer.id);
+        }
         return true;
     }
 
@@ -844,7 +846,9 @@ export class ImageGenerationService {
             for (const output of job.outputs) {
                 if (output.assetId) await this.storage.deleteOwned(ctx, output.assetId, customerId);
             }
-            if (job.referenceAssetId) await this.storage.deleteOwned(ctx, job.referenceAssetId, customerId);
+            for (const referenceAssetId of storedReferenceAssetIds(job)) {
+                await this.storage.deleteOwned(ctx, referenceAssetId, customerId);
+            }
         }
         return this.connection.withTransaction(ctx, async txCtx => {
             const promptResult = await this.connection
@@ -883,7 +887,7 @@ export class ImageGenerationService {
                     .getRepository(txCtx, ImageGenerationOutput)
                     .update(
                         { jobId: job.id },
-                        { providerRequestId: null, errorMessage: null, assetId: null },
+                        { providerRequestId: null, errorMessage: null, failureCode: null, assetId: null },
                     );
             }
             const event = await this.connection.getRepository(txCtx, ImageComplianceAuditEvent).save(
@@ -934,16 +938,20 @@ export class ImageGenerationService {
         ) {
             throw new UserInputError('中转站账号或地址已更换，不能使用旧幂等键重试');
         }
-        const transition = await this.connection
-            .getRepository(ctx, ImageGenerationOutput)
-            .update(
-                { id: output.id, state: 'UNKNOWN', walletSettled: false },
-                { state: 'QUEUED', unknownAt: null, errorMessage: '管理员确认后使用相同幂等键重试' },
-            );
+        const transition = await this.connection.getRepository(ctx, ImageGenerationOutput).update(
+            { id: output.id, state: 'UNKNOWN', walletSettled: false },
+            {
+                state: 'QUEUED',
+                unknownAt: null,
+                errorMessage: '管理员确认后使用相同幂等键重试',
+                failureCode: null,
+            },
+        );
         if (transition.affected !== 1) throw new UserInputError('该输出状态已变更，请刷新后重试');
         output.state = 'QUEUED';
         output.unknownAt = null;
         output.errorMessage = '管理员确认后使用相同幂等键重试';
+        output.failureCode = null;
         await this.connection.getRepository(ctx, ImageGenerationDispatch).upsert(
             {
                 outputId: output.id,
@@ -951,6 +959,10 @@ export class ImageGenerationService {
                 attemptCount: 0,
                 nextAttemptAt: new Date(),
                 dispatchedAt: null,
+                queueTaskId: null,
+                processingStage: null,
+                heartbeatAt: null,
+                stagedAssetId: null,
                 lastError: null,
             },
             ['outputId'],
@@ -1005,13 +1017,18 @@ export class ImageGenerationService {
         return output;
     }
 
-    async failQueuedOutput(ctx: RequestContext, outputId: ID, message: string): Promise<void> {
+    async failQueuedOutput(
+        ctx: RequestContext,
+        outputId: ID,
+        message: string,
+        failureCode?: string,
+    ): Promise<void> {
         const output = await this.connection.getRepository(ctx, ImageGenerationOutput).findOne({
             where: { id: outputId },
             relations: { job: true },
         });
         if (!output) return;
-        await this.transitionAndRelease(ctx, output.job, output, ['QUEUED'], 'FAILED', message);
+        await this.transitionAndRelease(ctx, output.job, output, ['QUEUED'], 'FAILED', message, failureCode);
         await this.refreshJob(ctx, output.jobId);
     }
 
@@ -1068,7 +1085,12 @@ export class ImageGenerationService {
         });
     }
 
-    async failRunningOutput(ctx: RequestContext, outputId: ID, message: string): Promise<boolean> {
+    async failRunningOutput(
+        ctx: RequestContext,
+        outputId: ID,
+        message: string,
+        failureCode?: string,
+    ): Promise<boolean> {
         const output = await this.connection.getRepository(ctx, ImageGenerationOutput).findOne({
             where: { id: outputId },
             relations: { job: true },
@@ -1081,6 +1103,7 @@ export class ImageGenerationService {
             ['RUNNING'],
             'FAILED',
             message,
+            failureCode,
         );
         await this.refreshJob(ctx, output.jobId);
         return failed;
@@ -1123,6 +1146,7 @@ export class ImageGenerationService {
                 ['UNKNOWN'],
                 'FAILED',
                 '中转站结果在 15 分钟内无法确认，已自动退回本张费用',
+                'UNKNOWN_RESULT',
             );
             if (released) await this.refreshJob(ctx, output.jobId);
         }
@@ -1145,6 +1169,7 @@ export class ImageGenerationService {
                 {
                     state: 'UNKNOWN',
                     unknownAt: output.updatedAt,
+                    failureCode: 'UNKNOWN_RESULT',
                     errorMessage: '生图任务超过 15 分钟仍未返回结果，系统正在核对并释放费用',
                 },
             );
@@ -1267,6 +1292,7 @@ export class ImageGenerationService {
         fromStates: string[],
         targetState: 'FAILED' | 'CANCELLED',
         message: string,
+        failureCode?: string,
     ): Promise<boolean> {
         return this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ImageGenerationOutput);
@@ -1276,6 +1302,7 @@ export class ImageGenerationService {
                 {
                     state: targetState,
                     errorMessage: message.slice(0, 500),
+                    failureCode: failureCode?.slice(0, 48) ?? output.failureCode,
                     completedAt,
                     walletSettled: true,
                     billingMode: 'RELEASED',
@@ -1285,6 +1312,7 @@ export class ImageGenerationService {
             if (transition.affected !== 1) return false;
             output.state = targetState;
             output.errorMessage = message.slice(0, 500);
+            output.failureCode = failureCode?.slice(0, 48) ?? output.failureCode;
             output.completedAt = completedAt;
             output.walletSettled = true;
             output.billingMode = 'RELEASED';
@@ -1294,7 +1322,7 @@ export class ImageGenerationService {
     }
 
     async refreshJob(ctx: RequestContext, jobId: ID): Promise<void> {
-        let terminalReferenceAssetId: ID | null = null;
+        let terminalReferenceAssetIds: string[] = [];
         await this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ImageGenerationJob);
             if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
@@ -1340,39 +1368,36 @@ export class ImageGenerationService {
             job.state = settlement.state;
             job.completedAt = settlement.terminal ? (job.completedAt ?? new Date()) : null;
             await repository.save(job, { reload: false });
-            terminalReferenceAssetId = settlement.terminal ? job.referenceAssetId : null;
+            terminalReferenceAssetIds = settlement.terminal ? storedReferenceAssetIds(job) : [];
         });
-        const referenceAssetId = terminalReferenceAssetId;
-        if (referenceAssetId) {
-            await this.connection.withTransaction(ctx, async txCtx => {
-                if (supportsGenerationLock(this.connection.rawConnection.options.type)) {
-                    await this.connection
-                        .getRepository(txCtx, ImagePrivateAsset)
-                        .createQueryBuilder('asset')
-                        .setLock('pessimistic_write')
-                        .where('asset.id = :id', { id: referenceAssetId })
-                        .getOne();
-                }
-                const activeJobs = await this.connection.getRepository(txCtx, ImageGenerationJob).count({
-                    where: {
-                        channelId: txCtx.channelId,
-                        referenceAssetId,
-                        state: In(['QUEUED', 'RUNNING', 'UNKNOWN']),
-                    },
-                });
-                if (activeJobs === 0) {
-                    await this.storage.expireReferenceAfterTerminal(txCtx, referenceAssetId);
-                }
+        if (!terminalReferenceAssetIds.length) return;
+        await this.connection.withTransaction(ctx, async txCtx => {
+            const activeJobs = await this.connection.getRepository(txCtx, ImageGenerationJob).find({
+                where: {
+                    channelId: txCtx.channelId,
+                    state: In(['QUEUED', 'RUNNING', 'UNKNOWN']),
+                },
+                select: { id: true, referenceAssetId: true, promptSpec: true },
             });
-        }
+            const activeReferenceIds = new Set(activeJobs.flatMap(storedReferenceAssetIds));
+            for (const referenceAssetId of terminalReferenceAssetIds) {
+                if (activeReferenceIds.has(String(referenceAssetId))) continue;
+                await this.storage.expireReferenceAfterTerminal(txCtx, referenceAssetId);
+            }
+        });
     }
 
     jobView(job: ImageGenerationJob, customerId: ID) {
+        const outputs = job.outputs ?? [];
         return {
             ...job,
+            errorMessage:
+                outputs.map(publicOutputError).find((message): message is string => Boolean(message)) ?? null,
             referenceAsset: job.referenceAsset ? this.assetView(job.referenceAsset, customerId) : null,
-            outputs: (job.outputs ?? []).map(output => ({
+            outputs: outputs.map(output => ({
                 ...output,
+                providerRequestId: null,
+                errorMessage: publicOutputError(output),
                 width: output.asset?.width ?? null,
                 height: output.asset?.height ?? null,
                 imageUrl: output.asset ? this.storage.signedUrl(output.asset, customerId) : null,
@@ -1878,6 +1903,33 @@ function storedReferenceAssetIds(job: ImageGenerationJob): string[] {
 function storedReferenceInstruction(job: ImageGenerationJob): string {
     const value = job.promptSpec?.referenceInstruction;
     return typeof value === 'string' ? value : '';
+}
+
+function publicOutputError(output: ImageGenerationOutput): string | null {
+    if (!output.errorMessage) return null;
+    if (output.failureCode === 'UNKNOWN_RESULT' && output.state === 'FAILED') {
+        return '生成结果在 15 分钟内无法确认，已自动退回本张费用';
+    }
+    return (
+        (
+            {
+                QUEUE_DISPATCH: '任务暂时无法进入队列，本张费用已退回，请稍后重试',
+                CREDENTIAL_UNAVAILABLE: '当前生图服务暂不可用，本张费用已退回，请稍后重试',
+                UPSTREAM_AUTH: '当前生图服务暂不可用，本张费用已退回，请稍后重试',
+                UPSTREAM_RATE_LIMIT: '生图服务繁忙，系统将稍后重试',
+                UPSTREAM_TIMEOUT: '生成结果暂时无法确认，系统正在核对，请勿重复提交',
+                UPSTREAM_NETWORK: '生成结果暂时无法确认，系统正在核对，请勿重复提交',
+                UPSTREAM_HTTP: '生成结果暂时无法确认，系统正在核对，请勿重复提交',
+                UPSTREAM_INVALID_RESPONSE: '生图服务返回异常，本张费用已退回，请稍后重试',
+                LOCAL_IMAGE_PROCESSING: '图片处理失败，本张费用已退回，请稍后重试',
+                IMAGE_TOO_LARGE: '生成图片超过平台大小限制，本张费用已退回',
+                IMAGE_RESOLUTION_MISMATCH: '生成图片尺寸不符合所选规格，本张费用已退回',
+                STORAGE: '图片保存失败，本张费用已退回，请稍后重试',
+                SETTLEMENT: '图片已生成，系统正在恢复结算',
+                UNKNOWN_RESULT: '生成结果暂时无法确认，系统正在核对，请勿重复提交',
+            } as Record<string, string>
+        )[output.failureCode ?? ''] ?? '图片生成未成功，本张费用已释放，请稍后重试'
+    );
 }
 
 function normalizeReferenceMode(value?: ImageReferenceMode | null): ImageReferenceMode {

@@ -63,7 +63,10 @@ export const MAX_REFERENCE_UPLOADS_PER_DAY = 30;
 export const MAX_ACTIVE_REFERENCE_ASSETS = 10;
 export const MAX_ACTIVE_REFERENCE_BYTES = 100 * 1024 * 1024;
 export const IMAGE_DISPATCH_MAX_AGE_MS = 15 * 60 * 1_000;
+export const IMAGE_DISPATCH_REQUEUE_AGE_MS = 2 * 60 * 1_000;
 export const IMAGE_UNKNOWN_MAX_AGE_MS = 15 * 60 * 1_000;
+export const IMAGE_WORKER_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
+export const IMAGE_WORKER_STALE_AFTER_MS = 90 * 1_000;
 // Image providers commonly take longer than ordinary metadata/text APIs. Keep this
 // below the 15-minute stale-output guard so a live worker finishes before reconciliation.
 export const IMAGE_GENERATION_DELIVERY_TIMEOUT_MS = 10 * 60 * 1_000;

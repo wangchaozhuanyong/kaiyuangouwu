@@ -145,10 +145,18 @@ function ImageGenerationSettingsPage() {
     const [jobState, setJobState] = useState('');
     const [jobBilling, setJobBilling] = useState('');
     const [jobFrom, setJobFrom] = useState('');
+    const [jobPage, setJobPage] = useState(0);
     const [usagePage, setUsagePage] = useState(0);
     const [selectedUsage, setSelectedUsage] = useState<{ recordType: string; id: string } | null>(null);
     const operationsQuery = useQuery({
-        queryKey: ['image-generation-operations', activeChannel?.id, activeTab, historyView],
+        queryKey: [
+            'image-generation-operations',
+            activeChannel?.id,
+            activeTab,
+            historyView,
+            jobPage,
+            jobState,
+        ],
         enabled:
             Boolean(activeChannel?.id) &&
             (activeTab === 'prompts' || activeTab === 'jobs' || activeTab === 'costs'),
@@ -158,8 +166,15 @@ function ImageGenerationSettingsPage() {
                 includeCosts: activeTab === 'costs',
                 includeSkills: activeTab === 'prompts',
                 includePromptAudit: activeTab === 'jobs' && historyView === 'prompts',
+                jobSkip: jobPage * 30,
+                jobTake: 30,
+                jobState: jobState || null,
             }),
+        refetchInterval: activeTab === 'jobs' && historyView === 'generation' ? 5_000 : false,
     });
+    useEffect(() => {
+        setJobPage(0);
+    }, [jobSearch, jobState, jobBilling, jobFrom]);
     useEffect(() => {
         setUsagePage(0);
     }, [
@@ -405,6 +420,25 @@ function ImageGenerationSettingsPage() {
             truncated: false,
             items: [],
         },
+        imageGenerationReliabilitySummary: operationsQuery.data?.imageGenerationReliabilitySummary ?? {
+            workerStatus: 'MISSING',
+            workerHeartbeatAt: null,
+            workerStale: true,
+            lastReconcileAt: null,
+            oldestQueuedAt: null,
+            queuedOutputs: 0,
+            activeOutputs: 0,
+            attempts24h: 0,
+            successes24h: 0,
+            failures24h: 0,
+            unknowns24h: 0,
+            successRate: 0,
+            unknownRate: 0,
+            missingCostCount: 0,
+            missingCostRate: 0,
+            failureBuckets: [],
+            keyRedundancy: [],
+        },
         imagePromptSkillReleases: operationsQuery.data?.imagePromptSkillReleases ?? [],
         imagePromptOptimizationAudit: operationsQuery.data?.imagePromptOptimizationAudit ?? {
             items: [],
@@ -513,6 +547,7 @@ function ImageGenerationSettingsPage() {
                                 />
                                 <Field label="默认模型">
                                     <select
+                                        aria-label="默认模型"
                                         className="h-9 w-full rounded-md border bg-background px-3"
                                         value={draft.defaultModelCode}
                                         onChange={event => setDefaultModel(event.target.value)}
@@ -848,71 +883,152 @@ function ImageGenerationSettingsPage() {
                 ) : null}
 
                 {activeTab === 'costs' ? (
-                    <PageBlock
-                        column="full"
-                        blockId="image-cost-audit"
-                        title="近 30 天成本对账"
-                        description="销售额是成功图的原始售价合计（未减人工退款）；上游成本仅在中转站返回费用字段时可对账，不同币种不自动换算。"
-                    >
-                        {data.imageGenerationCostSummary.truncated ? (
-                            <Alert className="mb-3">
-                                <AlertDescription>记录超过 20,000 条，当前仅展示截断统计。</AlertDescription>
-                            </Alert>
-                        ) : null}
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b text-left">
-                                        <th className="p-2">模型</th>
-                                        <th>请求/成功</th>
-                                        <th>重试/未知/失败</th>
-                                        <th>原始销售额</th>
-                                        <th>上游成本</th>
-                                        <th>缺失成本</th>
-                                        <th>平均耗时</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.imageGenerationCostSummary.items.map(item => (
-                                        <tr
-                                            key={`${item.modelCode}:${item.saleCurrencyCode}:${item.costCurrency}`}
-                                            className="border-b"
-                                        >
-                                            <td className="p-2">
-                                                {item.modelCode}
-                                                <div className="text-xs text-muted-foreground">
-                                                    {item.providerScope}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                {item.attempts} / {item.successes}
-                                            </td>
-                                            <td>
-                                                {item.retries} / {item.unknowns} / {item.failures}
-                                            </td>
-                                            <td>
-                                                {minorToMajor(item.grossRevenue, item.saleCurrencyCode)}{' '}
-                                                {item.saleCurrencyCode}
-                                            </td>
-                                            <td>
-                                                {item.actualCost.toFixed(6)} {item.costCurrency}
-                                            </td>
-                                            <td>{item.missingCostCount}</td>
-                                            {/* i18n-audit-ignore -- Fixed latency unit. */}
-                                            <td>{item.averageLatencyMs}ms</td>
+                    <>
+                        <PageBlock
+                            column="full"
+                            blockId="image-reliability-summary"
+                            title="近 24 小时可靠性"
+                            description="Worker 存活、队列积压、真实调用结果和 Key 冗余分开统计；配置健康不等于近期调用稳定。"
+                        >
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                {[
+                                    [
+                                        'Worker',
+                                        data.imageGenerationReliabilitySummary.workerStale
+                                            ? '异常或无心跳'
+                                            : data.imageGenerationReliabilitySummary.workerStatus,
+                                    ],
+                                    [
+                                        '队列 / 活动',
+                                        `${data.imageGenerationReliabilitySummary.queuedOutputs} / ${data.imageGenerationReliabilitySummary.activeOutputs}`,
+                                    ],
+                                    [
+                                        '成功率',
+                                        percentage(data.imageGenerationReliabilitySummary.successRate),
+                                    ],
+                                    [
+                                        'UNKNOWN / 成本缺失',
+                                        `${percentage(
+                                            data.imageGenerationReliabilitySummary.unknownRate,
+                                        )} / ${percentage(
+                                            data.imageGenerationReliabilitySummary.missingCostRate,
+                                        )}`,
+                                    ],
+                                ].map(([label, value]) => (
+                                    <div key={label} className="rounded-lg border bg-muted/20 p-3">
+                                        <div className="text-xs text-muted-foreground">{label}</div>
+                                        <div className="mt-1 text-lg font-medium tabular-nums">{value}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            {data.imageGenerationReliabilitySummary.workerStale ? (
+                                <Alert className="mt-3">
+                                    <AlertDescription>
+                                        AI Worker 超过 90 秒没有心跳，请检查 Worker 进程和队列消费；仅 PM2
+                                        在线不足以证明生图可用。
+                                    </AlertDescription>
+                                </Alert>
+                            ) : null}
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {data.imageGenerationReliabilitySummary.keyRedundancy.map(item => (
+                                    <Badge key={item.scope} variant={item.warning ? 'warning' : 'success'}>
+                                        {providerName(item.scope as 'OPENAI' | 'GEMINI')}：
+                                        {item.healthyKeyCount} 个健康 Key
+                                        {item.warning ? ` · ${item.warning}` : ''}
+                                    </Badge>
+                                ))}
+                                {data.imageGenerationReliabilitySummary.failureBuckets.map(item => (
+                                    <Badge key={item.code} variant="outline">
+                                        {item.code}：{item.count}
+                                    </Badge>
+                                ))}
+                            </div>
+                        </PageBlock>
+                        <PageBlock
+                            column="full"
+                            blockId="image-cost-audit"
+                            title="近 30 天成本对账"
+                            description="销售额是成功图的原始售价合计（未减人工退款）；上游成本仅在中转站返回费用字段时可对账，不同币种不自动换算。"
+                        >
+                            {data.imageGenerationCostSummary.truncated ? (
+                                <Alert className="mb-3">
+                                    <AlertDescription>
+                                        记录超过 20,000 条，当前仅展示截断统计。
+                                    </AlertDescription>
+                                </Alert>
+                            ) : null}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b text-left">
+                                            <th className="p-2">模型</th>
+                                            <th>请求/成功</th>
+                                            <th>重试/未知/失败</th>
+                                            <th>原始销售额</th>
+                                            <th>上游成本</th>
+                                            <th>缺失成本</th>
+                                            <th>平均耗时</th>
                                         </tr>
-                                    ))}
-                                    {!data.imageGenerationCostSummary.items.length ? (
-                                        <tr>
-                                            <td className="p-4 text-muted-foreground" colSpan={7}>
-                                                暂无真实生图成本记录。
-                                            </td>
-                                        </tr>
-                                    ) : null}
-                                </tbody>
-                            </table>
-                        </div>
-                    </PageBlock>
+                                    </thead>
+                                    <tbody>
+                                        {data.imageGenerationCostSummary.items.map(item => (
+                                            <tr
+                                                key={`${item.modelCode}:${item.saleCurrencyCode}:${item.costCurrency}`}
+                                                className="border-b"
+                                            >
+                                                <td className="p-2">
+                                                    {item.modelCode}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {item.providerScope}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {item.attempts} / {item.successes}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        成功率{' '}
+                                                        {percentage(
+                                                            item.attempts
+                                                                ? item.successes / item.attempts
+                                                                : 0,
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {item.retries} / {item.unknowns} / {item.failures}
+                                                </td>
+                                                <td>
+                                                    {minorToMajor(item.grossRevenue, item.saleCurrencyCode)}{' '}
+                                                    {item.saleCurrencyCode}
+                                                </td>
+                                                <td>
+                                                    {item.actualCost.toFixed(6)} {item.costCurrency}
+                                                </td>
+                                                <td>
+                                                    {item.missingCostCount}
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {percentage(
+                                                            item.attempts
+                                                                ? item.missingCostCount / item.attempts
+                                                                : 0,
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                {/* i18n-audit-ignore -- Fixed latency unit. */}
+                                                <td>{item.averageLatencyMs}ms</td>
+                                            </tr>
+                                        ))}
+                                        {!data.imageGenerationCostSummary.items.length ? (
+                                            <tr>
+                                                <td className="p-4 text-muted-foreground" colSpan={7}>
+                                                    暂无真实生图成本记录。
+                                                </td>
+                                            </tr>
+                                        ) : null}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </PageBlock>
+                    </>
                 ) : null}
 
                 {activeTab === 'prompts' ? (
@@ -1222,6 +1338,7 @@ function ImageGenerationSettingsPage() {
                                 </Field>
                                 <Field label="记录类型">
                                     <select
+                                        aria-label="记录类型"
                                         className="h-9 w-full rounded-md border bg-background px-3"
                                         value={usageType}
                                         onChange={event => setUsageType(event.target.value)}
@@ -1720,6 +1837,7 @@ function ImageGenerationSettingsPage() {
                                 </Field>
                                 <Field label="任务状态">
                                     <select
+                                        aria-label="任务状态"
                                         className="h-9 w-full rounded-md border bg-background px-3"
                                         value={jobState}
                                         onChange={event => setJobState(event.target.value)}
@@ -1742,6 +1860,7 @@ function ImageGenerationSettingsPage() {
                                 </Field>
                                 <Field label="计费类型">
                                     <select
+                                        aria-label="计费类型"
                                         className="h-9 w-full rounded-md border bg-background px-3"
                                         value={jobBilling}
                                         onChange={event => setJobBilling(event.target.value)}
@@ -1878,6 +1997,32 @@ function ImageGenerationSettingsPage() {
                                     </tbody>
                                 </table>
                             </div>
+                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                <span className="text-sm text-muted-foreground">
+                                    第 {jobPage + 1} 页 · 每页最多 30 条
+                                </span>
+                                <div className="flex gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={jobPage === 0 || operationsQuery.isFetching}
+                                        onClick={() => setJobPage(page => Math.max(0, page - 1))}
+                                    >
+                                        上一页
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={
+                                            operationsQuery.isFetching ||
+                                            (jobPage + 1) * 30 >= data.imageGenerationJobs.totalItems
+                                        }
+                                        onClick={() => setJobPage(page => page + 1)}
+                                    >
+                                        下一页
+                                    </Button>
+                                </div>
+                            </div>
                         </PageBlock>
                     </>
                 ) : null}
@@ -1992,6 +2137,9 @@ export function ImageGenerationAccessPage() {
                                         {summary.healthy ? '有可用 Key' : '暂无健康 Key'}
                                     </Badge>
                                 </div>
+                                {summary.image === 1 ? (
+                                    <div className="mt-2 text-xs text-amber-700">单 Key、无故障切换</div>
+                                ) : null}
                                 <div className="mt-3 grid grid-cols-4 gap-2 text-center">
                                     {[
                                         ['启用', summary.enabled],
@@ -2128,7 +2276,7 @@ function ProviderCredentialList({
         mutationFn: (id: string) =>
             api.mutate<{ testImageProviderCredential: { ok: boolean; message: string } }>(
                 testImageProviderMutation,
-                { id },
+                { id, enableOnSuccess: false },
             ),
         onSuccess: result => {
             (result.testImageProviderCredential.ok ? toast.success : toast.error)(
@@ -2412,7 +2560,10 @@ export function ProviderCredentialEditorSheet({
             }
             const testResult = await api.mutate<{
                 testImageProviderCredential: { ok: boolean; message: string };
-            }>(testImageProviderMutation, { id: savedResult.saveImageProviderCredential.id });
+            }>(testImageProviderMutation, {
+                id: savedResult.saveImageProviderCredential.id,
+                enableOnSuccess: draft.enabled,
+            });
             return {
                 testResult: testResult.testImageProviderCredential,
                 savedEnabled: savedCredential.credentialEnabled,
@@ -2437,7 +2588,7 @@ export function ProviderCredentialEditorSheet({
         mutationFn: () =>
             api.mutate<{ testImageProviderCredential: { ok: boolean; message: string } }>(
                 testImageProviderMutation,
-                { id: config.id },
+                { id: config.id, enableOnSuccess: false },
             ),
         onSuccess: result => {
             setTestFeedback(result.testImageProviderCredential);
@@ -2832,7 +2983,16 @@ function ProviderHealthBadge({
     config,
     status = credentialDisplayStatus(config),
 }: Readonly<{ config: ImageProviderAdminConfigRecord; status?: string }>) {
-    if (status === 'HEALTHY') return <Badge variant="success">{statusZh(status)}</Badge>;
+    if (status === 'HEALTHY') {
+        return (
+            <div className="flex flex-wrap gap-1">
+                <Badge variant="success">配置可路由</Badge>
+                {config.providerRuntimeStatus === 'FLUCTUATING' ? (
+                    <Badge variant="warning">近期调用波动</Badge>
+                ) : null}
+            </div>
+        );
+    }
     if (status === 'UNHEALTHY') return <Badge variant="destructive">{statusZh(status)}</Badge>;
     if (status === 'COOLDOWN') return <Badge variant="warning">{statusZh(status)}</Badge>;
     return <Badge variant="secondary">{statusZh(status)}</Badge>;
@@ -2935,6 +3095,9 @@ function providerHealthSummary(config: ImageProviderAdminConfigRecord): string {
     if (credentialDisplayStatus(config) === 'COOLDOWN') {
         return `冷却至 ${formatProviderDate(config.cooldownUntil)}`;
     }
+    if (config.providerRuntimeStatus === 'FLUCTUATING') {
+        return `近 24 小时 ${config.recentAttempts ?? 0} 次，成功率 ${percentage(config.recentSuccessRate ?? 0)}；最近 ${config.lastRuntimeOutcome ?? '未知'}`;
+    }
     return config.providerHealthMessage || '暂无详情';
 }
 
@@ -2980,12 +3143,21 @@ function emptyCredential(code: string): ImageProviderAdminConfigRecord {
         textModelId: '',
         providerHealthStatus: 'UNCONFIGURED',
         providerHealthMessage: null,
+        providerRuntimeStatus: 'NO_RECENT_CALLS',
+        lastRuntimeOutcome: null,
+        lastRuntimeAt: null,
+        recentAttempts: 0,
+        recentSuccessRate: 0,
         priority: 100,
         weight: 1,
         cooldownUntil: null,
         lastUsedAt: null,
         modelCodes: [],
     };
+}
+
+function percentage(value: number): string {
+    return `${(Math.max(0, Math.min(1, value)) * 100).toFixed(1)}%`;
 }
 
 function skillUseCaseZh(useCase: string): string {

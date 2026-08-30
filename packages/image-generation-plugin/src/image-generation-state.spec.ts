@@ -4,6 +4,9 @@ import {
     decideImageOutputFailure,
     deriveImageJobSettlement,
     hasStaleImageOutput,
+    imageOutboxRetryDelayMs,
+    interruptedImageStageAction,
+    preserveProviderCostTelemetry,
 } from './image-generation-state';
 
 describe('hasStaleImageOutput', () => {
@@ -123,5 +126,52 @@ describe('decideImageOutputFailure', () => {
         expect(
             decideImageOutputFailure({ retryable: false, ambiguous: false, attempts: 1, retries: 2 }),
         ).toBe('FAIL');
+    });
+});
+
+describe('interrupted image generation recovery', () => {
+    it('only retries before the provider request and never retries an unknown provider result', () => {
+        expect(interruptedImageStageAction('CLAIMED', 'RUNNING')).toBe('REQUEUE');
+        expect(interruptedImageStageAction('REQUEST_STARTED', 'RUNNING')).toBe('UNKNOWN');
+        expect(interruptedImageStageAction('RESPONSE_RECEIVED', 'RUNNING')).toBe('UNKNOWN');
+        expect(interruptedImageStageAction('ASSET_STORED', 'RUNNING')).toBe('SETTLE');
+        expect(interruptedImageStageAction('SETTLED', 'SUCCEEDED')).toBe('COMPLETE');
+    });
+
+    it('honors Retry-After, caps 429 delay and switches immediately after auth failures', () => {
+        expect(imageOutboxRetryDelayMs(429, 17)).toBe(17_000);
+        expect(imageOutboxRetryDelayMs(429, 900)).toBe(300_000);
+        expect(imageOutboxRetryDelayMs(401, 120)).toBe(0);
+        expect(imageOutboxRetryDelayMs(403)).toBe(0);
+    });
+
+    it('keeps provider telemetry when settlement recovery only changes the outcome', () => {
+        expect(
+            preserveProviderCostTelemetry(
+                {
+                    httpStatus: 200,
+                    providerRequestId: 'request-1',
+                    latencyMs: 53_700,
+                    actualCostMicrounits: 125_000,
+                    costCurrency: 'USD',
+                    usage: { images: 1 },
+                },
+                {
+                    httpStatus: null,
+                    providerRequestId: null,
+                    latencyMs: 0,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                    usage: null,
+                },
+            ),
+        ).toEqual({
+            httpStatus: 200,
+            providerRequestId: 'request-1',
+            latencyMs: 53_700,
+            actualCostMicrounits: 125_000,
+            costCurrency: 'USD',
+            usage: { images: 1 },
+        });
     });
 });

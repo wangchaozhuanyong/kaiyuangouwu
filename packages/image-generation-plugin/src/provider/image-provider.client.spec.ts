@@ -8,6 +8,7 @@ import {
     AmbiguousImageProviderError,
     DefinitiveImageProviderError,
     ImageProviderClient,
+    LocalImageProcessingError,
     RetryableImageProviderError,
 } from './image-provider.client';
 
@@ -152,9 +153,9 @@ describe('ImageProviderClient', () => {
     });
 
     it('keeps base64 image payloads out of persisted provider metadata', async () => {
-        const encoded = Buffer.from('fake-image-bytes').toString('base64');
+        const encoded = Buffer.from('fake-image-bytes'.repeat(16)).toString('base64');
         const fetchMock = vi.fn().mockResolvedValue(
-            new Response(JSON.stringify({ id: 'request-1', data: [{ b64_json: encoded.repeat(16) }] }), {
+            new Response(JSON.stringify({ id: 'request-1', data: [{ b64_json: encoded }] }), {
                 status: 200,
                 headers: { 'content-type': 'application/json' },
             }),
@@ -444,6 +445,227 @@ describe('ImageProviderClient', () => {
                 }),
             }),
         );
+    });
+
+    it('decodes a multi-megabyte Gemini 4K SSE image without a RegExp stack overflow', async () => {
+        const source = Buffer.alloc(7 * 1024 * 1024, 0xab);
+        const encoded = source.toString('base64');
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                [
+                    `data: ${JSON.stringify({ responseId: 'gemini-stream-4k', candidates: [] })}`,
+                    '',
+                    `data: ${JSON.stringify({
+                        candidates: [
+                            {
+                                content: {
+                                    parts: [
+                                        { text: 'Generated a square product image.' },
+                                        { inlineData: { mimeType: 'image/png', data: encoded } },
+                                    ],
+                                },
+                            },
+                        ],
+                        usageMetadata: { totalTokenCount: 2_520 },
+                    })}`,
+                    '',
+                    'data: [DONE]',
+                    '',
+                ].join('\n'),
+                {
+                    status: 200,
+                    headers: { 'content-type': 'text/event-stream', 'x-request-id': 'relay-stream-4k' },
+                },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        const result = await client.generate(credential, 'GEMINI_NATIVE_STREAM', {
+            providerModelId: 'gemini-3.1-flash-image',
+            prompt: 'square product campaign',
+            aspectRatio: '1:1',
+            resolution: '4K',
+            idempotencyKey: 'image-job-gemini-stream-4k',
+        });
+
+        expect(result.bytes.equals(source)).toBe(true);
+        expect(result).toMatchObject({
+            mimeType: 'image/png',
+            providerRequestId: 'gemini-stream-4k',
+            telemetry: {
+                httpStatus: 200,
+                providerRequestId: 'gemini-stream-4k',
+                usage: { totalTokenCount: 2_520 },
+            },
+        });
+        expect(JSON.stringify(result.metadata)).not.toContain(encoded.slice(0, 1_000));
+        const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+        expect(parseJsonRequestBody(init)).toEqual(
+            expect.objectContaining({
+                generationConfig: expect.objectContaining({
+                    imageConfig: { aspectRatio: '1:1', imageSize: '4K' },
+                }),
+            }),
+        );
+    }, 15_000);
+
+    it('keeps response telemetry when inline image decoding fails', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        id: 'invalid-image-response',
+                        data: [{ b64_json: 'not-valid-base64!!!' }],
+                    }),
+                    { status: 200, headers: { 'x-request-id': 'invalid-image-header' } },
+                ),
+            ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        try {
+            await client.generate(credential, 'OPENAI_IMAGES', {
+                providerModelId: 'gpt-image-2',
+                prompt: 'product photo',
+                aspectRatio: '1:1',
+                idempotencyKey: 'image-job-invalid-base64',
+            });
+            throw new Error('Expected generation to fail');
+        } catch (error) {
+            expect(error).toBeInstanceOf(DefinitiveImageProviderError);
+            expect((error as Error).message).toBe('中转站返回了无效的图片编码');
+            expect((error as DefinitiveImageProviderError).details).toEqual(
+                expect.objectContaining({ httpStatus: 200, providerRequestId: 'invalid-image-response' }),
+            );
+        }
+    });
+
+    it('converts unexpected local parsing failures into a safe error with telemetry', async () => {
+        const client = new ImageProviderClient(cipher, safeUrls);
+        const response = new Proxy<Record<string, unknown>>(
+            {},
+            {
+                ownKeys() {
+                    throw new RangeError('Maximum call stack size exceeded');
+                },
+            },
+        );
+        const invokeImageResult = client as unknown as {
+            imageResult(
+                value: unknown,
+                telemetry: { httpStatus: number; providerRequestId: string },
+            ): Promise<unknown>;
+        };
+
+        try {
+            await invokeImageResult.imageResult(response, {
+                httpStatus: 200,
+                providerRequestId: 'local-parser-response',
+            });
+            throw new Error('Expected generation to fail');
+        } catch (error) {
+            expect(error).toBeInstanceOf(LocalImageProcessingError);
+            expect((error as Error).message).toBe('中转站返回的图片无法解析');
+            expect((error as LocalImageProcessingError).sourceErrorName).toBe('RangeError');
+            expect((error as LocalImageProcessingError).details).toEqual({
+                httpStatus: 200,
+                providerRequestId: 'local-parser-response',
+            });
+        }
+    });
+
+    it('rejects decoded images above 25MB before allocating the output buffer', async () => {
+        const encoded = 'A'.repeat(Math.ceil((25 * 1024 * 1024) / 3) * 4 + 4);
+        vi.stubGlobal(
+            'fetch',
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(
+                        JSON.stringify({ id: 'oversized-image-response', data: [{ b64_json: encoded }] }),
+                        { status: 200 },
+                    ),
+                ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        await expect(
+            client.generate(credential, 'OPENAI_IMAGES', {
+                providerModelId: 'gpt-image-2',
+                prompt: 'oversized product photo',
+                aspectRatio: '1:1',
+                idempotencyKey: 'image-job-oversized-base64',
+            }),
+        ).rejects.toMatchObject({
+            message: '中转站图片超过 25MB',
+            details: { httpStatus: 200, providerRequestId: 'oversized-image-response' },
+        });
+    }, 15_000);
+
+    it('supports snake_case Gemini inline image parts', async () => {
+        const encoded = Buffer.from('snake-case-gemini-image'.repeat(16)).toString('base64');
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(
+                    `data: ${JSON.stringify({
+                        responseId: 'gemini-snake-case',
+                        candidates: [
+                            {
+                                content: {
+                                    parts: [{ inline_data: { mime_type: 'image/webp', data: encoded } }],
+                                },
+                            },
+                        ],
+                    })}\n\ndata: [DONE]\n\n`,
+                    { status: 200, headers: { 'content-type': 'text/event-stream' } },
+                ),
+            ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        await expect(
+            client.generate(credential, 'GEMINI_NATIVE_STREAM', {
+                providerModelId: 'gemini-3.1-flash-image',
+                prompt: 'product photo',
+                aspectRatio: '4:3',
+                resolution: '2K',
+                idempotencyKey: 'image-job-gemini-snake-case',
+            }),
+        ).resolves.toMatchObject({ mimeType: 'image/webp', providerRequestId: 'gemini-snake-case' });
+    });
+
+    it('rejects malformed Gemini SSE with HTTP telemetry intact', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response('data: {not-json}\n\n', {
+                    status: 200,
+                    headers: { 'content-type': 'text/event-stream', 'x-request-id': 'malformed-sse' },
+                }),
+            ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        try {
+            await client.generate(credential, 'GEMINI_NATIVE_STREAM', {
+                providerModelId: 'gemini-3.1-flash-image',
+                prompt: 'product photo',
+                aspectRatio: '1:1',
+                resolution: '4K',
+                idempotencyKey: 'image-job-malformed-sse',
+            });
+            throw new Error('Expected generation to fail');
+        } catch (error) {
+            expect(error).toBeInstanceOf(DefinitiveImageProviderError);
+            expect((error as Error).message).toBe('中转站返回了无效的 Gemini 流式数据');
+            expect((error as DefinitiveImageProviderError).details).toEqual({
+                httpStatus: 200,
+                providerRequestId: 'malformed-sse',
+            });
+        }
     });
 
     it('keeps an image request open beyond the ordinary 120-second API timeout', async () => {

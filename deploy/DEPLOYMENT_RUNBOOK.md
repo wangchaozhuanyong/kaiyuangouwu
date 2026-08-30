@@ -265,6 +265,7 @@ DEPLOYMENT_ID="${TARGET_SHA}-$(date -u +%Y%m%dT%H%M%SZ)"
 VENDURE_DEPLOYMENT_ID="${DEPLOYMENT_ID}" \
     /var/www/kaiyuangouwu/deploy/switch-production-runtime.sh "${CANDIDATE}"
 curl -fsS http://127.0.0.1:3002/health
+curl -fsS http://127.0.0.1:3002/image-generation/health
 pm2 save
 ```
 
@@ -330,7 +331,7 @@ sudo -n systemctl reload nginx
 6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 8. 记录当前稳定指针；数据库迁移只在生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。
-9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
+9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 与 `127.0.0.1:3002/image-generation/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
 10. 从候选产物预演并执行本次审核过的库存继承修复，再预演并执行店铺图片同步；两者写入都必须使用 `--apply --allow-remote`，成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。

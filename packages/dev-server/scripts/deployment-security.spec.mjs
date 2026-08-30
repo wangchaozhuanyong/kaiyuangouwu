@@ -168,6 +168,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     );
     assert.ok(script.includes(migrationReadinessCommand));
     assert.match(script, /switch-production-runtime\.sh/u);
+    assert.match(script, /127\.0\.0\.1:3002\/image-generation\/health/u);
+    assert.match(script, /candidate AI image worker health check did not pass/u);
+    assert.match(script, /vendure-production-healthcheck\.timer/u);
+    assert.match(script, /systemctl start vendure-production-healthcheck\.service/u);
     assert.match(script, /rollback 1/u);
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
@@ -250,6 +254,10 @@ void test('production swap setup is fixed-size, persistent, and low-swappiness',
 
 void test('scheduled production monitor checks memory, processes, and health through OIDC SSM', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/monitor-production-health.sh'), 'utf8');
+    const systemdHealthcheck = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-production-healthcheck'),
+        'utf8',
+    );
     const workflow = await readFile(
         path.join(repositoryRoot, '.github/workflows/monitor_production_health.yml'),
         'utf8',
@@ -258,12 +266,16 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /production-memory-guard\.cjs/u);
     assert.match(script, /--stage scheduled-monitor --check/u);
     assert.match(script, /127\.0\.0\.1:3002\/health/u);
+    assert.match(script, /127\.0\.0\.1:3002\/image-generation\/health/u);
+    assert.match(script, /AI_IMAGE_/u);
     assert.match(script, /https:\/\/damatong\.net\/health/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
     assert.match(script, /pm2 jlist/u);
     assert.match(script, /vendure-api/u);
     assert.match(script, /vendure-worker/u);
     assert.match(script, /PRODUCTION_HEALTH_MONITOR_OK/u);
+    assert.match(systemdHealthcheck, /127\.0\.0\.1:3002\/image-generation\/health/u);
+    assert.match(systemdHealthcheck, /image-generation-health-failed/u);
 
     assert.match(workflow, /schedule:/u);
     assert.match(workflow, /workflow_dispatch:/u);

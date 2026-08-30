@@ -14,11 +14,21 @@ export interface ImageJobSettlementSummary {
 }
 
 export type ImageOutputFailureDecision = 'RETRY' | 'UNKNOWN' | 'FAIL';
+export type InterruptedImageStageAction = 'REQUEUE' | 'UNKNOWN' | 'SETTLE' | 'COMPLETE' | 'IGNORE';
 
 export interface ImageOutputActivitySnapshot {
     state: string;
     unknownAt?: Date | null;
     updatedAt?: Date | null;
+}
+
+export interface ProviderCostTelemetrySnapshot {
+    httpStatus?: number | null;
+    providerRequestId?: string | null;
+    latencyMs: number;
+    actualCostMicrounits?: number | null;
+    costCurrency?: string | null;
+    usage?: unknown;
 }
 
 export function hasStaleImageOutput(outputs: readonly ImageOutputActivitySnapshot[], cutoff: Date): boolean {
@@ -39,6 +49,38 @@ export function decideImageOutputFailure(input: {
     if (input.retryable && input.attempts <= input.retries) return 'RETRY';
     if (input.ambiguous) return 'UNKNOWN';
     return 'FAIL';
+}
+
+export function interruptedImageStageAction(
+    stage: string | null | undefined,
+    outputState: string,
+): InterruptedImageStageAction {
+    if (stage === 'SETTLED' || outputState === 'SUCCEEDED') return 'COMPLETE';
+    if (outputState !== 'RUNNING') return 'IGNORE';
+    if (stage === 'CLAIMED') return 'REQUEUE';
+    if (stage === 'REQUEST_STARTED' || stage === 'RESPONSE_RECEIVED') return 'UNKNOWN';
+    if (stage === 'ASSET_STORED') return 'SETTLE';
+    return 'IGNORE';
+}
+
+export function imageOutboxRetryDelayMs(httpStatus?: number, retryAfterSeconds?: number): number {
+    if (httpStatus === 401 || httpStatus === 403) return 0;
+    return Math.min(300_000, Math.max(1, retryAfterSeconds ?? 60) * 1_000);
+}
+
+export function preserveProviderCostTelemetry<T extends ProviderCostTelemetrySnapshot>(
+    existing: T,
+    incoming: T,
+): T {
+    return {
+        ...incoming,
+        httpStatus: incoming.httpStatus ?? existing.httpStatus,
+        providerRequestId: incoming.providerRequestId ?? existing.providerRequestId,
+        latencyMs: Math.max(existing.latencyMs, incoming.latencyMs),
+        actualCostMicrounits: incoming.actualCostMicrounits ?? existing.actualCostMicrounits,
+        costCurrency: incoming.costCurrency ?? existing.costCurrency,
+        usage: incoming.usage ?? existing.usage,
+    };
 }
 
 /**

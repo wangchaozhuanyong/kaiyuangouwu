@@ -74,6 +74,11 @@ const providerConfigFields = gql`
         textModelId
         providerHealthStatus
         providerHealthMessage
+        providerRuntimeStatus
+        lastRuntimeOutcome
+        lastRuntimeAt
+        recentAttempts
+        recentSuccessRate
         priority
         weight
         cooldownUntil
@@ -112,8 +117,11 @@ export const imageGenerationOperationsQuery = gql`
         $includeCosts: Boolean!
         $includeSkills: Boolean!
         $includePromptAudit: Boolean!
+        $jobSkip: Int
+        $jobTake: Int
+        $jobState: ImageGenerationState
     ) {
-        imageGenerationJobs(take: 30) @include(if: $includeJobs) {
+        imageGenerationJobs(skip: $jobSkip, take: $jobTake, state: $jobState) @include(if: $includeJobs) {
             totalItems
             items {
                 id
@@ -153,6 +161,7 @@ export const imageGenerationOperationsQuery = gql`
                     providerRequestId
                     refundedAt
                     errorMessage
+                    failureCode
                 }
             }
         }
@@ -174,6 +183,32 @@ export const imageGenerationOperationsQuery = gql`
                 grossRevenue
                 actualCost
                 averageLatencyMs
+            }
+        }
+        imageGenerationReliabilitySummary @include(if: $includeCosts) {
+            workerStatus
+            workerHeartbeatAt
+            workerStale
+            lastReconcileAt
+            oldestQueuedAt
+            queuedOutputs
+            activeOutputs
+            attempts24h
+            successes24h
+            failures24h
+            unknowns24h
+            successRate
+            unknownRate
+            missingCostCount
+            missingCostRate
+            failureBuckets {
+                code
+                count
+            }
+            keyRedundancy {
+                scope
+                healthyKeyCount
+                warning
             }
         }
         imagePromptSkillReleases @include(if: $includeSkills) {
@@ -330,8 +365,8 @@ export const saveImageCredentialMutation = gql`
 `;
 
 export const testImageProviderMutation = gql`
-    mutation TestImageProvider($id: ID!) {
-        testImageProviderCredential(id: $id) {
+    mutation TestImageProvider($id: ID!, $enableOnSuccess: Boolean) {
+        testImageProviderCredential(id: $id, enableOnSuccess: $enableOnSuccess) {
             ok
             message
             testedAt
@@ -474,6 +509,11 @@ export interface ImageProviderAdminConfigRecord {
     textModelId: string;
     providerHealthStatus: string;
     providerHealthMessage?: string | null;
+    providerRuntimeStatus?: string;
+    lastRuntimeOutcome?: string | null;
+    lastRuntimeAt?: string | null;
+    recentAttempts?: number;
+    recentSuccessRate?: number;
     priority: number;
     weight: number;
     cooldownUntil?: string | null;
@@ -514,6 +554,7 @@ export interface ImageAdminJobRecord {
         providerRequestId?: string | null;
         refundedAt?: string | null;
         errorMessage?: string | null;
+        failureCode?: string | null;
     }>;
 }
 
@@ -599,6 +640,25 @@ export interface ImageAdminOperationsQueryResult {
             actualCost: number;
             averageLatencyMs: number;
         }>;
+    };
+    imageGenerationReliabilitySummary?: {
+        workerStatus: string;
+        workerHeartbeatAt?: string | null;
+        workerStale: boolean;
+        lastReconcileAt?: string | null;
+        oldestQueuedAt?: string | null;
+        queuedOutputs: number;
+        activeOutputs: number;
+        attempts24h: number;
+        successes24h: number;
+        failures24h: number;
+        unknowns24h: number;
+        successRate: number;
+        unknownRate: number;
+        missingCostCount: number;
+        missingCostRate: number;
+        failureBuckets: Array<{ code: string; count: number }>;
+        keyRedundancy: Array<{ scope: string; healthyKeyCount: number; warning?: string | null }>;
     };
     imagePromptSkillReleases?: Array<{
         id: string;

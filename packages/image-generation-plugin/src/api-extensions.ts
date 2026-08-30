@@ -98,6 +98,7 @@ const commonTypes = gql`
         attemptCount: Int!
         providerRequestId: String
         errorMessage: String
+        failureCode: String
         completedAt: DateTime
         refundedAt: DateTime
         billingMode: String!
@@ -332,6 +333,11 @@ export const adminApiExtensions = gql`
         textModelId: String!
         providerHealthStatus: String!
         providerHealthMessage: String
+        providerRuntimeStatus: String!
+        lastRuntimeOutcome: String
+        lastRuntimeAt: DateTime
+        recentAttempts: Int!
+        recentSuccessRate: Float!
         priority: Int!
         weight: Int!
         cooldownUntil: DateTime
@@ -374,6 +380,37 @@ export const adminApiExtensions = gql`
         to: DateTime!
         truncated: Boolean!
         items: [ImageGenerationCostSummaryItem!]!
+    }
+
+    type ImageGenerationFailureBucket {
+        code: String!
+        count: Int!
+    }
+
+    type ImageGenerationKeyRedundancy {
+        scope: String!
+        healthyKeyCount: Int!
+        warning: String
+    }
+
+    type ImageGenerationReliabilitySummary {
+        workerStatus: String!
+        workerHeartbeatAt: DateTime
+        workerStale: Boolean!
+        lastReconcileAt: DateTime
+        oldestQueuedAt: DateTime
+        queuedOutputs: Int!
+        activeOutputs: Int!
+        attempts24h: Int!
+        successes24h: Int!
+        failures24h: Int!
+        unknowns24h: Int!
+        successRate: Float!
+        unknownRate: Float!
+        missingCostCount: Int!
+        missingCostRate: Float!
+        failureBuckets: [ImageGenerationFailureBucket!]!
+        keyRedundancy: [ImageGenerationKeyRedundancy!]!
     }
 
     type ImagePromptSkillRelease implements Node {
@@ -562,13 +599,14 @@ export const adminApiExtensions = gql`
         imageAiUsageRecords(input: ImageAiUsageRecordListInput): ImageAiUsageRecordList!
         imageAiUsageRecord(recordType: String!, id: ID!): ImageAiUsageRecordDetail!
         imageGenerationCostSummary(days: Int): ImageGenerationCostSummary!
+        imageGenerationReliabilitySummary: ImageGenerationReliabilitySummary!
     }
 
     extend type Mutation {
         saveImageGenerationConfig(input: SaveImageGenerationConfigInput!): ImageGenerationAdminConfig!
         saveImageProviderCredential(input: SaveImageProviderCredentialInput!): ImageProviderAdminConfig!
         testImageProviderConnection(scope: ImageProviderScope!): ImageProviderConnectionResult!
-        testImageProviderCredential(id: ID!): ImageProviderConnectionResult!
+        testImageProviderCredential(id: ID!, enableOnSuccess: Boolean): ImageProviderConnectionResult!
         archiveImageProviderCredential(id: ID!): Boolean!
         anonymizeImageGenerationCustomerData(customerId: ID!, reason: String!): ImageComplianceActionResult!
         testImageModel(code: String!): ImageProviderConnectionResult!

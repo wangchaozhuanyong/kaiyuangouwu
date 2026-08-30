@@ -17,6 +17,7 @@ import {
 
 const REQUEST_TIMEOUT_MS = 120_000;
 const MAX_PROVIDER_IMAGE_BYTES = 25 * 1024 * 1024;
+const MAX_PROVIDER_BASE64_CHARACTERS = Math.ceil(MAX_PROVIDER_IMAGE_BYTES / 3) * 4;
 const MAX_PROVIDER_JSON_BYTES = 40 * 1024 * 1024;
 const MAX_PROMPT_RESPONSE_BYTES = 1024 * 1024;
 const MAX_MODEL_RESPONSE_BYTES = 1024 * 1024;
@@ -31,12 +32,23 @@ class ImageProviderError extends Error {
         readonly details: ImageProviderErrorDetails = {},
     ) {
         super(message);
+        this.name = new.target.name;
     }
 }
 
 export class RetryableImageProviderError extends ImageProviderError {}
 export class AmbiguousImageProviderError extends ImageProviderError {}
 export class DefinitiveImageProviderError extends ImageProviderError {}
+
+export class LocalImageProcessingError extends DefinitiveImageProviderError {
+    constructor(
+        message: string,
+        details: ImageProviderErrorDetails,
+        readonly sourceErrorName: string,
+    ) {
+        super(message, details);
+    }
+}
 
 interface ProviderJsonResponse {
     payload: unknown;
@@ -452,73 +464,54 @@ export class ImageProviderClient {
         response: unknown,
         requestTelemetry: ProviderTelemetry = {},
     ): Promise<ProviderGenerationResult> {
-        const providerRequestId =
-            stringAt(response, ['id']) ??
-            stringAt(response, ['responseId']) ??
-            findStringByKey(response, new Set(['responseId', 'requestId']), value => Boolean(value.trim())) ??
-            requestTelemetry.providerRequestId;
-        const revisedPrompt = stringAt(response, ['data', 0, 'revised_prompt']);
-        const embeddedDataUrl = findStringValue(response, value =>
-            /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+/iu.test(value),
-        );
-        const embeddedData = embeddedDataUrl?.match(/data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)/iu);
-        const base64 =
-            imageGenerationResult(response) ??
-            stringAt(response, ['data', 0, 'b64_json']) ??
-            stringAt(response, ['output_image', 'data']) ??
-            stringAt(response, ['candidates', 0, 'content', 'parts', 0, 'inlineData', 'data']) ??
-            findStringByKey(response, new Set(['b64_json', 'data', 'result']), value =>
-                /^[a-z0-9+/=\s]{128,}$/iu.test(value),
-            ) ??
-            embeddedData?.[2];
-        const mimeType =
-            stringAt(response, ['output_image', 'mime_type']) ??
-            stringAt(response, ['candidates', 0, 'content', 'parts', 0, 'inlineData', 'mimeType']) ??
-            findStringByKey(response, new Set(['mime_type', 'mimeType']), value =>
-                /^image\/[a-z0-9.+-]+$/iu.test(value),
-            ) ??
-            embeddedData?.[1] ??
-            'image/png';
-        if (base64) {
-            const bytes = Buffer.from(base64.replace(/^data:image\/[a-z0-9.+-]+;base64,/iu, ''), 'base64');
-            if (!bytes.length || bytes.length > MAX_PROVIDER_IMAGE_BYTES) {
-                throw new DefinitiveImageProviderError('中转站返回的图片大小无效', requestTelemetry);
+        try {
+            const providerRequestId =
+                stringAt(response, ['id']) ??
+                stringAt(response, ['responseId']) ??
+                findStringByKey(response, new Set(['responseId', 'requestId']), value =>
+                    Boolean(value.trim()),
+                ) ??
+                requestTelemetry.providerRequestId;
+            const revisedPrompt = stringAt(response, ['data', 0, 'revised_prompt']);
+            const inlineImage =
+                structuredInlineImage(response) ??
+                findGenericInlineImage(response) ??
+                findEmbeddedInlineImage(response);
+            if (inlineImage) {
+                const dataUrl = extractImageDataUrl(inlineImage.data);
+                const encoded = dataUrl?.data ?? inlineImage.data;
+                const mimeType =
+                    normalizedImageMimeType(inlineImage.mimeType ?? dataUrl?.mimeType) ?? 'image/png';
+                const bytes = decodeBase64Image(encoded, requestTelemetry);
+                return {
+                    bytes,
+                    mimeType,
+                    providerRequestId,
+                    revisedPrompt,
+                    metadata: safeProviderMetadata(providerRequestId, revisedPrompt, mimeType, 'inline'),
+                    telemetry: { ...requestTelemetry, providerRequestId },
+                };
             }
+            const imageUrl = findRemoteImageUrl(response);
+            if (!imageUrl) {
+                throw new DefinitiveImageProviderError('中转站响应中没有可识别的图片', requestTelemetry);
+            }
+            const downloaded = await this.downloadImage(imageUrl);
             return {
-                bytes,
-                mimeType,
+                ...downloaded,
                 providerRequestId,
                 revisedPrompt,
-                metadata: safeProviderMetadata(providerRequestId, revisedPrompt, mimeType, 'inline'),
+                metadata: safeProviderMetadata(
+                    providerRequestId,
+                    revisedPrompt,
+                    downloaded.mimeType,
+                    'remote-url',
+                ),
                 telemetry: { ...requestTelemetry, providerRequestId },
             };
-        }
-        const imageUrl =
-            stringAt(response, ['data', 0, 'url']) ??
-            findStringByKey(response, new Set(['url', 'image_url']), value => /^https?:\/\//iu.test(value)) ??
-            findStringValue(response, value => /https?:\/\/[^\s)"']+/iu.test(value))?.match(
-                /https?:\/\/[^\s)"']+/iu,
-            )?.[0];
-        if (!imageUrl)
-            throw new DefinitiveImageProviderError('中转站响应中没有可识别的图片', requestTelemetry);
-        let downloaded: { bytes: Buffer; mimeType: string };
-        try {
-            downloaded = await this.downloadImage(imageUrl);
         } catch (error) {
-            throw withProviderTelemetry(error, requestTelemetry);
+            throw withImageProcessingTelemetry(error, requestTelemetry);
         }
-        return {
-            ...downloaded,
-            providerRequestId,
-            revisedPrompt,
-            metadata: safeProviderMetadata(
-                providerRequestId,
-                revisedPrompt,
-                downloaded.mimeType,
-                'remote-url',
-            ),
-            telemetry: { ...requestTelemetry, providerRequestId },
-        };
     }
 
     private async downloadImage(rawUrl: string): Promise<{ bytes: Buffer; mimeType: string }> {
@@ -788,6 +781,240 @@ function parseGeminiStreamResponse(text: string): unknown {
     }
 }
 
+interface InlineImagePayload {
+    data: string;
+    mimeType?: string;
+}
+
+function structuredInlineImage(value: unknown): InlineImagePayload | undefined {
+    return (
+        openAiResponsesInlineImage(value) ??
+        inlineImageAt(value, ['data', 0], ['b64_json'], ['mime_type', 'mimeType']) ??
+        inlineImageAt(value, ['output_image'], ['data'], ['mime_type', 'mimeType']) ??
+        geminiInlineImage(value)
+    );
+}
+
+function openAiResponsesInlineImage(value: unknown): InlineImagePayload | undefined {
+    const output = objectAt(value, ['output']);
+    if (!Array.isArray(output)) return;
+    for (const item of output) {
+        if (objectAt(item, ['type']) !== 'image_generation_call') continue;
+        const data = rawStringAt(item, ['result']);
+        if (!data) continue;
+        const mimeType = normalizedImageMimeType(stringAt(item, ['mime_type']));
+        return { data, ...(mimeType ? { mimeType } : {}) };
+    }
+}
+
+function geminiInlineImage(value: unknown): InlineImagePayload | undefined {
+    const events = Array.isArray(value) ? value : [value];
+    for (const event of events) {
+        const candidates = objectAt(event, ['candidates']);
+        if (!Array.isArray(candidates)) continue;
+        for (const candidate of candidates) {
+            const parts = objectAt(candidate, ['content', 'parts']);
+            if (!Array.isArray(parts)) continue;
+            for (const part of parts) {
+                const inlineData = objectAt(part, ['inlineData']) ?? objectAt(part, ['inline_data']);
+                const image = inlineImageFromObject(inlineData, ['data'], ['mimeType', 'mime_type']);
+                if (image) return image;
+            }
+        }
+    }
+}
+
+function inlineImageAt(
+    value: unknown,
+    path: Array<string | number>,
+    dataKeys: string[],
+    mimeTypeKeys: string[],
+): InlineImagePayload | undefined {
+    return inlineImageFromObject(objectAt(value, path), dataKeys, mimeTypeKeys);
+}
+
+function inlineImageFromObject(
+    value: unknown,
+    dataKeys: string[],
+    mimeTypeKeys: string[],
+): InlineImagePayload | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const object = value as Record<string, unknown>;
+    const data = dataKeys.map(key => object[key]).find(child => typeof child === 'string' && child.length);
+    if (typeof data !== 'string') return;
+    const mimeType = mimeTypeKeys
+        .map(key => normalizedImageMimeType(object[key]))
+        .find((child): child is string => Boolean(child));
+    return { data, ...(mimeType ? { mimeType } : {}) };
+}
+
+function findGenericInlineImage(value: unknown, depth = 0): InlineImagePayload | undefined {
+    if (depth > 8 || !value || typeof value !== 'object') return;
+    const object = value as Record<string, unknown>;
+    for (const key of ['b64_json', 'data', 'result']) {
+        const child = object[key];
+        if (typeof child !== 'string' || !looksLikeBase64ImageData(child)) continue;
+        const mimeType =
+            normalizedImageMimeType(object.mimeType) ?? normalizedImageMimeType(object.mime_type);
+        return { data: child, ...(mimeType ? { mimeType } : {}) };
+    }
+    for (const child of Object.values(object)) {
+        const nested = findGenericInlineImage(child, depth + 1);
+        if (nested) return nested;
+    }
+}
+
+function findEmbeddedInlineImage(value: unknown, depth = 0): InlineImagePayload | undefined {
+    if (depth > 8) return;
+    if (typeof value === 'string') return extractImageDataUrl(value, true);
+    if (!value || typeof value !== 'object') return;
+    for (const child of Object.values(value as Record<string, unknown>)) {
+        const nested = findEmbeddedInlineImage(child, depth + 1);
+        if (nested) return nested;
+    }
+}
+
+function extractImageDataUrl(value: string, embedded = false): InlineImagePayload | undefined {
+    const markerIndex = embedded
+        ? asciiCaseInsensitiveIndexOf(value, 'data:image/')
+        : asciiCaseInsensitiveIndexOf(value, 'data:image/', 0, true);
+    if (markerIndex < 0) return;
+    const mimeStart = markerIndex + 'data:'.length;
+    const separatorIndex = asciiCaseInsensitiveIndexOf(value, ';base64,', mimeStart);
+    if (separatorIndex < 0 || separatorIndex - mimeStart > 64) return;
+    const mimeType = normalizedImageMimeType(value.slice(mimeStart, separatorIndex));
+    if (!mimeType) return;
+    const dataStart = separatorIndex + ';base64,'.length;
+    let dataEnd = dataStart;
+    while (dataEnd < value.length && isBase64OrWhitespaceCharacter(value.charCodeAt(dataEnd))) {
+        dataEnd += 1;
+    }
+    if (dataEnd === dataStart) return;
+    return { data: value.slice(dataStart, dataEnd), mimeType };
+}
+
+function decodeBase64Image(value: string, telemetry: ProviderTelemetry): Buffer {
+    const inspection = inspectBase64(value);
+    if (inspection === 'TOO_LARGE') {
+        throw new DefinitiveImageProviderError('中转站图片超过 25MB', telemetry);
+    }
+    if (inspection !== 'VALID') {
+        throw new DefinitiveImageProviderError('中转站返回了无效的图片编码', telemetry);
+    }
+    const bytes = Buffer.from(value, 'base64');
+    if (!bytes.length) {
+        throw new DefinitiveImageProviderError('中转站返回的图片大小无效', telemetry);
+    }
+    if (bytes.length > MAX_PROVIDER_IMAGE_BYTES) {
+        throw new DefinitiveImageProviderError('中转站图片超过 25MB', telemetry);
+    }
+    return bytes;
+}
+
+function looksLikeBase64ImageData(value: string): boolean {
+    if (value.length < 128) return false;
+    const dataUrl = extractImageDataUrl(value);
+    return inspectBase64(dataUrl?.data ?? value) !== 'INVALID';
+}
+
+function inspectBase64(value: string): 'VALID' | 'INVALID' | 'TOO_LARGE' {
+    let characterCount = 0;
+    let paddingCount = 0;
+    let paddingStarted = false;
+    for (let index = 0; index < value.length; index += 1) {
+        const code = value.charCodeAt(index);
+        if (isAsciiWhitespace(code)) continue;
+        characterCount += 1;
+        if (characterCount > MAX_PROVIDER_BASE64_CHARACTERS) return 'TOO_LARGE';
+        if (code === 61) {
+            paddingStarted = true;
+            paddingCount += 1;
+            if (paddingCount > 2) return 'INVALID';
+            continue;
+        }
+        if (paddingStarted || !isBase64Character(code)) return 'INVALID';
+    }
+    if (!characterCount || characterCount % 4 === 1) return 'INVALID';
+    if (paddingCount && characterCount % 4 !== 0) return 'INVALID';
+    return 'VALID';
+}
+
+function isBase64OrWhitespaceCharacter(code: number): boolean {
+    return isBase64Character(code) || code === 61 || isAsciiWhitespace(code);
+}
+
+function isBase64Character(code: number): boolean {
+    return (
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122) ||
+        (code >= 48 && code <= 57) ||
+        code === 43 ||
+        code === 47
+    );
+}
+
+function isAsciiWhitespace(code: number): boolean {
+    return code === 9 || code === 10 || code === 13 || code === 32;
+}
+
+function normalizedImageMimeType(value: unknown): string | undefined {
+    if (typeof value !== 'string' || value.length > 64 || !/^image\/[a-z0-9.+-]+$/iu.test(value)) return;
+    return value.toLowerCase();
+}
+
+function findRemoteImageUrl(value: unknown, depth = 0): string | undefined {
+    if (depth > 8) return;
+    if (typeof value === 'string') return extractHttpUrl(value);
+    if (!value || typeof value !== 'object') return;
+    const object = value as Record<string, unknown>;
+    for (const key of ['url', 'image_url']) {
+        const child = object[key];
+        if (typeof child !== 'string') continue;
+        const imageUrl = extractHttpUrl(child);
+        if (imageUrl) return imageUrl;
+    }
+    for (const child of Object.values(object)) {
+        const nested = findRemoteImageUrl(child, depth + 1);
+        if (nested) return nested;
+    }
+}
+
+function extractHttpUrl(value: string): string | undefined {
+    const httpIndex = asciiCaseInsensitiveIndexOf(value, 'http://');
+    const httpsIndex = asciiCaseInsensitiveIndexOf(value, 'https://');
+    const start = httpIndex < 0 ? httpsIndex : httpsIndex < 0 ? httpIndex : Math.min(httpIndex, httpsIndex);
+    if (start < 0) return;
+    let end = start;
+    const maximumEnd = Math.min(value.length, start + 4_096);
+    while (end < maximumEnd && !isUrlTerminator(value.charCodeAt(end))) end += 1;
+    return end > start ? value.slice(start, end) : undefined;
+}
+
+function isUrlTerminator(code: number): boolean {
+    return isAsciiWhitespace(code) || code === 34 || code === 39 || code === 41;
+}
+
+function asciiCaseInsensitiveIndexOf(
+    value: string,
+    needle: string,
+    fromIndex = 0,
+    requireAtStart = false,
+): number {
+    const lastStart = requireAtStart ? fromIndex : value.length - needle.length;
+    for (let start = fromIndex; start <= lastStart; start += 1) {
+        let offset = 0;
+        while (offset < needle.length) {
+            const code = value.charCodeAt(start + offset);
+            const folded = code >= 65 && code <= 90 ? code + 32 : code;
+            if (folded !== needle.charCodeAt(offset)) break;
+            offset += 1;
+        }
+        if (offset === needle.length) return start;
+        if (requireAtStart) return -1;
+    }
+    return -1;
+}
+
 function objectAt(value: unknown, path: Array<string | number>): unknown {
     return path.reduce<unknown>((current, key) => {
         if (Array.isArray(current) && typeof key === 'number') return current[key];
@@ -802,6 +1029,11 @@ function stringAt(value: unknown, path: Array<string | number>): string | undefi
     return typeof found === 'string' && found.trim() ? found : undefined;
 }
 
+function rawStringAt(value: unknown, path: Array<string | number>): string | undefined {
+    const found = objectAt(value, path);
+    return typeof found === 'string' && found.length ? found : undefined;
+}
+
 function geminiResponseText(value: unknown): string | undefined {
     const parts = objectAt(value, ['candidates', 0, 'content', 'parts']);
     if (!Array.isArray(parts)) return;
@@ -811,16 +1043,6 @@ function geminiResponseText(value: unknown): string | undefined {
         .join('\n')
         .trim();
     return text || undefined;
-}
-
-function imageGenerationResult(value: unknown): string | undefined {
-    const output = objectAt(value, ['output']);
-    if (!Array.isArray(output)) return;
-    for (const item of output) {
-        if (objectAt(item, ['type']) !== 'image_generation_call') continue;
-        const result = stringAt(item, ['result']);
-        if (result) return result;
-    }
 }
 
 function findStringByKey(
@@ -833,20 +1055,6 @@ function findStringByKey(
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
         if (keys.has(key) && typeof child === 'string' && predicate(child)) return child;
         const nested = findStringByKey(child, keys, predicate, depth + 1);
-        if (nested) return nested;
-    }
-}
-
-function findStringValue(
-    value: unknown,
-    predicate: (value: string) => boolean,
-    depth = 0,
-): string | undefined {
-    if (depth > 8) return;
-    if (typeof value === 'string') return predicate(value) ? value : undefined;
-    if (!value || typeof value !== 'object') return;
-    for (const child of Object.values(value as Record<string, unknown>)) {
-        const nested = findStringValue(child, predicate, depth + 1);
         if (nested) return nested;
     }
 }
@@ -865,6 +1073,13 @@ function httpFailure(status: number, details: ImageProviderErrorDetails): ImageP
 
 function withProviderTelemetry(error: unknown, telemetry: ProviderTelemetry): ImageProviderError {
     const message = safeError(error);
+    if (error instanceof LocalImageProcessingError) {
+        return new LocalImageProcessingError(
+            message,
+            { ...telemetry, ...error.details },
+            error.sourceErrorName,
+        );
+    }
     if (error instanceof RetryableImageProviderError) {
         return new RetryableImageProviderError(message, { ...telemetry, ...error.details });
     }
@@ -875,6 +1090,15 @@ function withProviderTelemetry(error: unknown, telemetry: ProviderTelemetry): Im
         return new DefinitiveImageProviderError(message, { ...telemetry, ...error.details });
     }
     return new DefinitiveImageProviderError(message, telemetry);
+}
+
+function withImageProcessingTelemetry(error: unknown, telemetry: ProviderTelemetry): ImageProviderError {
+    if (error instanceof ImageProviderError) return withProviderTelemetry(error, telemetry);
+    return new LocalImageProcessingError(
+        '中转站返回的图片无法解析',
+        telemetry,
+        error instanceof Error ? error.name.slice(0, 100) : typeof error,
+    );
 }
 
 function responseErrorDetails(response: Response): ImageProviderErrorDetails {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
@@ -379,11 +380,13 @@ function credentialService() {
         save: vi.fn(),
         createQueryBuilder: vi.fn(() => bindingQuery),
     };
+    const costRepository = { find: vi.fn().mockResolvedValue([]) };
     const connection = {
         getRepository: vi.fn((_ctx: unknown, entity: unknown) => {
             if (entity === ImageProviderCredential) return credentialRepository;
             if (entity === ImageModelConfig) return modelRepository;
             if (entity === ImageProviderCredentialModel) return bindingRepository;
+            if (entity === ImageGenerationCostEvent) return costRepository;
             throw new Error('Unexpected repository');
         }),
         withTransaction: vi.fn((_ctx: unknown, work: (ctx: unknown) => unknown) =>

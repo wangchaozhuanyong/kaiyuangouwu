@@ -27,6 +27,15 @@ readonly candidate_name="$(basename "${candidate}")"
 
 node "${memory_guard}" --stage scheduled-monitor --check
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null
+readonly image_health_json="$(
+    curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health
+)"
+IMAGE_HEALTH_JSON="${image_health_json}" node -e "
+const snapshot = JSON.parse(process.env.IMAGE_HEALTH_JSON || '{}');
+for (const alert of snapshot.alerts || []) {
+    process.stderr.write('AI_IMAGE_' + alert.severity + ' ' + alert.code + ' ' + alert.message + '\n');
+}
+"
 curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url https://console.damatong.net/dashboard/

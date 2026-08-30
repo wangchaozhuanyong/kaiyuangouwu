@@ -22,3 +22,7 @@ export function imageResolutionAvailability(
     }
     return { status: 'AVAILABLE', option };
 }
+
+export function aspectRatioSupports4K(model: ResolutionModel, aspectRatio: string): boolean {
+    return imageResolutionAvailability(model, '4K', aspectRatio).status === 'AVAILABLE';
+}

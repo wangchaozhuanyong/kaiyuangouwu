@@ -77,4 +77,10 @@ export class ImageGenerationCostEvent extends VendureEntity {
 
     @Column({ type: 'varchar', length: 500, nullable: true })
     errorMessage: string | null;
+
+    @Column({ type: 'varchar', length: 48, nullable: true })
+    failureCode: string | null;
+
+    @Column({ type: 'varchar', length: 32, nullable: true })
+    providerStage: string | null;
 }

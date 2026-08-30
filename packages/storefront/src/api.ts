@@ -244,7 +244,7 @@ const imageGenerationJobFields = `
     errorMessage
     completedAt
     referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
-    outputs { id outputIndex state attemptCount errorMessage completedAt refundedAt billingMode chargeAmount width height imageUrl downloadUrl }
+    outputs { id outputIndex state attemptCount errorMessage failureCode completedAt refundedAt billingMode chargeAmount width height imageUrl downloadUrl }
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order
@@ -423,6 +423,16 @@ export class ShopApiError extends Error {
     ) {
         super(message);
         this.name = 'ShopApiError';
+    }
+}
+
+export class ShopApiTimeoutError extends Error {
+    constructor(
+        message: string,
+        readonly resultUnknown = false,
+    ) {
+        super(message);
+        this.name = 'ShopApiTimeoutError';
     }
 }
 
@@ -1447,6 +1457,7 @@ export class ShopApi {
             `,
             undefined,
             signal,
+            15_000,
         );
         return result.imageStudioConfig;
     }
@@ -1467,6 +1478,7 @@ export class ShopApi {
             }`,
             undefined,
             signal,
+            15_000,
         );
         return result.imageStudioWallet;
     }
@@ -1482,6 +1494,7 @@ export class ShopApi {
             }`,
             undefined,
             signal,
+            15_000,
         );
         return result.imagePromptQuotaStatus;
     }
@@ -1497,6 +1510,7 @@ export class ShopApi {
             }`,
             undefined,
             signal,
+            15_000,
         );
         return result.imageModelQuotaStatus;
     }
@@ -1521,6 +1535,9 @@ export class ShopApi {
                 }
             `,
             { input: { prompt, referenceMode, ...quote } },
+            undefined,
+            150_000,
+            true,
         );
         return result.optimizeImagePrompt;
     }
@@ -1559,14 +1576,24 @@ export class ShopApi {
         if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
         if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
         const separator = API_URL.includes('?') ? '&' : '?';
-        const response = await fetch(
-            `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
-            { method: 'POST', credentials: 'include', headers, body: form },
-        );
-        this.captureAuthToken(response);
-        const body = (await response.json()) as GraphQlResponse<{
-            uploadImageReference: ImagePrivateAssetView;
-        }>;
+        const timeout = createRequestSignal(undefined, 60_000);
+        let response: Response;
+        let body: GraphQlResponse<{ uploadImageReference: ImagePrivateAssetView }>;
+        try {
+            response = await fetch(
+                `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
+                { method: 'POST', credentials: 'include', headers, body: form, signal: timeout.signal },
+            );
+            this.captureAuthToken(response);
+            body = (await response.json()) as GraphQlResponse<{
+                uploadImageReference: ImagePrivateAssetView;
+            }>;
+        } catch (error) {
+            if (timeout.didTimeout()) throw new ShopApiTimeoutError('参考图上传超时，请检查网络后重试');
+            throw error;
+        } finally {
+            timeout.cleanup();
+        }
         if (!response.ok || body.errors?.length || !body.data) {
             throw new Error(body.errors?.[0]?.message ?? `Reference upload failed (${response.status})`);
         }
@@ -1579,6 +1606,9 @@ export class ShopApi {
                 createImageGeneration(input: $input) { ${imageGenerationJobFields} }
             }`,
             { input },
+            undefined,
+            45_000,
+            true,
         );
         return result.createImageGeneration;
     }
@@ -1588,6 +1618,7 @@ export class ShopApi {
             `query MyImageGenerationJob($id: ID!) { myImageGenerationJob(id: $id) { ${imageGenerationJobFields} } }`,
             { id },
             signal,
+            15_000,
         );
         return result.myImageGenerationJob;
     }
@@ -1601,6 +1632,7 @@ export class ShopApi {
             }`,
             { skip, take },
             signal,
+            15_000,
         );
         return result.myImageGenerationJobs;
     }
@@ -2230,6 +2262,8 @@ export class ShopApi {
         query: string,
         variables?: Record<string, unknown>,
         signal?: AbortSignal,
+        timeoutMs?: number,
+        resultUnknownOnTimeout = false,
     ): Promise<T> {
         const headers: Record<string, string> = {
             'content-type': 'application/json',
@@ -2245,15 +2279,32 @@ export class ShopApi {
         const requestUrl =
             `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}` +
             `&currencyCode=${encodeURIComponent(this.market.currencyCode)}`;
-        const response = await fetch(requestUrl, {
-            method: 'POST',
-            credentials: 'include',
-            headers,
-            body: JSON.stringify({ query, variables }),
-            signal,
-        });
-        this.captureAuthToken(response);
-        const rawBody = await response.text();
+        const timeout = createRequestSignal(signal, timeoutMs);
+        let response: Response;
+        let rawBody: string;
+        try {
+            response = await fetch(requestUrl, {
+                method: 'POST',
+                credentials: 'include',
+                headers,
+                body: JSON.stringify({ query, variables }),
+                signal: timeout.signal,
+            });
+            this.captureAuthToken(response);
+            rawBody = await response.text();
+        } catch (error) {
+            if (timeout.didTimeout()) {
+                throw new ShopApiTimeoutError(
+                    resultUnknownOnTimeout
+                        ? '请求超时，提交结果暂时无法确认，请勿更改参数后重复提交'
+                        : '请求超时，请检查网络后重试',
+                    resultUnknownOnTimeout,
+                );
+            }
+            throw error;
+        } finally {
+            timeout.cleanup();
+        }
         let body: GraphQlResponse<T>;
         try {
             body = JSON.parse(rawBody) as GraphQlResponse<T>;
@@ -2318,6 +2369,31 @@ export class ShopApi {
             );
         }
     }
+}
+
+function createRequestSignal(external?: AbortSignal, timeoutMs?: number) {
+    if (!timeoutMs) {
+        return { signal: external, cleanup: () => undefined, didTimeout: () => false };
+    }
+    const controller = new AbortController();
+    let timedOut = false;
+    const abortFromExternal = () => controller.abort(external?.reason);
+    if (external?.aborted) abortFromExternal();
+    else external?.addEventListener('abort', abortFromExternal, { once: true });
+    const timer = timeoutMs
+        ? setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+          }, timeoutMs)
+        : undefined;
+    return {
+        signal: controller.signal,
+        cleanup() {
+            if (timer) clearTimeout(timer);
+            external?.removeEventListener('abort', abortFromExternal);
+        },
+        didTimeout: () => timedOut,
+    };
 }
 
 function storefrontRealtimeUrl(): string {

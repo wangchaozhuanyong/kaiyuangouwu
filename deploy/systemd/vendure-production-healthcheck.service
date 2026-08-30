@@ -1,5 +1,5 @@
 [Unit]
-Description=Check Vendure database, public health, backups, and disk usage
+Description=Check Vendure database, public and AI health, backups, and disk usage
 After=mysql.service network-online.target
 Wants=network-online.target
 

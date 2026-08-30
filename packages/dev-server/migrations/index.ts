@@ -79,6 +79,7 @@ import { AddChannelUsdtWallets1787882400000 } from './1787882400000-add-channel-
 import { AddUsdtManualRefunds1787886000000 } from './1787886000000-add-usdt-manual-refunds';
 import { AlignChannelUsdtSchema1787889600000 } from './1787889600000-align-channel-usdt-schema';
 import { AlignSystemAnnouncementChannelForeignKeys1787893200000 } from './1787893200000-align-system-announcement-channel-foreign-keys';
+import { HardenImageGenerationReliability1787896800000 } from './1787896800000-harden-image-generation-reliability';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -162,4 +163,5 @@ export const devServerMigrations = [
     AddUsdtManualRefunds1787886000000,
     AlignChannelUsdtSchema1787889600000,
     AlignSystemAnnouncementChannelForeignKeys1787893200000,
+    HardenImageGenerationReliability1787896800000,
 ];

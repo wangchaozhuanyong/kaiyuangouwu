@@ -703,7 +703,7 @@ describe('AI image generation full flow', () => {
                 outputs: [
                     expect.objectContaining({
                         state: 'FAILED',
-                        errorMessage: '中转站结果在 15 分钟内无法确认，已自动退回本张费用',
+                        errorMessage: '生成结果在 15 分钟内无法确认，已自动退回本张费用',
                     }),
                 ],
             },

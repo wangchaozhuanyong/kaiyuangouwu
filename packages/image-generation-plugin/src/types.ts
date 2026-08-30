@@ -14,6 +14,23 @@ export type ImageGenerationState =
 export type ImageOutputState = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 export type ImageReferenceMode = 'NONE' | 'STYLE' | 'COMPOSITION' | 'IDENTITY' | 'PRODUCT' | 'EDIT';
 export type ImageResolution = '1K' | '2K' | '4K';
+export type ImageGenerationProcessingStage =
+    'CLAIMED' | 'REQUEST_STARTED' | 'RESPONSE_RECEIVED' | 'ASSET_STORED' | 'SETTLED';
+export type ImageGenerationFailureCode =
+    | 'QUEUE_DISPATCH'
+    | 'CREDENTIAL_UNAVAILABLE'
+    | 'UPSTREAM_AUTH'
+    | 'UPSTREAM_RATE_LIMIT'
+    | 'UPSTREAM_TIMEOUT'
+    | 'UPSTREAM_NETWORK'
+    | 'UPSTREAM_HTTP'
+    | 'UPSTREAM_INVALID_RESPONSE'
+    | 'LOCAL_IMAGE_PROCESSING'
+    | 'IMAGE_TOO_LARGE'
+    | 'IMAGE_RESOLUTION_MISMATCH'
+    | 'STORAGE'
+    | 'SETTLEMENT'
+    | 'UNKNOWN_RESULT';
 
 export interface ImageGenerationPluginOptions {
     storageRoot?: string;

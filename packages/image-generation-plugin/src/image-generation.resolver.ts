@@ -3,6 +3,7 @@ import { Allow, Ctx, ID, Permission, RequestContext } from '@vendure/core';
 
 import { manageImageGenerationPermission } from './constants';
 import { ImageGenerationConfigService } from './image-generation-config.service';
+import { ImageGenerationReliabilityService } from './image-generation-reliability.service';
 import { ImageGenerationService } from './image-generation.service';
 import { ImagePromptEngineService } from './prompt/image-prompt-engine.service';
 import { UploadedImageFile } from './storage/image-private-storage.service';
@@ -123,6 +124,7 @@ export class ImageGenerationAdminResolver {
         private readonly configService: ImageGenerationConfigService,
         private readonly generations: ImageGenerationService,
         private readonly promptEngine: ImagePromptEngineService,
+        private readonly reliability: ImageGenerationReliabilityService,
     ) {}
 
     @Query()
@@ -186,6 +188,12 @@ export class ImageGenerationAdminResolver {
         return this.generations.adminCostSummary(ctx, days);
     }
 
+    @Query()
+    @Allow(manageImageGenerationPermission.Read)
+    imageGenerationReliabilitySummary(@Ctx() ctx: RequestContext) {
+        return this.reliability.adminSummary(ctx);
+    }
+
     @Mutation()
     @Allow(manageImageGenerationPermission.Update)
     saveImageGenerationConfig(
@@ -212,8 +220,12 @@ export class ImageGenerationAdminResolver {
 
     @Mutation()
     @Allow(Permission.SuperAdmin)
-    testImageProviderCredential(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.configService.testCredential(ctx, id);
+    testImageProviderCredential(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('enableOnSuccess') enableOnSuccess?: boolean,
+    ) {
+        return this.configService.testCredential(ctx, id, enableOnSuccess);
     }
 
     @Mutation()

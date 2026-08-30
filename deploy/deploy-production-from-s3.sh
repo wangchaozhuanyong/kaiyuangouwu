@@ -212,6 +212,13 @@ for attempt in $(seq 1 30); do
     [[ "${attempt}" != "30" ]] || fail 'candidate API health check did not pass'
     sleep 2
 done
+for attempt in $(seq 1 45); do
+    if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null; then
+        break
+    fi
+    [[ "${attempt}" != "45" ]] || fail 'candidate AI image worker health check did not pass'
+    sleep 2
+done
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url http://127.0.0.1:3002/dashboard/ \
     --release-id "${target_sha}"
@@ -229,6 +236,7 @@ sudo -n mv -Tf "/var/www/.kaiyuangouwu-current.new.$$" "${current_pointer}"
 pointer_changed=1
 
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null
+curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null
 curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url https://console.damatong.net/dashboard/ \
@@ -237,6 +245,15 @@ node "${repository}/deploy/verify-dashboard-assets.mjs" \
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-production-release-retention.cjs" \
     /usr/local/sbin/vendure-production-release-retention
+sudo -n install -o root -g root -m 0755 \
+    "${repository}/deploy/systemd/vendure-production-healthcheck" \
+    /usr/local/sbin/vendure-production-healthcheck
+sudo -n install -o root -g root -m 0644 \
+    "${repository}/deploy/systemd/vendure-production-healthcheck.service" \
+    /etc/systemd/system/vendure-production-healthcheck.service
+sudo -n install -o root -g root -m 0644 \
+    "${repository}/deploy/systemd/vendure-production-healthcheck.timer" \
+    /etc/systemd/system/vendure-production-healthcheck.timer
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-mysql-restore-drill" \
     /usr/local/sbin/vendure-mysql-restore-drill
@@ -258,6 +275,8 @@ sudo -n install -o root -g root -m 0755 \
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
+sudo -n systemctl enable --now vendure-production-healthcheck.timer
+sudo -n systemctl start vendure-production-healthcheck.service
 if [[ ! -s /var/lib/vendure-readiness/restore-drill.json || \
     "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" != "success" ]]; then
     sudo -n systemctl start vendure-mysql-restore-drill.service
@@ -265,6 +284,9 @@ fi
 [[ "$(sudo -n systemctl is-enabled vendure-mysql-restore-drill.timer)" == "enabled" ]]
 [[ "$(sudo -n systemctl is-active vendure-mysql-restore-drill.timer)" == "active" ]]
 [[ "$(sudo -n systemctl show vendure-mysql-restore-drill.service -p Result --value)" == "success" ]]
+[[ "$(sudo -n systemctl is-enabled vendure-production-healthcheck.timer)" == "enabled" ]]
+[[ "$(sudo -n systemctl is-active vendure-production-healthcheck.timer)" == "active" ]]
+[[ "$(sudo -n systemctl show vendure-production-healthcheck.service -p Result --value)" == "success" ]]
 
 printf '%s\n' "${target_sha}" > "${releases_dir}/.current-sha.new"
 mv "${releases_dir}/.current-sha.new" "${current_marker}"

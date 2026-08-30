@@ -122,6 +122,7 @@ export class ImageProviderRouterService {
             values.cooldownUntil = new Date(Date.now() + Math.max(1, input.retryAfterSeconds ?? 60) * 1_000);
         } else if (consecutiveFailures >= 3) {
             values.healthStatus = 'UNHEALTHY';
+            values.enabled = false;
         }
         await this.connection
             .getRepository(ctx, ImageProviderCredential)

@@ -9,6 +9,7 @@ import { ImageGenerationCostEvent } from './entities/image-generation-cost-event
 import { ImageGenerationDispatch } from './entities/image-generation-dispatch.entity';
 import { ImageGenerationJob } from './entities/image-generation-job.entity';
 import { ImageGenerationOutput } from './entities/image-generation-output.entity';
+import { ImageGenerationRuntimeStatus } from './entities/image-generation-runtime-status.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePrivateAsset } from './entities/image-private-asset.entity';
 import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
@@ -18,7 +19,9 @@ import { ImageProviderCredential } from './entities/image-provider-credential.en
 import { ImageUsageQuotaBucket } from './entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from './entities/image-usage-quota-event.entity';
 import { ImageGenerationConfigService } from './image-generation-config.service';
+import { ImageGenerationHealthController } from './image-generation-health.controller';
 import { ImageGenerationQueueService } from './image-generation-queue.service';
+import { ImageGenerationReliabilityService } from './image-generation-reliability.service';
 import { ImageGenerationAdminResolver, ImageGenerationShopResolver } from './image-generation.resolver';
 import { ImageGenerationService } from './image-generation.service';
 import {
@@ -52,10 +55,11 @@ import { ImageGenerationPluginOptions } from './types';
         ImagePrivateAsset,
         ImageGenerationJob,
         ImageGenerationOutput,
+        ImageGenerationRuntimeStatus,
         ImageUsageQuotaBucket,
         ImageUsageQuotaEvent,
     ],
-    controllers: [ImagePrivateController],
+    controllers: [ImagePrivateController, ImageGenerationHealthController],
     providers: [
         PromptRulesService,
         ImageProviderCipherService,
@@ -64,6 +68,7 @@ import { ImageGenerationPluginOptions } from './types';
         ImageProviderRouterService,
         ImagePrivateStorageService,
         ImageGenerationConfigService,
+        ImageGenerationReliabilityService,
         ImageUsageQuotaService,
         ImagePromptEngineService,
         ImageGenerationService,

@@ -20,7 +20,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { ShopApi } from '../api';
+import { ShopApi, ShopApiTimeoutError } from '../api';
 import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
@@ -45,13 +45,18 @@ import {
     imageAspectRatioMismatch,
     summarizeImageOutputDimensions,
 } from './ai-image-studio-dimensions';
+import { StableImageStudioRequest, stableImageStudioRequest } from './ai-image-studio-idempotency';
 import {
     imageGenerationElapsedSeconds,
     imageGenerationPollDelay,
     imageGenerationProgress,
     startImageGenerationPolling,
 } from './ai-image-studio-progress';
-import { customerImageResolutions, imageResolutionAvailability } from './ai-image-studio-resolution';
+import {
+    aspectRatioSupports4K,
+    customerImageResolutions,
+    imageResolutionAvailability,
+} from './ai-image-studio-resolution';
 
 interface AiImageStudioPageProps {
     api: ShopApi;
@@ -104,6 +109,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const [jobs, setJobs] = useState<ImageGenerationJob[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [refreshWarning, setRefreshWarning] = useState('');
     const [prompt, setPrompt] = useState('');
     const [originalPrompt, setOriginalPrompt] = useState('');
     const [optimized, setOptimized] = useState(false);
@@ -134,6 +140,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const pollStartedAt = useRef(Date.now());
     const loadEpoch = useRef(0);
     const settlementEpoch = useRef(0);
+    const jobsRef = useRef<ImageGenerationJob[]>([]);
+    const optimizeRequestRef = useRef<StableImageStudioRequest | null>(null);
+    const generateRequestRef = useRef<StableImageStudioRequest | null>(null);
 
     const revokeReferencePreview = useCallback((url: string) => {
         if (!url || !localReferencePreviewUrlsRef.current.has(url)) return;
@@ -148,29 +157,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const load = useCallback(async () => {
         const epoch = ++loadEpoch.current;
         setLoadError('');
+        setRefreshWarning('');
         try {
             const studioConfig = await api.imageStudioConfig();
-            let availableBalance = 0;
-            let currentWalletCurrencyCode = market.currencyCode;
-            let history: Awaited<ReturnType<ShopApi['myImageGenerationJobs']>> = {
-                items: [],
-                totalItems: 0,
-            };
-            let currentPromptQuota: ImagePromptQuotaStatus | null = null;
-            let currentModelQuotas: ImageModelQuotaStatus[] = [];
-            if (customer) {
-                const [wallet, loadedHistory, loadedPromptQuota, loadedModelQuotas] = await Promise.all([
-                    api.imageStudioWallet(),
-                    api.myImageGenerationJobs(0, 20),
-                    api.imagePromptQuotaStatus(),
-                    api.imageModelQuotaStatus(),
-                ]);
-                availableBalance = wallet.availableBalance;
-                currentWalletCurrencyCode = wallet.currencyCode;
-                history = loadedHistory;
-                currentPromptQuota = loadedPromptQuota;
-                currentModelQuotas = loadedModelQuotas;
-            }
             if (epoch !== loadEpoch.current) return;
             setConfig(studioConfig);
             setModelCode(current =>
@@ -178,17 +167,87 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     ? current
                     : studioConfig.defaultModelCode || studioConfig.models[0]?.code || '',
             );
-            setBalance(availableBalance);
-            setWalletCurrencyCode(currentWalletCurrencyCode);
-            setJobs(history.items);
-            setPromptQuota(currentPromptQuota);
-            setModelQuotas(currentModelQuotas);
+            if (!customer) {
+                setBalance(0);
+                setWalletCurrencyCode(market.currencyCode);
+                setJobs([]);
+                setPromptQuota(null);
+                setModelQuotas([]);
+                return;
+            }
+            const [wallet, history, loadedPromptQuota, loadedModelQuotas] = await Promise.allSettled([
+                api.imageStudioWallet(),
+                api.myImageGenerationJobs(0, 20),
+                api.imagePromptQuotaStatus(),
+                api.imageModelQuotaStatus(),
+            ]);
+            if (epoch !== loadEpoch.current) return;
+            if (wallet.status === 'fulfilled') {
+                setBalance(wallet.value.availableBalance);
+                setWalletCurrencyCode(wallet.value.currencyCode);
+            }
+            if (history.status === 'fulfilled') setJobs(history.value.items);
+            if (loadedPromptQuota.status === 'fulfilled') setPromptQuota(loadedPromptQuota.value);
+            if (loadedModelQuotas.status === 'fulfilled') setModelQuotas(loadedModelQuotas.value);
+            if (
+                [wallet, history, loadedPromptQuota, loadedModelQuotas].some(
+                    result => result.status === 'rejected',
+                )
+            ) {
+                setRefreshWarning(
+                    isZh
+                        ? '部分数据刷新失败，已保留现有内容并将在后台重试。'
+                        : 'Some data could not be refreshed. Existing data is preserved.',
+                );
+            }
         } catch (error) {
             if (epoch === loadEpoch.current) setLoadError(errorMessage(error));
         } finally {
             if (epoch === loadEpoch.current) setLoading(false);
         }
-    }, [api, customer, market.currencyCode]);
+    }, [api, customer, isZh, market.currencyCode]);
+
+    useEffect(() => {
+        jobsRef.current = jobs;
+    }, [jobs]);
+
+    const refreshActiveJobs = useCallback(async () => {
+        if (!customer) return;
+        const activeIds = jobsRef.current.filter(job => activeStates.has(job.state)).map(job => job.id);
+        if (!activeIds.length) return;
+        const [jobResults, wallet, loadedPromptQuota, loadedModelQuotas] = await Promise.allSettled([
+            Promise.allSettled(activeIds.map(id => api.myImageGenerationJob(id))),
+            api.imageStudioWallet(),
+            api.imagePromptQuotaStatus(),
+            api.imageModelQuotaStatus(),
+        ]);
+        let partialFailure = false;
+        if (jobResults.status === 'fulfilled') {
+            const refreshed = new Map<string, ImageGenerationJob>();
+            for (const result of jobResults.value) {
+                if (result.status === 'fulfilled') refreshed.set(result.value.id, result.value);
+                else partialFailure = true;
+            }
+            if (refreshed.size) {
+                setJobs(current => current.map(job => refreshed.get(job.id) ?? job));
+            }
+        } else partialFailure = true;
+        if (wallet.status === 'fulfilled') {
+            setBalance(wallet.value.availableBalance);
+            setWalletCurrencyCode(wallet.value.currencyCode);
+        } else partialFailure = true;
+        if (loadedPromptQuota.status === 'fulfilled') setPromptQuota(loadedPromptQuota.value);
+        else partialFailure = true;
+        if (loadedModelQuotas.status === 'fulfilled') setModelQuotas(loadedModelQuotas.value);
+        else partialFailure = true;
+        setRefreshWarning(
+            partialFailure
+                ? isZh
+                    ? '刷新失败，正在重试；任务状态和已有数据不会被清空。'
+                    : 'Refresh failed; retrying without clearing current data.'
+                : '',
+        );
+    }, [api, customer, isZh]);
 
     useEffect(() => {
         settlementEpoch.current += 1;
@@ -201,6 +260,9 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         setLastOptimizerModelId(null);
         setBusy('');
         setActionError('');
+        setRefreshWarning('');
+        optimizeRequestRef.current = null;
+        generateRequestRef.current = null;
         void load();
         return () => {
             settlementEpoch.current += 1;
@@ -223,7 +285,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
     const hasActiveJobs = jobs.some(job => activeStates.has(job.state));
     useEffect(() => {
         if (!hasActiveJobs) return;
-        const polling = startImageGenerationPolling(load, () =>
+        const polling = startImageGenerationPolling(refreshActiveJobs, () =>
             imageGenerationPollDelay(pollStartedAt.current),
         );
         const refreshWhenVisible = () => {
@@ -237,7 +299,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             window.removeEventListener('online', refreshWhenOnline);
             polling.stop();
         };
-    }, [hasActiveJobs, load]);
+    }, [hasActiveJobs, refreshActiveJobs]);
 
     const selectedModel = config?.models.find(model => model.code === modelCode) ?? config?.models[0];
     const referenceAssets = referenceItems.flatMap(item => (item.asset ? [item.asset] : []));
@@ -318,12 +380,20 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             const paidPrompt = Boolean(
                 promptQuota && !promptQuota.daily.unlimited && promptQuota.daily.remaining <= 0,
             );
+            const fingerprint = JSON.stringify({
+                prompt: prompt.trim(),
+                referenceMode,
+                expectedPrice: paidPrompt ? promptQuota?.paidPrice : null,
+                currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
+            });
+            const idempotencyKey = stableRequestId(optimizeRequestRef, fingerprint);
             const result = await api.optimizeImagePrompt(prompt, referenceMode, {
                 expectedPrice: paidPrompt ? promptQuota?.paidPrice : null,
                 currencyCode: paidPrompt ? promptQuota?.currencyCode : null,
-                idempotencyKey: requestId(),
+                idempotencyKey,
             });
             if (epoch !== settlementEpoch.current) return;
+            optimizeRequestRef.current = null;
             setOriginalPrompt(prompt);
             setPrompt(result.optimizedPrompt);
             setOptimized(true);
@@ -339,7 +409,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 selectModel(result.recommendedModelCode);
             }
         } catch (error) {
-            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
+            if (epoch === settlementEpoch.current) setActionError(actionErrorMessage(error, isZh));
         } finally {
             if (epoch === settlementEpoch.current) setBusy('');
         }
@@ -475,7 +545,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
         setBusy('GENERATE');
         setActionError('');
         try {
-            const job = await api.createImageGeneration({
+            const requestInput = {
                 modelCode: selectedModel.code,
                 prompt: optimized ? originalPrompt || prompt : prompt,
                 optimizedPrompt: optimized ? prompt : null,
@@ -489,23 +559,40 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 expectedUnitPrice: selectedResolutionOption.unitPrice,
                 expectedChargeAmount: estimatedPrice,
                 currencyCode: selectedModel.currencyCode,
-                idempotencyKey: requestId(),
                 termsAccepted,
+            };
+            const fingerprint = JSON.stringify(requestInput);
+            const job = await api.createImageGeneration({
+                ...requestInput,
+                idempotencyKey: stableRequestId(generateRequestRef, fingerprint),
             });
             if (epoch !== settlementEpoch.current) return;
+            generateRequestRef.current = null;
             pollStartedAt.current = Date.now();
             setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
             setBalance(value => Math.max(0, value - job.reservedAmount));
-            const [nextPromptQuota, nextModelQuotas] = await Promise.all([
+            const [nextPromptQuota, nextModelQuotas, nextWallet] = await Promise.allSettled([
                 api.imagePromptQuotaStatus(),
                 api.imageModelQuotaStatus(),
+                api.imageStudioWallet(),
             ]);
             if (epoch !== settlementEpoch.current) return;
-            setPromptQuota(nextPromptQuota);
-            setModelQuotas(nextModelQuotas);
+            if (nextPromptQuota.status === 'fulfilled') setPromptQuota(nextPromptQuota.value);
+            if (nextModelQuotas.status === 'fulfilled') setModelQuotas(nextModelQuotas.value);
+            if (nextWallet.status === 'fulfilled') {
+                setBalance(nextWallet.value.availableBalance);
+                setWalletCurrencyCode(nextWallet.value.currencyCode);
+            }
+            if ([nextPromptQuota, nextModelQuotas, nextWallet].some(result => result.status === 'rejected')) {
+                setRefreshWarning(
+                    isZh
+                        ? '任务已提交，但余额或额度刷新失败；任务状态仍会继续更新。'
+                        : 'Generation was submitted, but balance or quota refresh failed.',
+                );
+            }
             onNotify(isZh ? '任务已提交，正在逐张生成' : 'Generation queued');
         } catch (error) {
-            if (epoch === settlementEpoch.current) setActionError(errorMessage(error));
+            if (epoch === settlementEpoch.current) setActionError(actionErrorMessage(error, isZh));
         } finally {
             if (epoch === settlementEpoch.current) setBusy('');
         }
@@ -950,6 +1037,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                 {actionError}
                             </div>
                         ) : null}
+                        {refreshWarning ? (
+                            <div className="ai-studio-error" role="status">
+                                <RefreshCw aria-hidden="true" />
+                                {refreshWarning}
+                            </div>
+                        ) : null}
                         {balance < estimatedPrice ? (
                             <div className="ai-studio-low-balance" role="alert">
                                 <CircleAlert aria-hidden="true" />
@@ -1084,6 +1177,13 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                                               key={value}
                                               selected={value === aspectRatio}
                                               label={value}
+                                              description={
+                                                  aspectRatioSupports4K(selectedModel, value)
+                                                      ? isZh
+                                                          ? '支持 4K'
+                                                          : 'Supports 4K'
+                                                      : undefined
+                                              }
                                               onClick={() => selectAspectRatio(value)}
                                           />
                                       ))
@@ -1390,7 +1490,10 @@ function GenerationCard({
                         />
                     </div>
                 ) : job.errorMessage ? (
-                    <span className="ai-generation-error-copy">{job.errorMessage}</span>
+                    <span className="ai-generation-error-copy">
+                        {job.errorMessage}
+                        {failureSuggestion(job.outputs.find(output => output.failureCode)?.failureCode, isZh)}
+                    </span>
                 ) : null}
                 <div className="ai-generation-meta">
                     <span>{isZh ? `目标 ${job.aspectRatio}` : `Target ${job.aspectRatio}`}</span>
@@ -1587,7 +1690,12 @@ function GenerationDetail({
                                         <CircleAlert />
                                     )}
                                     <span>{stateLabel(output.state, isZh)}</span>
-                                    {output.errorMessage ? <small>{output.errorMessage}</small> : null}
+                                    {output.errorMessage ? (
+                                        <small>
+                                            {output.errorMessage}
+                                            {failureSuggestion(output.failureCode, isZh)}
+                                        </small>
+                                    ) : null}
                                 </div>
                             )}
                             <div className="ai-generation-output-actions">
@@ -1986,6 +2094,31 @@ function formatReferenceSize(byteSize: number): string {
 }
 function requestId(): string {
     return globalThis.crypto?.randomUUID?.() ?? `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function stableRequestId(ref: { current: StableImageStudioRequest | null }, fingerprint: string): string {
+    ref.current = stableImageStudioRequest(ref.current, fingerprint, requestId);
+    return ref.current.idempotencyKey;
+}
+function actionErrorMessage(error: unknown, isZh: boolean): string {
+    if (error instanceof ShopApiTimeoutError && error.resultUnknown) {
+        return isZh
+            ? '提交结果暂时无法确认。请保持当前参数后重试，系统会复用同一请求，不会重复创建任务。'
+            : 'The result is temporarily unknown. Retry with the same settings to reuse this request.';
+    }
+    return errorMessage(error);
+}
+function failureSuggestion(failureCode: string | null | undefined, isZh: boolean): string {
+    if (!failureCode) return '';
+    if (failureCode === 'UNKNOWN_RESULT' || failureCode.startsWith('UPSTREAM_')) {
+        return isZh ? ' 建议稍后使用相同参数重试。' : ' Retry later with the same settings.';
+    }
+    if (failureCode === 'CREDENTIAL_UNAVAILABLE') {
+        return isZh ? ' 请稍后重试或联系管理员检查生图 Key。' : ' Retry later or contact an administrator.';
+    }
+    if (failureCode === 'IMAGE_RESOLUTION_MISMATCH') {
+        return isZh ? ' 可降低清晰度或更换画幅后重试。' : ' Try a lower resolution or another aspect ratio.';
+    }
+    return isZh ? ' 可稍后重新创作。' : ' You can retry this generation later.';
 }
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);

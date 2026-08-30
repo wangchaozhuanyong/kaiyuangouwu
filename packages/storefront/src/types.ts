@@ -872,6 +872,7 @@ export interface ImageGenerationOutput {
     state: ImageOutputState;
     attemptCount: number;
     errorMessage?: string | null;
+    failureCode?: string | null;
     completedAt?: string | null;
     refundedAt?: string | null;
     billingMode: string;

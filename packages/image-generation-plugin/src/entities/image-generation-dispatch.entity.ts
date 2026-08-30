@@ -1,8 +1,9 @@
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { EntityId, VendureEntity } from '@vendure/core';
-import { Column, Entity, Index, JoinColumn, OneToOne } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToOne } from 'typeorm';
 
 import { ImageGenerationOutput } from './image-generation-output.entity';
+import { ImagePrivateAsset } from './image-private-asset.entity';
 
 @Entity({ name: 'image_generation_dispatch' })
 @Index('IDX_image_generation_dispatch_output', ['outputId'], { unique: true })
@@ -30,6 +31,22 @@ export class ImageGenerationDispatch extends VendureEntity {
 
     @Column({ type: Date, nullable: true })
     dispatchedAt: Date | null;
+
+    @Column({ type: 'varchar', length: 120, nullable: true })
+    queueTaskId: string | null;
+
+    @Column({ type: 'varchar', length: 32, nullable: true })
+    processingStage: string | null;
+
+    @Column({ type: Date, nullable: true })
+    heartbeatAt: Date | null;
+
+    @ManyToOne(() => ImagePrivateAsset, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'stagedAssetId', foreignKeyConstraintName: 'FK_image_dispatch_staged_asset' })
+    stagedAsset: ImagePrivateAsset | null;
+
+    @EntityId({ nullable: true })
+    stagedAssetId: ID | null;
 
     @Column({ type: 'varchar', length: 500, nullable: true })
     lastError: string | null;

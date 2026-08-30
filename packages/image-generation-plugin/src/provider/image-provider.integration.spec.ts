@@ -15,6 +15,7 @@ interface RelayRequest {
 }
 
 const imageBase64 = Buffer.from('mock-provider-image-bytes-'.repeat(16)).toString('base64');
+const remoteImageBytes = Buffer.from('mock-remote-image-bytes');
 const requests: RelayRequest[] = [];
 let baseUrl = '';
 
@@ -100,6 +101,23 @@ describe('ImageProviderClient mock relay integration', () => {
         expect(editRequest?.headers['content-type']).toContain('multipart/form-data');
         expect(editRequest?.body.toString('utf8')).toContain('keep product and replace background');
         expect(editRequest?.body.toString('utf8')).toContain('medium');
+    });
+
+    it('downloads a remote image URL returned by a provider', async () => {
+        const result = await client().generate(credential, 'OPENAI_IMAGES', {
+            providerModelId: 'gpt-image-2',
+            prompt: 'return remote image',
+            aspectRatio: '1:1',
+            idempotencyKey: 'output-remote-image-1',
+        });
+
+        expect(result.bytes.equals(remoteImageBytes)).toBe(true);
+        expect(result.mimeType).toBe('image/png');
+        expect(result.metadata).toEqual(expect.objectContaining({ delivery: 'remote-url' }));
+        expect(requests.map(item => item.path)).toEqual([
+            '/v1/images/generations',
+            '/v1/generated-image.png',
+        ]);
     });
 
     it('generates through the OpenAI Responses image tool protocol', async () => {
@@ -230,7 +248,22 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
         return sendJson(response, { data: [{ id: 'gpt-image-2' }] });
     }
     if (path === '/v1/images/generations' || path === '/v1/images/edits') {
+        const payload =
+            path === '/v1/images/generations' && chunks.length
+                ? (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { prompt?: string })
+                : {};
+        if (payload.prompt === 'return remote image') {
+            return sendJson(response, {
+                id: 'remote-image-request',
+                data: [{ url: `${baseUrl}/generated-image.png` }],
+            });
+        }
         return sendJson(response, { id: 'openai-request', data: [{ b64_json: imageBase64 }] });
+    }
+    if (request.method === 'GET' && path === '/v1/generated-image.png') {
+        response.writeHead(200, { 'content-type': 'image/png', 'content-length': remoteImageBytes.length });
+        response.end(remoteImageBytes);
+        return;
     }
     if (path === '/v1/responses') {
         return sendJson(response, {

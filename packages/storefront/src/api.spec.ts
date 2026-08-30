@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ShopApi, ShopApiError } from './api';
+import { ShopApi, ShopApiError, ShopApiTimeoutError } from './api';
 import { MarketConfig } from './types';
 
 const market: MarketConfig = {
@@ -168,6 +168,7 @@ describe('ShopApi storefront mutations', () => {
         await new ShopApi(market).createImageGeneration(input);
 
         const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            query: string;
             variables: { input: Record<string, unknown> };
         };
         expect(request.variables.input).toMatchObject({
@@ -177,6 +178,43 @@ describe('ShopApi storefront mutations', () => {
             referenceAssetIds: ['reference-1', 'reference-2'],
             referenceInstruction: '把图1主体放到图2场景',
         });
+        expect(request.query).toContain('failureCode');
+    });
+
+    it('marks a timed-out generation submission as an unknown result', async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+            return new Promise<Response>((_resolve, reject) => {
+                init?.signal?.addEventListener('abort', () =>
+                    reject(new DOMException('Aborted', 'AbortError')),
+                );
+            });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const request = new ShopApi(market).createImageGeneration({
+            modelCode: 'GEMINI_FLASH',
+            prompt: '白色保温杯商品图',
+            optimizedPrompt: null,
+            referenceAssetId: null,
+            referenceAssetIds: [],
+            referenceMode: 'NONE',
+            referenceInstruction: null,
+            aspectRatio: '1:1',
+            resolution: '1K',
+            quantity: 1,
+            expectedUnitPrice: 30,
+            expectedChargeAmount: 30,
+            currencyCode: 'CNY',
+            idempotencyKey: 'stable-generation-request-1',
+            termsAccepted: true,
+        });
+
+        const rejection = expect(request).rejects.toEqual(
+            expect.objectContaining<Partial<ShopApiTimeoutError>>({ resultUnknown: true }),
+        );
+        await vi.advanceTimersByTimeAsync(45_000);
+        await rejection;
+        vi.useRealTimers();
     });
     it('switches the active checkout order to the selected settlement currency', async () => {
         const order = {
